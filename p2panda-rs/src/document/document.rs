@@ -6,9 +6,9 @@ use crate::document::error::{DocumentBuilderError, DocumentReducerError};
 use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
 use crate::graph::{Graph, Reducer};
-use crate::identity_v2::PublicKey;
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::OperationId;
+use crate::identity::PublicKey;
+use crate::operation::traits::AsOperation;
+use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::Human;
 

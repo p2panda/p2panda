@@ -4,7 +4,7 @@
 //! format of document ids and document view ids.
 use thiserror::Error;
 
-use crate::operation_v2::OperationId;
+use crate::operation::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
 #[derive(Error, Debug)]
@@ -100,7 +100,7 @@ pub enum DocumentViewIdError {
 
     /// Handle errors from validating operation id hashes.
     #[error(transparent)]
-    InvalidOperationId(#[from] crate::operation_v2::error::OperationIdError),
+    InvalidOperationId(#[from] crate::operation::error::OperationIdError),
 }
 
 /// Error types for `DocumentId`.
@@ -108,5 +108,5 @@ pub enum DocumentViewIdError {
 pub enum DocumentIdError {
     /// Handle errors from validating operation ids.
     #[error(transparent)]
-    OperationIdError(#[from] crate::operation_v2::error::OperationIdError),
+    OperationIdError(#[from] crate::operation::error::OperationIdError),
 }

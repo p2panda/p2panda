@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use ed25519_dalek::{
-    Keypair as Ed25519Keypair, PublicKey as Ed25519PubicKey, SecretKey, Signature, Signer, Verifier,
-};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
 use crate::identity::error::KeyPairError;
-use crate::identity::PublicKey;
+use crate::identity::{PrivateKey, PublicKey, Signature};
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct KeyPair(Ed25519Keypair);
+pub struct KeyPair(PrivateKey);
 
 impl KeyPair {
     /// Generates a new key pair using the systems random number generator (CSPRNG) as a seed.
@@ -41,9 +37,7 @@ impl KeyPair {
     /// # }
     /// ```
     pub fn new() -> Self {
-        let mut csprng: OsRng = OsRng {};
-        let key_pair = Ed25519Keypair::generate(&mut csprng);
-        Self(key_pair)
+        Self(PrivateKey::new())
     }
 
     /// Derives a key pair from a private key.
@@ -72,35 +66,26 @@ impl KeyPair {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn from_private_key(private_key: &SecretKey) -> Result<Self, KeyPairError> {
-        // Derive public part from secret part
-        let public_key: Ed25519PubicKey = private_key.into();
-
-        // Assemble key pair from both parts
-        let bytes = [private_key.to_bytes(), public_key.to_bytes()].concat();
-        let key_pair = Ed25519Keypair::from_bytes(&bytes)?;
-
-        Ok(KeyPair(key_pair))
+    pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, KeyPairError> {
+        Ok(Self(private_key.to_owned()))
     }
 
     /// Derives a key pair from a private key (encoded as hex string for better handling in browser
     /// contexts).
     pub fn from_private_key_str(private_key: &str) -> Result<Self, KeyPairError> {
         let secret_key_bytes = hex::decode(private_key)?;
-        let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
+        let secret_key = PrivateKey::from_bytes(&secret_key_bytes)?;
         Self::from_private_key(&secret_key)
     }
 
     /// Returns the public half of the key pair.
     pub fn public_key(&self) -> PublicKey {
-        let public_key = &self.0.public;
-        let public_key: PublicKey = public_key.into();
-        public_key
+        self.0.public_key()
     }
 
     /// Returns the private half of the key pair.
-    pub fn private_key(&self) -> &SecretKey {
-        &self.0.secret
+    pub fn private_key(&self) -> PrivateKey {
+        self.0.clone()
     }
 
     /// Sign any data using this key pair.
@@ -126,17 +111,6 @@ impl KeyPair {
     pub fn sign(&self, bytes: &[u8]) -> Signature {
         self.0.sign(bytes)
     }
-
-    /// Verify the integrity of signed data.
-    pub fn verify(
-        public_key: &PublicKey,
-        bytes: &[u8],
-        signature: &Signature,
-    ) -> Result<(), KeyPairError> {
-        let public_key: Ed25519PubicKey = public_key.into();
-        public_key.verify(bytes, signature)?;
-        Ok(())
-    }
 }
 
 impl Default for KeyPair {
@@ -161,22 +135,7 @@ mod tests {
     #[test]
     fn key_pair_from_private_key() {
         let key_pair = KeyPair::new();
-        let key_pair2 = KeyPair::from_private_key(key_pair.private_key()).unwrap();
+        let key_pair2 = KeyPair::from_private_key(&key_pair.private_key()).unwrap();
         assert_eq!(key_pair.public_key(), key_pair2.public_key());
-    }
-
-    #[test]
-    fn signing() {
-        let key_pair = KeyPair::new();
-        let bytes = b"test";
-        let signature = key_pair.sign(bytes);
-        assert!(KeyPair::verify(&key_pair.public_key(), bytes, &signature).is_ok());
-
-        // Invalid data
-        assert!(KeyPair::verify(&key_pair.public_key(), b"not test", &signature).is_err());
-
-        // Invalid public key
-        let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(&key_pair_2.public_key(), bytes, &signature).is_err());
     }
 }

@@ -2,7 +2,7 @@
 
 //! Constants used across the `test_utils` module for default values.
 
-use crate::operation_v2::{
+use crate::operation::{
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::{FieldType, Schema};
@@ -87,8 +87,8 @@ pub fn schema() -> Schema {
 #[cfg(test)]
 mod tests {
     use crate::document::DocumentViewId;
-    use crate::hash_v2::Hash;
-    use crate::operation_v2::OperationId;
+    use crate::hash::Hash;
+    use crate::operation::OperationId;
     use crate::schema::{SchemaId, SchemaName};
 
     use super::*;

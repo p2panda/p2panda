@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use crate::api::ValidationError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation_v2::body::traits::Schematic;
+use crate::operation::body::traits::Schematic;
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::OperationStore;
 

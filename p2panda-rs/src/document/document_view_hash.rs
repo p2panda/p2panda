@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use crate::document::DocumentViewId;
-use crate::hash_v2::{Hash, HashId};
+use crate::hash::{Hash, HashId};
 
 /// Contains a hash over the sorted graph tips constituting this view id.
 ///

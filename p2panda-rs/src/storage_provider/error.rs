@@ -3,10 +3,10 @@
 //! Errors from storage provider and associated traits.
 use crate::document::error::DocumentBuilderError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash_v2::error::HashError;
-use crate::identity_v2::error::PublicKeyError;
-use crate::operation_v2::error::ValidateOperationError;
-use crate::operation_v2::OperationId;
+use crate::hash::error::HashError;
+use crate::identity::error::PublicKeyError;
+use crate::operation::error::ValidateOperationError;
+use crate::operation::OperationId;
 
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]

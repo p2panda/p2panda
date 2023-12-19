@@ -5,7 +5,7 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::operation_v2::body::plain::{PlainFields, PlainValue};
+use crate::operation::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaFieldDefinitionError;
 use crate::schema::SchemaId;
 

@@ -3,8 +3,8 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::hash_v2::Hash;
-use crate::operation_v2::body::plain::{PlainFields, PlainValue};
+use crate::hash::Hash;
+use crate::operation::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobError;
 
 /// Checks "mime_type" field of operations with "blob_v1" schema id.
@@ -69,7 +69,7 @@ mod test {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-    use crate::operation_v2::body::plain::PlainFields;
+    use crate::operation::body::plain::PlainFields;
     use crate::test_utils::fixtures::random_document_view_id;
 
     use super::{validate_blob_v1_fields, validate_mime_type};

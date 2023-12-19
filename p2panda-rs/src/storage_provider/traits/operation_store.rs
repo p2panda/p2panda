@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::{Operation, OperationId};
+use crate::operation::traits::AsOperation;
+use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 

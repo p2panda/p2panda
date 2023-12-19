@@ -5,29 +5,18 @@ use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
-use arrayvec::ArrayVec;
-use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
 use crate::hash::HashId;
 use crate::serde::deserialize_hex;
 use crate::{Human, Validate};
 
-/// Size of p2panda entries' hashes.
-pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
+/// Size of p2panda hashes.
+pub const HASH_SIZE: usize = blake3::KEY_LEN;
 
-/// Type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
-pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
-
-/// Hash of `Entry` or `Operation` encoded as hex string.
-///
-/// This uses the BLAKE3 algorithm wrapped in [`YASMF`] "Yet-Another-Smol-Multi-Format" according
-/// to the Bamboo specification.
-///
-/// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
+/// BLAKE3 hash of `Entry` or `Operation` encoded as hex string.
 #[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
@@ -41,19 +30,7 @@ impl Hash {
 
     /// Hashes byte data and returns it as `Hash` instance.
     pub fn new_from_bytes(value: &[u8]) -> Self {
-        // Generate Blake3 hash
-        let blake3_hash = new_blake3(value);
-
-        // Wrap hash in YASMF container format
-        let mut bytes = Vec::new();
-        blake3_hash
-            .encode_write(&mut bytes)
-            // Unwrap here as this will only fail on critical system failures
-            .unwrap();
-
-        // Encode bytes as hex string
-        let hex_str = hex::encode(&bytes);
-
+        let hex_str = blake3::hash(value).to_hex().to_string();
         Self(hex_str)
     }
 
@@ -77,14 +54,10 @@ impl Validate for Hash {
         match hex::decode(&self.0) {
             Ok(bytes) => {
                 // Check if length is correct
-                if bytes.len() != HASH_SIZE + 2 {
-                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
-                }
-
-                // Check if YASMF BLAKE3 hash is valid
-                match YasmfHash::<&[u8]>::decode(&bytes) {
-                    Ok((YasmfHash::Blake3(_), _)) => Ok(()),
-                    _ => Err(HashError::DecodingFailed),
+                if bytes.len() != HASH_SIZE {
+                    Err(HashError::InvalidLength(bytes.len(), HASH_SIZE))
+                } else {
+                    Ok(())
                 }
             }
             Err(_) => Err(HashError::InvalidHexEncoding),
@@ -104,14 +77,14 @@ impl Human for Hash {
     /// ## Example
     ///
     /// ```
-    /// # use p2panda_rs::hash::Hash;
+    /// # use p2panda_rs::hash_v2::Hash;
     /// # use p2panda_rs::Human;
-    /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+    /// let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
     /// let hash: Hash = hash_str.parse().unwrap();
     /// assert_eq!(hash.display(), "<Hash 6ec805>");
     /// ```
     fn display(&self) -> String {
-        let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
+        let offset = (HASH_SIZE * 2) - 6;
         format!("<Hash {}>", &self.as_str()[offset..])
     }
 }
@@ -140,28 +113,6 @@ impl<'de> Deserialize<'de> for Hash {
         // Convert and validate format
         let hash_str = hex::encode(hash_bytes);
         Hash::new(&hash_str).map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
-    }
-}
-
-/// Converts YASMF hash from `yasmf-hash` crate to p2panda `Hash` instance.
-impl<T: core::borrow::Borrow<[u8]> + Clone> From<&YasmfHash<T>> for Hash {
-    fn from(yasmf_hash: &YasmfHash<T>) -> Self {
-        let mut out = [0u8; MAX_YAMF_HASH_SIZE];
-        // Unwrap here as this will only fail on a critical system error
-        let _ = yasmf_hash.encode(&mut out).unwrap();
-        // Unwrap because we know it is a valid hex string
-        Self::new(&hex::encode(out)).unwrap()
-    }
-}
-
-/// Returns Yet-Another-Smol-Multiformat Hash struct from the `yasmf-hash` crate.
-///
-/// This comes in handy when interacting with the `bamboo-rs` crate.
-impl From<&Hash> for YasmfHash<Blake3ArrayVec> {
-    fn from(hash: &Hash) -> YasmfHash<Blake3ArrayVec> {
-        let bytes = hash.to_bytes();
-        let yasmf_hash = YasmfHash::<Blake3ArrayVec>::decode_owned(&bytes).unwrap();
-        yasmf_hash.0
     }
 }
 
@@ -205,23 +156,18 @@ mod tests {
 
     use ciborium::cbor;
     use serde_bytes::ByteBuf;
-    use yasmf_hash::YasmfHash;
 
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::Human;
 
-    use super::{Blake3ArrayVec, Hash};
+    use super::Hash;
 
     #[test]
     fn validate() {
         assert!(Hash::new("abcdefg").is_err());
         assert!(Hash::new("112233445566ff").is_err());
         assert!(
-            Hash::new("01234567812345678123456781234567812345678123456781234567812345678").is_err()
-        );
-        assert!(
-            Hash::new("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543")
-                .is_ok()
+            Hash::new("b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543").is_ok()
         );
     }
 
@@ -229,17 +175,8 @@ mod tests {
     fn new_from_bytes() {
         assert_eq!(
             Hash::new_from_bytes(&[1, 2, 3]),
-            Hash::new("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543")
-                .unwrap()
+            Hash::new("b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543").unwrap()
         );
-    }
-
-    #[test]
-    fn convert_yasmf() {
-        let hash = Hash::new_from_bytes(&[1, 2, 3]);
-        let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(&hash);
-        let hash_restored = Into::<Hash>::into(&yasmf_hash);
-        assert_eq!(hash, hash_restored);
     }
 
     #[test]
@@ -254,7 +191,7 @@ mod tests {
 
     #[test]
     fn from_string() {
-        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash_str = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
         // Using TryFrom<&str>
         let hash_from_str: Hash = hash_str.try_into().unwrap();
@@ -271,7 +208,7 @@ mod tests {
 
     #[test]
     fn string_representation() {
-        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash_str = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
         let hash = Hash::new(hash_str).unwrap();
 
         assert_eq!(hash_str, hash.as_str());
@@ -281,7 +218,7 @@ mod tests {
 
     #[test]
     fn short_representation() {
-        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash_str = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
         let hash = Hash::new(hash_str).unwrap();
 
         assert_eq!(hash.display(), "<Hash 496543>");
@@ -289,14 +226,14 @@ mod tests {
 
     #[test]
     fn serialize() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let hash = Hash::new(hash_str).unwrap();
         let bytes = serialize_from(hash.clone());
         assert_eq!(
             bytes,
             vec![
-                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
-                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
+                88, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40,
+                19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
             ]
         );
 
@@ -308,14 +245,10 @@ mod tests {
 
     #[test]
     fn deserialize() {
-        // Deserialize from non human-readable CBOR bytes
-        let hash_bytes = [
-            0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40, 19,
-            183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5,
-        ];
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_bytes = hex::decode(hash_str).unwrap();
         let hash: Hash =
             deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         assert_eq!(Hash::new(hash_str).unwrap(), hash);
 
         // Invalid hashes
@@ -323,32 +256,5 @@ mod tests {
         assert!(invalid_hash.is_err());
         let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("xyz".as_bytes())));
         assert!(invalid_hash.is_err(), "{:#?}", invalid_hash);
-    }
-
-    #[test]
-    fn deserialize_human_readable() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-
-        #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct Test {
-            hash: Hash,
-        }
-
-        // Deserialize from human-readable (hex-encoded) JSON string
-        let json = format!(
-            r#"
-            {{
-                "hash": "{hash_str}"
-            }}
-        "#
-        );
-
-        let result: Test = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            Test {
-                hash: Hash::new(hash_str).unwrap()
-            },
-            result
-        );
     }
 }

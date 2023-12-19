@@ -3,16 +3,16 @@
 use crate::api::validation::{get_checked_document_id_for_view_id, validate_claimed_schema_id};
 use crate::api::DomainError;
 use crate::document::DocumentId;
-use crate::operation_v2::body::decode::decode_body;
-use crate::operation_v2::body::plain::{self, PlainOperation};
-use crate::operation_v2::body::{Body, EncodedBody};
-use crate::operation_v2::header::decode::decode_header;
-use crate::operation_v2::header::traits::Actionable;
-use crate::operation_v2::header::validate::validate_payload;
-use crate::operation_v2::header::EncodedHeader;
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::validate::validate_plain_operation;
-use crate::operation_v2::{Operation, OperationAction};
+use crate::operation::body::decode::decode_body;
+use crate::operation::body::plain::{self, PlainOperation};
+use crate::operation::body::{Body, EncodedBody};
+use crate::operation::header::decode::decode_header;
+use crate::operation::header::traits::Actionable;
+use crate::operation::header::validate::validate_payload;
+use crate::operation::header::EncodedHeader;
+use crate::operation::traits::AsOperation;
+use crate::operation::validate::validate_plain_operation;
+use crate::operation::{Operation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 

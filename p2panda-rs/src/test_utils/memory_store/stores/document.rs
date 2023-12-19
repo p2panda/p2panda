@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 
 use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
-use crate::operation_v2::body::traits::Schematic;
-use crate::operation_v2::traits::AsOperation;
+use crate::operation::body::traits::Schematic;
+use crate::operation::traits::AsOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::{DocumentStore, OperationStore};

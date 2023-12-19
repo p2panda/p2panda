@@ -2,7 +2,7 @@
 
 use rstest::fixture;
 
-use crate::operation_v2::OperationValue;
+use crate::operation::OperationValue;
 use crate::schema::Schema;
 use crate::test_utils::constants;
 use crate::test_utils::fixtures::schema;

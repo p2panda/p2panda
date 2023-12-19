@@ -4,10 +4,10 @@ use async_trait::async_trait;
 use log::debug;
 
 use crate::document::DocumentId;
-use crate::operation_v2::body::traits::Schematic;
-use crate::operation_v2::header::traits::Actionable;
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::{Operation, OperationId};
+use crate::operation::body::traits::Schematic;
+use crate::operation::header::traits::Actionable;
+use crate::operation::traits::AsOperation;
+use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;

@@ -60,7 +60,7 @@ pub enum SchemaIdError {
 
     /// Invalid hash in schema id.
     #[error("encountered invalid hash while parsing application schema id: {0}")]
-    HashError(#[from] crate::hash_v2::error::HashError),
+    HashError(#[from] crate::hash::error::HashError),
 
     /// Handle errors from validating document view ids.
     #[error("encountered invalid document view id while parsing application schema id: {0}")]
@@ -68,7 +68,7 @@ pub enum SchemaIdError {
 
     /// Handle errors from validating operation ids.
     #[error("encountered invalid hash while parsing application schema id: {0}")]
-    OperationIdError(#[from] crate::operation_v2::error::OperationIdError),
+    OperationIdError(#[from] crate::operation::error::OperationIdError),
 }
 
 /// Custom errors related to `Schema`.

@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::operation_v2::{OperationValue, PinnedRelationList};
+use crate::operation::{OperationValue, PinnedRelationList};
 use crate::schema::system::SystemSchemaError;
 use crate::schema::FieldType;
 

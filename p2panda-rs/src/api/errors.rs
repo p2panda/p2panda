@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::operation_v2::body::error::DecodeBodyError;
-use crate::operation_v2::error::ValidateOperationError;
-use crate::operation_v2::header::error::{DecodeHeaderError, ValidateHeaderError};
-use crate::operation_v2::OperationId;
+use crate::operation::body::error::DecodeBodyError;
+use crate::operation::error::ValidateOperationError;
+use crate::operation::header::error::{DecodeHeaderError, ValidateHeaderError};
+use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 

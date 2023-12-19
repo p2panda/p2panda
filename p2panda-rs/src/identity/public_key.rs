@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryInto;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
-use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
+use ed25519_dalek_v2::{VerifyingKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 
 use crate::identity::error::PublicKeyError;
+use crate::identity::Signature;
 use crate::serde::{deserialize_hex, serialize_hex};
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Copy)]
-pub struct PublicKey(Ed25519PublicKey);
+pub struct PublicKey(VerifyingKey);
 
 impl PublicKey {
     /// Validates and wraps Ed25519 public key string into a new `PublicKey` instance.
@@ -36,27 +38,34 @@ impl PublicKey {
     /// # }
     /// ```
     pub fn new(value: &str) -> Result<Self, PublicKeyError> {
+        // Check if hex-encoding is correct
         let bytes = match hex::decode(value) {
-            Ok(bytes) => {
-                // Check if length is correct
-                if bytes.len() != PUBLIC_KEY_LENGTH {
-                    return Err(PublicKeyError::InvalidLength);
-                }
-                bytes
-            }
+            Ok(bytes) => bytes,
             Err(_) => {
                 return Err(PublicKeyError::InvalidHexEncoding);
             }
         };
 
-        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes)?;
-        let public_key = Self(ed25519_public_key);
-        Ok(public_key)
+        Self::from_bytes(&bytes)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PublicKeyError> {
+        // Check if length is correct
+        let bytes: [u8; PUBLIC_KEY_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| PublicKeyError::InvalidLength)?;
+
+        let ed25519_public_key = VerifyingKey::from_bytes(&bytes)?;
+        Ok(Self(ed25519_public_key))
     }
 
     /// Returns public_key represented as bytes.
     pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
+    }
+
+    pub fn verify(&self, bytes: &[u8], signature: &Signature) -> bool {
+        self.0.verify_strict(bytes, &signature.into()).is_ok()
     }
 }
 
@@ -81,10 +90,9 @@ impl<'de> Deserialize<'de> for PublicKey {
         D: serde::Deserializer<'de>,
     {
         let bytes = deserialize_hex(deserializer)?;
-        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes).map_err(|err| {
+        let public_key = Self::from_bytes(&bytes).map_err(|err| {
             serde::de::Error::custom(format!("invalid public key bytes, {}", err))
         })?;
-        let public_key = Self(ed25519_public_key);
         Ok(public_key)
     }
 }
@@ -107,25 +115,24 @@ impl Human for PublicKey {
     }
 }
 
-/// Convert ed25519_dalek `PublicKey` to `PublicKey` instance.
-impl From<&Ed25519PublicKey> for PublicKey {
-    fn from(public_key: &Ed25519PublicKey) -> Self {
+impl From<VerifyingKey> for PublicKey {
+    fn from(public_key: VerifyingKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
         Self::new(&hex::encode(public_key.to_bytes())).unwrap()
     }
 }
 
-impl From<&PublicKey> for Ed25519PublicKey {
+impl From<&PublicKey> for VerifyingKey {
     fn from(public_key: &PublicKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
-        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
+        VerifyingKey::from_bytes(&public_key.to_bytes()).unwrap()
     }
 }
 
-impl From<PublicKey> for Ed25519PublicKey {
+impl From<PublicKey> for VerifyingKey {
     fn from(public_key: PublicKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
-        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
+        VerifyingKey::from_bytes(&public_key.to_bytes()).unwrap()
     }
 }
 
@@ -156,10 +163,11 @@ impl Eq for PublicKey {}
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
-    use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
+    use ed25519_dalek_v2::{VerifyingKey, PUBLIC_KEY_LENGTH};
     use serde_bytes::Bytes;
 
     use crate::identity::error::PublicKeyError;
+    use crate::identity::PrivateKey;
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::Human;
 
@@ -171,7 +179,7 @@ mod tests {
             PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
                 .unwrap();
         assert_eq!(
-            serialize_from(public_key),
+            serialize_from(public_key.clone()),
             serialize_value(cbor!(Bytes::new(&public_key.to_bytes())))
         );
     }
@@ -182,7 +190,7 @@ mod tests {
             PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
                 .unwrap();
         assert_eq!(
-            deserialize_into::<PublicKey>(&serialize_from(public_key)).unwrap(),
+            deserialize_into::<PublicKey>(&serialize_from(public_key.clone())).unwrap(),
             public_key
         );
     }
@@ -225,10 +233,10 @@ mod tests {
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
             243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
         ];
-        let public_key = Ed25519PublicKey::from_bytes(&public_key_bytes).unwrap();
+        let public_key = VerifyingKey::from_bytes(&public_key_bytes).unwrap();
 
         // Convert `ed25519_dalek` `PublicKey` into `PublicKey` instance
-        let public_key: PublicKey = (&public_key).into();
+        let public_key: PublicKey = public_key.into();
         assert_eq!(public_key.to_string(), hex::encode(public_key_bytes));
     }
 
@@ -256,5 +264,21 @@ mod tests {
         let public_key = PublicKey::new(public_key_str).unwrap();
 
         assert_eq!(public_key.display(), "<PublicKey a5d982>");
+    }
+
+    #[test]
+    fn signing() {
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+        let bytes = b"test";
+        let signature = private_key.sign(bytes);
+        assert!(public_key.verify(bytes, &signature));
+
+        // Invalid data
+        assert!(!public_key.verify(b"not test", &signature));
+
+        // Invalid public key
+        let public_key_2 = PrivateKey::new().public_key();
+        assert!(!public_key_2.verify(bytes, &signature));
     }
 }

@@ -15,12 +15,8 @@ pub enum HashError {
     InvalidHexEncoding,
 
     /// Hash is not a valid YASMF BLAKE3 hash.
-    #[error("can not decode YASMF BLAKE3 hash")]
+    #[error("can not decode BLAKE3 hash")]
     DecodingFailed,
-
-    /// Internal error from `yasmf_hash` crate.
-    #[error(transparent)]
-    YasmfHashError(#[from] yasmf_hash::error::Error),
 
     /// Internal error from `hex` crate.
     #[error(transparent)]

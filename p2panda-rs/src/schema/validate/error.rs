@@ -3,7 +3,7 @@
 //! Error types for validating operation fields against schemas.
 use thiserror::Error;
 
-use crate::operation_v2::body::error::PlainValueError;
+use crate::operation::body::error::PlainValueError;
 
 /// Custom error types for validating raw operations with schemas.
 #[derive(Error, Debug)]

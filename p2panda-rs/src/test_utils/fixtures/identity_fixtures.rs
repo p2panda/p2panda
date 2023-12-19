@@ -2,7 +2,7 @@
 
 use rstest::fixture;
 
-use crate::identity_v2::{KeyPair, PublicKey};
+use crate::identity::{KeyPair, PublicKey};
 use crate::test_utils::constants::PRIVATE_KEY;
 
 /// Fixture which injects the default private key string into a test method.

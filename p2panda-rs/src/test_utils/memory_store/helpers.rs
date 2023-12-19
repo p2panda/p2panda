@@ -4,12 +4,12 @@
 
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::identity_v2::KeyPair;
-use crate::operation_v2::body::encode::encode_body;
-use crate::operation_v2::header::encode::encode_header;
-use crate::operation_v2::header::HeaderAction;
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::{Operation, OperationBuilder, OperationValue};
+use crate::identity::KeyPair;
+use crate::operation::body::encode::encode_body;
+use crate::operation::header::encode::encode_header;
+use crate::operation::header::HeaderAction;
+use crate::operation::traits::AsOperation;
+use crate::operation::{Operation, OperationBuilder, OperationValue};
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 use crate::storage_provider::utils::Result;

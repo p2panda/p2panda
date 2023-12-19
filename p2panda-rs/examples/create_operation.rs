@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use p2panda_rs::identity_v2::KeyPair;
-use p2panda_rs::operation_v2::body::encode::encode_body;
-use p2panda_rs::operation_v2::header::encode::encode_header;
-use p2panda_rs::operation_v2::OperationBuilder;
+use p2panda_rs::identity::KeyPair;
+use p2panda_rs::operation::body::encode::encode_body;
+use p2panda_rs::operation::header::encode::encode_header;
+use p2panda_rs::operation::OperationBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Id of the schema which describes the data we want to publish. This should

@@ -3,7 +3,7 @@
 use crate::api::validation::get_checked_document_id_for_view_id;
 use crate::api::DomainError;
 use crate::document::DocumentViewId;
-use crate::identity_v2::PublicKey;
+use crate::identity::PublicKey;
 use crate::storage_provider::traits::OperationStore;
 
 type Depth = ();

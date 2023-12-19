@@ -71,6 +71,7 @@ pub mod api;
 pub mod document;
 pub mod graph;
 pub mod hash;
+pub mod operation;
 pub mod identity;
 pub mod schema;
 #[cfg(feature = "secret-group")]
@@ -82,11 +83,6 @@ pub mod storage_provider;
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
-
-// @TODO: Merge these back into original modules as soon as refactor finished
-pub mod hash_v2;
-pub mod identity_v2;
-pub mod operation_v2;
 
 /// Trait used by p2panda structs to validate data formats.
 ///

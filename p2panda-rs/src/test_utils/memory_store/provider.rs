@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::operation_v2::{OperationId, Operation};
+use crate::operation::{OperationId, Operation};
 
 /// An in-memory implementation of p2panda storage traits.
 ///

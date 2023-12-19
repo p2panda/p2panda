@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
-use crate::operation_v2::body::plain::{PlainFields, PlainValue};
+use crate::operation::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobPieceError;
 
 /// Maximum number of bytes a single blob piece can contain.
