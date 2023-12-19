@@ -9,8 +9,8 @@ use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
-use crate::operation_v2::header::traits::Authored;
-use crate::operation_v2::OperationVersion;
+use crate::operation_v2::header::traits::{Authored, Actionable};
+use crate::operation_v2::{OperationVersion, OperationAction};
 
 pub type PayloadHash = Hash;
 
@@ -50,6 +50,30 @@ impl Authored for Header {
         self.5
             .clone()
             .expect("signature needs to be given at this point")
+    }
+}
+
+
+impl Actionable for Header {
+    fn version(&self) -> OperationVersion {
+        self.0
+    }
+
+    fn action(&self) -> OperationAction {
+        let HeaderExtension {
+            action, previous, ..
+        } = self.extension();
+        match (action, previous) {
+            (None, None) => OperationAction::Create,
+            (None, Some(_)) => OperationAction::Update,
+            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
+            // If correct validation was performed this case will not occur.
+            (Some(HeaderAction::Delete), None) => unreachable!(),
+        }
+    }
+
+    fn previous(&self) -> Option<&DocumentViewId> {
+        self.extension().previous.as_ref()
     }
 }
 
