@@ -314,8 +314,7 @@ mod tests {
 
     #[rstest]
     fn string_representation(key_pair: KeyPair, schema_id: SchemaId) {
-        let operation = OperationBuilder::new(&schema_id)
-            .timestamp(1703027623)
+        let operation = OperationBuilder::new(&schema_id, 1703027623)
             .fields(&[("name", "Panda".into())])
             .sign(&key_pair)
             .unwrap();
@@ -359,8 +358,7 @@ mod tests {
         //
         // DOCUMENT: [panda_1]
 
-        let panda_operation_1 = OperationBuilder::new(schema.id())
-            .timestamp(1703027623)
+        let panda_operation_1 = OperationBuilder::new(schema.id(), 1703027623)
             .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
             .sign(&panda)
             .unwrap();

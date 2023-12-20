@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key_pair = KeyPair::new();
 
     // Build and sign a CREATE operation.
-    let operation = OperationBuilder::new(&SCHEMA_ID.parse()?)
+    let operation = OperationBuilder::new(&SCHEMA_ID.parse()?, 1703027623)
         .fields(&[("username", "panda".into())])
         .sign(&key_pair)?;
 

@@ -2,6 +2,8 @@
 
 //! Helper methods for working with a storage provider when testing.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::identity::KeyPair;
@@ -89,24 +91,29 @@ pub async fn populate_store<S: OperationStore>(
             let mut previous: Option<DocumentViewId> = None;
 
             for index in 0..config.no_of_operations {
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("can retrieve system time")
+                    .as_secs();
+
                 // Create an operation based on the current index and whether this document should
                 // contain a DELETE operation
                 let operation = match index {
                     // First operation is CREATE
-                    0 => OperationBuilder::new(config.schema.id())
+                    0 => OperationBuilder::new(config.schema.id(), timestamp)
                         .fields(&config.create_operation_fields)
                         .sign(key_pair)
                         .expect("Error building operation"),
                     // Last operation is DELETE if the with_delete flag is set
                     seq if seq == (config.no_of_operations - 1) && config.with_delete => {
-                        OperationBuilder::new(config.schema.id())
+                        OperationBuilder::new(config.schema.id(), timestamp)
                             .action(HeaderAction::Delete)
                             .previous(&previous.expect("Previous should be set"))
                             .sign(key_pair)
                             .expect("Error building operation")
                     }
                     // All other operations are UPDATE
-                    _ => OperationBuilder::new(config.schema.id())
+                    _ => OperationBuilder::new(config.schema.id(), timestamp)
                         .fields(&config.update_operation_fields)
                         .previous(&previous.expect("Previous should be set"))
                         .sign(key_pair)

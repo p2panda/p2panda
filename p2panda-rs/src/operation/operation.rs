@@ -118,8 +118,10 @@ pub struct OperationBuilder {
 
 impl OperationBuilder {
     /// Returns a new instance of `OperationBuilder`.
-    pub fn new(schema_id: &SchemaId) -> Self {
-        let header_extension = HeaderExtension::default();
+    pub fn new(schema_id: &SchemaId, timestamp: u64) -> Self {
+        let mut header_extension = HeaderExtension::default();
+        header_extension.timestamp = Some(timestamp);
+
         let body = Body(schema_id.to_owned(), None);
 
         Self {
@@ -155,12 +157,6 @@ impl OperationBuilder {
     /// Set document id.
     pub fn document_id(mut self, document_id: &DocumentId) -> Self {
         self.header_extension.document_id = Some(document_id.to_owned());
-        self
-    }
-
-    /// Set timestamp.
-    pub fn timestamp(mut self, timestamp: u64) -> Self {
-        self.header_extension.timestamp = Some(timestamp.to_owned());
         self
     }
 
@@ -305,8 +301,7 @@ mod tests {
 
         let timestamp = 1703027623;
 
-        let operation = OperationBuilder::new(&schema_id)
-            .timestamp(timestamp)
+        let operation = OperationBuilder::new(&schema_id, timestamp)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -337,11 +332,10 @@ mod tests {
 
         let timestamp = 1703027623;
 
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = OperationBuilder::new(&schema_id, timestamp)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -366,12 +360,11 @@ mod tests {
     ) {
         let timestamp = 1703027623;
 
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .sign(&key_pair)
             .unwrap();
 
@@ -396,148 +389,110 @@ mod tests {
         let timestamp = 1703027623;
 
         // Correct CREATE operation
-        assert!(OperationBuilder::new(&schema_id)
-            .timestamp(timestamp)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_ok());
 
         // CREATE operations must not contain previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // CREATE operations must not contain backlink
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .backlink(&backlink)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // CREATE operations must contain fields
-        assert!(OperationBuilder::new(&schema_id)
-            .timestamp(timestamp)
-            .sign(&key_pair)
-            .is_err());
-
-        // CREATE operations must contain timestamp
-        assert!(OperationBuilder::new(&schema_id)
-            .fields(&[("year", 2020.into())])
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .sign(&key_pair)
             .is_err());
 
         // correct UPDATE operation
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_ok());
 
         // UPDATE operations must have fields
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .sign(&key_pair)
             .is_err());
 
         // UPDATE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .document_id(&document_id)
             .backlink(&backlink)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // UPDATE operations must have document id
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // UPDATE operation must have backlink
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .document_id(&document_id)
-            .previous(&document_view_id)
-            .timestamp(timestamp)
-            .fields(&[("year", 2020.into())])
-            .sign(&key_pair)
-            .is_err());
-
-        // UPDATE operation must have timestamp
-        assert!(OperationBuilder::new(&schema_id)
-            .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // correct DELETE operation
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .sign(&key_pair)
             .is_ok());
 
         // DELETE operations must not have fields
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // DELETE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
-            .timestamp(timestamp)
             .sign(&key_pair)
             .is_err());
 
         // DELETE operations must have document id
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .timestamp(timestamp)
             .sign(&key_pair)
             .is_err());
 
         // DELETE operation must have backlink
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .previous(&document_view_id)
-            .timestamp(timestamp)
-            .sign(&key_pair)
-            .is_err());
-
-        // correct DELETE operation must have timestamp
-        assert!(OperationBuilder::new(&schema_id)
-            .action(HeaderAction::Delete)
-            .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .sign(&key_pair)
             .is_err());
@@ -548,14 +503,12 @@ mod tests {
         let timestamp = 1703027623;
 
         // Create first test operation
-        let operation_1 = OperationBuilder::new(&schema_id)
-            .timestamp(timestamp)
+        let operation_1 = OperationBuilder::new(&schema_id, timestamp)
             .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
             .sign(&key_pair);
 
         // Create second test operation with same values but different order of fields
-        let operation_2 = OperationBuilder::new(&schema_id)
-            .timestamp(timestamp)
+        let operation_2 = OperationBuilder::new(&schema_id, timestamp)
             .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
             .sign(&key_pair);
 
