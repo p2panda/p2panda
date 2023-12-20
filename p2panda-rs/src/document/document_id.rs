@@ -75,6 +75,12 @@ impl From<Hash> for DocumentId {
     }
 }
 
+impl From<OperationId> for DocumentId {
+    fn from(operation: OperationId) -> Self {
+        Self(operation.into())
+    }
+}
+
 impl FromStr for DocumentId {
     type Err = DocumentIdError;
 
