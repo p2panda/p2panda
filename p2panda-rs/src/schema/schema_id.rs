@@ -66,7 +66,7 @@ impl SchemaId {
     /// assert!(system_schema.is_ok());
     ///
     /// let application_schema = SchemaId::new(
-    ///     "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+    ///     "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
     /// );
     /// assert!(application_schema.is_ok());
     /// ```
@@ -285,7 +285,7 @@ mod test {
     #[rstest]
     #[case(
         SchemaId::new(SCHEMA_ID).unwrap(),
-        "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
     #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
@@ -303,9 +303,9 @@ mod test {
 
     #[rstest]
     #[case(
-        SchemaId::new_application(&SchemaName::new("venue").unwrap(), &"0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771".parse().unwrap()
+        SchemaId::new_application(&SchemaName::new("venue").unwrap(), &"ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771".parse().unwrap()
         ),
-        "venue_0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771"
+        "venue_ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771"
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
     #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
@@ -324,32 +324,32 @@ mod test {
     )]
     // Only an operation id, could be interpreted as document view id but still missing the name
     #[case(
-        "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-        "malformed schema id `0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: doesn't contain an underscore"
+        "c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+        "malformed schema id `c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: doesn't contain an underscore"
     )]
     // Only the name is missing now
     #[case(
-        "_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-        "application schema id is missing a name: _0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c\
+        "_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+        "application schema id is missing a name: _c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c\
         7b9ab46293111c48fc78b"
     )]
     // Name contains invalid characters
     #[case(
-        "abc2%_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-        "malformed schema id `abc2%_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: name contains too many or invalid characters"
+        "abc2%_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+        "malformed schema id `abc2%_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: name contains too many or invalid characters"
     )]
     // This name is too long, parser will fail trying to read its last section as an operation id
     #[case(
-        "this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65\
+        "this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_c65\
         567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
         "encountered invalid hash while parsing application schema id: invalid hex encoding in \
         hash string"
     )]
     // This hash is malformed
     #[case(
-        "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7",
-        "encountered invalid hash while parsing application schema id: invalid hash length 33 \
-        bytes, expected 34 bytes"
+        "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7",
+        "encountered invalid hash while parsing application schema id: invalid hash length 31 \
+        bytes, expected 32 bytes"
     )]
     // this looks like a system schema, but it is not
     #[case(
@@ -371,20 +371,20 @@ mod test {
     #[test]
     fn new_schema_type() {
         let appl_schema = SchemaId::new(
-            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+            "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
         )
         .unwrap();
         assert_eq!(
             appl_schema,
             SchemaId::new(
-                "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+                "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
             )
             .unwrap()
         );
 
         assert_eq!(
             format!("{}", appl_schema),
-            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
 
         let schema = SchemaId::new("schema_definition_v50").unwrap();
@@ -406,11 +406,11 @@ mod test {
     fn string_representation(schema_id: SchemaId) {
         assert_eq!(
             schema_id.to_string(),
-            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
         assert_eq!(
             format!("{}", schema_id),
-            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            "venue_c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
         assert_eq!(format!("{}", SchemaId::Blob(1)), "blob_v1");
         assert_eq!(format!("{}", SchemaId::BlobPiece(1)), "blob_piece_v1");
