@@ -299,7 +299,9 @@ mod tests {
     use crate::document::{
         Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
+    use crate::hash::HashId;
     use crate::identity::KeyPair;
+    use crate::operation::traits::AsOperation;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
@@ -351,7 +353,7 @@ mod tests {
         )
         .unwrap();
 
-        let store = MemoryStore::default();
+        let mut operations = Vec::new();
 
         // Panda publishes a CREATE operation.
         // This instantiates a new document.
@@ -363,162 +365,149 @@ mod tests {
             .sign(&panda)
             .unwrap();
 
-        send_to_store(&store, &panda_operation_1, &schema)
-            .await
-            .unwrap();
+        let document_id = DocumentId::new(panda_operation_1.id());
+
+        operations.push(panda_operation_1.clone());
 
         // Panda publishes an UPDATE operation.
         // It contains the id of the previous operation in it's `previous` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
+
+        let panda_operation_2 = OperationBuilder::new(schema.id(), 1703027624)
+            .document_id(&document_id)
+            .backlink(panda_operation_1.id().as_hash())
+            .previous(&panda_operation_1.id().clone().into())
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .sign(&panda)
+            .unwrap();
+
+        operations.push(panda_operation_2.clone());
+
+        // Penguin publishes an update operation which creates a new branch in the graph.
+        // This is because they didn't know about Panda's second operation.
         //
-        //         let panda_operation_2 = OperationBuilder::new(schema.id())
-        //             .action(OperationAction::Update)
-        //             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-        //             .previous(&panda_entry_1.hash().into())
-        //             .build()
-        //             .unwrap();
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let penguin_operation_1 = OperationBuilder::new(schema.id(), 1703027625)
+            .document_id(&document_id)
+            .fields(&[(
+                "name",
+                OperationValue::String("Penguin Cafe!!!".to_string()),
+            )])
+            .previous(&panda_operation_2.id().clone().into())
+            .sign(&panda)
+            .unwrap();
+
+        operations.push(penguin_operation_1.clone());
+
+        // Penguin publishes a new operation while now being aware of the previous branching situation.
+        // Their `previous` field now contains 2 operation id's.
         //
-        //         let (panda_entry_2, _) = send_to_store(&store, &panda_operation_2, &schema, &panda)
-        //             .await
-        //             .unwrap();
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
+        //                    \----[panda_2]<--/
+
+        let penguin_operation_2 = OperationBuilder::new(schema.id(), 1703027626)
+            .document_id(&document_id)
+            .backlink(penguin_operation_1.id().as_hash())
+            .previous(&DocumentViewId::new(&[
+                penguin_operation_1.id().clone(),
+                panda_operation_2.id().clone(),
+            ]))
+            .fields(&[(
+                "name",
+                OperationValue::String("Polar Bear Cafe".to_string()),
+            )])
+            .sign(&penguin)
+            .unwrap();
+
+        operations.push(penguin_operation_2.clone());
+
+        // Penguin publishes a new update operation which points at the current graph tip.
         //
-        //         // Penguin publishes an update operation which creates a new branch in the graph.
-        //         // This is because they didn't know about Panda's second operation.
-        //         //
-        //         // DOCUMENT: [panda_1]<--[penguin_1]
-        //         //                    \----[panda_2]
-        //
-        //         let penguin_operation_1 = OperationBuilder::new(schema.id())
-        //             .action(OperationAction::Update)
-        //             .fields(&[(
-        //                 "name",
-        //                 OperationValue::String("Penguin Cafe!!!".to_string()),
-        //             )])
-        //             .previous(&panda_entry_1.hash().into())
-        //             .build()
-        //             .unwrap();
-        //
-        //         let (penguin_entry_1, _) = send_to_store(&store, &penguin_operation_1, &schema, &penguin)
-        //             .await
-        //             .unwrap();
-        //
-        //         // Penguin publishes a new operation while now being aware of the previous branching situation.
-        //         // Their `previous` field now contains 2 operation id's.
-        //         //
-        //         // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
-        //         //                    \----[panda_2]<--/
-        //
-        //         let penguin_operation_2 = OperationBuilder::new(schema.id())
-        //             .action(OperationAction::Update)
-        //             .fields(&[(
-        //                 "name",
-        //                 OperationValue::String("Polar Bear Cafe".to_string()),
-        //             )])
-        //             .previous(&DocumentViewId::new(&[
-        //                 penguin_entry_1.hash().into(),
-        //                 panda_entry_2.hash().into(),
-        //             ]))
-        //             .build()
-        //             .unwrap();
-        //
-        //         let (penguin_entry_2, _) = send_to_store(&store, &penguin_operation_2, &schema, &penguin)
-        //             .await
-        //             .unwrap();
-        //
-        //         // Penguin publishes a new update operation which points at the current graph tip.
-        //         //
-        //         // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]<--[penguin_3]
-        //         //                    \----[panda_2]<--/
-        //
-        //         let penguin_operation_3 = OperationBuilder::new(schema.id())
-        //             .action(OperationAction::Update)
-        //             .fields(&[(
-        //                 "name",
-        //                 OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
-        //             )])
-        //             .previous(&penguin_entry_2.hash().into())
-        //             .build()
-        //             .unwrap();
-        //
-        //         let (penguin_entry_3, _) = send_to_store(&store, &penguin_operation_3, &schema, &penguin)
-        //             .await
-        //             .unwrap();
-        //
-        //         let operations = store.operations.lock().unwrap();
-        //         let operations = operations.values().collect::<Vec<&PublishedOperation>>();
-        //         let document = Document::try_from(operations.clone());
-        //
-        //         assert!(document.is_ok(), "{:#?}", document);
-        //
-        //         // Document should resolve to expected value
-        //         let document = document.unwrap();
-        //
-        //         let mut exp_result = DocumentViewFields::new();
-        //         exp_result.insert(
-        //             "name",
-        //             DocumentViewValue::new(
-        //                 &penguin_entry_3.hash().into(),
-        //                 &OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
-        //             ),
-        //         );
-        //
-        //         let document_id = DocumentId::new(&panda_entry_1.hash().into());
-        //         let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3.hash().into()];
-        //
-        //         assert_eq!(
-        //             document.fields().unwrap().get("name"),
-        //             exp_result.get("name")
-        //         );
-        //         assert!(document.is_edited());
-        //         assert!(!document.is_deleted());
-        //         assert_eq!(document.author(), &panda.public_key());
-        //         assert_eq!(document.schema_id(), schema.id());
-        //         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
-        //         assert_eq!(document.id(), &document_id);
-        //
-        //         // Multiple replicas receiving operations in different orders should resolve to same value.
-        //         let replica_1: Document = vec![
-        //             operations[4],
-        //             operations[3],
-        //             operations[2],
-        //             operations[1],
-        //             operations[0],
-        //         ]
-        //         .try_into()
-        //         .unwrap();
-        //
-        //         let replica_2: Document = vec![
-        //             operations[2],
-        //             operations[1],
-        //             operations[0],
-        //             operations[4],
-        //             operations[3],
-        //         ]
-        //         .try_into()
-        //         .unwrap();
-        //
-        //         assert_eq!(
-        //             replica_1.fields().unwrap().get("name"),
-        //             exp_result.get("name")
-        //         );
-        //         assert!(replica_1.is_edited());
-        //         assert!(!replica_1.is_deleted());
-        //         assert_eq!(replica_1.author(), &panda.public_key());
-        //         assert_eq!(replica_1.schema_id(), schema.id());
-        //         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
-        //         assert_eq!(replica_1.id(), &document_id);
-        //
-        //         assert_eq!(
-        //             replica_1.fields().unwrap().get("name"),
-        //             replica_2.fields().unwrap().get("name")
-        //         );
-        //         assert_eq!(replica_1.id(), replica_2.id());
-        //         assert_eq!(
-        //             replica_1.view_id().graph_tips(),
-        //             replica_2.view_id().graph_tips(),
-        //         );
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]<--[penguin_3]
+        //                    \----[panda_2]<--/
+
+        let penguin_operation_3 = OperationBuilder::new(schema.id(), 1703027627)
+            .document_id(&document_id)
+            .backlink(penguin_operation_2.id().as_hash())
+            .previous(&penguin_operation_2.id().clone().into())
+            .fields(&[(
+                "name",
+                OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            )])
+            .sign(&penguin)
+            .unwrap();
+
+        operations.push(penguin_operation_3.clone());
+
+        let (document, operations) = DocumentBuilder::new(operations).build().unwrap();
+        let mut exp_result = DocumentViewFields::new();
+        exp_result.insert(
+            "name",
+            DocumentViewValue::new(
+                penguin_operation_3.id().into(),
+                &OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            ),
+        );
+
+        let document_id = DocumentId::new(panda_operation_1.id().into());
+        let expected_graph_tips: Vec<OperationId> = vec![penguin_operation_3.id().clone()];
+
+        assert_eq!(
+            document.fields().unwrap().get("name"),
+            exp_result.get("name")
+        );
+        assert!(document.is_edited());
+        assert!(!document.is_deleted());
+        assert_eq!(document.author(), &panda.public_key());
+        assert_eq!(document.schema_id(), schema.id());
+        assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
+        assert_eq!(document.id(), &document_id);
+
+        // Multiple documents receiving operations in different orders should resolve to same value.
+        let (document_1, _) = DocumentBuilder::new(vec![
+            operations[4].clone(),
+            operations[3].clone(),
+            operations[2].clone(),
+            operations[1].clone(),
+            operations[0].clone(),
+        ])
+        .build()
+        .unwrap();
+
+        let (document_2, _) = DocumentBuilder::new(vec![
+            operations[2].clone(),
+            operations[1].clone(),
+            operations[0].clone(),
+            operations[4].clone(),
+            operations[3].clone(),
+        ])
+        .build()
+        .unwrap();
+
+        assert_eq!(
+            document_1.fields().unwrap().get("name"),
+            exp_result.get("name")
+        );
+        assert!(document_1.is_edited());
+        assert!(!document_1.is_deleted());
+        assert_eq!(document_1.author(), &panda.public_key());
+        assert_eq!(document_1.schema_id(), schema.id());
+        assert_eq!(document_1.view_id().graph_tips(), expected_graph_tips);
+        assert_eq!(document_1.id(), &document_id);
+
+        assert_eq!(
+            document_1.fields().unwrap().get("name"),
+            document_2.fields().unwrap().get("name")
+        );
+        assert_eq!(document_1.id(), document_2.id());
+        assert_eq!(
+            document_1.view_id().graph_tips(),
+            document_2.view_id().graph_tips(),
+        );
     }
     //
     //     #[rstest]
