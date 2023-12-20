@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document;
-use crate::document::DocumentId;
-use crate::document::DocumentViewId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::Hash;
-use crate::hash::HashId;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
-use crate::operation::body::plain::{PlainFields, PlainOperation};
+use crate::operation::body::plain::PlainFields;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
-use crate::operation::error::OperationBuilderError;
+use crate::operation::error::{OperationBuilderError, ValidateOperationError};
 use crate::operation::header::encode::{encode_header, sign_header};
 use crate::operation::header::traits::{Actionable, Authored};
 use crate::operation::header::{Header, HeaderAction, HeaderExtension};
@@ -20,8 +17,6 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 use crate::Validate;
-
-use super::error::ValidateOperationError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operation(OperationId, Header, Body);
@@ -292,13 +287,13 @@ mod tests {
     use crate::operation::header::traits::Actionable;
     use crate::operation::header::HeaderAction;
     use crate::operation::traits::AsOperation;
-    use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
+    use crate::operation::{
+        OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
+    };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, key_pair, random_hash, schema, schema_id,
+        document_id, document_view_id, key_pair, random_hash, schema_id,
     };
-
-    use super::OperationBuilder;
 
     #[rstest]
     fn operation_builder_create(key_pair: KeyPair, schema_id: SchemaId) {
