@@ -59,7 +59,7 @@ impl Validate for Operation {
 
         let document_id = match document_id {
             Some(document_id) => document_id.to_owned(),
-            None => return Err(ValidateOperationError::ExpectedDocumentId),
+            None => DocumentId::new(self.id()),
         };
 
         if timestamp.is_none() {
@@ -194,10 +194,11 @@ impl AsOperation for Operation {
         &self.0
     }
 
-    fn document_id(&self) -> &DocumentId {
-        // Safely unwrap as we validated already that the operation header contains required field
-        // document id.
-        self.header().extension().document_id.as_ref().unwrap()
+    fn document_id(&self) -> DocumentId {
+        match self.header().extension().document_id.as_ref() {
+            Some(document_id) => document_id.clone(),
+            None => DocumentId::new(self.id()),
+        }
     }
 
     /// Timestamp
