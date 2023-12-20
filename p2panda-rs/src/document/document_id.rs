@@ -107,7 +107,7 @@ mod tests {
     #[rstest]
     fn conversion(#[from(random_hash)] hash: Hash) {
         // Converts any string to `DocumentId`
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn string_representation() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
 
         assert_eq!(document_id.to_string(), hash_str);
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn short_representation() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
 
         assert_eq!(document_id.display(), "<DocumentId 6ec805>");
@@ -144,27 +144,26 @@ mod tests {
     fn serialize() {
         let bytes = serialize_from(
             DocumentId::from_str(
-                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805",
+                "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805",
             )
             .unwrap(),
         );
         assert_eq!(
             bytes,
             vec![
-                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
-                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
+                88, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40,
+                19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
             ]
         );
     }
 
     #[test]
     fn deserialize() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let document_id: DocumentId =
-            deserialize_into(&serialize_value(cbor!(hex_string_to_bytes(
-                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
-            ))))
-            .unwrap();
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let document_id: DocumentId = deserialize_into(&serialize_value(cbor!(
+            hex_string_to_bytes("cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805")
+        )))
+        .unwrap();
         assert_eq!(DocumentId::from_str(hash_str).unwrap(), document_id);
 
         // Invalid hashes
