@@ -138,6 +138,12 @@ impl OperationBuilder {
         self
     }
 
+    /// Set operation backlink.
+    pub fn backlink(mut self, backlink: &Hash) -> Self {
+        self.header_extension.backlink = Some(backlink.to_owned());
+        self
+    }
+
     /// Set previous operations.
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
         self.header_extension.previous = Some(previous.to_owned());
