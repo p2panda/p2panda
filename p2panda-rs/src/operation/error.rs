@@ -33,6 +33,10 @@ pub enum ValidateOperationError {
     #[error("expected 'document_id' in operation header")]
     ExpectedDocumentId,
 
+    /// Expect `document_id` on all operations.
+    #[error("unexpected 'document_id' in CREATE operation header")]
+    UnexpectedDocumentId,
+
     /// Expect `timestamp` on all operations.
     #[error("expected 'timestamp' in operation header")]
     ExpectedTimestamp,
