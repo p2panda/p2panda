@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document;
 use crate::document::DocumentId;
 use crate::document::DocumentViewId;
 use crate::hash::Hash;
@@ -192,7 +193,6 @@ impl OperationBuilder {
     /// regarding operation action.
     pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
         let payload = encode_body(&self.body)?;
-        let plain_operation: PlainOperation = (&self.body).into();
         let header = sign_header(self.header_extension, &payload, key_pair)?;
         let header_hash = encode_header(&header)?.hash();
         let operation = Operation::new(header_hash.into(), header, self.body)?;
@@ -278,5 +278,315 @@ impl Authored for Operation {
 
     fn signature(&self) -> crate::identity::Signature {
         self.header().signature()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::identity::KeyPair;
+    use crate::operation::body::traits::Schematic;
+    use crate::operation::header::traits::Actionable;
+    use crate::operation::header::HeaderAction;
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{
+        document_id, document_view_id, key_pair, random_hash, schema, schema_id,
+    };
+
+    use super::OperationBuilder;
+
+    #[rstest]
+    fn operation_builder_create(key_pair: KeyPair, schema_id: SchemaId) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let timestamp = 1703027623;
+
+        let operation = OperationBuilder::new(&schema_id)
+            .timestamp(timestamp)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        assert_eq!(operation.version(), OperationVersion::V1);
+        assert_eq!(operation.action(), OperationAction::Create);
+        assert_eq!(operation.schema_id(), &schema_id);
+        assert_eq!(operation.document_id(), DocumentId::new(operation.id()));
+        assert_eq!(operation.backlink(), None);
+        assert_eq!(operation.previous(), None);
+        assert_eq!(operation.timestamp(), timestamp);
+        assert_eq!(operation.fields(), Some(&fields.into()));
+    }
+
+    #[rstest]
+    fn operation_builder_update(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_hash)] backlink: Hash,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
+    ) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let timestamp = 1703027623;
+
+        let operation = OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        assert_eq!(operation.version(), OperationVersion::V1);
+        assert_eq!(operation.action(), OperationAction::Update);
+        assert_eq!(operation.schema_id(), &schema_id);
+        assert_eq!(operation.document_id(), document_id);
+        assert_eq!(operation.backlink(), Some(&backlink));
+        assert_eq!(operation.previous(), Some(&document_view_id));
+        assert_eq!(operation.timestamp(), timestamp);
+        assert_eq!(operation.fields(), Some(&fields.into()));
+    }
+
+    #[rstest]
+    fn operation_builder_delete(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_hash)] backlink: Hash,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
+    ) {
+        let timestamp = 1703027623;
+
+        let operation = OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .unwrap();
+
+        assert_eq!(operation.version(), OperationVersion::V1);
+        assert_eq!(operation.action(), OperationAction::Delete);
+        assert_eq!(operation.schema_id(), &schema_id);
+        assert_eq!(operation.document_id(), document_id);
+        assert_eq!(operation.backlink(), Some(&backlink));
+        assert_eq!(operation.previous(), Some(&document_view_id));
+        assert_eq!(operation.timestamp(), timestamp);
+        assert_eq!(operation.fields(), None);
+    }
+
+    #[rstest]
+    fn operation_builder_validation(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_hash)] backlink: Hash,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
+    ) {
+        let timestamp = 1703027623;
+
+        // Correct CREATE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_ok());
+
+        // CREATE operations must not contain previous
+        assert!(OperationBuilder::new(&schema_id)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // CREATE operations must not contain backlink
+        assert!(OperationBuilder::new(&schema_id)
+            .backlink(&backlink)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // CREATE operations must contain fields
+        assert!(OperationBuilder::new(&schema_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_err());
+
+        // CREATE operations must contain timestamp
+        assert!(OperationBuilder::new(&schema_id)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // correct UPDATE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_ok());
+
+        // UPDATE operations must have fields
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_err());
+
+        // UPDATE operations must have previous
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // UPDATE operations must have document id
+        assert!(OperationBuilder::new(&schema_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // UPDATE operation must have backlink
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // UPDATE operation must have timestamp
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // correct DELETE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_ok());
+
+        // DELETE operations must not have fields
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
+        // DELETE operations must have previous
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_err());
+
+        // DELETE operations must have document id
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_err());
+
+        // DELETE operation must have backlink
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .previous(&document_view_id)
+            .timestamp(timestamp)
+            .sign(&key_pair)
+            .is_err());
+
+        // correct DELETE operation must have timestamp
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .sign(&key_pair)
+            .is_err());
+    }
+
+    #[rstest]
+    fn field_ordering(key_pair: KeyPair, schema_id: SchemaId) {
+        let timestamp = 1703027623;
+
+        // Create first test operation
+        let operation_1 = OperationBuilder::new(&schema_id)
+            .timestamp(timestamp)
+            .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
+            .sign(&key_pair);
+
+        // Create second test operation with same values but different order of fields
+        let operation_2 = OperationBuilder::new(&schema_id)
+            .timestamp(timestamp)
+            .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
+            .sign(&key_pair);
+
+        assert_eq!(operation_1.unwrap(), operation_2.unwrap());
+    }
+
+    #[test]
+    fn field_iteration() {
+        // Create first test operation
+        let mut fields = OperationFields::new();
+        fields
+            .insert("a", OperationValue::String("sloth".to_owned()))
+            .unwrap();
+        fields
+            .insert("b", OperationValue::String("penguin".to_owned()))
+            .unwrap();
+
+        let mut field_iterator = fields.iter();
+
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &OperationValue::String("sloth".to_owned())
+        );
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &OperationValue::String("penguin".to_owned())
+        );
     }
 }
