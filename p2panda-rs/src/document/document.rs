@@ -299,14 +299,18 @@ mod tests {
     use crate::document::{
         Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
-    use crate::hash::HashId;
+    use crate::hash::{Hash, HashId};
     use crate::identity::KeyPair;
+    use crate::operation::header::HeaderAction;
     use crate::operation::traits::AsOperation;
-    use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
+    use crate::operation::{
+        OperationAction, OperationBuilder, OperationFields, OperationId, OperationValue,
+    };
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
-        key_pair, operation_fields, random_document_view_id, random_operation_id, schema, schema_id,
+        document_id, document_view_id, key_pair, operation_fields, random_document_view_id,
+        random_hash, random_operation_id, schema, schema_id,
     };
     use crate::test_utils::memory_store::helpers::send_to_store;
     use crate::test_utils::memory_store::MemoryStore;
@@ -397,8 +401,8 @@ mod tests {
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous(&panda_operation_2.id().clone().into())
-            .sign(&panda)
+            .previous(&panda_operation_1.id().clone().into())
+            .sign(&penguin)
             .unwrap();
 
         operations.push(penguin_operation_1.clone());
@@ -509,349 +513,425 @@ mod tests {
             document_2.view_id().graph_tips(),
         );
     }
-    //
-    //     #[rstest]
-    //     fn must_have_create_operation(
-    //         #[from(published_operation)]
-    //         #[with(
-    //             Some(operation_fields(constants::test_fields())),
-    //             constants::schema(),
-    //             Some(random_document_view_id())
-    //         )]
-    //         update_operation: PublishedOperation,
-    //     ) {
-    //         let document: Result<Document, _> = vec![&update_operation].try_into();
-    //         assert_eq!(
-    //             document.unwrap_err().to_string(),
-    //             format!(
-    //                 "operation {} cannot be connected to the document graph",
-    //                 WithId::<OperationId>::id(&update_operation)
-    //             )
-    //         );
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn incorrect_previous_operations(
-    //         #[from(published_operation)]
-    //         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-    //         create_operation: PublishedOperation,
-    //         #[from(published_operation)]
-    //         #[with(
-    //             Some(operation_fields(constants::test_fields())),
-    //             constants::schema(),
-    //             Some(random_document_view_id())
-    //         )]
-    //         update_operation: PublishedOperation,
-    //     ) {
-    //         let document: Result<Document, _> = vec![&create_operation, &update_operation].try_into();
-    //
-    //         assert_eq!(
-    //             document.unwrap_err().to_string(),
-    //             format!(
-    //                 "operation {} cannot be connected to the document graph",
-    //                 WithId::<OperationId>::id(&update_operation).clone()
-    //             )
-    //         );
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn operation_schemas_not_matching() {
-    //         let create_operation = published_operation(
-    //             Some(operation_fields(constants::test_fields())),
-    //             constants::schema(),
-    //             None,
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         let update_operation = published_operation(
-    //             Some(operation_fields(vec![
-    //                 ("name", "is_cute".into()),
-    //                 ("type", "bool".into()),
-    //             ])),
-    //             Schema::get_system(SchemaId::SchemaFieldDefinition(1))
-    //                 .unwrap()
-    //                 .to_owned(),
-    //             Some(WithId::<OperationId>::id(&create_operation).clone().into()),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         let document: Result<Document, _> = vec![&create_operation, &update_operation].try_into();
-    //
-    //         assert_eq!(
-    //             document.unwrap_err().to_string(),
-    //             "Could not perform reducer function: Operation 0020b7674a56756183f7d2c6afa20e06041a9a9a30b0aec728e35acf281ecff2b544 does not match the documents schema".to_string()
-    //         );
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn is_deleted(
-    //         #[from(published_operation)]
-    //         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-    //         create_operation: PublishedOperation,
-    //     ) {
-    //         let delete_operation = published_operation(
-    //             None,
-    //             constants::schema(),
-    //             Some(DocumentViewId::new(&[WithId::<OperationId>::id(
-    //                 &create_operation,
-    //             )
-    //             .clone()])),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         let document: Document = vec![&create_operation, &delete_operation]
-    //             .try_into()
-    //             .unwrap();
-    //
-    //         assert!(document.is_deleted());
-    //         assert!(document.fields().is_none());
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn more_than_one_create(
-    //         #[from(published_operation)] create_operation: PublishedOperation,
-    //     ) {
-    //         let document: Result<Document, _> = vec![&create_operation, &create_operation].try_into();
-    //
-    //         assert_eq!(
-    //             document.unwrap_err().to_string(),
-    //             "multiple CREATE operations found when building operation graph".to_string()
-    //         );
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn fields(#[with(vec![("name".to_string(), FieldType::String)])] schema: Schema) {
-    //         let mut operations = Vec::new();
-    //
-    //         let panda = KeyPair::new().public_key().to_owned();
-    //         let penguin = KeyPair::new().public_key().to_owned();
-    //
-    //         // Panda publishes a CREATE operation.
-    //         // This instantiates a new document.
-    //         //
-    //         // DOCUMENT: [panda_1]
-    //
-    //         let operation_1_id = random_operation_id();
-    //         let operation = OperationBuilder::new(schema.id())
-    //             .action(OperationAction::Create)
-    //             .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
-    //             .build()
-    //             .unwrap();
-    //
-    //         operations.push((operation_1_id.clone(), operation, panda));
-    //
-    //         // Panda publishes an UPDATE operation.
-    //         // It contains the id of the previous operation in it's `previous` array
-    //         //
-    //         // DOCUMENT: [panda_1]<--[panda_2]
-    //         //
-    //
-    //         let operation_2_id = random_operation_id();
-    //         let operation = OperationBuilder::new(schema.id())
-    //             .action(OperationAction::Update)
-    //             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-    //             .previous(&DocumentViewId::new(&[operation_1_id.clone()]))
-    //             .build()
-    //             .unwrap();
-    //
-    //         operations.push((operation_2_id.clone(), operation, panda));
-    //
-    //         // Penguin publishes an update operation which creates a new branch in the graph.
-    //         // This is because they didn't know about Panda's second operation.
-    //         //
-    //         // DOCUMENT: [panda_1]<--[penguin_1]
-    //         //                    \----[panda_2]
-    //
-    //         let operation_3_id = random_operation_id();
-    //         let operation = OperationBuilder::new(schema.id())
-    //             .action(OperationAction::Update)
-    //             .fields(&[(
-    //                 "name",
-    //                 OperationValue::String("Penguin Cafe!!!".to_string()),
-    //             )])
-    //             .previous(&DocumentViewId::new(&[operation_2_id.clone()]))
-    //             .build()
-    //             .unwrap();
-    //
-    //         operations.push((operation_3_id.clone(), operation, penguin));
-    //
-    //         let document_builder = DocumentBuilder::new(operations);
-    //
-    //         let (document, _) = document_builder
-    //             .build_to_view_id(DocumentViewId::new(&[operation_1_id]))
-    //             .unwrap();
-    //         assert_eq!(
-    //             document.fields().unwrap().get("name").unwrap().value(),
-    //             &OperationValue::String("Panda Cafe".to_string())
-    //         );
-    //
-    //         let (document, _) = document_builder
-    //             .build_to_view_id(DocumentViewId::new(&[operation_2_id.clone()]))
-    //             .unwrap();
-    //         assert_eq!(
-    //             document.fields().unwrap().get("name").unwrap().value(),
-    //             &OperationValue::String("Panda Cafe!".to_string())
-    //         );
-    //
-    //         let (document, _) = document_builder
-    //             .build_to_view_id(DocumentViewId::new(&[operation_3_id.clone()]))
-    //             .unwrap();
-    //         assert_eq!(
-    //             document.fields().unwrap().get("name").unwrap().value(),
-    //             &OperationValue::String("Penguin Cafe!!!".to_string())
-    //         );
-    //
-    //         let (document, _) = document_builder
-    //             .build_to_view_id(DocumentViewId::new(&[operation_2_id, operation_3_id]))
-    //             .unwrap();
-    //         assert_eq!(
-    //             document.fields().unwrap().get("name").unwrap().value(),
-    //             &OperationValue::String("Penguin Cafe!!!".to_string())
-    //         );
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn apply_commit(
-    //         #[from(published_operation)]
-    //         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-    //         create_operation: PublishedOperation,
-    //     ) {
-    //         // Construct operations we will use to update an existing document.
-    //
-    //         let create_view_id =
-    //             DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
-    //
-    //         let update_operation = operation(
-    //             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
-    //             Some(create_view_id.clone()),
-    //             constants::schema().id().to_owned(),
-    //         );
-    //
-    //         let update_operation_id = random_operation_id();
-    //         let update_view_id = DocumentViewId::new(&[update_operation_id.clone()]);
-    //
-    //         let delete_operation = operation(
-    //             None,
-    //             Some(update_view_id.clone()),
-    //             constants::schema().id().to_owned(),
-    //         );
-    //
-    //         let delete_operation_id = random_operation_id();
-    //         let delete_view_id = DocumentViewId::new(&[delete_operation_id.clone()]);
-    //
-    //         // Create the initial document from a single CREATE operation.
-    //         let mut document: Document = vec![&create_operation].try_into().unwrap();
-    //
-    //         assert!(!document.is_edited());
-    //         assert_eq!(document.view_id(), &create_view_id);
-    //         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
-    //
-    //         // Apply a commit with an UPDATE operation.
-    //         document
-    //             .commit(&update_operation_id, &update_operation)
-    //             .unwrap();
-    //
-    //         assert!(document.is_edited());
-    //         assert_eq!(document.view_id(), &update_view_id);
-    //         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
-    //
-    //         // Apply a commit with a DELETE operation.
-    //         document
-    //             .commit(&delete_operation_id, &delete_operation)
-    //             .unwrap();
-    //
-    //         assert!(document.is_deleted());
-    //         assert_eq!(document.view_id(), &delete_view_id);
-    //         assert_eq!(document.fields(), None);
-    //     }
-    //
-    //     #[rstest]
-    //     #[tokio::test]
-    //     async fn validate_commit_operation(
-    //         #[from(published_operation)]
-    //         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-    //         create_operation: PublishedOperation,
-    //     ) {
-    //         // Create the initial document from a single CREATE operation.
-    //         let mut document: Document = vec![&create_operation].try_into().unwrap();
-    //
-    //         // Committing a CREATE operation should fail.
-    //         assert!(document
-    //             .commit(create_operation.id(), &create_operation)
-    //             .is_err());
-    //
-    //         let create_view_id =
-    //             DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
-    //
-    //         let schema_name = SchemaName::new("my_wrong_schema").expect("Valid schema name");
-    //         let update_with_incorrect_schema_id = published_operation(
-    //             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
-    //             schema(
-    //                 vec![("age".into(), FieldType::Integer)],
-    //                 SchemaId::new_application(&schema_name, &random_document_view_id()),
-    //                 "Schema with a wrong id",
-    //             ),
-    //             Some(create_view_id.clone()),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         // Apply a commit with an UPDATE operation containing the wrong schema id.
-    //         assert!(document
-    //             .commit(
-    //                 update_with_incorrect_schema_id.id(),
-    //                 &update_with_incorrect_schema_id
-    //             )
-    //             .is_err());
-    //
-    //         let update_not_referring_to_current_view = published_operation(
-    //             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
-    //             constants::schema(),
-    //             Some(random_document_view_id()),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         // Apply a commit with an UPDATE operation not pointing to the current view.
-    //         assert!(document
-    //             .commit(
-    //                 update_not_referring_to_current_view.id(),
-    //                 &update_not_referring_to_current_view
-    //             )
-    //             .is_err());
-    //
-    //         // Now we apply a correct delete operation.
-    //         let delete_operation = published_operation(
-    //             None,
-    //             constants::schema(),
-    //             Some(create_view_id.clone()),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         assert!(document
-    //             .commit(delete_operation.id(), &delete_operation)
-    //             .is_ok());
-    //
-    //         let delete_view_id =
-    //             DocumentViewId::new(&[WithId::<OperationId>::id(&delete_operation).clone()]);
-    //
-    //         let update_on_a_deleted_document = published_operation(
-    //             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
-    //             constants::schema(),
-    //             Some(delete_view_id.to_owned()),
-    //             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
-    //         );
-    //
-    //         // Apply a commit with an UPDATE operation on a deleted document.
-    //         assert!(document
-    //             .commit(
-    //                 update_on_a_deleted_document.id(),
-    //                 &update_on_a_deleted_document
-    //             )
-    //             .is_err());
-    //     }
+
+    #[rstest]
+    fn must_have_create_operation(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_hash)] backlink: Hash,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
+    ) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let timestamp = 1703027623;
+
+        let update_operation = OperationBuilder::new(&schema_id, timestamp)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let document = DocumentBuilder::new(vec![update_operation.clone()]).build();
+        assert_eq!(
+            document.unwrap_err().to_string(),
+            format!(
+                "operation {} cannot be connected to the document graph",
+                update_operation.id()
+            )
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn incorrect_previous_operations(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_document_view_id)] document_view_id: DocumentViewId,
+    ) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let create_operation = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let update_operation = OperationBuilder::new(&schema_id, 1703027624)
+            .document_id(&create_operation.id().clone().into())
+            .backlink(&create_operation.id().as_hash())
+            .previous(&document_view_id)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let document = DocumentBuilder::new(vec![update_operation.clone()]).build();
+
+        assert_eq!(
+            document.unwrap_err().to_string(),
+            format!(
+                "operation {} cannot be connected to the document graph",
+                update_operation.id()
+            )
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn operation_schemas_not_matching(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        document_view_id: DocumentViewId,
+    ) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let create_operation = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let incorrect_schema_id =
+            SchemaId::Application(SchemaName::new("my_new_schema").unwrap(), document_view_id);
+
+        let create_operation_id = create_operation.id();
+        let update_operation = OperationBuilder::new(&incorrect_schema_id, 1703027624)
+            .document_id(&create_operation_id.clone().into())
+            .backlink(&create_operation_id.as_hash())
+            .previous(&create_operation_id.clone().into())
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let document =
+            DocumentBuilder::new(vec![create_operation, update_operation.clone()]).build();
+
+        assert_eq!(
+            document.unwrap_err().to_string(),
+            "Could not perform reducer function: Operation 1e85dd1a05f387f278231a21e52676f025ea06686366302e08d8a08f525fde0f does not match the documents schema".to_string()
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn is_deleted(key_pair: KeyPair, schema_id: SchemaId, document_view_id: DocumentViewId) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let create_operation = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let create_operation_id = create_operation.id();
+        let delete_operation = OperationBuilder::new(&schema_id, 1703027624)
+            .action(HeaderAction::Delete)
+            .document_id(&create_operation_id.clone().into())
+            .backlink(&create_operation_id.as_hash())
+            .previous(&create_operation_id.clone().into())
+            .sign(&key_pair)
+            .unwrap();
+
+        let (document, _) = DocumentBuilder::new(vec![create_operation, delete_operation.clone()])
+            .build()
+            .unwrap();
+
+        assert!(document.is_deleted());
+        assert!(document.fields().is_none());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn more_than_one_create(key_pair: KeyPair, schema_id: SchemaId) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let create_operation_1 = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let create_operation_2 = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let result = DocumentBuilder::new(vec![create_operation_1, create_operation_2]).build();
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "multiple CREATE operations found when building operation graph".to_string()
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn fields(#[with(vec![("name".to_string(), FieldType::String)])] schema: Schema) {
+        let panda = KeyPair::from_private_key_str(
+            "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+        )
+        .unwrap();
+
+        let penguin = KeyPair::from_private_key_str(
+            "1c86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
+        )
+        .unwrap();
+
+        let mut operations = Vec::new();
+
+        // Panda publishes a CREATE operation.
+        // This instantiates a new document.
+        //
+        // DOCUMENT: [panda_1]
+
+        let panda_operation_1 = OperationBuilder::new(schema.id(), 1703027623)
+            .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
+            .sign(&panda)
+            .unwrap();
+
+        let document_id = DocumentId::new(panda_operation_1.id());
+
+        operations.push(panda_operation_1.clone());
+
+        // Panda publishes an UPDATE operation.
+        // It contains the id of the previous operation in it's `previous` array
+        //
+        // DOCUMENT: [panda_1]<--[panda_2]
+        //
+
+        let panda_operation_2 = OperationBuilder::new(schema.id(), 1703027624)
+            .document_id(&document_id)
+            .backlink(panda_operation_1.id().as_hash())
+            .previous(&panda_operation_1.id().clone().into())
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .sign(&panda)
+            .unwrap();
+
+        operations.push(panda_operation_2.clone());
+
+        // Penguin publishes an update operation which creates a new branch in the graph.
+        // This is because they didn't know about Panda's second operation.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let penguin_operation_1 = OperationBuilder::new(schema.id(), 1703027625)
+            .document_id(&document_id)
+            .fields(&[(
+                "name",
+                OperationValue::String("Penguin Cafe!!!".to_string()),
+            )])
+            .previous(&panda_operation_2.id().clone().into())
+            .sign(&penguin)
+            .unwrap();
+
+        operations.push(penguin_operation_1.clone());
+
+        let document_builder = DocumentBuilder::new(operations);
+
+        let (document, _) = document_builder
+            .build_to_view_id(panda_operation_1.id().clone().into())
+            .unwrap();
+        assert_eq!(
+            document.fields().unwrap().get("name").unwrap().value(),
+            &OperationValue::String("Panda Cafe".to_string())
+        );
+
+        let (document, _) = document_builder
+            .build_to_view_id(panda_operation_2.id().clone().into())
+            .unwrap();
+        assert_eq!(
+            document.fields().unwrap().get("name").unwrap().value(),
+            &OperationValue::String("Panda Cafe!".to_string())
+        );
+
+        let (document, _) = document_builder
+            .build_to_view_id(penguin_operation_1.id().clone().into())
+            .unwrap();
+        assert_eq!(
+            document.fields().unwrap().get("name").unwrap().value(),
+            &OperationValue::String("Penguin Cafe!!!".to_string())
+        );
+
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[
+                panda_operation_2.id().clone(),
+                penguin_operation_1.id().clone(),
+            ]))
+            .unwrap();
+        assert_eq!(
+            document.fields().unwrap().get("name").unwrap().value(),
+            &OperationValue::String("Penguin Cafe!!!".to_string())
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn apply_commit(#[with(vec![("name".to_string(), FieldType::String)])] schema: Schema) {
+        let panda = KeyPair::from_private_key_str(
+            "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+        )
+        .unwrap();
+
+        let mut operations = Vec::new();
+
+        let create_operation = OperationBuilder::new(schema.id(), 1703027623)
+            .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
+            .sign(&panda)
+            .unwrap();
+
+        let document_id = DocumentId::new(create_operation.id());
+
+        let update_operation = OperationBuilder::new(schema.id(), 1703027624)
+            .document_id(&document_id)
+            .backlink(create_operation.id().as_hash())
+            .previous(&create_operation.id().clone().into())
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .sign(&panda)
+            .unwrap();
+
+        operations.push(update_operation.clone());
+
+        let delete_operation = OperationBuilder::new(schema.id(), 1703027625)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(update_operation.id().as_hash())
+            .previous(&update_operation.id().clone().into())
+            .sign(&panda)
+            .unwrap();
+
+        operations.push(delete_operation.clone());
+
+        // Create the initial document from a single CREATE operation.
+        let (mut document, _) = DocumentBuilder::new(vec![create_operation.clone()])
+            .build()
+            .unwrap();
+
+        assert!(!document.is_edited());
+        assert_eq!(
+            document.view_id(),
+            &DocumentViewId::from(create_operation.id().clone())
+        );
+        assert_eq!(
+            document.get("name").unwrap(),
+            &OperationValue::String("Panda Cafe".to_string())
+        );
+
+        // Apply a commit with an UPDATE operation.
+        document.commit(&update_operation).unwrap();
+
+        assert!(document.is_edited());
+        assert_eq!(
+            document.view_id(),
+            &DocumentViewId::from(update_operation.id().clone())
+        );
+        assert_eq!(
+            document.get("name").unwrap(),
+            &OperationValue::String("Panda Cafe!".to_string())
+        );
+
+        // Apply a commit with a DELETE operation.
+        document.commit(&delete_operation).unwrap();
+
+        assert!(document.is_deleted());
+        assert_eq!(
+            document.view_id(),
+            &DocumentViewId::from(delete_operation.id().clone())
+        );
+        assert_eq!(document.fields(), None);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn validate_commit_operation(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        #[from(random_document_view_id)] schema_view_id: DocumentViewId,
+        #[from(random_document_view_id)] incorrect_previous: DocumentViewId,
+    ) {
+        let create_operation = OperationBuilder::new(&schema_id, 1703027623)
+            .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
+            .sign(&key_pair)
+            .unwrap();
+
+        let create_operation_id = create_operation.id();
+
+        // Create the initial document from a single CREATE operation.
+        let (mut document, _) = DocumentBuilder::new(vec![create_operation.clone()])
+            .build()
+            .unwrap();
+
+        // Committing a CREATE operation should fail.
+        assert!(document.commit(&create_operation).is_err());
+
+        // Apply a commit with an UPDATE operation containing the wrong schema id.
+        let incorrect_schema_id =
+            SchemaId::Application(SchemaName::new("my_new_schema").unwrap(), schema_view_id);
+        let update_operation_incorrect_schema_id =
+            OperationBuilder::new(&incorrect_schema_id, 1703027624)
+                .document_id(&create_operation_id.clone().into())
+                .backlink(&create_operation_id.as_hash())
+                .previous(&create_operation_id.clone().into())
+                .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+                .sign(&key_pair)
+                .unwrap();
+
+        assert!(document
+            .commit(&update_operation_incorrect_schema_id)
+            .is_err());
+
+        // Apply a commit with an UPDATE operation not pointing to the current view.
+        let update_not_referring_to_current_view = OperationBuilder::new(&schema_id, 1703027624)
+            .document_id(&create_operation_id.clone().into())
+            .backlink(&create_operation_id.as_hash())
+            .previous(&incorrect_previous)
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .sign(&key_pair)
+            .unwrap();
+
+        assert!(document
+            .commit(&update_not_referring_to_current_view)
+            .is_err());
+
+        // Now we apply a correct delete operation.
+        let delete_operation = OperationBuilder::new(&schema_id, 1703027624)
+            .action(HeaderAction::Delete)
+            .document_id(&create_operation_id.clone().into())
+            .backlink(&create_operation_id.as_hash())
+            .previous(&create_operation_id.clone().into())
+            .sign(&key_pair)
+            .unwrap();
+
+        assert!(document.commit(&delete_operation).is_ok());
+
+        // Apply a commit with an UPDATE operation on a deleted document.
+        let delete_view_id = DocumentViewId::new(&[delete_operation.id().clone()]);
+        let update_on_a_deleted_document = OperationBuilder::new(&schema_id, 1703027624)
+            .document_id(&create_operation_id.clone().into())
+            .backlink(&create_operation_id.as_hash())
+            .previous(&delete_view_id)
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .sign(&key_pair)
+            .unwrap();
+
+        assert!(document.commit(&update_on_a_deleted_document).is_err());
+    }
 }

@@ -66,6 +66,8 @@ pub trait AsDocument {
     /// For the update to be successful the passed operation must refer to this documents' current
     /// view id in it's previous field and must update a field which exists on this document.
     fn commit<T: AsOperation>(&mut self, operation: &T) -> Result<(), DocumentError> {
+        // @TODO: additional validation required for B3K operation format
+
         // Validate operation passed to commit.
         if operation.is_create() {
             return Err(DocumentError::CommitCreate);
