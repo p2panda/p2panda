@@ -62,7 +62,7 @@ impl OperationStore for MemoryStore {
                 None
             }
         });
-        Ok(document_id.cloned())
+        Ok(document_id)
     }
 
     /// Get all `Operations` for a single `Document`.
@@ -73,7 +73,7 @@ impl OperationStore for MemoryStore {
         let operations = self.operations.lock().unwrap();
         let operations = operations
             .values()
-            .filter(|operation| operation.document_id() == id)
+            .filter(|operation| operation.document_id() == *id)
             .cloned()
             .collect();
         Ok(operations)

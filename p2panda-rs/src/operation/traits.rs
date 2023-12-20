@@ -16,7 +16,7 @@ pub trait AsOperation: Actionable + Authored + Schematic {
     fn id(&self) -> &OperationId;
 
     /// Id of the document this operation applies to.
-    fn document_id(&self) -> &DocumentId;
+    fn document_id(&self) -> DocumentId;
     
     /// Timestamp when this operation was published.
     fn timestamp(&self) -> u64;
