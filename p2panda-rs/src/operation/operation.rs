@@ -50,6 +50,7 @@ impl Validate for Operation {
 
     fn validate(&self) -> Result<(), Self::Error> {
         let HeaderExtension {
+            action,
             document_id,
             previous,
             timestamp,
@@ -57,51 +58,56 @@ impl Validate for Operation {
             ..
         } = &self.header().4;
 
-        let document_id = match document_id {
-            Some(document_id) => document_id.to_owned(),
-            None => DocumentId::new(self.id()),
-        };
-
+        // All operations require a timestamp
         if timestamp.is_none() {
             return Err(ValidateOperationError::ExpectedTimestamp);
         }
 
-        match self.action() {
+        let action = match (action, previous) {
+            (None, None) => OperationAction::Create,
+            (None, Some(_)) => OperationAction::Update,
+            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
+            (Some(HeaderAction::Delete), None) => {
+                return Err(ValidateOperationError::ExpectedPreviousOperations)
+            }
+        };
+
+        match (action, self.has_fields()) {
+            (OperationAction::Delete, true) => Err(ValidateOperationError::UnexpectedFields),
+            (OperationAction::Create | OperationAction::Update, false) => {
+                Err(ValidateOperationError::ExpectedFields)
+            }
+            _ => Ok(()),
+        }?;
+
+        match action {
             OperationAction::Create => {
-                if self.id().as_hash() != document_id.as_hash() {
-                    return Err(ValidateOperationError::IncorrectDocumentId(
-                        document_id.to_string(),
-                        self.id().to_string(),
-                    ));
-                };
+                if document_id.is_some() {
+                    return Err(ValidateOperationError::UnexpectedDocumentId);
+                }
 
                 if backlink.is_some() {
                     return Err(ValidateOperationError::UnexpectedBacklink);
                 }
 
-                if self.fields().is_none() {
-                    return Err(ValidateOperationError::ExpectedFields);
+                if previous.is_some() {
+                    return Err(ValidateOperationError::UnexpectedPreviousOperations);
                 }
                 Ok(())
             }
-            OperationAction::Update => {
+            OperationAction::Update | OperationAction::Delete => {
+                if document_id.is_none() {
+                    return Err(ValidateOperationError::ExpectedDocumentId);
+                }
+
                 if backlink.is_none() {
                     return Err(ValidateOperationError::ExpectedBacklink);
                 }
 
-                if self.fields().is_none() {
-                    return Err(ValidateOperationError::ExpectedFields);
-                }
-                Ok(())
-            }
-            OperationAction::Delete => {
-                if backlink.is_none() {
-                    return Err(ValidateOperationError::ExpectedBacklink);
+                if previous.is_none() {
+                    return Err(ValidateOperationError::ExpectedPreviousOperations);
                 }
 
-                if self.fields().is_some() {
-                    return Err(ValidateOperationError::UnexpectedFields);
-                }
                 Ok(())
             }
         }
