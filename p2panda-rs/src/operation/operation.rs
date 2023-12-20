@@ -96,10 +96,6 @@ impl Validate for Operation {
                     return Err(ValidateOperationError::ExpectedDocumentId);
                 }
 
-                if backlink.is_none() {
-                    return Err(ValidateOperationError::ExpectedBacklink);
-                }
-
                 if previous.is_none() {
                     return Err(ValidateOperationError::ExpectedPreviousOperations);
                 }
