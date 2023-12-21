@@ -195,13 +195,13 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     }
 }
 
-impl TryFrom<&[String]> for DocumentViewId {
+impl<T: ToString> TryFrom<Vec<T>> for DocumentViewId {
     type Error = DocumentViewIdError;
 
-    fn try_from(str_list: &[String]) -> Result<Self, Self::Error> {
+    fn try_from(str_list: Vec<T>) -> Result<Self, Self::Error> {
         let operation_ids: Result<Vec<OperationId>, OperationIdError> = str_list
             .iter()
-            .map(|operation_id_str| operation_id_str.parse::<OperationId>())
+            .map(|operation_id| operation_id.to_string().parse::<OperationId>())
             .collect();
 
         Self::from_untrusted(operation_ids?)
@@ -278,16 +278,16 @@ impl FromStr for DocumentViewId {
         Self::from_untrusted(operations)
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use std::collections::hash_map::DefaultHasher;
 //     use std::hash::{Hash as StdHash, Hasher};
 //     use std::str::FromStr;
-// 
+//
 //     use rstest::rstest;
 //     use serde::{Deserialize, Serialize};
-// 
+//
 //     use crate::hash::Hash;
 //     use crate::operation_v2::OperationId;
 //     use crate::serde::{hex_string_to_bytes, serialize_from};
@@ -295,9 +295,9 @@ impl FromStr for DocumentViewId {
 //     use crate::test_utils::fixtures::random_hash;
 //     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
 //     use crate::{Human, Validate};
-// 
+//
 //     use super::DocumentViewId;
-// 
+//
 //     #[rstest]
 //     fn constructor_converts_to_canonic_format() {
 //         let operation_id_1: OperationId =
@@ -316,7 +316,7 @@ impl FromStr for DocumentViewId {
 //             "002047e8d17a2edb41621beec8c710ee71a1b2ea81d356f05cd466526b269a7b2493"
 //                 .parse()
 //                 .unwrap();
-// 
+//
 //         // Everything is in order
 //         let document_view_id_1 = DocumentViewId::new(&[
 //             operation_id_1.clone(),
@@ -325,7 +325,7 @@ impl FromStr for DocumentViewId {
 //             operation_id_4.clone(),
 //         ]);
 //         assert!(document_view_id_1.validate().is_ok());
-// 
+//
 //         // Unordered operations will be sorted and deduplicated
 //         let document_view_id_2 = DocumentViewId::new(&[
 //             operation_id_3.clone(),
@@ -337,7 +337,7 @@ impl FromStr for DocumentViewId {
 //         ]);
 //         assert!(document_view_id_2.validate().is_ok());
 //         assert_eq!(document_view_id_2.graph_tips().len(), 4);
-// 
+//
 //         assert!(DocumentViewId::from_untrusted(vec![
 //             operation_id_3.clone(),
 //             operation_id_3,
@@ -348,7 +348,7 @@ impl FromStr for DocumentViewId {
 //         ])
 //         .is_err());
 //     }
-// 
+//
 //     #[rstest]
 //     fn conversion(#[from(random_hash)] hash: Hash) {
 //         // Converts a string to `DocumentViewId`
@@ -358,52 +358,52 @@ impl FromStr for DocumentViewId {
 //             document_id,
 //             DocumentViewId::new(&[hash_str.parse::<OperationId>().unwrap()])
 //         );
-// 
+//
 //         // Converts a `Hash` to `DocumentViewId`
 //         let document_id: DocumentViewId = hash.clone().into();
 //         assert_eq!(document_id, DocumentViewId::new(&[hash.clone().into()]));
-// 
+//
 //         // Converts an `OperationId` to `DocumentViewId`
 //         let document_id: DocumentViewId = OperationId::new(&hash).into();
 //         assert_eq!(document_id, DocumentViewId::new(&[hash.into()]));
-// 
+//
 //         // Fails when string is not a hash
 //         assert!("This is not a hash".parse::<DocumentViewId>().is_err());
 //     }
-// 
+//
 //     #[rstest]
 //     fn iterates(document_view_id: DocumentViewId) {
 //         for hash in document_view_id.graph_tips() {
 //             assert!(hash.validate().is_ok());
 //         }
 //     }
-// 
+//
 //     #[test]
 //     fn string_representation() {
 //         let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
-// 
+//
 //         assert_eq!(
 //             document_view_id.to_string(),
 //             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
 //         );
-// 
+//
 //         assert_eq!(
 //             format!("{}", document_view_id),
 //             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
 //         );
-// 
+//
 //         let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
 //             .parse::<OperationId>()
 //             .unwrap();
 //         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
 //             .parse::<OperationId>()
 //             .unwrap();
-// 
+//
 //         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
 //         assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
 //         assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
 //     }
-// 
+//
 //     #[test]
 //     fn short_representation() {
 //         let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
@@ -412,11 +412,11 @@ impl FromStr for DocumentViewId {
 //         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
 //             .parse::<OperationId>()
 //             .unwrap();
-// 
+//
 //         let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]);
 //         assert_eq!(view_id_unmerged.display(), "496543_f16e79");
 //     }
-// 
+//
 //     #[rstest]
 //     fn equality(
 //         #[from(random_operation_id)] operation_id_1: OperationId,
@@ -426,7 +426,7 @@ impl FromStr for DocumentViewId {
 //         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
 //         assert_eq!(view_id_1, view_id_2);
 //     }
-// 
+//
 //     #[rstest]
 //     fn hash_equality(
 //         #[from(random_operation_id)] operation_id_1: OperationId,
@@ -440,7 +440,7 @@ impl FromStr for DocumentViewId {
 //         view_id_2.hash(&mut hasher_2);
 //         assert_eq!(hasher_1.finish(), hasher_2.finish());
 //     }
-// 
+//
 //     #[rstest]
 //     fn deserialize_unsorted_view_id(
 //         #[from(random_operation_id)] operation_id_1: OperationId,
@@ -457,33 +457,33 @@ impl FromStr for DocumentViewId {
 //         ];
 //         let mut cbor_bytes = Vec::new();
 //         ciborium::ser::into_writer(&unsorted_hashes, &mut cbor_bytes).unwrap();
-// 
+//
 //         // Construct document view id by deserialising CBOR data
 //         let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
 //             ciborium::de::from_reader(&cbor_bytes[..]);
-// 
+//
 //         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
 //             None,
 //             "expected sorted operation ids in document view id".to_string(),
 //         );
-// 
+//
 //         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
-// 
+//
 //         // However, unsorted values in an id are sorted during serialisation
 //         let mut reversed_ids = vec![operation_id_1, operation_id_2];
 //         reversed_ids.sort();
 //         reversed_ids.reverse();
 //         let view_id_unsorted = DocumentViewId::new(&reversed_ids);
-// 
+//
 //         let mut cbor_bytes = Vec::new();
 //         ciborium::ser::into_writer(&view_id_unsorted, &mut cbor_bytes).unwrap();
-// 
+//
 //         let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
 //             ciborium::de::from_reader(&cbor_bytes[..]);
 //         assert!(result.is_ok());
 //         assert_eq!(result.unwrap(), view_id_unsorted);
 //     }
-// 
+//
 //     #[test]
 //     fn deserialize_invalid_view_id() {
 //         // The second operation id is missing 4 characters
@@ -496,28 +496,28 @@ impl FromStr for DocumentViewId {
 //         let mut cbor_bytes = Vec::new();
 //         ciborium::ser::into_writer(&invalid_hashes, &mut cbor_bytes).unwrap();
 //         let invalid_id_encoded = hex::encode(cbor_bytes);
-// 
+//
 //         // Construct document view id by deserialising CBOR data
 //         let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
 //             ciborium::de::from_reader(&hex::decode(invalid_id_encoded).unwrap()[..]);
-// 
+//
 //         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
 //             None,
 //             "invalid hash length 32 bytes, expected 34 bytes".to_string(),
 //         );
-// 
+//
 //         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
 //     }
-// 
+//
 //     #[test]
 //     fn deserialize_human_readable() {
 //         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
-// 
+//
 //         #[derive(Deserialize, Serialize, Debug, PartialEq)]
 //         struct Test {
 //             document_view_id: DocumentViewId,
 //         }
-// 
+//
 //         // Deserialize from human-readable (hex-encoded) JSON string
 //         let json = format!(
 //             r#"
@@ -526,7 +526,7 @@ impl FromStr for DocumentViewId {
 //             }}
 //         "#
 //         );
-// 
+//
 //         let result: Test = serde_json::from_str(&json).unwrap();
 //         assert_eq!(
 //             Test {
@@ -534,7 +534,7 @@ impl FromStr for DocumentViewId {
 //             },
 //             result
 //         );
-// 
+//
 //         // Serialize into non human-readable CBOR format (operation ids are encoded as bytes)
 //         let bytes = serialize_from(result);
 //         assert_eq!(
