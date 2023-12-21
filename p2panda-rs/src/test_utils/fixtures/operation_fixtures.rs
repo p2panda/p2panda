@@ -44,21 +44,8 @@ pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
 /// Returns operation fields populated with test values.
 #[fixture]
 pub fn operation_fields(
-    #[default(test_fields())] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(test_fields())] fields: Vec<(&'static str, OperationValue)>,
 ) -> OperationFields {
-    let mut operation_fields = OperationFields::new();
-    for (key, value) in fields_vec.iter() {
-        operation_fields
-            .insert(key, value.to_owned())
-            .expect("Can insert operation field")
-    }
-    operation_fields
+    fields.into()
 }
 
-/// Returns operation fields wrapped in an option.
-#[fixture]
-pub fn some_fields(
-    #[default(test_fields())] fields_vec: Vec<(&str, OperationValue)>,
-) -> Option<OperationFields> {
-    Some(operation_fields(fields_vec))
-}

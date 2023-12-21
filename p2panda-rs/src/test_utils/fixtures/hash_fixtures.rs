@@ -3,7 +3,13 @@
 use rand::Rng;
 use rstest::fixture;
 
-use crate::hash::Hash;
+use crate::{hash::Hash, test_utils::constants::HASH};
+
+/// Returns constant testing HASH.
+#[fixture]
+pub fn hash(#[default(HASH)] hash_str: &str) -> Hash {
+    hash_str.parse().unwrap()
+}
 
 /// Fixture which injects a random hash into a test method.
 #[fixture]
