@@ -8,7 +8,7 @@ use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
 use crate::operation::header::traits::{Actionable, Authored};
-use crate::operation::header::validate::validate_payload;
+use crate::operation::header::validate::{validate_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
@@ -29,12 +29,16 @@ pub async fn publish<S: OperationStore>(
     // Validate the payload.
     validate_payload(&header, encoded_body)?;
 
+    // Verify the operations' signature against it's public key.
+    verify_signature(header.public_key(), &header.signature(), encoded_header)?;
+
     // Validate the plain fields against claimed schema and produce an operation Body.
     let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
     // Construct the operation. This performs internal validation to check the header and body
     // combine into a valid p2panda operation.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
+
     let latest_operation = store
         .get_latest_operation(&operation.document_id(), operation.public_key())
         .await?;
@@ -133,4 +137,55 @@ pub async fn get_view_id_operations<S: OperationStore>(
         }
     }
     Ok(found_operations)
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::api::publish;
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::identity::KeyPair;
+    use crate::operation::body::encode::encode_body;
+    use crate::operation::body::traits::Schematic;
+    use crate::operation::header::encode::encode_header;
+    use crate::operation::header::traits::Actionable;
+    use crate::operation::header::HeaderAction;
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{
+        OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
+    };
+    use crate::schema::{Schema, SchemaId};
+    use crate::test_utils::constants::test_fields;
+    use crate::test_utils::fixtures::{
+        document_id, document_view_id, key_pair, random_hash, schema, schema_id,
+    };
+    use crate::test_utils::memory_store::MemoryStore;
+
+    #[rstest]
+    #[tokio::test]
+    async fn operation_builder_create(key_pair: KeyPair, schema: Schema) {
+        let store = MemoryStore::default();
+
+        let timestamp = 1703027623;
+
+        let operation = OperationBuilder::new(schema.id(), timestamp)
+            .fields(&test_fields())
+            .sign(&key_pair)
+            .unwrap();
+
+        let encoded_header = encode_header(operation.header()).unwrap();
+        let encoded_body = encode_body(operation.body()).unwrap();
+
+        assert!(publish(
+            &store,
+            &schema,
+            &encoded_header,
+            &operation.body().into(),
+            &encoded_body,
+        )
+        .await
+        .is_ok());
+    }
 }

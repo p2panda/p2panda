@@ -8,7 +8,7 @@ use crate::operation::header::traits::Authored;
 
 /// Checks if the operation is authentic by verifying the public key with the given signature
 /// (#E5).
-pub fn validate_signature(
+pub fn verify_signature(
     public_key: &PublicKey,
     signature: &Signature,
     encoded_header: &EncodedHeader,
