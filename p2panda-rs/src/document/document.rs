@@ -291,30 +291,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::{TryFrom, TryInto};
-
     use rstest::rstest;
 
     use crate::document::traits::AsDocument;
-    use crate::document::{
-        Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
-    };
+    use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::hash::{Hash, HashId};
     use crate::identity::KeyPair;
     use crate::operation::header::HeaderAction;
     use crate::operation::traits::AsOperation;
-    use crate::operation::{
-        OperationAction, OperationBuilder, OperationFields, OperationId, OperationValue,
-    };
+    use crate::operation::{OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
-    use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, key_pair, operation_fields, random_document_view_id,
-        random_hash, random_operation_id, schema, schema_id,
+        document_id, document_view_id, key_pair, random_document_view_id, random_hash, schema,
+        schema_id,
     };
-    use crate::test_utils::memory_store::helpers::send_to_store;
-    use crate::test_utils::memory_store::MemoryStore;
-    use crate::{Human, WithId};
+    use crate::Human;
 
     use super::DocumentBuilder;
 
@@ -626,7 +617,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn is_deleted(key_pair: KeyPair, schema_id: SchemaId, document_view_id: DocumentViewId) {
+    async fn is_deleted(key_pair: KeyPair, schema_id: SchemaId) {
         let fields = vec![
             ("firstname", "Peter".into()),
             ("lastname", "Panda".into()),
