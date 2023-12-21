@@ -12,8 +12,8 @@ use crate::storage_provider::error::OperationStorageError;
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
     /// Claimed schema does not match the documents expected schema.
-    #[error("Operation {0} claims incorrect schema {1} for document with schema {2}")]
-    InvalidClaimedSchema(OperationId, SchemaId, SchemaId),
+    #[error("Operation {0} claims incorrect schema {1}")]
+    InvalidClaimedSchema(OperationId, SchemaId),
 
     /// An operation in the `previous` field was not found in the store.
     #[error("Previous operation {0} not found in store")]
@@ -24,8 +24,12 @@ pub enum ValidationError {
     InvalidDocumentViewId,
 
     /// An operation was found with an incorrect document id which.
-    #[error("Operation {0} contains incorrect document id {1} expected: {2}")]
-    IncorrectDocumentId(OperationId, DocumentId, DocumentId),
+    #[error("Operation {0} document id {1} does not match expected document id")]
+    IncorrectDocumentId(OperationId, DocumentId),
+
+    /// An operation was found with a timestamp not greater than the one in it's previous operations.
+    #[error("Operation {0} contains a timestamp {1} not greater than those found in previous")]
+    InvalidTimestamp(OperationId, u64),
 
     /// Error coming from the operation store.
     #[error(transparent)]

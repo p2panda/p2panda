@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::api::validation::{get_checked_document_id_for_view_id, validate_claimed_schema_id};
 use crate::api::DomainError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::body::decode::decode_body;
@@ -15,7 +14,7 @@ use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
 use crate::operation::{Operation, OperationAction};
 use crate::schema::Schema;
-use crate::storage_provider::traits::{OperationStore, DocumentStore};
+use crate::storage_provider::traits::{DocumentStore, OperationStore};
 
 use super::ValidationError;
 
@@ -31,7 +30,7 @@ pub async fn publish<S: OperationStore>(
 
     // Validate the payload.
     validate_payload(&header, encoded_body)?;
-    
+
     // Validate the plain fields against claimed schema and produce an operation Body.
     let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
@@ -39,30 +38,71 @@ pub async fn publish<S: OperationStore>(
     // combine into a valid p2panda operation.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
 
+    // @TODO: Check that the backlink exists and no fork has occurred.
+
     if let Some(previous) = operation.previous() {
-        // Validate claimed schema for this operation matches the expected found in the
-        // previous operations.
-        validate_claimed_schema_id(store, &operation.schema_id(), &previous).await?;
+        // Get all operations contained in this operations previous.
+        let previous_operations = get_view_id_operations(store, previous).await?;
 
-        // Get the document_id for the document_view_id contained in previous operations.
-        // This performs several validation steps (check method doc string).
-        let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
+        // Check that all document ids are the same.
+        let all_previous_from_same_document = previous_operations
+            .iter()
+            .all(|previous_operation| previous_operation.document_id() == operation.document_id());
 
-        if document_id != operation.document_id() {
+        if !all_previous_from_same_document {
             return Err(ValidationError::IncorrectDocumentId(
                 operation.id().clone(),
                 operation.document_id(),
-                document_id,
             )
             .into());
         }
 
-        // @TODO: Validate the claimed sequence number / depth / nonce
+        // Check that all schema ids are the same.
+        let all_previous_have_same_schema_id = previous_operations
+            .iter()
+            .all(|previous_operation| previous_operation.schema_id() == operation.schema_id());
+
+        if !all_previous_have_same_schema_id {
+            return Err(ValidationError::InvalidClaimedSchema(
+                operation.id().clone(),
+                operation.schema_id().clone(),
+            )
+            .into());
+        };
+
+        // Check that all timestamps are lower.
+        let all_previous_timestamps_are_lower = previous_operations
+            .iter()
+            .all(|previous_operation| previous_operation.timestamp() < operation.timestamp());
+
+        if !all_previous_timestamps_are_lower {
+            return Err(ValidationError::InvalidTimestamp(
+                operation.id().clone(),
+                operation.timestamp(),
+            )
+            .into());
+        };
     }
 
     // Insert the operation into the store.
     store.insert_operation(&operation).await?;
     Ok(())
+}
+
+pub async fn get_view_id_operations<S: OperationStore>(
+    store: &S,
+    view_id: &DocumentViewId,
+) -> Result<Vec<impl AsOperation>, ValidationError> {
+    let mut found_operations = vec![];
+    for id in view_id.iter() {
+        let operation = store.get_operation(id).await?;
+        if let Some(operation) = operation {
+            found_operations.push(operation)
+        } else {
+            return Err(ValidationError::PreviousOperationNotFound(id.clone()));
+        }
+    }
+    Ok(found_operations)
 }
 
 //
