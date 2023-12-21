@@ -36,8 +36,8 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
                 ])
                 .unwrap(),
                 DocumentViewId::try_from(vec![
-                    "995d53f460293c5686c42037b72787ed28668ad8b6d18e9d5f02c5d3301161f0",
                     "19ed3e9b39cd17f1dbc0f6e31a6e7b9c9ab7e349332e710c946a441b7d308eb5",
+                    "995d53f460293c5686c42037b72787ed28668ad8b6d18e9d5f02c5d3301161f0",
                 ])
                 .unwrap(),
             ]
@@ -56,8 +56,8 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
         (
             "past_event",
             DocumentViewId::try_from(vec![
-                "f7a17e14b9a5e87435decdbc28d562662fbf37da39b94e8469d8e1873336e80e",
                 "475488c0e2bbb9f5a81929e2fe11de81c1f83c8045de41da43899d25ad0d4afa",
+                "f7a17e14b9a5e87435decdbc28d562662fbf37da39b94e8469d8e1873336e80e",
             ])
             .unwrap()
             .into(),
