@@ -39,20 +39,7 @@ pub async fn publish<S: OperationStore>(
 
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.
-        let previous_operations = get_view_id_operations(store, previous).await?;
-
-        // Check that all document ids are the same.
-        let all_previous_from_same_document = previous_operations
-            .iter()
-            .all(|previous_operation| previous_operation.document_id() == operation.document_id());
-
-        if !all_previous_from_same_document {
-            return Err(ValidationError::IncorrectDocumentId(
-                operation.id().clone(),
-                operation.document_id(),
-            )
-            .into());
-        }
+        let mut previous_operations = get_view_id_operations(store, previous).await?;
 
         // Check that all schema ids are the same.
         let all_previous_have_same_schema_id = previous_operations
@@ -79,6 +66,23 @@ pub async fn publish<S: OperationStore>(
             )
             .into());
         };
+
+        // Check that all operations in previous originate from the same document.
+        previous_operations.dedup_by(|a, b| a.document_id() == b.document_id());
+        if previous_operations.len() > 1 {
+            return Err(ValidationError::InvalidDocumentViewId.into());
+        }
+
+        // Check that the document id of all previous operations match the published operation.
+        //
+        // We can unwrap here as we know there is one operation id in previous_operations.
+        if previous_operations.first().unwrap().document_id() != operation.document_id() {
+            return Err(ValidationError::IncorrectDocumentId(
+                operation.id().clone(),
+                operation.document_id(),
+            )
+            .into());
+        }
     }
 
     // Insert the operation into the store.
