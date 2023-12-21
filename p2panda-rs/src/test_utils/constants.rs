@@ -2,11 +2,13 @@
 
 //! Constants used across the `test_utils` module for default values.
 
-use crate::operation::{
-    OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
-};
+use std::convert::TryFrom;
+use std::str::FromStr;
+
+use crate::document::{DocumentId, DocumentViewId};
+use crate::operation::OperationValue;
 use crate::schema::{FieldType, Schema};
-use crate::test_utils::fixtures::{document_id, document_view_id, schema_fields, schema_id};
+use crate::test_utils::fixtures::{schema_fields, schema_id};
 
 /// Hash value, used when a hash is needed for testing. It's the default hash in fixtures
 /// when a custom value isn't specified.
@@ -24,48 +26,52 @@ pub const SKIPLINK_SEQ_NUMS: [u64; 5] = [4, 8, 12, 13, 17];
 
 /// Constant operation fields used throughout the fixtures module.
 pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
-    // Define a bunch of hard-coded test values to preserve constant behaviour of this function.
-    let document_id_1 =
-        document_id("b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543");
-    let document_id_2 =
-        document_id("9a2149589672fa1ac2348e48b4c56fc208a0eff44938464dd2091850f444a323");
-    let document_view_id_1 = document_view_id(vec![
-        "f7a17e14b9a5e87435decdbc28d562662fbf37da39b94e8469d8e1873336e80e",
-        "475488c0e2bbb9f5a81929e2fe11de81c1f83c8045de41da43899d25ad0d4afa",
-    ]);
-    let document_view_id_2 = document_view_id(vec![
-        "4f0dd3a1b8205b6d4ce3fd4c158bb91c9e131bd842e727164ea220b5b6d09346",
-    ]);
-    let document_view_id_3 = document_view_id(vec![
-        "995d53f460293c5686c42037b72787ed28668ad8b6d18e9d5f02c5d3301161f0",
-        "19ed3e9b39cd17f1dbc0f6e31a6e7b9c9ab7e349332e710c946a441b7d308eb5",
-    ]);
-
     [
-        ("age", OperationValue::Integer(28)),
+        ("age", 28.into()),
         (
             "comments",
-            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                document_view_id_2,
-                document_view_id_3,
-            ])),
+            vec![
+                DocumentViewId::try_from(vec![
+                    "4f0dd3a1b8205b6d4ce3fd4c158bb91c9e131bd842e727164ea220b5b6d09346",
+                ])
+                .unwrap(),
+                DocumentViewId::try_from(vec![
+                    "995d53f460293c5686c42037b72787ed28668ad8b6d18e9d5f02c5d3301161f0",
+                    "19ed3e9b39cd17f1dbc0f6e31a6e7b9c9ab7e349332e710c946a441b7d308eb5",
+                ])
+                .unwrap(),
+            ]
+            .into(),
         ),
-        ("height", OperationValue::Float(3.5)),
-        ("is_admin", OperationValue::Boolean(false)),
+        ("height", 3.5.into()),
+        ("is_admin", false.into()),
         (
             "my_friends",
-            OperationValue::RelationList(RelationList::new(vec![document_id_2])),
+            vec![DocumentId::from_str(
+                "9a2149589672fa1ac2348e48b4c56fc208a0eff44938464dd2091850f444a323",
+            )
+            .unwrap()]
+            .into(),
         ),
         (
             "past_event",
-            OperationValue::PinnedRelation(PinnedRelation::new(document_view_id_1)),
+            DocumentViewId::try_from(vec![
+                "f7a17e14b9a5e87435decdbc28d562662fbf37da39b94e8469d8e1873336e80e",
+                "475488c0e2bbb9f5a81929e2fe11de81c1f83c8045de41da43899d25ad0d4afa",
+            ])
+            .unwrap()
+            .into(),
         ),
         (
             "profile_picture",
-            OperationValue::Relation(Relation::new(document_id_1)),
+            DocumentId::from_str(
+                "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543",
+            )
+            .unwrap()
+            .into(),
         ),
-        ("username", OperationValue::String("bubu".to_owned())),
-        ("data", OperationValue::Bytes(vec![0, 1, 2, 3])),
+        ("username", "bubu".into()),
+        ("data", vec![0, 1, 2, 3].into()),
     ]
     .to_vec()
 }
@@ -103,7 +109,10 @@ mod tests {
     fn default_schema() {
         let venue_operation_id: OperationId = Hash::new_from_bytes(&[3, 2, 1]).into();
         let venue_schema_name = SchemaName::new("venue").expect("Valid schema name");
-        let schema = SchemaId::new_application(&venue_schema_name, &DocumentViewId::new(&[venue_operation_id]));
+        let schema = SchemaId::new_application(
+            &venue_schema_name,
+            &DocumentViewId::new(&[venue_operation_id]),
+        );
         assert_eq!(schema.to_string(), SCHEMA_ID)
     }
 }
