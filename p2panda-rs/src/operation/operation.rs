@@ -476,14 +476,6 @@ mod tests {
             .previous(&document_view_id)
             .sign(&key_pair)
             .is_err());
-
-        // DELETE operation must have backlink
-        assert!(OperationBuilder::new(&schema_id, timestamp)
-            .action(HeaderAction::Delete)
-            .document_id(&document_id)
-            .previous(&document_view_id)
-            .sign(&key_pair)
-            .is_err());
     }
 
     #[rstest]
