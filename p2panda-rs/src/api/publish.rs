@@ -1,22 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::api::DomainError;
-use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::body::decode::decode_body;
-use crate::operation::body::plain::{self, PlainOperation};
+use crate::api::{DomainError, ValidationError};
+use crate::document::DocumentViewId;
+use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
-use crate::operation::body::{Body, EncodedBody};
+use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
 use crate::operation::header::traits::Actionable;
 use crate::operation::header::validate::validate_payload;
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
-use crate::operation::{Operation, OperationAction};
+use crate::operation::Operation;
 use crate::schema::Schema;
-use crate::storage_provider::traits::{DocumentStore, OperationStore};
-
-use super::ValidationError;
+use crate::storage_provider::traits::OperationStore;
 
 pub async fn publish<S: OperationStore>(
     store: &S,
