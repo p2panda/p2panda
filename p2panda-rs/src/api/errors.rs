@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document::DocumentId;
 use crate::operation::body::error::DecodeBodyError;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::header::error::{DecodeHeaderError, ValidateHeaderError};
@@ -21,6 +22,10 @@ pub enum ValidationError {
     /// A document view id was provided which contained operations from different documents.
     #[error("Operations in passed document view id originate from different documents")]
     InvalidDocumentViewId,
+
+    /// An operation was found with an incorrect document id which.
+    #[error("Operation {0} contains incorrect document id {1} expected: {2}")]
+    IncorrectDocumentId(OperationId, DocumentId, DocumentId),
 
     /// Error coming from the operation store.
     #[error(transparent)]

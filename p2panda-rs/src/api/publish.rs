@@ -2,9 +2,10 @@
 
 use crate::api::validation::{get_checked_document_id_for_view_id, validate_claimed_schema_id};
 use crate::api::DomainError;
-use crate::document::DocumentId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::body::decode::decode_body;
 use crate::operation::body::plain::{self, PlainOperation};
+use crate::operation::body::traits::Schematic;
 use crate::operation::body::{Body, EncodedBody};
 use crate::operation::header::decode::decode_header;
 use crate::operation::header::traits::Actionable;
@@ -14,7 +15,9 @@ use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
 use crate::operation::{Operation, OperationAction};
 use crate::schema::Schema;
-use crate::storage_provider::traits::OperationStore;
+use crate::storage_provider::traits::{OperationStore, DocumentStore};
+
+use super::ValidationError;
 
 pub async fn publish<S: OperationStore>(
     store: &S,
@@ -25,55 +28,43 @@ pub async fn publish<S: OperationStore>(
 ) -> Result<(), DomainError> {
     // Decode the header.
     let header = decode_header(encoded_header)?;
-    validate_payload(&header, encoded_body)?;
 
-    let plain_operation = decode_body(encoded_body)?;
+    // Validate the payload.
+    validate_payload(&header, encoded_body)?;
+    
+    // Validate the plain fields against claimed schema and produce an operation Body.
     let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
+    // Construct the operation. This performs internal validation to check the header and body
+    // combine into a valid p2panda operation.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
 
-    // @TODO: Validate the claimed document id
-    // @TODO: Validate the claimed previous
-    // @TODO: Validate the claimed sequence number / depth / nonce
+    if let Some(previous) = operation.previous() {
+        // Validate claimed schema for this operation matches the expected found in the
+        // previous operations.
+        validate_claimed_schema_id(store, &operation.schema_id(), &previous).await?;
+
+        // Get the document_id for the document_view_id contained in previous operations.
+        // This performs several validation steps (check method doc string).
+        let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
+
+        if document_id != operation.document_id() {
+            return Err(ValidationError::IncorrectDocumentId(
+                operation.id().clone(),
+                operation.document_id(),
+                document_id,
+            )
+            .into());
+        }
+
+        // @TODO: Validate the claimed sequence number / depth / nonce
+    }
 
     // Insert the operation into the store.
     store.insert_operation(&operation).await?;
-
-    // @TODO: Construct and return next args.
     Ok(())
 }
 
-/// Determine the document id for the passed operation. If this is a create operation then we use
-/// the provided operation id to derive a new document id. In all other cases we retrieve and
-/// validate the document id by look at the operations contained in the `previous` field. Returns
-/// an error if the document in question is deleted.
-async fn determine_document_id<S: OperationStore>(
-    store: &S,
-    operation: &impl AsOperation,
-) -> Result<DocumentId, DomainError> {
-    let document_id = match operation.action() {
-        OperationAction::Create => {
-            // Derive the document id for this new document.
-            Ok::<DocumentId, DomainError>(DocumentId::new(&operation.id()))
-        }
-        _ => {
-            // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
-            let previous = operation.previous().unwrap();
-
-            // Validate claimed schema for this operation matches the expected found in the
-            // previous operations.
-            validate_claimed_schema_id(store, &operation.schema_id(), &previous).await?;
-
-            // Get the document_id for the document_view_id contained in previous operations.
-            // This performs several validation steps (check method doc string).
-            let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
-
-            Ok(document_id)
-        }
-    }?;
-
-    Ok(document_id)
-}
 //
 // #[cfg(test)]
 // mod tests {
