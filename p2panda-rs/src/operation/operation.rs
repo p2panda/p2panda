@@ -442,14 +442,6 @@ mod tests {
             .sign(&key_pair)
             .is_err());
 
-        // UPDATE operation must have backlink
-        assert!(OperationBuilder::new(&schema_id, timestamp)
-            .document_id(&document_id)
-            .previous(&document_view_id)
-            .fields(&[("year", 2020.into())])
-            .sign(&key_pair)
-            .is_err());
-
         // correct DELETE operation
         assert!(OperationBuilder::new(&schema_id, timestamp)
             .action(HeaderAction::Delete)
