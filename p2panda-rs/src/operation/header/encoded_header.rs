@@ -3,11 +3,15 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
+use hex::ToHex;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
 use crate::identity::SIGNATURE_SIZE;
+use crate::operation::header::decode::decode_header;
 use crate::serde::{deserialize_hex, serialize_hex};
+
+use super::encode::encode_header;
 
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedHeader(
@@ -32,9 +36,14 @@ impl EncodedHeader {
     }
 
     pub fn unsigned_bytes(&self) -> Vec<u8> {
-        let bytes = self.to_bytes();
-        let signature_offset = bytes.len() - SIGNATURE_SIZE;
-        bytes[..signature_offset].into()
+        // Safely unwrap as only valid headers are encoded.
+        let mut header = decode_header(self).unwrap();
+
+        // Set the signature to None
+        header.5 = None;
+
+        // Encode again, unwrapping safely as this header is still valid.
+        encode_header(&header).unwrap().to_bytes()
     }
 
     pub fn to_hex(&self) -> String {
