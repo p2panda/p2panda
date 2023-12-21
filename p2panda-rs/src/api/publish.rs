@@ -2,16 +2,17 @@
 
 use crate::api::{DomainError, ValidationError};
 use crate::document::DocumentViewId;
+use crate::hash::HashId;
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
-use crate::operation::header::traits::Actionable;
+use crate::operation::header::traits::{Actionable, Authored};
 use crate::operation::header::validate::validate_payload;
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 
@@ -34,8 +35,36 @@ pub async fn publish<S: OperationStore>(
     // Construct the operation. This performs internal validation to check the header and body
     // combine into a valid p2panda operation.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
+    let latest_operation = store
+        .get_latest_operation(&operation.document_id(), operation.public_key())
+        .await?;
 
-    // @TODO: Check that the backlink exists and no fork has occurred.
+    // Validate the authors document log integrity:
+    // - if a backlink is given it should point to the latest operation for this document and public key
+    // - if no backlink is given no log should exist for this document and public key
+    match (operation.backlink(), latest_operation) {
+        (None, None) => Ok(()),
+        (None, Some(_)) => Err(ValidationError::UnexpectedDocumentLog(
+            operation.public_key().clone(),
+            operation.document_id(),
+        )),
+        (Some(_), None) => Err(ValidationError::ExpectedDocumentLog(
+            operation.public_key().clone(),
+            operation.document_id(),
+        )),
+        (Some(backlink), Some(latest_operation)) => {
+            if backlink != latest_operation.id().as_hash() {
+                return Err(ValidationError::IncorrectBacklink(
+                    operation.id().as_hash().clone(),
+                    operation.public_key().clone(),
+                    operation.document_id(),
+                    latest_operation.id().as_hash().clone(),
+                )
+                .into());
+            }
+            Ok(())
+        }
+    }?;
 
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.

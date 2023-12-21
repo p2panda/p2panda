@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentId;
+use crate::hash::Hash;
+use crate::identity::PublicKey;
 use crate::operation::body::error::DecodeBodyError;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::header::error::{DecodeHeaderError, ValidateHeaderError};
@@ -14,6 +16,18 @@ pub enum ValidationError {
     /// Claimed schema does not match the documents expected schema.
     #[error("Operation {0} claims incorrect schema {1}")]
     InvalidClaimedSchema(OperationId, SchemaId),
+
+    /// An existing document log was found for this public key document id combination.
+    #[error("Existing document log found for public key {0} and document {1}")]
+    UnexpectedDocumentLog(PublicKey, DocumentId),
+
+    /// An existing document log was not found for this public key document id combination.
+    #[error("Document log not found for public key {0} and document {1}")]
+    ExpectedDocumentLog(PublicKey, DocumentId),
+
+    /// A document view id was provided which contained operations from different documents.
+    #[error("Backlink {0} does not match latest operation for public key {1} and document {2}, expected: {3}")]
+    IncorrectBacklink(Hash, PublicKey, DocumentId, Hash),
 
     /// An operation in the `previous` field was not found in the store.
     #[error("Previous operation {0} not found in store")]
