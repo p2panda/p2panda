@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
+use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
@@ -32,10 +33,7 @@ pub trait OperationStore {
     /// `validation` and `domain` modules.
     ///
     /// Returns an error if a fatal storage error occurred.
-    async fn insert_operation(
-        &self,
-        operation: &Operation,
-    ) -> Result<(), OperationStorageError>;
+    async fn insert_operation(&self, operation: &Operation) -> Result<(), OperationStorageError>;
 
     /// Get an `Operation` identified by it's `OperationId`, returns `None` if no `Operation` was found.
     ///
@@ -70,4 +68,10 @@ pub trait OperationStore {
         &self,
         id: &SchemaId,
     ) -> Result<Vec<Self::Operation>, OperationStorageError>;
+
+    async fn get_latest_operation(
+        &self,
+        document_id: &DocumentId,
+        public_key: &PublicKey,
+    ) -> Result<Option<Self::Operation>, OperationStorageError>;
 }

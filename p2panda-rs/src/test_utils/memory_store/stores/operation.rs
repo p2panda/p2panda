@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use log::debug;
 
 use crate::document::DocumentId;
+use crate::identity::PublicKey;
 use crate::operation::body::traits::Schematic;
-use crate::operation::header::traits::Actionable;
+use crate::operation::header::traits::{Actionable, Authored};
 use crate::operation::traits::AsOperation;
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
@@ -95,6 +96,25 @@ impl OperationStore for MemoryStore {
                 }
             })
             .collect())
+    }
+
+    /// Get the latest `Operation` of a public keys document log.
+    async fn get_latest_operation(
+        &self,
+        document_id: &DocumentId,
+        public_key: &PublicKey,
+    ) -> Result<Option<Operation>, OperationStorageError> {
+        let operations = self.operations.lock().unwrap();
+        let mut operations: Vec<Operation> = operations
+            .values()
+            .filter(|operation| {
+                operation.document_id() == *document_id && operation.public_key() == public_key
+            })
+            .cloned()
+            .collect();
+
+        operations.sort_by(|a, b| a.timestamp().cmp(&b.timestamp()));
+        Ok(operations.last().cloned())
     }
 }
 //
