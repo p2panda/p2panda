@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::{Hash, HashId};
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
 use crate::operation::header::encode::encode_header;
@@ -88,7 +89,9 @@ pub async fn populate_store<S: OperationStore>(
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_documents {
+            let mut backlink: Option<Hash> = None;
             let mut previous: Option<DocumentViewId> = None;
+            let mut document_id: Option<DocumentId> = None;
 
             for index in 0..config.no_of_operations {
                 let timestamp = SystemTime::now()
@@ -108,14 +111,18 @@ pub async fn populate_store<S: OperationStore>(
                     seq if seq == (config.no_of_operations - 1) && config.with_delete => {
                         OperationBuilder::new(config.schema.id(), timestamp)
                             .action(HeaderAction::Delete)
-                            .previous(&previous.expect("Previous should be set"))
+                            .document_id(&document_id.expect("document_id should be set"))
+                            .backlink(&backlink.expect("backlink should be set"))
+                            .previous(&previous.expect("previous should be set"))
                             .sign(key_pair)
                             .expect("Error building operation")
                     }
                     // All other operations are UPDATE
                     _ => OperationBuilder::new(config.schema.id(), timestamp)
                         .fields(&config.update_operation_fields)
-                        .previous(&previous.expect("Previous should be set"))
+                        .document_id(&document_id.expect("document_id should be set"))
+                        .backlink(&backlink.expect("backlink should be set"))
+                        .previous(&previous.expect("previous should be set"))
                         .sign(key_pair)
                         .expect("Error building operation"),
                 };
@@ -126,7 +133,9 @@ pub async fn populate_store<S: OperationStore>(
                     .expect("Send to store");
 
                 // Set the previous based on the backlink
-                previous = Some(DocumentViewId::new(&[operation.id().to_owned()]));
+                previous = Some(operation.id().clone().into());
+                backlink = Some(operation.id().as_hash().clone());
+                document_id = Some(operation.id().clone().into());
 
                 // Push this document id to the test data.
                 if index == 0 {
@@ -144,15 +153,14 @@ pub async fn send_to_store<S: OperationStore>(
     operation: &Operation,
     schema: &Schema,
 ) -> Result<()> {
-    // @TODO: get next seq number here from next_args.
-
-    // Encode the operation.
+    // Encode the header.
     let encoded_header = encode_header(operation.header())?;
 
+    // Encode the body.
     let encoded_body = encode_body(operation.body())?;
 
     // Publish the entry and get the next entry args.
-    let next_args = publish(
+    publish(
         store,
         schema,
         &encoded_header,
@@ -161,168 +169,82 @@ pub async fn send_to_store<S: OperationStore>(
     )
     .await?;
 
-    Ok(next_args)
+    Ok(())
 }
-//
-// #[cfg(test)]
-// mod tests {
-//     use rstest::rstest;
-//
-//     use crate::document::DocumentViewId;
-//     use crate::entry::traits::{AsEncodedEntry, AsEntry};
-//     use crate::entry::{LogId, SeqNum};
-//     use crate::identity::KeyPair;
-//     use crate::operation::Operation;
-//     use crate::schema::Schema;
-//     use crate::storage_provider::traits::DocumentStore;
-//     use crate::test_utils::constants::{test_fields, SKIPLINK_SEQ_NUMS};
-//     use crate::test_utils::fixtures::{
-//         key_pair, operation, populate_store_config, random_key_pair, schema, update_operation,
-//     };
-//     use crate::test_utils::memory_store::helpers::{
-//         populate_store, send_to_store, PopulateStoreConfig,
-//     };
-//     use crate::test_utils::memory_store::MemoryStore;
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn correct_next_args(
-//         #[from(populate_store_config)]
-//         #[with(17, 1, 1)]
-//         config: PopulateStoreConfig,
-//     ) {
-//         let store = MemoryStore::default();
-//         populate_store(&store, &config).await;
-//
-//         let entries = store.entries.lock().unwrap().clone();
-//         for seq_num in 1..17 {
-//             let entry = entries
-//                 .values()
-//                 .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
-//                 .unwrap();
-//
-//             let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
-//             assert_eq!(expected_seq_num, *entry.seq_num());
-//
-//             let expected_log_id = LogId::default();
-//             assert_eq!(expected_log_id, *entry.log_id());
-//
-//             let mut expected_backlink_hash = None;
-//
-//             if seq_num != 1 {
-//                 expected_backlink_hash = Some(
-//                     entries
-//                         .values()
-//                         .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
-//                         .unwrap()
-//                         .hash(),
-//                 );
-//             }
-//             assert_eq!(expected_backlink_hash.as_ref(), entry.backlink());
-//
-//             let mut expected_skiplink_hash = None;
-//
-//             if SKIPLINK_SEQ_NUMS.contains(&(seq_num as u64)) {
-//                 let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
-//
-//                 let skiplink_entry = entries
-//                     .values()
-//                     .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
-//                     .unwrap();
-//                 expected_skiplink_hash = Some(skiplink_entry.hash());
-//             };
-//
-//             assert_eq!(expected_skiplink_hash.as_ref(), entry.skiplink());
-//         }
-//     }
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn correct_test_values(
-//         schema: Schema,
-//         #[from(populate_store_config)]
-//         #[with(10, 4, 2)]
-//         config: PopulateStoreConfig,
-//     ) {
-//         let store = MemoryStore::default();
-//         let (key_pairs, documents) = populate_store(&store, &config).await;
-//
-//         assert_eq!(key_pairs.len(), 2);
-//         assert_eq!(documents.len(), 8);
-//         assert_eq!(store.entries.lock().unwrap().len(), 80);
-//         assert_eq!(store.operations.lock().unwrap().len(), 80);
-//         assert_eq!(
-//             store
-//                 .get_documents_by_schema(schema.id())
-//                 .await
-//                 .unwrap()
-//                 .len(),
-//             8
-//         );
-//     }
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn sends_to_node(
-//         operation: Operation,
-//         schema: Schema,
-//         key_pair: KeyPair,
-//         #[from(random_key_pair)] another_key_pair: KeyPair,
-//     ) {
-//         let store = MemoryStore::default();
-//
-//         // Publish first entry and operation.
-//         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
-//             send_to_store(&store, &operation, &schema, &key_pair)
-//                 .await
-//                 .unwrap();
-//
-//         assert_eq!(seq_num, SeqNum::new(2).unwrap());
-//         assert_eq!(log_id, LogId::new(0));
-//         assert!(backlink.is_some());
-//         assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
-//         assert!(skiplink.is_none());
-//
-//         let update = update_operation(
-//             test_fields(),
-//             backlink.map(DocumentViewId::from).unwrap(),
-//             schema.id().clone(),
-//         );
-//
-//         // Publish second entry and an update operation.
-//         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
-//             send_to_store(&store, &update, &schema, &key_pair)
-//                 .await
-//                 .unwrap();
-//
-//         assert_eq!(seq_num, SeqNum::new(3).unwrap());
-//         assert_eq!(log_id, LogId::new(0));
-//         assert!(backlink.is_some());
-//         assert_eq!(backlink.unwrap(), encoded_entry.hash());
-//         assert!(skiplink.is_none());
-//
-//         // Publish an entry and operation to a new log.
-//         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
-//             send_to_store(&store, &operation, &schema, &key_pair)
-//                 .await
-//                 .unwrap();
-//
-//         assert_eq!(seq_num, SeqNum::new(2).unwrap());
-//         assert_eq!(log_id, LogId::new(1));
-//         assert!(backlink.is_some());
-//         assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
-//         assert!(skiplink.is_none());
-//
-//         // Publish an entry and operation with a new key pair.
-//         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
-//             send_to_store(&store, &operation, &schema, &another_key_pair)
-//                 .await
-//                 .unwrap();
-//
-//         assert_eq!(seq_num, SeqNum::new(2).unwrap());
-//         assert_eq!(log_id, LogId::new(0));
-//         assert!(backlink.is_some());
-//         assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
-//         assert!(skiplink.is_none());
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::hash::HashId;
+    use crate::identity::KeyPair;
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{Operation, OperationBuilder, OperationValue};
+    use crate::schema::Schema;
+    use crate::storage_provider::traits::DocumentStore;
+    use crate::test_utils::fixtures::{
+        key_pair, operation_fields, populate_store_config, random_key_pair, schema,
+    };
+    use crate::test_utils::memory_store::helpers::{
+        populate_store, send_to_store, PopulateStoreConfig,
+    };
+    use crate::test_utils::memory_store::MemoryStore;
+
+    #[rstest]
+    #[tokio::test]
+    async fn correct_test_values(
+        schema: Schema,
+        #[from(populate_store_config)]
+        #[with(10, 4, 2)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        assert_eq!(key_pairs.len(), 2);
+        assert_eq!(documents.len(), 8);
+        assert_eq!(store.operations.lock().unwrap().len(), 80);
+        assert_eq!(
+            store
+                .get_documents_by_schema(schema.id())
+                .await
+                .unwrap()
+                .len(),
+            8
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn sends_to_store(
+        schema: Schema,
+        #[from(operation_fields)] fields: Vec<(&str, OperationValue)>,
+        #[from(key_pair)] key_pair_1: KeyPair,
+        #[from(random_key_pair)] key_pair_2: KeyPair,
+    ) {
+        let store = MemoryStore::default();
+
+        let create_operation = OperationBuilder::new(schema.id(), 1703027623)
+            .fields(&fields)
+            .sign(&key_pair_1)
+            .unwrap();
+
+        // Publish a create operation.
+        send_to_store(&store, &create_operation, &schema)
+            .await
+            .unwrap();
+
+        let update_operation: Operation = OperationBuilder::new(schema.id(), 1703027624)
+            .document_id(&create_operation.id().clone().into())
+            .backlink(create_operation.id().as_hash())
+            .previous(&create_operation.id().clone().into())
+            .fields(&fields)
+            .sign(&key_pair_1)
+            .unwrap();
+
+        // Publish an update operation.
+        send_to_store(&store, &update_operation, &schema)
+            .await
+            .unwrap();
+    }
+}
