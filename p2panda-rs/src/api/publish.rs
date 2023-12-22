@@ -158,9 +158,7 @@ mod tests {
     async fn operation_builder_create(key_pair: KeyPair, schema: Schema) {
         let store = MemoryStore::default();
 
-        let timestamp = 1703027623;
-
-        let operation = OperationBuilder::new(schema.id(), timestamp)
+        let operation = OperationBuilder::new(schema.id())
             .fields(&test_fields())
             .sign(&key_pair)
             .unwrap();

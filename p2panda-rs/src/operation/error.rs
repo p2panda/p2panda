@@ -17,6 +17,9 @@ pub enum OperationBuilderError {
 
     #[error(transparent)]
     EncodeHeader(#[from] crate::operation::header::error::EncodeHeaderError),
+
+    #[error(transparent)]
+    SystemTime(#[from] std::time::SystemTimeError),
 }
 
 #[derive(Error, Debug)]

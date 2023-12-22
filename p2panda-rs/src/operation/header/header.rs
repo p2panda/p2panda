@@ -95,7 +95,7 @@ pub struct HeaderExtension {
     pub(crate) action: Option<HeaderAction>,
 
     #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
-    pub(crate) timestamp: Option<u64>,
+    pub(crate) timestamp: Option<u128>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -116,7 +116,7 @@ impl HeaderBuilder {
         self
     }
 
-    pub fn timestamp(mut self, timestamp: u64) -> Self {
+    pub fn timestamp(mut self, timestamp: u128) -> Self {
         self.0.timestamp = Some(timestamp);
         self
     }

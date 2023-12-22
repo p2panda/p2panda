@@ -43,7 +43,7 @@ pub enum ValidationError {
 
     /// An operation was found with a timestamp not greater than the one in it's previous operations.
     #[error("Operation {0} contains a timestamp {1} not greater than those found in previous")]
-    InvalidTimestamp(OperationId, u64),
+    InvalidTimestamp(OperationId, u128),
 
     /// Error coming from the operation store.
     #[error(transparent)]

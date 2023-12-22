@@ -19,7 +19,7 @@ pub trait AsOperation: Actionable + Authored + Schematic {
     fn document_id(&self) -> DocumentId;
     
     /// Timestamp when this operation was published.
-    fn timestamp(&self) -> u64;
+    fn timestamp(&self) -> u128;
 
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash>;
