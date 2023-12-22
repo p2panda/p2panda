@@ -12,7 +12,7 @@ use crate::operation::header::validate::{validate_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_plain_operation;
-use crate::operation::{Operation, OperationAction};
+use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 
@@ -144,23 +144,13 @@ mod tests {
     use rstest::rstest;
 
     use crate::api::publish;
-    use crate::document::{DocumentId, DocumentViewId};
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::encode::encode_body;
-    use crate::operation::body::traits::Schematic;
     use crate::operation::header::encode::encode_header;
-    use crate::operation::header::traits::Actionable;
-    use crate::operation::header::HeaderAction;
-    use crate::operation::traits::AsOperation;
-    use crate::operation::{
-        OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
-    };
-    use crate::schema::{Schema, SchemaId};
+    use crate::operation::OperationBuilder;
+    use crate::schema::Schema;
     use crate::test_utils::constants::test_fields;
-    use crate::test_utils::fixtures::{
-        document_id, document_view_id, key_pair, random_hash, schema, schema_id,
-    };
+    use crate::test_utils::fixtures::{key_pair, schema};
     use crate::test_utils::memory_store::MemoryStore;
 
     #[rstest]
