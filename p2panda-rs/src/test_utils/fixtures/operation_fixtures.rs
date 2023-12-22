@@ -45,7 +45,7 @@ pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
 #[fixture]
 pub fn operation_fields(
     #[default(test_fields())] fields: Vec<(&'static str, OperationValue)>,
-) -> OperationFields {
-    fields.into()
+) -> Vec<(&'static str, OperationValue)> {
+    fields
 }
 

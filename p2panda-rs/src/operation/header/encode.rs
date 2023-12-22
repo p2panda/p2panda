@@ -49,7 +49,7 @@ mod tests {
     use crate::operation::header::encode::encode_header;
     use crate::operation::header::traits::Authored;
     use crate::operation::header::HeaderBuilder;
-    use crate::operation::OperationFields;
+    use crate::operation::{OperationFields, OperationValue};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, hash, key_pair, operation_fields, random_key_pair, schema_id,
@@ -58,14 +58,14 @@ mod tests {
     #[rstest]
     fn sign_and_encode_header(
         schema_id: SchemaId,
-        #[from(operation_fields)] fields: OperationFields,
+        #[from(operation_fields)] fields: Vec<(&str, OperationValue)>,
         document_id: DocumentId,
         #[from(hash)] backlink: Hash,
         #[from(document_view_id)] previous: DocumentViewId,
         key_pair: KeyPair,
         #[from(random_key_pair)] incorrect_key_pair: KeyPair,
     ) {
-        let body = Body(schema_id, Some(fields));
+        let body = Body(schema_id, Some(fields.into()));
         let encoded_body = encode_body(&body).unwrap();
         let result = HeaderBuilder::new()
             .document_id(&document_id)
