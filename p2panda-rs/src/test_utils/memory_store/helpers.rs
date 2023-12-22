@@ -2,8 +2,6 @@
 
 //! Helper methods for working with a storage provider when testing.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::{Hash, HashId};
@@ -94,52 +92,49 @@ pub async fn populate_store<S: OperationStore>(
             let mut document_id: Option<DocumentId> = None;
 
             for index in 0..config.no_of_operations {
-                let timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("can retrieve system time")
-                    .as_secs();
+                let mut operation_builder = OperationBuilder::new(config.schema.id());
 
-                // Create an operation based on the current index and whether this document should
-                // contain a DELETE operation
-                let operation = match index {
-                    // First operation is CREATE
-                    0 => OperationBuilder::new(config.schema.id(), timestamp)
-                        .fields(&config.create_operation_fields)
-                        .sign(key_pair)
-                        .expect("Error building operation"),
-                    // Last operation is DELETE if the with_delete flag is set
-                    seq if seq == (config.no_of_operations - 1) && config.with_delete => {
-                        OperationBuilder::new(config.schema.id(), timestamp)
-                            .action(HeaderAction::Delete)
-                            .document_id(&document_id.expect("document_id should be set"))
+                operation_builder = match index {
+                    // CREATE operation
+                    0 => operation_builder.fields(&config.create_operation_fields),
+                    // UPDATE and DELETE operations
+                    _ => {
+                        operation_builder = operation_builder
+                            .document_id(&document_id.clone().expect("document_id should be set"))
                             .backlink(&backlink.expect("backlink should be set"))
-                            .previous(&previous.expect("previous should be set"))
-                            .sign(key_pair)
-                            .expect("Error building operation")
+                            .previous(&previous.expect("previous should be set"));
+
+                        if index == (config.no_of_operations - 1) && config.with_delete {
+                            // additionally set action on DELETE operations
+                            operation_builder = operation_builder.action(HeaderAction::Delete);
+                        } else {
+                            // otherwise set fields on UPDATE operations
+                            operation_builder =
+                                operation_builder.fields(&config.update_operation_fields);
+                        }
+                        operation_builder
                     }
-                    // All other operations are UPDATE
-                    _ => OperationBuilder::new(config.schema.id(), timestamp)
-                        .fields(&config.update_operation_fields)
-                        .document_id(&document_id.expect("document_id should be set"))
-                        .backlink(&backlink.expect("backlink should be set"))
-                        .previous(&previous.expect("previous should be set"))
-                        .sign(key_pair)
-                        .expect("Error building operation"),
                 };
+
+                // build and sign the operation.
+                let operation = operation_builder
+                    .sign(&key_pair)
+                    .expect("can build operation");
 
                 // Publish the operation encoded on an entry to storage.
                 let _ = send_to_store(store, &operation, &config.schema)
                     .await
-                    .expect("Send to store");
+                    .expect("can publish operation");
 
-                // Set the previous based on the backlink
+                // Set the previous and backlink based on current operation id
                 previous = Some(operation.id().clone().into());
                 backlink = Some(operation.id().as_hash().clone());
-                document_id = Some(operation.id().clone().into());
 
-                // Push this document id to the test data.
                 if index == 0 {
-                    documents.push(DocumentId::new(&operation.id()));
+                    // Push this new document id to the documents vec and set current document id.
+                    let new_document_id = DocumentId::new(&operation.id());
+                    document_id = Some(new_document_id.clone());
+                    documents.push(new_document_id);
                 }
             }
         }
@@ -220,11 +215,10 @@ mod tests {
         schema: Schema,
         #[from(operation_fields)] fields: Vec<(&str, OperationValue)>,
         #[from(key_pair)] key_pair_1: KeyPair,
-        #[from(random_key_pair)] key_pair_2: KeyPair,
     ) {
         let store = MemoryStore::default();
 
-        let create_operation = OperationBuilder::new(schema.id(), 1703027623)
+        let create_operation = OperationBuilder::new(schema.id())
             .fields(&fields)
             .sign(&key_pair_1)
             .unwrap();
@@ -234,7 +228,7 @@ mod tests {
             .await
             .unwrap();
 
-        let update_operation: Operation = OperationBuilder::new(schema.id(), 1703027624)
+        let update_operation: Operation = OperationBuilder::new(schema.id())
             .document_id(&create_operation.id().clone().into())
             .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
