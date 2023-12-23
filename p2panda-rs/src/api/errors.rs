@@ -37,24 +37,34 @@ pub enum ValidationError {
     #[error("Operations in passed document view id originate from different documents")]
     InvalidDocumentViewId,
 
-    /// An operation was found with an incorrect document id which.
-    #[error("Operation {0} document id {1} does not match expected document id")]
-    IncorrectDocumentId(OperationId, DocumentId),
+    /// An operation was found in `previous` with a mismatching document id.
+    #[error("Previous operation {0} has document id {1}, expected: {2}")]
+    MismathingDocumentIdInPrevious(OperationId, DocumentId, DocumentId),
+
+    /// An operation was found in `previous` with a mismatching schema id.
+    #[error("Previous operation {0} has schema id {1}, expected: {2}")]
+    MismathingSchemaInPrevious(OperationId, SchemaId, SchemaId),
 
     /// An operation was found with a timestamp not greater than the one in it's previous operations.
-    #[error("Operation {0} contains a timestamp {1} not greater than those found in previous")]
+    #[error(
+        "Operation {0} contains a timestamp {1} which is not greater than those found in previous"
+    )]
     TimestampLessThanPrevious(OperationId, u128),
 
     /// An operation was found with a timestamp not greater than the one in it's backlink.
-    #[error("Operation {0} contains a timestamp {1} not greater than those found in backlink")]
+    #[error(
+        "Operation {0} contains a timestamp {1} which is not greater than it's backlink timestamp"
+    )]
     TimestampLessThanBacklink(OperationId, u128),
 
     /// An operation was found with a depth not greater than the one in it's previous operations.
-    #[error("Operation {0} contains a depth {1} not greater than those found in previous")]
+    #[error(
+        "Operation {0} contains a depth {1} which is not greater than those found in previous"
+    )]
     DepthLessThanPrevious(OperationId, u64),
 
     /// An operation was found with a depth not greater than the one in it's backlink.
-    #[error("Operation {0} contains a depth {1} not greater than those found in backlink")]
+    #[error("Operation {0} contains a depth {1} which is not greater than it's backlink depth")]
     DepthLessThanBacklink(OperationId, u64),
 
     /// Error coming from the operation store.

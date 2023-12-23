@@ -16,6 +16,8 @@ use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 
+use crate::api::{validate_backlink, validate_previous};
+
 pub async fn publish<S: OperationStore>(
     store: &S,
     schema: &Schema,
@@ -58,30 +60,7 @@ pub async fn publish<S: OperationStore>(
             operation.document_id(),
         )),
         (Some(backlink), Some(latest_operation)) => {
-            if backlink != latest_operation.id().as_hash() {
-                return Err(ValidationError::IncorrectBacklink(
-                    operation.id().as_hash().clone(),
-                    operation.public_key().clone(),
-                    operation.document_id(),
-                    latest_operation.id().as_hash().clone(),
-                )
-                .into());
-            }
-
-            if operation.timestamp() <= latest_operation.timestamp() {
-                return Err(ValidationError::TimestampLessThanBacklink(
-                    operation.id().clone(),
-                    operation.timestamp(),
-                ).into());
-            }
-
-            if operation.depth() <= latest_operation.depth() {
-                return Err(ValidationError::DepthLessThanBacklink(
-                    operation.id().clone(),
-                    operation.depth(),
-                ).into());
-            }
-            Ok(())
+            validate_backlink(&operation, &backlink, &latest_operation)
         }
     }?;
 
@@ -92,63 +71,8 @@ pub async fn publish<S: OperationStore>(
     // - all document ids should match the document id of the new operation
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.
-        let mut previous_operations = get_view_id_operations(store, previous).await?;
-
-        // Check that all schema ids are the same.
-        let all_previous_have_same_schema_id = previous_operations
-            .iter()
-            .all(|previous_operation| previous_operation.schema_id() == operation.schema_id());
-
-        if !all_previous_have_same_schema_id {
-            return Err(ValidationError::InvalidClaimedSchema(
-                operation.id().clone(),
-                operation.schema_id().clone(),
-            )
-            .into());
-        };
-
-        // Check that all timestamps are lower.
-        let all_previous_timestamps_are_lower = previous_operations
-            .iter()
-            .all(|previous_operation| previous_operation.timestamp() < operation.timestamp());
-
-        if !all_previous_timestamps_are_lower {
-            return Err(ValidationError::TimestampLessThanPrevious(
-                operation.id().clone(),
-                operation.timestamp(),
-            )
-            .into());
-        };
-
-        // Check that all depths are lower.
-        let all_previous_depths_are_lower = previous_operations
-            .iter()
-            .all(|previous_operation| previous_operation.depth() < operation.depth());
-
-        if !all_previous_depths_are_lower {
-            return Err(ValidationError::DepthLessThanPrevious(
-                operation.id().clone(),
-                operation.depth(),
-            )
-            .into());
-        };
-
-        // Check that all operations in previous originate from the same document.
-        previous_operations.dedup_by(|a, b| a.document_id() == b.document_id());
-        if previous_operations.len() > 1 {
-            return Err(ValidationError::InvalidDocumentViewId.into());
-        }
-
-        // Check that the document id of all previous operations match the published operation.
-        //
-        // We can unwrap here as we know there is one operation id in previous_operations.
-        if previous_operations.first().unwrap().document_id() != operation.document_id() {
-            return Err(ValidationError::IncorrectDocumentId(
-                operation.id().clone(),
-                operation.document_id(),
-            )
-            .into());
-        }
+        let previous_operations = get_view_id_operations(store, previous).await?;
+        validate_previous(&operation, &previous_operations)?;
     }
 
     // Insert the operation into the store.
