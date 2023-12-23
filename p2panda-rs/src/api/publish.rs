@@ -44,7 +44,8 @@ pub async fn publish<S: OperationStore>(
         .await?;
 
     // Validate the authors document log integrity:
-    // - if a backlink is given it should point to the latest operation for this document and public key
+    // - if a backlink is given it should point to the latest operation for this document and
+    //   public key, and the new operation should have a greater timestamp.
     // - if no backlink is given no log should exist for this document and public key
     match (operation.backlink(), latest_operation) {
         (None, None) => Ok(()),
@@ -65,6 +66,13 @@ pub async fn publish<S: OperationStore>(
                     latest_operation.id().as_hash().clone(),
                 )
                 .into());
+            }
+
+            if operation.timestamp() <= latest_operation.timestamp() {
+                return Err(ValidationError::InvalidTimestamp(
+                    operation.id().clone(),
+                    operation.timestamp(),
+                ).into());
             }
             Ok(())
         }
