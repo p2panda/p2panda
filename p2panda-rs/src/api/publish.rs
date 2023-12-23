@@ -59,9 +59,13 @@ pub async fn publish<S: OperationStore>(
             operation.public_key().clone(),
             operation.document_id(),
         )),
-        (Some(backlink), Some(latest_operation)) => {
-            validate_backlink(&operation, &backlink, &latest_operation)
-        }
+        (Some(claimed_backlink), Some(latest_operation)) => validate_backlink(
+            &operation,
+            &claimed_backlink,
+            &latest_operation.id().as_hash(),
+            latest_operation.depth(),
+            latest_operation.timestamp(),
+        ),
     }?;
 
     // Validate the operations contained in `previous``:
@@ -72,7 +76,15 @@ pub async fn publish<S: OperationStore>(
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.
         let previous_operations = get_view_id_operations(store, previous).await?;
-        validate_previous(&operation, &previous_operations)?;
+        for previous in previous_operations {
+            validate_previous(
+                &operation,
+                previous.schema_id(),
+                &previous.document_id(),
+                previous.depth(),
+                previous.timestamp(),
+            )?;
+        }
     }
 
     // Insert the operation into the store.

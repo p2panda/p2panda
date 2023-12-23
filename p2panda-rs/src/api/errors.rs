@@ -25,7 +25,8 @@ pub enum ValidationError {
     #[error("Document log not found for public key {0} and document {1}")]
     ExpectedDocumentLog(PublicKey, DocumentId),
 
-    /// A document view id was provided which contained operations from different documents.
+    /// A backlink which does not match the latest operation for for the public key and document
+    /// was found.
     #[error("Backlink {0} does not match latest operation for public key {1} and document {2}, expected: {3}")]
     IncorrectBacklink(Hash, PublicKey, DocumentId, Hash),
 
@@ -33,16 +34,12 @@ pub enum ValidationError {
     #[error("Previous operation {0} not found in store")]
     PreviousOperationNotFound(OperationId),
 
-    /// A document view id was provided which contained operations from different documents.
-    #[error("Operations in passed document view id originate from different documents")]
-    InvalidDocumentViewId,
-
     /// An operation was found in `previous` with a mismatching document id.
-    #[error("Previous operation {0} has document id {1}, expected: {2}")]
+    #[error("Operation {0} contains a previous operation with document id {1}, expected: {2}")]
     MismathingDocumentIdInPrevious(OperationId, DocumentId, DocumentId),
 
     /// An operation was found in `previous` with a mismatching schema id.
-    #[error("Previous operation {0} has schema id {1}, expected: {2}")]
+    #[error("Operation {0} contains a previous operation with schema id {1}, expected: {2}")]
     MismathingSchemaInPrevious(OperationId, SchemaId, SchemaId),
 
     /// An operation was found with a timestamp not greater than the one in it's previous operations.
