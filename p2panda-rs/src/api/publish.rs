@@ -45,7 +45,7 @@ pub async fn publish<S: OperationStore>(
 
     // Validate the authors document log integrity:
     // - if a backlink is given it should point to the latest operation for this document and
-    //   public key, and the new operation should have a greater timestamp.
+    //   public key, and the new operation should have a greater timestamp and depth.
     // - if no backlink is given no log should exist for this document and public key
     match (operation.backlink(), latest_operation) {
         (None, None) => Ok(()),
@@ -69,15 +69,27 @@ pub async fn publish<S: OperationStore>(
             }
 
             if operation.timestamp() <= latest_operation.timestamp() {
-                return Err(ValidationError::InvalidTimestamp(
+                return Err(ValidationError::TimestampLessThanBacklink(
                     operation.id().clone(),
                     operation.timestamp(),
+                ).into());
+            }
+
+            if operation.depth() <= latest_operation.depth() {
+                return Err(ValidationError::DepthLessThanBacklink(
+                    operation.id().clone(),
+                    operation.depth(),
                 ).into());
             }
             Ok(())
         }
     }?;
 
+    // Validate the operations contained in `previous``:
+    // - all schema id should match the schema id of the new operation
+    // - all timestamps should be lower than the new operation's timestamp
+    // - all depths should be lower than the new operation's depth
+    // - all document ids should match the document id of the new operation
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.
         let mut previous_operations = get_view_id_operations(store, previous).await?;
@@ -101,9 +113,22 @@ pub async fn publish<S: OperationStore>(
             .all(|previous_operation| previous_operation.timestamp() < operation.timestamp());
 
         if !all_previous_timestamps_are_lower {
-            return Err(ValidationError::InvalidTimestamp(
+            return Err(ValidationError::TimestampLessThanPrevious(
                 operation.id().clone(),
                 operation.timestamp(),
+            )
+            .into());
+        };
+
+        // Check that all depths are lower.
+        let all_previous_depths_are_lower = previous_operations
+            .iter()
+            .all(|previous_operation| previous_operation.depth() < operation.depth());
+
+        if !all_previous_depths_are_lower {
+            return Err(ValidationError::DepthLessThanPrevious(
+                operation.id().clone(),
+                operation.depth(),
             )
             .into());
         };

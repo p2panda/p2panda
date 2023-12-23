@@ -43,7 +43,19 @@ pub enum ValidationError {
 
     /// An operation was found with a timestamp not greater than the one in it's previous operations.
     #[error("Operation {0} contains a timestamp {1} not greater than those found in previous")]
-    InvalidTimestamp(OperationId, u128),
+    TimestampLessThanPrevious(OperationId, u128),
+
+    /// An operation was found with a timestamp not greater than the one in it's backlink.
+    #[error("Operation {0} contains a timestamp {1} not greater than those found in backlink")]
+    TimestampLessThanBacklink(OperationId, u128),
+
+    /// An operation was found with a depth not greater than the one in it's previous operations.
+    #[error("Operation {0} contains a depth {1} not greater than those found in previous")]
+    DepthLessThanPrevious(OperationId, u64),
+
+    /// An operation was found with a depth not greater than the one in it's backlink.
+    #[error("Operation {0} contains a depth {1} not greater than those found in backlink")]
+    DepthLessThanBacklink(OperationId, u64),
 
     /// Error coming from the operation store.
     #[error(transparent)]

@@ -91,6 +91,10 @@ impl Validate for Operation {
                 if previous.is_some() {
                     return Err(ValidateOperationError::UnexpectedPreviousOperations);
                 }
+
+                if self.depth() != 0 {
+                    return Err(ValidateOperationError::ExpectedZeroDepth);
+                }
                 Ok(())
             }
             OperationAction::Update | OperationAction::Delete => {
@@ -102,6 +106,9 @@ impl Validate for Operation {
                     return Err(ValidateOperationError::ExpectedPreviousOperations);
                 }
 
+                if self.depth() == 0 {
+                    return Err(ValidateOperationError::ExpectedNonZeroDepth);
+                }
                 Ok(())
             }
         }
@@ -124,6 +131,7 @@ impl OperationBuilder {
             .unwrap()
             .as_nanos();
         header_extension.timestamp = Some(timestamp);
+        header_extension.depth = Some(0);
 
         let body = Body(schema_id.to_owned(), None);
 
@@ -166,6 +174,12 @@ impl OperationBuilder {
     /// Set document id.
     pub fn document_id(mut self, document_id: &DocumentId) -> Self {
         self.header_extension.document_id = Some(document_id.to_owned());
+        self
+    }
+
+    /// Set depth.
+    pub fn depth(mut self, depth: u64) -> Self {
+        self.header_extension.depth = Some(depth);
         self
     }
 
@@ -224,6 +238,12 @@ impl AsOperation for Operation {
         self.header().4.backlink.as_ref()
     }
 
+    /// The distance (via the longest path) from this operation to the root of the operation graph.
+    fn depth(&self) -> u64 {
+        // Safely unwrap as validation performed already.
+        self.header().4.depth.unwrap()
+    }
+
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields> {
         self.body().1.as_ref()
@@ -236,15 +256,10 @@ impl Actionable for Operation {
     }
 
     fn action(&self) -> OperationAction {
-        let HeaderExtension {
-            action, previous, ..
-        } = self.header().extension();
-        match (action, previous) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            // If correct validation was performed this case will not occur.
-            (Some(HeaderAction::Delete), None) => unreachable!(),
+        match (self.header().extension().action, self.depth()) {
+            (None, 0) => OperationAction::Create,
+            (None, _) => OperationAction::Update,
+            (Some(HeaderAction::Delete), _) => OperationAction::Delete,
         }
     }
 
@@ -319,6 +334,7 @@ mod tests {
         assert_eq!(operation.document_id(), DocumentId::new(operation.id()));
         assert_eq!(operation.backlink(), None);
         assert_eq!(operation.previous(), None);
+        assert_eq!(operation.depth(), 0);
         assert!(operation.header().extension().timestamp.is_some());
         assert_eq!(operation.fields(), Some(&fields.into()));
     }
@@ -341,6 +357,7 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -351,6 +368,7 @@ mod tests {
         assert_eq!(operation.document_id(), document_id);
         assert_eq!(operation.backlink(), Some(&backlink));
         assert_eq!(operation.previous(), Some(&document_view_id));
+        assert_eq!(operation.depth(), 1);
         assert!(operation.header().extension().timestamp.is_some());
         assert_eq!(operation.fields(), Some(&fields.into()));
     }
@@ -368,6 +386,7 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .sign(&key_pair)
             .unwrap();
 
@@ -377,6 +396,7 @@ mod tests {
         assert_eq!(operation.document_id(), document_id);
         assert_eq!(operation.backlink(), Some(&backlink));
         assert_eq!(operation.previous(), Some(&document_view_id));
+        assert_eq!(operation.depth(), 1);
         assert!(operation.header().extension().timestamp.is_some());
         assert_eq!(operation.fields(), None);
     }
@@ -409,6 +429,13 @@ mod tests {
             .sign(&key_pair)
             .is_err());
 
+        // CREATE operations must not contain non-zero depth
+        assert!(OperationBuilder::new(&schema_id)
+            .depth(1)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
+
         // CREATE operations must contain fields
         assert!(OperationBuilder::new(&schema_id).sign(&key_pair).is_err());
 
@@ -417,15 +444,27 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_ok());
+
+        // UPDATE operation mut have non-zero depth
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .depth(0)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_err());
 
         // UPDATE operations must have fields
         assert!(OperationBuilder::new(&schema_id)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .sign(&key_pair)
             .is_err());
 
@@ -433,6 +472,7 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id)
             .document_id(&document_id)
             .backlink(&backlink)
+            .depth(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
@@ -441,6 +481,7 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
@@ -451,8 +492,19 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .sign(&key_pair)
             .is_ok());
+
+        // DELETE operation must have non-zero depth
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&document_view_id)
+            .depth(0)
+            .sign(&key_pair)
+            .is_err());
 
         // DELETE operations must not have fields
         assert!(OperationBuilder::new(&schema_id)
@@ -461,6 +513,7 @@ mod tests {
             .backlink(&backlink)
             .previous(&document_view_id)
             .fields(&[("year", 2020.into())])
+            .depth(1)
             .sign(&key_pair)
             .is_err());
 
@@ -469,6 +522,7 @@ mod tests {
             .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
+            .depth(1)
             .sign(&key_pair)
             .is_err());
 
@@ -477,6 +531,7 @@ mod tests {
             .action(HeaderAction::Delete)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .depth(1)
             .sign(&key_pair)
             .is_err());
     }

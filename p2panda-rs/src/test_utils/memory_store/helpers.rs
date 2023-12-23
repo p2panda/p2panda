@@ -92,7 +92,8 @@ pub async fn populate_store<S: OperationStore>(
             let mut document_id: Option<DocumentId> = None;
 
             for index in 0..config.no_of_operations {
-                let mut operation_builder = OperationBuilder::new(config.schema.id());
+                let mut operation_builder =
+                    OperationBuilder::new(config.schema.id()).depth(index as u64);
 
                 operation_builder = match index {
                     // CREATE operation
@@ -232,6 +233,7 @@ mod tests {
             .document_id(&create_operation.id().clone().into())
             .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
+            .depth(1)
             .fields(&fields)
             .sign(&key_pair_1)
             .unwrap();

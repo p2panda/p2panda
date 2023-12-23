@@ -24,6 +24,9 @@ pub trait AsOperation: Actionable + Authored + Schematic {
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash>;
 
+    /// The distance (via the longest path) from this operation to the root of the operation graph.
+    fn depth(&self) -> u64;
+
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields>;
 

@@ -79,8 +79,8 @@ impl Actionable for Header {
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HeaderExtension {
-    #[serde(rename = "s", skip_serializing_if = "Option::is_none")]
-    pub(crate) seq_num: Option<u64>,
+    #[serde(rename = "h", skip_serializing_if = "Option::is_none")]
+    pub(crate) depth: Option<u64>,
 
     #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
     pub(crate) document_id: Option<DocumentId>,
@@ -111,8 +111,8 @@ impl HeaderBuilder {
         self
     }
 
-    pub fn seq_num(mut self, seq_num: u64) -> Self {
-        self.0.seq_num = Some(seq_num);
+    pub fn depth(mut self, depth: u64) -> Self {
+        self.0.depth = Some(depth);
         self
     }
 

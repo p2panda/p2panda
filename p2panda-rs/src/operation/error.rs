@@ -68,6 +68,14 @@ pub enum ValidateOperationError {
     #[error("unexpected 'backlink' in CREATE operation")]
     UnexpectedBacklink,
 
+    /// Expected 'depth' to be 0 for CREATE operation.
+    #[error("expected 'depth' to be 0 for CREATE operation")]
+    ExpectedZeroDepth,
+
+    /// Expected 'depth' to be to be non-zero u64 for UPDATE and DELETE operations.
+    #[error("expected 'depth' to be non-zero u64 for UPDATE and DELETE operations")]
+    ExpectedNonZeroDepth,
+
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
     SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
