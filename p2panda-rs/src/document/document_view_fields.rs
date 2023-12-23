@@ -108,65 +108,76 @@ impl<T: AsOperation> From<T> for DocumentViewFields {
         document_view_fields
     }
 }
-// 
-// #[cfg(test)]
-// mod tests {
-//     use rstest::rstest;
-// 
-//     use crate::document::{DocumentViewFields, DocumentViewValue};
-//     use crate::operation_v2::traits::AsOperation;
-//     use crate::operation_v2::{OperationId, OperationValue};
-//     use crate::test_utils::fixtures::{published_operation, random_operation_id};
-//     use crate::test_utils::memory_store::PublishedOperation;
-//     use crate::WithId;
-// 
-//     #[rstest]
-//     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
-//         let mut fields = DocumentViewFields::new();
-// 
-//         fields.insert(
-//             "name",
-//             DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into())),
-//         );
-//         fields.insert(
-//             "owner",
-//             DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into())),
-//         );
-//         fields.insert(
-//             "house-number",
-//             DocumentViewValue::new(&value_id, &OperationValue::Integer(12)),
-//         );
-// 
-//         assert_eq!(fields.len(), 3);
-//         assert!(!fields.is_empty());
-//         assert_eq!(
-//             fields.get("name").unwrap(),
-//             &DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into()))
-//         );
-//         assert_eq!(
-//             fields.get("owner").unwrap(),
-//             &DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into()))
-//         );
-//         assert_eq!(
-//             fields.get("house-number").unwrap(),
-//             &DocumentViewValue::new(&value_id, &OperationValue::Integer(12))
-//         );
-//     }
-// 
-//     #[rstest]
-//     fn from_published_operation(#[from(published_operation)] operation: PublishedOperation) {
-//         let document_view_fields = DocumentViewFields::from(operation.clone());
-//         let operation_fields = operation.fields().unwrap();
-//         assert_eq!(document_view_fields.len(), operation_fields.len());
-//     }
-// 
-//     #[rstest]
-//     fn new_from_operation_fields(#[from(published_operation)] operation: PublishedOperation) {
-//         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-//             operation.id(),
-//             &operation.fields().unwrap(),
-//         );
-//         let operation_fields = operation.fields().unwrap();
-//         assert_eq!(document_view_fields.len(), operation_fields.len());
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::{DocumentViewFields, DocumentViewValue};
+    use crate::identity::KeyPair;
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{OperationBuilder, OperationId, OperationValue};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::{key_pair, schema_id};
+
+    #[rstest]
+    fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
+        let mut fields = DocumentViewFields::new();
+
+        fields.insert(
+            "name",
+            DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into())),
+        );
+        fields.insert(
+            "owner",
+            DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into())),
+        );
+        fields.insert(
+            "house-number",
+            DocumentViewValue::new(&value_id, &OperationValue::Integer(12)),
+        );
+
+        assert_eq!(fields.len(), 3);
+        assert!(!fields.is_empty());
+        assert_eq!(
+            fields.get("name").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into()))
+        );
+        assert_eq!(
+            fields.get("owner").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into()))
+        );
+        assert_eq!(
+            fields.get("house-number").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::Integer(12))
+        );
+    }
+
+    #[rstest]
+    fn from_published_operation(key_pair: KeyPair, schema_id: SchemaId) {
+        let operation = OperationBuilder::new(&schema_id)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .unwrap();
+
+        let document_view_fields = DocumentViewFields::from(operation.clone());
+        let operation_fields = operation.fields().unwrap();
+        assert_eq!(document_view_fields.len(), operation_fields.len());
+    }
+
+    #[rstest]
+    fn new_from_operation_fields(key_pair: KeyPair, schema_id: SchemaId) {
+        let operation = OperationBuilder::new(&schema_id)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .unwrap();
+
+        let document_view_fields = DocumentViewFields::new_from_operation_fields(
+            operation.id(),
+            &operation.fields().unwrap(),
+        );
+        let operation_fields = operation.fields().unwrap();
+        assert_eq!(document_view_fields.len(), operation_fields.len());
+    }
+}

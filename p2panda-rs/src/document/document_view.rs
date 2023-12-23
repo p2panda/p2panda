@@ -81,93 +81,108 @@ impl Human for DocumentView {
         format!("<DocumentView {}>", self.id.display())
     }
 }
-// 
-// #[cfg(test)]
-// mod tests {
-//     use rstest::rstest;
-// 
-//     use crate::document::DocumentViewValue;
-//     use crate::identity_v2::PublicKey;
-//     use crate::operation_v2::{Operation, OperationFields, OperationId, OperationValue};
-//     use crate::test_utils::fixtures::{
-//         create_operation, operation_fields, public_key, random_operation_id,
-//     };
-//     use crate::Human;
-// 
-//     #[rstest]
-//     fn from_single_create_op(
-//         create_operation: Operation,
-//         #[from(random_operation_id)] id: OperationId,
-//         public_key: PublicKey,
-//         operation_fields: OperationFields,
-//     ) {
-//         let (document, _) = DocumentBuilder::new(vec![(id.clone(), create_operation, public_key)])
-//             .build()
-//             .unwrap();
-//         let document_view = document.view().unwrap();
-// 
-//         assert!(!document_view.is_empty());
-//         assert_eq!(document_view.len(), 9);
-//         assert_eq!(document_view.keys(), operation_fields.keys());
-//         for key in operation_fields.keys() {
-//             assert_eq!(
-//                 document_view.get(&key).unwrap(),
-//                 &DocumentViewValue::new(&id, operation_fields.get(&key).unwrap(),),
-//             );
-//         }
-//     }
-// 
-//     #[rstest]
-//     fn with_update_op(create_operation: Operation, public_key: PublicKey) {
-//         let create_id = random_operation_id();
-//         let update_operation = OperationBuilder::new(&create_operation.schema_id())
-//             .action(OperationAction::Update)
-//             .fields(&[(
-//                 "username",
-//                 OperationValue::String("Panda Cafe!!!!".to_string()),
-//             )])
-//             .previous(&DocumentViewId::new(&[create_id.clone()]))
-//             .build()
-//             .unwrap();
-//         let update_id = random_operation_id();
-// 
-//         let operations = vec![
-//             (create_id, create_operation, public_key),
-//             (update_id.clone(), update_operation, public_key),
-//         ];
-// 
-//         let (document, _) = DocumentBuilder::new(operations).build().unwrap();
-//         let document_view = document.view().unwrap();
-// 
-//         assert_eq!(
-//             document_view.get("username").unwrap(),
-//             &DocumentViewValue::new(
-//                 &update_id,
-//                 &OperationValue::String("Panda Cafe!!!!".to_owned()),
-//             )
-//         );
-//     }
-// 
-//     #[rstest]
-//     fn string_representation(create_operation: Operation, public_key: PublicKey) {
-//         let id_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-//             .parse::<OperationId>()
-//             .unwrap();
-//         let id_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
-//             .parse::<OperationId>()
-//             .unwrap();
-// 
-//         let (document, _) =
-//             DocumentBuilder::new(vec![(id_1.clone(), create_operation, public_key)])
-//                 .build()
-//                 .unwrap();
-// 
-//         // Fabricate a view id just for testing.
-//         let mut view = document.view().unwrap();
-//         let view_id = DocumentViewId::new(&[id_1.clone(), id_2.clone()]);
-//         view.id = view_id;
-// 
-//         assert_eq!(format!("{id_1}_{id_2}"), view.to_string());
-//         assert_eq!(view.display(), "<DocumentView 496543_f16e79>");
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::traits::AsDocument;
+    use crate::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
+    use crate::hash::HashId;
+    use crate::identity::KeyPair;
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{OperationBuilder, OperationFields, OperationId, OperationValue};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{key_pair, operation_fields, schema_id};
+    use crate::Human;
+
+    #[rstest]
+    fn from_single_create_op(
+        key_pair: KeyPair,
+        schema_id: SchemaId,
+        operation_fields: Vec<(&str, OperationValue)>,
+    ) {
+        let operation = OperationBuilder::new(&schema_id)
+            .fields(&operation_fields)
+            .sign(&key_pair)
+            .unwrap();
+
+        let (document, _) = DocumentBuilder::new(vec![operation.clone()])
+            .build()
+            .unwrap();
+
+        let document_view = document.view().unwrap();
+
+        assert!(!document_view.is_empty());
+        assert_eq!(document_view.len(), 9);
+
+        let operation_fields = OperationFields::from(operation_fields);
+        assert_eq!(document_view.keys(), operation_fields.keys());
+        for key in operation_fields.keys() {
+            assert_eq!(
+                document_view.get(&key).unwrap(),
+                &DocumentViewValue::new(&operation.id(), operation_fields.get(&key).unwrap(),),
+            );
+        }
+    }
+
+    #[rstest]
+    fn with_update_op(key_pair: KeyPair, schema_id: SchemaId) {
+        let create_operation = OperationBuilder::new(&schema_id)
+            .fields(&[("username", OperationValue::String("Panda Cafe".to_string()))])
+            .sign(&key_pair)
+            .unwrap();
+
+        let update_operation = OperationBuilder::new(&schema_id)
+            .document_id(&create_operation.id().clone().into())
+            .backlink(&create_operation.id().as_hash())
+            .previous(&DocumentViewId::new(&[create_operation.id().clone()]))
+            .depth(1)
+            .fields(&[(
+                "username",
+                OperationValue::String("Panda Cafe!!!!".to_string()),
+            )])
+            .sign(&key_pair)
+            .unwrap();
+
+        let operations = vec![create_operation, update_operation.clone()];
+
+        let (document, _) = DocumentBuilder::new(operations).build().unwrap();
+        let document_view = document.view().unwrap();
+
+        assert_eq!(
+            document_view.get("username").unwrap(),
+            &DocumentViewValue::new(
+                update_operation.id(),
+                &OperationValue::String("Panda Cafe!!!!".to_owned()),
+            )
+        );
+    }
+
+    #[rstest]
+    fn string_representation(key_pair: KeyPair, schema_id: SchemaId) {
+        let create_operation = OperationBuilder::new(&schema_id)
+            .fields(&[("username", OperationValue::String("Panda Cafe".to_string()))])
+            .sign(&key_pair)
+            .unwrap();
+
+        let id_1 = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            .parse::<OperationId>()
+            .unwrap();
+        let id_2 = "d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+            .parse::<OperationId>()
+            .unwrap();
+
+        let (document, _) = DocumentBuilder::new(vec![create_operation])
+            .build()
+            .unwrap();
+
+        // Fabricate a view id just for testing.
+        let mut view = document.view().unwrap();
+        let view_id = DocumentViewId::new(&[id_1.clone(), id_2.clone()]);
+        view.id = view_id;
+
+        assert_eq!(format!("{id_1}_{id_2}"), view.to_string());
+        assert_eq!(view.display(), "<DocumentView 496543_f16e79>");
+    }
+}
