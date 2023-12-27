@@ -9,8 +9,11 @@ use crate::operation::body::EncodedBody;
 use crate::operation::header::action::HeaderAction;
 use crate::operation::header::encode::sign_header;
 use crate::operation::header::error::EncodeHeaderError;
-use crate::operation::header::traits::{Authored, Actionable};
-use crate::operation::{OperationVersion, OperationAction};
+use crate::operation::header::traits::{Actionable, Authored};
+use crate::operation::{OperationAction, OperationVersion};
+use crate::Validate;
+
+use super::error::ValidateHeaderError;
 
 pub type PayloadHash = Hash;
 
@@ -53,6 +56,42 @@ impl Authored for Header {
     }
 }
 
+impl Validate for Header {
+    type Error = ValidateHeaderError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        // The validation performed here is based on only the strictest requirements expected
+        // of a header. It is possible to build headers which may be incompatible with the current
+        // p2panda operation specification. We intentionally don't enforce these restrictions here
+        // in order to leave the option to publish custom operation header formats open. 
+
+        // What is validated here: 
+        // - if a document id is not present, then we know this is a header for a CREATE operation
+        //   and should therefore _not_ contain a backlink or previous extension as well.
+        // - if action is DELETE then a document id _must_ also be provided.
+
+        let HeaderExtension {
+            action,
+            previous,
+            backlink,
+            document_id,
+            ..
+        } = &self.4;
+
+        match (document_id, backlink, previous) {
+            (None, Some(_), _) => Err(ValidateHeaderError::CreateUnexpectedBacklink),
+            (None, None, Some(_)) => Err(ValidateHeaderError::CreateUnexpectedPrevious),
+            (_, _, _) => Ok(()),
+        }?;
+
+        match (document_id, action) {
+            (None, Some(HeaderAction::Delete)) => {
+                Err(ValidateHeaderError::DeleteExpectedDocumentId)
+            }
+            (_, _) => Ok(()),
+        }
+    }
+}
 
 impl Actionable for Header {
     fn version(&self) -> OperationVersion {
@@ -61,9 +100,13 @@ impl Actionable for Header {
 
     fn action(&self) -> OperationAction {
         let HeaderExtension {
-            action, previous, ..
+            action,
+            document_id,
+            ..
         } = self.extension();
-        match (action, previous) {
+
+        // Action
+        match (action, document_id) {
             (None, None) => OperationAction::Create,
             (None, Some(_)) => OperationAction::Update,
             (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
@@ -141,6 +184,8 @@ impl HeaderBuilder {
         encoded_body: &EncodedBody,
         key_pair: &KeyPair,
     ) -> Result<Header, EncodeHeaderError> {
-        sign_header(self.0, encoded_body, key_pair)
+        let header = sign_header(self.0, encoded_body, key_pair)?;
+        header.validate()?;
+        Ok(header)
     }
 }

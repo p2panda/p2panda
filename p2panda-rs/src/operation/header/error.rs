@@ -11,6 +11,9 @@ pub enum EncodeHeaderError {
     /// CBOR encoder could not serialize this value.
     #[error("cbor encoder failed serializing value {0}")]
     EncoderFailed(String),
+
+    #[error(transparent)]
+    ValidateHeaderError(#[from] ValidateHeaderError),
 }
 
 #[derive(Error, Debug)]
@@ -44,6 +47,18 @@ pub enum ValidateHeaderError {
     /// Payload needs to match claimed size in header.
     #[error("body doesn't match claimed payload size in header")]
     PayloadSizeMismatch,
+
+    /// Header without document ids are considered CREATE and should not contain a backlink.
+    #[error("unexpected backlink found on CREATE header")]
+    CreateUnexpectedBacklink,
+
+    /// Header without document ids are considered CREATE and should not contain previous.
+    #[error("unexpected previous found on CREATE header")]
+    CreateUnexpectedPrevious,
+
+    /// DELETE header expected to contain a document id.
+    #[error("expected document id on DELETE header")]
+    DeleteExpectedDocumentId,
 
     /// Could not verify authorship of operation.
     #[error("signature invalid")]
