@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::{Human, Validate};
 use crate::api::ValidationError;
 use crate::document::DocumentId;
 use crate::hash::{Hash, HashId};
-use crate::operation::OperationAction;
-use crate::operation::body::Body;
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
+use crate::operation::body::Body;
 use crate::operation::error::ValidateOperationError;
-use crate::operation::header::{Header, HeaderExtension, HeaderAction};
+use crate::operation::header::traits::Actionable;
+use crate::operation::header::{Header, HeaderAction, HeaderExtension};
 use crate::operation::traits::AsOperation;
+use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
-use crate::schema::{SchemaId, Schema};
+use crate::schema::{Schema, SchemaId};
+use crate::{Human, Validate};
 
+use super::error::{ValidateHeaderExtensionsError, ValidatePlainOperationError};
 
-pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateOperationError> {
+pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateHeaderExtensionsError> {
     let HeaderExtension {
-        action,
-        document_id,
         previous,
         timestamp,
         backlink,
@@ -31,49 +31,45 @@ pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateOperati
 
     // All operations require a timestamp
     if timestamp.is_none() {
-        return Err(ValidateOperationError::ExpectedTimestamp);
+        return Err(ValidateHeaderExtensionsError::ExpectedTimestamp);
     }
 
     // All operations require a depth
     let depth = match depth {
         Some(depth) => depth,
-        None => return Err(ValidateOperationError::ExpectedDepth),
+        None => return Err(ValidateHeaderExtensionsError::ExpectedDepth),
     };
 
-    match (action, document_id) {
+    match header.action() {
         // Operations with no action set in their header and without a document id are CREATE operations.
-        (None, None) => {
+        OperationAction::Create => {
             if backlink.is_some() {
-                return Err(ValidateOperationError::UnexpectedBacklink);
+                return Err(ValidateHeaderExtensionsError::UnexpectedBacklink);
             }
 
             if previous.is_some() {
-                return Err(ValidateOperationError::UnexpectedPreviousOperations);
+                return Err(ValidateHeaderExtensionsError::UnexpectedPreviousOperations);
             }
 
             if *depth != 0 {
-                return Err(ValidateOperationError::ExpectedZeroDepth);
+                return Err(ValidateHeaderExtensionsError::ExpectedZeroDepth);
             }
             Ok(())
         }
         // Operations with the document id set are either UPDATE or DELETE operations.
-        (_, Some(_)) => {
+        OperationAction::Update | OperationAction::Delete => {
             if backlink.is_none() {
-                return Err(ValidateOperationError::ExpectedBacklink);
+                return Err(ValidateHeaderExtensionsError::ExpectedBacklink);
             }
 
             if previous.is_none() {
-                return Err(ValidateOperationError::ExpectedPreviousOperations);
+                return Err(ValidateHeaderExtensionsError::ExpectedPreviousOperations);
             }
 
             if *depth == 0 {
-                return Err(ValidateOperationError::ExpectedNonZeroDepth);
+                return Err(ValidateHeaderExtensionsError::ExpectedNonZeroDepth);
             }
             Ok(())
-        }
-        // If the DELETE header action is set then we expect a document id as well.
-        (Some(HeaderAction::Delete), None) => {
-            return Err(ValidateOperationError::ExpectedDocumentId)
         }
     }
 }
@@ -83,12 +79,12 @@ pub fn validate_plain_operation(
     action: &OperationAction,
     plain_operation: &PlainOperation,
     schema: &Schema,
-) -> Result<Body, ValidateOperationError> {
+) -> Result<Body, ValidatePlainOperationError> {
     let claimed_schema_id = plain_operation.schema_id();
 
     // Make sure the schema id and given schema matches
     if claimed_schema_id != schema.id() {
-        return Err(ValidateOperationError::SchemaNotMatching(
+        return Err(ValidatePlainOperationError::SchemaNotMatching(
             claimed_schema_id.display(),
             schema.id().display(),
         ));
@@ -102,9 +98,9 @@ pub fn validate_plain_operation(
             validate_only_given_fields(&fields, schema).map(|fields| Some(fields))
         }
         (OperationAction::Delete, None) => Ok(None),
-        (OperationAction::Delete, Some(_)) => return Err(ValidateOperationError::UnexpectedFields),
+        (OperationAction::Delete, Some(_)) => return Err(ValidatePlainOperationError::UnexpectedFields),
         (OperationAction::Create | OperationAction::Update, None) => {
-            return Err(ValidateOperationError::ExpectedFields)
+            return Err(ValidatePlainOperationError::ExpectedFields)
         }
     }?;
 

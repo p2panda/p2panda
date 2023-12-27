@@ -3,12 +3,64 @@
 use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::identity::PublicKey;
-use crate::operation::body::error::DecodeBodyError;
-use crate::operation::error::ValidateOperationError;
-use crate::operation::header::error::{DecodeHeaderError, ValidateHeaderError};
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
-use crate::storage_provider::error::OperationStorageError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ValidatePlainOperationError {
+    /// Claimed schema id did not match given schema.
+    #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
+    SchemaNotMatching(String, String),
+
+    /// Expected `fields` in CREATE or UPDATE operation.
+    #[error("expected 'fields' in CREATE or UPDATE operation")]
+    ExpectedFields,
+
+    /// Unexpected `fields` in DELETE operation.
+    #[error("unexpected 'fields' in DELETE operation")]
+    UnexpectedFields,
+
+    #[error(transparent)]
+    ValidateFieldsError(#[from] crate::schema::validate::error::ValidationError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ValidateHeaderExtensionsError {
+    /// Expect `timestamp` on all operations.
+    #[error("expected 'timestamp' in operation header")]
+    ExpectedTimestamp,
+
+    /// Expect `depth` on all operations.
+    #[error("expected 'depth' in operation header")]
+    ExpectedDepth,
+
+    /// Expected `previous` in UPDATE or DELETE operation.
+    #[error("expected 'previous' in UPDATE or DELETE operation")]
+    ExpectedPreviousOperations,
+
+    /// Unexpected `previous` in CREATE operation.
+    #[error("unexpected 'previous' in CREATE operation")]
+    UnexpectedPreviousOperations,
+
+    /// Expected `backlink` in UPDATE or DELETE operation.
+    #[error("expected 'backlink' in UPDATE or DELETE operation")]
+    ExpectedBacklink,
+
+    /// Unexpected `backlink` in CREATE operation.
+    #[error("unexpected 'backlink' in CREATE operation")]
+    UnexpectedBacklink,
+
+    /// Expected 'depth' to be 0 for CREATE operation.
+    #[error("expected 'depth' to be 0 for CREATE operation")]
+    ExpectedZeroDepth,
+
+    /// Expected 'depth' to be to be non-zero u64 for UPDATE and DELETE operations.
+    #[error("expected 'depth' to be non-zero u64 for UPDATE and DELETE operations")]
+    ExpectedNonZeroDepth,
+
+    #[error(transparent)]
+    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
+}
 
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
@@ -66,7 +118,7 @@ pub enum ValidationError {
 
     /// Error coming from the operation store.
     #[error(transparent)]
-    OperationStoreError(#[from] OperationStorageError),
+    OperationStoreError(#[from] crate::storage_provider::error::OperationStorageError),
 }
 
 /// Error type used in the domain module.
@@ -78,21 +130,29 @@ pub enum DomainError {
 
     /// Error coming from the operation store.
     #[error(transparent)]
-    OperationStoreError(#[from] OperationStorageError),
+    OperationStoreError(#[from] crate::storage_provider::error::OperationStorageError),
 
     /// Error occurring when decoding header.
     #[error(transparent)]
-    DecodeHeaderError(#[from] DecodeHeaderError),
+    DecodeHeaderError(#[from] crate::operation::header::error::DecodeHeaderError),
 
     /// Error occurring when decoding body.
     #[error(transparent)]
-    DecodeBodyError(#[from] DecodeBodyError),
+    DecodeBodyError(#[from] crate::operation::body::error::DecodeBodyError),
 
     /// Error occurring when validating operations.
     #[error(transparent)]
-    ValidateOperationError(#[from] ValidateOperationError),
+    ValidateOperationError(#[from] crate::operation::error::ValidateOperationError),
+
+    /// Error occurring when validating plain operations.
+    #[error(transparent)]
+    ValidatePlainOperationError(#[from] ValidatePlainOperationError),
 
     /// Error occurring when validating headers.
     #[error(transparent)]
-    ValidateHeaderError(#[from] ValidateHeaderError),
+    ValidateHeaderError(#[from] crate::operation::header::error::ValidateHeaderError),
+
+    /// Error occurring when validating header extensions.
+    #[error(transparent)]
+    ValidateHeaderExtensionsError(#[from] ValidateHeaderExtensionsError),
 }
