@@ -20,6 +20,8 @@ use crate::operation::{
 use crate::schema::SchemaId;
 use crate::Validate;
 
+use super::validation::validate_header_extensions;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operation(OperationId, Header, Body);
 
@@ -53,15 +55,13 @@ impl Validate for Operation {
     type Error = ValidateOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // We validate only the strictest requirements expected of an operation here. To see all validation
-        // which is required of operations by current reference implementations of p2panda please
-        // look into the `api/validation` module.
-
-        // What is validated here:
+        // Validation steps performed:
         // - check the header follows minimum requirements (see Header::Validate)
+        // - validate that all expected header extensions are present
         // - CREATE and UPDATE operations must contain fields
         // - DELETE operations must not contain fields
         self.header().validate()?;
+        validate_header_extensions(self.header())?;
         match (self.action(), self.fields()) {
             (OperationAction::Create | OperationAction::Update, None) => {
                 Err(ValidateOperationError::ExpectedFields)
@@ -294,7 +294,6 @@ mod tests {
     fn operation_builder_update(
         key_pair: KeyPair,
         schema_id: SchemaId,
-        #[from(random_hash)] backlink: Hash,
         document_id: DocumentId,
         document_view_id: DocumentViewId,
     ) {
@@ -306,7 +305,6 @@ mod tests {
 
         let operation = OperationBuilder::new(&schema_id)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .fields(&fields)
@@ -317,7 +315,6 @@ mod tests {
         assert_eq!(operation.action(), OperationAction::Update);
         assert_eq!(operation.schema_id(), &schema_id);
         assert_eq!(operation.document_id(), document_id);
-        assert_eq!(operation.backlink(), Some(&backlink));
         assert_eq!(operation.previous(), Some(&document_view_id));
         assert_eq!(operation.depth(), 1);
         assert!(operation.header().extension().timestamp.is_some());
@@ -328,14 +325,12 @@ mod tests {
     fn operation_builder_delete(
         key_pair: KeyPair,
         schema_id: SchemaId,
-        #[from(random_hash)] backlink: Hash,
         document_id: DocumentId,
         document_view_id: DocumentViewId,
     ) {
         let operation = OperationBuilder::new(&schema_id)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .sign(&key_pair)
@@ -345,7 +340,6 @@ mod tests {
         assert_eq!(operation.action(), OperationAction::Delete);
         assert_eq!(operation.schema_id(), &schema_id);
         assert_eq!(operation.document_id(), document_id);
-        assert_eq!(operation.backlink(), Some(&backlink));
         assert_eq!(operation.previous(), Some(&document_view_id));
         assert_eq!(operation.depth(), 1);
         assert!(operation.header().extension().timestamp.is_some());
@@ -393,6 +387,15 @@ mod tests {
         // correct UPDATE operation
         assert!(OperationBuilder::new(&schema_id)
             .document_id(&document_id)
+            .previous(&document_view_id)
+            .depth(1)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .is_ok());
+
+        // UPDATE operation may contain backlink
+        assert!(OperationBuilder::new(&schema_id)
+            .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
@@ -438,6 +441,15 @@ mod tests {
             .is_err());
 
         // correct DELETE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .action(HeaderAction::Delete)
+            .document_id(&document_id)
+            .previous(&document_view_id)
+            .depth(1)
+            .sign(&key_pair)
+            .is_ok());
+
+        // DELETE operation may contain backlink
         assert!(OperationBuilder::new(&schema_id)
             .action(HeaderAction::Delete)
             .document_id(&document_id)

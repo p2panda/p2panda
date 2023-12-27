@@ -12,6 +12,7 @@ mod operation_value;
 mod operation_version;
 mod relation;
 pub mod traits;
+pub mod validation;
 
 pub use operation::{Operation, OperationBuilder};
 pub use operation_action::OperationAction;

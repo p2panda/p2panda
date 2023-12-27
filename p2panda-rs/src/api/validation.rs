@@ -6,73 +6,15 @@ use crate::hash::{Hash, HashId};
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
-use crate::operation::error::ValidateOperationError;
 use crate::operation::header::traits::Actionable;
-use crate::operation::header::{Header, HeaderAction, HeaderExtension};
+use crate::operation::header::{Header, HeaderExtension};
 use crate::operation::traits::AsOperation;
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::{Schema, SchemaId};
 use crate::{Human, Validate};
 
-use super::error::{ValidateHeaderExtensionsError, ValidatePlainOperationError};
-
-pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateHeaderExtensionsError> {
-    let HeaderExtension {
-        previous,
-        timestamp,
-        backlink,
-        depth,
-        ..
-    } = &header.4;
-
-    // Perform basic header validation
-    header.validate()?;
-
-    // All operations require a timestamp
-    if timestamp.is_none() {
-        return Err(ValidateHeaderExtensionsError::ExpectedTimestamp);
-    }
-
-    // All operations require a depth
-    let depth = match depth {
-        Some(depth) => depth,
-        None => return Err(ValidateHeaderExtensionsError::ExpectedDepth),
-    };
-
-    match header.action() {
-        // Operations with no action set in their header and without a document id are CREATE operations.
-        OperationAction::Create => {
-            if backlink.is_some() {
-                return Err(ValidateHeaderExtensionsError::UnexpectedBacklink);
-            }
-
-            if previous.is_some() {
-                return Err(ValidateHeaderExtensionsError::UnexpectedPreviousOperations);
-            }
-
-            if *depth != 0 {
-                return Err(ValidateHeaderExtensionsError::ExpectedZeroDepth);
-            }
-            Ok(())
-        }
-        // Operations with the document id set are either UPDATE or DELETE operations.
-        OperationAction::Update | OperationAction::Delete => {
-            if backlink.is_none() {
-                return Err(ValidateHeaderExtensionsError::ExpectedBacklink);
-            }
-
-            if previous.is_none() {
-                return Err(ValidateHeaderExtensionsError::ExpectedPreviousOperations);
-            }
-
-            if *depth == 0 {
-                return Err(ValidateHeaderExtensionsError::ExpectedNonZeroDepth);
-            }
-            Ok(())
-        }
-    }
-}
+use super::error::ValidatePlainOperationError;
 
 /// Checks the fields and format of an operation against a schema.
 pub fn validate_plain_operation(
@@ -98,7 +40,9 @@ pub fn validate_plain_operation(
             validate_only_given_fields(&fields, schema).map(|fields| Some(fields))
         }
         (OperationAction::Delete, None) => Ok(None),
-        (OperationAction::Delete, Some(_)) => return Err(ValidatePlainOperationError::UnexpectedFields),
+        (OperationAction::Delete, Some(_)) => {
+            return Err(ValidatePlainOperationError::UnexpectedFields)
+        }
         (OperationAction::Create | OperationAction::Update, None) => {
             return Err(ValidatePlainOperationError::ExpectedFields)
         }

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::api::{
-    validate_backlink, validate_header_extensions, validate_plain_operation, validate_previous,
-    DomainError, ValidationError,
+    validate_backlink, validate_plain_operation, validate_previous, DomainError, ValidationError,
 };
 use crate::document::DocumentViewId;
 use crate::hash::HashId;
@@ -14,6 +13,7 @@ use crate::operation::header::traits::{Actionable, Authored};
 use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
+use crate::operation::validation::validate_header_extensions;
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
@@ -34,13 +34,11 @@ pub async fn publish<S: OperationStore>(
     // Verify the payload against the payload hash in the header.
     verify_payload(&header, encoded_body)?;
 
-    // Validate that the header contains expected combination of extensions.
-    validate_header_extensions(&header)?;
-
     // Validate the plain fields against claimed schema and produce an operation Body.
     let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
-    // Construct an operation from it's validated and verified header and body.
+    // Construct an operation, this performs additional validation which checks that all expected
+    // header extensions are present.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
 
     // Retrieve the most recent operation from this authors document log.

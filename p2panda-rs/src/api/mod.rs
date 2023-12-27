@@ -8,5 +8,5 @@ mod validation;
 pub use error::{DomainError, ValidationError};
 pub use publish::publish;
 pub use validation::{
-    validate_backlink, validate_header_extensions, validate_plain_operation, validate_previous,
+    validate_backlink, validate_plain_operation, validate_previous,
 };

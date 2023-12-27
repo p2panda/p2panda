@@ -24,44 +24,6 @@ pub enum ValidatePlainOperationError {
     ValidateFieldsError(#[from] crate::schema::validate::error::ValidationError),
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ValidateHeaderExtensionsError {
-    /// Expect `timestamp` on all operations.
-    #[error("expected 'timestamp' in operation header")]
-    ExpectedTimestamp,
-
-    /// Expect `depth` on all operations.
-    #[error("expected 'depth' in operation header")]
-    ExpectedDepth,
-
-    /// Expected `previous` in UPDATE or DELETE operation.
-    #[error("expected 'previous' in UPDATE or DELETE operation")]
-    ExpectedPreviousOperations,
-
-    /// Unexpected `previous` in CREATE operation.
-    #[error("unexpected 'previous' in CREATE operation")]
-    UnexpectedPreviousOperations,
-
-    /// Expected `backlink` in UPDATE or DELETE operation.
-    #[error("expected 'backlink' in UPDATE or DELETE operation")]
-    ExpectedBacklink,
-
-    /// Unexpected `backlink` in CREATE operation.
-    #[error("unexpected 'backlink' in CREATE operation")]
-    UnexpectedBacklink,
-
-    /// Expected 'depth' to be 0 for CREATE operation.
-    #[error("expected 'depth' to be 0 for CREATE operation")]
-    ExpectedZeroDepth,
-
-    /// Expected 'depth' to be to be non-zero u64 for UPDATE and DELETE operations.
-    #[error("expected 'depth' to be non-zero u64 for UPDATE and DELETE operations")]
-    ExpectedNonZeroDepth,
-
-    #[error(transparent)]
-    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
-}
-
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
@@ -154,5 +116,5 @@ pub enum DomainError {
 
     /// Error occurring when validating header extensions.
     #[error(transparent)]
-    ValidateHeaderExtensionsError(#[from] ValidateHeaderExtensionsError),
+    ValidateHeaderExtensionsError(#[from] crate::operation::error::ValidateHeaderExtensionsError),
 }
