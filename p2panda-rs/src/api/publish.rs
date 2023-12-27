@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::api::{DomainError, ValidationError};
+use crate::api::{
+    validate_backlink, validate_header_extensions, validate_plain_operation, validate_previous,
+    DomainError, ValidationError,
+};
 use crate::document::DocumentViewId;
 use crate::hash::HashId;
 use crate::operation::body::plain::PlainOperation;
@@ -8,15 +11,12 @@ use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
 use crate::operation::header::traits::{Actionable, Authored};
-use crate::operation::header::validate::{validate_payload, verify_signature};
+use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
 use crate::operation::traits::AsOperation;
-use crate::operation::validate::validate_plain_operation;
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
-
-use crate::api::{validate_backlink, validate_previous};
 
 pub async fn publish<S: OperationStore>(
     store: &S,
@@ -28,24 +28,27 @@ pub async fn publish<S: OperationStore>(
     // Decode the header.
     let header = decode_header(encoded_header)?;
 
-    // Validate the payload.
-    validate_payload(&header, encoded_body)?;
-
     // Verify the operations' signature against it's public key.
     verify_signature(header.public_key(), &header.signature(), encoded_header)?;
+
+    // Verify the payload against the payload hash in the header.
+    verify_payload(&header, encoded_body)?;
+
+    // Validate that the header contains expected combination of extensions.
+    validate_header_extensions(&header)?;
 
     // Validate the plain fields against claimed schema and produce an operation Body.
     let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
-    // Construct the operation. This performs internal validation to check the header and body
-    // combine into a valid p2panda operation.
+    // Construct an operation from it's validated and verified header and body.
     let operation = Operation::new(encoded_header.hash().into(), header, body)?;
 
+    // Retrieve the most recent operation from this authors document log.
     let latest_operation = store
         .get_latest_operation(&operation.document_id(), operation.public_key())
         .await?;
 
-    // Validate the authors document log integrity:
+    // Validate the authors claimed and actual backlink:
     // - if a backlink is given it should point to the latest operation for this document and
     //   public key, and the new operation should have a greater timestamp and depth.
     // - if no backlink is given no log should exist for this document and public key
@@ -68,7 +71,7 @@ pub async fn publish<S: OperationStore>(
         ),
     }?;
 
-    // Validate the operations contained in `previous``:
+    // Validate the operations claimed and actual previous:
     // - all schema id should match the schema id of the new operation
     // - all timestamps should be lower than the new operation's timestamp
     // - all depths should be lower than the new operation's depth

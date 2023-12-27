@@ -44,6 +44,10 @@ pub enum ValidateOperationError {
     #[error("expected 'timestamp' in operation header")]
     ExpectedTimestamp,
 
+    /// Expect `depth` on all operations.
+    #[error("expected 'depth' in operation header")]
+    ExpectedDepth,
+
     /// Expected `fields` in CREATE or UPDATE operation.
     #[error("expected 'fields' in CREATE or UPDATE operation")]
     ExpectedFields,

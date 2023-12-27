@@ -21,7 +21,7 @@ pub fn verify_signature(
 }
 
 /// Checks if the claimed payload hash and size matches the actual data (#E6).
-pub fn validate_payload(header: &Header, payload: &EncodedBody) -> Result<(), ValidateHeaderError> {
+pub fn verify_payload(header: &Header, payload: &EncodedBody) -> Result<(), ValidateHeaderError> {
     if header.payload_hash() != &payload.hash() {
         return Err(ValidateHeaderError::PayloadHashMismatch);
     }

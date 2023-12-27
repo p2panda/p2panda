@@ -1,10 +1,112 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::Human;
 use crate::api::ValidationError;
 use crate::document::DocumentId;
 use crate::hash::{Hash, HashId};
+use crate::operation::OperationAction;
+use crate::operation::body::Body;
+use crate::operation::body::plain::PlainOperation;
+use crate::operation::body::traits::Schematic;
+use crate::operation::error::ValidateOperationError;
+use crate::operation::header::{Header, HeaderExtension, HeaderAction};
 use crate::operation::traits::AsOperation;
-use crate::schema::SchemaId;
+use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
+use crate::schema::{SchemaId, Schema};
+
+
+pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateOperationError> {
+    let HeaderExtension {
+        action,
+        document_id,
+        previous,
+        timestamp,
+        backlink,
+        depth,
+        ..
+    } = &header.4;
+
+    // All operations require a timestamp
+    if timestamp.is_none() {
+        return Err(ValidateOperationError::ExpectedTimestamp);
+    }
+
+    // All operations require a depth
+    let depth = match depth {
+        Some(depth) => depth,
+        None => return Err(ValidateOperationError::ExpectedDepth),
+    };
+
+    match (action, document_id) {
+        // Operations with no action set in their header and without a document id are CREATE operations.
+        (None, None) => {
+            if backlink.is_some() {
+                return Err(ValidateOperationError::UnexpectedBacklink);
+            }
+
+            if previous.is_some() {
+                return Err(ValidateOperationError::UnexpectedPreviousOperations);
+            }
+
+            if *depth != 0 {
+                return Err(ValidateOperationError::ExpectedZeroDepth);
+            }
+            Ok(())
+        }
+        // Operations with the document id set are either UPDATE or DELETE operations.
+        (_, Some(_)) => {
+            if backlink.is_none() {
+                return Err(ValidateOperationError::ExpectedBacklink);
+            }
+
+            if previous.is_none() {
+                return Err(ValidateOperationError::ExpectedPreviousOperations);
+            }
+
+            if *depth == 0 {
+                return Err(ValidateOperationError::ExpectedNonZeroDepth);
+            }
+            Ok(())
+        }
+        // If the DELETE header action is set then we expect a document id as well.
+        (Some(HeaderAction::Delete), None) => {
+            return Err(ValidateOperationError::ExpectedDocumentId)
+        }
+    }
+}
+
+/// Checks the fields and format of an operation against a schema.
+pub fn validate_plain_operation(
+    action: &OperationAction,
+    plain_operation: &PlainOperation,
+    schema: &Schema,
+) -> Result<Body, ValidateOperationError> {
+    let claimed_schema_id = plain_operation.schema_id();
+
+    // Make sure the schema id and given schema matches
+    if claimed_schema_id != schema.id() {
+        return Err(ValidateOperationError::SchemaNotMatching(
+            claimed_schema_id.display(),
+            schema.id().display(),
+        ));
+    }
+
+    let fields = match (action, plain_operation.plain_fields()) {
+        (OperationAction::Create, Some(fields)) => {
+            validate_all_fields(&fields, schema).map(|fields| Some(fields))
+        }
+        (OperationAction::Update, Some(fields)) => {
+            validate_only_given_fields(&fields, schema).map(|fields| Some(fields))
+        }
+        (OperationAction::Delete, None) => Ok(None),
+        (OperationAction::Delete, Some(_)) => return Err(ValidateOperationError::UnexpectedFields),
+        (OperationAction::Create | OperationAction::Update, None) => {
+            return Err(ValidateOperationError::ExpectedFields)
+        }
+    }?;
+
+    Ok(Body(schema.id().clone(), fields))
+}
 
 pub fn validate_previous(
     operation: &impl AsOperation,

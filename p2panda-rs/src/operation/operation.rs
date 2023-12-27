@@ -2,7 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::{DocumentId, DocumentViewId, self};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
@@ -29,8 +29,8 @@ impl Operation {
         header: Header,
         body: Body,
     ) -> Result<Self, ValidateOperationError> {
+        // @TODO: implement validation for compulsory operation format expectations.
         let operation = Self(operation_id, header, body);
-        operation.validate()?;
         Ok(operation)
     }
 
@@ -40,78 +40,6 @@ impl Operation {
 
     pub fn body(&self) -> &Body {
         &self.2
-    }
-}
-
-impl Validate for Operation {
-    type Error = ValidateOperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        let HeaderExtension {
-            action,
-            document_id,
-            previous,
-            timestamp,
-            backlink,
-            ..
-        } = &self.header().4;
-
-        // All operations require a timestamp
-        if timestamp.is_none() {
-            return Err(ValidateOperationError::ExpectedTimestamp);
-        }
-
-        let action = match (action, previous) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            (Some(HeaderAction::Delete), None) => {
-                return Err(ValidateOperationError::ExpectedPreviousOperations)
-            }
-        };
-
-        match (action, self.has_fields()) {
-            (OperationAction::Delete, true) => Err(ValidateOperationError::UnexpectedFields),
-            (OperationAction::Create | OperationAction::Update, false) => {
-                Err(ValidateOperationError::ExpectedFields)
-            }
-            _ => Ok(()),
-        }?;
-
-        match action {
-            OperationAction::Create => {
-                if document_id.is_some() {
-                    return Err(ValidateOperationError::UnexpectedDocumentId);
-                }
-
-                if backlink.is_some() {
-                    return Err(ValidateOperationError::UnexpectedBacklink);
-                }
-
-                if previous.is_some() {
-                    return Err(ValidateOperationError::UnexpectedPreviousOperations);
-                }
-
-                if self.depth() != 0 {
-                    return Err(ValidateOperationError::ExpectedZeroDepth);
-                }
-                Ok(())
-            }
-            OperationAction::Update | OperationAction::Delete => {
-                if document_id.is_none() {
-                    return Err(ValidateOperationError::ExpectedDocumentId);
-                }
-
-                if previous.is_none() {
-                    return Err(ValidateOperationError::ExpectedPreviousOperations);
-                }
-
-                if self.depth() == 0 {
-                    return Err(ValidateOperationError::ExpectedNonZeroDepth);
-                }
-                Ok(())
-            }
-        }
     }
 }
 
