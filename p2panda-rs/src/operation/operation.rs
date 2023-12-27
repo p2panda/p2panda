@@ -2,7 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::document::{DocumentId, DocumentViewId, self};
+use crate::document::{self, DocumentId, DocumentViewId};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
@@ -29,8 +29,8 @@ impl Operation {
         header: Header,
         body: Body,
     ) -> Result<Self, ValidateOperationError> {
-        // @TODO: implement validation for compulsory operation format expectations.
         let operation = Self(operation_id, header, body);
+        operation.validate()?;
         Ok(operation)
     }
 
@@ -47,6 +47,29 @@ impl Operation {
 pub struct OperationBuilder {
     header_extension: HeaderExtension,
     body: Body,
+}
+
+impl Validate for Operation {
+    type Error = ValidateOperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        // We validate only the strictest requirements expected of an operation here. To see all validation
+        // which is required of operations by current reference implementations of p2panda please
+        // look into the `api/validation` module.
+
+        // What is validated here:
+        // - check the header follows minimum requirements (see Header::Validate)
+        // - CREATE and UPDATE operations must contain fields
+        // - DELETE operations must not contain fields
+        self.header().validate()?;
+        match (self.action(), self.fields()) {
+            (OperationAction::Create | OperationAction::Update, None) => {
+                Err(ValidateOperationError::ExpectedFields)
+            }
+            (OperationAction::Delete, Some(_)) => Err(ValidateOperationError::UnexpectedFields),
+            (_, _) => Ok(()),
+        }
+    }
 }
 
 impl OperationBuilder {

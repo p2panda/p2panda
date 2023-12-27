@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::Human;
+use crate::{Human, Validate};
 use crate::api::ValidationError;
 use crate::document::DocumentId;
 use crate::hash::{Hash, HashId};
@@ -25,6 +25,9 @@ pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateOperati
         depth,
         ..
     } = &header.4;
+
+    // Perform basic header validation
+    header.validate()?;
 
     // All operations require a timestamp
     if timestamp.is_none() {
