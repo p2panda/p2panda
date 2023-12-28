@@ -121,6 +121,8 @@ mod tests {
     use crate::test_utils::fixtures::random_operation_id;
     use crate::test_utils::fixtures::{key_pair, schema_id};
 
+    const TIMESTAMP: u128 = 17037976940000000;
+
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
         let mut fields = DocumentViewFields::new();
@@ -156,7 +158,7 @@ mod tests {
 
     #[rstest]
     fn from_published_operation(key_pair: KeyPair, schema_id: SchemaId) {
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .unwrap();
@@ -168,7 +170,7 @@ mod tests {
 
     #[rstest]
     fn new_from_operation_fields(key_pair: KeyPair, schema_id: SchemaId) {
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .unwrap();

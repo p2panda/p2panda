@@ -2,6 +2,8 @@
 
 //! Helper methods for working with a storage provider when testing.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::{Hash, HashId};
@@ -92,8 +94,14 @@ pub async fn populate_store<S: OperationStore>(
             let mut document_id: Option<DocumentId> = None;
 
             for index in 0..config.no_of_operations {
+                // safely unwrap as we expect all times to be greater than "1970-01-01 00:00:00 UTC"
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos();
+
                 let mut operation_builder =
-                    OperationBuilder::new(config.schema.id()).depth(index as u64);
+                    OperationBuilder::new(config.schema.id(), timestamp).depth(index as u64);
 
                 operation_builder = match index {
                     // CREATE operation
@@ -179,12 +187,14 @@ mod tests {
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::fixtures::{
-        key_pair, operation_fields, populate_store_config, random_key_pair, schema,
+        key_pair, operation_fields, populate_store_config, schema,
     };
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::MemoryStore;
+
+    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     #[tokio::test]
@@ -219,7 +229,7 @@ mod tests {
     ) {
         let store = MemoryStore::default();
 
-        let create_operation = OperationBuilder::new(schema.id())
+        let create_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .fields(&fields)
             .sign(&key_pair_1)
             .unwrap();
@@ -229,7 +239,7 @@ mod tests {
             .await
             .unwrap();
 
-        let update_operation: Operation = OperationBuilder::new(schema.id())
+        let update_operation: Operation = OperationBuilder::new(schema.id(), TIMESTAMP + 1)
             .document_id(&create_operation.id().clone().into())
             .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())

@@ -96,13 +96,15 @@ mod tests {
     use crate::test_utils::fixtures::{key_pair, operation_fields, schema_id};
     use crate::Human;
 
+    const TIMESTAMP: u128 = 17037976940000000;
+
     #[rstest]
     fn from_single_create_op(
         key_pair: KeyPair,
         schema_id: SchemaId,
         operation_fields: Vec<(&str, OperationValue)>,
     ) {
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .fields(&operation_fields)
             .sign(&key_pair)
             .unwrap();
@@ -128,12 +130,12 @@ mod tests {
 
     #[rstest]
     fn with_update_op(key_pair: KeyPair, schema_id: SchemaId) {
-        let create_operation = OperationBuilder::new(&schema_id)
+        let create_operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .fields(&[("username", OperationValue::String("Panda Cafe".to_string()))])
             .sign(&key_pair)
             .unwrap();
 
-        let update_operation = OperationBuilder::new(&schema_id)
+        let update_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .document_id(&create_operation.id().clone().into())
             .backlink(&create_operation.id().as_hash())
             .previous(&DocumentViewId::new(&[create_operation.id().clone()]))
@@ -161,7 +163,7 @@ mod tests {
 
     #[rstest]
     fn string_representation(key_pair: KeyPair, schema_id: SchemaId) {
-        let create_operation = OperationBuilder::new(&schema_id)
+        let create_operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .fields(&[("username", OperationValue::String("Panda Cafe".to_string()))])
             .sign(&key_pair)
             .unwrap();

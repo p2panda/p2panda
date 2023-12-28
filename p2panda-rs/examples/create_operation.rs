@@ -5,6 +5,8 @@ use p2panda_rs::operation::body::encode::encode_body;
 use p2panda_rs::operation::header::encode::encode_header;
 use p2panda_rs::operation::OperationBuilder;
 
+const TIMESTAMP: u128 = 17037976940000000;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Id of the schema which describes the data we want to publish. This should
     // already be known to the node we are publishing to.
@@ -15,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key_pair = KeyPair::new();
 
     // Build and sign a CREATE operation.
-    let operation = OperationBuilder::new(&SCHEMA_ID.parse()?)
+    let operation = OperationBuilder::new(&SCHEMA_ID.parse()?, TIMESTAMP)
         .fields(&[("username", "panda".into())])
         .sign(&key_pair)?;
 

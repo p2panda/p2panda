@@ -123,12 +123,14 @@ mod tests {
     use crate::test_utils::fixtures::{key_pair, schema};
     use crate::test_utils::memory_store::MemoryStore;
 
+    const TIMESTAMP: u128 = 17037976940000000;
+
     #[rstest]
     #[tokio::test]
     async fn operation_builder_create(key_pair: KeyPair, schema: Schema) {
         let store = MemoryStore::default();
 
-        let operation = OperationBuilder::new(schema.id())
+        let operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .fields(&test_fields())
             .sign(&key_pair)
             .unwrap();
