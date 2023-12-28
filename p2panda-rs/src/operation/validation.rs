@@ -6,6 +6,8 @@ use crate::operation::header::{Header, HeaderExtension};
 use crate::operation::OperationAction;
 use crate::Validate;
 
+/// This method validates a headers extensions against those we require for a valid p2panda
+/// operation. 
 pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateHeaderExtensionsError> {
     let HeaderExtension {
         previous,
