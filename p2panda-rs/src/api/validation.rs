@@ -84,7 +84,8 @@ pub fn validate_previous(
         .into());
     }
 
-    if operation.timestamp() <= previous_timestamp {
+    // timestamp can be equal to previous timestamp.
+    if operation.timestamp() < previous_timestamp {
         return Err(ValidationError::TimestampLessThanPrevious(
             operation.id().clone(),
             operation.timestamp(),
@@ -111,7 +112,7 @@ pub fn validate_backlink(
         .into());
     }
 
-    if operation.timestamp() <= backlink_timestamp {
+    if operation.timestamp() < backlink_timestamp {
         return Err(ValidationError::TimestampLessThanBacklink(
             operation.id().clone(),
             operation.timestamp(),
