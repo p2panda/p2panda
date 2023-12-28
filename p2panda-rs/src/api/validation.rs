@@ -68,7 +68,7 @@ pub fn validate_previous(
     }
 
     if operation.document_id() != previous_document_id.clone() {
-        return Err(ValidationError::MismathingDocumentIdInPrevious(
+        return Err(ValidationError::MismatchingDocumentIdInPrevious(
             operation.id().clone(),
             previous_document_id.clone(),
             operation.document_id(),

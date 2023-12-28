@@ -50,7 +50,7 @@ pub enum ValidationError {
 
     /// An operation was found in `previous` with a mismatching document id.
     #[error("Operation {0} contains a previous operation with document id {1}, expected: {2}")]
-    MismathingDocumentIdInPrevious(OperationId, DocumentId, DocumentId),
+    MismatchingDocumentIdInPrevious(OperationId, DocumentId, DocumentId),
 
     /// An operation was found in `previous` with a mismatching schema id.
     #[error("Operation {0} contains a previous operation with schema id {1}, expected: {2}")]
