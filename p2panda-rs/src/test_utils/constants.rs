@@ -7,8 +7,8 @@ use std::str::FromStr;
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::OperationValue;
-use crate::schema::{FieldType, Schema};
-use crate::test_utils::fixtures::{schema_fields, schema_id};
+use crate::schema::Schema;
+use crate::test_utils::fixtures::{self, schema_fields, schema_id};
 
 /// Hash value, used when a hash is needed for testing. It's the default hash in fixtures
 /// when a custom value isn't specified.
@@ -82,12 +82,7 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
 pub fn schema() -> Schema {
     let id = schema_id(SCHEMA_ID);
     let fields = schema_fields(test_fields(), id.clone());
-    let fields: Vec<(&str, FieldType)> = fields
-        .iter()
-        .map(|(name, field_type)| (name.as_str(), field_type.to_owned()))
-        .collect();
-
-    Schema::new(&id, "Test schema", &fields).unwrap()
+    fixtures::schema(fields, id, "Test schema")
 }
 
 #[cfg(test)]

@@ -129,3 +129,139 @@ pub fn validate_backlink(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::api::error::ValidatePlainOperationError;
+    use crate::api::validate_plain_operation;
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::identity::KeyPair;
+    use crate::operation::body::plain::{PlainFields, PlainOperation, PlainValue};
+    use crate::operation::header::HeaderAction;
+    use crate::operation::{OperationAction, OperationBuilder};
+    use crate::schema::{FieldName, FieldType, Schema, SchemaId, SchemaName};
+    use crate::test_utils::constants::test_fields;
+    use crate::test_utils::fixtures::{
+        document_id, document_view_id, hash, key_pair, random_document_view_id, schema,
+    };
+
+    const TIMESTAMP: u128 = 17037976940000000;
+
+    #[rstest]
+    fn validate_plain_operations_pass(
+        key_pair: KeyPair,
+        schema: Schema,
+        document_id: DocumentId,
+        #[from(hash)] backlink: Hash,
+        #[from(document_view_id)] previous: DocumentViewId,
+    ) {
+        let create_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
+            .fields(&test_fields())
+            .sign(&key_pair)
+            .unwrap();
+
+        let plain_operation: PlainOperation = create_operation.body().into();
+
+        assert!(
+            validate_plain_operation(&OperationAction::Create, &plain_operation, &schema).is_ok()
+        );
+
+        let update_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
+            .document_id(&document_id)
+            .backlink(&backlink)
+            .previous(&previous)
+            .depth(1)
+            // Update just one field
+            .fields(&[test_fields().first().unwrap().to_owned()])
+            .sign(&key_pair)
+            .unwrap();
+
+        let plain_operation: PlainOperation = update_operation.body().into();
+
+        assert!(
+            validate_plain_operation(&OperationAction::Update, &plain_operation, &schema).is_ok()
+        );
+
+        let delete_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
+            .document_id(&document_id)
+            .action(HeaderAction::Delete)
+            .backlink(&backlink)
+            .previous(&previous)
+            .depth(1)
+            .sign(&key_pair)
+            .unwrap();
+
+        let plain_operation: PlainOperation = delete_operation.body().into();
+
+        assert!(
+            validate_plain_operation(&OperationAction::Delete, &plain_operation, &schema).is_ok()
+        );
+    }
+
+    #[rstest]
+    fn validate_plain_operations_failure(
+        #[with(vec![("name".to_string(), FieldType::String), ("age".to_string(), FieldType::Integer)])]
+        schema: Schema,
+    ) {
+        let mut plain_fields = PlainFields::new();
+        plain_fields
+            .insert("name", PlainValue::String("panda".to_string()))
+            .unwrap();
+        plain_fields.insert("age", PlainValue::Integer(12)).unwrap();
+
+        let plain_operation = PlainOperation(schema.id().to_owned(), Some(plain_fields.clone()));
+
+        // Mismatching schema
+        let wrong_schema = Schema::get_system(SchemaId::BlobPiece(1)).unwrap();
+        let error =
+            validate_plain_operation(&OperationAction::Create, &plain_operation, &wrong_schema)
+                .err()
+                .unwrap();
+
+        assert!(matches!(
+            error,
+            ValidatePlainOperationError::SchemaNotMatching(_, _)
+        ));
+
+        // CREATE and UPDATE operations must have fields.
+        let plain_operation = PlainOperation(schema.id().to_owned(), None);
+        let error = validate_plain_operation(&OperationAction::Create, &plain_operation, &schema)
+            .unwrap_err();
+        assert!(matches!(error, ValidatePlainOperationError::ExpectedFields));
+
+        let error = validate_plain_operation(&OperationAction::Update, &plain_operation, &schema)
+            .unwrap_err();
+        assert!(matches!(error, ValidatePlainOperationError::ExpectedFields));
+
+        // DELETE operations must not have fields.
+        let plain_operation = PlainOperation(schema.id().to_owned(), Some(plain_fields));
+        let error = validate_plain_operation(&OperationAction::Delete, &plain_operation, &schema)
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ValidatePlainOperationError::UnexpectedFields
+        ));
+
+        // Errors occurring when validating operation fields against schema bubble up.
+        let mut wrong_plain_fields = PlainFields::new();
+        wrong_plain_fields
+            .insert("name", PlainValue::String("panda".to_string()))
+            .unwrap();
+        wrong_plain_fields
+            .insert("height", PlainValue::Float(187.89))
+            .unwrap();
+
+        let wrong_plain_operation =
+            PlainOperation(schema.id().to_owned(), Some(wrong_plain_fields.clone()));
+        let error =
+            validate_plain_operation(&OperationAction::Create, &wrong_plain_operation, &schema)
+                .unwrap_err();
+        assert!(matches!(
+            error,
+            ValidatePlainOperationError::ValidateFieldsError(_)
+        ));
+    }
+}
