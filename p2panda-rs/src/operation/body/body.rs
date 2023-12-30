@@ -6,7 +6,7 @@ use crate::operation::OperationFields;
 use crate::schema::SchemaId;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Body(pub(crate) SchemaId, pub(crate) Option<OperationFields>);
+pub struct Body(pub SchemaId, pub Option<OperationFields>);
 
 impl Schematic for Body {
     fn schema_id(&self) -> &SchemaId {

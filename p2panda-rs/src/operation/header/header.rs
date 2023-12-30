@@ -21,12 +21,12 @@ pub type PayloadSize = u64;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Header(
-    pub(crate) OperationVersion,
-    pub(crate) PublicKey,
-    pub(crate) PayloadHash,
-    pub(crate) PayloadSize,
-    pub(crate) HeaderExtension,
-    #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<Signature>,
+    pub OperationVersion,
+    pub PublicKey,
+    pub PayloadHash,
+    pub PayloadSize,
+    pub HeaderExtension,
+    #[serde(skip_serializing_if = "Option::is_none")] pub Option<Signature>,
 );
 
 impl Header {
