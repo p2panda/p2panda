@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::api::{
-    validate_backlink, validate_plain_operation, validate_previous, DomainError, ValidationError,
-};
+use crate::api::{validate_plain_operation, validate_previous, DomainError, ValidationError};
 use crate::document::DocumentViewId;
 use crate::hash::HashId;
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
-use crate::operation::traits::{Actionable, Authored, Identifiable, Timestamped, Capable};
 use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
+use crate::operation::traits::{Actionable, Authored, Capable, Identifiable, Timestamped};
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
@@ -43,29 +41,6 @@ pub async fn publish<S: OperationStore>(
     let latest_operation = store
         .get_latest_operation(&operation.document_id(), operation.public_key())
         .await?;
-
-    // Validate the authors claimed and actual backlink:
-    // - if a backlink is given it should point to the latest operation for this document and
-    //   public key, and the new operation should have a greater timestamp and depth.
-    // - if no backlink is given no log should exist for this document and public key
-    match (operation.backlink(), latest_operation) {
-        (None, None) => Ok(()),
-        (None, Some(_)) => Err(ValidationError::UnexpectedDocumentLog(
-            operation.public_key().clone(),
-            operation.document_id(),
-        )),
-        (Some(_), None) => Err(ValidationError::ExpectedDocumentLog(
-            operation.public_key().clone(),
-            operation.document_id(),
-        )),
-        (Some(claimed_backlink), Some(latest_operation)) => validate_backlink(
-            &operation,
-            &claimed_backlink,
-            &latest_operation.id().as_hash(),
-            latest_operation.depth(),
-            latest_operation.timestamp(),
-        ),
-    }?;
 
     // Validate the operations claimed and actual previous:
     // - all schema id should match the schema id of the new operation

@@ -380,7 +380,6 @@ mod tests {
 
         let panda_operation_2 = OperationBuilder::new(schema.id(), TIMESTAMP + 1)
             .document_id(&document_id)
-            .backlink(panda_operation_1.id().as_hash())
             .previous(&panda_operation_1.id().clone().into())
             .timestamp(1703027624)
             .depth(1)
@@ -418,7 +417,6 @@ mod tests {
 
         let penguin_operation_2 = OperationBuilder::new(schema.id(), TIMESTAMP + 3)
             .document_id(&document_id)
-            .backlink(penguin_operation_1.id().as_hash())
             .previous(&DocumentViewId::new(&[
                 penguin_operation_1.id().clone(),
                 panda_operation_2.id().clone(),
@@ -441,7 +439,6 @@ mod tests {
 
         let penguin_operation_3 = OperationBuilder::new(schema.id(), TIMESTAMP + 4)
             .document_id(&document_id)
-            .backlink(penguin_operation_2.id().as_hash())
             .previous(&penguin_operation_2.id().clone().into())
             .timestamp(1703027627)
             .depth(3)
@@ -537,7 +534,6 @@ mod tests {
 
         let update_operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .timestamp(1703027623)
             .depth(1)
@@ -576,7 +572,6 @@ mod tests {
 
         let update_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .document_id(&create_operation.id().clone().into())
-            .backlink(&create_operation.id().as_hash())
             .previous(&document_view_id)
             .timestamp(1703027624)
             .depth(1)
@@ -620,7 +615,6 @@ mod tests {
         let create_operation_id = create_operation.id();
         let update_operation = OperationBuilder::new(&incorrect_schema_id, TIMESTAMP + 1)
             .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
             .timestamp(1703027624)
             .depth(1)
@@ -633,7 +627,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "Could not perform reducer function: Operation 5864643f4ac943869b293b761ac7365ce1b6e2b61d584aaa63b90eadf6935eb9 does not match the documents schema".to_string()
+            "Could not perform reducer function: Operation c53c7feb3df32009bc2a2bdec61e5ab2b635de1e80549fec9fbe93957d335f05 does not match the documents schema".to_string()
         );
     }
 
@@ -655,7 +649,6 @@ mod tests {
         let delete_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .action(HeaderAction::Delete)
             .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
             .depth(1)
             .sign(&key_pair)
@@ -734,7 +727,6 @@ mod tests {
 
         let panda_operation_2 = OperationBuilder::new(schema.id(), TIMESTAMP + 1)
             .document_id(&document_id)
-            .backlink(panda_operation_1.id().as_hash())
             .previous(&panda_operation_1.id().clone().into())
             .timestamp(1703027624)
             .depth(1)
@@ -821,7 +813,6 @@ mod tests {
 
         let update_operation = OperationBuilder::new(schema.id(), TIMESTAMP + 1)
             .document_id(&document_id)
-            .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
             .depth(1)
@@ -833,7 +824,6 @@ mod tests {
         let delete_operation = OperationBuilder::new(schema.id(), TIMESTAMP + 2)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .backlink(update_operation.id().as_hash())
             .previous(&update_operation.id().clone().into())
             .depth(2)
             .sign(&panda)
@@ -909,7 +899,6 @@ mod tests {
         let update_operation_incorrect_schema_id =
             OperationBuilder::new(&incorrect_schema_id, TIMESTAMP + 1)
                 .document_id(&create_operation_id.clone().into())
-                .backlink(&create_operation_id.as_hash())
                 .previous(&create_operation_id.clone().into())
                 .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
                 .depth(1)
@@ -923,7 +912,6 @@ mod tests {
         // Apply a commit with an UPDATE operation not pointing to the current view.
         let update_not_referring_to_current_view = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
             .previous(&incorrect_previous)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
             .depth(1)
@@ -938,7 +926,6 @@ mod tests {
         let delete_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .action(HeaderAction::Delete)
             .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
             .depth(1)
             .sign(&key_pair)
@@ -950,7 +937,6 @@ mod tests {
         let delete_view_id = DocumentViewId::new(&[delete_operation.id().clone()]);
         let update_on_a_deleted_document = OperationBuilder::new(&schema_id, TIMESTAMP + 2)
             .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
             .previous(&delete_view_id)
             .depth(2)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])

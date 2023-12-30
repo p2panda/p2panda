@@ -97,12 +97,6 @@ impl OperationBuilder {
         self
     }
 
-    /// Set operation backlink.
-    pub fn backlink(mut self, backlink: &Hash) -> Self {
-        self.header_extension.backlink = Some(backlink.to_owned());
-        self
-    }
-
     /// Set previous operations.
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
         self.header_extension.previous = Some(previous.to_owned());
@@ -182,11 +176,6 @@ impl Timestamped for Operation {
 }
 
 impl Capable for Operation {
-    /// Hash of the preceding operation in an authors log, None if this is the first operation.
-    fn backlink(&self) -> Option<&Hash> {
-        self.header().4.backlink.as_ref()
-    }
-
     /// The distance (via the longest path) from this operation to the root of the operation graph.
     fn depth(&self) -> u64 {
         // Safely unwrap as validation performed already.
@@ -295,7 +284,6 @@ mod tests {
         assert_eq!(operation.action(), OperationAction::Create);
         assert_eq!(operation.schema_id(), &schema_id);
         assert_eq!(operation.document_id(), DocumentId::new(operation.id()));
-        assert_eq!(operation.backlink(), None);
         assert_eq!(operation.previous(), None);
         assert_eq!(operation.depth(), 0);
         assert!(operation.header().extension().timestamp.is_some());
@@ -379,13 +367,6 @@ mod tests {
             .sign(&key_pair)
             .is_err());
 
-        // CREATE operations must not contain backlink
-        assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .backlink(&backlink)
-            .fields(&[("year", 2020.into())])
-            .sign(&key_pair)
-            .is_err());
-
         // CREATE operations must not contain non-zero depth
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .depth(1)
@@ -410,7 +391,6 @@ mod tests {
         // UPDATE operation may contain backlink
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .fields(&[("year", 2020.into())])
@@ -420,7 +400,6 @@ mod tests {
         // UPDATE operation mut have non-zero depth
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(0)
             .fields(&[("year", 2020.into())])
@@ -430,7 +409,6 @@ mod tests {
         // UPDATE operations must have fields
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .sign(&key_pair)
@@ -439,7 +417,6 @@ mod tests {
         // UPDATE operations must have previous
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
-            .backlink(&backlink)
             .depth(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
@@ -447,7 +424,6 @@ mod tests {
 
         // UPDATE operations must have document id
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .fields(&[("year", 2020.into())])
@@ -463,21 +439,10 @@ mod tests {
             .sign(&key_pair)
             .is_ok());
 
-        // DELETE operation may contain backlink
-        assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
-            .document_id(&document_id)
-            .backlink(&backlink)
-            .previous(&document_view_id)
-            .depth(1)
-            .sign(&key_pair)
-            .is_ok());
-
         // DELETE operation must have non-zero depth
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(0)
             .sign(&key_pair)
@@ -487,7 +452,6 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .fields(&[("year", 2020.into())])
             .depth(1)
@@ -498,7 +462,6 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .action(HeaderAction::Delete)
             .document_id(&document_id)
-            .backlink(&backlink)
             .depth(1)
             .sign(&key_pair)
             .is_err());
@@ -506,7 +469,6 @@ mod tests {
         // DELETE operations must have document id
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .action(HeaderAction::Delete)
-            .backlink(&backlink)
             .previous(&document_view_id)
             .depth(1)
             .sign(&key_pair)
