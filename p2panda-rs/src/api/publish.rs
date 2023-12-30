@@ -9,11 +9,9 @@ use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
-use crate::operation::header::traits::{Actionable, Authored};
+use crate::operation::traits::{Actionable, Authored, Identifiable, Timestamped, Capable};
 use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
-use crate::operation::traits::AsOperation;
-use crate::operation::validation::validate_header_extensions;
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
@@ -96,7 +94,7 @@ pub async fn publish<S: OperationStore>(
 pub async fn get_view_id_operations<S: OperationStore>(
     store: &S,
     view_id: &DocumentViewId,
-) -> Result<Vec<impl AsOperation>, ValidationError> {
+) -> Result<Vec<Operation>, ValidationError> {
     let mut found_operations = vec![];
     for id in view_id.iter() {
         let operation = store.get_operation(id).await?;

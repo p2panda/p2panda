@@ -9,7 +9,7 @@ use crate::operation::body::EncodedBody;
 use crate::operation::header::action::HeaderAction;
 use crate::operation::header::encode::sign_header;
 use crate::operation::header::error::EncodeHeaderError;
-use crate::operation::header::traits::{Actionable, Authored};
+use crate::operation::traits::Actionable;
 use crate::operation::{OperationAction, OperationVersion};
 use crate::Validate;
 
@@ -33,22 +33,20 @@ impl Header {
     pub fn extension(&self) -> &HeaderExtension {
         &self.4
     }
-}
 
-impl Authored for Header {
-    fn public_key(&self) -> &PublicKey {
+    pub fn public_key(&self) -> &PublicKey {
         &self.1
     }
 
-    fn payload_hash(&self) -> &Hash {
+    pub fn payload_hash(&self) -> &Hash {
         &self.2
     }
 
-    fn payload_size(&self) -> u64 {
+    pub fn payload_size(&self) -> u64 {
         self.3
     }
 
-    fn signature(&self) -> Signature {
+    pub fn signature(&self) -> Signature {
         // We never use an unsigned header outside of our API
         self.5
             .clone()
@@ -63,9 +61,9 @@ impl Validate for Header {
         // The validation performed here is based on only the strictest requirements expected
         // of a header. It is possible to build headers which may be incompatible with the current
         // p2panda operation specification. We intentionally don't enforce these restrictions here
-        // in order to leave the option to publish custom operation header formats open. 
+        // in order to leave the option to publish custom operation header formats open.
 
-        // What is validated here: 
+        // What is validated here:
         // - if a document id is not present, then we know this is a header for a CREATE operation
         //   and should therefore _not_ contain a backlink or previous extension as well.
         // - if action is DELETE then a document id _must_ also be provided.

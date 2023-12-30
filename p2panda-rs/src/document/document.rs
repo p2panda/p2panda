@@ -7,7 +7,8 @@ use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
 use crate::graph::{Graph, Reducer};
 use crate::identity::PublicKey;
-use crate::operation::traits::AsOperation;
+use crate::operation::body::traits::Schematic;
+use crate::operation::traits::{Actionable, Authored, Fielded, Identifiable};
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::Human;
@@ -26,7 +27,7 @@ use super::error::DocumentError;
 /// operation should have been validated against this schema before being included in the graph.
 ///
 /// Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
-/// the [`AsOperation`], [`WithId<OperationId>`] and [`WithPublicKey`].
+/// the [`Actionable`], [`WithId<OperationId>`] and [`WithPublicKey`].
 ///
 /// To efficiently commit more operations to an already constructed document use the `commit`
 /// method. Any operations committed in this way must refer to the documents current view id in
@@ -104,7 +105,10 @@ struct DocumentReducer {
 }
 
 /// Implementation of the `Reduce` trait for collections of authored operations.
-impl<T: AsOperation> Reducer<T> for DocumentReducer {
+impl<T> Reducer<T> for DocumentReducer
+where
+    T: Actionable + Fielded + Identifiable + Schematic + Authored,
+{
     type Error = DocumentReducerError;
 
     /// Combine a visited operation with the existing document.
@@ -174,7 +178,7 @@ pub struct DocumentBuilder<T>(Vec<T>);
 
 impl<T> DocumentBuilder<T>
 where
-    T: AsOperation + Debug + Clone + PartialEq,
+    T: Actionable + Fielded + Identifiable + Schematic + Authored + Debug + Clone + PartialEq,
 {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
     pub fn new(operations: Vec<T>) -> Self {
@@ -298,7 +302,7 @@ mod tests {
     use crate::hash::{Hash, HashId};
     use crate::identity::KeyPair;
     use crate::operation::header::HeaderAction;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::Identifiable;
     use crate::operation::{OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::fixtures::{
@@ -902,14 +906,15 @@ mod tests {
         // Apply a commit with an UPDATE operation containing the wrong schema id.
         let incorrect_schema_id =
             SchemaId::Application(SchemaName::new("my_new_schema").unwrap(), schema_view_id);
-        let update_operation_incorrect_schema_id = OperationBuilder::new(&incorrect_schema_id, TIMESTAMP + 1)
-            .document_id(&create_operation_id.clone().into())
-            .backlink(&create_operation_id.as_hash())
-            .previous(&create_operation_id.clone().into())
-            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .depth(1)
-            .sign(&key_pair)
-            .unwrap();
+        let update_operation_incorrect_schema_id =
+            OperationBuilder::new(&incorrect_schema_id, TIMESTAMP + 1)
+                .document_id(&create_operation_id.clone().into())
+                .backlink(&create_operation_id.as_hash())
+                .previous(&create_operation_id.clone().into())
+                .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+                .depth(1)
+                .sign(&key_pair)
+                .unwrap();
 
         assert!(document
             .commit(&update_operation_incorrect_schema_id)

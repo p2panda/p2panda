@@ -11,7 +11,7 @@ use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
 use crate::operation::header::encode::encode_header;
 use crate::operation::header::HeaderAction;
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::Identifiable;
 use crate::operation::{Operation, OperationBuilder, OperationValue};
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
@@ -182,7 +182,7 @@ mod tests {
 
     use crate::hash::HashId;
     use crate::identity::KeyPair;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::Identifiable;
     use crate::operation::{Operation, OperationBuilder, OperationValue};
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;

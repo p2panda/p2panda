@@ -3,8 +3,7 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::traits::AsOperation;
-use crate::operation::{OperationFields, OperationId, OperationValue};
+use crate::operation::{OperationFields, OperationId, OperationValue, traits::{Identifiable, Actionable, Fielded}};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -95,7 +94,7 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl<T: AsOperation> From<T> for DocumentViewFields {
+impl<T: Fielded + Identifiable> From<T> for DocumentViewFields {
     fn from(operation: T) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
@@ -115,7 +114,7 @@ mod tests {
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
     use crate::identity::KeyPair;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::{Fielded, Identifiable};
     use crate::operation::{OperationBuilder, OperationId, OperationValue};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::random_operation_id;

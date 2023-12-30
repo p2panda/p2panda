@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use crate::document::{self, DocumentId, DocumentViewId};
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
@@ -11,16 +9,15 @@ use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
 use crate::operation::error::{OperationBuilderError, ValidateOperationError};
 use crate::operation::header::encode::{encode_header, sign_header};
-use crate::operation::header::traits::{Actionable, Authored};
 use crate::operation::header::{Header, HeaderAction, HeaderExtension};
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::{Actionable, Authored, Capable, Payloaded};
 use crate::operation::{
     OperationAction, OperationFields, OperationId, OperationValue, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
 
-use super::header;
+use super::traits::{Fielded, Identifiable, Timestamped};
 use super::validation::validate_header_extensions;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -161,25 +158,30 @@ impl OperationBuilder {
     }
 }
 
-impl AsOperation for Operation {
+impl Identifiable for Operation {
     /// Id of this operation.
     fn id(&self) -> &OperationId {
         &self.0
     }
 
+    /// Id of the document this operation belongs to.
     fn document_id(&self) -> DocumentId {
         match self.header().extension().document_id.as_ref() {
             Some(document_id) => document_id.clone(),
             None => DocumentId::new(self.id()),
         }
     }
+}
 
+impl Timestamped for Operation {
     /// Timestamp
     fn timestamp(&self) -> u128 {
         // Safely unwrap as validation was performed already.
         self.header().4.timestamp.unwrap()
     }
+}
 
+impl Capable for Operation {
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash> {
         self.header().4.backlink.as_ref()
@@ -190,18 +192,15 @@ impl AsOperation for Operation {
         // Safely unwrap as validation performed already.
         self.header().4.depth.unwrap()
     }
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<&OperationFields> {
-        self.body().1.as_ref()
-    }
 }
 
 impl Actionable for Operation {
+    /// Returns the operation version.
     fn version(&self) -> OperationVersion {
         self.header().0
     }
 
+    /// Returns the operation action.
     fn action(&self) -> OperationAction {
         match (self.header().extension().action, self.depth()) {
             (None, 0) => OperationAction::Create,
@@ -210,36 +209,52 @@ impl Actionable for Operation {
         }
     }
 
+    /// Returns a list of previous operations.
     fn previous(&self) -> Option<&DocumentViewId> {
         self.header().extension().previous.as_ref()
     }
 }
 
+impl Fielded for Operation {
+    /// Returns application data fields of operation.
+    fn fields(&self) -> Option<&OperationFields> {
+        self.body().1.as_ref()
+    }
+}
+
 impl Schematic for Operation {
+    /// Returns the schema id of this operation.
     fn schema_id(&self) -> &SchemaId {
         &self.body().schema_id()
     }
 
+    /// Returns the fields of this operation in plain form.
     fn plain_fields(&self) -> Option<PlainFields> {
         self.body().plain_fields()
     }
 }
 
 impl Authored for Operation {
+    /// The public key of the keypair which signed this data.
     fn public_key(&self) -> &crate::identity::PublicKey {
         self.header().public_key()
     }
 
+    /// The signature.
+    fn signature(&self) -> crate::identity::Signature {
+        self.header().signature()
+    }
+}
+
+impl Payloaded for Operation {
+    /// Size size in bytes of the payload.
     fn payload_size(&self) -> u64 {
         self.header().payload_size()
     }
 
+    /// Hash of the payload.
     fn payload_hash(&self) -> &Hash {
         self.header().payload_hash()
-    }
-
-    fn signature(&self) -> crate::identity::Signature {
-        self.header().signature()
     }
 }
 
@@ -251,9 +266,8 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::traits::Schematic;
-    use crate::operation::header::traits::Actionable;
     use crate::operation::header::HeaderAction;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::{Actionable, Capable, Fielded, Identifiable};
     use crate::operation::{
         OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
     };

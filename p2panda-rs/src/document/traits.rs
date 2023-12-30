@@ -7,7 +7,8 @@ use crate::document::{
     DocumentId, DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue,
 };
 use crate::identity::PublicKey;
-use crate::operation::traits::AsOperation;
+use crate::operation::body::traits::Schematic;
+use crate::operation::traits::{Actionable, Fielded, Identifiable};
 use crate::operation::OperationValue;
 use crate::schema::SchemaId;
 
@@ -65,7 +66,10 @@ pub trait AsDocument {
     ///
     /// For the update to be successful the passed operation must refer to this documents' current
     /// view id in it's previous field and must update a field which exists on this document.
-    fn commit<T: AsOperation>(&mut self, operation: &T) -> Result<(), DocumentError> {
+    fn commit<T>(&mut self, operation: &T) -> Result<(), DocumentError>
+    where
+        T: Actionable + Schematic + Identifiable + Fielded,
+    {
         // @TODO: additional validation required for B3K operation format
 
         // Validate operation passed to commit.
@@ -97,7 +101,10 @@ pub trait AsDocument {
     }
 
     /// Commit an new operation to the document without performing any validation.
-    fn commit_unchecked<T: AsOperation>(&mut self, operation: &T) {
+    fn commit_unchecked<T>(&mut self, operation: &T)
+    where
+        T: Actionable + Fielded + Identifiable,
+    {
         let next_fields = match operation.fields() {
             // If the operation contains fields it's an UPDATE and so we want to apply the changes
             // to the designated fields.

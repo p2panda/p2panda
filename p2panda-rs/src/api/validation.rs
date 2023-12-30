@@ -6,9 +6,8 @@ use crate::hash::{Hash, HashId};
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
-use crate::operation::header::traits::Actionable;
 use crate::operation::header::{Header, HeaderExtension};
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::{Actionable, Capable, Identifiable, Timestamped};
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::{Schema, SchemaId};
@@ -52,7 +51,7 @@ pub fn validate_plain_operation(
 }
 
 pub fn validate_previous(
-    operation: &impl AsOperation,
+    operation: &(impl Identifiable + Actionable + Schematic + Capable + Timestamped),
     previous_schema_id: &SchemaId,
     previous_document_id: &DocumentId,
     previous_depth: u64,
@@ -96,7 +95,7 @@ pub fn validate_previous(
 }
 
 pub fn validate_backlink(
-    operation: &impl AsOperation,
+    operation: &(impl Identifiable + Capable + Timestamped),
     claimed_backlink: &Hash,
     backlink_hash: &Hash,
     backlink_depth: u64,

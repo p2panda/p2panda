@@ -6,8 +6,7 @@ use log::debug;
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
 use crate::operation::body::traits::Schematic;
-use crate::operation::header::traits::{Actionable, Authored};
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::{Actionable, Authored, Identifiable, Capable};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
@@ -16,8 +15,6 @@ use crate::test_utils::memory_store::MemoryStore;
 
 #[async_trait]
 impl OperationStore for MemoryStore {
-    type Operation = Operation;
-
     /// Insert an `Operation` into the store.
     async fn insert_operation(&self, operation: &Operation) -> Result<(), OperationStorageError> {
         let id = operation.id();
@@ -113,7 +110,7 @@ impl OperationStore for MemoryStore {
             .cloned()
             .collect();
 
-        operations.sort_by(|a, b| a.timestamp().cmp(&b.timestamp()));
+        operations.sort_by(|a, b| a.depth().cmp(&b.depth()));
         Ok(operations.last().cloned())
     }
 }

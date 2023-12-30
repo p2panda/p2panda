@@ -47,9 +47,8 @@ mod tests {
     use crate::operation::body::encode::encode_body;
     use crate::operation::body::Body;
     use crate::operation::header::encode::encode_header;
-    use crate::operation::header::traits::Authored;
     use crate::operation::header::HeaderBuilder;
-    use crate::operation::{OperationFields, OperationValue};
+    use crate::operation::OperationValue;
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, hash, key_pair, operation_fields, random_key_pair, schema_id,

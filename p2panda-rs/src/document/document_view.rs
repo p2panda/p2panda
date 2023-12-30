@@ -90,7 +90,7 @@ mod tests {
     use crate::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
     use crate::hash::HashId;
     use crate::identity::KeyPair;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::Identifiable;
     use crate::operation::{OperationBuilder, OperationFields, OperationId, OperationValue};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{key_pair, operation_fields, schema_id};

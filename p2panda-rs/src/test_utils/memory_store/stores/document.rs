@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
 use crate::operation::body::traits::Schematic;
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::Identifiable;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::{DocumentStore, OperationStore};
@@ -19,7 +19,6 @@ use crate::test_utils::memory_store::MemoryStore;
 /// implementation is very inefficient and is only recommended for use in test environments.
 #[async_trait]
 impl DocumentStore for MemoryStore {
-    /// Associated type representing an `Entry` retrieved from storage.
     type Document = Document;
 
     /// Get a document by it's document id.

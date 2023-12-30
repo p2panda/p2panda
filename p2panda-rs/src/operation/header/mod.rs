@@ -7,7 +7,6 @@ pub mod encoded_header;
 pub mod error;
 #[allow(clippy::module_inception)]
 mod header;
-pub mod traits;
 pub mod validate;
 
 pub use action::HeaderAction;
