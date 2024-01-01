@@ -89,7 +89,6 @@ pub async fn populate_store<S: OperationStore>(
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_documents {
-            let mut backlink: Option<Hash> = None;
             let mut previous: Option<DocumentViewId> = None;
             let mut document_id: Option<DocumentId> = None;
 
@@ -129,14 +128,10 @@ pub async fn populate_store<S: OperationStore>(
                     .sign(&key_pair)
                     .expect("can build operation");
 
-                // Publish the operation encoded on an entry to storage.
-                let _ = send_to_store(store, &operation, &config.schema)
-                    .await
-                    .expect("can publish operation");
+                store.insert_operation(&operation).await.expect("can insert operation");
 
                 // Set the previous and backlink based on current operation id
                 previous = Some(operation.id().clone().into());
-                backlink = Some(operation.id().as_hash().clone());
 
                 if index == 0 {
                     // Push this new document id to the documents vec and set current document id.
