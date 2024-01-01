@@ -121,22 +121,22 @@ impl Actionable for Header {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HeaderExtension {
     #[serde(rename = "h", skip_serializing_if = "Option::is_none")]
-    pub(crate) depth: Option<u64>,
+    pub depth: Option<u64>,
 
     #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
-    pub(crate) document_id: Option<DocumentId>,
+    pub document_id: Option<DocumentId>,
 
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
-    pub(crate) previous: Option<DocumentViewId>,
+    pub previous: Option<DocumentViewId>,
 
     #[serde(rename = "b", skip_serializing_if = "Option::is_none")]
-    pub(crate) backlink: Option<Hash>,
+    pub backlink: Option<Hash>,
 
     #[serde(rename = "a", skip_serializing_if = "Option::is_none")]
-    pub(crate) action: Option<HeaderAction>,
+    pub action: Option<HeaderAction>,
 
     #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
-    pub(crate) timestamp: Option<u128>,
+    pub timestamp: Option<u128>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -21,7 +21,7 @@ use super::traits::{Fielded, Identifiable, Timestamped};
 use super::validation::validate_header_extensions;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Operation(OperationId, Header, Body);
+pub struct Operation(pub OperationId, pub Header, pub Body);
 
 impl Operation {
     pub(crate) fn new(
