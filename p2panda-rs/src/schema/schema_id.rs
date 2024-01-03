@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -233,6 +234,14 @@ impl FromStr for SchemaId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
+    }
+}
+
+impl TryFrom<String> for SchemaId {
+    type Error = SchemaIdError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::from_str(&str)
     }
 }
 

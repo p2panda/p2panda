@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -55,6 +56,14 @@ impl FromStr for OperationId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(Hash::new(s)?))
+    }
+}
+
+impl TryFrom<String> for OperationId {
+    type Error = OperationIdError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::from_str(&str)
     }
 }
 

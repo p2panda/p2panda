@@ -279,6 +279,14 @@ impl FromStr for DocumentViewId {
     }
 }
 
+impl TryFrom<String> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        DocumentViewId::from_str(&str)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;

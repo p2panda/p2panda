@@ -122,3 +122,11 @@ pub enum PinnedRelationListError {
     #[error(transparent)]
     DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
 }
+
+/// Errors from `OperationAction` struct.
+#[derive(Error, Debug)]
+pub enum OperationActionError {
+    /// String is not a valid action.
+    #[error("string \"{0}\" is not a valid action")]
+    InvalidActionString(String),
+}
