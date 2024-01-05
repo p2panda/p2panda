@@ -2,8 +2,8 @@
 
 extern crate libc;
 
-use glib_sys::g_strdup;
-use libc::c_char;
+use glib_sys::{g_strdup, g_free};
+use libc::{c_char, c_void};
 use std::ffi::CStr;
 use std::ffi::CString;
 
@@ -148,38 +148,30 @@ pub extern "C" fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Ent
     // Decode Bamboo entry
     let entry: crate::entry::Entry = crate::entry::decode::decode_entry(&entry_encoded).unwrap();
 
+    let mut c_string: CString;
+
     // Serialise result to C struct
     let c_entry = Entry {
-        public_key: CString::new(entry.public_key().to_string().as_str())
-            .unwrap()
-            .into_raw(),
+        public_key: unsafe { c_string = CString::new(entry.public_key().to_string().as_str()).unwrap(); g_strdup(c_string.as_ptr()) },
         seq_num: entry.seq_num().as_u64(),
         log_id: entry.log_id().as_u64(),
-        skiplink: CString::new(
+        skiplink: unsafe { c_string = CString::new(
             entry
                 .skiplink()
                 .map(|hash| hash.to_string())
                 .unwrap()
                 .as_str(),
-        )
-        .unwrap()
-        .into_raw(),
-        backlink: CString::new(
+        ).unwrap(); g_strdup(c_string.as_ptr()) },
+        backlink: unsafe { c_string = CString::new(
             entry
                 .backlink()
                 .map(|hash| hash.to_string())
                 .unwrap()
                 .as_str(),
-        )
-        .unwrap()
-        .into_raw(),
+        ).unwrap(); g_strdup(c_string.as_ptr()) },
         payload_size: entry.payload_size(),
-        payload_hash: CString::new(entry.payload_hash().to_string().as_str())
-            .unwrap()
-            .into_raw(),
-        signature: CString::new(entry.signature().to_string().as_str())
-            .unwrap()
-            .into_raw(),
+        payload_hash: unsafe { c_string = CString::new(entry.payload_hash().to_string().as_str()).unwrap(); g_strdup(c_string.as_ptr()) },
+        signature: unsafe { c_string = CString::new(entry.signature().to_string().as_str()).unwrap(); g_strdup(c_string.as_ptr()) },
     };
     Box::into_raw(Box::new(c_entry))
 }
@@ -193,6 +185,11 @@ pub extern "C" fn p2panda_entry_free(instance: *mut Entry) {
         return;
     }
     unsafe {
+        g_free((*instance).public_key as *mut c_void);
+        g_free((*instance).skiplink as *mut c_void);
+        g_free((*instance).backlink as *mut c_void);
+        g_free((*instance).payload_hash as *mut c_void);
+        g_free((*instance).signature as *mut c_void);
         drop(Box::from_raw(instance));
     }
 }
