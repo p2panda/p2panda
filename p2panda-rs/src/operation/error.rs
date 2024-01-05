@@ -22,6 +22,10 @@ pub enum ValidateHeaderExtensionsError {
     #[error("expected 'timestamp' in operation header")]
     ExpectedTimestamp,
 
+    /// Expect `schema_id` on all operations.
+    #[error("expected 'schema_id' in operation header")]
+    ExpectedSchemaId,
+
     /// Expect `depth` on all operations.
     #[error("expected 'depth' in operation header")]
     ExpectedDepth,

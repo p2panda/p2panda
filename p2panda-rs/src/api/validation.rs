@@ -21,16 +21,6 @@ pub fn validate_plain_operation(
     plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Body, ValidatePlainOperationError> {
-    let claimed_schema_id = plain_operation.schema_id();
-
-    // Make sure the schema id and given schema matches
-    if claimed_schema_id != schema.id() {
-        return Err(ValidatePlainOperationError::SchemaNotMatching(
-            claimed_schema_id.display(),
-            schema.id().display(),
-        ));
-    }
-
     let fields = match (action, plain_operation.plain_fields()) {
         (OperationAction::Create, Some(fields)) => {
             validate_all_fields(&fields, schema).map(|fields| Some(fields))
@@ -47,7 +37,7 @@ pub fn validate_plain_operation(
         }
     }?;
 
-    Ok(Body(schema.id().clone(), fields))
+    Ok(Body(fields))
 }
 
 pub fn validate_previous(
@@ -174,22 +164,8 @@ mod tests {
             .unwrap();
         plain_fields.insert("age", PlainValue::Integer(12)).unwrap();
 
-        let plain_operation = PlainOperation(schema.id().to_owned(), Some(plain_fields.clone()));
-
-        // Mismatching schema
-        let wrong_schema = Schema::get_system(SchemaId::BlobPiece(1)).unwrap();
-        let error =
-            validate_plain_operation(&OperationAction::Create, &plain_operation, &wrong_schema)
-                .err()
-                .unwrap();
-
-        assert!(matches!(
-            error,
-            ValidatePlainOperationError::SchemaNotMatching(_, _)
-        ));
-
         // CREATE and UPDATE operations must have fields.
-        let plain_operation = PlainOperation(schema.id().to_owned(), None);
+        let plain_operation = PlainOperation(None);
         let error = validate_plain_operation(&OperationAction::Create, &plain_operation, &schema)
             .unwrap_err();
         assert!(matches!(error, ValidatePlainOperationError::ExpectedFields));
@@ -199,7 +175,7 @@ mod tests {
         assert!(matches!(error, ValidatePlainOperationError::ExpectedFields));
 
         // DELETE operations must not have fields.
-        let plain_operation = PlainOperation(schema.id().to_owned(), Some(plain_fields));
+        let plain_operation = PlainOperation(Some(plain_fields));
         let error = validate_plain_operation(&OperationAction::Delete, &plain_operation, &schema)
             .unwrap_err();
         assert!(matches!(
@@ -217,7 +193,7 @@ mod tests {
             .unwrap();
 
         let wrong_plain_operation =
-            PlainOperation(schema.id().to_owned(), Some(wrong_plain_fields.clone()));
+            PlainOperation(Some(wrong_plain_fields.clone()));
         let error =
             validate_plain_operation(&OperationAction::Create, &wrong_plain_operation, &schema)
                 .unwrap_err();

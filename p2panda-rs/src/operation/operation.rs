@@ -76,8 +76,9 @@ impl OperationBuilder {
         let mut header_extension = HeaderExtension::default();
         header_extension.timestamp = Some(timestamp);
         header_extension.depth = Some(0);
+        header_extension.schema_id = Some(schema_id.to_owned());
 
-        let body = Body(schema_id.to_owned(), None);
+        let body = Body(None);
 
         Self {
             header_extension,
@@ -93,7 +94,7 @@ impl OperationBuilder {
 
     /// Set operation schema.
     pub fn schema_id(mut self, schema_id: SchemaId) -> Self {
-        self.body.0 = schema_id;
+        self.header_extension.schema_id = Some(schema_id);
         self
     }
 
@@ -135,7 +136,7 @@ impl OperationBuilder {
             }
         }
 
-        self.body.1 = Some(operation_fields);
+        self.body.0 = Some(operation_fields);
         self
     }
 
@@ -207,14 +208,15 @@ impl Actionable for Operation {
 impl Fielded for Operation {
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields> {
-        self.body().1.as_ref()
+        self.body().0.as_ref()
     }
 }
 
 impl Schematic for Operation {
     /// Returns the schema id of this operation.
     fn schema_id(&self) -> &SchemaId {
-        &self.body().schema_id()
+        // Safely unwrap as extension validation is expected to have already been performed.
+        self.header().extension().schema_id.as_ref().unwrap()
     }
 
     /// Returns the fields of this operation in plain form.

@@ -64,7 +64,7 @@ mod tests {
         key_pair: KeyPair,
         #[from(random_key_pair)] incorrect_key_pair: KeyPair,
     ) {
-        let body = Body(schema_id, Some(fields.into()));
+        let body = Body(Some(fields.into()));
         let encoded_body = encode_body(&body).unwrap();
         let result = HeaderBuilder::new()
             .document_id(&document_id)

@@ -6,14 +6,10 @@ use crate::operation::OperationFields;
 use crate::schema::SchemaId;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Body(pub SchemaId, pub Option<OperationFields>);
+pub struct Body(pub Option<OperationFields>);
 
-impl Schematic for Body {
-    fn schema_id(&self) -> &SchemaId {
-        &self.0
-    }
-
-    fn plain_fields(&self) -> Option<PlainFields> {
-        self.1.clone().map(|fields| (&fields).into())
+impl Body {
+    pub fn plain_fields(&self) -> Option<PlainFields> {
+        self.0.clone().map(|fields| (&fields).into())
     }
 }

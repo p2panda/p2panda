@@ -14,6 +14,7 @@ pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateHeaderE
         timestamp,
         backlink,
         depth,
+        schema_id, 
         ..
     } = &header.4;
 
@@ -23,6 +24,11 @@ pub fn validate_header_extensions(header: &Header) -> Result<(), ValidateHeaderE
     // All operations require a timestamp
     if timestamp.is_none() {
         return Err(ValidateHeaderExtensionsError::ExpectedTimestamp);
+    }
+
+    // All operations require a schema id
+    if schema_id.is_none() {
+        return Err(ValidateHeaderExtensionsError::ExpectedSchemaId);
     }
 
     // All operations require a depth

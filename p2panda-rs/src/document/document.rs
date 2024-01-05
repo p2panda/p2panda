@@ -327,16 +327,16 @@ mod tests {
 
         assert_eq!(
             document.to_string(),
-            "7a24e6a06d86221a44dcaffc5b71ea08c918b2751d04eb41fd802734595064a8"
+            "a095a6a3dbbc17f1ab96bd8479a7742082d656f4bf352fda82872e17518c562b"
         );
 
         // Short string representation
-        assert_eq!(document.display(), "<Document 5064a8>");
+        assert_eq!(document.display(), "<Document 8c562b>");
 
         // Make sure the id is matching
         assert_eq!(
             document.id().as_str(),
-            "7a24e6a06d86221a44dcaffc5b71ea08c918b2751d04eb41fd802734595064a8"
+            "a095a6a3dbbc17f1ab96bd8479a7742082d656f4bf352fda82872e17518c562b"
         );
     }
 
@@ -627,7 +627,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "Could not perform reducer function: Operation c53c7feb3df32009bc2a2bdec61e5ab2b635de1e80549fec9fbe93957d335f05 does not match the documents schema".to_string()
+            "Could not perform reducer function: Operation 941b97d93ba45c61cced8b5bf0e4f06153d5d22bfe911c7ac37407fecb8478b8 does not match the documents schema".to_string()
         );
     }
 

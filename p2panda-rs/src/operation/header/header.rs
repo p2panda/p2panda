@@ -12,6 +12,7 @@ use crate::operation::header::error::EncodeHeaderError;
 use crate::operation::traits::Actionable;
 use crate::operation::{OperationAction, OperationVersion};
 use crate::Validate;
+use crate::schema::SchemaId;
 
 use super::error::ValidateHeaderError;
 
@@ -120,6 +121,9 @@ impl Actionable for Header {
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HeaderExtension {
+    #[serde(rename = "s", skip_serializing_if = "Option::is_none")]
+    pub schema_id: Option<SchemaId>,
+
     #[serde(rename = "h", skip_serializing_if = "Option::is_none")]
     pub depth: Option<u64>,
 
@@ -164,6 +168,11 @@ impl HeaderBuilder {
 
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
         self.0.previous = Some(previous.to_owned());
+        self
+    }
+
+    pub fn schema_id(mut self, schema_id: &SchemaId) -> Self {
+        self.0.schema_id = Some(schema_id.to_owned());
         self
     }
 
