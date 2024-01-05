@@ -6,7 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::{Hash, HashId};
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
 use crate::operation::header::encode::encode_header;
@@ -174,7 +173,6 @@ pub async fn send_to_store<S: OperationStore>(
 mod tests {
     use rstest::rstest;
 
-    use crate::hash::HashId;
     use crate::identity::KeyPair;
     use crate::operation::traits::Identifiable;
     use crate::operation::{Operation, OperationBuilder, OperationValue};

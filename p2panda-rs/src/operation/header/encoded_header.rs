@@ -3,11 +3,9 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
-use hex::ToHex;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::identity::SIGNATURE_SIZE;
 use crate::operation::header::decode::decode_header;
 use crate::serde::{deserialize_hex, serialize_hex};
 

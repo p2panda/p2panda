@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
-
-use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
 use crate::operation::body::plain::PlainFields;
-use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
-use crate::schema::SchemaId;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PlainOperation(

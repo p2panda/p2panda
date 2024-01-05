@@ -299,7 +299,7 @@ mod tests {
 
     use crate::document::traits::AsDocument;
     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
-    use crate::hash::{Hash, HashId};
+    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::header::HeaderAction;
     use crate::operation::traits::Identifiable;
@@ -522,7 +522,6 @@ mod tests {
     fn must_have_create_operation(
         key_pair: KeyPair,
         schema_id: SchemaId,
-        #[from(random_hash)] backlink: Hash,
         document_id: DocumentId,
         document_view_id: DocumentViewId,
     ) {

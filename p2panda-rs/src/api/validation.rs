@@ -2,16 +2,13 @@
 
 use crate::api::ValidationError;
 use crate::document::DocumentId;
-use crate::hash::{Hash, HashId};
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
-use crate::operation::header::{Header, HeaderExtension};
 use crate::operation::traits::{Actionable, Capable, Identifiable, Timestamped};
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::{Schema, SchemaId};
-use crate::{Human, Validate};
 
 use super::error::ValidatePlainOperationError;
 
@@ -91,15 +88,14 @@ mod tests {
     use crate::api::error::ValidatePlainOperationError;
     use crate::api::validate_plain_operation;
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::plain::{PlainFields, PlainOperation, PlainValue};
     use crate::operation::header::HeaderAction;
     use crate::operation::{OperationAction, OperationBuilder};
-    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::schema::{FieldType, Schema};
     use crate::test_utils::constants::test_fields;
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, hash, key_pair, schema,
+        document_id, document_view_id, key_pair, schema,
     };
 
     const TIMESTAMP: u128 = 17037976940000000;
@@ -109,7 +105,6 @@ mod tests {
         key_pair: KeyPair,
         schema: Schema,
         document_id: DocumentId,
-        #[from(hash)] backlink: Hash,
         #[from(document_view_id)] previous: DocumentViewId,
     ) {
         let create_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
