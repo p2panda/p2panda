@@ -2,6 +2,7 @@
 
 use crate::api::ValidationError;
 use crate::document::DocumentId;
+use crate::hash::{Hash, HashId};
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
@@ -123,15 +124,14 @@ mod tests {
     use crate::api::error::ValidatePlainOperationError;
     use crate::api::validate_plain_operation;
     use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::plain::{PlainFields, PlainOperation, PlainValue};
     use crate::operation::header::HeaderAction;
     use crate::operation::{OperationAction, OperationBuilder};
-    use crate::schema::{FieldName, FieldType, Schema, SchemaId, SchemaName};
+    use crate::schema::{FieldType, Schema};
     use crate::test_utils::constants::test_fields;
-    use crate::test_utils::fixtures::{
-        document_id, document_view_id, hash, key_pair, random_document_view_id, schema,
-    };
+    use crate::test_utils::fixtures::{document_id, document_view_id, hash, key_pair, schema};
 
     const TIMESTAMP: u128 = 17037976940000000;
 
@@ -141,6 +141,7 @@ mod tests {
         schema: Schema,
         document_id: DocumentId,
         #[from(document_view_id)] previous: DocumentViewId,
+        #[from(hash)] backlink: Hash,
     ) {
         let create_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .fields(&test_fields())
@@ -224,8 +225,7 @@ mod tests {
             .insert("height", PlainValue::Float(187.89))
             .unwrap();
 
-        let wrong_plain_operation =
-            PlainOperation(Some(wrong_plain_fields.clone()));
+        let wrong_plain_operation = PlainOperation(Some(wrong_plain_fields.clone()));
         let error =
             validate_plain_operation(&OperationAction::Create, &wrong_plain_operation, &schema)
                 .unwrap_err();

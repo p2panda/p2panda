@@ -88,6 +88,7 @@ mod tests {
 
     use crate::document::traits::AsDocument;
     use crate::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
+    use crate::hash::HashId;
     use crate::identity::KeyPair;
     use crate::operation::traits::Identifiable;
     use crate::operation::{OperationBuilder, OperationFields, OperationId, OperationValue};

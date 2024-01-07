@@ -526,7 +526,8 @@ mod tests {
         key_pair: KeyPair,
         schema_id: SchemaId,
         document_id: DocumentId,
-        document_view_id: DocumentViewId,
+        #[from(random_document_view_id)] previous: DocumentViewId,
+        #[from(random_hash)] backlink: Hash,
     ) {
         let fields = vec![
             ("firstname", "Peter".into()),
@@ -537,7 +538,7 @@ mod tests {
         let update_operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
             .backlink(&backlink)
-            .previous(&document_view_id)
+            .previous(&previous)
             .timestamp(1703027623)
             .depth(1)
             .fields(&fields)
@@ -632,7 +633,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "Could not perform reducer function: Operation 5864643f4ac943869b293b761ac7365ce1b6e2b61d584aaa63b90eadf6935eb9 does not match the documents schema".to_string()
+            "Could not perform reducer function: Operation 5736b0c1834f0adc1604b40a3b9cc0424be92b1973da8071fa72e6d490c077d7 does not match the documents schema".to_string()
         );
     }
 

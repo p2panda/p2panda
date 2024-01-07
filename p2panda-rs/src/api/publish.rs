@@ -4,6 +4,7 @@ use crate::api::{
     validate_backlink, validate_plain_operation, validate_previous, DomainError, ValidationError,
 };
 use crate::document::DocumentViewId;
+use crate::hash::HashId;
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;

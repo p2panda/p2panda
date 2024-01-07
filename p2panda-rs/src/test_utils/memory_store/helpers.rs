@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
 use crate::operation::header::encode::encode_header;
@@ -88,6 +89,7 @@ pub async fn populate_store<S: OperationStore>(
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_documents {
+            let mut backlink: Option<Hash> = None;
             let mut previous: Option<DocumentViewId> = None;
             let mut document_id: Option<DocumentId> = None;
 
@@ -128,9 +130,13 @@ pub async fn populate_store<S: OperationStore>(
                     .sign(&key_pair)
                     .expect("can build operation");
 
-                store.insert_operation(&operation).await.expect("can insert operation");
+                store
+                    .insert_operation(&operation)
+                    .await
+                    .expect("can insert operation");
 
                 // Set the previous and backlink based on current operation id
+                backlink = Some(operation.id().clone().into());
                 previous = Some(operation.id().clone().into());
 
                 if index == 0 {
@@ -174,14 +180,13 @@ pub async fn send_to_store<S: OperationStore>(
 mod tests {
     use rstest::rstest;
 
+    use crate::hash::HashId;
     use crate::identity::KeyPair;
     use crate::operation::traits::Identifiable;
     use crate::operation::{Operation, OperationBuilder, OperationValue};
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
-    use crate::test_utils::fixtures::{
-        key_pair, operation_fields, populate_store_config, schema,
-    };
+    use crate::test_utils::fixtures::{key_pair, operation_fields, populate_store_config, schema};
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
