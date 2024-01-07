@@ -108,6 +108,7 @@ pub async fn populate_store<S: OperationStore>(
                     _ => {
                         operation_builder = operation_builder
                             .document_id(&document_id.clone().expect("document_id should be set"))
+                            .backlink(&backlink.expect("backlink should be set"))
                             .previous(&previous.expect("previous should be set"));
 
                         if index == (config.no_of_operations - 1) && config.with_delete {
@@ -233,6 +234,7 @@ mod tests {
 
         let update_operation: Operation = OperationBuilder::new(schema.id(), TIMESTAMP + 1)
             .document_id(&create_operation.id().clone().into())
+            .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
             .depth(1)
             .fields(&fields)

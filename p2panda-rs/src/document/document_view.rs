@@ -136,6 +136,7 @@ mod tests {
 
         let update_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
             .document_id(&create_operation.id().clone().into())
+            .backlink(&create_operation.id().as_hash())
             .previous(&DocumentViewId::new(&[create_operation.id().clone()]))
             .depth(1)
             .fields(&[(

@@ -81,6 +81,41 @@ pub fn validate_previous(
     Ok(())
 }
 
+pub fn validate_backlink(
+    operation: &(impl Identifiable + Capable + Timestamped),
+    claimed_backlink: &Hash,
+    backlink_hash: &Hash,
+    backlink_depth: u64,
+    backlink_timestamp: u128,
+) -> Result<(), ValidationError> {
+    if claimed_backlink != backlink_hash {
+        return Err(ValidationError::IncorrectBacklink(
+            operation.id().as_hash().clone(),
+            operation.public_key().clone(),
+            operation.document_id(),
+            backlink_hash.clone(),
+        )
+        .into());
+    }
+
+    if operation.timestamp() < backlink_timestamp {
+        return Err(ValidationError::TimestampLessThanBacklink(
+            operation.id().clone(),
+            operation.timestamp(),
+        )
+        .into());
+    }
+
+    if operation.depth() <= backlink_depth {
+        return Err(ValidationError::DepthLessThanBacklink(
+            operation.id().clone(),
+            operation.depth(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -92,10 +127,10 @@ mod tests {
     use crate::operation::body::plain::{PlainFields, PlainOperation, PlainValue};
     use crate::operation::header::HeaderAction;
     use crate::operation::{OperationAction, OperationBuilder};
-    use crate::schema::{FieldType, Schema};
+    use crate::schema::{FieldName, FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::test_fields;
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, key_pair, schema,
+        document_id, document_view_id, hash, key_pair, random_document_view_id, schema,
     };
 
     const TIMESTAMP: u128 = 17037976940000000;
@@ -120,6 +155,7 @@ mod tests {
 
         let update_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .document_id(&document_id)
+            .backlink(&backlink)
             .previous(&previous)
             .depth(1)
             // Update just one field
@@ -136,6 +172,7 @@ mod tests {
         let delete_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .document_id(&document_id)
             .action(HeaderAction::Delete)
+            .backlink(&backlink)
             .previous(&previous)
             .depth(1)
             .sign(&key_pair)
