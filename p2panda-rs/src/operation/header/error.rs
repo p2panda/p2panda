@@ -72,3 +72,16 @@ pub enum HeaderActionError {
     #[error("unknown operation action {0}")]
     UnknownAction(u64),
 }
+
+/// Errors from `SeqNum` struct.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum SeqNumError {
+    /// Sequence numbers are always positive.
+    #[error("sequence number can not be zero or negative")]
+    NotZeroOrNegative,
+
+    /// Conversion to u64 from string failed.
+    #[error("string contains invalid u64 value")]
+    InvalidU64String,
+}
