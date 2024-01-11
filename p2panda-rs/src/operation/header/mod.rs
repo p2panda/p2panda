@@ -10,7 +10,7 @@ mod header;
 mod seq_num;
 pub mod validate;
 
-pub use seq_num::SeqNum;
 pub use action::HeaderAction;
 pub use encoded_header::EncodedHeader;
-pub use header::{Header, HeaderBuilder, HeaderExtension, DocumentLinks};
+pub use header::{DocumentLinks, Header, HeaderBuilder, HeaderExtension};
+pub use seq_num::SeqNum;

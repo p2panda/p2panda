@@ -6,8 +6,8 @@ use crate::operation::body::EncodedBody;
 use crate::operation::header::error::ValidateHeaderError;
 use crate::operation::header::{EncodedHeader, Header};
 
-use super::DocumentLinks;
 use super::error::DocumentLinksError;
+use super::DocumentLinks;
 
 /// Checks if the operation is authentic by verifying the public key with the given signature
 /// (#E5).

@@ -6,8 +6,8 @@ use crate::hash::Hash;
 use crate::identity::{PublicKey, Signature};
 use crate::operation::{OperationAction, OperationFields, OperationId};
 
-use super::OperationVersion;
 use super::header::SeqNum;
+use super::OperationVersion;
 
 /// Methods associated with identifying an operation and it's document.
 pub trait Identifiable {
@@ -31,7 +31,7 @@ pub trait Capable: Authored {
 pub trait Authored {
     /// The public key of the keypair which signed this data.
     fn public_key(&self) -> &PublicKey;
-    
+
     /// The signature.
     fn signature(&self) -> Signature;
 }

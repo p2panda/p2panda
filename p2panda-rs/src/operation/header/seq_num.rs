@@ -105,7 +105,9 @@ impl FromStr for SeqNum {
     type Err = SeqNumError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?))
+        Ok(Self::new(
+            u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?,
+        ))
     }
 }
 
@@ -114,7 +116,9 @@ impl TryFrom<String> for SeqNum {
     type Error = SeqNumError;
 
     fn try_from(str: String) -> Result<Self, Self::Error> {
-        Ok(Self::new(u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?))
+        Ok(Self::new(
+            u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?,
+        ))
     }
 }
 
@@ -157,10 +161,7 @@ mod tests {
 
     #[test]
     fn backlink_seq_num() {
-        assert_eq!(
-            SeqNum::new(12).backlink_seq_num().unwrap(),
-            SeqNum::new(11)
-        );
+        assert_eq!(SeqNum::new(12).backlink_seq_num().unwrap(), SeqNum::new(11));
 
         assert!(SeqNum::new(0).backlink_seq_num().is_none());
     }

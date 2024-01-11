@@ -8,8 +8,8 @@ use std::fmt;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
-use crate::operation::error::FieldsError;
 use crate::operation::body::plain::PlainValue;
+use crate::operation::error::FieldsError;
 use crate::operation::{OperationFields, OperationValue};
 use crate::schema::FieldName;
 

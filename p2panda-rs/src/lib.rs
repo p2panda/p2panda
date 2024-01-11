@@ -71,8 +71,8 @@ pub mod api;
 pub mod document;
 pub mod graph;
 pub mod hash;
-pub mod operation;
 pub mod identity;
+pub mod operation;
 pub mod schema;
 #[cfg(feature = "secret-group")]
 pub mod secret_group;

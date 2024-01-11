@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use crate::operation::traits::{Fielded, Identifiable};
 use crate::operation::{OperationFields, OperationId, OperationValue};
-use crate::operation::traits::{Identifiable, Fielded};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]

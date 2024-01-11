@@ -48,4 +48,3 @@ pub fn operation_fields(
 ) -> Vec<(&'static str, OperationValue)> {
     fields
 }
-

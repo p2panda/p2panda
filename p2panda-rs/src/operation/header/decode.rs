@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::operation::header::encoded_header::EncodedHeader;
 use crate::operation::header::error::DecodeHeaderError;
 use crate::operation::header::Header;
-use crate::operation::header::encoded_header::EncodedHeader;
 
 pub fn decode_header(encoded_header: &EncodedHeader) -> Result<Header, DecodeHeaderError> {
     let bytes = encoded_header.to_bytes();

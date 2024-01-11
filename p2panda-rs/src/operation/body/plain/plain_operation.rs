@@ -18,8 +18,6 @@ impl PlainOperation {
 
 impl From<&Body> for PlainOperation {
     fn from(body: &Body) -> Self {
-        PlainOperation(
-            body.plain_fields(),
-        )
+        PlainOperation(body.plain_fields())
     }
 }

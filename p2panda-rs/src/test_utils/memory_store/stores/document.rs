@@ -89,13 +89,13 @@ impl DocumentStore for MemoryStore {
         Ok(documents)
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use std::str::FromStr;
-// 
+//
 //     use rstest::rstest;
-// 
+//
 //     use crate::document::traits::AsDocument;
 //     use crate::document::DocumentId;
 //     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
@@ -107,7 +107,7 @@ impl DocumentStore for MemoryStore {
 //     };
 //     use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
 //     use crate::test_utils::memory_store::MemoryStore;
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn gets_one_document(
@@ -118,15 +118,15 @@ impl DocumentStore for MemoryStore {
 //         let store = MemoryStore::default();
 //         let (_, documents) = populate_store(&store, &config).await;
 //         let document_id = documents[0].clone();
-// 
+//
 //         let document = store.get_document(&document_id).await.unwrap().unwrap();
-// 
+//
 //         for (key, value) in test_fields() {
 //             assert!(document.get(key).is_some());
 //             assert_eq!(document.get(key).unwrap(), &value);
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn document_does_not_exist(
@@ -138,10 +138,10 @@ impl DocumentStore for MemoryStore {
 //         let store = MemoryStore::default();
 //         populate_store(&store, &config).await;
 //         let document = store.get_document(&random_document_id).await.unwrap();
-// 
+//
 //         assert!(document.is_none());
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn updates_a_document(
@@ -153,11 +153,11 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let store = MemoryStore::default();
 //         let (key_pairs, documents) = populate_store(&store, &config).await;
-// 
+//
 //         let public_key = key_pairs[0].public_key();
 //         let document_id = documents[0].clone();
 //         let create_operation_id: OperationId = document_id.as_str().parse().unwrap();
-// 
+//
 //         let field_to_update = ("age", OperationValue::Integer(29));
 //         let update_operation = OperationBuilder::new(&schema_id)
 //             .action(OperationAction::Update)
@@ -165,18 +165,18 @@ impl DocumentStore for MemoryStore {
 //             .fields(&[field_to_update.clone()])
 //             .build()
 //             .unwrap();
-// 
+//
 //         let _ = store
 //             .insert_operation(&operation_id, &public_key, &update_operation, &document_id)
 //             .await
 //             .is_ok();
-// 
+//
 //         let document = store.get_document(&document_id).await.unwrap().unwrap();
-// 
+//
 //         assert!(document.get(field_to_update.0).is_some());
 //         assert_eq!(document.get(field_to_update.0).unwrap(), &field_to_update.1);
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn gets_documents_by_schema(
@@ -186,17 +186,17 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let store = MemoryStore::default();
 //         populate_store(&store, &config).await;
-// 
+//
 //         let schema_id = SchemaId::from_str(constants::SCHEMA_ID).unwrap();
 //         let schema_documents = store.get_documents_by_schema(&schema_id).await.unwrap();
-// 
+//
 //         assert_eq!(schema_documents.len(), 2);
-// 
+//
 //         let schema_documents = store
 //             .get_documents_by_schema(&SchemaId::SchemaDefinition(1))
 //             .await
 //             .unwrap();
-// 
+//
 //         assert_eq!(schema_documents.len(), 0);
 //     }
 // }

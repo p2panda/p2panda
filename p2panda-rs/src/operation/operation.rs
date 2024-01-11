@@ -64,7 +64,7 @@ impl Validate for Operation {
 
         // Check the header contains a schema id extension.
         if self.header().extension().schema_id.is_none() {
-            return Err(ValidateOperationError::ExpectedFields)
+            return Err(ValidateOperationError::ExpectedFields);
         }
 
         // Check that fields are provided when expected.

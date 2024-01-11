@@ -184,22 +184,22 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         })
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use std::convert::TryFrom;
-// 
+//
 //     use rstest::rstest;
-// 
+//
 //     use crate::document::{DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue};
 //     use crate::operation_v2::{OperationId, OperationValue, PinnedRelationList};
 //     use crate::schema::system::SchemaFieldView;
 //     use crate::schema::SchemaId;
 //     use crate::test_utils::fixtures::schema_id;
 //     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
-// 
+//
 //     use super::{FieldType, SchemaView};
-// 
+//
 //     #[rstest]
 //     fn from_document_view(
 //         #[from(random_operation_id)] operation_id: OperationId,
@@ -232,10 +232,10 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //         );
 //         let document_view_id = DocumentViewId::from(view_id);
 //         let document_view = DocumentView::new(&document_view_id, &venue_schema);
-// 
+//
 //         assert!(SchemaView::try_from(document_view).is_ok());
 //     }
-// 
+//
 //     #[rstest]
 //     fn field_type_from_document_view(
 //         #[from(random_operation_id)] operation_id: OperationId,
@@ -244,7 +244,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //     ) {
 //         // Create first schema field "is_accessible"
 //         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+//
 //         let mut bool_field = DocumentViewFields::new();
 //         bool_field.insert(
 //             "name",
@@ -257,18 +257,18 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             "type",
 //             DocumentViewValue::new(&operation_id, &FieldType::Boolean.into()),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &bool_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_ok());
-// 
+//
 //         let field_view = field_view.unwrap();
 //         assert_eq!(field_view.field_type(), &FieldType::Boolean);
 //         assert_eq!(field_view.name(), "is_accessible");
-// 
+//
 //         // Create second schema field "capacity"
 //         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+//
 //         let mut capacity_field = DocumentViewFields::new();
 //         capacity_field.insert(
 //             "name",
@@ -281,15 +281,15 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             "type",
 //             DocumentViewValue::new(&operation_id, &FieldType::Integer.into()),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &capacity_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_ok());
 //         assert_eq!(field_view.unwrap().field_type(), &FieldType::Integer);
-// 
+//
 //         // Create third schema field "ticket_price"
 //         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+//
 //         let mut float_field = DocumentViewFields::new();
 //         float_field.insert(
 //             "name",
@@ -302,15 +302,15 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             "type",
 //             DocumentViewValue::new(&operation_id, &FieldType::Float.into()),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &float_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_ok());
 //         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
-// 
+//
 //         // Create fourth schema field "venue_name"
 //         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+//
 //         let mut str_field = DocumentViewFields::new();
 //         str_field.insert(
 //             "name",
@@ -323,15 +323,15 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             "type",
 //             DocumentViewValue::new(&operation_id, &FieldType::String.into()),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &str_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_ok());
 //         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
-// 
+//
 //         // Create fifth schema field "address"
 //         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+//
 //         let mut relation_field = DocumentViewFields::new();
 //         relation_field.insert(
 //             "name",
@@ -347,7 +347,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //                 &FieldType::Relation(address_schema.clone()).into(),
 //             ),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &relation_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_ok());
@@ -356,7 +356,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             &FieldType::Relation(address_schema)
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     fn invalid_schema_field(
 //         #[from(random_operation_id)] operation_id: OperationId,
@@ -374,12 +374,12 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //             "type",
 //             DocumentViewValue::new(&operation_id, &OperationValue::String("hash".to_string())),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &invalid_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_err());
 //     }
-// 
+//
 //     #[rstest]
 //     fn too_many_fields(
 //         #[from(random_operation_id)] operation_id: OperationId,
@@ -408,11 +408,11 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 //                 &OperationValue::String("penguin".to_string()),
 //             ),
 //         );
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &invalid_field);
 //         let field_view = SchemaFieldView::try_from(document_view);
 //         assert!(field_view.is_err());
-// 
+//
 //         let document_view = DocumentView::new(&document_view_id, &invalid_field);
 //         let field_view = SchemaView::try_from(document_view);
 //         assert!(field_view.is_err());

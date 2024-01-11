@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryInto, TryFrom};
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -152,7 +152,6 @@ impl TryFrom<String> for PublicKey {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         PublicKey::from_str(&value)
     }
-
 }
 
 impl StdHash for PublicKey {

@@ -7,6 +7,4 @@ mod validation;
 
 pub use error::{DomainError, ValidationError};
 pub use publish::publish;
-pub use validation::{
-    validate_backlink, validate_plain_operation, validate_previous,
-};
+pub use validation::{validate_backlink, validate_plain_operation, validate_previous};

@@ -3,8 +3,8 @@
 use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::identity::PublicKey;
-use crate::operation::OperationId;
 use crate::operation::header::SeqNum;
+use crate::operation::OperationId;
 use crate::schema::SchemaId;
 
 #[derive(thiserror::Error, Debug)]

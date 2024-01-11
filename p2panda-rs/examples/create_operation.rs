@@ -5,7 +5,7 @@ use p2panda_rs::operation::body::encode::encode_body;
 use p2panda_rs::operation::header::encode::encode_header;
 use p2panda_rs::operation::OperationBuilder;
 
-const TIMESTAMP: u64 = 1704983260; 
+const TIMESTAMP: u64 = 1704983260;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Id of the schema which describes the data we want to publish. This should
