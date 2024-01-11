@@ -301,10 +301,10 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::hash::{Hash, HashId};
     use crate::identity::KeyPair;
-    use crate::operation::header::HeaderAction;
     use crate::operation::traits::Identifiable;
     use crate::operation::{OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
+    use crate::test_utils::constants::TIMESTAMP;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, key_pair, random_document_view_id, random_hash, schema,
         schema_id,
@@ -312,8 +312,6 @@ mod tests {
     use crate::Human;
 
     use super::DocumentBuilder;
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     fn string_representation(key_pair: KeyPair, schema_id: SchemaId) {
@@ -327,16 +325,16 @@ mod tests {
 
         assert_eq!(
             document.to_string(),
-            "a095a6a3dbbc17f1ab96bd8479a7742082d656f4bf352fda82872e17518c562b"
+            "60efbd215223228a7b100e018a221860a217b50a3d9756076ac2eddbe95a334c"
         );
 
         // Short string representation
-        assert_eq!(document.display(), "<Document 8c562b>");
+        assert_eq!(document.display(), "<Document 5a334c>");
 
         // Make sure the id is matching
         assert_eq!(
             document.id().as_str(),
-            "a095a6a3dbbc17f1ab96bd8479a7742082d656f4bf352fda82872e17518c562b"
+            "60efbd215223228a7b100e018a221860a217b50a3d9756076ac2eddbe95a334c"
         );
     }
 
@@ -383,7 +381,7 @@ mod tests {
             .backlink(panda_operation_1.id().as_hash())
             .previous(&panda_operation_1.id().clone().into())
             .timestamp(1703027624)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
             .sign(&panda)
             .unwrap();
@@ -400,7 +398,7 @@ mod tests {
             .document_id(&document_id)
             .previous(&panda_operation_1.id().clone().into())
             .timestamp(1703027625)
-            .depth(1)
+            .seq_num(1)
             .fields(&[(
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
@@ -424,7 +422,7 @@ mod tests {
                 panda_operation_2.id().clone(),
             ]))
             .timestamp(1703027626)
-            .depth(2)
+            .seq_num(2)
             .fields(&[(
                 "name",
                 OperationValue::String("Polar Bear Cafe".to_string()),
@@ -444,7 +442,7 @@ mod tests {
             .backlink(penguin_operation_2.id().as_hash())
             .previous(&penguin_operation_2.id().clone().into())
             .timestamp(1703027627)
-            .depth(3)
+            .seq_num(3)
             .fields(&[(
                 "name",
                 OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
@@ -540,7 +538,7 @@ mod tests {
             .backlink(&backlink)
             .previous(&previous)
             .timestamp(1703027623)
-            .depth(1)
+            .seq_num(1)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -579,7 +577,7 @@ mod tests {
             .backlink(&create_operation.id().as_hash())
             .previous(&document_view_id)
             .timestamp(1703027624)
-            .depth(1)
+            .seq_num(1)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -623,7 +621,7 @@ mod tests {
             .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
             .timestamp(1703027624)
-            .depth(1)
+            .seq_num(1)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -633,7 +631,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "Could not perform reducer function: Operation 5736b0c1834f0adc1604b40a3b9cc0424be92b1973da8071fa72e6d490c077d7 does not match the documents schema".to_string()
+            "Could not perform reducer function: Operation 153a72803eada1493c159370f17056ec5c3e784f7fb2510e214a6a9bece82ad9 does not match the documents schema".to_string()
         );
     }
 
@@ -653,11 +651,11 @@ mod tests {
 
         let create_operation_id = create_operation.id();
         let delete_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
-            .action(HeaderAction::Delete)
             .document_id(&create_operation_id.clone().into())
             .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
-            .depth(1)
+            .tombstone()
+            .seq_num(1)
             .sign(&key_pair)
             .unwrap();
 
@@ -737,7 +735,7 @@ mod tests {
             .backlink(panda_operation_1.id().as_hash())
             .previous(&panda_operation_1.id().clone().into())
             .timestamp(1703027624)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
             .sign(&panda)
             .unwrap();
@@ -753,7 +751,7 @@ mod tests {
         let penguin_operation_1 = OperationBuilder::new(schema.id(), TIMESTAMP + 2)
             .document_id(&document_id)
             .previous(&panda_operation_2.id().clone().into())
-            .depth(1)
+            .seq_num(1)
             .timestamp(1703027625)
             .fields(&[(
                 "name",
@@ -824,18 +822,18 @@ mod tests {
             .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .depth(1)
+            .seq_num(1)
             .sign(&panda)
             .unwrap();
 
         operations.push(update_operation.clone());
 
         let delete_operation = OperationBuilder::new(schema.id(), TIMESTAMP + 2)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(update_operation.id().as_hash())
             .previous(&update_operation.id().clone().into())
-            .depth(2)
+            .tombstone()
+            .seq_num(2)
             .sign(&panda)
             .unwrap();
 
@@ -912,7 +910,7 @@ mod tests {
                 .backlink(&create_operation_id.as_hash())
                 .previous(&create_operation_id.clone().into())
                 .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-                .depth(1)
+                .seq_num(1)
                 .sign(&key_pair)
                 .unwrap();
 
@@ -926,7 +924,7 @@ mod tests {
             .backlink(&create_operation_id.as_hash())
             .previous(&incorrect_previous)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .depth(1)
+            .seq_num(1)
             .sign(&key_pair)
             .unwrap();
 
@@ -936,11 +934,11 @@ mod tests {
 
         // Now we apply a correct delete operation.
         let delete_operation = OperationBuilder::new(&schema_id, TIMESTAMP + 1)
-            .action(HeaderAction::Delete)
             .document_id(&create_operation_id.clone().into())
             .backlink(&create_operation_id.as_hash())
             .previous(&create_operation_id.clone().into())
-            .depth(1)
+            .tombstone()
+            .seq_num(1)
             .sign(&key_pair)
             .unwrap();
 
@@ -952,7 +950,7 @@ mod tests {
             .document_id(&create_operation_id.clone().into())
             .backlink(&create_operation_id.as_hash())
             .previous(&delete_view_id)
-            .depth(2)
+            .seq_num(2)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
             .sign(&key_pair)
             .unwrap();

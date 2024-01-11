@@ -110,7 +110,7 @@ impl OperationStore for MemoryStore {
             .cloned()
             .collect();
 
-        operations.sort_by(|a, b| a.depth().cmp(&b.depth()));
+        operations.sort_by(|a, b| a.seq_num().cmp(b.seq_num()));
         Ok(operations.last().cloned())
     }
 }

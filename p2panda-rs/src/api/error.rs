@@ -4,6 +4,7 @@ use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::OperationId;
+use crate::operation::header::SeqNum;
 use crate::schema::SchemaId;
 
 #[derive(thiserror::Error, Debug)]
@@ -60,23 +61,23 @@ pub enum ValidationError {
     #[error(
         "Operation {0} contains a timestamp {1} which is not greater than those found in previous"
     )]
-    TimestampLessThanPrevious(OperationId, u128),
+    TimestampLessThanPrevious(OperationId, u64),
 
     /// An operation was found with a timestamp not greater than the one in it's backlink.
     #[error(
         "Operation {0} contains a timestamp {1} which is not greater than it's backlink timestamp"
     )]
-    TimestampLessThanBacklink(OperationId, u128),
+    TimestampLessThanBacklink(OperationId, u64),
 
     /// An operation was found with a depth not greater than the one in it's previous operations.
     #[error(
         "Operation {0} contains a depth {1} which is not greater than those found in previous"
     )]
-    DepthLessThanPrevious(OperationId, u64),
+    DepthLessThanPrevious(OperationId, SeqNum),
 
     /// An operation was found with a depth not greater than the one in it's backlink.
     #[error("Operation {0} contains a depth {1} which is not greater than it's backlink depth")]
-    DepthLessThanBacklink(OperationId, u64),
+    DepthLessThanBacklink(OperationId, SeqNum),
 
     /// Error coming from the operation store.
     #[error(transparent)]
@@ -113,8 +114,4 @@ pub enum DomainError {
     /// Error occurring when validating headers.
     #[error(transparent)]
     ValidateHeaderError(#[from] crate::operation::header::error::ValidateHeaderError),
-
-    /// Error occurring when validating header extensions.
-    #[error(transparent)]
-    ValidateHeaderExtensionsError(#[from] crate::operation::error::ValidateHeaderExtensionsError),
 }

@@ -7,6 +7,7 @@ use crate::identity::{PublicKey, Signature};
 use crate::operation::{OperationAction, OperationFields, OperationId};
 
 use super::OperationVersion;
+use super::header::SeqNum;
 
 /// Methods associated with identifying an operation and it's document.
 pub trait Identifiable {
@@ -22,8 +23,8 @@ pub trait Capable: Authored {
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash>;
 
-    /// The distance (via the longest path) from this operation to the root of the operation graph.
-    fn depth(&self) -> u64;
+    /// Sequence number of this operation.
+    fn seq_num(&self) -> SeqNum;
 }
 
 /// Methods available on signed data.
@@ -38,7 +39,7 @@ pub trait Authored {
 /// Method available on data which has a timestamp.
 pub trait Timestamped {
     /// Timestamp when this operation was published.
-    fn timestamp(&self) -> u128;
+    fn timestamp(&self) -> u64;
 }
 
 /// Methods for retrieving metadata of an operations payload.

@@ -9,16 +9,16 @@ use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
 use crate::operation::error::{OperationBuilderError, ValidateOperationError};
 use crate::operation::header::encode::{encode_header, sign_header};
-use crate::operation::header::{Header, HeaderAction, HeaderExtension};
-use crate::operation::traits::{Actionable, Authored, Capable, Payloaded};
+use crate::operation::header::validate::validate_document_links;
+use crate::operation::header::{Header, HeaderExtension, SeqNum};
+use crate::operation::traits::{
+    Actionable, Authored, Capable, Fielded, Identifiable, Payloaded, Timestamped,
+};
 use crate::operation::{
     OperationAction, OperationFields, OperationId, OperationValue, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
-
-use super::traits::{Fielded, Identifiable, Timestamped};
-use super::validation::validate_header_extensions;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operation(pub OperationId, pub Header, pub Body);
@@ -43,8 +43,14 @@ impl Operation {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct OperationBuilder {
+    timestamp: u64,
+    seq_num: SeqNum,
+    backlink: Option<Hash>,
+    document_id: Option<DocumentId>,
+    previous: Option<DocumentViewId>,
+    tombstone: bool,
     header_extension: HeaderExtension,
     body: Body,
 }
@@ -53,13 +59,15 @@ impl Validate for Operation {
     type Error = ValidateOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // Validation steps performed:
-        // - check the header follows minimum requirements (see Header::Validate)
-        // - validate that all expected header extensions are present
-        // - CREATE and UPDATE operations must contain fields
-        // - DELETE operations must not contain fields
+        // Check the header represents a valid operation action.
         self.header().validate()?;
-        validate_header_extensions(self.header())?;
+
+        // Check the header contains a schema id extension.
+        if self.header().extension().schema_id.is_none() {
+            return Err(ValidateOperationError::ExpectedFields)
+        }
+
+        // Check that fields are provided when expected.
         match (self.action(), self.fields()) {
             (OperationAction::Create | OperationAction::Update, None) => {
                 Err(ValidateOperationError::ExpectedFields)
@@ -72,24 +80,18 @@ impl Validate for Operation {
 
 impl OperationBuilder {
     /// Returns a new instance of `OperationBuilder`.
-    pub fn new(schema_id: &SchemaId, timestamp: u128) -> Self {
+    pub fn new(schema_id: &SchemaId, timestamp: u64) -> Self {
         let mut header_extension = HeaderExtension::default();
-        header_extension.timestamp = Some(timestamp);
-        header_extension.depth = Some(0);
         header_extension.schema_id = Some(schema_id.to_owned());
 
         let body = Body(None);
 
         Self {
+            timestamp,
             header_extension,
             body,
+            ..Default::default()
         }
-    }
-
-    /// Set operation action.
-    pub fn action(mut self, action: HeaderAction) -> Self {
-        self.header_extension.action = Some(action);
-        self
     }
 
     /// Set operation schema.
@@ -100,31 +102,37 @@ impl OperationBuilder {
 
     /// Set operation backlink.
     pub fn backlink(mut self, backlink: &Hash) -> Self {
-        self.header_extension.backlink = Some(backlink.to_owned());
+        self.backlink = Some(backlink.to_owned());
         self
     }
 
     /// Set previous operations.
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
-        self.header_extension.previous = Some(previous.to_owned());
+        self.previous = Some(previous.to_owned());
         self
     }
 
     /// Set unix timestamp in nanoseconds.
-    pub fn timestamp(mut self, timestamp: u128) -> Self {
-        self.header_extension.timestamp = Some(timestamp);
+    pub fn timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = timestamp;
         self
     }
 
     /// Set document id.
     pub fn document_id(mut self, document_id: &DocumentId) -> Self {
-        self.header_extension.document_id = Some(document_id.to_owned());
+        self.document_id = Some(document_id.to_owned());
         self
     }
 
-    /// Set depth.
-    pub fn depth(mut self, depth: u64) -> Self {
-        self.header_extension.depth = Some(depth);
+    /// Set seq_num.
+    pub fn seq_num(mut self, seq_num: u64) -> Self {
+        self.seq_num = SeqNum::new(seq_num);
+        self
+    }
+
+    /// Set tombstone to true.
+    pub fn tombstone(mut self) -> Self {
+        self.tombstone = true;
         self
     }
 
@@ -151,8 +159,18 @@ impl OperationBuilder {
     /// This method checks if the given previous operations and operation fields are matching the
     /// regarding operation action.
     pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
+        let document_links = validate_document_links(self.document_id, self.previous)?;
         let payload = encode_body(&self.body)?;
-        let header = sign_header(self.header_extension, &payload, key_pair)?;
+        let header = sign_header(
+            self.timestamp,
+            self.seq_num,
+            self.backlink,
+            document_links,
+            self.tombstone,
+            self.header_extension,
+            &payload,
+            key_pair,
+        )?;
         let header_hash = encode_header(&header)?.hash();
         let operation = Operation::new(header_hash.into(), header, self.body)?;
         Ok(operation)
@@ -167,7 +185,7 @@ impl Identifiable for Operation {
 
     /// Id of the document this operation belongs to.
     fn document_id(&self) -> DocumentId {
-        match self.header().extension().document_id.as_ref() {
+        match self.header().document_id() {
             Some(document_id) => document_id.clone(),
             None => DocumentId::new(self.id()),
         }
@@ -176,22 +194,21 @@ impl Identifiable for Operation {
 
 impl Timestamped for Operation {
     /// Timestamp
-    fn timestamp(&self) -> u128 {
-        // Safely unwrap as validation was performed already.
-        self.header().4.timestamp.unwrap()
+    fn timestamp(&self) -> u64 {
+        self.header().timestamp()
     }
 }
 
 impl Capable for Operation {
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash> {
-        self.header().4.backlink.as_ref()
+        self.header().backlink()
     }
 
-    /// The distance (via the longest path) from this operation to the root of the operation graph.
-    fn depth(&self) -> u64 {
+    /// Sequence number of this operation.
+    fn seq_num(&self) -> SeqNum {
         // Safely unwrap as validation performed already.
-        self.header().4.depth.unwrap()
+        self.header().seq_num()
     }
 }
 
@@ -203,16 +220,12 @@ impl Actionable for Operation {
 
     /// Returns the operation action.
     fn action(&self) -> OperationAction {
-        match (self.header().extension().action, self.depth()) {
-            (None, 0) => OperationAction::Create,
-            (None, _) => OperationAction::Update,
-            (Some(HeaderAction::Delete), _) => OperationAction::Delete,
-        }
+        self.header().action()
     }
 
     /// Returns a list of previous operations.
     fn previous(&self) -> Option<&DocumentViewId> {
-        self.header().extension().previous.as_ref()
+        self.header().previous()
     }
 }
 
@@ -269,16 +282,15 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::body::traits::Schematic;
     use crate::operation::header::HeaderAction;
-    use crate::operation::traits::{Actionable, Capable, Fielded, Identifiable};
+    use crate::operation::traits::{Actionable, Capable, Fielded, Identifiable, Timestamped};
     use crate::operation::{
         OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
     };
     use crate::schema::SchemaId;
+    use crate::test_utils::constants::TIMESTAMP;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, key_pair, random_hash, schema_id,
     };
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     fn operation_builder_create(key_pair: KeyPair, schema_id: SchemaId) {
@@ -299,8 +311,8 @@ mod tests {
         assert_eq!(operation.document_id(), DocumentId::new(operation.id()));
         assert_eq!(operation.backlink(), None);
         assert_eq!(operation.previous(), None);
-        assert_eq!(operation.depth(), 0);
-        assert!(operation.header().extension().timestamp.is_some());
+        assert_eq!(operation.seq_num(), 0.into());
+        assert_eq!(operation.timestamp(), TIMESTAMP);
         assert_eq!(operation.fields(), Some(&fields.into()));
     }
 
@@ -320,7 +332,7 @@ mod tests {
         let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
             .fields(&fields)
             .sign(&key_pair)
             .unwrap();
@@ -330,8 +342,8 @@ mod tests {
         assert_eq!(operation.schema_id(), &schema_id);
         assert_eq!(operation.document_id(), document_id);
         assert_eq!(operation.previous(), Some(&document_view_id));
-        assert_eq!(operation.depth(), 1);
-        assert!(operation.header().extension().timestamp.is_some());
+        assert_eq!(operation.seq_num(), 1.into());
+        assert_eq!(operation.timestamp(), TIMESTAMP);
         assert_eq!(operation.fields(), Some(&fields.into()));
     }
 
@@ -343,10 +355,10 @@ mod tests {
         document_view_id: DocumentViewId,
     ) {
         let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
+            .tombstone()
             .sign(&key_pair)
             .unwrap();
 
@@ -355,8 +367,8 @@ mod tests {
         assert_eq!(operation.schema_id(), &schema_id);
         assert_eq!(operation.document_id(), document_id);
         assert_eq!(operation.previous(), Some(&document_view_id));
-        assert_eq!(operation.depth(), 1);
-        assert!(operation.header().extension().timestamp.is_some());
+        assert_eq!(operation.seq_num(), 1.into());
+        assert_eq!(operation.timestamp(), TIMESTAMP);
         assert_eq!(operation.fields(), None);
     }
 
@@ -388,9 +400,9 @@ mod tests {
             .sign(&key_pair)
             .is_err());
 
-        // CREATE operations must not contain non-zero depth
+        // CREATE operations must not contain non-zero seq_num
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
@@ -404,7 +416,7 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_ok());
@@ -414,27 +426,17 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_ok());
-
-        // UPDATE operation mut have non-zero depth
-        assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .document_id(&document_id)
-            .backlink(&backlink)
-            .previous(&document_view_id)
-            .depth(0)
-            .fields(&[("year", 2020.into())])
-            .sign(&key_pair)
-            .is_err());
 
         // UPDATE operations must have fields
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
             .sign(&key_pair)
             .is_err());
 
@@ -442,7 +444,7 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .document_id(&document_id)
             .backlink(&backlink)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
@@ -451,66 +453,56 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
             .fields(&[("year", 2020.into())])
             .sign(&key_pair)
             .is_err());
 
         // correct DELETE operation
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
+            .tombstone()
             .sign(&key_pair)
             .is_ok());
 
         // DELETE operation may contain backlink
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .depth(1)
+            .tombstone()
+            .seq_num(1)
             .sign(&key_pair)
             .is_ok());
 
-        // DELETE operation must have non-zero depth
-        assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
-            .document_id(&document_id)
-            .backlink(&backlink)
-            .previous(&document_view_id)
-            .depth(0)
-            .sign(&key_pair)
-            .is_err());
-
         // DELETE operations must not have fields
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&document_view_id)
+            .tombstone()
             .fields(&[("year", 2020.into())])
-            .depth(1)
+            .seq_num(1)
             .sign(&key_pair)
             .is_err());
 
         // DELETE operations must have previous
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .document_id(&document_id)
             .backlink(&backlink)
-            .depth(1)
+            .seq_num(1)
+            .tombstone()
             .sign(&key_pair)
             .is_err());
 
         // DELETE operations must have document id
         assert!(OperationBuilder::new(&schema_id, TIMESTAMP)
-            .action(HeaderAction::Delete)
             .backlink(&backlink)
             .previous(&document_view_id)
-            .depth(1)
+            .seq_num(1)
+            .tombstone()
             .sign(&key_pair)
             .is_err());
     }

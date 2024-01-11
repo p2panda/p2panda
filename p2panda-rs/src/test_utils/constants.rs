@@ -10,6 +10,9 @@ use crate::operation::OperationValue;
 use crate::schema::Schema;
 use crate::test_utils::fixtures::{self, schema_fields, schema_id};
 
+/// A useful u64 unix epoch timestamp in seconds.
+pub const TIMESTAMP: u64 = 1704983260;
+
 /// Hash value, used when a hash is needed for testing. It's the default hash in fixtures
 /// when a custom value isn't specified.
 pub const HASH: &str = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";

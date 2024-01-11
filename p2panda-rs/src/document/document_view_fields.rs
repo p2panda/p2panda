@@ -118,10 +118,9 @@ mod tests {
     use crate::operation::traits::{Fielded, Identifiable};
     use crate::operation::{OperationBuilder, OperationId, OperationValue};
     use crate::schema::SchemaId;
+    use crate::test_utils::constants::TIMESTAMP;
     use crate::test_utils::fixtures::random_operation_id;
     use crate::test_utils::fixtures::{key_pair, schema_id};
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {

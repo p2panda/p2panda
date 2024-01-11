@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
@@ -11,7 +12,7 @@ use crate::operation::header::error::SeqNumError;
 use crate::serde::StringOrU64;
 
 /// Start counting entries from here.
-pub const FIRST_SEQ_NUM: u64 = 1;
+pub const FIRST_SEQ_NUM: u64 = 0;
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, Ord, PartialOrd, StdHash)]
@@ -28,17 +29,13 @@ impl SeqNum {
     /// use p2panda_rs::entry::SeqNum;
     ///
     /// // Generate new sequence number
-    /// let seq_num = SeqNum::new(2)?;
+    /// let seq_num = SeqNum::new(2);
     ///
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(value: u64) -> Result<Self, SeqNumError> {
-        if value < FIRST_SEQ_NUM {
-            Err(SeqNumError::NotZeroOrNegative)
-        } else {
-            Ok(Self(value))
-        }
+    pub fn new(value: u64) -> Self {
+        Self(value)
     }
 
     /// Return sequence number of the previous entry (backlink).
@@ -51,24 +48,19 @@ impl SeqNum {
     /// use p2panda_rs::entry::SeqNum;
     ///
     /// // Return backlink (sequence number of the previous entry)
-    /// let seq_num = SeqNum::new(2)?;
+    /// let seq_num = SeqNum::new(2);
     /// let backlink = seq_num.backlink_seq_num();
     ///
-    /// assert_eq!(backlink, Some(SeqNum::new(1)?));
+    /// assert_eq!(backlink, Some(SeqNum::new(1)));
     /// # Ok(())
     /// # }
     /// ```
     pub fn backlink_seq_num(&self) -> Option<Self> {
-        Self::new(self.0 - 1).ok()
-    }
-
-    /// Return sequence number of the lipmaa entry (skiplink).
-    ///
-    /// See [Bamboo] specification for more details about how skiplinks are calculated.
-    ///
-    /// [Bamboo]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
-    pub fn skiplink_seq_num(&self) -> Option<Self> {
-        Some(Self(lipmaa(self.0)))
+        if self.0 == FIRST_SEQ_NUM {
+            None
+        } else {
+            Some(Self::new(self.0 - 1))
+        }
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -84,7 +76,7 @@ impl SeqNum {
 
 impl Default for SeqNum {
     fn default() -> Self {
-        Self::new(FIRST_SEQ_NUM).unwrap()
+        Self::new(FIRST_SEQ_NUM)
     }
 }
 
@@ -102,10 +94,8 @@ impl Iterator for SeqNum {
     }
 }
 
-impl TryFrom<u64> for SeqNum {
-    type Error = SeqNumError;
-
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
+impl From<u64> for SeqNum {
+    fn from(value: u64) -> Self {
         Self::new(value)
     }
 }
@@ -115,7 +105,7 @@ impl FromStr for SeqNum {
     type Err = SeqNumError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?)
+        Ok(Self::new(u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?))
     }
 }
 
@@ -124,7 +114,7 @@ impl TryFrom<String> for SeqNum {
     type Error = SeqNumError;
 
     fn try_from(str: String) -> Result<Self, Self::Error> {
-        Self::new(u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?)
+        Ok(Self::new(u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?))
     }
 }
 
@@ -134,6 +124,12 @@ impl<'de> Deserialize<'de> for SeqNum {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_any(StringOrU64::<SeqNum>::new())
+    }
+}
+
+impl Display for SeqNum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }
 
@@ -147,14 +143,8 @@ mod tests {
     use super::SeqNum;
 
     #[test]
-    fn validate() {
-        assert!(SeqNum::new(0).is_err());
-        assert!(SeqNum::new(100).is_ok());
-    }
-
-    #[test]
     fn iterator() {
-        let mut seq_num = SeqNum::new(1).unwrap();
+        let mut seq_num = SeqNum::new(1);
 
         assert_eq!(Some(SeqNum(2)), seq_num.next());
         assert_eq!(Some(SeqNum(3)), seq_num.next());
@@ -166,21 +156,13 @@ mod tests {
     }
 
     #[test]
-    fn skiplink_seq_num() {
-        assert_eq!(
-            SeqNum::new(13).unwrap().skiplink_seq_num().unwrap(),
-            SeqNum::new(4).unwrap()
-        );
-    }
-
-    #[test]
     fn backlink_seq_num() {
         assert_eq!(
-            SeqNum::new(12).unwrap().backlink_seq_num().unwrap(),
-            SeqNum::new(11).unwrap()
+            SeqNum::new(12).backlink_seq_num().unwrap(),
+            SeqNum::new(11)
         );
 
-        assert!(SeqNum::new(1).unwrap().backlink_seq_num().is_none());
+        assert!(SeqNum::new(0).backlink_seq_num().is_none());
     }
 
     #[test]
@@ -193,12 +175,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("1", Some(SeqNum::new(1).unwrap()))]
-    #[case(12, Some(SeqNum::new(12).unwrap()))]
+    #[case("0", Some(SeqNum::new(0)))]
+    #[case(12, Some(SeqNum::new(12)))]
     #[case("-1", None)]
     #[case(-12, None)]
     #[case("18446744073709551616", None)] // u64::MAX + 1
-    #[case("0", None)]
     #[case("Not a sequence number", None)]
     fn deserialize_str_and_u64(
         #[case] value: impl Serialize + Sized,

@@ -10,7 +10,6 @@ use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::encode::encode_body;
 use crate::operation::header::encode::encode_header;
-use crate::operation::header::HeaderAction;
 use crate::operation::traits::Identifiable;
 use crate::operation::{Operation, OperationBuilder, OperationValue};
 use crate::schema::Schema;
@@ -88,20 +87,24 @@ pub async fn populate_store<S: OperationStore>(
     let key_pairs = many_key_pairs(config.no_of_public_keys);
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
-        for _log_id in 0..config.no_of_documents {
+        // safely unwrap as we expect all times to be greater than "1970-01-01 00:00:00 UTC"
+        let mut timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        for _ in 0..config.no_of_documents {
             let mut backlink: Option<Hash> = None;
             let mut previous: Option<DocumentViewId> = None;
             let mut document_id: Option<DocumentId> = None;
 
-            for index in 0..config.no_of_operations {
-                // safely unwrap as we expect all times to be greater than "1970-01-01 00:00:00 UTC"
-                let timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos();
+            // We increment the timestamp for each document so that they each have a unique hash
+            // for their document id.
+            timestamp += 1;
 
+            for index in 0..config.no_of_operations {
                 let mut operation_builder =
-                    OperationBuilder::new(config.schema.id(), timestamp).depth(index as u64);
+                    OperationBuilder::new(config.schema.id(), timestamp).seq_num(index as u64);
 
                 operation_builder = match index {
                     // CREATE operation
@@ -115,7 +118,7 @@ pub async fn populate_store<S: OperationStore>(
 
                         if index == (config.no_of_operations - 1) && config.with_delete {
                             // additionally set action on DELETE operations
-                            operation_builder = operation_builder.action(HeaderAction::Delete);
+                            operation_builder = operation_builder.tombstone();
                         } else {
                             // otherwise set fields on UPDATE operations
                             operation_builder =
@@ -186,13 +189,12 @@ mod tests {
     use crate::operation::{Operation, OperationBuilder, OperationValue};
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
+    use crate::test_utils::constants::TIMESTAMP;
     use crate::test_utils::fixtures::{key_pair, operation_fields, populate_store_config, schema};
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::MemoryStore;
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     #[tokio::test]
@@ -241,7 +243,7 @@ mod tests {
             .document_id(&create_operation.id().clone().into())
             .backlink(create_operation.id().as_hash())
             .previous(&create_operation.id().clone().into())
-            .depth(1)
+            .seq_num(1)
             .fields(&fields)
             .sign(&key_pair_1)
             .unwrap();

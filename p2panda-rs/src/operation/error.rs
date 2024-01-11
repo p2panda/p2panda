@@ -14,48 +14,9 @@ pub enum OperationBuilderError {
 
     #[error(transparent)]
     EncodeHeader(#[from] crate::operation::header::error::EncodeHeaderError),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ValidateHeaderExtensionsError {
-    /// Expect `timestamp` on all operations.
-    #[error("expected 'timestamp' in operation header")]
-    ExpectedTimestamp,
-
-    /// Expect `schema_id` on all operations.
-    #[error("expected 'schema_id' in operation header")]
-    ExpectedSchemaId,
-
-    /// Expect `depth` on all operations.
-    #[error("expected 'depth' in operation header")]
-    ExpectedDepth,
-
-    /// Expected `previous` in UPDATE or DELETE operation.
-    #[error("expected 'previous' in UPDATE or DELETE operation")]
-    ExpectedPreviousOperations,
-
-    /// Unexpected `previous` in CREATE operation.
-    #[error("unexpected 'previous' in CREATE operation")]
-    UnexpectedPreviousOperations,
-
-    /// Expected `backlink` in UPDATE or DELETE operation.
-    #[error("expected 'backlink' in UPDATE or DELETE operation")]
-    ExpectedBacklink,
-
-    /// Unexpected `backlink` in CREATE operation.
-    #[error("unexpected 'backlink' in CREATE operation")]
-    UnexpectedBacklink,
-
-    /// Expected 'depth' to be 0 for CREATE operation.
-    #[error("expected 'depth' to be 0 for CREATE operation")]
-    ExpectedZeroDepth,
-
-    /// Expected 'depth' to be to be non-zero u64 for UPDATE and DELETE operations.
-    #[error("expected 'depth' to be non-zero u64 for UPDATE and DELETE operations")]
-    ExpectedNonZeroDepth,
 
     #[error(transparent)]
-    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
+    DocumentLinks(#[from] crate::operation::header::error::DocumentLinksError),
 }
 
 #[derive(Error, Debug)]
@@ -68,11 +29,12 @@ pub enum ValidateOperationError {
     #[error("unexpected 'fields' in DELETE operation")]
     UnexpectedFields,
 
-    #[error(transparent)]
-    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
+    /// Expect `schema_id` on all operations.
+    #[error("expected 'schema_id' in operation header")]
+    ExpectedSchemaId,
 
     #[error(transparent)]
-    HeaderExtensionValidation(#[from] crate::operation::error::ValidateHeaderExtensionsError),
+    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
 }
 
 /// Error types for methods of plain fields or operation fields.

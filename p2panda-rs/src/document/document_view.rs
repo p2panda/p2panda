@@ -93,10 +93,9 @@ mod tests {
     use crate::operation::traits::Identifiable;
     use crate::operation::{OperationBuilder, OperationFields, OperationId, OperationValue};
     use crate::schema::SchemaId;
+    use crate::test_utils::constants::TIMESTAMP;
     use crate::test_utils::fixtures::{key_pair, operation_fields, schema_id};
     use crate::Human;
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     fn from_single_create_op(
@@ -139,7 +138,7 @@ mod tests {
             .document_id(&create_operation.id().clone().into())
             .backlink(&create_operation.id().as_hash())
             .previous(&DocumentViewId::new(&[create_operation.id().clone()]))
-            .depth(1)
+            .seq_num(1)
             .fields(&[(
                 "username",
                 OperationValue::String("Panda Cafe!!!!".to_string()),

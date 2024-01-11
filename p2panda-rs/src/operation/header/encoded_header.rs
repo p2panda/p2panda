@@ -38,7 +38,7 @@ impl EncodedHeader {
         let mut header = decode_header(self).unwrap();
 
         // Set the signature to None
-        header.5 = None;
+        header.10 = None;
 
         // Encode again, unwrapping safely as this header is still valid.
         encode_header(&header).unwrap().to_bytes()

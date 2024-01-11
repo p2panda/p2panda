@@ -13,4 +13,4 @@ pub mod validate;
 pub use seq_num::SeqNum;
 pub use action::HeaderAction;
 pub use encoded_header::EncodedHeader;
-pub use header::{Header, HeaderBuilder, HeaderExtension};
+pub use header::{Header, HeaderBuilder, HeaderExtension, DocumentLinks};

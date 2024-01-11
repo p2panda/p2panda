@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document::{DocumentId, DocumentViewId};
 use crate::identity::{PublicKey, Signature};
 use crate::operation::body::EncodedBody;
 use crate::operation::header::error::ValidateHeaderError;
 use crate::operation::header::{EncodedHeader, Header};
+
+use super::DocumentLinks;
+use super::error::DocumentLinksError;
 
 /// Checks if the operation is authentic by verifying the public key with the given signature
 /// (#E5).
@@ -30,4 +34,16 @@ pub fn verify_payload(header: &Header, payload: &EncodedBody) -> Result<(), Vali
     }
 
     Ok(())
+}
+
+pub fn validate_document_links(
+    document_id: Option<DocumentId>,
+    previous: Option<DocumentViewId>,
+) -> Result<Option<DocumentLinks>, DocumentLinksError> {
+    match (document_id, previous) {
+        (Some(document_id), Some(previous)) => Ok(Some(DocumentLinks(document_id, previous))),
+        (None, Some(_)) => Err(DocumentLinksError::ExpectedPrevious),
+        (Some(_), None) => Err(DocumentLinksError::ExpectedDocumentId),
+        (None, None) => Ok(None),
+    }
 }

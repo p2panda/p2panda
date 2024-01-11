@@ -9,9 +9,9 @@ use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
-use crate::operation::traits::{Actionable, Authored, Identifiable, Timestamped, Capable};
 use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
+use crate::operation::traits::{Actionable, Authored, Capable, Identifiable, Timestamped};
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
@@ -62,7 +62,7 @@ pub async fn publish<S: OperationStore>(
             &operation,
             &claimed_backlink,
             &latest_operation.id().as_hash(),
-            latest_operation.depth(),
+            latest_operation.seq_num(),
             latest_operation.timestamp(),
         ),
     }?;
@@ -70,7 +70,7 @@ pub async fn publish<S: OperationStore>(
     // Validate the operations claimed and actual previous:
     // - all schema id should match the schema id of the new operation
     // - all timestamps should be lower than the new operation's timestamp
-    // - all depths should be lower than the new operation's depth
+    // - all seq_nums should be lower than the new operation's seq_num
     // - all document ids should match the document id of the new operation
     if let Some(previous) = operation.previous() {
         // Get all operations contained in this operations previous.
@@ -80,7 +80,7 @@ pub async fn publish<S: OperationStore>(
                 &operation,
                 previous.schema_id(),
                 &previous.document_id(),
-                previous.depth(),
+                previous.seq_num(),
                 previous.timestamp(),
             )?;
         }
@@ -117,11 +117,9 @@ mod tests {
     use crate::operation::header::encode::encode_header;
     use crate::operation::OperationBuilder;
     use crate::schema::Schema;
-    use crate::test_utils::constants::test_fields;
+    use crate::test_utils::constants::{test_fields, TIMESTAMP};
     use crate::test_utils::fixtures::{key_pair, schema};
     use crate::test_utils::memory_store::MemoryStore;
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     #[tokio::test]
@@ -136,14 +134,15 @@ mod tests {
         let encoded_header = encode_header(operation.header()).unwrap();
         let encoded_body = encode_body(operation.body()).unwrap();
 
-        assert!(publish(
+        let result = publish(
             &store,
             &schema,
             &encoded_header,
             &operation.body().into(),
             &encoded_body,
         )
-        .await
-        .is_ok());
+        .await;
+
+        assert!(result.is_ok(), "{:#?}", result);
     }
 }

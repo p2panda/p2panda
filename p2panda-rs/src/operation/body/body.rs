@@ -3,7 +3,7 @@
 use crate::operation::body::plain::PlainFields;
 use crate::operation::OperationFields;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Body(pub Option<OperationFields>);
 
 impl Body {

@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::body::EncodedBody;
 use crate::operation::header::error::EncodeHeaderError;
 use crate::operation::header::{EncodedHeader, Header, HeaderExtension};
 use crate::operation::OperationVersion;
 
+use super::header::DocumentLinks;
+use super::{seq_num, SeqNum};
+
 pub fn sign_header(
+    timestamp: u64,
+    seq_num: SeqNum,
+    backlink: Option<Hash>,
+    document_links: Option<DocumentLinks>,
+    tombstone: bool,
     extension: HeaderExtension,
     payload: &EncodedBody,
     key_pair: &KeyPair,
@@ -16,13 +25,18 @@ pub fn sign_header(
         key_pair.public_key(),
         payload.hash(),
         payload.size(),
+        timestamp,
+        seq_num,
+        backlink,
+        document_links,
+        tombstone,
         extension,
         None,
     );
 
     // @TODO: we're signing the CBOR encoded bytes here, not convinced this is the desired approach.
     let unsigned_encoded_header = encode_header(&header)?;
-    header.5 = Some(key_pair.sign(&unsigned_encoded_header.to_bytes()));
+    header.10 = Some(key_pair.sign(&unsigned_encoded_header.to_bytes()));
 
     Ok(header)
 }

@@ -3,6 +3,29 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+pub enum DocumentLinksError {
+    /// Document id was set but not previous.
+    #[error("if document id is set then previous is also expected")]
+    ExpectedPrevious,
+
+    /// previous was set but not document id.
+    #[error("if previous is set then document id is also expected")]
+    ExpectedDocumentId,
+}
+
+#[derive(Error, Debug)]
+pub enum HeaderBuilderError {
+    #[error(transparent)]
+    EncodeHeaderError(#[from] EncodeHeaderError),
+
+    #[error(transparent)]
+    ValidateHeaderError(#[from] ValidateHeaderError),
+
+    #[error(transparent)]
+    DocumentLinksError(#[from] DocumentLinksError),
+}
+
+#[derive(Error, Debug)]
 pub enum EncodeHeaderError {
     /// CBOR encoder failed critically due to an IO issue.
     #[error("cbor encoder failed {0}")]
@@ -11,9 +34,6 @@ pub enum EncodeHeaderError {
     /// CBOR encoder could not serialize this value.
     #[error("cbor encoder failed serializing value {0}")]
     EncoderFailed(String),
-
-    #[error(transparent)]
-    ValidateHeaderError(#[from] ValidateHeaderError),
 }
 
 #[derive(Error, Debug)]
@@ -48,17 +68,17 @@ pub enum ValidateHeaderError {
     #[error("body doesn't match claimed payload size in header")]
     PayloadSizeMismatch,
 
-    /// Header without document ids are considered CREATE and should not contain a backlink.
-    #[error("unexpected backlink found on CREATE header")]
-    CreateUnexpectedBacklink,
+    /// Header assumed to be CREATE cannot have a non-zero sequence number.
+    #[error("header assumed to be CREATE cannot have a non-zero sequence number")]
+    CreateUnexpectedNonZeroSeqNum,
 
-    /// Header without document ids are considered CREATE and should not contain previous.
-    #[error("unexpected previous found on CREATE header")]
-    CreateUnexpectedPrevious,
+    /// Header assumed to be UPDATE must contain document id and previous.
+    #[error("header assumed to be UPDATE must contain document id and previous")]
+    UpdateExpectedDocumentIdAndPrevious,
 
-    /// DELETE header expected to contain a document id.
-    #[error("expected document id on DELETE header")]
-    DeleteExpectedDocumentId,
+    /// DELETE header must contain document id and previous.
+    #[error("DELETE header must contain document id and previous")]
+    DeleteExpectedDocumentIdAndPrevious,
 
     /// Could not verify authorship of operation.
     #[error("signature invalid")]

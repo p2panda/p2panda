@@ -8,17 +8,38 @@ use crate::identity::{KeyPair, PublicKey, Signature};
 use crate::operation::body::EncodedBody;
 use crate::operation::header::action::HeaderAction;
 use crate::operation::header::encode::sign_header;
-use crate::operation::header::error::EncodeHeaderError;
+use crate::operation::header::error::{HeaderBuilderError, ValidateHeaderError};
+use crate::operation::header::validate::validate_document_links;
+use crate::operation::header::SeqNum;
 use crate::operation::traits::Actionable;
 use crate::operation::{OperationAction, OperationVersion};
-use crate::Validate;
 use crate::schema::SchemaId;
-
-use super::error::ValidateHeaderError;
+use crate::Validate;
 
 pub type PayloadHash = Hash;
 
 pub type PayloadSize = u64;
+
+pub type Timestamp = u64;
+
+pub type Backlink = Hash;
+
+pub type Previous = DocumentViewId;
+
+pub type Tombstone = bool;
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct DocumentLinks(pub DocumentId, pub Previous);
+
+impl DocumentLinks {
+    pub fn document_id(&self) -> &DocumentId {
+        &self.0
+    }
+
+    pub fn previous(&self) -> &Previous {
+        &self.1
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Header(
@@ -26,13 +47,18 @@ pub struct Header(
     pub PublicKey,
     pub PayloadHash,
     pub PayloadSize,
+    pub Timestamp,
+    pub SeqNum,
+    pub Option<Backlink>,
+    pub Option<DocumentLinks>,
+    pub Tombstone,
     pub HeaderExtension,
     #[serde(skip_serializing_if = "Option::is_none")] pub Option<Signature>,
 );
 
 impl Header {
     pub fn extension(&self) -> &HeaderExtension {
-        &self.4
+        &self.9
     }
 
     pub fn public_key(&self) -> &PublicKey {
@@ -47,9 +73,33 @@ impl Header {
         self.3
     }
 
+    pub fn timestamp(&self) -> u64 {
+        self.4
+    }
+
+    pub fn seq_num(&self) -> SeqNum {
+        self.5
+    }
+
+    pub fn backlink(&self) -> Option<&Hash> {
+        self.6.as_ref()
+    }
+
+    pub fn document_id(&self) -> Option<&DocumentId> {
+        self.7.as_ref().map(DocumentLinks::document_id)
+    }
+
+    pub fn previous(&self) -> Option<&Previous> {
+        self.7.as_ref().map(DocumentLinks::previous)
+    }
+
+    pub fn tombstone(&self) -> bool {
+        self.8
+    }
+
     pub fn signature(&self) -> Signature {
         // We never use an unsigned header outside of our API
-        self.5
+        self.10
             .clone()
             .expect("signature needs to be given at this point")
     }
@@ -59,35 +109,26 @@ impl Validate for Header {
     type Error = ValidateHeaderError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // The validation performed here is based on only the strictest requirements expected
-        // of a header. It is possible to build headers which may be incompatible with the current
-        // p2panda operation specification. We intentionally don't enforce these restrictions here
-        // in order to leave the option to publish custom operation header formats open.
+        let backlink = self.backlink();
+        let document_links = &self.7;
+        let tombstone = self.tombstone();
+        let seq_num = self.seq_num();
 
-        // What is validated here:
-        // - if a document id is not present, then we know this is a header for a CREATE operation
-        //   and should therefore _not_ contain a backlink or previous extension as well.
-        // - if action is DELETE then a document id _must_ also be provided.
-
-        let HeaderExtension {
-            action,
-            previous,
-            backlink,
-            document_id,
-            ..
-        } = &self.4;
-
-        match (document_id, backlink, previous) {
-            (None, Some(_), _) => Err(ValidateHeaderError::CreateUnexpectedBacklink),
-            (None, None, Some(_)) => Err(ValidateHeaderError::CreateUnexpectedPrevious),
-            (_, _, _) => Ok(()),
-        }?;
-
-        match (document_id, action) {
-            (None, Some(HeaderAction::Delete)) => {
-                Err(ValidateHeaderError::DeleteExpectedDocumentId)
+        match (seq_num, backlink, document_links, tombstone) {
+            // header for CREATE operation
+            (seq_num, None, None, false) if seq_num.is_first() => Ok(()),
+            // header for UPDATE operation
+            (_, _, Some(_), false) => Ok(()),
+            // header for DELETE operation
+            (_, _, Some(_), true) => Ok(()),
+            // invalid CREATE header with non-zero sequence number
+            (_, None, None, false) => Err(ValidateHeaderError::CreateUnexpectedNonZeroSeqNum),
+            // invalid UPDATE header with backlink but no document id or previous
+            (_, Some(_), None, false) => {
+                Err(ValidateHeaderError::UpdateExpectedDocumentIdAndPrevious)
             }
-            (_, _) => Ok(()),
+            // invalid DELETE header with backlink but no document id or previous
+            (_, _, None, true) => Err(ValidateHeaderError::DeleteExpectedDocumentIdAndPrevious),
         }
     }
 }
@@ -98,24 +139,24 @@ impl Actionable for Header {
     }
 
     fn action(&self) -> OperationAction {
-        let HeaderExtension {
-            action,
-            document_id,
-            ..
-        } = self.extension();
+        let backlink = &self.6;
+        let document_links = &self.7;
+        let tombstone = self.8;
 
-        // Action
-        match (action, document_id) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            // If correct validation was performed this case will not occur.
-            (Some(HeaderAction::Delete), None) => unreachable!(),
+        match (backlink, document_links, tombstone) {
+            // header for CREATE operation
+            (None, None, false) => OperationAction::Create,
+            // header for UPDATE operation
+            (_, Some(_), false) => OperationAction::Update,
+            // header for DELETE operation
+            (_, Some(_), true) => OperationAction::Delete,
+            // if validation was performed correctly then all other cases will not occur.
+            (_, _, _) => unreachable!(),
         }
     }
 
     fn previous(&self) -> Option<&DocumentViewId> {
-        self.extension().previous.as_ref()
+        self.7.as_ref().map(|links| &links.1)
     }
 }
 
@@ -123,66 +164,56 @@ impl Actionable for Header {
 pub struct HeaderExtension {
     #[serde(rename = "s", skip_serializing_if = "Option::is_none")]
     pub schema_id: Option<SchemaId>,
-
-    #[serde(rename = "h", skip_serializing_if = "Option::is_none")]
-    pub depth: Option<u64>,
-
-    #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
-    pub document_id: Option<DocumentId>,
-
-    #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
-    pub previous: Option<DocumentViewId>,
-
-    #[serde(rename = "b", skip_serializing_if = "Option::is_none")]
-    pub backlink: Option<Hash>,
-
-    #[serde(rename = "a", skip_serializing_if = "Option::is_none")]
-    pub action: Option<HeaderAction>,
-
-    #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
-    pub timestamp: Option<u128>,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct HeaderBuilder(HeaderExtension);
+pub struct HeaderBuilder {
+    timestamp: Timestamp,
+    seq_num: SeqNum,
+    tombstone: Tombstone,
+    document_id: Option<DocumentId>,
+    backlink: Option<Backlink>,
+    previous: Option<Previous>,
+    extension: HeaderExtension,
+}
 
 impl HeaderBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn action(mut self, action: HeaderAction) -> Self {
-        self.0.action = Some(action);
+    pub fn tombstone(mut self) -> Self {
+        self.tombstone = true;
         self
     }
 
-    pub fn depth(mut self, depth: u64) -> Self {
-        self.0.depth = Some(depth);
+    pub fn seq_num(mut self, seq_num: &SeqNum) -> Self {
+        self.seq_num = seq_num.clone();
         self
     }
 
-    pub fn timestamp(mut self, timestamp: u128) -> Self {
-        self.0.timestamp = Some(timestamp);
+    pub fn timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = timestamp;
         self
     }
 
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
-        self.0.previous = Some(previous.to_owned());
+        self.previous = Some(previous.to_owned());
         self
     }
 
     pub fn schema_id(mut self, schema_id: &SchemaId) -> Self {
-        self.0.schema_id = Some(schema_id.to_owned());
+        self.extension.schema_id = Some(schema_id.to_owned());
         self
     }
 
     pub fn backlink(mut self, backlink: &Hash) -> Self {
-        self.0.backlink = Some(backlink.to_owned());
+        self.backlink = Some(backlink.to_owned());
         self
     }
 
     pub fn document_id(mut self, document_id: &DocumentId) -> Self {
-        self.0.document_id = Some(document_id.to_owned());
+        self.document_id = Some(document_id.to_owned());
         self
     }
 
@@ -190,8 +221,18 @@ impl HeaderBuilder {
         self,
         encoded_body: &EncodedBody,
         key_pair: &KeyPair,
-    ) -> Result<Header, EncodeHeaderError> {
-        let header = sign_header(self.0, encoded_body, key_pair)?;
+    ) -> Result<Header, HeaderBuilderError> {
+        let document_links = validate_document_links(self.document_id, self.previous)?;
+        let header = sign_header(
+            self.timestamp,
+            self.seq_num,
+            self.backlink,
+            document_links,
+            self.tombstone,
+            self.extension,
+            encoded_body,
+            key_pair,
+        )?;
         header.validate()?;
         Ok(header)
     }

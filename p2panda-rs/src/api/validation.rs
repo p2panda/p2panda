@@ -6,6 +6,7 @@ use crate::hash::{Hash, HashId};
 use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
+use crate::operation::header::SeqNum;
 use crate::operation::traits::{Actionable, Capable, Identifiable, Timestamped};
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
@@ -42,8 +43,8 @@ pub fn validate_previous(
     operation: &(impl Identifiable + Actionable + Schematic + Capable + Timestamped),
     previous_schema_id: &SchemaId,
     previous_document_id: &DocumentId,
-    previous_depth: u64,
-    previous_timestamp: u128,
+    previous_seq_num: SeqNum,
+    previous_timestamp: u64,
 ) -> Result<(), ValidationError> {
     if operation.schema_id() != previous_schema_id {
         return Err(ValidationError::MismathingSchemaInPrevious(
@@ -63,10 +64,10 @@ pub fn validate_previous(
         .into());
     }
 
-    if operation.depth() <= previous_depth {
+    if operation.seq_num() <= previous_seq_num {
         return Err(ValidationError::DepthLessThanPrevious(
             operation.id().clone(),
-            operation.depth(),
+            operation.seq_num(),
         )
         .into());
     }
@@ -86,8 +87,8 @@ pub fn validate_backlink(
     operation: &(impl Identifiable + Capable + Timestamped),
     claimed_backlink: &Hash,
     backlink_hash: &Hash,
-    backlink_depth: u64,
-    backlink_timestamp: u128,
+    backlink_seq_num: SeqNum,
+    backlink_timestamp: u64,
 ) -> Result<(), ValidationError> {
     if claimed_backlink != backlink_hash {
         return Err(ValidationError::IncorrectBacklink(
@@ -107,10 +108,10 @@ pub fn validate_backlink(
         .into());
     }
 
-    if operation.depth() <= backlink_depth {
+    if operation.seq_num() <= backlink_seq_num {
         return Err(ValidationError::DepthLessThanBacklink(
             operation.id().clone(),
-            operation.depth(),
+            operation.seq_num(),
         )
         .into());
     }
@@ -127,13 +128,10 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::plain::{PlainFields, PlainOperation, PlainValue};
-    use crate::operation::header::HeaderAction;
     use crate::operation::{OperationAction, OperationBuilder};
     use crate::schema::{FieldType, Schema};
-    use crate::test_utils::constants::test_fields;
+    use crate::test_utils::constants::{test_fields, TIMESTAMP};
     use crate::test_utils::fixtures::{document_id, document_view_id, hash, key_pair, schema};
-
-    const TIMESTAMP: u128 = 17037976940000000;
 
     #[rstest]
     fn validate_plain_operations_pass(
@@ -158,7 +156,7 @@ mod tests {
             .document_id(&document_id)
             .backlink(&backlink)
             .previous(&previous)
-            .depth(1)
+            .seq_num(1)
             // Update just one field
             .fields(&[test_fields().first().unwrap().to_owned()])
             .sign(&key_pair)
@@ -172,10 +170,10 @@ mod tests {
 
         let delete_operation = OperationBuilder::new(schema.id(), TIMESTAMP)
             .document_id(&document_id)
-            .action(HeaderAction::Delete)
             .backlink(&backlink)
             .previous(&previous)
-            .depth(1)
+            .seq_num(1)
+            .tombstone()
             .sign(&key_pair)
             .unwrap();
 
