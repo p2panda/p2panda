@@ -5,6 +5,7 @@ use crate::identity::{PublicKey, Signature};
 use crate::operation::body::EncodedBody;
 use crate::operation::header::error::ValidateHeaderError;
 use crate::operation::header::{EncodedHeader, Header};
+use crate::operation::traits::Verifiable;
 
 use super::error::DocumentLinksError;
 use super::DocumentLinks;

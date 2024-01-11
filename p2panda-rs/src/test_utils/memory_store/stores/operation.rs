@@ -6,7 +6,7 @@ use log::debug;
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
 use crate::operation::body::traits::Schematic;
-use crate::operation::traits::{Actionable, Authored, Capable, Identifiable};
+use crate::operation::traits::{Actionable, Verifiable, Identifiable, Authored, Sequenced};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;

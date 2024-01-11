@@ -12,13 +12,15 @@ use crate::operation::header::encode::{encode_header, sign_header};
 use crate::operation::header::validate::validate_document_links;
 use crate::operation::header::{Header, HeaderExtension, SeqNum};
 use crate::operation::traits::{
-    Actionable, Authored, Capable, Fielded, Identifiable, Payloaded, Timestamped,
+    Actionable, Fielded, Identifiable, Sequenced, Timestamped, Verifiable,
 };
 use crate::operation::{
     OperationAction, OperationFields, OperationId, OperationValue, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
+
+use super::traits::Authored;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operation(pub OperationId, pub Header, pub Body);
@@ -199,16 +201,33 @@ impl Timestamped for Operation {
     }
 }
 
-impl Capable for Operation {
-    /// Hash of the preceding operation in an authors log, None if this is the first operation.
-    fn backlink(&self) -> Option<&Hash> {
-        self.header().backlink()
-    }
-
+impl Sequenced for Operation {
     /// Sequence number of this operation.
     fn seq_num(&self) -> SeqNum {
         // Safely unwrap as validation performed already.
         self.header().seq_num()
+    }
+}
+
+impl Verifiable for Operation {
+    /// The signature.
+    fn signature(&self) -> crate::identity::Signature {
+        self.header().signature()
+    }
+
+    /// Size size in bytes of the payload.
+    fn payload_size(&self) -> u64 {
+        self.header().payload_size()
+    }
+
+    /// Hash of the payload.
+    fn payload_hash(&self) -> &Hash {
+        self.header().payload_hash()
+    }
+
+    /// Hash of the preceding operation in an authors log, None if this is the first operation.
+    fn backlink(&self) -> Option<&Hash> {
+        self.header().backlink()
     }
 }
 
@@ -254,23 +273,6 @@ impl Authored for Operation {
     fn public_key(&self) -> &crate::identity::PublicKey {
         self.header().public_key()
     }
-
-    /// The signature.
-    fn signature(&self) -> crate::identity::Signature {
-        self.header().signature()
-    }
-}
-
-impl Payloaded for Operation {
-    /// Size size in bytes of the payload.
-    fn payload_size(&self) -> u64 {
-        self.header().payload_size()
-    }
-
-    /// Hash of the payload.
-    fn payload_hash(&self) -> &Hash {
-        self.header().payload_hash()
-    }
 }
 
 #[cfg(test)]
@@ -281,8 +283,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::traits::Schematic;
-    use crate::operation::header::HeaderAction;
-    use crate::operation::traits::{Actionable, Capable, Fielded, Identifiable, Timestamped};
+    use crate::operation::traits::{Actionable, Fielded, Identifiable, Timestamped, Verifiable, Sequenced};
     use crate::operation::{
         OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
     };

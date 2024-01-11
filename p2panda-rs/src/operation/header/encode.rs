@@ -64,6 +64,7 @@ mod tests {
     use crate::operation::header::encode::encode_header;
     use crate::operation::header::HeaderBuilder;
     use crate::operation::OperationValue;
+    use crate::operation::traits::Verifiable;
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, hash, key_pair, operation_fields, random_key_pair, schema_id,

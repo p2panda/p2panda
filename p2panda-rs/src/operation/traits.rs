@@ -18,37 +18,37 @@ pub trait Identifiable {
     fn document_id(&self) -> DocumentId;
 }
 
-/// Methods required for handling author capabilities.
-pub trait Capable: Authored {
+/// Properties required when wanting to verify the authenticity and cryptographic soundness of an operation.
+pub trait Verifiable {
+    /// The signature.
+    fn signature(&self) -> Signature;
+
+    /// Size size in bytes of the payload.
+    fn payload_size(&self) -> u64;
+
+    /// Hash of the payload.
+    fn payload_hash(&self) -> &Hash;
+
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
     fn backlink(&self) -> Option<&Hash>;
-
-    /// Sequence number of this operation.
-    fn seq_num(&self) -> SeqNum;
 }
 
-/// Methods available on signed data.
+/// Method returning the public key of a signed piece of data.
 pub trait Authored {
     /// The public key of the keypair which signed this data.
     fn public_key(&self) -> &PublicKey;
+}
 
-    /// The signature.
-    fn signature(&self) -> Signature;
+/// Method available on data which has a sequence number.
+pub trait Sequenced {
+    /// Sequence number of this operation.
+    fn seq_num(&self) -> SeqNum;
 }
 
 /// Method available on data which has a timestamp.
 pub trait Timestamped {
     /// Timestamp when this operation was published.
     fn timestamp(&self) -> u64;
-}
-
-/// Methods for retrieving metadata of an operations payload.
-pub trait Payloaded {
-    /// Size size in bytes of the payload.
-    fn payload_size(&self) -> u64;
-
-    /// Hash of the payload.
-    fn payload_hash(&self) -> &Hash;
 }
 
 /// Methods available on an operation which contains OperationFields in it's payload.

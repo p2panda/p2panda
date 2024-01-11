@@ -11,7 +11,7 @@ use crate::operation::header::encode::sign_header;
 use crate::operation::header::error::{HeaderBuilderError, ValidateHeaderError};
 use crate::operation::header::validate::validate_document_links;
 use crate::operation::header::SeqNum;
-use crate::operation::traits::Actionable;
+use crate::operation::traits::{Actionable, Identifiable, Timestamped, Sequenced, Verifiable, Authored};
 use crate::operation::{OperationAction, OperationVersion};
 use crate::schema::SchemaId;
 use crate::Validate;
@@ -61,47 +61,12 @@ impl Header {
         &self.9
     }
 
-    pub fn public_key(&self) -> &PublicKey {
-        &self.1
-    }
-
-    pub fn payload_hash(&self) -> &Hash {
-        &self.2
-    }
-
-    pub fn payload_size(&self) -> u64 {
-        self.3
-    }
-
-    pub fn timestamp(&self) -> u64 {
-        self.4
-    }
-
-    pub fn seq_num(&self) -> SeqNum {
-        self.5
-    }
-
-    pub fn backlink(&self) -> Option<&Hash> {
-        self.6.as_ref()
-    }
-
     pub fn document_id(&self) -> Option<&DocumentId> {
         self.7.as_ref().map(DocumentLinks::document_id)
     }
 
-    pub fn previous(&self) -> Option<&Previous> {
-        self.7.as_ref().map(DocumentLinks::previous)
-    }
-
     pub fn tombstone(&self) -> bool {
         self.8
-    }
-
-    pub fn signature(&self) -> Signature {
-        // We never use an unsigned header outside of our API
-        self.10
-            .clone()
-            .expect("signature needs to be given at this point")
     }
 }
 
@@ -130,6 +95,53 @@ impl Validate for Header {
             // invalid DELETE header with backlink but no document id or previous
             (_, _, None, true) => Err(ValidateHeaderError::DeleteExpectedDocumentIdAndPrevious),
         }
+    }
+}
+
+
+impl Authored for Header {
+    /// The public key of the keypair which signed this data.
+    fn public_key(&self) -> &PublicKey {
+        &self.1
+    }
+}
+
+impl Timestamped for Header {
+    /// Timestamp
+    fn timestamp(&self) -> u64 {
+        self.4
+    }
+}
+
+impl Sequenced for Header {
+    /// Sequence number of this operation.
+    fn seq_num(&self) -> SeqNum {
+        self.5
+    }
+}
+
+impl Verifiable for Header {
+    /// The signature.
+    fn signature(&self) -> Signature {
+        // We never use an unsigned header outside of our API
+        self.10
+            .clone()
+            .expect("signature needs to be given at this point")
+    }
+
+    /// Size size in bytes of the payload.
+    fn payload_size(&self) -> u64 {
+        self.3
+    }
+
+    /// Hash of the payload.
+    fn payload_hash(&self) -> &Hash {
+        &self.2
+    }
+
+    /// Hash of the preceding operation in an authors log, None if this is the first operation.
+    fn backlink(&self) -> Option<&Hash> {
+        self.6.as_ref()
     }
 }
 

@@ -7,7 +7,7 @@ use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
 use crate::operation::header::SeqNum;
-use crate::operation::traits::{Actionable, Capable, Identifiable, Timestamped};
+use crate::operation::traits::{Actionable, Identifiable, Timestamped, Sequenced, Authored};
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::{Schema, SchemaId};
@@ -40,7 +40,7 @@ pub fn validate_plain_operation(
 }
 
 pub fn validate_previous(
-    operation: &(impl Identifiable + Actionable + Schematic + Capable + Timestamped),
+    operation: &(impl Identifiable + Actionable + Schematic + Sequenced + Timestamped),
     previous_schema_id: &SchemaId,
     previous_document_id: &DocumentId,
     previous_seq_num: SeqNum,
@@ -84,7 +84,7 @@ pub fn validate_previous(
 }
 
 pub fn validate_backlink(
-    operation: &(impl Identifiable + Capable + Timestamped),
+    operation: &(impl Identifiable + Sequenced + Timestamped + Authored),
     claimed_backlink: &Hash,
     backlink_hash: &Hash,
     backlink_seq_num: SeqNum,
