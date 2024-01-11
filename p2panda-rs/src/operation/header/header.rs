@@ -11,7 +11,9 @@ use crate::operation::header::encode::sign_header;
 use crate::operation::header::error::{HeaderBuilderError, ValidateHeaderError};
 use crate::operation::header::validate::validate_document_links;
 use crate::operation::header::SeqNum;
-use crate::operation::traits::{Actionable, Identifiable, Timestamped, Sequenced, Verifiable, Authored};
+use crate::operation::traits::{
+    Actionable, Authored, Identifiable, Sequenced, Timestamped, Verifiable,
+};
 use crate::operation::{OperationAction, OperationVersion};
 use crate::schema::SchemaId;
 use crate::Validate;
@@ -97,7 +99,6 @@ impl Validate for Header {
         }
     }
 }
-
 
 impl Authored for Header {
     /// The public key of the keypair which signed this data.

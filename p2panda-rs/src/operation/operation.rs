@@ -283,7 +283,9 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::body::traits::Schematic;
-    use crate::operation::traits::{Actionable, Fielded, Identifiable, Timestamped, Verifiable, Sequenced};
+    use crate::operation::traits::{
+        Actionable, Fielded, Identifiable, Sequenced, Timestamped, Verifiable,
+    };
     use crate::operation::{
         OperationAction, OperationBuilder, OperationFields, OperationValue, OperationVersion,
     };

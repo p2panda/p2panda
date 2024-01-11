@@ -8,7 +8,7 @@ use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
 use crate::graph::{Graph, Reducer};
 use crate::identity::PublicKey;
 use crate::operation::body::traits::Schematic;
-use crate::operation::traits::{Actionable, Fielded, Identifiable, Authored};
+use crate::operation::traits::{Actionable, Authored, Fielded, Identifiable};
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::Human;

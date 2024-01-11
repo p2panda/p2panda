@@ -7,7 +7,7 @@ use crate::operation::body::plain::PlainOperation;
 use crate::operation::body::traits::Schematic;
 use crate::operation::body::Body;
 use crate::operation::header::SeqNum;
-use crate::operation::traits::{Actionable, Identifiable, Timestamped, Sequenced, Authored};
+use crate::operation::traits::{Actionable, Authored, Identifiable, Sequenced, Timestamped};
 use crate::operation::OperationAction;
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::{Schema, SchemaId};

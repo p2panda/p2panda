@@ -11,7 +11,9 @@ use crate::operation::body::EncodedBody;
 use crate::operation::header::decode::decode_header;
 use crate::operation::header::validate::{verify_payload, verify_signature};
 use crate::operation::header::EncodedHeader;
-use crate::operation::traits::{Actionable, Identifiable, Timestamped, Authored, Verifiable, Sequenced};
+use crate::operation::traits::{
+    Actionable, Authored, Identifiable, Sequenced, Timestamped, Verifiable,
+};
 use crate::operation::Operation;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
