@@ -34,7 +34,6 @@ pub fn sign_header(
         None,
     );
 
-    // @TODO: we're signing the CBOR encoded bytes here, not convinced this is the desired approach.
     let unsigned_encoded_header = encode_header(&header)?;
     header.10 = Some(key_pair.sign(&unsigned_encoded_header.to_bytes()));
 
