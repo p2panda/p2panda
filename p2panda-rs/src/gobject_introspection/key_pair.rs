@@ -9,10 +9,10 @@ use ed25519_dalek::Signature;
 use glib_sys::g_strdup;
 use libc::{c_char, c_int};
 
-use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
+use crate::identity::{KeyPair as KeyPairRust, PublicKey};
 
 /// p2panda_KeyPair: (free-func p2panda_key_pair_free)
-pub struct KeyPair(KeyPairNonC);
+pub struct KeyPair(KeyPairRust);
 
 /// p2panda_key_pair_new_from_private_key:
 /// @private_key: (transfer none): the private key string
@@ -29,7 +29,7 @@ pub extern "C" fn p2panda_key_pair_new_from_private_key(
         c_repr.to_str().expect("convert the private key from C")
     };
 
-    let key_pair_inner = KeyPairNonC::from_private_key_str(private_key).expect("get a key pair");
+    let key_pair_inner = KeyPairRust::from_private_key_str(private_key).expect("get a key pair");
 
     Box::into_raw(Box::new(KeyPair(key_pair_inner)))
 }
@@ -46,7 +46,7 @@ pub extern "C" fn p2panda_key_pair_free(instance: *mut KeyPair) {
 
 impl KeyPair {
     /// Internal method to access non-wasm instance of `KeyPair`.
-    pub(super) fn as_inner(&self) -> &KeyPairNonC {
+    pub(super) fn as_inner(&self) -> &KeyPairRust {
         &self.0
     }
 }
@@ -119,7 +119,7 @@ pub extern "C" fn p2panda_key_pair_verify_signature(
 
     let public_key = PublicKey::new(public_key.to_str().unwrap()).unwrap();
     let signature = Signature::try_from(signature.to_bytes()).unwrap();
-    match KeyPairNonC::verify(&public_key, bytes.to_bytes(), &signature) {
+    match KeyPairRust::verify(&public_key, bytes.to_bytes(), &signature) {
         Ok(_) => 1,
         Err(_) => 0,
     }

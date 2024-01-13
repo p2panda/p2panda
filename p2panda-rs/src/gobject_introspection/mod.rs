@@ -7,3 +7,4 @@
 mod entry;
 mod hash;
 mod key_pair;
+mod operations;
