@@ -58,7 +58,7 @@ browser.
 > so please be prepared for breaking API changes until we reach `v1.0`.
 > Currently no p2panda implementation has recieved a security audit.
 
-[`specification`]: https://p2panda.org/specification
+[`specification`]: https://p2panda.org/specifications
 
 ## Installation
 
