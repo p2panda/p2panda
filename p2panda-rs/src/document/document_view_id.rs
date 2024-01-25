@@ -136,7 +136,7 @@ impl Display for DocumentViewId {
 impl Human for DocumentViewId {
     fn display(&self) -> String {
         let mut result = String::new();
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        let offset = blake3::KEY_LEN * 2 - 6;
 
         for (i, operation_id) in self.iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
@@ -195,13 +195,13 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     }
 }
 
-impl TryFrom<&[String]> for DocumentViewId {
+impl<T: ToString> TryFrom<Vec<T>> for DocumentViewId {
     type Error = DocumentViewIdError;
 
-    fn try_from(str_list: &[String]) -> Result<Self, Self::Error> {
+    fn try_from(str_list: Vec<T>) -> Result<Self, Self::Error> {
         let operation_ids: Result<Vec<OperationId>, OperationIdError> = str_list
             .iter()
-            .map(|operation_id_str| operation_id_str.parse::<OperationId>())
+            .map(|operation_id| operation_id.to_string().parse::<OperationId>())
             .collect();
 
         Self::from_untrusted(operation_ids?)
@@ -279,6 +279,14 @@ impl FromStr for DocumentViewId {
     }
 }
 
+impl TryFrom<String> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        DocumentViewId::from_str(&str)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;
@@ -301,19 +309,19 @@ mod tests {
     #[rstest]
     fn constructor_converts_to_canonic_format() {
         let operation_id_1: OperationId =
-            "00201413ae916e6745ab715c1f5ab49c47d6773c3c0febd970ecf1039beed203b472"
+            "1413ae916e6745ab715c1f5ab49c47d6773c3c0febd970ecf1039beed203b472"
                 .parse()
                 .unwrap();
         let operation_id_2: OperationId =
-            "0020266fe901ea7d3efa983f12d145089d29480064b0da7393a8c0779af7488c7f0d"
+            "266fe901ea7d3efa983f12d145089d29480064b0da7393a8c0779af7488c7f0d"
                 .parse()
                 .unwrap();
         let operation_id_3: OperationId =
-            "0020387b96cfdc7ac155eff0a9941400dee4a21e7cf18dcccefbf0a46a7c0138bbf5"
+            "387b96cfdc7ac155eff0a9941400dee4a21e7cf18dcccefbf0a46a7c0138bbf5"
                 .parse()
                 .unwrap();
         let operation_id_4: OperationId =
-            "002047e8d17a2edb41621beec8c710ee71a1b2ea81d356f05cd466526b269a7b2493"
+            "47e8d17a2edb41621beec8c710ee71a1b2ea81d356f05cd466526b269a7b2493"
                 .parse()
                 .unwrap();
 
@@ -352,7 +360,7 @@ mod tests {
     #[rstest]
     fn conversion(#[from(random_hash)] hash: Hash) {
         // Converts a string to `DocumentViewId`
-        let hash_str = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79";
+        let hash_str = "d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79";
         let document_id: DocumentViewId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
@@ -384,32 +392,32 @@ mod tests {
 
         assert_eq!(
             document_view_id.to_string(),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
         );
 
         assert_eq!(
             format!("{}", document_view_id),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
         );
 
-        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        let operation_1 = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
             .parse::<OperationId>()
             .unwrap();
-        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+        let operation_2 = "d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
 
         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
-        assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
-        assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
+        assert_eq!(document_view_id.to_string(), "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
+        assert_eq!("b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
     }
 
     #[test]
     fn short_representation() {
-        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        let operation_1 = "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
             .parse::<OperationId>()
             .unwrap();
-        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+        let operation_2 = "d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
 
@@ -448,12 +456,8 @@ mod tests {
     ) {
         // Unsorted operation ids in document view id array:
         let unsorted_hashes = [
-            hex_string_to_bytes(
-                "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-            ),
-            hex_string_to_bytes(
-                "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
-            ),
+            hex_string_to_bytes("c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8"),
+            hex_string_to_bytes("2dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"),
         ];
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&unsorted_hashes, &mut cbor_bytes).unwrap();
@@ -488,10 +492,8 @@ mod tests {
     fn deserialize_invalid_view_id() {
         // The second operation id is missing 4 characters
         let invalid_hashes = [
-            hex_string_to_bytes(
-                "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-            ),
             hex_string_to_bytes("2dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"),
+            hex_string_to_bytes("c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa7"),
         ];
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&invalid_hashes, &mut cbor_bytes).unwrap();
@@ -503,7 +505,7 @@ mod tests {
 
         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
             None,
-            "invalid hash length 32 bytes, expected 34 bytes".to_string(),
+            "invalid hash length 30 bytes, expected 32 bytes".to_string(),
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
@@ -511,7 +513,7 @@ mod tests {
 
     #[test]
     fn deserialize_human_readable() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
 
         #[derive(Deserialize, Serialize, Debug, PartialEq)]
         struct Test {
@@ -540,14 +542,11 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                // {"document_view_id":
-                // [h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC805',
-                // h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC808']}
                 161, 112, 100, 111, 99, 117, 109, 101, 110, 116, 95, 118, 105, 101, 119, 95, 105,
-                100, 130, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106,
-                159, 251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110,
-                200, 5, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159,
-                251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 8
+                100, 130, 88, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
+                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5, 88,
+                32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40, 19,
+                183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 8
             ]
         )
     }

@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Common validation and API methods following the p2panda specification.
-mod errors;
-pub mod helpers;
-mod next_args;
+mod error;
 mod publish;
-pub mod validation;
+mod validation;
 
-pub use errors::{DomainError, ValidationError};
-pub use next_args::next_args;
+pub use error::{DomainError, ValidationError};
 pub use publish::publish;
+pub use validation::{validate_backlink, validate_plain_operation, validate_previous};

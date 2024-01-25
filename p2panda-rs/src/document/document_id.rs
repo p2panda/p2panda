@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -55,7 +56,7 @@ impl Display for DocumentId {
 
 impl Human for DocumentId {
     fn display(&self) -> String {
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        let offset = blake3::KEY_LEN * 2 - 6;
         format!("<DocumentId {}>", &self.0.as_str()[offset..])
     }
 }
@@ -75,11 +76,25 @@ impl From<Hash> for DocumentId {
     }
 }
 
+impl From<OperationId> for DocumentId {
+    fn from(operation: OperationId) -> Self {
+        Self(operation.into())
+    }
+}
+
 impl FromStr for DocumentId {
     type Err = DocumentIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.parse::<OperationId>()?))
+    }
+}
+
+impl TryFrom<String> for DocumentId {
+    type Error = DocumentIdError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::from_str(&str)
     }
 }
 
@@ -101,7 +116,7 @@ mod tests {
     #[rstest]
     fn conversion(#[from(random_hash)] hash: Hash) {
         // Converts any string to `DocumentId`
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
@@ -118,7 +133,7 @@ mod tests {
 
     #[test]
     fn string_representation() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
 
         assert_eq!(document_id.to_string(), hash_str);
@@ -128,7 +143,7 @@ mod tests {
 
     #[test]
     fn short_representation() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
 
         assert_eq!(document_id.display(), "<DocumentId 6ec805>");
@@ -138,27 +153,26 @@ mod tests {
     fn serialize() {
         let bytes = serialize_from(
             DocumentId::from_str(
-                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805",
+                "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805",
             )
             .unwrap(),
         );
         assert_eq!(
             bytes,
             vec![
-                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
-                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
+                88, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40,
+                19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
             ]
         );
     }
 
     #[test]
     fn deserialize() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let document_id: DocumentId =
-            deserialize_into(&serialize_value(cbor!(hex_string_to_bytes(
-                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
-            ))))
-            .unwrap();
+        let hash_str = "cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let document_id: DocumentId = deserialize_into(&serialize_value(cbor!(
+            hex_string_to_bytes("cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805")
+        )))
+        .unwrap();
         assert_eq!(DocumentId::from_str(hash_str).unwrap(), document_id);
 
         // Invalid hashes

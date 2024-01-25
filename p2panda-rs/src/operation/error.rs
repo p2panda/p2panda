@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Error types for encoding, decoding and validating operations with schemas and regarding data
-//! types like operation fields, relations or plain operations.
 use thiserror::Error;
 
 /// Errors from `OperationBuilder` struct.
@@ -10,47 +8,19 @@ pub enum OperationBuilderError {
     /// Handle errors from `operation::validate` module.
     #[error(transparent)]
     ValidateOperationError(#[from] ValidateOperationError),
+
+    #[error(transparent)]
+    EncodeBody(#[from] crate::operation::body::error::EncodeBodyError),
+
+    #[error(transparent)]
+    EncodeHeader(#[from] crate::operation::header::error::EncodeHeaderError),
+
+    #[error(transparent)]
+    DocumentLinks(#[from] crate::operation::header::error::DocumentLinksError),
 }
 
-/// Errors from `operation::encode` module.
-#[derive(Error, Debug)]
-pub enum EncodeOperationError {
-    /// CBOR encoder failed critically due to an IO issue.
-    #[error("cbor encoder failed {0}")]
-    EncoderIOFailed(String),
-
-    /// CBOR encoder could not serialize this value.
-    #[error("cbor encoder failed serializing value {0}")]
-    EncoderFailed(String),
-}
-
-/// Errors from `operation::decode` module.
-#[derive(Error, Debug)]
-pub enum DecodeOperationError {
-    /// CBOR decoder failed critically due to an IO issue.
-    #[error("cbor decoder failed {0}")]
-    DecoderIOFailed(String),
-
-    /// Invalid CBOR encoding detected.
-    #[error("invalid cbor encoding at byte {0}")]
-    InvalidCBOREncoding(usize),
-
-    /// Invalid p2panda operation encoding detected.
-    #[error("{0}")]
-    InvalidEncoding(String),
-
-    /// CBOR decoder exceeded maximum recursion limit.
-    #[error("cbor decoder exceeded recursion limit")]
-    RecursionLimitExceeded,
-}
-
-/// Errors from `operation::validate` module.
 #[derive(Error, Debug)]
 pub enum ValidateOperationError {
-    /// Claimed schema id did not match given schema.
-    #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
-    SchemaNotMatching(String, String),
-
     /// Expected `fields` in CREATE or UPDATE operation.
     #[error("expected 'fields' in CREATE or UPDATE operation")]
     ExpectedFields,
@@ -59,21 +29,12 @@ pub enum ValidateOperationError {
     #[error("unexpected 'fields' in DELETE operation")]
     UnexpectedFields,
 
-    /// Expected `previous` in UPDATE or DELETE operation.
-    #[error("expected 'previous' in UPDATE or DELETE operation")]
-    ExpectedPreviousOperations,
+    /// Expect `schema_id` on all operations.
+    #[error("expected 'schema_id' in operation header")]
+    ExpectedSchemaId,
 
-    /// Unexpected `previous` in CREATE operation.
-    #[error("unexpected 'previous' in CREATE operation")]
-    UnexpectedPreviousOperations,
-
-    /// Handle errors from `schema::validate` module.
     #[error(transparent)]
-    SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
-
-    /// Handle errors from `entry::validate` module.
-    #[error(transparent)]
-    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
+    HeaderValidation(#[from] crate::operation::header::error::ValidateHeaderError),
 }
 
 /// Error types for methods of plain fields or operation fields.
@@ -94,22 +55,6 @@ pub enum OperationIdError {
     /// Handle errors from `Hash` struct.
     #[error(transparent)]
     HashError(#[from] crate::hash::error::HashError),
-}
-
-/// Errors from `PlainValue` enum.
-#[derive(Error, Debug)]
-pub enum PlainValueError {
-    /// Error resulting from failure to parsing a byte string into a String.
-    #[error("attempted to parse non-utf8 bytes into string")]
-    BytesNotUtf8,
-
-    /// Handle errors when converting from an integer.
-    #[error(transparent)]
-    IntError(#[from] std::num::TryFromIntError),
-
-    /// Tried to parse a PlainValue from an unsupported cbor value.
-    #[error("data did not match any variant of untagged enum PlainValue")]
-    UnsupportedValue,
 }
 
 /// Errors from `Relation` struct.
@@ -144,11 +89,10 @@ pub enum PinnedRelationListError {
     DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
 }
 
-/// Errors from `OperationAction` enum.
+/// Errors from `OperationAction` struct.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum OperationActionError {
-    /// Passed unknown operation action value.
-    #[error("unknown operation action {0}")]
-    UnknownAction(u64),
+    /// String is not a valid action.
+    #[error("string \"{0}\" is not a valid action")]
+    InvalidActionString(String),
 }

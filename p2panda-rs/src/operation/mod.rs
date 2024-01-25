@@ -1,129 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Create, encode and decode p2panda operations.
-//!
-//! Operations describe data mutations in the p2panda network. Authors send operations to create,
-//! update or delete documents.
-//!
-//! Every operations contains application data which is formed after a schema. To be able to decode
-//! an operation, a schema aids with getting the data out of the operation.
-//!
-//! ## Build or decode operation
-//!
-//! There are two approaches (similar to `Entry`) to create an `Operation`.
-//!
-//! To programmatically create an `Operation`, use the `OperationBuilder`. When working with
-//! operations coming in as bytes, you can use the `decode_operation` method to first deserialize
-//! it into a `PlainOperation` instance, which is a schemaless object giving you already access to
-//! the "header" data, like the schema id.
-//!
-//! Knowing the schema id you can look up your internal database for known schemas and derive a
-//! `Schema` instance from there. Now together with the `PlainOperation` and `Schema` you can
-//! finally validate the operation (via `validate_operation`) to arrive at the final, verified
-//! `Operation`.
-//!
-//! ```text
-//!              ┌────────────────┐
-//!              │OperationBuilder├──────────build()──────────────┐
-//!              └────────────────┘                               │
-//!                                                               │
-//!                                                               │
-//!                                                               ▼
-//!                                         ┌──────┐          ┌─────────┐
-//!                                         │Schema│          │Operation│
-//!                                         └──┬───┘          └─────────┘
-//!                                            │                  ▲
-//!                           Lookup Schema    │                  │
-//!                                            │                  │
-//!              ┌──────────────┐              ▼                  │
-//!              │PlainOperation├───────validate_operation()──────┘
-//!              └──────────────┘
-//!                     ▲
-//!                     │
-//!             decode_operation()
-//!                     │
-//!             ┌───────┴────────┐
-//! bytes ────► │EncodedOperation│
-//!             └────────────────┘
-//! ```
-//!
-//! Please note that `Operation` in itself is immutable and can not directly be deserialized, there
-//! are only these above mentioned approaches to arrive at it. Both approaches apply all means to
-//! validate the integrity and correct encoding of the operation as per specification.
-//!
-//! ## Encoding
-//!
-//! `Operation` structs can be encoded again into their raw bytes form like that, for this no
-//! `Schema` is required:
-//!
-//! ```text
-//! ┌─────────┐                           ┌────────────────┐
-//! │Operation│ ───encode_operation()───► │EncodedOperation│ ────► bytes
-//! └─────────┘                           └────────────────┘
-//! ```
-//!
-//! ## Validation
-//!
-//! The above mentioned high-level methods will automatically apply different sorts of validation
-//! checks. All low-level methods can also be used independently, depending on your implementation:
-//!
-//! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#OP1)
-//! 2. Correct operation format as per specification, including canonic format checks against
-//!    duplicate and unsorted operation fields (#OP2)
-//! 3. Correctly formatted and canonic operation field values, like document view ids (no
-//!    duplicates, sorted, when no semantic value is given by that) as per specification (#OP3)
-//! 4. Operation fields match the claimed schema (#OP4)
-//!
-//! Both #OP2 and #OP3 check against the canonic format but in separate steps, this is required as
-//! we can only check for the correct format of the operation field values, like document view ids
-//! _after_ we obtained the schema, while we can already check the correct operation format
-//! _before_.
-//!
-//! This module also provides a high-level method `validate_operation_with_entry` which will apply
-//! _all_ checks required to verify the integrity of an operation and entry. This includes all
-//! validation steps listed above plus the ones mentioned in the `entry` module. Since this
-//! validation requires you to provide a `Schema` instance and the regarding back- & skiplink
-//! `Entry` instances yourself, it needs some preparation from your end which can roughly be
-//! described like this:
-//!
-//! ```text
-//!                                                                  Look-Up
-//!
-//!             ┌────────────┐                       ┌─────┐    ┌─────┐    ┌─────┐
-//!  bytes ───► │EncodedEntry├────decode_entry()────►│Entry│    │Entry│    │Entry│
-//!             └──────┬─────┘                       └──┬──┘    └─────┘    └─────┘
-//!                    │                                │
-//!                    └───────────────────────────┐    │       Skiplink   Backlink
-//!                                                │    │          │          │
-//!             ┌────────────────┐                 │    │          │          │
-//!  bytes ───► │EncodedOperation├─────────────┐   │    │          │          │
-//!             └───────┬────────┘             │   │    │          │          │
-//!                     │                      │   │    │          │          │
-//!             decode_operation()             │   │    │          │          │
-//!                     │            Look-Up   │   │    │          │          │
-//!                     ▼                      │   │    │          │          │
-//!              ┌──────────────┐    ┌──────┐  │   │    │          │          │
-//!              │PlainOperation│    │Schema│  │   │    │          │          │
-//!              └──────┬───────┘    └──┬───┘  │   │    │          │          │
-//!                     │               │      │   │    │          │          │
-//!                     │               │      │   │    │          │          │
-//!                     │               │      │   │    │          │          │
-//!                     │               │      │   │    │          │          │
-//!                     │               ▼      ▼   ▼    ▼          ▼          │
-//!                     └───────────►  validate_operation_with_entry() ◄──────┘
-//!                                                 │
-//!                                                 │
-//!                                                 │
-//!                                                 │
-//!                                                 ▼
-//!                                     ┌────────────────────────┐
-//!                                     │(Operation, OperationId)│
-//!                                     └────────────────────────┘
-//! ```
-pub mod decode;
-pub mod encode;
-mod encoded_operation;
+pub mod body;
 pub mod error;
+pub mod header;
 #[allow(clippy::module_inception)]
 mod operation;
 mod operation_action;
@@ -131,12 +10,9 @@ mod operation_fields;
 mod operation_id;
 mod operation_value;
 mod operation_version;
-pub mod plain;
 mod relation;
 pub mod traits;
-pub mod validate;
 
-pub use encoded_operation::EncodedOperation;
 pub use operation::{Operation, OperationBuilder};
 pub use operation_action::OperationAction;
 pub use operation_fields::OperationFields;

@@ -3,9 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::traits::AsOperation;
+use crate::operation::traits::{Fielded, Identifiable};
 use crate::operation::{OperationFields, OperationId, OperationValue};
-use crate::WithId;
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,13 +95,13 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl<T: AsOperation + WithId<OperationId>> From<T> for DocumentViewFields {
+impl<T: Fielded + Identifiable> From<T> for DocumentViewFields {
     fn from(operation: T) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         if let Some(fields) = operation.fields() {
             for (name, value) in fields.iter() {
-                document_view_fields.insert(name, DocumentViewValue::new(operation.id(), value));
+                document_view_fields.insert(name, DocumentViewValue::new(&operation.id(), value));
             }
         }
 
@@ -115,11 +114,13 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::traits::AsOperation;
-    use crate::operation::{OperationId, OperationValue};
-    use crate::test_utils::fixtures::{published_operation, random_operation_id};
-    use crate::test_utils::memory_store::PublishedOperation;
-    use crate::WithId;
+    use crate::identity::KeyPair;
+    use crate::operation::traits::{Fielded, Identifiable};
+    use crate::operation::{OperationBuilder, OperationId, OperationValue};
+    use crate::schema::SchemaId;
+    use crate::test_utils::constants::TIMESTAMP;
+    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::{key_pair, schema_id};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
@@ -155,14 +156,24 @@ mod tests {
     }
 
     #[rstest]
-    fn from_published_operation(#[from(published_operation)] operation: PublishedOperation) {
+    fn from_published_operation(key_pair: KeyPair, schema_id: SchemaId) {
+        let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .unwrap();
+
         let document_view_fields = DocumentViewFields::from(operation.clone());
         let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(#[from(published_operation)] operation: PublishedOperation) {
+    fn new_from_operation_fields(key_pair: KeyPair, schema_id: SchemaId) {
+        let operation = OperationBuilder::new(&schema_id, TIMESTAMP)
+            .fields(&[("year", 2020.into())])
+            .sign(&key_pair)
+            .unwrap();
+
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
             operation.id(),
             &operation.fields().unwrap(),

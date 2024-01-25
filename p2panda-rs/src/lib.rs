@@ -69,7 +69,6 @@ use rstest_reuse;
 #[cfg(any(feature = "storage-provider", test))]
 pub mod api;
 pub mod document;
-pub mod entry;
 pub mod graph;
 pub mod hash;
 pub mod identity;

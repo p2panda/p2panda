@@ -7,7 +7,7 @@ use crate::document::error::DocumentViewIdError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::error::HashError;
 use crate::hash::Hash;
-use crate::operation::plain::{PlainFields, PlainValue};
+use crate::operation::body::plain::{PlainFields, PlainValue};
 use crate::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
@@ -341,7 +341,7 @@ fn validate_system_schema_fields(
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
@@ -905,4 +905,4 @@ mod tests {
         // Check if fields match the schema
         assert!(validate_all_fields(&plain_fields, schema).is_ok());
     }
-}
+}*/

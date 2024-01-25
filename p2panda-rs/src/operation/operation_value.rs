@@ -84,8 +84,8 @@ impl From<&str> for OperationValue {
     }
 }
 
-impl From<&[u8]> for OperationValue {
-    fn from(value: &[u8]) -> Self {
+impl From<Vec<u8>> for OperationValue {
+    fn from(value: Vec<u8>) -> Self {
         OperationValue::Bytes(value.to_owned())
     }
 }
@@ -111,80 +111,5 @@ impl From<DocumentViewId> for OperationValue {
 impl From<Vec<DocumentViewId>> for OperationValue {
     fn from(value: Vec<DocumentViewId>) -> Self {
         OperationValue::PinnedRelationList(PinnedRelationList::new(value))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use rstest::rstest;
-
-    use crate::document::{DocumentId, DocumentViewId};
-    use crate::operation::{
-        OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
-    };
-    use crate::test_utils::fixtures::{document_id, document_view_id, random_operation_id};
-
-    use super::OperationValue;
-
-    #[rstest]
-    fn to_field_type(#[from(random_operation_id)] operation_id: OperationId) {
-        let bool = OperationValue::Boolean(true);
-        assert_eq!(bool.field_type(), "bool");
-
-        let int = OperationValue::Integer(1);
-        assert_eq!(int.field_type(), "int");
-
-        let float = OperationValue::Float(0.1);
-        assert_eq!(float.field_type(), "float");
-
-        let text = OperationValue::String("Hello".to_string());
-        assert_eq!(text.field_type(), "str");
-
-        let relation = OperationValue::Relation(Relation::new(DocumentId::new(&operation_id)));
-        assert_eq!(relation.field_type(), "relation");
-
-        let pinned_relation =
-            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
-                operation_id.clone(),
-            ])));
-        assert_eq!(pinned_relation.field_type(), "pinned_relation");
-
-        let relation_list =
-            OperationValue::RelationList(RelationList::new(vec![DocumentId::new(&operation_id)]));
-        assert_eq!(relation_list.field_type(), "relation_list");
-
-        let pinned_relation_list = OperationValue::PinnedRelationList(PinnedRelationList::new(
-            vec![DocumentViewId::new(&[operation_id])],
-        ));
-        assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
-    }
-
-    #[rstest]
-    fn from_primitives(document_id: DocumentId, document_view_id: DocumentViewId) {
-        // Scalar types
-        assert_eq!(OperationValue::Boolean(true), true.into());
-        assert_eq!(OperationValue::Float(1.5), 1.5.into());
-        assert_eq!(OperationValue::Integer(3), 3.into());
-        assert_eq!(OperationValue::String("hellö".to_string()), "hellö".into());
-
-        // Relation types
-        assert_eq!(
-            OperationValue::Relation(Relation::new(document_id.clone())),
-            document_id.clone().into()
-        );
-        assert_eq!(
-            OperationValue::RelationList(RelationList::new(vec![document_id.clone()])),
-            vec![document_id].into()
-        );
-        assert_eq!(
-            OperationValue::PinnedRelation(PinnedRelation::new(document_view_id.clone())),
-            document_view_id.clone().into()
-        );
-        assert_eq!(
-            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                document_view_id.clone()
-            ])),
-            vec![document_view_id].into()
-        );
     }
 }

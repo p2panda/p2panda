@@ -1,24 +1,67 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Interfaces for interactions for operation-like structs.
-use crate::document::DocumentViewId;
-use crate::identity::PublicKey;
-use crate::operation::plain::PlainFields;
-use crate::operation::{OperationAction, OperationFields, OperationVersion};
-use crate::schema::SchemaId;
+use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::Hash;
+use crate::identity::{PublicKey, Signature};
+use crate::operation::{OperationAction, OperationFields, OperationId};
 
-/// Trait representing a struct encapsulating data which has been signed by an author.
-///
-/// The method returns the public key of the keypair used to perform signing.
-pub trait WithPublicKey {
-    /// Returns the public key of the author of this entry or operation.
+use super::header::SeqNum;
+use super::OperationVersion;
+
+/// Methods associated with identifying an operation and it's document.
+pub trait Identifiable {
+    /// Id of this operation.
+    fn id(&self) -> &OperationId;
+
+    /// Id of the document this operation applies to.
+    fn document_id(&self) -> DocumentId;
+}
+
+/// Properties required when wanting to verify the authenticity and cryptographic soundness of an operation.
+pub trait Verifiable {
+    /// The signature.
+    fn signature(&self) -> Signature;
+
+    /// Size size in bytes of the payload.
+    fn payload_size(&self) -> u64;
+
+    /// Hash of the payload.
+    fn payload_hash(&self) -> &Hash;
+
+    /// Hash of the preceding operation in an authors log, None if this is the first operation.
+    fn backlink(&self) -> Option<&Hash>;
+}
+
+/// Method returning the public key of a signed piece of data.
+pub trait Authored {
+    /// The public key of the keypair which signed this data.
     fn public_key(&self) -> &PublicKey;
 }
 
-/// Trait representing an "operation-like" struct.
-///
-/// Structs which "behave like" operations have a version and a distinct action. They can also
-/// relate to previous operations to form an operation graph.
+/// Method available on data which has a sequence number.
+pub trait Sequenced {
+    /// Sequence number of this operation.
+    fn seq_num(&self) -> SeqNum;
+}
+
+/// Method available on data which has a timestamp.
+pub trait Timestamped {
+    /// Timestamp when this operation was published.
+    fn timestamp(&self) -> u64;
+}
+
+/// Methods available on an operation which contains OperationFields in it's payload.
+pub trait Fielded {
+    /// Returns application data fields of operation.
+    fn fields(&self) -> Option<&OperationFields>;
+
+    /// Returns true if operation contains fields.
+    fn has_fields(&self) -> bool {
+        self.fields().is_some()
+    }
+}
+
 pub trait Actionable {
     /// Returns the operation version.
     fn version(&self) -> OperationVersion;
@@ -28,56 +71,20 @@ pub trait Actionable {
 
     /// Returns a list of previous operations.
     fn previous(&self) -> Option<&DocumentViewId>;
-}
-
-/// Trait representing an "operation-like" struct which contains data fields that can be checked
-/// against a schema.
-pub trait Schematic {
-    /// Returns the schema id.
-    fn schema_id(&self) -> &SchemaId;
-
-    /// Returns the fields holding the data.
-    fn fields(&self) -> Option<PlainFields>;
-}
-
-/// Trait to be implemented on "operation-like" structs.
-pub trait AsOperation {
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction;
-
-    /// Returns schema id of operation.
-    fn schema_id(&self) -> SchemaId;
-
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion;
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<OperationFields>;
-
-    /// Returns vector of this operation's previous operation ids
-    fn previous(&self) -> Option<DocumentViewId>;
-
-    /// Returns true if operation contains fields.
-    fn has_fields(&self) -> bool {
-        self.fields().is_some()
-    }
 
     /// Returns true if previous contains a document view id.
     fn has_previous_operations(&self) -> bool {
         self.previous().is_some()
     }
 
-    /// Returns true when instance is CREATE operation.
     fn is_create(&self) -> bool {
         self.action() == OperationAction::Create
     }
 
-    /// Returns true when instance is UPDATE operation.
     fn is_update(&self) -> bool {
         self.action() == OperationAction::Update
     }
 
-    /// Returns true when instance is DELETE operation.
     fn is_delete(&self) -> bool {
         self.action() == OperationAction::Delete
     }

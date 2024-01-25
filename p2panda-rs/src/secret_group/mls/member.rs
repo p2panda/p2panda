@@ -32,7 +32,7 @@ impl MlsMember {
 
         // Full key here because we need it to sign
         let private_key = key_pair.private_key().to_bytes();
-        let full_key = [private_key, public_key].concat();
+        let full_key = [private_key, public_key.to_vec()].concat();
 
         let signature_key_pair = SignatureKeypair::from_bytes(
             MLS_CIPHERSUITE_NAME.into(),

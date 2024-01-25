@@ -7,7 +7,6 @@
 pub mod constants;
 pub mod fixtures;
 pub mod memory_store;
-pub mod templates;
 
 /// Generates random bytes of given length.
 pub fn generate_random_bytes(len: usize) -> Vec<u8> {

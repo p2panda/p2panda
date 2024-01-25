@@ -4,11 +4,9 @@ use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
-use crate::WithId;
 
 /// Storage interface for storing and querying `Operations`.
 ///
@@ -20,9 +18,6 @@ use crate::WithId;
 /// their decoded values are stored and queried with this interface.
 #[async_trait]
 pub trait OperationStore {
-    /// Associated type representing an `Operation` in storage.
-    type Operation: AsOperation + WithId<OperationId> + WithId<DocumentId> + WithPublicKey + Sync;
-
     /// Insert an `Operation` into the store.
     ///
     /// We pass in the decoded `Operation` as well as it's `OperationId` the `PublicKey` of it's author and
@@ -34,13 +29,7 @@ pub trait OperationStore {
     /// `validation` and `domain` modules.
     ///
     /// Returns an error if a fatal storage error occurred.
-    async fn insert_operation(
-        &self,
-        id: &OperationId,
-        public_key: &PublicKey,
-        operation: &Operation,
-        document_id: &DocumentId,
-    ) -> Result<(), OperationStorageError>;
+    async fn insert_operation(&self, operation: &Operation) -> Result<(), OperationStorageError>;
 
     /// Get an `Operation` identified by it's `OperationId`, returns `None` if no `Operation` was found.
     ///
@@ -48,7 +37,7 @@ pub trait OperationStore {
     async fn get_operation(
         &self,
         id: &OperationId,
-    ) -> Result<Option<Self::Operation>, OperationStorageError>;
+    ) -> Result<Option<Operation>, OperationStorageError>;
 
     /// Get the `DocumentId` for an `Operation`.
     ///
@@ -65,7 +54,7 @@ pub trait OperationStore {
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
-    ) -> Result<Vec<Self::Operation>, OperationStorageError>;
+    ) -> Result<Vec<Operation>, OperationStorageError>;
 
     /// Get all `Operations` for a certain `Schema`.
     ///
@@ -74,5 +63,11 @@ pub trait OperationStore {
     async fn get_operations_by_schema_id(
         &self,
         id: &SchemaId,
-    ) -> Result<Vec<Self::Operation>, OperationStorageError>;
+    ) -> Result<Vec<Operation>, OperationStorageError>;
+
+    async fn get_latest_operation(
+        &self,
+        document_id: &DocumentId,
+        public_key: &PublicKey,
+    ) -> Result<Option<Operation>, OperationStorageError>;
 }
