@@ -300,10 +300,9 @@ mod tests {
             ]
         );
 
-        // The `cbor` macro serializes to human readable formats, in this case, hex encoded bytes.
+        // The `cbor` macro serializes to bytes
         let human_readable_cbor = cbor!(hash).unwrap();
-        assert!(human_readable_cbor.is_text());
-        assert_eq!(human_readable_cbor.as_text().unwrap(), hash_str)
+        assert!(human_readable_cbor.is_bytes());
     }
 
     #[test]
