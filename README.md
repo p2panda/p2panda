@@ -6,8 +6,6 @@
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
-<br />
-
 <div align="center">
   <h3>
     <a href="https://github.com/p2panda/p2panda/releases">
@@ -24,8 +22,6 @@
   </h3>
 </div>
 
-<br/>
-
 This repository will eventually contain all sorts of building blocks you can
 use to write offline-first applications with: Core data types for
 collaboration, fine-grained permissions, group encryption, efficient
@@ -36,10 +32,6 @@ replication, p2p networking and privacy-respecting deletion.
 > opiniated, but fully functional implementation of p2panda.
 
 ## Supported by
-
-<img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/ngi-logo.png" width="auto" height="80px"><br />
-<img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/nlnet-logo.svg" width="auto" height="80px"><br />
-<img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/eu-flag-logo.png" width="auto" height="80px">
 
 *This project has received funding from the European Union’s Horizon 2020
 research and innovation programme within the framework of the NGI-POINTER
