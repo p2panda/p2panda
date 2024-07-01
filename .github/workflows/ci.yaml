@@ -1,0 +1,71 @@
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.79.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Run tests
+        # Ensure debug output is also tested
+        env:
+          RUST_LOG: debug
+        run: cargo test --all-features
+
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Check project and dependencies
+        run: cargo check
+
+  fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          components: rustfmt
+          channel: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          components: clippy
+          channel: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Check code with clippy
+        run: cargo clippy -- -D warnings --no-deps
