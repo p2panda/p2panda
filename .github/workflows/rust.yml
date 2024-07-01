@@ -4,6 +4,7 @@ on: push
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.79.0
   cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
@@ -15,7 +16,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Run tests
         # Ensure debug output is also tested
@@ -34,10 +37,11 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
         with:
           bins: wasm-bindgen-cli,wasm-pack
           targets: wasm32-unknown-unknown
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Run wasm tests
         run: |
@@ -55,7 +59,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check project and dependencies
         run: |
@@ -70,9 +76,10 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
         with:
           components: rustfmt
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check formatting
         run: |
@@ -88,9 +95,10 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
         with:
           components: clippy
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check code with clippy
         run: |
@@ -109,10 +117,11 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
         with:
           bins: grcov
           components: llvm-tools-preview
+          channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Run compiler for source based coverage
         env:
