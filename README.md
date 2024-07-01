@@ -9,30 +9,7 @@
 <br />
 
 <div align="center">
-  <!-- CI status -->
-  <a href="https://github.com/p2panda/p2panda/actions">
-    <img src="https://img.shields.io/github/checks-status/p2panda/p2panda/main?style=flat-square" alt="CI Status" />
-  </a>
-  <!-- Codecov report -->
-  <a href="https://app.codecov.io/gh/p2panda/p2panda/">
-    <img src="https://img.shields.io/codecov/c/gh/p2panda/p2panda?style=flat-square" alt="Codecov Report" />
-  </a>
-  <!-- Crates version -->
-  <a href="https://crates.io/crates/p2panda-rs">
-    <img src="https://img.shields.io/crates/v/p2panda-rs.svg?style=flat-square" alt="Crates.io version" />
-  </a>
-  <!-- NPM version -->
-  <a href="https://www.npmjs.com/package/p2panda-js">
-    <img src="https://img.shields.io/npm/v/p2panda-js?style=flat-square" alt="NPM version" />
-  </a>
-</div>
-
-<div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda#installation">
-      Installation
-    </a>
-    <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
       Releases
     </a>
@@ -49,90 +26,14 @@
 
 <br/>
 
-This library provides all tools required to write a client, node or even your
-own protocol implementation for the [`p2panda`] network. It is shipped both as
-a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
-[`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
-browser.
+This repository will eventually contain all sorts of building blocks you can
+use to write offline-first applications with: Core data types for
+collaboration, fine-grained permissions, group encryption, efficient
+replication, p2p networking and privacy-respecting deletion.
 
-> The core p2panda [`specification`] is fully functional but still under review
-> so please be prepared for breaking API changes until we reach `v1.0`.
-> Currently no p2panda implementation has recieved a security audit.
-
-[`specification`]: https://p2panda.org/specifications
-
-## Features
-
-- Generate Ed25519 key pairs.
-- Create and encode [`Bamboo`] entries.
-- Publish schemas and validate data.
-- Create, update and delete data collaboratively.
-- Encrypt data with [`OpenMLS`].
-- Materialise documents from data changes.
-- Prepare data for [`node`] servers.
-
-[`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-[`node`]: https://github.com/p2panda/aquadoggo
-[`OpenMLS`]: https://github.com/openmls/openmls
-
-## Usage
-
-```javascript
-import { KeyPair } from "p2panda-js";
-const keyPair = new KeyPair();
-console.log(keyPair.publicKey());
-```
-
-```rust
-use p2panda_rs::identity::KeyPair;
-let key_pair = KeyPair::new();
-println!("{}", key_pair.public_key());
-```
-
-See [the demo application](https://p2panda.org) and its [source
-code](https://github.com/p2panda/zoo-adventures). More examples can be found in the
-[`p2panda-rs`] and [`p2panda-js`] directories.
-
-## Installation
-
-If you are using `p2panda` in web browsers or NodeJS applications run:
-
-```bash
-$ npm i p2panda-js
-```
-
-For Rust environments run:
-
-```bash
-$ cargo add p2panda-rs
-```
-
-## Documentation
-
-Visit the corresponding folders for development instructions and documentation:
-- [`p2panda-rs`]
-- [`p2panda-js`]
-
-## Benchmarks
-
-Performance benchmarks can be found in [benches](/p2panda-rs/benchmarks). You
-can run them using
-[`cargo-criterion`](https://crates.io/crates/cargo-criterion):
-
-```bash
-$ cargo install cargo-criterion
-$ cargo criterion
-# An HTML report with plots is generated automatically
-$ open target/criterion/reports/index.html
-```
-
-These benchmarks  can be used to compare the performance across branches by
-running them first in a base branch and then in the comparison branch. The
-HTML-reports will include a comparison of the two results.
-
-## License
-
-GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
+> Check out the [`v1`](https://github.com/p2panda/p2panda/tree/v1) branch and
+> [`aquadoggo`](https://github.com/p2panda/aquadoggo/) for a less modular, more
+> opiniated, but fully functional implementation of p2panda.
 
 ## Supported by
 
@@ -142,8 +43,7 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 
 *This project has received funding from the European Union’s Horizon 2020
 research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528 and NGI-ASSURE No 957073*
+Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
+NGI0-ENTRUST No 101069594*
 
 [`p2panda`]: https://p2panda.org
-[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js

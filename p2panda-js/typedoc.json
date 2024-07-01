@@ -1,5 +1,0 @@
-{
-    "$schema": "https://typedoc.org/schema.json",
-    "sort": ["visibility", "source-order", "alphabetical"],
-    "excludeInternal": true
-}
