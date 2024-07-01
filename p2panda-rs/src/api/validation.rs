@@ -528,7 +528,7 @@ mod tests {
         let store = MemoryStore::default();
         let (_, document_ids) = populate_store(&store, &config).await;
 
-        let document_id = document_ids.get(0).unwrap().to_owned();
+        let document_id = document_ids.first().unwrap().to_owned();
 
         let create_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
 

@@ -81,7 +81,7 @@ impl AsDocument for Document {
 
     /// Update the current view of this document.
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>) {
-        self.view_id = id.to_owned();
+        id.clone_into(&mut self.view_id);
         self.fields = view.cloned();
     }
 }

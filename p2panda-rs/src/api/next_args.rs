@@ -448,7 +448,7 @@ mod tests {
 
         // Here we are missing the skiplink.
         remove_entries(&store, &public_key, &[(0, 4)]);
-        let document_id = documents.get(0).unwrap();
+        let document_id = documents.first().unwrap();
         let document_view_id = DocumentViewId::new(&[document_id.as_str().parse().unwrap()]);
 
         let result = next_args(&store, &public_key, Some(&document_view_id)).await;

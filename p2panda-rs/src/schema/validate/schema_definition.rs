@@ -33,7 +33,7 @@ pub fn validate_description(value: &str) -> bool {
 /// Checks "fields" field of operations with "schema_definition_v1" schema id.
 ///
 /// 1. A schema must have at most 1024 fields
-fn validate_fields(value: &Vec<Vec<Hash>>) -> bool {
+fn validate_fields(value: &[Vec<Hash>]) -> bool {
     value.len() <= 1024
 }
 

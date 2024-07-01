@@ -9,7 +9,7 @@ pub const MAX_BLOB_PIECE_LENGTH: usize = 256 * 1000; // 256kb as per specificati
 /// Checks "data" field of operations with "blob_piece_v1" schema id.
 ///
 /// 1. It must be less than `MAX_BLOB_PIECE_LENGTH`
-pub fn validate_data(value: &Vec<u8>) -> bool {
+pub fn validate_data(value: &[u8]) -> bool {
     value.len() <= MAX_BLOB_PIECE_LENGTH
 }
 

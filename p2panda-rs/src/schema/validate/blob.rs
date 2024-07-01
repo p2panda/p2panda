@@ -22,7 +22,7 @@ pub fn validate_mime_type(value: &str) -> bool {
 /// Checks "pieces" field of operations with "blob_v1" schema id.
 ///
 /// 1. It is not empty
-pub fn validate_pieces(value: &Vec<Vec<Hash>>) -> bool {
+pub fn validate_pieces(value: &[Vec<Hash>]) -> bool {
     !value.is_empty()
 }
 

@@ -123,7 +123,7 @@ impl Validate for DocumentViewId {
 }
 
 impl Display for DocumentViewId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, operation_id) in self.iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             let _ = write!(f, "{}{}", &separator, operation_id.as_str());

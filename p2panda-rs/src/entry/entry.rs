@@ -37,13 +37,13 @@ impl EntryBuilder {
 
     /// Set log id of entry.
     pub fn log_id(mut self, log_id: &LogId) -> Self {
-        self.log_id = log_id.to_owned();
+        log_id.clone_into(&mut self.log_id);
         self
     }
 
     /// Set sequence number of entry.
     pub fn seq_num(mut self, seq_num: &SeqNum) -> Self {
-        self.seq_num = seq_num.to_owned();
+        seq_num.clone_into(&mut self.seq_num);
         self
     }
 

@@ -35,7 +35,7 @@ impl Iterator for LogId {
     type Item = LogId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.0 == std::u64::MAX {
+        match self.0 == u64::MAX {
             true => None,
             false => {
                 self.0 += 1;
