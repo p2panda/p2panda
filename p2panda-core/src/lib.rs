@@ -10,4 +10,4 @@ mod serde;
 
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
-pub use operation::{Body, Header, Operation};
+pub use operation::{validate_header, validate_operation, Body, Header, Operation, OperationError};
