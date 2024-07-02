@@ -32,6 +32,30 @@ impl Ord for Operation {
     }
 }
 
+pub fn validate_operation(operation: &Operation) -> Result<(), OperationError> {
+    validate_header(&operation.header)?;
+
+    let claimed_payload_size = operation.header.payload_size;
+    let claimed_payload_hash: Option<Hash> = match claimed_payload_size {
+        0 => None,
+        _ => {
+            let hash = operation
+                .header
+                .payload_hash
+                .ok_or(OperationError::MissingPayloadHash)?;
+            Some(hash)
+        }
+    };
+
+    if let Some(body) = &operation.body {
+        if claimed_payload_hash != Some(body.hash()) || claimed_payload_size != body.size() {
+            return Err(OperationError::PayloadMismatch);
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Header {
     pub version: u64,
@@ -73,6 +97,36 @@ impl Header {
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
     }
+}
+
+pub fn validate_header(header: &Header) -> Result<(), OperationError> {
+    if header.version != 1 {
+        return Err(OperationError::UnsupportedVersion(header.version, 1));
+    }
+
+    if header.signature.is_none() {
+        return Err(OperationError::MissingSignature);
+    }
+
+    if !header.verify() {
+        return Err(OperationError::SignatureMismatch);
+    }
+
+    if (header.payload_hash.is_some() && header.payload_size == 0)
+        || (header.payload_hash.is_none() && header.payload_size > 0)
+    {
+        return Err(OperationError::InconsistentPayloadInfo);
+    }
+
+    if !header.previous.is_empty() && header.backlink.is_none() {
+        return Err(OperationError::LinksMismatch);
+    }
+
+    if header.backlink.is_some() && header.seq_num == 0 {
+        return Err(OperationError::SeqNumMismatch);
+    }
+
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq)]
