@@ -3,9 +3,11 @@
 use std::fmt;
 use std::str::FromStr;
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[cfg(feature = "serde")]
 use crate::serde::{deserialize_hex, serialize_hex};
 
 /// Size of BLAKE3 hashes.
@@ -119,6 +121,7 @@ impl fmt::Debug for Hash {
     }
 }
 
+#[cfg(feature = "serde")]
 impl Serialize for Hash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -128,6 +131,7 @@ impl Serialize for Hash {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Hash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

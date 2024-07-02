@@ -2,6 +2,7 @@
 
 pub mod hash;
 pub mod identity;
+#[cfg(feature = "serde")]
 mod serde;
 
 pub use hash::{Hash, HashError};
