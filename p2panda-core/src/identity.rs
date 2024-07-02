@@ -5,12 +5,7 @@ use std::str::FromStr;
 
 use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-#[cfg(feature = "serde")]
-use crate::serde::{deserialize_hex, serialize_hex};
 
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
@@ -105,31 +100,6 @@ impl TryFrom<&[u8]> for PrivateKey {
             .map_err(|_| IdentityError::InvalidLength(value_len, PRIVATE_KEY_LEN))?;
 
         Ok(Self::from(checked_value))
-    }
-}
-
-#[cfg(feature = "serde")]
-impl Serialize for PrivateKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_hex(self.0.as_bytes(), serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for PrivateKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserialize_hex(deserializer)?;
-
-        bytes
-            .as_slice()
-            .try_into()
-            .map_err(|err: IdentityError| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -237,29 +207,6 @@ impl FromStr for PublicKey {
     }
 }
 
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_hex(&self.0.to_bytes(), serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserialize_hex(deserializer)?;
-
-        bytes
-            .as_slice()
-            .try_into()
-            .map_err(|err: IdentityError| serde::de::Error::custom(err.to_string()))
-    }
-}
-
 #[derive(Copy, Eq, PartialEq, Clone)]
 pub struct Signature(ed25519_dalek::Signature);
 
@@ -334,29 +281,6 @@ impl TryFrom<&[u8]> for Signature {
     }
 }
 
-impl Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_hex(&self.0.to_bytes(), serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserialize_hex(deserializer)?;
-
-        bytes
-            .as_slice()
-            .try_into()
-            .map_err(|err: IdentityError| serde::de::Error::custom(err.to_string()))
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum IdentityError {
     /// Invalid number of bytes.
@@ -383,33 +307,7 @@ pub enum IdentityError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PrivateKey, PublicKey};
-
-    #[test]
-    fn serialize_public_key() {
-        // Serialize CBOR (non human-readable byte encoding)
-        let mut bytes: Vec<u8> = Vec::new();
-        let public_key = PublicKey::from_bytes(&[
-            215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
-            243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
-        ])
-        .unwrap();
-        ciborium::ser::into_writer(&public_key, &mut bytes).unwrap();
-        assert_eq!(
-            bytes,
-            vec![
-                88, 32, 215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14,
-                225, 114, 243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
-            ]
-        );
-
-        // Serialize JSON (human-readable hex encoding)
-        let json = serde_json::to_string(&public_key).unwrap();
-        assert_eq!(
-            json,
-            "\"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a\""
-        );
-    }
+    use super::PrivateKey;
 
     #[test]
     fn signing() {

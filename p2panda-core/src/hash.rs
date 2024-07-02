@@ -3,12 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-#[cfg(feature = "serde")]
-use crate::serde::{deserialize_hex, serialize_hex};
 
 /// Size of BLAKE3 hashes.
 pub const HASH_LEN: usize = blake3::KEY_LEN;
@@ -121,31 +116,6 @@ impl fmt::Debug for Hash {
     }
 }
 
-#[cfg(feature = "serde")]
-impl Serialize for Hash {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_hex(self.0.as_bytes(), serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for Hash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserialize_hex(deserializer)?;
-
-        bytes
-            .as_slice()
-            .try_into()
-            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
-    }
-}
-
 /// Error types for `Hash` struct.
 #[derive(Error, Debug)]
 pub enum HashError {
@@ -173,44 +143,6 @@ mod tests {
                 155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67
             ]
         );
-    }
-
-    #[test]
-    fn serialize() {
-        // Serialize CBOR (non human-readable byte encoding)
-        let mut bytes: Vec<u8> = Vec::new();
-        let hash = Hash::new([1, 2, 3]);
-        ciborium::ser::into_writer(&hash, &mut bytes).unwrap();
-        assert_eq!(
-            bytes,
-            vec![
-                88, 32, 177, 119, 236, 27, 242, 109, 251, 59, 112, 16, 212, 115, 230, 212, 71, 19,
-                178, 155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67
-            ]
-        );
-
-        // Serialize JSON (human-readable hex encoding)
-        let json = serde_json::to_string(&hash).unwrap();
-        assert_eq!(
-            json,
-            "\"b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\""
-        );
-    }
-
-    #[test]
-    fn deserialize() {
-        // Deserialize CBOR (non human-readable byte encoding)
-        let bytes = [
-            88, 32, 177, 119, 236, 27, 242, 109, 251, 59, 112, 16, 212, 115, 230, 212, 71, 19, 178,
-            155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67,
-        ];
-        let hash: Hash = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(hash, Hash::new([1, 2, 3]));
-
-        // Deserialize JSON (human-readable hex encoding)
-        let json = "\"b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\"";
-        let hash: Hash = serde_json::from_str(json).unwrap();
-        assert_eq!(hash, Hash::new([1, 2, 3]));
     }
 
     #[test]

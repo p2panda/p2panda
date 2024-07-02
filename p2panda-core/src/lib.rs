@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#[cfg(feature = "cbor")]
+mod cbor;
 pub mod hash;
 pub mod identity;
 pub mod operation;
