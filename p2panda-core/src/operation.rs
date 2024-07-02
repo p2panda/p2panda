@@ -1,22 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
-
-#[cfg(feature = "serde")]
-use serde::de::{Error as SerdeError, SeqAccess, Visitor};
-#[cfg(feature = "serde")]
-use serde::ser::SerializeSeq;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
-#[cfg(feature = "serde")]
-use crate::serde::{deserialize_hex, serialize_hex};
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Operation {
     pub hash: Hash,
     pub header: Header,
@@ -60,20 +49,6 @@ pub trait Encode {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
-#[cfg(feature = "cbor")]
-impl Encode for Header {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-
-        ciborium::ser::into_writer(&self, &mut bytes)
-            // We can be sure that all values in this module are serializable and _if_ ciborium
-            // still fails then because of something really bad ..
-            .expect("CBOR encoder failed due to an critical IO error");
-
-        bytes
-    }
-}
-
 impl Header {
     pub fn sign(&mut self, private_key: &PrivateKey) {
         // Make sure the signature is not already set before we encode
@@ -100,144 +75,8 @@ impl Header {
     }
 }
 
-#[cfg(feature = "serde")]
-impl Serialize for Header {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut seq = serializer.serialize_seq(None)?;
-        seq.serialize_element(&self.version)?;
-        seq.serialize_element(&self.public_key)?;
-
-        if let Some(signature) = &self.signature {
-            seq.serialize_element(signature)?;
-        }
-
-        seq.serialize_element(&self.payload_size)?;
-        seq.serialize_element(&self.payload_hash)?;
-        seq.serialize_element(&self.timestamp)?;
-        seq.serialize_element(&self.seq_num)?;
-
-        if let Some(backlink) = &self.backlink {
-            seq.serialize_element(backlink)?;
-        }
-
-        seq.serialize_element(&self.previous)?;
-
-        seq.end()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for Header {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct HeaderVisitor;
-
-        impl<'de> Visitor<'de> for HeaderVisitor {
-            type Value = Header;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Header encoded as a sequence")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let version: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid version, expected u64"))?
-                    .ok_or(SerdeError::custom("version missing"))?;
-
-                let public_key: PublicKey = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid public key, expected bytes"))?
-                    .ok_or(SerdeError::custom("public key missing"))?;
-
-                let signature: Signature = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
-                    .ok_or(SerdeError::custom("signature missing"))?;
-
-                let payload_size: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid payload size, expected u64"))?
-                    .ok_or(SerdeError::custom("payload size missing"))?;
-
-                let payload_hash: Option<Hash> = match payload_size {
-                    0 => None,
-                    _ => {
-                        let hash: Hash = seq
-                            .next_element()
-                            .map_err(|_| {
-                                SerdeError::custom("invalid payload hash, expected bytes")
-                            })?
-                            .ok_or(SerdeError::custom("payload hash missing"))?;
-                        Some(hash)
-                    }
-                };
-
-                let timestamp: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid timestamp, expected u64"))?
-                    .ok_or(SerdeError::custom("timestamp missing"))?;
-
-                let seq_num: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid sequence number, expected u64"))?
-                    .ok_or(SerdeError::custom("sequence number missing"))?;
-
-                let backlink: Option<Hash> = match seq_num {
-                    0 => None,
-                    _ => {
-                        let hash: Hash = seq
-                            .next_element()
-                            .map_err(|err| {
-                                SerdeError::custom(format!(
-                                    "invalid backlink, expected bytes {err}"
-                                ))
-                            })?
-                            .ok_or(SerdeError::custom("backlink missing"))?;
-                        Some(hash)
-                    }
-                };
-
-                let previous: Vec<Hash> = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
-                    .ok_or(SerdeError::custom("previous array missing"))?;
-
-                Ok(Header {
-                    version,
-                    public_key,
-                    signature: Some(signature),
-                    payload_hash,
-                    payload_size,
-                    timestamp,
-                    seq_num,
-                    backlink,
-                    previous,
-                })
-            }
-        }
-
-        deserializer.deserialize_seq(HeaderVisitor)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Body(
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")
-    )]
-    Vec<u8>,
-);
+pub struct Body(pub(crate) Vec<u8>);
 
 impl Body {
     pub fn new(bytes: &[u8]) -> Self {
