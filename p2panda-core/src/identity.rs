@@ -5,9 +5,11 @@ use std::str::FromStr;
 
 use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[cfg(feature = "serde")]
 use crate::serde::{deserialize_hex, serialize_hex};
 
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
@@ -106,6 +108,7 @@ impl TryFrom<&[u8]> for PrivateKey {
     }
 }
 
+#[cfg(feature = "serde")]
 impl Serialize for PrivateKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -115,6 +118,7 @@ impl Serialize for PrivateKey {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for PrivateKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
