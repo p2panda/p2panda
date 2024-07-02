@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
@@ -52,7 +50,6 @@ pub struct Header {
     pub seq_num: u64,
     pub backlink: Option<Hash>,
     pub previous: Vec<Hash>,
-    pub extensions: Option<Extensions>,
 }
 
 pub trait Encode {
@@ -97,13 +94,6 @@ impl Header {
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
     }
-
-    pub fn extension(&self, key: &str) -> Option<&Extension> {
-        match &self.extensions {
-            Some(extensions) => extensions.get(key),
-            None => None,
-        }
-    }
 }
 
 #[cfg(feature = "serde")]
@@ -130,10 +120,6 @@ impl Serialize for Header {
         }
 
         seq.serialize_element(&self.previous)?;
-
-        if let Some(extensions) = &self.extensions {
-            seq.serialize_element(extensions)?;
-        }
 
         seq.end()
     }
@@ -221,10 +207,6 @@ impl<'de> Deserialize<'de> for Header {
                     .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
                     .ok_or(SerdeError::custom("previous array missing"))?;
 
-                let extensions: Option<Extensions> = seq
-                    .next_element()
-                    .map_err(|err| SerdeError::custom(format!("invalid extensions map: {err}")))?;
-
                 Ok(Header {
                     version,
                     public_key,
@@ -235,7 +217,6 @@ impl<'de> Deserialize<'de> for Header {
                     seq_num,
                     backlink,
                     previous,
-                    extensions,
                 })
             }
         }
@@ -269,137 +250,6 @@ impl Body {
 
     pub fn size(&self) -> u64 {
         self.0.len() as u64
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Extension {
-    Boolean(bool),
-    Bytes(Vec<u8>),
-    Float(f64),
-    Integer(i64),
-    String(String),
-}
-
-impl From<bool> for Extension {
-    fn from(value: bool) -> Self {
-        Extension::Boolean(value)
-    }
-}
-
-impl From<&[u8]> for Extension {
-    fn from(value: &[u8]) -> Self {
-        Extension::Bytes(value.to_vec())
-    }
-}
-
-impl From<Vec<u8>> for Extension {
-    fn from(value: Vec<u8>) -> Self {
-        Extension::Bytes(value)
-    }
-}
-
-impl From<f64> for Extension {
-    fn from(value: f64) -> Self {
-        Extension::Float(value)
-    }
-}
-
-impl From<i64> for Extension {
-    fn from(value: i64) -> Self {
-        Extension::Integer(value)
-    }
-}
-
-impl From<&str> for Extension {
-    fn from(value: &str) -> Self {
-        Extension::String(value.to_string())
-    }
-}
-
-impl From<String> for Extension {
-    fn from(value: String) -> Self {
-        Extension::String(value)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct Extensions(BTreeMap<String, Extension>);
-
-impl Default for Extensions {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Extensions {
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
-    }
-
-    pub fn insert(&mut self, key: &str, value: Extension) {
-        self.0.insert(key.to_string(), value);
-    }
-
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.0.contains_key(key)
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Extension> {
-        self.0.get(key)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for Extensions {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct ExtensionsVisitor;
-
-        impl<'de> Visitor<'de> for ExtensionsVisitor {
-            type Value = Extensions;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("canonical operation extensions map")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut extensions = Extensions::new();
-                let mut last_key: String = String::new();
-
-                while let Some(key) = map.next_key::<String>()? {
-                    // Check that field names are sorted lexicographically to ensure canonical
-                    // encoding
-                    if last_key.cmp(&key) == Ordering::Greater {
-                        return Err(serde::de::Error::custom(format!(
-                            "encountered unsorted extension key: '{}' should be before '{}'",
-                            key, last_key,
-                        )));
-                    }
-
-                    let value: Extension = map.next_value()?;
-                    if extensions.0.insert(key.to_string(), value).is_some() {
-                        // Fail if field names are duplicate to ensure canonical encoding
-                        return Err(serde::de::Error::custom(format!(
-                            "encountered duplicate extension key '{}'",
-                            key
-                        )));
-                    }
-
-                    last_key = key;
-                }
-
-                Ok(extensions)
-            }
-        }
-
-        deserializer.deserialize_map(ExtensionsVisitor)
     }
 }
 
