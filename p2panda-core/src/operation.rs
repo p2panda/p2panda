@@ -176,3 +176,40 @@ pub enum OperationError {
     #[error("payload hash and size do not match given body")]
     PayloadMismatch,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::PrivateKey;
+
+    use super::*;
+
+    #[test]
+    fn sign_and_verify() {
+        let private_key = PrivateKey::new();
+
+        let body = Body::new("Hello, Sloth!".as_bytes());
+
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+        };
+        assert!(!header.verify());
+
+        header.sign(&private_key);
+        assert!(header.verify());
+
+        let operation = Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        };
+        assert!(validate_operation(&operation).is_ok());
+    }
+}
