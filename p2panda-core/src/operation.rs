@@ -2,13 +2,17 @@
 
 use std::fmt;
 
+#[cfg(feature = "serde")]
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
+#[cfg(feature = "serde")]
 use serde::ser::SerializeSeq;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+#[cfg(feature = "serde")]
 use crate::serde::{deserialize_hex, serialize_hex};
 
 #[derive(Clone, Debug)]
