@@ -3,24 +3,17 @@ name = "p2panda-core"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = ["cbor"]
-cbor = ["serde", "dep:ciborium"]
-serde = [
-  "dep:serde",
-  "dep:serde_bytes",
-  "ed25519-dalek/serde",
-  "hex/serde",
-]
+[lints]
+workspace = true
 
 [dependencies]
 blake3 = "1.5.1"
-ciborium = { version = "0.2.2", optional = true }
+ciborium = "0.2.2"
 ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
-hex = "0.4.3"
+hex = { version = "0.4.3", features = ["serde"] }
 rand = "0.8.5"
-serde = { version = "1.0.203", features = ["derive"], optional = true }
-serde_bytes = { version = "0.11.15", optional = true }
+serde = { version = "1.0.203", features = ["derive"] }
+serde_bytes = { version = "0.11.15" }
 thiserror = "1.0.61"
 
 [dev-dependencies]
