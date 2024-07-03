@@ -85,6 +85,7 @@ where
     /// has been observed yet.
     pub previous: Vec<Hash>,
 
+    /// Custom meta data.
     pub extension: Option<E>,
 }
 
