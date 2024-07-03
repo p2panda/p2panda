@@ -72,8 +72,8 @@ where
     /// Time in microseconds since the Unix epoch.
     pub timestamp: u64,
 
-    /// Number of operations this author has published to this log, begins with 0 and is
-    /// always incremented by 1 with each new operation by the same author.
+    /// Number of operations this author has published to this log, begins with 0 and is always
+    /// incremented by 1 with each new operation by the same author.
     pub seq_num: u64,
 
     /// Hash of the previous operation of the same author and log. Can be omitted if first
