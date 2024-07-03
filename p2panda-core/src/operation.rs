@@ -74,6 +74,17 @@ pub trait Encode {
 }
 
 impl Header {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        ciborium::ser::into_writer(&self, &mut bytes)
+            // We can be sure that all values in this module are serializable and _if_ ciborium
+            // still fails then because of something really bad ..
+            .expect("CBOR encoder failed due to an critical IO error");
+
+        bytes
+    }
+
     pub fn sign(&mut self, private_key: &PrivateKey) {
         // Make sure the signature is not already set before we encode
         self.signature = None;
