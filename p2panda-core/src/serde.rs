@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
+use std::marker::PhantomData;
 
-use serde::de::{Error as SerdeError, SeqAccess, Visitor};
+use serde::de::{DeserializeOwned, Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
@@ -130,7 +131,10 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl Serialize for Header {
+impl<E> Serialize for Header<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -154,19 +158,31 @@ impl Serialize for Header {
 
         seq.serialize_element(&self.previous)?;
 
+        if let Some(extension) = &self.extension {
+            seq.serialize_element(extension)?;
+        }
+
         seq.end()
     }
 }
 
-impl<'de> Deserialize<'de> for Header {
+impl<'de, E> Deserialize<'de> for Header<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        struct HeaderVisitor;
+        struct HeaderVisitor<E> {
+            _marker: PhantomData<E>,
+        }
 
-        impl<'de> Visitor<'de> for HeaderVisitor {
-            type Value = Header;
+        impl<'de, E> Visitor<'de> for HeaderVisitor<E>
+        where
+            E: Clone + Serialize + DeserializeOwned,
+        {
+            type Value = Header<E>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("Header encoded as a sequence")
@@ -239,6 +255,10 @@ impl<'de> Deserialize<'de> for Header {
                     .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
                     .ok_or(SerdeError::custom("previous array missing"))?;
 
+                let extension: Option<E> = seq
+                    .next_element()
+                    .map_err(|err| SerdeError::custom(format!("invalid extension: {err}")))?;
+
                 Ok(Header {
                     version,
                     public_key,
@@ -249,11 +269,14 @@ impl<'de> Deserialize<'de> for Header {
                     seq_num,
                     backlink,
                     previous,
+                    extension,
                 })
             }
         }
 
-        deserializer.deserialize_seq(HeaderVisitor)
+        deserializer.deserialize_seq(HeaderVisitor::<E> {
+            _marker: PhantomData,
+        })
     }
 }
 
