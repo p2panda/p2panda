@@ -3,3 +3,6 @@ resolver = "2"
 members = [
   "p2panda-core",
 ]
+
+[workspace.lints.rust]
+missing_docs = "warn"
