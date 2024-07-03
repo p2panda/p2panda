@@ -46,7 +46,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Header<E>
 where
     E: Serialize + DeserializeOwned,
@@ -317,6 +317,43 @@ mod tests {
             body: Some(body),
         };
         assert!(validate_operation(&operation).is_ok());
+    }
+
+    #[test]
+    fn valid_backlink_header() {
+        let private_key = PrivateKey::new();
+
+        let mut header_0 = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        };
+        header_0.sign(&private_key);
+        assert!(validate_header(&header_0).is_ok());
+
+        let mut header_1 = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(header_0.hash()),
+            previous: vec![],
+            extension: None,
+        };
+        header_1.sign(&private_key);
+        assert!(validate_header(&header_1).is_ok());
+
+        assert!(validate_backlink(&header_0, &header_1).is_ok());
     }
 
     #[test]
