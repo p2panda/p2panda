@@ -148,7 +148,10 @@ where
         }
 
         seq.serialize_element(&self.payload_size)?;
-        seq.serialize_element(&self.payload_hash)?;
+        if let Some(hash) = &self.payload_hash {
+            seq.serialize_element(&hash)?;
+        }
+
         seq.serialize_element(&self.timestamp)?;
         seq.serialize_element(&self.seq_num)?;
 
@@ -301,10 +304,12 @@ impl<'de> Deserialize<'de> for Body {
 
 #[cfg(test)]
 mod tests {
+    use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
     use crate::hash::Hash;
-    use crate::identity::PublicKey;
+    use crate::identity::{PrivateKey, PublicKey};
+    use crate::operation::Header;
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -395,6 +400,80 @@ mod tests {
         assert_eq!(
             json,
             "\"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a\""
+        );
+    }
+
+    fn assert_serde_roundtrip<
+        E: Clone + std::fmt::Debug + PartialEq + Serialize + DeserializeOwned,
+    >(
+        header: Header<E>,
+        private_key: &PrivateKey,
+    ) {
+        let mut header = header;
+        header.sign(&private_key);
+
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&header, &mut bytes).unwrap();
+        let header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header, header_again);
+    }
+
+    #[test]
+    fn serde_roundtrip_operations() {
+        #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+        struct Extension {
+            custom_field: u64,
+        }
+
+        let extension = Extension { custom_field: 12 };
+        let private_key = PrivateKey::new();
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                signature: None,
+                payload_size: 123,
+                payload_hash: Some(Hash::new(vec![1, 2, 3])),
+                timestamp: 0,
+                seq_num: 0,
+                backlink: None,
+                previous: vec![],
+                extension: Some(extension.clone()),
+            },
+            &private_key,
+        );
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                signature: None,
+                payload_size: 0,
+                payload_hash: None,
+                timestamp: 0,
+                seq_num: 7,
+                backlink: Some(Hash::new(vec![1, 2, 3])),
+                previous: vec![],
+                extension: None,
+            },
+            &private_key,
+        );
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                signature: None,
+                payload_size: 0,
+                payload_hash: None,
+                timestamp: 0,
+                seq_num: 0,
+                backlink: None,
+                previous: vec![],
+                extension: Some(extension),
+            },
+            &private_key,
         );
     }
 }
