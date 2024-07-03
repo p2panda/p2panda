@@ -32,21 +32,41 @@ impl Ord for Operation {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Header {
+    /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
-    pub public_key: PublicKey,
-    pub signature: Option<Signature>,
-    pub payload_hash: Option<Hash>,
-    pub payload_size: u64,
-    pub timestamp: u64,
-    pub seq_num: u64,
-    pub backlink: Option<Hash>,
-    pub previous: Vec<Hash>,
-}
 
-pub trait Encode {
-    fn to_bytes(&self) -> Vec<u8>;
+    /// Author of this operation.
+    pub public_key: PublicKey,
+
+    /// Signature by author over all fields in header, providing authenticity.
+    pub signature: Option<Signature>,
+
+    /// Number of bytes of the body of this operation, can be omitted if no body is given.
+    pub payload_size: u64,
+
+    /// Hash of the body of this operation, can be omitted if no body is given.
+    ///
+    /// Keeping the hash here allows us to delete the payload (off-chain data) while retaining the
+    /// ability to check the signature of the header.
+    pub payload_hash: Option<Hash>,
+
+    /// Time in microseconds since the Unix epoch.
+    pub timestamp: u64,
+
+    /// Number of operations this author has published to this log, begins with 0 and is
+    /// always incremented by 1 with each new operation by the same author.
+    pub seq_num: u64,
+
+    /// Hash of the previous operation of the same author and log. Can be omitted if first
+    /// operation in log.
+    pub backlink: Option<Hash>,
+
+    /// List of hashes of the operations we refer to as the "previous" ones. These are operations
+    /// from other authors. Can be left empty if no partial ordering is required or no other author
+    /// has been observed yet.
+    pub previous: Vec<Hash>,
 }
 
 impl Header {
