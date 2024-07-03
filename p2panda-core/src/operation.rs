@@ -337,10 +337,19 @@ mod tests {
             extension: None,
         };
 
+        // Incompatible operation format
+        let mut header = header_base.clone();
+        header.version = 0;
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_header(&header),
+            Err(OperationError::UnsupportedVersion(0, 1))
+        ));
+
         // Signature doesn't match public key
         let mut header = header_base.clone();
-        header.sign(&private_key);
         header.public_key = PrivateKey::new().public_key();
+        header.sign(&private_key);
         assert!(matches!(
             validate_header(&header),
             Err(OperationError::SignatureMismatch)
@@ -355,6 +364,15 @@ mod tests {
             Err(OperationError::BacklinkMissing)
         ));
 
+        // Backlink given but sequence number indicates none
+        let mut header = header_base.clone();
+        header.backlink = Some(Hash::new(vec![4, 5, 6]));
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_header(&header),
+            Err(OperationError::SeqNumMismatch)
+        ));
+
         // Payload size does not match
         let mut header = header_base.clone();
         header.payload_size = 11;
@@ -366,6 +384,28 @@ mod tests {
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
+        ));
+
+        // Payload hash does not match
+        let mut header = header_base.clone();
+        header.payload_hash = Some(Hash::new(vec![4, 5, 6]));
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_operation(&Operation {
+                hash: header.hash(),
+                header,
+                body: Some(body.clone()),
+            }),
+            Err(OperationError::PayloadMismatch)
+        ));
+
+        // Expected backlink when `previous` is given
+        let mut header = header_base.clone();
+        header.previous = vec![Hash::new(vec![1, 2, 3])];
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_header(&header),
+            Err(OperationError::LinksMismatch)
         ));
     }
 }
