@@ -244,6 +244,10 @@ pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
         return Err(OperationError::SeqNumMismatch);
     }
 
+    if header.backlink.is_none() && header.seq_num > 0 {
+        return Err(OperationError::BacklinkMissing);
+    }
+
     Ok(())
 }
 
@@ -313,5 +317,55 @@ mod tests {
             body: Some(body),
         };
         assert!(validate_operation(&operation).is_ok());
+    }
+
+    #[test]
+    fn invalid_operations() {
+        let private_key = PrivateKey::new();
+        let body = Body::new("Hello, Sloth!".as_bytes());
+
+        let header_base = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        };
+
+        // Signature doesn't match public key
+        let mut header = header_base.clone();
+        header.sign(&private_key);
+        header.public_key = PrivateKey::new().public_key();
+        assert!(matches!(
+            validate_header(&header),
+            Err(OperationError::SignatureMismatch)
+        ));
+
+        // Backlink missing
+        let mut header = header_base.clone();
+        header.seq_num = 1;
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_header(&header),
+            Err(OperationError::BacklinkMissing)
+        ));
+
+        // Payload size does not match
+        let mut header = header_base.clone();
+        header.payload_size = 11;
+        header.sign(&private_key);
+        assert!(matches!(
+            validate_operation(&Operation {
+                hash: header.hash(),
+                header,
+                body: Some(body.clone()),
+            }),
+            Err(OperationError::PayloadMismatch)
+        ));
     }
 }
