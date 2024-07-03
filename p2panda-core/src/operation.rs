@@ -251,27 +251,27 @@ pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
     Ok(())
 }
 
-pub fn validate_log<E>(
-    backlink_header: &Header<E>,
+pub fn validate_backlink<E>(
+    past_header: &Header<E>,
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
-    if backlink_header.public_key != header.public_key {
+    if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
     }
 
-    if backlink_header.seq_num + 1 != header.seq_num {
+    if past_header.seq_num + 1 != header.seq_num {
         return Err(OperationError::SeqNumNonIncremental(
-            backlink_header.seq_num + 1,
+            past_header.seq_num + 1,
             header.seq_num,
         ));
     }
 
     match header.backlink {
         Some(backlink) => {
-            if backlink_header.hash() != backlink {
+            if past_header.hash() != backlink {
                 return Err(OperationError::BacklinkMismatch);
             }
         }
