@@ -1,41 +1,56 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
 #[derive(Clone, Debug)]
-pub struct Operation {
+pub struct Operation<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     pub hash: Hash,
-    pub header: Header,
+    pub header: Header<E>,
     pub body: Option<Body>,
 }
 
-impl PartialEq for Operation {
+impl<E> PartialEq for Operation<E>
+where
+    for<'de> E: Clone + Serialize + Deserialize<'de>,
+{
     fn eq(&self, other: &Self) -> bool {
         self.hash.eq(&other.hash)
     }
 }
 
-impl Eq for Operation {}
+impl<E> Eq for Operation<E> where E: Clone + Serialize + DeserializeOwned {}
 
-impl PartialOrd for Operation {
+impl<E> PartialOrd for Operation<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.hash.cmp(&other.hash))
     }
 }
 
-impl Ord for Operation {
+impl<E> Ord for Operation<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash.cmp(&other.hash)
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Header {
-    // @TODO: Generic extension field
-    //
+pub struct Header<E>
+where
+    E: Serialize + DeserializeOwned,
+{
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
@@ -69,9 +84,14 @@ pub struct Header {
     /// from other authors. Can be left empty if no partial ordering is required or no other author
     /// has been observed yet.
     pub previous: Vec<Hash>,
+
+    pub extension: Option<E>,
 }
 
-impl Header {
+impl<E> Header<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
@@ -168,7 +188,9 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
-pub fn validate_operation(operation: &Operation) -> Result<(), OperationError> {
+pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
+    operation: &Operation<E>,
+) -> Result<(), OperationError> {
     validate_header(&operation.header)?;
 
     let claimed_payload_size = operation.header.payload_size;
@@ -192,7 +214,9 @@ pub fn validate_operation(operation: &Operation) -> Result<(), OperationError> {
     Ok(())
 }
 
-pub fn validate_header(header: &Header) -> Result<(), OperationError> {
+pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
+    header: &Header<E>,
+) -> Result<(), OperationError> {
     if header.version != 1 {
         return Err(OperationError::UnsupportedVersion(header.version, 1));
     }
@@ -222,7 +246,13 @@ pub fn validate_header(header: &Header) -> Result<(), OperationError> {
     Ok(())
 }
 
-pub fn validate_log(backlink_header: &Header, header: &Header) -> Result<(), OperationError> {
+pub fn validate_log<E>(
+    backlink_header: &Header<E>,
+    header: &Header<E>,
+) -> Result<(), OperationError>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     if backlink_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
     }
@@ -259,7 +289,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let mut header = Header {
+        let mut header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
             signature: None,
@@ -269,6 +299,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
+            extension: None,
         };
         assert!(!header.verify());
 
