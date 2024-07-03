@@ -154,6 +154,18 @@ pub enum OperationError {
 
     #[error("payload hash and size do not match given body")]
     PayloadMismatch,
+
+    #[error("logs can not contain operations of different authors")]
+    TooManyAuthors,
+
+    #[error("expected sequence number {0} but found {1}")]
+    SeqNumNonIncremental(u64, u64),
+
+    #[error("expected backlink but none was given")]
+    BacklinkMissing,
+
+    #[error("given backlink did not match previous operation")]
+    BacklinkMismatch,
 }
 
 pub fn validate_operation(operation: &Operation) -> Result<(), OperationError> {
@@ -211,22 +223,25 @@ pub fn validate_header(header: &Header) -> Result<(), OperationError> {
 }
 
 pub fn validate_log(backlink_header: &Header, header: &Header) -> Result<(), OperationError> {
-    if (backlink_header.public_key != header.public_key) {
-        // @TODO: Authors not matching
+    if backlink_header.public_key != header.public_key {
+        return Err(OperationError::TooManyAuthors);
     }
 
-    if (backlink_header.seq_num + 1 != header.seq_num) {
-        // @TODO: Non-incremental seq_num
+    if backlink_header.seq_num + 1 != header.seq_num {
+        return Err(OperationError::SeqNumNonIncremental(
+            backlink_header.seq_num + 1,
+            header.seq_num,
+        ));
     }
 
     match header.backlink {
         Some(backlink) => {
             if backlink_header.hash() != backlink {
-                // @TODO: Backlink not matching
+                return Err(OperationError::BacklinkMismatch);
             }
         }
         None => {
-            // @TODO: Backlink missing
+            return Err(OperationError::BacklinkMissing);
         }
     }
 
