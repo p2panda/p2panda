@@ -4,3 +4,6 @@ members = [
   "p2panda-core",
   "p2panda-net",
 ]
+
+[workspace.lints.rust]
+missing_docs = "warn"
