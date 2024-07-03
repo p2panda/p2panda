@@ -34,6 +34,8 @@ impl Ord for Operation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Header {
+    // @TODO: Generic extension field
+    //
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
@@ -203,6 +205,29 @@ pub fn validate_header(header: &Header) -> Result<(), OperationError> {
 
     if header.backlink.is_some() && header.seq_num == 0 {
         return Err(OperationError::SeqNumMismatch);
+    }
+
+    Ok(())
+}
+
+pub fn validate_log(backlink_header: &Header, header: &Header) -> Result<(), OperationError> {
+    if (backlink_header.public_key != header.public_key) {
+        // @TODO: Authors not matching
+    }
+
+    if (backlink_header.seq_num + 1 != header.seq_num) {
+        // @TODO: Non-incremental seq_num
+    }
+
+    match header.backlink {
+        Some(backlink) => {
+            if backlink_header.hash() != backlink {
+                // @TODO: Backlink not matching
+            }
+        }
+        None => {
+            // @TODO: Backlink missing
+        }
     }
 
     Ok(())
