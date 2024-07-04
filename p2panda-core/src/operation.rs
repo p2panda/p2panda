@@ -161,9 +161,6 @@ pub enum OperationError {
     #[error("signature does not match claimed public key")]
     SignatureMismatch,
 
-    #[error("backlink needs to be set when previous link is used")]
-    LinksMismatch,
-
     #[error("sequence number can't be 0 when backlink is given")]
     SeqNumMismatch,
 
@@ -234,10 +231,6 @@ pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
         || (header.payload_hash.is_none() && header.payload_size > 0)
     {
         return Err(OperationError::InconsistentPayloadInfo);
-    }
-
-    if !header.previous.is_empty() && header.backlink.is_none() {
-        return Err(OperationError::LinksMismatch);
     }
 
     if header.backlink.is_some() && header.seq_num == 0 {
@@ -434,15 +427,6 @@ mod tests {
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
-        ));
-
-        // Expected backlink when `previous` is given
-        let mut header = header_base.clone();
-        header.previous = vec![Hash::new(vec![1, 2, 3])];
-        header.sign(&private_key);
-        assert!(matches!(
-            validate_header(&header),
-            Err(OperationError::LinksMismatch)
         ));
     }
 }
