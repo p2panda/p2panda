@@ -319,7 +319,7 @@ where
             {
                 let sig: Signature = seq
                     .next_element()
-                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
+                    .map_err(|err: <A as SeqAccess<'de>>::Error| SerdeError::custom(format!("invalid signature: {err}")))?
                     .ok_or(SerdeError::custom("signature missing"))?;
 
                 let header: Header<E> = seq
@@ -526,20 +526,82 @@ mod tests {
             },
             &private_key,
         );
+    }
 
-        assert_serde_roundtrip(
-            Header::<Extension> {
-                version: 1,
-                public_key: private_key.public_key(),
-                payload_size: 2829099,
-                payload_hash: None,
-                timestamp: 0,
-                seq_num: 0,
-                backlink: None,
-                previous: vec![],
-                extension: None,
-            },
-            &private_key,
-        );
+    #[test]
+    fn expected_de_error() {
+        let private_key = PrivateKey::new();
+
+        // payload size given without payload hash
+        let header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 2829099,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        };
+
+        let signed_header = header.sign(&private_key);
+        let result =
+            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        assert!(result.is_err());
+
+        // payload hash given without payload size
+        let header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: Some(Hash::new([0, 1, 2])),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        };
+
+        let signed_header = header.sign(&private_key);
+        let result =
+            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        assert!(result.is_err());
+
+        // backlink given with seq number 0
+        let header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: Some(Hash::new([0, 1, 2])),
+            previous: vec![],
+            extension: None,
+        };
+
+        let signed_header = header.sign(&private_key);
+        let result =
+            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        assert!(result.is_err());
+
+        // backlink not given with seq number > 0
+        let header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 10,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        };
+
+        let signed_header = header.sign(&private_key);
+        let result =
+            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        assert!(result.is_err());
     }
 }
