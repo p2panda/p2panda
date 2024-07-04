@@ -3,7 +3,8 @@
 use std::fmt;
 use std::str::FromStr;
 
-use ed25519_dalek::Signer;
+use arbitrary::Arbitrary;
+use ed25519_dalek::{Signer, SECRET_KEY_LENGTH};
 use rand::rngs::OsRng;
 use thiserror::Error;
 
@@ -100,6 +101,13 @@ impl TryFrom<&[u8]> for PrivateKey {
             .map_err(|_| IdentityError::InvalidLength(value_len, PRIVATE_KEY_LEN))?;
 
         Ok(Self::from(checked_value))
+    }
+}
+
+impl<'a> Arbitrary<'a> for PrivateKey {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let bytes = <[u8; SECRET_KEY_LENGTH] as Arbitrary>::arbitrary(u)?;
+        Ok(PrivateKey::from_bytes(&bytes))
     }
 }
 
@@ -207,6 +215,15 @@ impl FromStr for PublicKey {
     }
 }
 
+impl<'a> Arbitrary<'a> for PublicKey {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let bytes = <[u8; PUBLIC_KEY_LEN] as Arbitrary>::arbitrary(u)?;
+        let public_key =
+            PublicKey::from_bytes(&bytes).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        Ok(public_key)
+    }
+}
+
 #[derive(Copy, Eq, PartialEq, Clone)]
 pub struct Signature(ed25519_dalek::Signature);
 
@@ -278,6 +295,13 @@ impl TryFrom<&[u8]> for Signature {
             .map_err(|_| IdentityError::InvalidLength(value_len, SIGNATURE_LEN))?;
 
         Ok(Self::from(checked_value))
+    }
+}
+
+impl<'a> Arbitrary<'a> for Signature {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let bytes = <[u8; SIGNATURE_LEN] as Arbitrary>::arbitrary(u)?;
+        Ok(Signature::from_bytes(&bytes))
     }
 }
 

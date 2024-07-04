@@ -47,6 +47,7 @@ where
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E>
 where
     E: Serialize + DeserializeOwned,
