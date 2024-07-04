@@ -3,6 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use arbitrary::Arbitrary;
 use thiserror::Error;
 
 /// Size of BLAKE3 hashes.
@@ -113,6 +114,13 @@ impl fmt::Display for Hash {
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Hash").field(self.0.as_bytes()).finish()
+    }
+}
+
+impl<'a> Arbitrary<'a> for Hash {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let bytes = <[u8; HASH_LEN] as Arbitrary>::arbitrary(u)?;
+        Ok(Hash::from_bytes(bytes))
     }
 }
 
