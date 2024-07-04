@@ -1,10 +1,10 @@
 #![no_main]
 
-use p2panda_core::{Header, PrivateKey, SignedHeader};
+use p2panda_core::{Header, PrivateKey, UnsignedHeader};
 
 use libfuzzer_sys::fuzz_target;
 
-fuzz_target!(|header: Header<String>| {
+fuzz_target!(|header: UnsignedHeader<String>| {
     let private_key = PrivateKey::new();
 
     // Sign header
@@ -16,7 +16,7 @@ fuzz_target!(|header: Header<String>| {
     ciborium::ser::into_writer(&signed_header, &mut bytes).unwrap();
 
     // Deserialize signed header bytes again
-    let result: Result<SignedHeader<String>, _> = ciborium::de::from_reader(&bytes[..]);
+    let result: Result<Header<String>, _> = ciborium::de::from_reader(&bytes[..]);
 
     // We expect these cases to fail
     if header.payload_size == 0 && header.payload_hash.is_some() // payload hash not expected when payload size is zero
