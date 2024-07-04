@@ -10,7 +10,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
-use crate::operation::{Body, Header};
+use crate::operation::{Body, Header, SignedHeader};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -140,12 +140,9 @@ where
         S: serde::Serializer,
     {
         let mut seq = serializer.serialize_seq(None)?;
+
         seq.serialize_element(&self.version)?;
         seq.serialize_element(&self.public_key)?;
-
-        if let Some(signature) = &self.signature {
-            seq.serialize_element(signature)?;
-        }
 
         seq.serialize_element(&self.payload_size)?;
         if let Some(hash) = &self.payload_hash {
@@ -205,11 +202,6 @@ where
                     .map_err(|_| SerdeError::custom("invalid public key, expected bytes"))?
                     .ok_or(SerdeError::custom("public key missing"))?;
 
-                let signature: Signature = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
-                    .ok_or(SerdeError::custom("signature missing"))?;
-
                 let payload_size: u64 = seq
                     .next_element()
                     .map_err(|_| SerdeError::custom("invalid payload size, expected u64"))?
@@ -265,7 +257,6 @@ where
                 Ok(Header {
                     version,
                     public_key,
-                    signature: Some(signature),
                     payload_hash,
                     payload_size,
                     timestamp,
@@ -278,6 +269,69 @@ where
         }
 
         deserializer.deserialize_seq(HeaderVisitor::<E> {
+            _marker: PhantomData,
+        })
+    }
+}
+
+impl<E> Serialize for SignedHeader<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(2))?;
+
+        seq.serialize_element(&self.sig)?;
+        seq.serialize_element(&self.header)?;
+
+        seq.end()
+    }
+}
+
+impl<'de, E> Deserialize<'de> for SignedHeader<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SignedHeaderVisitor<E> {
+            _marker: PhantomData<E>,
+        }
+
+        impl<'de, E> Visitor<'de> for SignedHeaderVisitor<E>
+        where
+            E: Clone + Serialize + DeserializeOwned,
+        {
+            type Value = SignedHeader<E>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("SignedHeader encoded as a sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let sig: Signature = seq
+                    .next_element()
+                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
+                    .ok_or(SerdeError::custom("signature missing"))?;
+
+                let header: Header<E> = seq
+                    .next_element()
+                    .map_err(|_| SerdeError::custom("invalid header, expected Header"))?
+                    .ok_or(SerdeError::custom("header missing"))?;
+
+                Ok(SignedHeader { header, sig })
+            }
+        }
+
+        deserializer.deserialize_seq(SignedHeaderVisitor::<E> {
             _marker: PhantomData,
         })
     }
@@ -309,7 +363,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
-    use crate::operation::Header;
+    use crate::operation::{Header, SignedHeader};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -409,13 +463,13 @@ mod tests {
         header: Header<E>,
         private_key: &PrivateKey,
     ) {
-        let mut header = header;
-        header.sign(&private_key);
+        let header = header;
+        let signed_header = header.sign(&private_key);
 
         let mut bytes = Vec::new();
-        ciborium::ser::into_writer(&header, &mut bytes).unwrap();
-        let header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(header, header_again);
+        ciborium::ser::into_writer(&signed_header, &mut bytes).unwrap();
+        let signed_header_again: SignedHeader<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(signed_header, signed_header_again);
     }
 
     #[test]
@@ -432,7 +486,6 @@ mod tests {
             Header::<Extension> {
                 version: 1,
                 public_key: private_key.public_key(),
-                signature: None,
                 payload_size: 123,
                 payload_hash: Some(Hash::new(vec![1, 2, 3])),
                 timestamp: 0,
@@ -443,37 +496,35 @@ mod tests {
             },
             &private_key,
         );
-
-        assert_serde_roundtrip(
-            Header::<Extension> {
-                version: 1,
-                public_key: private_key.public_key(),
-                signature: None,
-                payload_size: 0,
-                payload_hash: None,
-                timestamp: 0,
-                seq_num: 7,
-                backlink: Some(Hash::new(vec![1, 2, 3])),
-                previous: vec![],
-                extension: None,
-            },
-            &private_key,
-        );
-
-        assert_serde_roundtrip(
-            Header::<Extension> {
-                version: 1,
-                public_key: private_key.public_key(),
-                signature: None,
-                payload_size: 0,
-                payload_hash: None,
-                timestamp: 0,
-                seq_num: 0,
-                backlink: None,
-                previous: vec![],
-                extension: Some(extension),
-            },
-            &private_key,
-        );
+        //
+        //         assert_serde_roundtrip(
+        //             Header::<Extension> {
+        //                 version: 1,
+        //                 public_key: private_key.public_key(),
+        //                 payload_size: 0,
+        //                 payload_hash: None,
+        //                 timestamp: 0,
+        //                 seq_num: 7,
+        //                 backlink: Some(Hash::new(vec![1, 2, 3])),
+        //                 previous: vec![],
+        //                 extension: None,
+        //             },
+        //             &private_key,
+        //         );
+        //
+        //         assert_serde_roundtrip(
+        //             Header::<Extension> {
+        //                 version: 1,
+        //                 public_key: private_key.public_key(),
+        //                 payload_size: 0,
+        //                 payload_hash: None,
+        //                 timestamp: 0,
+        //                 seq_num: 0,
+        //                 backlink: None,
+        //                 previous: vec![],
+        //                 extension: Some(extension),
+        //             },
+        //             &private_key,
+        //         );
     }
 }

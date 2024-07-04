@@ -13,7 +13,7 @@ where
     E: Clone + Serialize + DeserializeOwned,
 {
     pub hash: Hash,
-    pub header: Header<E>,
+    pub header: SignedHeader<E>,
     pub body: Option<Body>,
 }
 
@@ -58,9 +58,6 @@ where
     /// Author of this operation.
     pub public_key: PublicKey,
 
-    /// Signature by author over all fields in header, providing authenticity.
-    pub signature: Option<Signature>,
-
     /// Number of bytes of the body of this operation, can be omitted if no body is given.
     pub payload_size: u64,
 
@@ -94,7 +91,7 @@ impl<E> Header<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
-    fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
         ciborium::ser::into_writer(&self, &mut bytes)
@@ -105,24 +102,44 @@ where
         bytes
     }
 
-    pub fn sign(&mut self, private_key: &PrivateKey) {
-        // Make sure the signature is not already set before we encode
-        self.signature = None;
-
+    pub fn sign(&self, private_key: &PrivateKey) -> SignedHeader<E> {
         let bytes = self.to_bytes();
-        self.signature = Some(private_key.sign(&bytes));
+        let sig = private_key.sign(&bytes);
+        SignedHeader {
+            header: self.clone(),
+            sig,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct SignedHeader<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
+    pub sig: Signature,
+    pub header: Header<E>,
+}
+
+impl<E> SignedHeader<E>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
+    pub fn verify(&self) -> bool {
+        let unsigned_bytes = self.header.to_bytes();
+        self.header.public_key.verify(&unsigned_bytes, &self.sig)
     }
 
-    pub fn verify(&self) -> bool {
-        match self.signature {
-            Some(claimed_signature) => {
-                let mut unsigned_header = self.clone();
-                unsigned_header.signature = None;
-                let unsigned_bytes = unsigned_header.to_bytes();
-                self.public_key.verify(&unsigned_bytes, &claimed_signature)
-            }
-            None => false,
-        }
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        ciborium::ser::into_writer(&self, &mut bytes)
+            // We can be sure that all values in this module are serializable and _if_ ciborium
+            // still fails then because of something really bad ..
+            .expect("CBOR encoder failed due to an critical IO error");
+
+        bytes
     }
 
     pub fn hash(&self) -> Hash {
@@ -192,12 +209,13 @@ pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
 ) -> Result<(), OperationError> {
     validate_header(&operation.header)?;
 
-    let claimed_payload_size = operation.header.payload_size;
+    let SignedHeader { header, .. } = &operation.header;
+
+    let claimed_payload_size = header.payload_size;
     let claimed_payload_hash: Option<Hash> = match claimed_payload_size {
         0 => None,
         _ => {
-            let hash = operation
-                .header
+            let hash = header
                 .payload_hash
                 .ok_or(OperationError::MissingPayloadHash)?;
             Some(hash)
@@ -214,18 +232,16 @@ pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
 }
 
 pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
-    header: &Header<E>,
+    signed_header: &SignedHeader<E>,
 ) -> Result<(), OperationError> {
+    if !signed_header.verify() {
+        return Err(OperationError::SignatureMismatch);
+    }
+
+    let header = &signed_header.header;
+
     if header.version != 1 {
         return Err(OperationError::UnsupportedVersion(header.version, 1));
-    }
-
-    if header.signature.is_none() {
-        return Err(OperationError::MissingSignature);
-    }
-
-    if !header.verify() {
-        return Err(OperationError::SignatureMismatch);
     }
 
     if (header.payload_hash.is_some() && header.payload_size == 0)
@@ -246,26 +262,26 @@ pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
 }
 
 pub fn validate_backlink<E>(
-    past_header: &Header<E>,
-    header: &Header<E>,
+    past_signed_header: &SignedHeader<E>,
+    signed_header: &SignedHeader<E>,
 ) -> Result<(), OperationError>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
-    if past_header.public_key != header.public_key {
+    if past_signed_header.header.public_key != signed_header.header.public_key {
         return Err(OperationError::TooManyAuthors);
     }
 
-    if past_header.seq_num + 1 != header.seq_num {
+    if past_signed_header.header.seq_num + 1 != signed_header.header.seq_num {
         return Err(OperationError::SeqNumNonIncremental(
-            past_header.seq_num + 1,
-            header.seq_num,
+            past_signed_header.header.seq_num + 1,
+            signed_header.header.seq_num,
         ));
     }
 
-    match header.backlink {
+    match signed_header.header.backlink {
         Some(backlink) => {
-            if past_header.hash() != backlink {
+            if past_signed_header.hash() != backlink {
                 return Err(OperationError::BacklinkMismatch);
             }
         }
@@ -288,10 +304,9 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let mut header = Header::<()> {
+        let header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
-            signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
             timestamp: 0,
@@ -300,14 +315,12 @@ mod tests {
             previous: vec![],
             extension: None,
         };
-        assert!(!header.verify());
-
-        header.sign(&private_key);
-        assert!(header.verify());
+        let signed_header = header.sign(&private_key);
+        assert!(signed_header.verify());
 
         let operation = Operation {
-            hash: header.hash(),
-            header,
+            hash: signed_header.hash(),
+            header: signed_header,
             body: Some(body),
         };
         assert!(validate_operation(&operation).is_ok());
@@ -317,10 +330,9 @@ mod tests {
     fn valid_backlink_header() {
         let private_key = PrivateKey::new();
 
-        let mut header_0 = Header::<()> {
+        let header_0 = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
-            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -329,25 +341,25 @@ mod tests {
             previous: vec![],
             extension: None,
         };
-        header_0.sign(&private_key);
-        assert!(validate_header(&header_0).is_ok());
+        let signed_header_0 = header_0.sign(&private_key);
+        assert!(validate_header(&signed_header_0).is_ok());
 
-        let mut header_1 = Header::<()> {
+        let header_1 = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
-            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
             seq_num: 1,
-            backlink: Some(header_0.hash()),
+            backlink: Some(signed_header_0.hash()),
             previous: vec![],
             extension: None,
         };
         header_1.sign(&private_key);
-        assert!(validate_header(&header_1).is_ok());
+        let signed_header_1 = header_1.sign(&private_key);
+        assert!(validate_header(&signed_header_1).is_ok());
 
-        assert!(validate_backlink(&header_0, &header_1).is_ok());
+        assert!(validate_backlink(&signed_header_0, &signed_header_1).is_ok());
     }
 
     #[test]
@@ -358,7 +370,6 @@ mod tests {
         let header_base = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
-            signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
             timestamp: 0,
@@ -371,47 +382,47 @@ mod tests {
         // Incompatible operation format
         let mut header = header_base.clone();
         header.version = 0;
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
-            validate_header(&header),
+            validate_header(&signed_header),
             Err(OperationError::UnsupportedVersion(0, 1))
         ));
 
         // Signature doesn't match public key
         let mut header = header_base.clone();
         header.public_key = PrivateKey::new().public_key();
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
-            validate_header(&header),
+            validate_header(&signed_header),
             Err(OperationError::SignatureMismatch)
         ));
 
         // Backlink missing
         let mut header = header_base.clone();
         header.seq_num = 1;
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
-            validate_header(&header),
+            validate_header(&signed_header),
             Err(OperationError::BacklinkMissing)
         ));
 
         // Backlink given but sequence number indicates none
         let mut header = header_base.clone();
         header.backlink = Some(Hash::new(vec![4, 5, 6]));
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
-            validate_header(&header),
+            validate_header(&signed_header),
             Err(OperationError::SeqNumMismatch)
         ));
 
         // Payload size does not match
         let mut header = header_base.clone();
         header.payload_size = 11;
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
             validate_operation(&Operation {
-                hash: header.hash(),
-                header,
+                hash: signed_header.hash(),
+                header: signed_header,
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
@@ -420,11 +431,11 @@ mod tests {
         // Payload hash does not match
         let mut header = header_base.clone();
         header.payload_hash = Some(Hash::new(vec![4, 5, 6]));
-        header.sign(&private_key);
+        let signed_header = header.sign(&private_key);
         assert!(matches!(
             validate_operation(&Operation {
-                hash: header.hash(),
-                header,
+                hash: signed_header.hash(),
+                header: signed_header,
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
