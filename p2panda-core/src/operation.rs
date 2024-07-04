@@ -13,7 +13,7 @@ where
     E: Clone + Serialize + DeserializeOwned,
 {
     pub hash: Hash,
-    pub header: SignedHeader<E>,
+    pub header: Header<E>,
     pub body: Option<Body>,
 }
 
@@ -48,7 +48,7 @@ where
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E>
+pub struct UnsignedHeader<E>
 where
     E: Serialize + DeserializeOwned,
 {
@@ -87,7 +87,7 @@ where
     pub extension: Option<E>,
 }
 
-impl<E> Header<E>
+impl<E> UnsignedHeader<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -102,33 +102,26 @@ where
         bytes
     }
 
-    pub fn sign(&self, private_key: &PrivateKey) -> SignedHeader<E> {
+    pub fn sign(&self, private_key: &PrivateKey) -> Header<E> {
         let bytes = self.to_bytes();
         let signature = private_key.sign(&bytes);
-        SignedHeader {
-            header: self.clone(),
-            signature,
-        }
+        Header(signature, self.clone())
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct SignedHeader<E>
+pub struct Header<E>(pub Signature, pub UnsignedHeader<E>)
 where
-    E: Clone + Serialize + DeserializeOwned,
-{
-    pub signature: Signature,
-    pub header: Header<E>,
-}
+    E: Clone + Serialize + DeserializeOwned;
 
-impl<E> SignedHeader<E>
+impl<E> Header<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
     pub fn verify(&self) -> bool {
-        let unsigned_bytes = self.header.to_bytes();
-        self.header.public_key.verify(&unsigned_bytes, &self.signature)
+        let unsigned_bytes = self.1.to_bytes();
+        self.1.public_key.verify(&unsigned_bytes, &self.0)
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -209,13 +202,13 @@ pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
 ) -> Result<(), OperationError> {
     validate_header(&operation.header)?;
 
-    let SignedHeader { header, .. } = &operation.header;
+    let Header(_, unsigned_header) = &operation.header;
 
-    let claimed_payload_size = header.payload_size;
+    let claimed_payload_size = unsigned_header.payload_size;
     let claimed_payload_hash: Option<Hash> = match claimed_payload_size {
         0 => None,
         _ => {
-            let hash = header
+            let hash = unsigned_header
                 .payload_hash
                 .ok_or(OperationError::MissingPayloadHash)?;
             Some(hash)
@@ -232,29 +225,32 @@ pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
 }
 
 pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
-    signed_header: &SignedHeader<E>,
+    header: &Header<E>,
 ) -> Result<(), OperationError> {
-    if !signed_header.verify() {
+    if !header.verify() {
         return Err(OperationError::SignatureMismatch);
     }
 
-    let header = &signed_header.header;
+    let Header(_, unsigned_header) = &header;
 
-    if header.version != 1 {
-        return Err(OperationError::UnsupportedVersion(header.version, 1));
+    if unsigned_header.version != 1 {
+        return Err(OperationError::UnsupportedVersion(
+            unsigned_header.version,
+            1,
+        ));
     }
 
-    if (header.payload_hash.is_some() && header.payload_size == 0)
-        || (header.payload_hash.is_none() && header.payload_size > 0)
+    if (unsigned_header.payload_hash.is_some() && unsigned_header.payload_size == 0)
+        || (unsigned_header.payload_hash.is_none() && unsigned_header.payload_size > 0)
     {
         return Err(OperationError::InconsistentPayloadInfo);
     }
 
-    if header.backlink.is_some() && header.seq_num == 0 {
+    if unsigned_header.backlink.is_some() && unsigned_header.seq_num == 0 {
         return Err(OperationError::SeqNumMismatch);
     }
 
-    if header.backlink.is_none() && header.seq_num > 0 {
+    if unsigned_header.backlink.is_none() && unsigned_header.seq_num > 0 {
         return Err(OperationError::BacklinkMissing);
     }
 
@@ -262,26 +258,26 @@ pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
 }
 
 pub fn validate_backlink<E>(
-    past_signed_header: &SignedHeader<E>,
-    signed_header: &SignedHeader<E>,
+    past_header: &Header<E>,
+    header: &Header<E>,
 ) -> Result<(), OperationError>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
-    if past_signed_header.header.public_key != signed_header.header.public_key {
+    if past_header.1.public_key != header.1.public_key {
         return Err(OperationError::TooManyAuthors);
     }
 
-    if past_signed_header.header.seq_num + 1 != signed_header.header.seq_num {
+    if past_header.1.seq_num + 1 != header.1.seq_num {
         return Err(OperationError::SeqNumNonIncremental(
-            past_signed_header.header.seq_num + 1,
-            signed_header.header.seq_num,
+            past_header.1.seq_num + 1,
+            header.1.seq_num,
         ));
     }
 
-    match signed_header.header.backlink {
+    match header.1.backlink {
         Some(backlink) => {
-            if past_signed_header.hash() != backlink {
+            if past_header.hash() != backlink {
                 return Err(OperationError::BacklinkMismatch);
             }
         }
@@ -304,7 +300,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let header = Header::<()> {
+        let header = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: body.size(),
@@ -330,7 +326,7 @@ mod tests {
     fn valid_backlink_header() {
         let private_key = PrivateKey::new();
 
-        let header_0 = Header::<()> {
+        let header_0 = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 0,
@@ -344,7 +340,7 @@ mod tests {
         let signed_header_0 = header_0.sign(&private_key);
         assert!(validate_header(&signed_header_0).is_ok());
 
-        let header_1 = Header::<()> {
+        let header_1 = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 0,
@@ -367,7 +363,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let header_base = Header::<()> {
+        let header_base = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: body.size(),

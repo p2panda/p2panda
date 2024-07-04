@@ -10,7 +10,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
-use crate::operation::{Body, Header, SignedHeader};
+use crate::operation::{Body, Header, UnsignedHeader};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -131,7 +131,7 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl<E> Serialize for Header<E>
+impl<E> Serialize for UnsignedHeader<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -166,7 +166,7 @@ where
     }
 }
 
-impl<'de, E> Deserialize<'de> for Header<E>
+impl<'de, E> Deserialize<'de> for UnsignedHeader<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -182,10 +182,10 @@ where
         where
             E: Clone + Serialize + DeserializeOwned,
         {
-            type Value = Header<E>;
+            type Value = UnsignedHeader<E>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Header encoded as a sequence")
+                formatter.write_str("UnsignedHeader encoded as a sequence")
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -254,7 +254,7 @@ where
                     .next_element()
                     .map_err(|err| SerdeError::custom(format!("invalid extension: {err}")))?;
 
-                Ok(Header {
+                Ok(UnsignedHeader {
                     version,
                     public_key,
                     payload_hash,
@@ -274,7 +274,7 @@ where
     }
 }
 
-impl<E> Serialize for SignedHeader<E>
+impl<E> Serialize for Header<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -284,14 +284,14 @@ where
     {
         let mut seq = serializer.serialize_seq(Some(2))?;
 
-        seq.serialize_element(&self.signature)?;
-        seq.serialize_element(&self.header)?;
+        seq.serialize_element(&self.0)?;
+        seq.serialize_element(&self.1)?;
 
         seq.end()
     }
 }
 
-impl<'de, E> Deserialize<'de> for SignedHeader<E>
+impl<'de, E> Deserialize<'de> for Header<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -307,10 +307,10 @@ where
         where
             E: Clone + Serialize + DeserializeOwned,
         {
-            type Value = SignedHeader<E>;
+            type Value = Header<E>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("SignedHeader encoded as a sequence")
+                formatter.write_str("Header encoded as a sequence")
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -322,12 +322,12 @@ where
                     .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
                     .ok_or(SerdeError::custom("signature missing"))?;
 
-                let header: Header<E> = seq
+                let unsigned_header: UnsignedHeader<E> = seq
                     .next_element()
                     .map_err(|err| SerdeError::custom(format!("invalid header: {err}")))?
                     .ok_or(SerdeError::custom("header missing"))?;
 
-                Ok(SignedHeader { header, signature })
+                Ok(Header(signature, unsigned_header))
             }
         }
 
@@ -363,7 +363,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
-    use crate::operation::{Header, SignedHeader};
+    use crate::operation::{Header, UnsignedHeader};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -460,7 +460,7 @@ mod tests {
     fn assert_serde_roundtrip<
         E: Clone + std::fmt::Debug + PartialEq + Serialize + DeserializeOwned,
     >(
-        header: Header<E>,
+        header: UnsignedHeader<E>,
         private_key: &PrivateKey,
     ) {
         let header = header;
@@ -468,7 +468,7 @@ mod tests {
 
         let mut bytes = Vec::new();
         ciborium::ser::into_writer(&signed_header, &mut bytes).unwrap();
-        let signed_header_again: SignedHeader<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let signed_header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
         assert_eq!(signed_header, signed_header_again);
     }
 
@@ -483,7 +483,7 @@ mod tests {
         let private_key = PrivateKey::new();
 
         assert_serde_roundtrip(
-            Header::<Extension> {
+            UnsignedHeader::<Extension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 123,
@@ -498,7 +498,7 @@ mod tests {
         );
 
         assert_serde_roundtrip(
-            Header::<Extension> {
+            UnsignedHeader::<Extension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -513,7 +513,7 @@ mod tests {
         );
 
         assert_serde_roundtrip(
-            Header::<Extension> {
+            UnsignedHeader::<Extension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -533,7 +533,7 @@ mod tests {
         let private_key = PrivateKey::new();
 
         // payload size given without payload hash
-        let header = Header::<()> {
+        let header = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 2829099,
@@ -543,15 +543,14 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        };
+        }
+        .sign(&private_key);
 
-        let signed_header = header.sign(&private_key);
-        let result =
-            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // payload hash given without payload size
-        let header = Header::<()> {
+        let header = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 0,
@@ -561,15 +560,14 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        };
+        }
+        .sign(&private_key);
 
-        let signed_header = header.sign(&private_key);
-        let result =
-            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // backlink given with seq number 0
-        let header = Header::<()> {
+        let header = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 0,
@@ -579,15 +577,14 @@ mod tests {
             backlink: Some(Hash::new([0, 1, 2])),
             previous: vec![],
             extension: None,
-        };
+        }
+        .sign(&private_key);
 
-        let signed_header = header.sign(&private_key);
-        let result =
-            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // backlink not given with seq number > 0
-        let header = Header::<()> {
+        let header = UnsignedHeader::<()> {
             version: 1,
             public_key: private_key.public_key(),
             payload_size: 0,
@@ -597,11 +594,10 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        };
+        }
+        .sign(&private_key);
 
-        let signed_header = header.sign(&private_key);
-        let result =
-            ciborium::de::from_reader::<SignedHeader<()>, _>(&signed_header.to_bytes()[..]);
+        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
     }
 }
