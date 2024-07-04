@@ -526,5 +526,20 @@ mod tests {
             },
             &private_key,
         );
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                payload_size: 2829099,
+                payload_hash: None,
+                timestamp: 0,
+                seq_num: 0,
+                backlink: None,
+                previous: vec![],
+                extension: None,
+            },
+            &private_key,
+        );
     }
 }
