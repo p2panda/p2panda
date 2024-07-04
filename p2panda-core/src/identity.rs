@@ -3,6 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+#[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use ed25519_dalek::{Signer, SECRET_KEY_LENGTH};
 use rand::rngs::OsRng;
@@ -104,6 +105,7 @@ impl TryFrom<&[u8]> for PrivateKey {
     }
 }
 
+#[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for PrivateKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let bytes = <[u8; SECRET_KEY_LENGTH] as Arbitrary>::arbitrary(u)?;
