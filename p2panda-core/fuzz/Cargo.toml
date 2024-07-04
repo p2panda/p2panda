@@ -16,8 +16,8 @@ path = ".."
 features = ["arbitrary"]
 
 [[bin]]
-name = "header_serde"
-path = "fuzz_targets/header_serde.rs"
+name = "header_e2e"
+path = "fuzz_targets/header_e2e.rs"
 test = false
 doc = false
 bench = false
