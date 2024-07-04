@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
-use ed25519_dalek::{Signer, SECRET_KEY_LENGTH};
+use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
 use thiserror::Error;
 
@@ -108,7 +108,7 @@ impl TryFrom<&[u8]> for PrivateKey {
 #[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for PrivateKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let bytes = <[u8; SECRET_KEY_LENGTH] as Arbitrary>::arbitrary(u)?;
+        let bytes = <[u8; PRIVATE_KEY_LEN] as Arbitrary>::arbitrary(u)?;
         Ok(PrivateKey::from_bytes(&bytes))
     }
 }
@@ -217,6 +217,7 @@ impl FromStr for PublicKey {
     }
 }
 
+#[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for PublicKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let bytes = <[u8; PUBLIC_KEY_LEN] as Arbitrary>::arbitrary(u)?;
@@ -300,6 +301,7 @@ impl TryFrom<&[u8]> for Signature {
     }
 }
 
+#[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for Signature {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let bytes = <[u8; SIGNATURE_LEN] as Arbitrary>::arbitrary(u)?;
