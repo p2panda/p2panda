@@ -326,7 +326,7 @@ pub enum IdentityError {
     /// * Being given bytes with a length different to what was expected.
     ///
     /// * A problem decompressing `r`, a curve point, in the `Signature`, or the curve point for a
-    /// `PublicKey`.
+    ///   `PublicKey`.
     ///
     /// * Failure of a signature to satisfy the verification equation.
     #[error("invalid signature: {0}")]
