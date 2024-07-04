@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-#[cfg(feature="arbitrary")]
+#[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use thiserror::Error;
 
@@ -118,7 +118,7 @@ impl fmt::Debug for Hash {
     }
 }
 
-#[cfg(feature="arbitrary")]
+#[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for Hash {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let bytes = <[u8; HASH_LEN] as Arbitrary>::arbitrary(u)?;

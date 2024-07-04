@@ -7,4 +7,6 @@ mod serde;
 
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
-pub use operation::{validate_header, validate_operation, Body, UnsignedHeader, Operation, OperationError};
+pub use operation::{
+    validate_header, validate_operation, Body, Operation, OperationError, UnsignedHeader,
+};
