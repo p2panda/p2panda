@@ -284,7 +284,7 @@ where
     {
         let mut seq = serializer.serialize_seq(Some(2))?;
 
-        seq.serialize_element(&self.sig)?;
+        seq.serialize_element(&self.signature)?;
         seq.serialize_element(&self.header)?;
 
         seq.end()
@@ -317,9 +317,9 @@ where
             where
                 A: SeqAccess<'de>,
             {
-                let sig: Signature = seq
+                let signature: Signature = seq
                     .next_element()
-                    .map_err(|err: <A as SeqAccess<'de>>::Error| SerdeError::custom(format!("invalid signature: {err}")))?
+                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
                     .ok_or(SerdeError::custom("signature missing"))?;
 
                 let header: Header<E> = seq
@@ -327,7 +327,7 @@ where
                     .map_err(|err| SerdeError::custom(format!("invalid header: {err}")))?
                     .ok_or(SerdeError::custom("header missing"))?;
 
-                Ok(SignedHeader { header, sig })
+                Ok(SignedHeader { header, signature })
             }
         }
 
