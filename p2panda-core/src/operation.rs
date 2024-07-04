@@ -104,10 +104,10 @@ where
 
     pub fn sign(&self, private_key: &PrivateKey) -> SignedHeader<E> {
         let bytes = self.to_bytes();
-        let sig = private_key.sign(&bytes);
+        let signature = private_key.sign(&bytes);
         SignedHeader {
             header: self.clone(),
-            sig,
+            signature,
         }
     }
 }
@@ -118,7 +118,7 @@ pub struct SignedHeader<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
-    pub sig: Signature,
+    pub signature: Signature,
     pub header: Header<E>,
 }
 
@@ -128,7 +128,7 @@ where
 {
     pub fn verify(&self) -> bool {
         let unsigned_bytes = self.header.to_bytes();
-        self.header.public_key.verify(&unsigned_bytes, &self.sig)
+        self.header.public_key.verify(&unsigned_bytes, &self.signature)
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
