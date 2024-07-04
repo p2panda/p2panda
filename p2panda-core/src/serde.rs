@@ -496,35 +496,35 @@ mod tests {
             },
             &private_key,
         );
-        
-                assert_serde_roundtrip(
-                    Header::<Extension> {
-                        version: 1,
-                        public_key: private_key.public_key(),
-                        payload_size: 0,
-                        payload_hash: None,
-                        timestamp: 0,
-                        seq_num: 7,
-                        backlink: Some(Hash::new(vec![1, 2, 3])),
-                        previous: vec![],
-                        extension: None,
-                    },
-                    &private_key,
-                );
-        
-                assert_serde_roundtrip(
-                    Header::<Extension> {
-                        version: 1,
-                        public_key: private_key.public_key(),
-                        payload_size: 0,
-                        payload_hash: None,
-                        timestamp: 0,
-                        seq_num: 0,
-                        backlink: None,
-                        previous: vec![],
-                        extension: Some(extension),
-                    },
-                    &private_key,
-                );
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                payload_size: 0,
+                payload_hash: None,
+                timestamp: 0,
+                seq_num: 7,
+                backlink: Some(Hash::new(vec![1, 2, 3])),
+                previous: vec![],
+                extension: None,
+            },
+            &private_key,
+        );
+
+        assert_serde_roundtrip(
+            Header::<Extension> {
+                version: 1,
+                public_key: private_key.public_key(),
+                payload_size: 0,
+                payload_hash: None,
+                timestamp: 0,
+                seq_num: 0,
+                backlink: None,
+                previous: vec![],
+                extension: Some(extension),
+            },
+            &private_key,
+        );
     }
 }
