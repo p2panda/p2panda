@@ -324,7 +324,7 @@ where
 
                 let header: Header<E> = seq
                     .next_element()
-                    .map_err(|_| SerdeError::custom("invalid header, expected Header"))?
+                    .map_err(|err| SerdeError::custom(format!("invalid header: {err}")))?
                     .ok_or(SerdeError::custom("header missing"))?;
 
                 Ok(SignedHeader { header, sig })
