@@ -13,7 +13,7 @@ where
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation
     /// already existed and no insertion occurred.
-    fn insert(header: Header<E>, body: Body) -> Result<bool, StoreError>;
+    fn insert(header: Header<E>, body: Option<Body>) -> Result<bool, StoreError>;
 
     /// Get a single operation.
     fn get(hash: &Hash) -> Result<Option<Operation<E>>, StoreError>;
