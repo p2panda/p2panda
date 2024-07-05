@@ -1,5 +1,5 @@
 [package]
-name = "p2panda-core-fuzz"
+name = "p2panda-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -12,7 +12,7 @@ ciborium = "0.2.2"
 libfuzzer-sys = "0.4"
 
 [dependencies.p2panda-core]
-path = ".."
+path = "../p2panda-core"
 features = ["arbitrary"]
 
 [[bin]]
