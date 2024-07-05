@@ -58,10 +58,11 @@ where
     /// Author of this operation.
     pub public_key: PublicKey,
 
-    /// Number of bytes of the body of this operation, can be omitted if no body is given.
+    /// Number of bytes of the body of this operation, must be zero if no body is given.
     pub payload_size: u64,
 
-    /// Hash of the body of this operation, can be omitted if no body is given.
+    /// Hash of the body of this operation, must be included if payload_size is non-zero and
+    /// omitted otherwise.
     ///
     /// Keeping the hash here allows us to delete the payload (off-chain data) while retaining the
     /// ability to check the signature of the header.
