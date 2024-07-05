@@ -39,6 +39,44 @@ where
     }
 }
 
+pub fn serialize_header<S, E>(
+    serializer: S,
+    header: &UnsignedHeader<E>,
+    signature: Option<&Signature>,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    E: Clone + Serialize + DeserializeOwned,
+{
+    let mut seq = serializer.serialize_seq(None)?;
+
+    seq.serialize_element(&header.version)?;
+    seq.serialize_element(&header.public_key)?;
+    if let Some(signature) = signature {
+        seq.serialize_element(signature)?;
+    }
+
+    seq.serialize_element(&header.payload_size)?;
+    if let Some(hash) = &header.payload_hash {
+        seq.serialize_element(&hash)?;
+    }
+
+    seq.serialize_element(&header.timestamp)?;
+    seq.serialize_element(&header.seq_num)?;
+
+    if let Some(backlink) = &header.backlink {
+        seq.serialize_element(backlink)?;
+    }
+
+    seq.serialize_element(&header.previous)?;
+
+    if let Some(extension) = &header.extension {
+        seq.serialize_element(extension)?;
+    }
+
+    seq.end()
+}
+
 impl Serialize for Hash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -139,34 +177,11 @@ where
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_seq(None)?;
-
-        seq.serialize_element(&self.version)?;
-        seq.serialize_element(&self.public_key)?;
-
-        seq.serialize_element(&self.payload_size)?;
-        if let Some(hash) = &self.payload_hash {
-            seq.serialize_element(&hash)?;
-        }
-
-        seq.serialize_element(&self.timestamp)?;
-        seq.serialize_element(&self.seq_num)?;
-
-        if let Some(backlink) = &self.backlink {
-            seq.serialize_element(backlink)?;
-        }
-
-        seq.serialize_element(&self.previous)?;
-
-        if let Some(extension) = &self.extension {
-            seq.serialize_element(extension)?;
-        }
-
-        seq.end()
+        serialize_header(serializer, self, None)
     }
 }
 
-impl<'de, E> Deserialize<'de> for UnsignedHeader<E>
+impl<'de, E> Deserialize<'de> for Header<E>
 where
     E: Clone + Serialize + DeserializeOwned,
 {
@@ -182,7 +197,7 @@ where
         where
             E: Clone + Serialize + DeserializeOwned,
         {
-            type Value = UnsignedHeader<E>;
+            type Value = Header<E>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("UnsignedHeader encoded as a sequence")
@@ -201,6 +216,11 @@ where
                     .next_element()
                     .map_err(|_| SerdeError::custom("invalid public key, expected bytes"))?
                     .ok_or(SerdeError::custom("public key missing"))?;
+
+                let signature: Signature = seq
+                    .next_element()
+                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
+                    .ok_or(SerdeError::custom("signature missing"))?;
 
                 let payload_size: u64 = seq
                     .next_element()
@@ -254,7 +274,7 @@ where
                     .next_element()
                     .map_err(|err| SerdeError::custom(format!("invalid extension: {err}")))?;
 
-                Ok(UnsignedHeader {
+                let unsigned_header = UnsignedHeader {
                     version,
                     public_key,
                     payload_hash,
@@ -264,7 +284,9 @@ where
                     backlink,
                     previous,
                     extension,
-                })
+                };
+
+                Ok(Header(signature, unsigned_header))
             }
         }
 
@@ -282,58 +304,7 @@ where
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(2))?;
-
-        seq.serialize_element(&self.0)?;
-        seq.serialize_element(&self.1)?;
-
-        seq.end()
-    }
-}
-
-impl<'de, E> Deserialize<'de> for Header<E>
-where
-    E: Clone + Serialize + DeserializeOwned,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct SignedHeaderVisitor<E> {
-            _marker: PhantomData<E>,
-        }
-
-        impl<'de, E> Visitor<'de> for SignedHeaderVisitor<E>
-        where
-            E: Clone + Serialize + DeserializeOwned,
-        {
-            type Value = Header<E>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Header encoded as a sequence")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let signature: Signature = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
-                    .ok_or(SerdeError::custom("signature missing"))?;
-
-                let unsigned_header: UnsignedHeader<E> = seq
-                    .next_element()
-                    .map_err(|err| SerdeError::custom(format!("invalid header: {err}")))?
-                    .ok_or(SerdeError::custom("header missing"))?;
-
-                Ok(Header(signature, unsigned_header))
-            }
-        }
-
-        deserializer.deserialize_seq(SignedHeaderVisitor::<E> {
-            _marker: PhantomData,
-        })
+        serialize_header(serializer, &self.1, Some(&self.0))
     }
 }
 
