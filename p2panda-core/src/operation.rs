@@ -111,7 +111,12 @@ where
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E>(pub Signature, pub UnsignedHeader<E>)
+pub struct Header<E>(
+    /// Signature by the operation author over all fields in header, providing authenticity.
+    pub Signature,
+    /// All other fields in the header which have been signed by the operation author.
+    pub UnsignedHeader<E>,
+)
 where
     E: Clone + Serialize + DeserializeOwned;
 
