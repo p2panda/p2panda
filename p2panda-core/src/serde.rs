@@ -335,6 +335,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::{Header, UnsignedHeader};
+    use crate::Body;
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -570,5 +571,155 @@ mod tests {
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn fixtures() {
+        let private_key = PrivateKey::from_bytes(&[
+            244, 123, 85, 215, 161, 204, 94, 227, 239, 253, 128, 164, 228, 160, 195, 49, 18, 49,
+            125, 4, 50, 218, 157, 230, 174, 1, 154, 231, 231, 142, 22, 170,
+        ]);
+
+        // header at seq num 0 with no previous
+        let header_0 = UnsignedHeader::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extension: None,
+        }
+        .sign(&private_key);
+
+        let bytes = [
+            159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 151,
+            14, 56, 41, 13, 112, 102, 141, 219, 131, 11, 17, 248, 53, 120, 203, 78, 204, 169, 210,
+            33, 121, 242, 84, 73, 190, 24, 71, 4, 33, 4, 47, 24, 3, 69, 15, 241, 116, 192, 27, 107,
+            131, 197, 49, 27, 41, 167, 116, 131, 215, 33, 86, 197, 109, 158, 152, 174, 240, 109,
+            151, 79, 151, 31, 0, 0, 0, 0, 128, 255,
+        ];
+
+        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header_0, header_again);
+
+        // header at seq num 0 with previous
+        let header_0_with_previous = UnsignedHeader::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![header_0.hash()],
+            extension: None,
+        }
+        .sign(&private_key);
+
+        let bytes = [
+            159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 1,
+            224, 130, 220, 51, 110, 202, 23, 113, 240, 208, 10, 13, 114, 146, 175, 49, 21, 189,
+            139, 33, 129, 21, 104, 162, 60, 69, 31, 195, 207, 200, 250, 37, 220, 70, 143, 86, 50,
+            94, 44, 147, 211, 227, 101, 130, 88, 238, 42, 35, 243, 1, 112, 77, 94, 106, 61, 190,
+            248, 89, 199, 191, 77, 15, 13, 0, 0, 0, 129, 88, 32, 62, 65, 169, 234, 245, 255, 26,
+            96, 213, 117, 30, 218, 58, 168, 139, 214, 41, 102, 11, 1, 177, 148, 177, 198, 247, 206,
+            65, 12, 118, 98, 169, 129, 255,
+        ];
+
+        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header_0_with_previous, header_again);
+
+        // header at seq num 0 with previous and body
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let header_0_with_previous_and_body = UnsignedHeader::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![header_0.hash()],
+            extension: None,
+        }
+        .sign(&private_key);
+
+        let bytes = [
+            159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 144,
+            8, 21, 121, 191, 103, 12, 224, 9, 22, 216, 194, 133, 166, 38, 6, 130, 105, 155, 62,
+            101, 119, 220, 71, 92, 255, 88, 216, 247, 109, 119, 99, 25, 232, 207, 85, 242, 185,
+            247, 249, 145, 69, 244, 55, 228, 231, 178, 129, 40, 198, 177, 207, 228, 47, 98, 243,
+            95, 236, 159, 17, 102, 147, 98, 5, 13, 88, 32, 191, 127, 68, 13, 227, 43, 252, 155, 49,
+            148, 176, 2, 162, 217, 175, 171, 49, 44, 181, 215, 71, 113, 211, 195, 29, 128, 192,
+            169, 5, 138, 160, 142, 0, 0, 129, 88, 32, 62, 65, 169, 234, 245, 255, 26, 96, 213, 117,
+            30, 218, 58, 168, 139, 214, 41, 102, 11, 1, 177, 148, 177, 198, 247, 206, 65, 12, 118,
+            98, 169, 129, 255,
+        ];
+
+        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header_0_with_previous_and_body, header_again);
+
+        // header at seq num 1 with backlink but no previous
+        let header_1 = UnsignedHeader::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(header_0.hash()),
+            previous: vec![],
+            extension: None,
+        }
+        .sign(&private_key);
+
+        let bytes = [
+            159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 45,
+            83, 178, 5, 28, 32, 37, 238, 97, 174, 237, 192, 209, 82, 115, 8, 64, 185, 127, 157, 74,
+            57, 105, 96, 51, 39, 203, 130, 202, 53, 254, 168, 151, 103, 87, 134, 223, 22, 137, 197,
+            254, 97, 234, 73, 203, 180, 212, 133, 4, 221, 75, 81, 86, 231, 183, 45, 12, 225, 143,
+            34, 61, 96, 82, 6, 0, 0, 1, 88, 32, 62, 65, 169, 234, 245, 255, 26, 96, 213, 117, 30,
+            218, 58, 168, 139, 214, 41, 102, 11, 1, 177, 148, 177, 198, 247, 206, 65, 12, 118, 98,
+            169, 129, 128, 255,
+        ];
+
+        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header_1, header_again);
+
+        // header at seq num 1 with previous
+        let header_1_with_previous = UnsignedHeader::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(header_0.hash()),
+            previous: vec![header_0.hash()],
+            extension: None,
+        }
+        .sign(&private_key);
+
+        let bytes = [
+            159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 46,
+            241, 1, 199, 99, 191, 232, 0, 194, 39, 195, 238, 238, 44, 19, 131, 1, 61, 5, 211, 25,
+            212, 123, 76, 32, 255, 28, 45, 41, 25, 51, 239, 172, 33, 23, 9, 100, 15, 76, 201, 235,
+            254, 188, 144, 131, 54, 254, 15, 188, 20, 173, 176, 197, 97, 43, 222, 28, 69, 234, 233,
+            119, 39, 174, 11, 0, 0, 1, 88, 32, 62, 65, 169, 234, 245, 255, 26, 96, 213, 117, 30,
+            218, 58, 168, 139, 214, 41, 102, 11, 1, 177, 148, 177, 198, 247, 206, 65, 12, 118, 98,
+            169, 129, 129, 88, 32, 62, 65, 169, 234, 245, 255, 26, 96, 213, 117, 30, 218, 58, 168,
+            139, 214, 41, 102, 11, 1, 177, 148, 177, 198, 247, 206, 65, 12, 118, 98, 169, 129, 255,
+        ];
+
+        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header_1_with_previous, header_again);
     }
 }

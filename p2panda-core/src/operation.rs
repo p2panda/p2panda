@@ -336,9 +336,9 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        };
-        let signed_header_0 = header_0.sign(&private_key);
-        assert!(validate_header(&signed_header_0).is_ok());
+        }
+        .sign(&private_key);
+        assert!(validate_header(&header_0).is_ok());
 
         let header_1 = UnsignedHeader::<()> {
             version: 1,
@@ -347,15 +347,14 @@ mod tests {
             payload_hash: None,
             timestamp: 0,
             seq_num: 1,
-            backlink: Some(signed_header_0.hash()),
+            backlink: Some(header_0.hash()),
             previous: vec![],
             extension: None,
-        };
-        header_1.sign(&private_key);
-        let signed_header_1 = header_1.sign(&private_key);
-        assert!(validate_header(&signed_header_1).is_ok());
+        }
+        .sign(&private_key);
+        assert!(validate_header(&header_1).is_ok());
 
-        assert!(validate_backlink(&signed_header_0, &signed_header_1).is_ok());
+        assert!(validate_backlink(&header_0, &header_1).is_ok());
     }
 
     #[test]
