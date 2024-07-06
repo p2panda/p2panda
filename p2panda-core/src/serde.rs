@@ -3,7 +3,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::de::{DeserializeOwned, Error as SerdeError, SeqAccess, Visitor};
+use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
@@ -11,6 +11,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
 use crate::operation::{Body, Header, UnsignedHeader};
+use crate::Extension;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -46,7 +47,7 @@ pub fn serialize_header<S, E>(
 ) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     let mut seq = serializer.serialize_seq(None)?;
 
@@ -171,7 +172,7 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl<E> Serialize for UnsignedHeader<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -183,7 +184,7 @@ where
 
 impl<'de, E> Deserialize<'de> for Header<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -195,7 +196,7 @@ where
 
         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
         where
-            E: Clone + Serialize + DeserializeOwned,
+            E: Extension,
         {
             type Value = Header<E>;
 
@@ -298,7 +299,7 @@ where
 
 impl<E> Serialize for Header<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -329,13 +330,12 @@ impl<'de> Deserialize<'de> for Body {
 
 #[cfg(test)]
 mod tests {
-    use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::{Header, UnsignedHeader};
-    use crate::Body;
+    use crate::{Body, Extension};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -429,9 +429,7 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<
-        E: Clone + std::fmt::Debug + PartialEq + Serialize + DeserializeOwned,
-    >(
+    fn assert_serde_roundtrip<E: Extension + std::fmt::Debug + PartialEq>(
         header: UnsignedHeader<E>,
         private_key: &PrivateKey,
     ) {
@@ -447,15 +445,17 @@ mod tests {
     #[test]
     fn serde_roundtrip_operations() {
         #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-        struct Extension {
+        struct CustomExtension {
             custom_field: u64,
         }
 
-        let extension = Extension { custom_field: 12 };
+        impl Extension for CustomExtension {}
+
+        let extension = CustomExtension { custom_field: 12 };
         let private_key = PrivateKey::new();
 
         assert_serde_roundtrip(
-            UnsignedHeader::<Extension> {
+            UnsignedHeader::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 123,
@@ -470,7 +470,7 @@ mod tests {
         );
 
         assert_serde_roundtrip(
-            UnsignedHeader::<Extension> {
+            UnsignedHeader::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -485,7 +485,7 @@ mod tests {
         );
 
         assert_serde_roundtrip(
-            UnsignedHeader::<Extension> {
+            UnsignedHeader::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
