@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::extension::Extension;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
 #[derive(Clone, Debug)]
 pub struct Operation<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     pub hash: Hash,
     pub header: Header<E>,
@@ -19,18 +18,18 @@ where
 
 impl<E> PartialEq for Operation<E>
 where
-    for<'de> E: Clone + Serialize + Deserialize<'de>,
+    E: Extension,
 {
     fn eq(&self, other: &Self) -> bool {
         self.hash.eq(&other.hash)
     }
 }
 
-impl<E> Eq for Operation<E> where E: Clone + Serialize + DeserializeOwned {}
+impl<E> Eq for Operation<E> where E: Extension {}
 
 impl<E> PartialOrd for Operation<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.hash.cmp(&other.hash))
@@ -39,7 +38,7 @@ where
 
 impl<E> Ord for Operation<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash.cmp(&other.hash)
@@ -50,7 +49,7 @@ where
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct UnsignedHeader<E>
 where
-    E: Serialize + DeserializeOwned,
+    E: Extension,
 {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
@@ -90,7 +89,7 @@ where
 
 impl<E> UnsignedHeader<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -119,11 +118,11 @@ pub struct Header<E>(
     pub UnsignedHeader<E>,
 )
 where
-    E: Clone + Serialize + DeserializeOwned;
+    E: Extension;
 
 impl<E> Header<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     pub fn verify(&self) -> bool {
         let unsigned_bytes = self.1.to_bytes();
@@ -203,9 +202,7 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
-pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
-    operation: &Operation<E>,
-) -> Result<(), OperationError> {
+pub fn validate_operation<E: Extension>(operation: &Operation<E>) -> Result<(), OperationError> {
     validate_header(&operation.header)?;
 
     let Header(_, unsigned_header) = &operation.header;
@@ -230,9 +227,7 @@ pub fn validate_operation<E: Clone + Serialize + DeserializeOwned>(
     Ok(())
 }
 
-pub fn validate_header<E: Clone + Serialize + DeserializeOwned>(
-    header: &Header<E>,
-) -> Result<(), OperationError> {
+pub fn validate_header<E: Extension>(header: &Header<E>) -> Result<(), OperationError> {
     if !header.verify() {
         return Err(OperationError::SignatureMismatch);
     }
@@ -268,7 +263,7 @@ pub fn validate_backlink<E>(
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension,
 {
     if past_header.1.public_key != header.1.public_key {
         return Err(OperationError::TooManyAuthors);
