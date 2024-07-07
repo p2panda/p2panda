@@ -1,0 +1,16 @@
+[package]
+name = "p2panda-engine"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+futures-core = "0.3.30"
+futures-util = "0.3.30"
+p2panda-core = { version = "0.1.0", path = "../p2panda-core" }
+thiserror = "1.0.61"
+
+[dev-dependencies]
+futures = "0.3.30"
