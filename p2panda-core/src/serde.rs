@@ -11,7 +11,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
 use crate::operation::{Body, Header};
-use crate::Extension;
+use crate::Extensions;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -134,7 +134,7 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl<E> Serialize for Header<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -162,8 +162,8 @@ where
 
         seq.serialize_element(&self.previous)?;
 
-        if let Some(extension) = &self.extension {
-            seq.serialize_element(extension)?;
+        if let Some(extensions) = &self.extensions {
+            seq.serialize_element(extensions)?;
         }
 
         seq.end()
@@ -172,7 +172,7 @@ where
 
 impl<'de, E> Deserialize<'de> for Header<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -184,7 +184,7 @@ where
 
         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
         where
-            E: Extension,
+            E: Extensions,
         {
             type Value = Header<E>;
 
@@ -259,9 +259,9 @@ where
                     .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
                     .ok_or(SerdeError::custom("previous array missing"))?;
 
-                let extension: Option<E> = seq
+                let extensions: Option<E> = seq
                     .next_element()
-                    .map_err(|err| SerdeError::custom(format!("invalid extension: {err}")))?;
+                    .map_err(|err| SerdeError::custom(format!("invalid extensions: {err}")))?;
 
                 Ok(Header {
                     version,
@@ -273,7 +273,7 @@ where
                     seq_num,
                     backlink,
                     previous,
-                    extension,
+                    extensions,
                 })
             }
         }
@@ -310,7 +310,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::Header;
-    use crate::{Body, Extension};
+    use crate::{Body, Extensions};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -404,7 +404,7 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<E: Extension + std::fmt::Debug + PartialEq>(
+    fn assert_serde_roundtrip<E: Extensions + std::fmt::Debug + PartialEq>(
         mut header: Header<E>,
         private_key: &PrivateKey,
     ) {
@@ -419,17 +419,17 @@ mod tests {
     #[test]
     fn serde_roundtrip_operations() {
         #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-        struct CustomExtension {
+        struct CustomExtensions {
             custom_field: u64,
         }
 
-        impl Extension for CustomExtension {}
+        impl Extensions for CustomExtensions {}
 
-        let extension = CustomExtension { custom_field: 12 };
+        let extensions = CustomExtensions { custom_field: 12 };
         let private_key = PrivateKey::new();
 
         assert_serde_roundtrip(
-            Header::<CustomExtension> {
+            Header::<CustomExtensions> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 123,
@@ -438,14 +438,14 @@ mod tests {
                 seq_num: 0,
                 backlink: None,
                 previous: vec![],
-                extension: Some(extension.clone()),
+                extensions: Some(extensions.clone()),
                 signature: None,
             },
             &private_key,
         );
 
         assert_serde_roundtrip(
-            Header::<CustomExtension> {
+            Header::<CustomExtensions> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -454,14 +454,14 @@ mod tests {
                 seq_num: 7,
                 backlink: Some(Hash::new(vec![1, 2, 3])),
                 previous: vec![],
-                extension: None,
+                extensions: None,
                 signature: None,
             },
             &private_key,
         );
 
         assert_serde_roundtrip(
-            Header::<CustomExtension> {
+            Header::<CustomExtensions> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -470,7 +470,7 @@ mod tests {
                 seq_num: 0,
                 backlink: None,
                 previous: vec![],
-                extension: Some(extension),
+                extensions: Some(extensions),
                 signature: None,
             },
             &private_key,
@@ -492,7 +492,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header.sign(&private_key);
 
@@ -510,7 +510,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header.sign(&private_key);
 
@@ -528,7 +528,7 @@ mod tests {
             seq_num: 0,
             backlink: Some(Hash::new([0, 1, 2])),
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header.sign(&private_key);
 
@@ -546,7 +546,7 @@ mod tests {
             seq_num: 10,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header.sign(&private_key);
 
@@ -572,7 +572,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header_0.sign(&private_key);
 
@@ -599,7 +599,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![header_0.hash()],
-            extension: None,
+            extensions: None,
         };
         header_0_with_previous.sign(&private_key);
 
@@ -629,7 +629,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![header_0.hash()],
-            extension: None,
+            extensions: None,
         };
         header_0_with_previous_and_body.sign(&private_key);
 
@@ -660,7 +660,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header_1.sign(&private_key);
 
@@ -689,7 +689,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![header_0.hash()],
-            extension: None,
+            extensions: None,
         };
         header_1_with_previous.sign(&private_key);
 
