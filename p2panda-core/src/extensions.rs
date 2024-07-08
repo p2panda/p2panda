@@ -3,6 +3,6 @@
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-pub trait Extension: Clone + Serialize + DeserializeOwned {}
+pub trait Extensions: Clone + Serialize + DeserializeOwned {}
 
-impl Extension for () {}
+impl Extensions for () {}

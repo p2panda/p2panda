@@ -4,12 +4,12 @@ use thiserror::Error;
 
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
-use crate::Extension;
+use crate::Extensions;
 
 #[derive(Clone, Debug)]
 pub struct Operation<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub hash: Hash,
     pub header: Header<E>,
@@ -18,18 +18,18 @@ where
 
 impl<E> PartialEq for Operation<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn eq(&self, other: &Self) -> bool {
         self.hash.eq(&other.hash)
     }
 }
 
-impl<E> Eq for Operation<E> where E: Extension {}
+impl<E> Eq for Operation<E> where E: Extensions {}
 
 impl<E> PartialOrd for Operation<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.hash.cmp(&other.hash))
@@ -38,7 +38,7 @@ where
 
 impl<E> Ord for Operation<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash.cmp(&other.hash)
@@ -49,7 +49,7 @@ where
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
@@ -87,12 +87,12 @@ where
     pub previous: Vec<Hash>,
 
     /// Custom meta data.
-    pub extension: Option<E>,
+    pub extensions: Option<E>,
 }
 
 impl<E> Header<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -187,7 +187,7 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
-pub fn validate_operation<E: Extension>(operation: &Operation<E>) -> Result<(), OperationError> {
+pub fn validate_operation<E: Extensions>(operation: &Operation<E>) -> Result<(), OperationError> {
     validate_header(&operation.header)?;
 
     let claimed_payload_size = operation.header.payload_size;
@@ -211,7 +211,7 @@ pub fn validate_operation<E: Extension>(operation: &Operation<E>) -> Result<(), 
     Ok(())
 }
 
-pub fn validate_header<E: Extension>(header: &Header<E>) -> Result<(), OperationError> {
+pub fn validate_header<E: Extensions>(header: &Header<E>) -> Result<(), OperationError> {
     if !header.verify() {
         return Err(OperationError::SignatureMismatch);
     }
@@ -242,7 +242,7 @@ pub fn validate_backlink<E>(
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
-    E: Extension,
+    E: Extensions,
 {
     if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
@@ -290,7 +290,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         assert!(!header.verify());
 
@@ -319,7 +319,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header_0.sign(&private_key);
         assert!(validate_header(&header_0).is_ok());
@@ -334,7 +334,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
         header_1.sign(&private_key);
         assert!(validate_header(&header_1).is_ok());
@@ -357,7 +357,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extension: None,
+            extensions: None,
         };
 
         // Incompatible operation format
