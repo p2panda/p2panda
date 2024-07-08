@@ -3,6 +3,15 @@
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::Operation;
+
 pub trait Extensions: Clone + Serialize + DeserializeOwned {}
 
 impl Extensions for () {}
+
+pub trait Extension<Output>
+where
+    Self: Extensions,
+{
+    fn execute(operation: &Operation<Self>) -> Output;
+}
