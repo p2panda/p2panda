@@ -10,7 +10,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
-use crate::operation::{Body, Header, UnsignedHeader};
+use crate::operation::{Body, Header};
 use crate::Extension;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -38,44 +38,6 @@ where
         let bytes = <SerdeByteBuf>::deserialize(deserializer)?;
         Ok(bytes.to_vec())
     }
-}
-
-pub fn serialize_header<S, E>(
-    serializer: S,
-    header: &UnsignedHeader<E>,
-    signature: Option<&Signature>,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-    E: Extension,
-{
-    let mut seq = serializer.serialize_seq(None)?;
-
-    seq.serialize_element(&header.version)?;
-    seq.serialize_element(&header.public_key)?;
-    if let Some(signature) = signature {
-        seq.serialize_element(signature)?;
-    }
-
-    seq.serialize_element(&header.payload_size)?;
-    if let Some(hash) = &header.payload_hash {
-        seq.serialize_element(&hash)?;
-    }
-
-    seq.serialize_element(&header.timestamp)?;
-    seq.serialize_element(&header.seq_num)?;
-
-    if let Some(backlink) = &header.backlink {
-        seq.serialize_element(backlink)?;
-    }
-
-    seq.serialize_element(&header.previous)?;
-
-    if let Some(extension) = &header.extension {
-        seq.serialize_element(extension)?;
-    }
-
-    seq.end()
 }
 
 impl Serialize for Hash {
@@ -170,7 +132,7 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-impl<E> Serialize for UnsignedHeader<E>
+impl<E> Serialize for Header<E>
 where
     E: Extension,
 {
@@ -178,7 +140,33 @@ where
     where
         S: serde::Serializer,
     {
-        serialize_header(serializer, self, None)
+        let mut seq = serializer.serialize_seq(None)?;
+        seq.serialize_element(&self.version)?;
+        seq.serialize_element(&self.public_key)?;
+
+        if let Some(signature) = &self.signature {
+            seq.serialize_element(signature)?;
+        }
+
+        seq.serialize_element(&self.payload_size)?;
+        if let Some(hash) = &self.payload_hash {
+            seq.serialize_element(&hash)?;
+        }
+
+        seq.serialize_element(&self.timestamp)?;
+        seq.serialize_element(&self.seq_num)?;
+
+        if let Some(backlink) = &self.backlink {
+            seq.serialize_element(backlink)?;
+        }
+
+        seq.serialize_element(&self.previous)?;
+
+        if let Some(extension) = &self.extension {
+            seq.serialize_element(extension)?;
+        }
+
+        seq.end()
     }
 }
 
@@ -201,7 +189,7 @@ where
             type Value = Header<E>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("UnsignedHeader encoded as a sequence")
+                formatter.write_str("Header encoded as a sequence")
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -275,9 +263,10 @@ where
                     .next_element()
                     .map_err(|err| SerdeError::custom(format!("invalid extension: {err}")))?;
 
-                let unsigned_header = UnsignedHeader {
+                Ok(Header {
                     version,
                     public_key,
+                    signature: Some(signature),
                     payload_hash,
                     payload_size,
                     timestamp,
@@ -285,27 +274,13 @@ where
                     backlink,
                     previous,
                     extension,
-                };
-
-                Ok(Header(signature, unsigned_header))
+                })
             }
         }
 
         deserializer.deserialize_seq(HeaderVisitor::<E> {
             _marker: PhantomData,
         })
-    }
-}
-
-impl<E> Serialize for Header<E>
-where
-    E: Extension,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_header(serializer, &self.1, Some(&self.0))
     }
 }
 
@@ -334,7 +309,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
-    use crate::operation::{Header, UnsignedHeader};
+    use crate::operation::Header;
     use crate::{Body, Extension};
 
     use super::{deserialize_hex, serialize_hex};
@@ -430,16 +405,15 @@ mod tests {
     }
 
     fn assert_serde_roundtrip<E: Extension + std::fmt::Debug + PartialEq>(
-        header: UnsignedHeader<E>,
+        mut header: Header<E>,
         private_key: &PrivateKey,
     ) {
-        let header = header;
-        let signed_header = header.sign(&private_key);
+        header.sign(&private_key);
 
         let mut bytes = Vec::new();
-        ciborium::ser::into_writer(&signed_header, &mut bytes).unwrap();
-        let signed_header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(signed_header, signed_header_again);
+        ciborium::ser::into_writer(&header, &mut bytes).unwrap();
+        let header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(header, header_again);
     }
 
     #[test]
@@ -455,7 +429,7 @@ mod tests {
         let private_key = PrivateKey::new();
 
         assert_serde_roundtrip(
-            UnsignedHeader::<CustomExtension> {
+            Header::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 123,
@@ -465,12 +439,13 @@ mod tests {
                 backlink: None,
                 previous: vec![],
                 extension: Some(extension.clone()),
+                signature: None,
             },
             &private_key,
         );
 
         assert_serde_roundtrip(
-            UnsignedHeader::<CustomExtension> {
+            Header::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -480,12 +455,13 @@ mod tests {
                 backlink: Some(Hash::new(vec![1, 2, 3])),
                 previous: vec![],
                 extension: None,
+                signature: None,
             },
             &private_key,
         );
 
         assert_serde_roundtrip(
-            UnsignedHeader::<CustomExtension> {
+            Header::<CustomExtension> {
                 version: 1,
                 public_key: private_key.public_key(),
                 payload_size: 0,
@@ -495,6 +471,7 @@ mod tests {
                 backlink: None,
                 previous: vec![],
                 extension: Some(extension),
+                signature: None,
             },
             &private_key,
         );
@@ -505,9 +482,10 @@ mod tests {
         let private_key = PrivateKey::new();
 
         // payload size given without payload hash
-        let header = UnsignedHeader::<()> {
+        let mut header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 2829099,
             payload_hash: None,
             timestamp: 0,
@@ -515,16 +493,17 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header.sign(&private_key);
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // payload hash given without payload size
-        let header = UnsignedHeader::<()> {
+        let mut header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: Some(Hash::new([0, 1, 2])),
             timestamp: 0,
@@ -532,16 +511,17 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header.sign(&private_key);
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // backlink given with seq number 0
-        let header = UnsignedHeader::<()> {
+        let mut header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -549,16 +529,17 @@ mod tests {
             backlink: Some(Hash::new([0, 1, 2])),
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header.sign(&private_key);
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
 
         // backlink not given with seq number > 0
-        let header = UnsignedHeader::<()> {
+        let mut header = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -566,8 +547,8 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header.sign(&private_key);
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
@@ -581,9 +562,10 @@ mod tests {
         ]);
 
         // header at seq num 0 with no previous
-        let header_0 = UnsignedHeader::<()> {
+        let mut header_0 = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -591,8 +573,8 @@ mod tests {
             backlink: None,
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header_0.sign(&private_key);
 
         let bytes = [
             159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -607,9 +589,10 @@ mod tests {
         assert_eq!(header_0, header_again);
 
         // header at seq num 0 with previous
-        let header_0_with_previous = UnsignedHeader::<()> {
+        let mut header_0_with_previous = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -617,8 +600,8 @@ mod tests {
             backlink: None,
             previous: vec![header_0.hash()],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header_0_with_previous.sign(&private_key);
 
         let bytes = [
             159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -636,9 +619,10 @@ mod tests {
 
         // header at seq num 0 with previous and body
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let header_0_with_previous_and_body = UnsignedHeader::<()> {
+        let mut header_0_with_previous_and_body = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
             timestamp: 0,
@@ -646,8 +630,8 @@ mod tests {
             backlink: None,
             previous: vec![header_0.hash()],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header_0_with_previous_and_body.sign(&private_key);
 
         let bytes = [
             159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -666,9 +650,10 @@ mod tests {
         assert_eq!(header_0_with_previous_and_body, header_again);
 
         // header at seq num 1 with backlink but no previous
-        let header_1 = UnsignedHeader::<()> {
+        let mut header_1 = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -676,8 +661,8 @@ mod tests {
             backlink: Some(header_0.hash()),
             previous: vec![],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header_1.sign(&private_key);
 
         let bytes = [
             159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -694,9 +679,10 @@ mod tests {
         assert_eq!(header_1, header_again);
 
         // header at seq num 1 with previous
-        let header_1_with_previous = UnsignedHeader::<()> {
+        let mut header_1_with_previous = Header::<()> {
             version: 1,
             public_key: private_key.public_key(),
+            signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
@@ -704,8 +690,8 @@ mod tests {
             backlink: Some(header_0.hash()),
             previous: vec![header_0.hash()],
             extension: None,
-        }
-        .sign(&private_key);
+        };
+        header_1_with_previous.sign(&private_key);
 
         let bytes = [
             159, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
