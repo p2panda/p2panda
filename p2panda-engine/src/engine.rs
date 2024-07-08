@@ -153,7 +153,7 @@ where
             Some(operation) => {
                 let mut router = self.inner.router.borrow_mut();
                 let result = match router
-                    .ingest(self.inner.context.clone(), operation.to_owned())
+                    .ingest(self.inner.context.clone(), &operation)
                     .poll_unpin(cx)
                 {
                     Poll::Ready(result) => result,

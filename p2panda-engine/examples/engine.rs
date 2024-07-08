@@ -28,9 +28,9 @@ fn main() {
         async fn ingest(
             &mut self,
             _context: p2panda_engine::Context,
-            operation: Operation<()>,
+            operation: &Operation<()>,
         ) -> IngestResult<()> {
-            Ok(StreamEvent::Commit(operation))
+            Ok(StreamEvent::Commit(operation.clone()))
         }
     }
 

@@ -17,7 +17,7 @@ where
     fn ingest(
         &mut self,
         context: Context,
-        operation: Operation<E>,
+        operation: &Operation<E>,
     ) -> impl Future<Output = IngestResult<E>>;
 }
 

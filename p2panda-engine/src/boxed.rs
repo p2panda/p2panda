@@ -40,10 +40,10 @@ pub trait BoxedMiddlewareInner<E>
 where
     E: Extension,
 {
-    fn ingest(
-        &mut self,
+    fn ingest<'a>(
+        &'a mut self,
         context: Context,
-        operation: Operation<E>,
+        operation: &'a Operation<E>,
     ) -> LocalBoxFuture<IngestResult<E>>;
 
     fn clone_box(&self) -> Box<dyn BoxedMiddlewareInner<E>>;
@@ -54,10 +54,10 @@ where
     T: Ingest<E> + Clone + 'static,
     E: Extension + 'static,
 {
-    fn ingest(
-        &mut self,
+    fn ingest<'a>(
+        &'a mut self,
         context: Context,
-        operation: Operation<E>,
+        operation: &'a Operation<E>,
     ) -> LocalBoxFuture<IngestResult<E>> {
         Box::pin(Ingest::ingest(self, context, operation))
     }

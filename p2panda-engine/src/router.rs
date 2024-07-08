@@ -57,7 +57,7 @@ where
 
     pub fn route<R>(self, route: R) -> Self
     where
-        R: Ingest<E> + Layer<E> + Clone + 'static,
+        R: Ingest<E> + Layer<R> + Clone + 'static,
         E: Extension + 'static,
     {
         self.map_inner(|this| RouterInner {
@@ -94,7 +94,7 @@ impl<E> Ingest<E> for Router<E>
 where
     E: Extension,
 {
-    async fn ingest(&mut self, context: Context, operation: Operation<E>) -> IngestResult<E> {
+    async fn ingest(&mut self, context: Context, operation: &Operation<E>) -> IngestResult<E> {
         match &self.inner.root_path {
             Some(path) => {
                 let mut path = path.borrow_mut();
@@ -104,3 +104,5 @@ where
         }
     }
 }
+
+// @TODO: Allow routers to be layered with other routes
