@@ -4,10 +4,12 @@ use p2panda_core::extensions::Extension;
 use p2panda_core::{Hash, Operation, PublicKey};
 use thiserror::Error;
 
-pub trait OperationStore<E, S>
+pub trait OperationStore<E>
 where
-    E: Extension<S>,
+    E: Extension<Self::LogId>,
 {
+    type LogId;
+
     /// Insert an operation.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation
@@ -32,8 +34,10 @@ where
 
 pub trait LogStore<E, S>
 where
-    E: Extension<S>,
+    E: Extension<Self::LogId>,
 {
+    type LogId;
+
     fn get_log(
         &self,
         public_key: PublicKey,
@@ -59,8 +63,10 @@ where
 
 pub trait StreamStore<E, S>
 where
-    E: Extension<S>,
+    E: Extension<Self::StreamId>,
 {
+    type StreamId;
+
     fn get_stream(stream_name: S) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 }
 
