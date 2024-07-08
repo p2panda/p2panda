@@ -1,33 +1,67 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use p2panda_core::{Body, Hash, Header, Operation, PublicKey};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use p2panda_core::extensions::Extension;
+use p2panda_core::{Hash, Operation, PublicKey};
 use thiserror::Error;
 
-pub trait OperationStore<E>
+pub trait OperationStore<E, S>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extension<S>,
 {
     /// Insert an operation.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation
     /// already existed and no insertion occurred.
-    fn insert(header: Header<E>, body: Option<Body>) -> Result<bool, StoreError>;
+    fn insert_operation(&mut self, operation: Operation<E>) -> Result<bool, StoreError>;
 
-    /// Get a single operation.
-    fn get(hash: &Hash) -> Result<Option<Operation<E>>, StoreError>;
+    /// Get an operation.
+    fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError>;
 
-    /// Remove a single operation.
+    /// Delete an operation.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation
     /// was not found in the store.
-    fn remove(hash: &Hash) -> Result<bool, StoreError>;
+    fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
 
-    /// Get all operations from a single authors log.
+    /// Delete the payload of an operation.
     ///
-    /// Returns `None` if the requested log or author was not found in the store.
-    fn all(public_key: &PublicKey, log_id: &str) -> Result<Option<Vec<Operation<E>>>, StoreError>;
+    /// Returns `true` when the removal occurred and `false` when the operation
+    /// was not found in the store or the payload was already deleted.
+    fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
+}
+
+pub trait LogStore<E, S>
+where
+    E: Extension<S>,
+{
+    fn get_log(
+        &self,
+        public_key: PublicKey,
+        log_id: S,
+    ) -> Result<Option<Vec<Operation<E>>>, StoreError>;
+
+    fn delete_operations(
+        &mut self,
+        public_key: PublicKey,
+        log_id: S,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<(), StoreError>;
+
+    fn delete_payloads(
+        &mut self,
+        public_key: PublicKey,
+        log_id: S,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<(), StoreError>;
+}
+
+pub trait StreamStore<E, S>
+where
+    E: Extension<S>,
+{
+    fn get_stream(stream_name: S) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 }
 
 #[derive(Error, Debug)]
