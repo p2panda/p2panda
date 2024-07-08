@@ -13,5 +13,5 @@ pub trait Extension<Output>
 where
     Self: Extensions,
 {
-    fn execute(operation: &Operation<Self>) -> Output;
+    fn extract(operation: &Operation<Self>) -> Output;
 }
