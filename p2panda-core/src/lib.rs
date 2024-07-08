@@ -6,7 +6,7 @@ pub mod identity;
 pub mod operation;
 mod serde;
 
-pub use extensions::Extensions;
+pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
 pub use operation::{
