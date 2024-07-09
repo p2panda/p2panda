@@ -1,0 +1,176 @@
+use p2panda_core::extensions::Extension;
+use p2panda_core::{Hash, Operation, PublicKey};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeSet, HashMap};
+
+use crate::{OperationStore, StoreError};
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct StreamName(pub String);
+
+type SeqNum = u64;
+type Timestamp = u64;
+
+#[derive(Debug, Default)]
+pub struct MemoryStore<E>
+where
+    E: Clone + Default + Serialize + DeserializeOwned + Extension<StreamName>,
+{
+    operations: HashMap<Hash, Operation<E>>,
+
+    logs: HashMap<(PublicKey, StreamName), BTreeSet<(SeqNum, Timestamp, Hash)>>,
+}
+
+impl<E> OperationStore<E> for MemoryStore<E>
+where
+    E: Clone + Default + Serialize + DeserializeOwned + Extension<StreamName>,
+{
+    type LogId = StreamName;
+
+    fn insert_operation(&mut self, operation: Operation<E>) -> Result<bool, StoreError> {
+        let stream_name = E::extract(&operation);
+        let entry = (
+            operation.header.seq_num,
+            operation.header.timestamp,
+            operation.hash,
+        );
+
+        self.logs
+            .entry((operation.header.public_key, stream_name))
+            .and_modify(|log| {
+                log.insert(entry);
+            })
+            .or_insert(BTreeSet::from([entry]));
+        self.operations.insert(operation.hash, operation);
+        return Ok(true);
+    }
+
+    fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError> {
+        Ok(self.operations.get(&hash).cloned())
+    }
+
+    fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
+        if let Some(operation) = self.operations.remove(&hash) {
+            let stream_name = E::extract(&operation);
+            self.logs
+                .get_mut(&(operation.header.public_key, stream_name))
+                .unwrap()
+                .remove(&(
+                    operation.header.seq_num,
+                    operation.header.timestamp,
+                    operation.hash,
+                ));
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
+        if let Some(operation) = self.operations.get_mut(&hash) {
+            operation.body = None;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use p2panda_core::{extensions::Extension, Body, Extensions, Header, Operation, PrivateKey};
+    use serde::{Deserialize, Serialize};
+
+    use crate::OperationStore;
+
+    use super::{MemoryStore, StreamName};
+
+    const PENGUIN_STREAM_NAME: &str = "penguins_are_cool_v1";
+
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct MyExtensions {
+        stream_name: Option<StreamName>,
+    }
+
+    impl Extensions for MyExtensions {}
+
+    impl Extension<StreamName> for MyExtensions {
+        fn extract(operation: &Operation<MyExtensions>) -> StreamName {
+            let extensions = &operation.header.extensions;
+            match extensions {
+                Some(extensions) => match &extensions.stream_name {
+                    Some(stream_name) => stream_name.to_owned(),
+                    None => StreamName(operation.header.public_key.to_string()),
+                },
+                None => StreamName(operation.header.public_key.to_string()),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct PenguinExtensions {}
+
+    impl Extensions for PenguinExtensions {}
+
+    impl Extension<StreamName> for PenguinExtensions {
+        fn extract(_operation: &Operation<PenguinExtensions>) -> StreamName {
+            StreamName(String::from(PENGUIN_STREAM_NAME))
+        }
+    }
+
+    #[test]
+    fn test() {
+        // MemoryStore can handle operations which contain MyExtensions 
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(MyExtensions::default()),
+        };
+        header.sign(&private_key);
+
+        let operation = Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        };
+
+        // MemoryStore can handle operations which contain PenguinExtensions 
+        let mut my_store = MemoryStore::default();
+        let _ = my_store.insert_operation(operation);
+
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(PenguinExtensions::default()),
+        };
+        header.sign(&private_key);
+
+        let penguin_operation = Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        };
+
+        let mut penguin_store = MemoryStore::default();
+        let _ = penguin_store.insert_operation(penguin_operation);
+    }
+}
