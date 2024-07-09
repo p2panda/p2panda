@@ -4,13 +4,11 @@ use std::collections::{BTreeSet, HashMap};
 
 use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{OperationStore, StoreError};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct LogId(pub String);
-
+type LogId = String;
 type SeqNum = u64;
 type Timestamp = u64;
 
@@ -101,9 +99,9 @@ mod tests {
             match &operation.header.extensions {
                 Some(extensions) => match &extensions.stream_name {
                     Some(stream_name) => stream_name.to_owned(),
-                    None => LogId(operation.header.public_key.to_string()),
+                    None => operation.header.public_key.to_string(),
                 },
-                None => LogId(operation.header.public_key.to_string()),
+                None => operation.header.public_key.to_string(),
             }
         }
     }
@@ -117,7 +115,7 @@ mod tests {
 
     impl Extension<LogId> for PenguinExtensions {
         fn extract(_operation: &Operation<PenguinExtensions>) -> LogId {
-            LogId(String::from(PENGUIN_STREAM_NAME))
+            String::from(PENGUIN_STREAM_NAME)
         }
     }
 
