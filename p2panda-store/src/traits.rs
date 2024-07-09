@@ -32,7 +32,7 @@ where
     fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
-pub trait LogStore<E, S>
+pub trait LogStore<E>
 where
     E: Extension<Self::LogId>,
 {
@@ -41,13 +41,13 @@ where
     fn get_log(
         &self,
         public_key: PublicKey,
-        log_id: S,
+        log_id: Self::LogId,
     ) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
-        log_id: S,
+        log_id: Self::LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<(), StoreError>;
@@ -55,19 +55,19 @@ where
     fn delete_payloads(
         &mut self,
         public_key: PublicKey,
-        log_id: S,
+        log_id: Self::LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<(), StoreError>;
 }
 
-pub trait StreamStore<E, S>
+pub trait StreamStore<E>
 where
     E: Extension<Self::StreamId>,
 {
     type StreamId;
 
-    fn get_stream(stream_name: S) -> Result<Option<Vec<Operation<E>>>, StoreError>;
+    fn get_stream(stream_name: Self::StreamId) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 }
 
 #[derive(Error, Debug)]
