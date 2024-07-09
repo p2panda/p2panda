@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use futures_core::future::LocalBoxFuture;
-use p2panda_core::{Extension, Operation};
+use p2panda_core::{Extensions, Operation};
 
 use crate::context::Context;
 use crate::ingest::{Ingest, IngestResult};
@@ -13,7 +13,7 @@ impl<E> BoxedMiddleware<E> {
     pub fn new<R>(inner: R) -> Self
     where
         R: Ingest<E> + Clone + 'static,
-        E: Extension + 'static,
+        E: Extensions + 'static,
     {
         Self(Box::new(inner))
     }
@@ -29,7 +29,7 @@ impl<E> Layer<BoxedMiddleware<E>> for BoxedMiddleware<E> {
 
 impl<E> Clone for BoxedMiddleware<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn clone(&self) -> Self {
         Self(self.0.clone_box())
@@ -38,7 +38,7 @@ where
 
 pub trait BoxedMiddlewareInner<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn ingest<'a>(
         &'a mut self,
@@ -52,7 +52,7 @@ where
 impl<T, E> BoxedMiddlewareInner<E> for T
 where
     T: Ingest<E> + Clone + 'static,
-    E: Extension + 'static,
+    E: Extensions + 'static,
 {
     fn ingest<'a>(
         &'a mut self,

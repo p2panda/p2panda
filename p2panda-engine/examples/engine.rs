@@ -1,7 +1,7 @@
 use futures::executor::LocalPool;
 use futures::stream::StreamExt;
 use futures::task::LocalSpawnExt;
-use p2panda_core::{Body, Hash, Operation, PrivateKey, UnsignedHeader};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
 use p2panda_engine::engine::EngineBuilder;
 use p2panda_engine::ingest::IngestResult;
 use p2panda_engine::{Ingest, Layer, Router, StreamEvent};
@@ -57,19 +57,20 @@ fn main() {
 
                 loop {
                     let body: Body = Body::new(&[1, 2, 3]);
-                    let header = UnsignedHeader::<()> {
+                    let mut header = Header::<()> {
                         version: 1,
                         public_key: private_key.public_key(),
+                        signature: None,
                         payload_size: body.size(),
                         payload_hash: Some(body.hash()),
                         timestamp: 0,
                         seq_num,
                         backlink,
                         previous: vec![],
-                        extension: None,
+                        extensions: None,
                     };
+                    header.sign(&private_key);
 
-                    let header = header.sign(&private_key);
                     backlink = Some(header.hash());
                     seq_num += 1;
 

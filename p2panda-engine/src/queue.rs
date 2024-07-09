@@ -2,12 +2,12 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use p2panda_core::{Extension, Hash, Operation};
+use p2panda_core::{Extensions, Hash, Operation};
 
 #[derive(Clone)]
 pub struct Queue<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     queue: VecDeque<Operation<E>>,
     hashes: HashSet<Hash>,
@@ -16,7 +16,7 @@ where
 
 impl<E> Queue<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub fn new(buffer: usize) -> Self {
         Self {

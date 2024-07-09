@@ -7,7 +7,7 @@ use std::task::{Context as TaskContext, Poll, Waker};
 
 use futures_core::stream::Stream;
 use futures_util::future::{poll_fn, FutureExt};
-use p2panda_core::{Extension, Operation};
+use p2panda_core::{Extensions, Operation};
 
 use crate::boxed::BoxedMiddlewareInner;
 use crate::context::Context;
@@ -19,7 +19,7 @@ const DEFAULT_BUFFER_SIZE: usize = 256;
 
 pub struct EngineBuilder<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     router: Option<Router<E>>,
     buffer: Option<usize>,
@@ -27,7 +27,7 @@ where
 
 impl<E> Default for EngineBuilder<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn default() -> Self {
         Self::new()
@@ -36,7 +36,7 @@ where
 
 impl<E> EngineBuilder<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub fn new() -> Self {
         Self {
@@ -66,14 +66,14 @@ where
 #[derive(Clone)]
 pub struct Engine<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     inner: Rc<EngineInner<E>>,
 }
 
 pub struct EngineInner<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     context: Context,
     router: RefCell<Router<E>>,
@@ -84,7 +84,7 @@ where
 
 impl<E> Engine<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn new(router: Router<E>, buffer: usize) -> Self {
         Self {
@@ -141,7 +141,7 @@ where
 
 impl<E> Stream for Engine<E>
 where
-    E: Extension + 'static,
+    E: Extensions + 'static,
 {
     type Item = IngestResult<E>;
 

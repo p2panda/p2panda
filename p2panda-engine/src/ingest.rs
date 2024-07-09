@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use p2panda_core::{Extension, Operation};
+use p2panda_core::{Extensions, Operation};
 use thiserror::Error;
 
 use crate::context::Context;
@@ -12,7 +12,7 @@ pub type IngestResult<E> = Result<StreamEvent<E>, IngestError>;
 
 pub trait Ingest<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn ingest(
         &mut self,
@@ -23,7 +23,7 @@ where
 
 pub trait IngestBulk<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn ingest_bulk(
         &mut self,

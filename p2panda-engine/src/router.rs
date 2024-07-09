@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::future::IntoFuture;
 use std::rc::Rc;
 
-use p2panda_core::{Extension, Operation};
+use p2panda_core::{Extensions, Operation};
 
 use crate::boxed::BoxedMiddleware;
 use crate::context::Context;
@@ -14,7 +14,7 @@ use crate::layer::Layer;
 #[derive(Clone)]
 pub struct Router<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     inner: Rc<RouterInner<E>>,
 }
@@ -22,14 +22,14 @@ where
 #[derive(Clone)]
 struct RouterInner<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     root_path: Option<RefCell<BoxedMiddleware<E>>>,
 }
 
 impl<E> RouterInner<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub fn new() -> Self {
         Self { root_path: None }
@@ -38,7 +38,7 @@ where
 
 impl<E> Default for Router<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     fn default() -> Self {
         Self::new()
@@ -47,7 +47,7 @@ where
 
 impl<E> Router<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     pub fn new() -> Self {
         Self {
@@ -58,7 +58,7 @@ where
     pub fn route<R>(self, route: R) -> Self
     where
         R: Ingest<E> + Layer<R> + Clone + 'static,
-        E: Extension + 'static,
+        E: Extensions + 'static,
     {
         self.map_inner(|this| RouterInner {
             root_path: match this.root_path {
@@ -92,7 +92,7 @@ where
 
 impl<E> Ingest<E> for Router<E>
 where
-    E: Extension,
+    E: Extensions,
 {
     async fn ingest(&mut self, context: Context, operation: &Operation<E>) -> IngestResult<E> {
         match &self.inner.root_path {
