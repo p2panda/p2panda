@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use p2panda_core::extensions::Extension;
-use p2panda_core::{Hash, Operation, PublicKey};
+use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use thiserror::Error;
 
 pub trait OperationStore<E>
