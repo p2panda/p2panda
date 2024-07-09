@@ -7,7 +7,7 @@ use std::collections::{BTreeSet, HashMap};
 use crate::{OperationStore, StoreError};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct StreamName(pub String);
+pub struct LogId(pub String);
 
 type SeqNum = u64;
 type Timestamp = u64;
@@ -15,18 +15,18 @@ type Timestamp = u64;
 #[derive(Debug, Default)]
 pub struct MemoryStore<E>
 where
-    E: Clone + Default + Serialize + DeserializeOwned + Extension<StreamName>,
+    E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
 {
     operations: HashMap<Hash, Operation<E>>,
 
-    logs: HashMap<(PublicKey, StreamName), BTreeSet<(SeqNum, Timestamp, Hash)>>,
+    logs: HashMap<(PublicKey, LogId), BTreeSet<(SeqNum, Timestamp, Hash)>>,
 }
 
 impl<E> OperationStore<E> for MemoryStore<E>
 where
-    E: Clone + Default + Serialize + DeserializeOwned + Extension<StreamName>,
+    E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
 {
-    type LogId = StreamName;
+    type LogId = LogId;
 
     fn insert_operation(&mut self, operation: Operation<E>) -> Result<bool, StoreError> {
         let stream_name = E::extract(&operation);
@@ -84,23 +84,23 @@ mod tests {
 
     use crate::OperationStore;
 
-    use super::{MemoryStore, StreamName};
+    use super::{MemoryStore, LogId};
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct MyExtensions {
-        stream_name: Option<StreamName>,
+        stream_name: Option<LogId>,
     }
 
     impl Extensions for MyExtensions {}
 
-    impl Extension<StreamName> for MyExtensions {
-        fn extract(operation: &Operation<MyExtensions>) -> StreamName {
+    impl Extension<LogId> for MyExtensions {
+        fn extract(operation: &Operation<MyExtensions>) -> LogId {
             match &operation.header.extensions {
                 Some(extensions) => match &extensions.stream_name {
                     Some(stream_name) => stream_name.to_owned(),
-                    None => StreamName(operation.header.public_key.to_string()),
+                    None => LogId(operation.header.public_key.to_string()),
                 },
-                None => StreamName(operation.header.public_key.to_string()),
+                None => LogId(operation.header.public_key.to_string()),
             }
         }
     }
@@ -112,9 +112,9 @@ mod tests {
 
     impl Extensions for PenguinExtensions {}
 
-    impl Extension<StreamName> for PenguinExtensions {
-        fn extract(_operation: &Operation<PenguinExtensions>) -> StreamName {
-            StreamName(String::from(PENGUIN_STREAM_NAME))
+    impl Extension<LogId> for PenguinExtensions {
+        fn extract(_operation: &Operation<PenguinExtensions>) -> LogId {
+            LogId(String::from(PENGUIN_STREAM_NAME))
         }
     }
 
