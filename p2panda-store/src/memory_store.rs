@@ -80,7 +80,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey};
+    use p2panda_core::{
+        validate_operation, Body, Extension, Extensions, Header, Operation, PrivateKey,
+    };
     use serde::{Deserialize, Serialize};
 
     use crate::OperationStore;
@@ -120,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn generic_extensions_mem_store_support() {
         // MemoryStore can handle operations which contain MyExtensions
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
@@ -143,11 +145,12 @@ mod tests {
             header,
             body: Some(body),
         };
+        assert!(validate_operation(&operation).is_ok());
+
+        let mut my_store = MemoryStore::default();
+        assert_eq!(my_store.insert_operation(operation).ok(), Some(true));
 
         // MemoryStore can handle operations which contain PenguinExtensions
-        let mut my_store = MemoryStore::default();
-        let _ = my_store.insert_operation(operation);
-
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
         let mut header = Header {
@@ -169,8 +172,12 @@ mod tests {
             header,
             body: Some(body),
         };
+        assert!(validate_operation(&penguin_operation).is_ok());
 
         let mut penguin_store = MemoryStore::default();
-        let _ = penguin_store.insert_operation(penguin_operation);
+        assert_eq!(
+            penguin_store.insert_operation(penguin_operation).ok(),
+            Some(true)
+        );
     }
 }
