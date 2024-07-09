@@ -86,8 +86,6 @@ mod tests {
 
     use super::{MemoryStore, StreamName};
 
-    const PENGUIN_STREAM_NAME: &str = "penguins_are_cool_v1";
-
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct MyExtensions {
         stream_name: Option<StreamName>,
@@ -97,8 +95,7 @@ mod tests {
 
     impl Extension<StreamName> for MyExtensions {
         fn extract(operation: &Operation<MyExtensions>) -> StreamName {
-            let extensions = &operation.header.extensions;
-            match extensions {
+            match &operation.header.extensions {
                 Some(extensions) => match &extensions.stream_name {
                     Some(stream_name) => stream_name.to_owned(),
                     None => StreamName(operation.header.public_key.to_string()),
@@ -107,6 +104,8 @@ mod tests {
             }
         }
     }
+
+    const PENGUIN_STREAM_NAME: &str = "penguins_are_cool_v1";
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct PenguinExtensions {}
