@@ -6,7 +6,7 @@ use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::{OperationStore, StoreError};
+use crate::traits::{OperationStore, StoreError};
 
 type LogId = String;
 type SeqNum = u64;
@@ -84,7 +84,7 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
 
-    use crate::OperationStore;
+    use crate::traits::OperationStore;
 
     use super::{LogId, MemoryStore};
 
