@@ -30,12 +30,12 @@ fuzz_target!(|header: Header<()>| {
         assert!(result.is_err())
     } else {
         // All other cases should successfully deserialize
-        let header = result.unwrap();
+        let header_again = result.unwrap();
 
         // Verify the signed header
-        header.verify();
+        header_again.verify();
 
         // Assert it matches the original
-        assert_eq!(header, header)
+        assert_eq!(header, header_again)
     }
 });
