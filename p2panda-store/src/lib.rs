@@ -4,4 +4,3 @@ mod memory_store;
 mod traits;
 
 pub use traits::{LogStore, OperationStore, StoreError, StreamStore};
-
