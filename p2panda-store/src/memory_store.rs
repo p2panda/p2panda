@@ -1,8 +1,10 @@
-use p2panda_core::extensions::Extension;
-use p2panda_core::{Hash, Operation, PublicKey};
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+use std::collections::{BTreeSet, HashMap};
+
+use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
 
 use crate::{OperationStore, StoreError};
 
@@ -18,7 +20,6 @@ where
     E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
 {
     operations: HashMap<Hash, Operation<E>>,
-
     logs: HashMap<(PublicKey, LogId), BTreeSet<(SeqNum, Timestamp, Hash)>>,
 }
 
@@ -79,12 +80,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{extensions::Extension, Body, Extensions, Header, Operation, PrivateKey};
+    use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey};
     use serde::{Deserialize, Serialize};
 
     use crate::OperationStore;
 
-    use super::{MemoryStore, LogId};
+    use super::{LogId, MemoryStore};
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     pub struct MyExtensions {
@@ -120,7 +121,7 @@ mod tests {
 
     #[test]
     fn test() {
-        // MemoryStore can handle operations which contain MyExtensions 
+        // MemoryStore can handle operations which contain MyExtensions
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
         let mut header = Header {
@@ -143,7 +144,7 @@ mod tests {
             body: Some(body),
         };
 
-        // MemoryStore can handle operations which contain PenguinExtensions 
+        // MemoryStore can handle operations which contain PenguinExtensions
         let mut my_store = MemoryStore::default();
         let _ = my_store.insert_operation(operation);
 
