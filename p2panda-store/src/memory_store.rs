@@ -11,6 +11,7 @@ use crate::{OperationStore, StoreError};
 type LogId = String;
 type SeqNum = u64;
 type Timestamp = u64;
+type LogMeta = (SeqNum, Timestamp, Hash);
 
 #[derive(Debug, Default)]
 pub struct MemoryStore<E>
@@ -18,7 +19,7 @@ where
     E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
 {
     operations: HashMap<Hash, Operation<E>>,
-    logs: HashMap<(PublicKey, LogId), BTreeSet<(SeqNum, Timestamp, Hash)>>,
+    logs: HashMap<(PublicKey, LogId), BTreeSet<LogMeta>>,
 }
 
 impl<E> OperationStore<E> for MemoryStore<E>
@@ -42,7 +43,7 @@ where
             })
             .or_insert(BTreeSet::from([entry]));
         self.operations.insert(operation.hash, operation);
-        return Ok(true);
+        Ok(true)
     }
 
     fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError> {
