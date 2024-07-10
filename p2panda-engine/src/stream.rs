@@ -9,4 +9,5 @@ where
 {
     Commit(Operation<E>),
     Replay(Vec<Operation<E>>),
+    None,
 }

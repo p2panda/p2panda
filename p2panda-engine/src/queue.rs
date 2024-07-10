@@ -4,7 +4,7 @@ use std::collections::{HashSet, VecDeque};
 
 use p2panda_core::{Extensions, Hash, Operation};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Queue<E>
 where
     E: Extensions,

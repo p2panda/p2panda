@@ -7,10 +7,12 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+futures = "0.3.30"
 futures-core = "0.3.30"
 futures-util = "0.3.30"
 p2panda-core = { version = "0.1.0", path = "../p2panda-core" }
 thiserror = "1.0.61"
+tokio = { version = "1.38.0", features = ["macros", "rt", "time"] }
 
 [dev-dependencies]
 futures = "0.3.30"

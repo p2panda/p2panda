@@ -7,11 +7,14 @@ pub mod ingest;
 pub mod layer;
 mod queue;
 pub mod router;
+pub mod sorter;
 pub mod stream;
 
 pub use context::Context;
 pub use engine::{Engine, EngineBuilder};
 pub use ingest::Ingest;
 pub use layer::Layer;
+pub use queue::Queue;
 pub use router::Router;
+pub use sorter::{Sorter, SorterRoute};
 pub use stream::StreamEvent;
