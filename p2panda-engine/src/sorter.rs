@@ -55,7 +55,8 @@ impl<E: Extensions + 'static> Sorter<E> {
                 // Empty the queue and sort all operations which were in it.
                 //
                 // @TODO: here we want different queues per stream name maybe? At least some way
-                // of grouping operations sensibly.
+                // of grouping operations sensibly. We also need to get any other operations for
+                // the streams we are sorting from the store.
                 let mut operations: Vec<Operation<E>> = queue.replace(vec![]);
                 operations.sort_by(|op_a, op_b| op_a.header.seq_num.cmp(&op_b.header.seq_num));
 
