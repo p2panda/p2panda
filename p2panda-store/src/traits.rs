@@ -3,9 +3,11 @@
 use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use thiserror::Error;
 
+use crate::LogId;
+
 pub trait OperationStore<E>
 where
-    E: Extension<Self::LogId>,
+    E: Extension<LogId>,
 {
     type LogId;
 
@@ -33,20 +35,20 @@ where
 
 pub trait LogStore<E>
 where
-    E: Extension<Self::LogId>,
+    E: Extension<LogId>,
 {
     type LogId;
 
     fn get_log(
         &self,
         public_key: PublicKey,
-        log_id: Self::LogId,
+        log_id: LogId,
     ) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
-        log_id: Self::LogId,
+        log_id: LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<(), StoreError>;
@@ -54,7 +56,7 @@ where
     fn delete_payloads(
         &mut self,
         public_key: PublicKey,
-        log_id: Self::LogId,
+        log_id: LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<(), StoreError>;
