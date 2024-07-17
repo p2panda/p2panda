@@ -310,7 +310,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::Header;
-    use crate::{Body, Extension, Extensions, Operation};
+    use crate::{Body, Extensions};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -558,6 +558,12 @@ mod tests {
     fn serde_header_with_other_types() {
         let private_key = PrivateKey::new();
 
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct Message {
+            header: Header<()>,
+            body: Body,
+        }
+
         let body = Body::new(b"hello");
         let mut header = Header::<()> {
             version: 1,
@@ -572,12 +578,6 @@ mod tests {
             extensions: Some(()),
         };
         header.sign(&private_key);
-
-        #[derive(Debug, PartialEq, Serialize, Deserialize)]
-        struct Message {
-            header: Header<()>,
-            body: Body,
-        }
 
         let message = Message { header, body };
 
