@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::traits::{OperationStore, StoreError};
+use crate::LogId;
 
-type LogId = String;
 type SeqNum = u64;
 type Timestamp = u64;
 type LogMeta = (SeqNum, Timestamp, Hash);
@@ -16,7 +16,7 @@ type LogMeta = (SeqNum, Timestamp, Hash);
 #[derive(Debug, Default)]
 pub struct MemoryStore<E>
 where
-    E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
+    E: Clone + Serialize + DeserializeOwned + Extension<LogId>,
 {
     operations: HashMap<Hash, Operation<E>>,
     logs: HashMap<(PublicKey, LogId), BTreeSet<LogMeta>>,
@@ -24,7 +24,7 @@ where
 
 impl<E> OperationStore<E> for MemoryStore<E>
 where
-    E: Clone + Default + Serialize + DeserializeOwned + Extension<LogId>,
+    E: Clone + Serialize + DeserializeOwned + Extension<LogId>,
 {
     type LogId = LogId;
 
@@ -100,9 +100,9 @@ mod tests {
             match &operation.header.extensions {
                 Some(extensions) => match &extensions.stream_name {
                     Some(stream_name) => stream_name.to_owned(),
-                    None => operation.header.public_key.to_string(),
+                    None => LogId(operation.header.public_key.to_string()),
                 },
-                None => operation.header.public_key.to_string(),
+                None => LogId(operation.header.public_key.to_string()),
             }
         }
     }
@@ -116,7 +116,7 @@ mod tests {
 
     impl Extension<LogId> for PenguinExtensions {
         fn extract(_operation: &Operation<PenguinExtensions>) -> LogId {
-            String::from(PENGUIN_STREAM_NAME)
+            LogId(String::from(PENGUIN_STREAM_NAME))
         }
     }
 
