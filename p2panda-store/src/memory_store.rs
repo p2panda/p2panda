@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::traits::{OperationStore, StoreError};
-use crate::LogId;
+use crate::{LogId, LogStore};
 
 type SeqNum = u64;
 type Timestamp = u64;
@@ -77,6 +77,55 @@ where
     }
 }
 
+impl<E> LogStore<E> for MemoryStore<E>
+where
+    E: Clone + Serialize + DeserializeOwned + Extension<LogId>,
+{
+    type LogId = LogId;
+
+    fn get_log(
+        &self,
+        public_key: PublicKey,
+        log_id: LogId,
+    ) -> Result<Option<Vec<Operation<E>>>, StoreError> {
+        todo!()
+    }
+
+    fn latest_operation(
+        &self,
+        public_key: PublicKey,
+        log_id: LogId,
+    ) -> Result<Option<Operation<E>>, StoreError> {
+        let latest = match self.logs.get(&(public_key, log_id)) {
+            Some(log) => match log.last() {
+                Some((_, _, hash)) => self.operations.get(&hash),
+                None => None,
+            },
+            None => None,
+        };
+        Ok(latest.cloned())
+    }
+
+    fn delete_operations(
+        &mut self,
+        public_key: PublicKey,
+        log_id: LogId,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<(), StoreError> {
+        todo!()
+    }
+
+    fn delete_payloads(
+        &mut self,
+        public_key: PublicKey,
+        log_id: LogId,
+        from: u64,
+        to: Option<u64>,
+    ) -> Result<(), StoreError> {
+        todo!()
+    }
+}
 #[cfg(test)]
 mod tests {
     use p2panda_core::{
