@@ -10,3 +10,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogId(pub String);
+
+impl From<String> for LogId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
