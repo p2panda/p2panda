@@ -45,6 +45,12 @@ where
         log_id: LogId,
     ) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 
+    fn latest_operation(
+        &self,
+        public_key: PublicKey,
+        log_id: LogId,
+    ) -> Result<Option<Operation<E>>, StoreError>;
+
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
