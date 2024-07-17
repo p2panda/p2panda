@@ -310,7 +310,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::Header;
-    use crate::{Body, Extensions};
+    use crate::{Body, Extension, Extensions, Operation};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -552,6 +552,40 @@ mod tests {
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn serde_header_with_other_types() {
+        let private_key = PrivateKey::new();
+
+        let body = Body::new(b"hello");
+        let mut header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(()),
+        };
+        header.sign(&private_key);
+
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct Message {
+            header: Header<()>,
+            body: Body,
+        }
+
+        let message = Message { header, body };
+
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&message, &mut bytes).unwrap();
+
+        let message_again: Message = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(message_again, message);
     }
 
     #[test]
