@@ -1,0 +1,14 @@
+[package]
+name = "p2panda-store"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1.0.203" }
+thiserror = "1.0.61"
+
+[dependencies.p2panda-core]
+path = "../p2panda-core"
