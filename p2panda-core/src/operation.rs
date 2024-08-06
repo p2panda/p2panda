@@ -128,6 +128,32 @@ where
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
     }
+
+    /// Number of fields included in the header.
+    ///
+    /// Fields instantiated with `None` values are excluded from the count.
+    pub fn len(&self) -> usize {
+        // There will always be a minimum of six fields in a complete header.
+        let mut len = 6;
+
+        if self.signature.is_some() {
+            len += 1;
+        }
+
+        if self.payload_hash.is_some() {
+            len += 1;
+        }
+
+        if self.backlink.is_some() {
+            len += 1;
+        }
+
+        if self.extensions.is_some() {
+            len += 1;
+        }
+
+        len
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
