@@ -1,0 +1,23 @@
+[package]
+name = "p2panda-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+ciborium = "0.2.2"
+libfuzzer-sys = "0.4"
+
+[dependencies.p2panda-core]
+path = "../p2panda-core"
+features = ["arbitrary"]
+
+[[bin]]
+name = "header_e2e"
+path = "fuzz_targets/header_e2e.rs"
+test = false
+doc = false
+bench = false
