@@ -140,7 +140,7 @@ where
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_seq(None)?;
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
         seq.serialize_element(&self.version)?;
         seq.serialize_element(&self.public_key)?;
 
