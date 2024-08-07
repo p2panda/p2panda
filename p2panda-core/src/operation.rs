@@ -132,7 +132,7 @@ where
     /// Number of fields included in the header.
     ///
     /// Fields instantiated with `None` values are excluded from the count.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         // There will always be a minimum of six fields in a complete header.
         let mut len = 6;
 
