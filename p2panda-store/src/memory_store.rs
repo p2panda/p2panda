@@ -112,7 +112,7 @@ where
         log_id: LogId,
         from: u64,
         to: Option<u64>,
-    ) -> Result<(), StoreError> {
+    ) -> Result<bool, StoreError> {
         todo!()
     }
 
@@ -122,7 +122,7 @@ where
         log_id: LogId,
         from: u64,
         to: Option<u64>,
-    ) -> Result<(), StoreError> {
+    ) -> Result<bool, StoreError> {
         todo!()
     }
 }
