@@ -29,6 +29,8 @@ p2panda core types based on the new [namakemono specification](https://p2panda.o
 * p2panda `Operation`, `Header`, `Body` and some validation methods
 * CBOR based encoding with `serde` and `ciborium`
 
+## `Header` and `Body`
+
 ```rust
 // Ed25519 signing key
 let private_key = PrivateKey::new();
@@ -67,4 +69,44 @@ let operation = Operation {
 // Validate the header and, when included, that the body matches the `payload_hash`
 assert!(validate_operation(&operation).is_ok());
 
+```
+
+## `Extensions`
+
+```rust
+// Define custom extension types required for your application
+#[derive(Clone, Serialize, Deserialize)]
+struct LogId(u64);
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Expiry(u64);
+
+#[derive(Clone, Serialize, Deserialize)]
+struct CustomExtensions {
+    log_id: LogId,
+    expires: Expiry,
+}
+
+// Implement the `Extension` trait for all unique types
+impl Extension<LogId> for CustomExtensions {
+    fn extract(&self) -> &LogId {
+        &self.log_id
+    }
+}
+
+impl Extension<Expiry> for CustomExtensions {
+    fn extract(&self) -> &Expiry {
+        &self.expires
+    }
+}
+
+// Create an concrete extension, this will be encoded on a `Header`
+let extensions = CustomExtensions {
+    log_id: LogId(0),
+    expires: Expiry(0123456),
+};
+
+// Extract the required fields by their type
+let log_id = Extension::<LogId>::extract(&extensions);
+let expires = Extension::<Expiry>::extract(&extensions);
 ```
