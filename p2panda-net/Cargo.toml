@@ -14,6 +14,8 @@ workspace = true
 [dependencies]
 anyhow = "1.0.86"
 ciborium = { version = "0.2.2", optional = true }
+# @TODO: remove this pinned-dependency after `iroh` version bump
+derive_more = "=1.0.0-beta.6"
 flume = "0.11.0"
 futures-buffered = "0.2.6"
 futures-lite = "2.3.0"
