@@ -47,10 +47,7 @@ where
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E>
-where
-    E: Extensions,
-{
+pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
@@ -306,7 +303,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let mut header = Header::<()> {
+        let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
             signature: None,
@@ -316,7 +313,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: None::<()>,
         };
         assert!(!header.verify());
 
