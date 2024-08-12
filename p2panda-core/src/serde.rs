@@ -3,7 +3,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::de::{Error as SerdeError, SeqAccess, Visitor};
+use serde::de::{DeserializeOwned, Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
@@ -11,7 +11,6 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
 use crate::operation::{Body, Header};
-use crate::Extensions;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -134,7 +133,7 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl<E> Serialize for Header<E>
 where
-    E: Extensions,
+    E: Clone + Serialize + DeserializeOwned,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -172,7 +171,7 @@ where
 
 impl<'de, E> Deserialize<'de> for Header<E>
 where
-    E: Extensions,
+    E: DeserializeOwned,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -184,7 +183,7 @@ where
 
         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
         where
-            E: Extensions,
+            E: DeserializeOwned,
         {
             type Value = Header<E>;
 
@@ -305,12 +304,13 @@ impl<'de> Deserialize<'de> for Body {
 
 #[cfg(test)]
 mod tests {
+    use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::Header;
-    use crate::{Body, Extensions};
+    use crate::Body;
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -404,7 +404,9 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<E: Extensions + std::fmt::Debug + PartialEq>(
+    fn assert_serde_roundtrip<
+        E: Clone + std::fmt::Debug + PartialEq + Serialize + DeserializeOwned,
+    >(
         mut header: Header<E>,
         private_key: &PrivateKey,
     ) {
@@ -422,8 +424,6 @@ mod tests {
         struct CustomExtensions {
             custom_field: u64,
         }
-
-        impl Extensions for CustomExtensions {}
 
         let extensions = CustomExtensions { custom_field: 12 };
         let private_key = PrivateKey::new();

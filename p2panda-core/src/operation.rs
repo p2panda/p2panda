@@ -1,45 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
-use crate::Extensions;
 
 #[derive(Clone, Debug)]
-pub struct Operation<E>
-where
-    E: Extensions,
-{
+pub struct Operation<E> {
     pub hash: Hash,
     pub header: Header<E>,
     pub body: Option<Body>,
 }
 
-impl<E> PartialEq for Operation<E>
-where
-    E: Extensions,
-{
+impl<E> PartialEq for Operation<E> {
     fn eq(&self, other: &Self) -> bool {
         self.hash.eq(&other.hash)
     }
 }
 
-impl<E> Eq for Operation<E> where E: Extensions {}
+impl<E> Eq for Operation<E> {}
 
-impl<E> PartialOrd for Operation<E>
-where
-    E: Extensions,
-{
+impl<E> PartialOrd for Operation<E> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.hash.cmp(&other.hash))
     }
 }
 
-impl<E> Ord for Operation<E>
-where
-    E: Extensions,
-{
+impl<E> Ord for Operation<E> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash.cmp(&other.hash)
     }
@@ -89,7 +78,7 @@ pub struct Header<E = ()> {
 
 impl<E> Header<E>
 where
-    E: Extensions,
+    E: Clone + Serialize + DeserializeOwned,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -210,7 +199,10 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
-pub fn validate_operation<E: Extensions>(operation: &Operation<E>) -> Result<(), OperationError> {
+pub fn validate_operation<E>(operation: &Operation<E>) -> Result<(), OperationError>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     validate_header(&operation.header)?;
 
     let claimed_payload_size = operation.header.payload_size;
@@ -234,7 +226,10 @@ pub fn validate_operation<E: Extensions>(operation: &Operation<E>) -> Result<(),
     Ok(())
 }
 
-pub fn validate_header<E: Extensions>(header: &Header<E>) -> Result<(), OperationError> {
+pub fn validate_header<E>(header: &Header<E>) -> Result<(), OperationError>
+where
+    E: Clone + Serialize + DeserializeOwned,
+{
     if !header.verify() {
         return Err(OperationError::SignatureMismatch);
     }
@@ -265,7 +260,7 @@ pub fn validate_backlink<E>(
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
-    E: Extensions,
+    E: Clone + Serialize + DeserializeOwned,
 {
     if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
@@ -294,7 +289,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::PrivateKey;
+    use serde::{Deserialize, Serialize};
+
+    use crate::{Extension, PrivateKey};
 
     use super::*;
 
@@ -445,5 +442,40 @@ mod tests {
             }),
             Err(OperationError::PayloadMismatch)
         ));
+    }
+
+    #[test]
+    fn extnensions() {
+        #[derive(Clone, Serialize, Deserialize)]
+        struct LogId(u64);
+
+        #[derive(Clone, Serialize, Deserialize)]
+        struct Expiry(u64);
+
+        #[derive(Clone, Serialize, Deserialize)]
+        struct CustomExtensions {
+            log_id: LogId,
+            expires: Expiry,
+        }
+
+        impl Extension<LogId> for CustomExtensions {
+            fn extract(&self) -> &LogId {
+                &self.log_id
+            }
+        }
+
+        impl Extension<Expiry> for CustomExtensions {
+            fn extract(&self) -> &Expiry {
+                &self.expires
+            }
+        }
+
+        let extensions = CustomExtensions {
+            log_id: LogId(0),
+            expires: Expiry(0123456),
+        };
+
+        let log_id = Extension::<LogId>::extract(&extensions);
+        let expires = Extension::<Expiry>::extract(&extensions);
     }
 }
