@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::pin::Pin;
 
 use anyhow::Result;
+use futures_buffered::MergeBounded;
 use futures_lite::stream::Stream;
 use iroh_net::NodeAddr;
 
@@ -36,7 +37,7 @@ impl Discovery for DiscoveryMap {
             .services
             .iter()
             .filter_map(|service| service.subscribe(network_id));
-        let streams = futures_buffered::Merge::from_iter(streams);
+        let streams = MergeBounded::from_iter(streams);
         Some(Box::pin(streams))
     }
 
