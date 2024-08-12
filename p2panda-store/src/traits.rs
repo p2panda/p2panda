@@ -3,12 +3,7 @@
 use p2panda_core::{Extension, Hash, Operation, PublicKey};
 use thiserror::Error;
 
-use crate::LogId;
-
-pub trait OperationStore<E>
-where
-    E: Extension<LogId>,
-{
+pub trait OperationStore<E> {
     type LogId;
 
     /// Insert an operation.
@@ -33,10 +28,7 @@ where
     fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
-pub trait LogStore<E>
-where
-    E: Extension<LogId>,
-{
+pub trait LogStore<E> {
     type LogId;
 
     /// Get all operations from an authors' log ordered by sequence number.
@@ -45,7 +37,7 @@ where
     fn get_log(
         &self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: Self::LogId,
     ) -> Result<Option<Vec<Operation<E>>>, StoreError>;
 
     /// Get only the latest operation from an authors' log.
@@ -54,7 +46,7 @@ where
     fn latest_operation(
         &self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: Self::LogId,
     ) -> Result<Option<Operation<E>>, StoreError>;
 
     /// Delete a range of operations from an authors' log.
@@ -64,7 +56,7 @@ where
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: Self::LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<bool, StoreError>;
@@ -76,7 +68,7 @@ where
     fn delete_payloads(
         &mut self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: Self::LogId,
         from: u64,
         to: Option<u64>,
     ) -> Result<bool, StoreError>;
