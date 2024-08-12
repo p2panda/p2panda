@@ -497,7 +497,7 @@ mod tests {
             extensions: Some(extensions.clone()),
         };
 
-        // Thanks to blanket implementation of Extension<T> on Header we can extract the 
+        // Thanks to blanket implementation of Extension<T> on Header we can extract the
         // extension value from the header itself.
         let log_id = Extension::<LogId>::extract(&header).unwrap();
         let expiry = Extension::<Expiry>::extract(&header).unwrap();
