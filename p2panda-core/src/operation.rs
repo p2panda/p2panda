@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn invalid_operations() {
         let private_key = PrivateKey::new();
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body: Body = Body::new("Hello, Sloth!".as_bytes());
 
         let header_base = Header::<()> {
             version: 1,
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn extnensions() {
+    fn extensions() {
         #[derive(Clone, Serialize, Deserialize)]
         struct LogId(u64);
 
@@ -459,14 +459,14 @@ mod tests {
         }
 
         impl Extension<LogId> for CustomExtensions {
-            fn extract(&self) -> &LogId {
-                &self.log_id
+            fn extract(&self) -> Option<LogId> {
+                Some(self.log_id.to_owned())
             }
         }
 
         impl Extension<Expiry> for CustomExtensions {
-            fn extract(&self) -> &Expiry {
-                &self.expires
+            fn extract(&self) -> Option<Expiry> {
+                Some(self.expires.to_owned())
             }
         }
 
@@ -475,7 +475,34 @@ mod tests {
             expires: Expiry(0123456),
         };
 
-        let log_id = Extension::<LogId>::extract(&extensions);
-        let expires = Extension::<Expiry>::extract(&extensions);
+        let log_id = Extension::<LogId>::extract(&extensions).unwrap();
+        let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
+
+        assert_eq!(extensions.log_id.0, log_id.0);
+        assert_eq!(extensions.expires.0, expiry.0);
+
+        let private_key = PrivateKey::new();
+        let body: Body = Body::new("Hello, Sloth!".as_bytes());
+
+        let header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(extensions.clone()),
+        };
+
+        // Thanks to blanket implementation of Extension<T> on Header we can extract the 
+        // extension value from the header itself.
+        let log_id = Extension::<LogId>::extract(&header).unwrap();
+        let expiry = Extension::<Expiry>::extract(&header).unwrap();
+
+        assert_eq!(extensions.log_id.0, log_id.0);
+        assert_eq!(extensions.expires.0, expiry.0);
     }
 }
