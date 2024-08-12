@@ -1,5 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["p2panda-core", "fuzz"]
-
-[workspace.lints.rust]
+members = ["p2panda-core", "p2panda-net", "fuzz"]

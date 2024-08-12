@@ -1,0 +1,32 @@
+[package]
+name = "p2panda-net"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["mdns", "cbor"]
+mdns = ["dep:hickory-proto", "dep:socket2"]
+cbor = ["dep:ciborium"]
+
+[dependencies]
+anyhow = "1.0.86"
+ciborium = { version = "0.2.2", optional = true }
+flume = "0.11.0"
+futures-buffered = "0.2.6"
+futures-lite = "2.3.0"
+futures-util = "0.3.30"
+hickory-proto = { version = "0.24.1", optional = true }
+iroh-base = "0.20.0"
+iroh-gossip = "0.20.0"
+iroh-net = "0.20.0"
+p2panda-core = { path = "../p2panda-core" }
+rand = "0.8.5"
+serde = { version = "1.0.203", features = ["derive"] }
+socket2 = { version = "0.5.7", optional = true }
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-stream = { version = "0.1.15", features = ["sync"] }
+tokio-util = { version = "0.7", features = ["codec", "io-util", "io"] }
+tracing = "0.1.40"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
