@@ -132,27 +132,27 @@ where
     /// Number of fields included in the header.
     ///
     /// Fields instantiated with `None` values are excluded from the count.
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) fn field_count(&self) -> usize {
         // There will always be a minimum of six fields in a complete header.
-        let mut len = 6;
+        let mut count = 6;
 
         if self.signature.is_some() {
-            len += 1;
+            count += 1;
         }
 
         if self.payload_hash.is_some() {
-            len += 1;
+            count += 1;
         }
 
         if self.backlink.is_some() {
-            len += 1;
+            count += 1;
         }
 
         if self.extensions.is_some() {
-            len += 1;
+            count += 1;
         }
 
-        len
+        count
     }
 }
 
