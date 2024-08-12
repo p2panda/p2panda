@@ -302,6 +302,7 @@ mod tests {
     fn sign_and_verify() {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
+        type CustomExtensions = ();
 
         let mut header = Header {
             version: 1,
@@ -313,7 +314,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None::<()>,
+            extensions: None::<CustomExtensions>,
         };
         assert!(!header.verify());
 
