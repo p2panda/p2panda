@@ -3,7 +3,9 @@
 use crate::Header;
 
 pub trait Extension<T> {
-    fn extract(&self) -> Option<T>;
+    fn extract(&self) -> Option<T> {
+        None
+    }
 }
 
 impl<T, E> Extension<T> for Header<E>
