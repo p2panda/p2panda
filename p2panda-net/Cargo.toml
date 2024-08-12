@@ -8,6 +8,9 @@ default = ["mdns", "cbor"]
 mdns = ["dep:hickory-proto", "dep:socket2"]
 cbor = ["dep:ciborium"]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1.0.86"
 ciborium = { version = "0.2.2", optional = true }
