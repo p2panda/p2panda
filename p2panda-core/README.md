@@ -89,14 +89,14 @@ struct CustomExtensions {
 
 // Implement the `Extension` trait for all unique types
 impl Extension<LogId> for CustomExtensions {
-    fn extract(&self) -> &LogId {
-        &self.log_id
+    fn extract(&self) -> Option<LogId> {
+        Some(self.log_id.to_owned())
     }
 }
 
 impl Extension<Expiry> for CustomExtensions {
-    fn extract(&self) -> &Expiry {
-        &self.expires
+    fn extract(&self) -> Option<Expiry> {
+        Some(self.expires.to_owned())
     }
 }
 
@@ -107,6 +107,7 @@ let extensions = CustomExtensions {
 };
 
 // Extract the required fields by their type
-let log_id = Extension::<LogId>::extract(&extensions);
-let expires = Extension::<Expiry>::extract(&extensions);
+let log_id = Extension::<LogId>::extract(&extensions).unwrap();
+let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
+
 ```
