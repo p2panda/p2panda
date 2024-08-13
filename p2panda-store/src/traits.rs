@@ -33,12 +33,12 @@ pub trait OperationStore<LogId, Extensions> {
 pub trait LogStore<LogId, Extensions> {
     /// Get all operations from an authors' log ordered by sequence number.
     ///
-    /// Returns None when the author or a log with the requested id was not found.
+    /// Returns an empty Vec when the author or a log with the requested id was not found.
     fn get_log(
         &self,
         public_key: PublicKey,
         log_id: LogId,
-    ) -> Result<Option<Vec<Operation<Extensions>>>, StoreError>;
+    ) -> Result<Vec<Operation<Extensions>>, StoreError>;
 
     /// Get only the latest operation from an authors' log.
     ///
@@ -49,19 +49,18 @@ pub trait LogStore<LogId, Extensions> {
         log_id: LogId,
     ) -> Result<Option<Operation<Extensions>>, StoreError>;
 
-    /// Delete a range of operations from an authors' log.
+    /// Delete all operations in a log before the given sequence number.
     ///
-    /// Returns `true` when operations within the requested range were deleted, or `false` when
+    /// Returns `true` when any operations were deleted, returns `false` when
     /// the author or log could not be found, or no operations were deleted.
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
         log_id: LogId,
-        from: u64,
-        to: Option<u64>,
+        before: u64,
     ) -> Result<bool, StoreError>;
 
-    /// Delete a range of operation payloads from an authors' log.
+    /// Delete a range of operation payloads in an authors' log.
     ///
     /// Returns `true` when operations within the requested range were deleted, or `false` when
     /// the author or log could not be found, or no operations were deleted.
@@ -70,7 +69,7 @@ pub trait LogStore<LogId, Extensions> {
         public_key: PublicKey,
         log_id: LogId,
         from: u64,
-        to: Option<u64>,
+        to: u64,
     ) -> Result<bool, StoreError>;
 }
 
