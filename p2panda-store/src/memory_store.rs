@@ -96,12 +96,18 @@ where
     T: Eq + std::hash::Hash + Default,
     E: Clone,
 {
-    fn get_log(
-        &self,
-        public_key: PublicKey,
-        log_id: T,
-    ) -> Result<Option<Vec<Operation<E>>>, StoreError> {
-        todo!()
+    fn get_log(&self, public_key: PublicKey, log_id: T) -> Result<Vec<Operation<E>>, StoreError> {
+        let mut operations = Vec::new();
+        self.logs.get(&(public_key, log_id)).map(|log| {
+            log.iter().map(|(_, _, hash)| {
+                let operation = self
+                    .operations
+                    .get(hash)
+                    .expect("operation exists in hashmap");
+                operations.push(operation.clone())
+            })
+        });
+        Ok(operations)
     }
 
     fn latest_operation(
@@ -123,10 +129,20 @@ where
         &mut self,
         public_key: PublicKey,
         log_id: T,
-        from: u64,
-        to: Option<u64>,
+        before: u64,
     ) -> Result<bool, StoreError> {
-        todo!()
+        let mut deletion_occurred = false;
+        if let Some(log) = self.logs.get_mut(&(public_key, log_id)) {
+            log.retain(|(seq_num, _, hash)| {
+                let remove = *seq_num < before;
+                if remove {
+                    deletion_occurred = true;
+                    self.operations.remove(hash);
+                };
+                !remove
+            })
+        };
+        Ok(deletion_occurred)
     }
 
     fn delete_payloads(
@@ -134,9 +150,20 @@ where
         public_key: PublicKey,
         log_id: T,
         from: u64,
-        to: Option<u64>,
+        to: u64,
     ) -> Result<bool, StoreError> {
-        todo!()
+        let mut deletion_occurred = false;
+        if let Some(log) = self.logs.get_mut(&(public_key, log_id)) {
+            log.retain(|(seq_num, _, hash)| {
+                let remove = *seq_num >= from || *seq_num < to;
+                if remove {
+                    deletion_occurred = true;
+                    self.operations.remove(hash);
+                };
+                !remove
+            })
+        };
+        Ok(deletion_occurred)
     }
 }
 
