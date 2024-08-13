@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
@@ -36,7 +37,7 @@ impl<E> Ord for Operation<E> {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E = ()> {
+pub struct Header<E = DefaultExtensions> {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
