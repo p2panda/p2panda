@@ -45,6 +45,7 @@ pub enum RelayMode {
 // Creates an overlay network for peers grouped under the same "network id". All peers can
 // subscribe to multiple "topics" in this overlay and hook into a data stream per topic where
 // they'll receive from and send any data to.
+#[derive(Debug)]
 pub struct NetworkBuilder {
     bind_port: Option<u16>,
     direct_node_addresses: Vec<NodeAddr>,
@@ -114,6 +115,10 @@ impl NetworkBuilder {
         self
     }
 
+    // @TODO: I'm pretty sure this doc comment is incorrect...
+    // This is adding the direct addresses of the local node, not those of another peer.
+    // Confirm this suspicion before updating.
+    //
     /// Adds a known address of another peer to our address book.
     ///
     /// Peers are identified with their public key (node id).
@@ -531,6 +536,8 @@ mod tests {
     use crate::config::Config;
     use crate::{NetworkBuilder, RelayMode, RelayUrl};
 
+    use super::OutEvent;
+
     #[tokio::test]
     async fn config() {
         let direct_node_public_key = PrivateKey::new().public_key();
@@ -561,5 +568,54 @@ mod tests {
             stun_port: DEFAULT_STUN_PORT,
         };
         assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
+    }
+
+    #[tokio::test]
+    async fn join_gossip_overlay() {
+        let network_id = [1; 32];
+
+        let private_key_1 = PrivateKey::new();
+        let private_key_2 = PrivateKey::new();
+
+        let public_key_1 = private_key_1.public_key();
+        let public_key_2 = private_key_2.public_key();
+
+        // Build and spawn the first node
+        let node_1 = NetworkBuilder::new(network_id)
+            .bind_port(2022)
+            .direct_address(public_key_1, vec!["0.0.0.0:2022".parse().unwrap()], None)
+            .build()
+            .await
+            .unwrap();
+
+        // Build and spawn the second node
+        let node_2 = NetworkBuilder::new(network_id)
+            .bind_port(2023)
+            .direct_address(public_key_2, vec!["0.0.0.0:2023".parse().unwrap()], None)
+            .build()
+            .await
+            .unwrap();
+
+        // Retrieve the address of the first node
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+
+        // Add the address of the first node, resulting in an automatic connection attempt under
+        // the hood
+        node_2.add_peer(node_1_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes
+        let (_tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
+        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
+
+        // Receive the first message for both nodes
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        let rx_1_msg = rx_1.recv().await.unwrap();
+
+        // Ensure the gossip-overlay has been joined for the given topic
+        assert!(matches!(rx_1_msg, OutEvent::Ready));
+        assert!(matches!(rx_2_msg, OutEvent::Ready));
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
     }
 }
