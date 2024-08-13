@@ -8,7 +8,11 @@ pub trait OperationStore<LogId, Extensions> {
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation
     /// already existed and no insertion occurred.
-    fn insert_operation(&mut self, operation: Operation<Extensions>, log_id: LogId) -> Result<bool, StoreError>;
+    fn insert_operation(
+        &mut self,
+        operation: Operation<Extensions>,
+        log_id: LogId,
+    ) -> Result<bool, StoreError>;
 
     /// Get an operation.
     fn get_operation(&self, hash: Hash) -> Result<Option<Operation<Extensions>>, StoreError>;
@@ -68,16 +72,6 @@ pub trait LogStore<LogId, Extensions> {
         from: u64,
         to: Option<u64>,
     ) -> Result<bool, StoreError>;
-}
-
-pub trait StreamStore<StreamId, Extensions> {
-    /// Get all operations from a stream.
-    ///
-    /// A stream contains operations from all author logs which share the same `LogId`.
-    /// Conceptually they can be understood as multi-writer logs. The operations in the returned
-    /// collection are "locally" ordered (ordered by sequence number per-log) but globally
-    /// unordered.
-    fn get_stream(stream_name: StreamId) -> Result<Option<Vec<Operation<Extensions>>>, StoreError>;
 }
 
 #[derive(Error, Debug)]

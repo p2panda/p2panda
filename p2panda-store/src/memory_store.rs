@@ -139,6 +139,7 @@ where
         todo!()
     }
 }
+
 #[cfg(test)]
 mod tests {
     use p2panda_core::{validate_operation, Body, Header, Operation, PrivateKey};
