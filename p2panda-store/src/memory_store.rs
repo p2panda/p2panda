@@ -2,27 +2,23 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use p2panda_core::{Extension, Hash, Operation, PublicKey};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use p2panda_core::extensions::DefaultExtensions;
+use p2panda_core::{Hash, Operation, PublicKey};
 
 use crate::traits::{OperationStore, StoreError};
-use crate::{LogId, LogStore};
+use crate::LogStore;
 
 type SeqNum = u64;
 type Timestamp = u64;
 type LogMeta = (SeqNum, Timestamp, Hash);
 
-#[derive(Debug, Default)]
-pub struct MemoryStore<E> {
+#[derive(Debug)]
+pub struct MemoryStore<T, E> {
     operations: HashMap<Hash, Operation<E>>,
-    logs: HashMap<(PublicKey, LogId), BTreeSet<LogMeta>>,
+    logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
-impl<E> MemoryStore<E>
-where
-    E: Clone + Extension<LogId>,
-{
+impl<T, E> MemoryStore<T, E> {
     pub fn new() -> Self {
         Self {
             operations: Default::default(),
@@ -31,21 +27,26 @@ where
     }
 }
 
-impl<E> OperationStore<E> for MemoryStore<E>
-where
-    E: Clone + Extension<LogId>,
-{
-    type LogId = LogId;
+impl<T> Default for MemoryStore<T, DefaultExtensions> {
+    fn default() -> Self {
+        Self {
+            operations: Default::default(),
+            logs: Default::default(),
+        }
+    }
+}
 
-    fn insert_operation(&mut self, operation: Operation<E>) -> Result<bool, StoreError> {
+impl<T, E> OperationStore<T, E> for MemoryStore<T, E>
+where
+    T: Eq + std::hash::Hash + Default,
+    E: Clone,
+{
+    fn insert_operation(&mut self, operation: Operation<E>, log_id: T) -> Result<bool, StoreError> {
         let entry = (
             operation.header.seq_num,
             operation.header.timestamp,
             operation.hash,
         );
-
-        let log_id = Extension::<Self::LogId>::extract(&operation.header)
-            .unwrap_or(LogId::from_public_key(operation.header.public_key));
 
         self.logs
             .entry((operation.header.public_key, log_id))
@@ -63,17 +64,17 @@ where
 
     fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
         if let Some(operation) = self.operations.remove(&hash) {
-            let log_id = Extension::<Self::LogId>::extract(&operation.header)
-                .unwrap_or(LogId::from_public_key(operation.header.public_key));
-
-            self.logs
-                .get_mut(&(operation.header.public_key, log_id))
-                .unwrap()
-                .remove(&(
+            let mut removed = false;
+            self.logs.iter_mut().for_each(|(_, log)| {
+                removed = log.remove(&(
                     operation.header.seq_num,
                     operation.header.timestamp,
                     operation.hash,
                 ));
+                if removed {
+                    return;
+                }
+            });
             Ok(true)
         } else {
             Ok(false)
@@ -90,16 +91,15 @@ where
     }
 }
 
-impl<E> LogStore<E> for MemoryStore<E>
+impl<T, E> LogStore<T, E> for MemoryStore<T, E>
 where
-    E: Clone + Serialize + DeserializeOwned + Extension<LogId>,
+    T: Eq + std::hash::Hash + Default,
+    E: Clone,
 {
-    type LogId = LogId;
-
     fn get_log(
         &self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: T,
     ) -> Result<Option<Vec<Operation<E>>>, StoreError> {
         todo!()
     }
@@ -107,7 +107,7 @@ where
     fn latest_operation(
         &self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: T,
     ) -> Result<Option<Operation<E>>, StoreError> {
         let latest = match self.logs.get(&(public_key, log_id)) {
             Some(log) => match log.last() {
@@ -122,7 +122,7 @@ where
     fn delete_operations(
         &mut self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: T,
         from: u64,
         to: Option<u64>,
     ) -> Result<bool, StoreError> {
@@ -132,7 +132,7 @@ where
     fn delete_payloads(
         &mut self,
         public_key: PublicKey,
-        log_id: LogId,
+        log_id: T,
         from: u64,
         to: Option<u64>,
     ) -> Result<bool, StoreError> {
@@ -141,31 +141,16 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{validate_operation, Body, Extension, Header, Operation, PrivateKey};
-    use serde::{Deserialize, Serialize};
+    use p2panda_core::{validate_operation, Body, Header, Operation, PrivateKey};
 
     use crate::traits::OperationStore;
 
-    use super::{LogId, MemoryStore};
-
-    #[derive(Clone, Deserialize, Serialize)]
-    pub struct MyCustomExtensions {
-        log_id: LogId,
-    }
-
-    impl Extension<LogId> for MyCustomExtensions {
-        fn extract(&self) -> Option<LogId> {
-            Some(self.log_id.clone())
-        }
-    }
+    use super::MemoryStore;
 
     #[test]
-    fn generic_extensions_mem_store_support() {
+    fn default_memory_store() {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
-        let extensions = MyCustomExtensions {
-            log_id: "messages".to_string().into(),
-        };
 
         let mut header = Header {
             version: 1,
@@ -177,7 +162,37 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: Some(extensions),
+            extensions: None,
+        };
+
+        header.sign(&private_key);
+
+        let operation = Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        };
+
+        let mut memory_store = MemoryStore::default();
+        assert!(memory_store.insert_operation(operation, 0).is_ok())
+    }
+
+    #[test]
+    fn generic_extensions_mem_store_support() {
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: None,
         };
         header.sign(&private_key);
 
@@ -188,7 +203,7 @@ mod tests {
         };
         assert!(validate_operation(&operation).is_ok());
 
-        let mut my_store = MemoryStore::new();
-        assert_eq!(my_store.insert_operation(operation).ok(), Some(true));
+        let mut my_store = MemoryStore::default();
+        assert_eq!(my_store.insert_operation(operation, 0).ok(), Some(true));
     }
 }
