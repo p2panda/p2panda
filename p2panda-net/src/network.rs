@@ -33,7 +33,7 @@ const MAX_STREAMS: u32 = 1024;
 /// Maximum number of parallel QUIC connections.
 const MAX_CONNECTIONS: u32 = 1024;
 
-/// How long we wait at most for some endpoints to be discovered.
+/// Timeout duration for discovery of at least one peer's direct address.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, PartialEq)]
@@ -42,9 +42,10 @@ pub enum RelayMode {
     Custom(RelayNode),
 }
 
-// Creates an overlay network for peers grouped under the same "network id". All peers can
-// subscribe to multiple "topics" in this overlay and hook into a data stream per topic where
-// they'll receive from and send any data to.
+/// Creates an overlay network for peers grouped under the same network identifier.
+///
+/// All peers can subscribe to multiple topics in this overlay and hook into a data stream per
+/// topic where they'll send and receive data.
 #[derive(Debug)]
 pub struct NetworkBuilder {
     bind_port: Option<u16>,
@@ -58,7 +59,10 @@ pub struct NetworkBuilder {
 }
 
 impl NetworkBuilder {
-    // Set a network identifier. It'll be used as an identifier for protocol handshake & discovery
+    /// Returns a new instance of `NetworkBuilder` using the given network identifier.
+    ///
+    /// The identifier is used during handshake and discovery protocols. Networks must use the
+    /// same identifier if they wish to successfully connect and share gossip.
     pub fn new(network_id: NetworkId) -> Self {
         Self {
             bind_port: None,
@@ -72,7 +76,7 @@ impl NetworkBuilder {
         }
     }
 
-    /// Instantiate a network builder from a configuration.
+    /// Returns a new instance of `NetworkBuilder` using the given configuration.
     pub fn from_config(config: Config) -> Self {
         let mut network_builder = Self::new(config.network_id).bind_port(config.bind_port);
 
@@ -88,24 +92,27 @@ impl NetworkBuilder {
         network_builder
     }
 
+    /// Sets or overwrites the the local bind port.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
         self
     }
 
-    // Sets or overwrites the private key, if not set it'll generate a new, random key when
-    // building the network.
+    /// Sets or overwrites the private key.
+    ///
+    /// If this value is not set, the `NetworkBuilder` will generate a new, random key when
+    /// building the network.
     pub fn private_key(mut self, private_key: PrivateKey) -> Self {
         self.secret_key = Some(SecretKey::from_bytes(private_key.as_bytes()));
         self
     }
 
-    /// Sets the relay of our node. Other peers need to use it if they want to establish a direct
-    /// connection with us.
+    /// Sets the relay used by the local network to facilitate the establishment of direct
+    /// connections.
     ///
     /// Relay nodes are STUN servers to help establishing a peer-to-peer connection if either or
-    /// both of the peers are behind a NAT. If this connection attempt fails, the Relay node might
-    /// offer a "proxy" functionality on top, which will help to relay the data in that case.
+    /// both of the peers are behind a NAT. If this connection attempt fails, the relay node might
+    /// offer a proxy functionality on top, which will help to relay the data in that case.
     pub fn relay(mut self, url: RelayUrl, stun_only: bool, stun_port: u16) -> Self {
         self.relay_mode = RelayMode::Custom(RelayNode {
             url: url.into(),
@@ -115,21 +122,15 @@ impl NetworkBuilder {
         self
     }
 
-    // @TODO: I'm pretty sure this doc comment is incorrect...
-    // This is adding the direct addresses of the local node, not those of another peer.
-    // Confirm this suspicion before updating.
-    //
-    /// Adds a known address of another peer to our address book.
+    /// Sets the direct address of a peer, identified by their public key (node id).
     ///
-    /// Peers are identified with their public key (node id).
+    /// If given a direct address, it should be reachable without the aid of a STUN / relay node.
+    /// If the direct connection attempt fails (for example because of a NAT or Firewall) the relay
+    /// node of that peer needs to be given, so we can re-attempt establishing a connection with it.
     ///
-    /// If given a direct address, it should be reachable without the aid of a STUN / Relay Node.
-    /// If this connection attempt fails (for example because of a NAT or Firewall) the Relay Node
-    /// of that peer needs to be given, so we can re-attempt establishing a connection with it.
-    ///
-    /// If no relay address is given but required, we optimistically try to use our own relay node
-    /// instead (if specified). This might still fail, as we can't know if the peer is using the
-    /// same relay node.
+    /// If no relay address is given but turns out to be required, we optimistically try to use our
+    /// own relay node instead (if specified). This might still fail, as we can't know if the peer
+    /// is using the same relay node.
     pub fn direct_address(
         mut self,
         node_id: PublicKey,
@@ -145,23 +146,22 @@ impl NetworkBuilder {
         self
     }
 
-    // Adds one or more discovery strategy. This can be for example:
-    // * mDNS
-    // * Rendesvouz / Boostrap Node
-    // * ...
+    /// Adds one or more discovery strategy, such as mDNS.
     pub fn discovery(mut self, handler: impl Discovery + 'static) -> Self {
         self.discovery.add(handler);
         self
     }
 
-    // Gossip mode is always on, maybe we can only configure it here (max active and passive peers
-    // etc.) or provide it with a custom implementation?
+    /// Sets the gossip configuration.
+    ///
+    /// Configuration parameters define the behavior of the swarm membership (HyParView) and gossip
+    /// broadcast (Plumtree) layers, as well as the maximum message size.
     pub fn gossip(mut self, config: GossipConfig) -> Self {
         self.gossip_config = Some(config);
         self
     }
 
-    // Add protocols which this node will accept.
+    /// Adds protocols for network communication.
     pub fn protocol(
         mut self,
         protocol_name: &'static [u8],
@@ -171,6 +171,16 @@ impl NetworkBuilder {
         self
     }
 
+    /// Returns a handle to a newly-spawned instance of `Network`.
+    ///
+    /// A peer-to-peer endpoint is created and bound to a QUIC socket, after which the gossip,
+    /// engine and handshake handlers are instantiated. Direct addresses for network peers are
+    /// added to the engine from the address book and core protocols are registered.
+    ///
+    /// After configuration and registration processes are complete, the network is spawned and an
+    /// attempt is made to retrieve a direct address for a network peer so that a connection
+    /// attempt may be made. If no address is retrieved within the timeout limit, the network is
+    /// shut down and an error is returned.
     pub async fn build(mut self) -> Result<Network> {
         let secret_key = self.secret_key.unwrap_or(SecretKey::generate());
 
