@@ -38,7 +38,7 @@ impl<T> Default for MemoryStore<T, DefaultExtensions> {
 
 impl<T, E> OperationStore<T, E> for MemoryStore<T, E>
 where
-    T: Eq + std::hash::Hash + Default,
+    T: Clone + Eq + std::hash::Hash + Default + std::fmt::Debug,
     E: Clone,
 {
     fn insert_operation(&mut self, operation: Operation<E>, log_id: T) -> Result<bool, StoreError> {
@@ -48,14 +48,17 @@ where
             operation.hash,
         );
 
-        self.logs
+        let insertion_occured = self
+            .logs
             .entry((operation.header.public_key, log_id))
-            .and_modify(|log| {
-                log.insert(entry);
-            })
-            .or_insert(BTreeSet::from([entry]));
-        self.operations.insert(operation.hash, operation);
-        Ok(true)
+            .or_default()
+            .insert(entry);
+
+        if insertion_occured {
+            self.operations.insert(operation.hash, operation);
+        }
+
+        Ok(insertion_occured)
     }
 
     fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError> {
@@ -63,22 +66,29 @@ where
     }
 
     fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        if let Some(operation) = self.operations.remove(&hash) {
-            let mut removed = false;
-            self.logs.iter_mut().for_each(|(_, log)| {
-                removed = log.remove(&(
-                    operation.header.seq_num,
-                    operation.header.timestamp,
-                    operation.hash,
+        let Some(removed) = self.operations.remove(&hash) else {
+            return Ok(false);
+        };
+
+        self.logs = self
+            .logs
+            .clone()
+            .into_iter()
+            .filter_map(|(key, mut log)| {
+                log.remove(&(
+                    removed.header.seq_num,
+                    removed.header.timestamp,
+                    removed.hash,
                 ));
-                if removed {
-                    return;
+                if log.is_empty() {
+                    None
+                } else {
+                    Some((key, log))
                 }
-            });
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+            })
+            .collect();
+
+        Ok(true)
     }
 
     fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
@@ -93,20 +103,20 @@ where
 
 impl<T, E> LogStore<T, E> for MemoryStore<T, E>
 where
-    T: Eq + std::hash::Hash + Default,
+    T: Eq + std::hash::Hash + Default + std::fmt::Debug,
     E: Clone,
 {
     fn get_log(&self, public_key: PublicKey, log_id: T) -> Result<Vec<Operation<E>>, StoreError> {
         let mut operations = Vec::new();
-        self.logs.get(&(public_key, log_id)).map(|log| {
-            log.iter().map(|(_, _, hash)| {
+        if let Some(log) = self.logs.get(&(public_key, log_id)) {
+            log.iter().for_each(|(_, _, hash)| {
                 let operation = self
                     .operations
                     .get(hash)
                     .expect("operation exists in hashmap");
                 operations.push(operation.clone())
             })
-        });
+        };
         Ok(operations)
     }
 
@@ -117,7 +127,7 @@ where
     ) -> Result<Option<Operation<E>>, StoreError> {
         let latest = match self.logs.get(&(public_key, log_id)) {
             Some(log) => match log.last() {
-                Some((_, _, hash)) => self.operations.get(&hash),
+                Some((_, _, hash)) => self.operations.get(hash),
                 None => None,
             },
             None => None,
@@ -153,15 +163,17 @@ where
         to: u64,
     ) -> Result<bool, StoreError> {
         let mut deletion_occurred = false;
-        if let Some(log) = self.logs.get_mut(&(public_key, log_id)) {
-            log.retain(|(seq_num, _, hash)| {
-                let remove = *seq_num >= from || *seq_num < to;
-                if remove {
+        if let Some(log) = self.logs.get(&(public_key, log_id)) {
+            log.iter().for_each(|(seq_num, _, hash)| {
+                if *seq_num >= from && *seq_num < to {
                     deletion_occurred = true;
-                    self.operations.remove(hash);
+                    let operation = self
+                        .operations
+                        .get_mut(hash)
+                        .expect("operation exists in store");
+                    operation.body = None;
                 };
-                !remove
-            })
+            });
         };
         Ok(deletion_occurred)
     }
