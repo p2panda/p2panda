@@ -1,4 +1,4 @@
-<h1 align="center">p2panda</h1>
+<h1 align="center">p2panda-core</h1>
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
@@ -22,23 +22,27 @@
   </h3>
 </div>
 
-p2panda core types based on the new [namakemono specification](https://p2panda.org/specifications/namakemono/). 🦥 
+p2panda core types based on the new [namakemono](https://p2panda.org/specifications/namakemono/) specification. 🦥 
+
+## Features
 
 * BLAKE3 `Hash`
 * Ed25519 `PrivateKey`, `PublicKey` and `Signature`
 * p2panda `Operation`, `Header`, `Body` and some validation methods
 * CBOR based encoding with `serde` and `ciborium`
 
-## `Header` and `Body`
+## Examples
+
+### Create and sign an operation
 
 ```rust
 // Ed25519 signing key
 let private_key = PrivateKey::new();
 
-// The operation body contains application data
+// Operation body contains application data
 let body = Body::new("Hello, Sloth!".as_bytes());
 
-// Create a header
+// Create header
 let mut header = Header {
     version: 1,
     public_key: private_key.public_key(),
@@ -55,8 +59,7 @@ let mut header = Header {
 // Sign header
 header.sign(&private_key);
 
-// An operation containing the header hash (the operation id), the header 
-// itself and an optional body
+// An operation containing the header hash (the operation id), the header itself and an optional body
 let operation = Operation {
     hash: header.hash(),
     header,
@@ -67,7 +70,7 @@ let operation = Operation {
 validate_operation(&operation).is_ok();
 ```
 
-## `Extensions`
+### Add extensions to operation
 
 ```rust
 // Define custom extension types required for your application
@@ -105,5 +108,4 @@ let extensions = CustomExtensions {
 // Extract the required fields by their type
 let log_id = Extension::<LogId>::extract(&extensions).unwrap();
 let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
-
 ```
