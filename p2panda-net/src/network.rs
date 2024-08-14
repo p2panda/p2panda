@@ -613,7 +613,7 @@ mod tests {
         // Build and spawn the first node
         let node_1 = NetworkBuilder::new(network_id)
             .bind_port(2022)
-            .direct_address(public_key_1, vec!["0.0.0.0:2022".parse().unwrap()], None)
+            .direct_address(public_key_1, vec!["0.0.0.0:2023".parse().unwrap()], None)
             .build()
             .await
             .unwrap();
@@ -621,7 +621,7 @@ mod tests {
         // Build and spawn the second node
         let node_2 = NetworkBuilder::new(network_id)
             .bind_port(2023)
-            .direct_address(public_key_2, vec!["0.0.0.0:2023".parse().unwrap()], None)
+            .direct_address(public_key_2, vec!["0.0.0.0:2022".parse().unwrap()], None)
             .build()
             .await
             .unwrap();
