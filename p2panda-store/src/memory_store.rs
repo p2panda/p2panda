@@ -181,47 +181,66 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{validate_operation, Body, Header, Operation, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use serde::{Deserialize, Serialize};
 
-    use crate::traits::OperationStore;
+    use crate::{traits::OperationStore, LogStore};
 
     use super::MemoryStore;
 
-    #[test]
-    fn default_memory_store() {
-        let private_key = PrivateKey::new();
-        let body = Body::new("hello!".as_bytes());
-
+    fn generate_operation(
+        private_key: &PrivateKey,
+        body: Body,
+        seq_num: u64,
+        timestamp: u64,
+        backlink: Option<Hash>,
+    ) -> Operation {
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
-            seq_num: 0,
-            backlink: None,
+            timestamp,
+            seq_num,
+            backlink,
             previous: vec![],
             extensions: None,
         };
-
         header.sign(&private_key);
 
-        let operation = Operation {
+        Operation {
             hash: header.hash(),
             header,
             body: Some(body),
-        };
-
-        let mut memory_store = MemoryStore::default();
-        assert!(memory_store.insert_operation(operation, 0).is_ok())
+        }
     }
 
     #[test]
-    fn generic_extensions_mem_store_support() {
+    fn default_memory_store() {
+        let mut store = MemoryStore::default();
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
+        let operation = generate_operation(&private_key, body, 0, 0, None);
+        let inserted = store
+            .insert_operation(operation.clone(), 0)
+            .expect("no errors");
+        assert!(inserted);
+    }
+
+    #[test]
+    fn generic_extensions_mem_store() {
+        // Define our own custom extension type
+        #[derive(Clone, Serialize, Deserialize)]
+        struct MyExtension {}
+
+        // Construct a new store
+        let mut store = MemoryStore::new();
+
+        // Construct an operation using the custom extension
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
@@ -232,7 +251,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: Some(MyExtension {}),
         };
         header.sign(&private_key);
 
@@ -241,9 +260,333 @@ mod tests {
             header,
             body: Some(body),
         };
-        assert!(validate_operation(&operation).is_ok());
 
-        let mut my_store = MemoryStore::default();
-        assert_eq!(my_store.insert_operation(operation, 0).ok(), Some(true));
+        // Insert the operation into the store, the extension type is inferred
+        let inserted = store
+            .insert_operation(operation.clone(), 0)
+            .expect("no errors");
+        assert!(inserted);
+    }
+
+    #[test]
+    fn insert_get_operation() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+
+        let operation = generate_operation(&private_key, body, 0, 0, None);
+
+        // Insert one operation
+        let inserted = store
+            .insert_operation(operation.clone(), 0)
+            .expect("no errors");
+        assert!(inserted);
+
+        // Retrieve it agin
+        let retreived_operation = store
+            .get_operation(operation.hash)
+            .expect("no error")
+            .expect("operation exists");
+
+        assert_eq!(operation, retreived_operation);
+    }
+
+    #[test]
+    fn delete_operation() {
+        let mut store: MemoryStore<i32, p2panda_core::extensions::DefaultExtensions> =
+            MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+
+        let operation = generate_operation(&private_key, body, 0, 0, None);
+
+        // Insert one operation
+        let inserted = store
+            .insert_operation(operation.clone(), 0)
+            .expect("no errors");
+        assert!(inserted);
+
+        // We expect one log and one operation
+        assert_eq!(store.logs.len(), 1);
+        assert_eq!(store.operations.len(), 1);
+
+        // Delete the operation
+        assert!(store.delete_operation(operation.hash).expect("no error"));
+
+        // We expect no logs and no operations
+        assert_eq!(store.logs.len(), 0);
+        assert_eq!(store.operations.len(), 0);
+
+        // Try to get the operation
+        let deleted_operation = store.get_operation(operation.hash).expect("no error");
+
+        // It isn't there anymore
+        assert!(deleted_operation.is_none());
+    }
+
+    #[test]
+    fn delete_payload() {
+        let mut store: MemoryStore<i32, p2panda_core::extensions::DefaultExtensions> =
+            MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+
+        let operation = generate_operation(&private_key, body, 0, 0, None);
+
+        // Insert one operation
+        let inserted = store
+            .insert_operation(operation.clone(), 0)
+            .expect("no errors");
+        assert!(inserted);
+
+        // Delete the payload
+        assert!(store.delete_payload(operation.hash).expect("no error"));
+
+        // Retrieve the operation again
+        let operation_no_payload = store
+            .get_operation(operation.hash)
+            .expect("no error")
+            .expect("operation exists");
+
+        // The value of body is `None`
+        assert!(operation_no_payload.body.is_none());
+    }
+
+    #[test]
+    fn get_log() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body0 = Body::new("hello!".as_bytes());
+        let body1 = Body::new("hello again!".as_bytes());
+
+        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
+        let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
+
+        store
+            .insert_operation(operation_0.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_1.clone(), log_id)
+            .expect("no errors");
+
+        let log = store
+            .get_log(private_key.public_key(), log_id)
+            .expect("no errors");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0], operation_0);
+        assert_eq!(log[1], operation_1);
+    }
+
+    #[test]
+    fn insert_many_get_one_log() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_a_id = "a";
+        let log_b_id = "b";
+
+        let body_a0 = Body::new("hello from log a!".as_bytes());
+        let body_a1 = Body::new("hello from log a again!".as_bytes());
+        let log_a_operation_0 = generate_operation(&private_key, body_a0, 0, 0, None);
+        let log_a_operation_1 =
+            generate_operation(&private_key, body_a1, 1, 1, Some(log_a_operation_0.hash));
+
+        let inserted = store
+            .insert_operation(log_a_operation_0.clone(), log_a_id)
+            .expect("no errors");
+        assert!(inserted);
+
+        let inserted = store
+            .insert_operation(log_a_operation_1.clone(), log_a_id)
+            .expect("no errors");
+        assert!(inserted);
+
+        let body_b0 = Body::new("hello from log b!".as_bytes());
+        let body_b1 = Body::new("hello from log b again!".as_bytes());
+        let log_b_operation_0 = generate_operation(&private_key, body_b0, 0, 3, None);
+        let log_b_operation_1 =
+            generate_operation(&private_key, body_b1, 1, 4, Some(log_b_operation_0.hash));
+
+        store
+            .insert_operation(log_b_operation_0.clone(), log_b_id)
+            .expect("no errors");
+
+        store
+            .insert_operation(log_b_operation_1.clone(), log_b_id)
+            .expect("no errors");
+
+        let log_a = store
+            .get_log(private_key.public_key(), log_a_id)
+            .expect("no errors");
+
+        assert_eq!(log_a.len(), 2);
+        assert_eq!(log_a[0], log_a_operation_0);
+        assert_eq!(log_a[1], log_a_operation_1);
+
+        let log_b = store
+            .get_log(private_key.public_key(), log_b_id)
+            .expect("no errors");
+
+        assert_eq!(log_b.len(), 2);
+        assert_eq!(log_b[0], log_b_operation_0);
+        assert_eq!(log_b[1], log_b_operation_1);
+    }
+
+    #[test]
+    fn many_authors_same_log_id() {
+        let mut store = MemoryStore::default();
+        let private_key_a = PrivateKey::new();
+        let private_key_b = PrivateKey::new();
+        let log_id = 0;
+        let body = Body::new("hello!".as_bytes());
+
+        let author_a_operation = generate_operation(&private_key_a, body.clone(), 0, 0, None);
+        let inserted = store
+            .insert_operation(author_a_operation.clone(), log_id)
+            .expect("no errors");
+        assert!(inserted);
+
+        let author_b_operation = generate_operation(&private_key_b, body, 0, 0, None);
+        let inserted = store
+            .insert_operation(author_b_operation.clone(), log_id)
+            .expect("no errors");
+        assert!(inserted);
+
+        let author_a_log = store
+            .get_log(private_key_a.public_key(), log_id)
+            .expect("no errors");
+
+        assert_eq!(author_a_log.len(), 1);
+        assert_eq!(author_a_log[0], author_a_operation);
+
+        let author_b_log = store
+            .get_log(private_key_b.public_key(), log_id)
+            .expect("no errors");
+
+        assert_eq!(author_b_log.len(), 1);
+        assert_eq!(author_b_log[0], author_b_operation);
+    }
+
+    #[test]
+    fn get_latest_operation() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body0 = Body::new("hello!".as_bytes());
+        let body1 = Body::new("hello again!".as_bytes());
+
+        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
+        let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
+
+        store
+            .insert_operation(operation_0.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_1.clone(), log_id)
+            .expect("no errors");
+
+        let latest_operation = store
+            .latest_operation(private_key.public_key(), log_id)
+            .expect("no errors");
+
+        assert_eq!(latest_operation, Some(operation_1));
+    }
+
+    #[test]
+    fn delete_operations() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body0 = Body::new("hello!".as_bytes());
+        let body1 = Body::new("hello again!".as_bytes());
+        let body2 = Body::new("final hello!".as_bytes());
+
+        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
+        let operation_1 = generate_operation(&private_key, body1, 1, 100, Some(operation_0.hash));
+        let operation_2 = generate_operation(&private_key, body2, 2, 200, Some(operation_0.hash));
+
+        store
+            .insert_operation(operation_0.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_1.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_2.clone(), log_id)
+            .expect("no errors");
+
+        // We expect one log and 3 operations
+        assert_eq!(store.logs.len(), 1);
+        assert_eq!(store.operations.len(), 3);
+
+        // Delete all operations _before_ seq_num 2
+        let deleted = store
+            .delete_operations(private_key.public_key(), log_id, 2)
+            .expect("no errors");
+        assert!(deleted);
+
+        // There is now only one operation in the log
+        assert_eq!(store.logs.len(), 1);
+        assert_eq!(store.operations.len(), 1);
+
+        // The remaining operation in the log should be the latest (seq_num == 2)
+        let log = store
+            .get_log(private_key.public_key(), log_id)
+            .expect("no errors");
+        assert_eq!(log[0], operation_2);
+
+        // Deleting the same range again should return `false`, meaning no deletion occurred
+        let deleted = store
+            .delete_operations(private_key.public_key(), log_id, 2)
+            .expect("no errors");
+        assert!(!deleted);
+    }
+
+    #[test]
+    fn delete_payloads() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body0 = Body::new("hello!".as_bytes());
+        let body1 = Body::new("hello again!".as_bytes());
+        let body2 = Body::new("final hello!".as_bytes());
+
+        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
+        let operation_1 = generate_operation(&private_key, body1, 1, 100, Some(operation_0.hash));
+        let operation_2 =
+            generate_operation(&private_key, body2.clone(), 2, 200, Some(operation_1.hash));
+
+        store
+            .insert_operation(operation_0.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_1.clone(), log_id)
+            .expect("no errors");
+        store
+            .insert_operation(operation_2.clone(), log_id)
+            .expect("no errors");
+
+        // There is one log and 3 operations
+        assert_eq!(store.logs.len(), 1);
+        assert_eq!(store.operations.len(), 3);
+
+        // Delete all operation payloads from sequence number 0 up to but not including 2
+        let deleted = store
+            .delete_payloads(private_key.public_key(), log_id, 0, 2)
+            .expect("no errors");
+        assert!(deleted);
+
+        let log = store
+            .get_log(private_key.public_key(), log_id)
+            .expect("no errors");
+
+        assert_eq!(log[0].body, None);
+        assert_eq!(log[1].body, None);
+        assert_eq!(log[2].body, Some(body2));
     }
 }
