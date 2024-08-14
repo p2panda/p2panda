@@ -61,7 +61,7 @@ pub trait LogStore<LogId, Extensions> {
     ) -> Result<bool, StoreError>;
 
     /// Delete a range of operation payloads in an authors' log.
-    /// 
+    ///
     /// The range of deleted payloads includes it's lower bound `from` but excludes the upper
     /// bound `to`.
     ///
