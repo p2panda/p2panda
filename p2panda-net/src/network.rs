@@ -293,6 +293,8 @@ impl NetworkBuilder {
     }
 }
 
+/// Controls a p2panda-net node, including handling of connections, discovery and gossip.
+// @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Network {
@@ -314,6 +316,14 @@ struct NetworkInner {
     secret_key: SecretKey,
 }
 
+/// Spawns a network.
+///
+/// Local network sockets are bound and a task is started to listen for direct addresses changes
+/// for the local endpoint. Inbound connection attempts to these endpoints are passed to a handler.
+///
+/// Any registered discovery services are subscribed to so that the identifiers and addresses of
+/// peers operating on the same network may be learned. Discovered peers are added to the local
+/// address book so they may be involved in connection and gossip activites.
 impl NetworkInner {
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
@@ -338,12 +348,12 @@ impl NetworkInner {
                 loop {
                     tokio::select! {
                         // Learn about our direct addresses and changes to them
-                        Some(eps) = addrs_stream.next() => {
-                            if let Err(err) = inner.gossip.update_direct_addresses(&eps) {
+                        Some(endpoints) = addrs_stream.next() => {
+                            if let Err(err) = inner.gossip.update_direct_addresses(&endpoints) {
                                 warn!("Failed to update direct addresses for gossip: {err:?}");
                             }
 
-                            let direct_addresses = eps.iter().map(|a| a.addr).collect();
+                            let direct_addresses = endpoints.iter().map(|endpoint| endpoint.addr).collect();
                             my_node_addr.info.direct_addresses = direct_addresses;
                             if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
                                 warn!("Failed to update direct addresses for discovery: {err:?}");
@@ -424,6 +434,7 @@ impl NetworkInner {
         join_set.shutdown().await;
     }
 
+    /// Closes all connections and shuts down the network engine.
     async fn shutdown(&self, protocols: Arc<ProtocolMap>) {
         // We ignore all errors during shutdown
         let _ = tokio::join!(
@@ -442,11 +453,13 @@ impl NetworkInner {
 }
 
 impl Network {
+    /// Returns the public key of the local network.
     pub fn node_id(&self) -> PublicKey {
         PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
             .expect("public key already checked")
     }
 
+    /// Returns the direct addresses of the local network.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
         self.inner
             .endpoint
@@ -456,12 +469,12 @@ impl Network {
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
     }
 
-    // Subscribes to a topic and establishes a bi-directional stream from which we can read and
-    // write to.
-    //
-    // Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
-    // up event"). They'll sync data initially (when a sync protocol is given) and then start
-    // "live" mode via gossip broadcast
+    /// Subscribes to a topic and returns a bi-directional stream from which can be read from
+    /// and written to.
+    ///
+    /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
+    /// up event"). They'll sync data initially (when a sync protocol is given) and then start
+    /// "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
@@ -472,19 +485,22 @@ impl Network {
         Ok((in_tx, out_rx))
     }
 
+    /// Returns a handle to the network endpoint.
     pub fn endpoint(&self) -> &Endpoint {
         &self.inner.endpoint
     }
 
+    /// Adds a peer to the local network address book.
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.inner.engine.add_peer(node_addr).await
     }
 
+    /// Returns the addresses of all known peers.
     pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
         self.inner.engine.known_peers().await
     }
 
-    // Shutdown of the whole network and all subscriptions and connections
+    /// Terminates the main network task and shuts down the network.
     pub async fn shutdown(self) -> Result<()> {
         // Trigger shutdown of the main run task by activating the cancel token
         self.inner.cancel_token.cancel();
@@ -515,6 +531,10 @@ pub enum OutEvent {
     },
 }
 
+/// Handle an inbound connection on the local network endpoint.
+///
+/// The connection is accepted if the handshake is successful and the peer is operating with
+/// a supported ALPN protocol.
 async fn handle_connection(
     mut connecting: iroh_net::endpoint::Connecting,
     protocols: Arc<ProtocolMap>,
