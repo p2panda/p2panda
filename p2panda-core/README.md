@@ -38,9 +38,6 @@ let private_key = PrivateKey::new();
 // The operation body contains application data
 let body = Body::new("Hello, Sloth!".as_bytes());
 
-// Custom extensions can be attached to an operation
-type CustomExtensions = ();
-
 // Create a header
 let mut header = Header {
     version: 1,
@@ -52,11 +49,11 @@ let mut header = Header {
     seq_num: 0,
     backlink: None,
     previous: vec![],
-    extensions: None::<()>,
-}.sign(&private_key);
+    extensions: None,
+};
 
-// Verify the header follows all protocol requirements
-assert!(header.verify());
+// Sign header
+header.sign(&private_key);
 
 // An operation containing the header hash (the operation id), the header 
 // itself and an optional body
@@ -67,8 +64,7 @@ let operation = Operation {
 };
 
 // Validate the header and, when included, that the body matches the `payload_hash`
-assert!(validate_operation(&operation).is_ok());
-
+validate_operation(&operation).is_ok();
 ```
 
 ## `Extensions`
