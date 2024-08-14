@@ -8,3 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
+
+### Added
+
+- Introduce all core p2panda types [#535](https://github.com/p2panda/p2panda/pull/535)
