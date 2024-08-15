@@ -11,4 +11,6 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Introduce networking functionality, including discovery and gossip
+  services [#540](https://github.com/p2panda/p2panda/pull/540)
 - Introduce all core p2panda types [#535](https://github.com/p2panda/p2panda/pull/535)
