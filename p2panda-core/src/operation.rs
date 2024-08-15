@@ -9,7 +9,7 @@ use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
 #[derive(Clone, Debug)]
-pub struct Operation<E> {
+pub struct Operation<E = DefaultExtensions> {
     pub hash: Hash,
     pub header: Header<E>,
     pub body: Option<Body>,
