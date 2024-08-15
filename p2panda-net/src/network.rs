@@ -519,7 +519,7 @@ pub enum InEvent {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 /// An event received from the gossip-overlay.
 // @TODO: Maybe consider renaming these two enums...
 // Could be switched to OutboundEvent and InboundEvent (in relation to the gossip-overlay).
@@ -564,9 +564,9 @@ mod tests {
 
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
-    use super::OutEvent;
+    use super::{InEvent, OutEvent};
 
     #[tokio::test]
     async fn config() {
@@ -604,37 +604,17 @@ mod tests {
     async fn join_gossip_overlay() {
         let network_id = [1; 32];
 
-        let private_key_1 = PrivateKey::new();
-        let private_key_2 = PrivateKey::new();
+        let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
 
-        let public_key_1 = private_key_1.public_key();
-        let public_key_2 = private_key_2.public_key();
-
-        // Build and spawn the first node
-        let node_1 = NetworkBuilder::new(network_id)
-            .bind_port(2022)
-            .direct_address(public_key_1, vec!["0.0.0.0:2023".parse().unwrap()], None)
-            .build()
-            .await
-            .unwrap();
-
-        // Build and spawn the second node
-        let node_2 = NetworkBuilder::new(network_id)
-            .bind_port(2023)
-            .direct_address(public_key_2, vec!["0.0.0.0:2022".parse().unwrap()], None)
-            .build()
-            .await
-            .unwrap();
-
-        // Retrieve the address of the first node
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
 
-        // Add the address of the first node, resulting in an automatic connection attempt under
-        // the hood
+        node_1.add_peer(node_2_addr).await.unwrap();
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes
-        let (_tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
+        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
         let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
 
         // Receive the first message for both nodes
@@ -644,6 +624,22 @@ mod tests {
         // Ensure the gossip-overlay has been joined for the given topic
         assert!(matches!(rx_1_msg, OutEvent::Ready));
         assert!(matches!(rx_2_msg, OutEvent::Ready));
+
+        // Broadcast a message and make sure it's received by the other node
+        tx_1.send(InEvent::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            OutEvent::Message {
+                bytes: "Hello, Node".to_bytes(),
+                delivered_from: node_1.node_id(),
+            }
+        );
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
