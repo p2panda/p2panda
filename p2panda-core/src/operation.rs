@@ -297,6 +297,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn simple_extension_type_parameter() {
+        let private_key = PrivateKey::new();
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: None::<()>,
+        };
+
+        header.sign(&private_key);
+    }
+
+    #[test]
     fn sign_and_verify() {
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
@@ -485,7 +505,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body: Body = Body::new("Hello, Sloth!".as_bytes());
 
-        let header = Header {
+        let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
             signature: None,
@@ -497,6 +517,8 @@ mod tests {
             previous: vec![],
             extensions: Some(extensions.clone()),
         };
+
+        header.sign(&private_key);
 
         // Thanks to blanket implementation of Extension<T> on Header we can extract the
         // extension value from the header itself.
