@@ -7,8 +7,10 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-serde = { version = "1.0.203" }
 thiserror = "1.0.61"
+
+[dev-dependencies]
+serde = { version = "1.0.203" }
 
 [dependencies.p2panda-core]
 path = "../p2panda-core"
