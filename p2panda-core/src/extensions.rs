@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Header;
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DefaultExtensions {}
 
 impl<T> Extension<T> for DefaultExtensions {
