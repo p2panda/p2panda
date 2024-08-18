@@ -14,16 +14,14 @@ workspace = true
 [dependencies]
 anyhow = "1.0.86"
 ciborium = { version = "0.2.2", optional = true }
-# @TODO: remove this pinned-dependency after `iroh` version bump
-derive_more = "=1.0.0-beta.6"
 flume = "0.11.0"
 futures-buffered = "0.2.6"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
 hickory-proto = { version = "0.24.1", optional = true }
-iroh-base = "0.20.0"
-iroh-gossip = "0.20.0"
-iroh-net = "0.20.0"
+iroh-base = "0.22.0"
+iroh-gossip = "0.22.0"
+iroh-net = "0.22.0"
 p2panda-core = { path = "../p2panda-core" }
 rand = "0.8.5"
 serde = { version = "1.0.203", features = ["derive"] }

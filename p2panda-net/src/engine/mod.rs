@@ -31,7 +31,6 @@ impl Engine {
 
         let engine_actor = EngineActor::new(
             endpoint,
-            gossip.clone(),
             gossip_actor_tx,
             engine_actor_rx,
             network_id.into(),

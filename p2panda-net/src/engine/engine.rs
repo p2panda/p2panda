@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
@@ -66,7 +65,6 @@ pub enum ToEngineActor {
 
 pub struct EngineActor {
     endpoint: Endpoint,
-    gossip: Gossip,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
@@ -82,14 +80,12 @@ pub struct EngineActor {
 impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
-        gossip: Gossip,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
         Self {
             endpoint,
-            gossip,
             gossip_actor_tx,
             inbox,
             network_id,
@@ -292,7 +288,14 @@ impl EngineActor {
         let topics = self.topics.earmarked().await;
         let message = NetworkMessage::new_announcement(topics);
         let bytes = message.to_bytes();
-        self.gossip.broadcast(self.network_id, bytes.into()).await?;
+
+        self.gossip_actor_tx
+            .send(ToGossipActor::Broadcast {
+                topic: self.network_id,
+                bytes,
+            })
+            .await?;
+
         Ok(())
     }
 
@@ -319,7 +322,7 @@ impl EngineActor {
 
         // Task to establish a channel for sending messages into gossip overlay
         {
-            let gossip = self.gossip.clone();
+            let gossip_actor_tx = self.gossip_actor_tx.clone();
             let topics = self.topics.clone();
             tokio::task::spawn(async move {
                 while let Some(event) = in_rx.recv().await {
@@ -330,7 +333,11 @@ impl EngineActor {
                     }
 
                     let result = match event {
-                        InEvent::Message { bytes } => gossip.broadcast(topic, bytes.into()).await,
+                        InEvent::Message { bytes } => {
+                            gossip_actor_tx
+                                .send(ToGossipActor::Broadcast { topic, bytes })
+                                .await
+                        }
                     };
 
                     if let Err(err) = result {
