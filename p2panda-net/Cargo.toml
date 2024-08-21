@@ -15,7 +15,7 @@ workspace = true
 anyhow = "1.0.86"
 ciborium = { version = "0.2.2", optional = true }
 flume = "0.11.0"
-futures-buffered = "0.2.6"
+futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
 hickory-proto = { version = "0.24.1", optional = true }
