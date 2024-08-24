@@ -3,7 +3,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::de::{DeserializeOwned, Error as SerdeError, SeqAccess, Visitor};
+use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
@@ -133,7 +133,7 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl<E> Serialize for Header<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -171,7 +171,7 @@ where
 
 impl<'de, E> Deserialize<'de> for Header<E>
 where
-    E: DeserializeOwned,
+    E: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -183,7 +183,7 @@ where
 
         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
         where
-            E: DeserializeOwned,
+            E: Deserialize<'de>,
         {
             type Value = Header<E>;
 

@@ -79,7 +79,7 @@ pub struct Header<E = DefaultExtensions> {
 
 impl<E> Header<E>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Clone + Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -115,7 +115,9 @@ where
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
     }
+}
 
+impl<E> Header<E> {
     /// Number of fields included in the header.
     ///
     /// Fields instantiated with `None` values are excluded from the count.
