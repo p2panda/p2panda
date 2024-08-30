@@ -166,3 +166,51 @@ pub enum ImportBlobEvent {
     Done(Hash),
     Abort(RpcError),
 }
+
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::Write;
+
+    use iroh_base::hash::Hash as IrohHash;
+    use iroh_blobs::store::mem::Store;
+    use iroh_blobs::store::Map;
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn import_blob_from_fs() {
+        let store = Store::new();
+        let pool_handle = LocalPoolHandle::new(2);
+
+        // Create a temporary directory and filepath.
+        let tmp_dir = tempdir().unwrap();
+        let tmp_path = tmp_dir.path().join("test.txt");
+
+        // Create a file in the temporary directory and write to it.
+        let mut tmp_file = File::create(&tmp_path).unwrap();
+        write!(tmp_file, "Testing file import...").unwrap();
+
+        let path = PathBuf::from(tmp_path.clone());
+
+        // Import the file as a blob and ensure success.
+        let mut stream = import_blob(store.clone(), pool_handle, path).await;
+        let event = stream.next().await.unwrap();
+        assert!(matches!(event, ImportBlobEvent::Done(_)));
+
+        // Obtain an iroh hash from the event.
+        let ImportBlobEvent::Done(hash) = event else {
+            panic!("expected ImportBlobEvent::Done containing hash")
+        };
+        let iroh_hash = IrohHash::from_bytes(*hash.as_bytes());
+
+        // Ensure that the blob did indeed make it into the store.
+        assert!(store.get(&iroh_hash).await.unwrap().is_some());
+
+        // Explicitly drop the file handle to avoid resource leaks.
+        drop(tmp_file);
+        tmp_dir.close().unwrap();
+    }
+}

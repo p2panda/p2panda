@@ -24,3 +24,6 @@ tokio = { version = "1.38.0", features = ["full"] }
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 tokio-util = { version = "0.7", features = ["codec", "io-util", "io", "rt"] }
 tracing = "0.1.40"
+
+[dev-dependencies]
+tempfile = "3.12.0"
