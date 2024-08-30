@@ -11,6 +11,8 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Introduce blobs functionality, including import, export and download
+  [#546](https://github.com/p2panda/p2panda/pull/546)
 - Bump `iroh` dependencies to `0.22.0` [#543](https://github.com/p2panda/p2panda/pull/543)
 - Introduce networking functionality, including discovery and gossip
   services [#540](https://github.com/p2panda/p2panda/pull/540)
