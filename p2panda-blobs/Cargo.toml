@@ -1,0 +1,26 @@
+[package]
+name = "p2panda-blobs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+async-channel = "2.3.1"
+bytes = "1.7.1"
+flume = "0.11.0"
+futures-buffered = "0.2.8"
+futures-lite = "2.3.0"
+futures-util = "0.3.30"
+iroh-base = "0.22.0"
+iroh-blobs = { version = "0.22.0", features = ["downloader", "fs-store"], default-features = false }
+iroh-io = "0.6.0"
+iroh-net = "0.22.0"
+num_cpus = "1.16.0"
+p2panda-core = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
+p2panda-net = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
+serde = { version = "1.0.204", features = ["derive"] }
+tempdir = "0.3.7"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-stream = { version = "0.1.15", features = ["sync"] }
+tokio-util = { version = "0.7", features = ["codec", "io-util", "io", "rt"] }
+tracing = "0.1.40"
