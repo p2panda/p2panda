@@ -1,0 +1,6 @@
+[package]
+name = "p2panda-sync"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
