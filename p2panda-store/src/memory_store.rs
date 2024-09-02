@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::{BTreeSet, HashMap};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Hash, Operation, PublicKey};
@@ -13,26 +14,48 @@ type Timestamp = u64;
 type LogMeta = (SeqNum, Timestamp, Hash);
 
 #[derive(Debug)]
-pub struct MemoryStore<T, E> {
+pub struct InnerMemoryStore<T, E> {
     operations: HashMap<Hash, Operation<E>>,
     logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
+pub struct MemoryStore<T, E> {
+    inner: Arc<RwLock<InnerMemoryStore<T, E>>>,
+}
+
 impl<T, E> MemoryStore<T, E> {
     pub fn new() -> Self {
-        Self {
+        let inner = InnerMemoryStore {
             operations: Default::default(),
             logs: Default::default(),
+        };
+        Self {
+            inner: Arc::new(RwLock::new(inner)),
         }
     }
 }
 
 impl<T> Default for MemoryStore<T, DefaultExtensions> {
     fn default() -> Self {
-        Self {
+        let inner = InnerMemoryStore {
             operations: Default::default(),
             logs: Default::default(),
+        };
+        Self {
+            inner: Arc::new(RwLock::new(inner)),
         }
+    }
+}
+
+impl<T, E> MemoryStore<T, E> {
+    pub fn read_store(&self) -> RwLockReadGuard<InnerMemoryStore<T, E>> {
+        self.inner.read().expect("error getting read lock on store")
+    }
+
+    pub fn write_store(&self) -> RwLockWriteGuard<InnerMemoryStore<T, E>> {
+        self.inner
+            .write()
+            .expect("error getting write lock on store")
     }
 }
 
@@ -49,28 +72,32 @@ where
         );
 
         let insertion_occured = self
+            .write_store()
             .logs
             .entry((operation.header.public_key, log_id))
             .or_default()
             .insert(entry);
 
         if insertion_occured {
-            self.operations.insert(operation.hash, operation);
+            self.write_store()
+                .operations
+                .insert(operation.hash, operation);
         }
 
         Ok(insertion_occured)
     }
 
     fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError> {
-        Ok(self.operations.get(&hash).cloned())
+        Ok(self.read_store().operations.get(&hash).cloned())
     }
 
     fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        let Some(removed) = self.operations.remove(&hash) else {
+        let Some(removed) = self.write_store().operations.remove(&hash) else {
             return Ok(false);
         };
 
-        self.logs = self
+        self.write_store().logs = self
+            .read_store()
             .logs
             .clone()
             .into_iter()
@@ -92,7 +119,7 @@ where
     }
 
     fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        if let Some(operation) = self.operations.get_mut(&hash) {
+        if let Some(operation) = self.write_store().operations.get_mut(&hash) {
             operation.body = None;
             Ok(true)
         } else {
@@ -108,9 +135,10 @@ where
 {
     fn get_log(&self, public_key: PublicKey, log_id: T) -> Result<Vec<Operation<E>>, StoreError> {
         let mut operations = Vec::new();
-        if let Some(log) = self.logs.get(&(public_key, log_id)) {
+        if let Some(log) = self.read_store().logs.get(&(public_key, log_id)) {
             log.iter().for_each(|(_, _, hash)| {
-                let operation = self
+                let read_store = self.read_store();
+                let operation = read_store
                     .operations
                     .get(hash)
                     .expect("operation exists in hashmap");
@@ -125,14 +153,18 @@ where
         public_key: PublicKey,
         log_id: T,
     ) -> Result<Option<Operation<E>>, StoreError> {
-        let latest = match self.logs.get(&(public_key, log_id)) {
+        let latest = match self.read_store().logs.get(&(public_key, log_id)) {
             Some(log) => match log.last() {
-                Some((_, _, hash)) => self.operations.get(hash),
+                Some((_, _, hash)) => {
+                    let store = self.read_store();
+                    let operation = store.operations.get(hash);
+                    operation.cloned()
+                }
                 None => None,
             },
             None => None,
         };
-        Ok(latest.cloned())
+        Ok(latest)
     }
 
     fn delete_operations(
@@ -142,12 +174,12 @@ where
         before: u64,
     ) -> Result<bool, StoreError> {
         let mut deletion_occurred = false;
-        if let Some(log) = self.logs.get_mut(&(public_key, log_id)) {
+        if let Some(log) = self.write_store().logs.get_mut(&(public_key, log_id)) {
             log.retain(|(seq_num, _, hash)| {
                 let remove = *seq_num < before;
                 if remove {
                     deletion_occurred = true;
-                    self.operations.remove(hash);
+                    self.write_store().operations.remove(hash);
                 };
                 !remove
             })
@@ -163,11 +195,12 @@ where
         to: u64,
     ) -> Result<bool, StoreError> {
         let mut deletion_occurred = false;
-        if let Some(log) = self.logs.get(&(public_key, log_id)) {
+        if let Some(log) = self.read_store().logs.get(&(public_key, log_id)) {
             log.iter().for_each(|(seq_num, _, hash)| {
                 if *seq_num >= from && *seq_num < to {
                     deletion_occurred = true;
-                    let operation = self
+                    let mut store = self.write_store();
+                    let operation = store
                         .operations
                         .get_mut(hash)
                         .expect("operation exists in store");
@@ -326,15 +359,15 @@ mod tests {
         assert!(inserted);
 
         // We expect one log and one operation
-        assert_eq!(store.logs.len(), 1);
-        assert_eq!(store.operations.len(), 1);
+        assert_eq!(store.read_store().logs.len(), 1);
+        assert_eq!(store.read_store().operations.len(), 1);
 
         // Delete the operation
         assert!(store.delete_operation(operation.hash).expect("no error"));
 
         // We expect no logs and no operations
-        assert_eq!(store.logs.len(), 0);
-        assert_eq!(store.operations.len(), 0);
+        assert_eq!(store.read_store().logs.len(), 0);
+        assert_eq!(store.read_store().operations.len(), 0);
 
         // Try to get the operation
         let deleted_operation = store.get_operation(operation.hash).expect("no error");
@@ -539,8 +572,8 @@ mod tests {
             .expect("no errors");
 
         // We expect one log and 3 operations
-        assert_eq!(store.logs.len(), 1);
-        assert_eq!(store.operations.len(), 3);
+        assert_eq!(store.read_store().logs.len(), 1);
+        assert_eq!(store.read_store().operations.len(), 3);
 
         // Delete all operations _before_ seq_num 2
         let deleted = store
@@ -549,8 +582,8 @@ mod tests {
         assert!(deleted);
 
         // There is now only one operation in the log
-        assert_eq!(store.logs.len(), 1);
-        assert_eq!(store.operations.len(), 1);
+        assert_eq!(store.read_store().logs.len(), 1);
+        assert_eq!(store.read_store().operations.len(), 1);
 
         // The remaining operation in the log should be the latest (seq_num == 2)
         let log = store
@@ -591,8 +624,8 @@ mod tests {
             .expect("no errors");
 
         // There is one log and 3 operations
-        assert_eq!(store.logs.len(), 1);
-        assert_eq!(store.operations.len(), 3);
+        assert_eq!(store.read_store().logs.len(), 1);
+        assert_eq!(store.read_store().operations.len(), 3);
 
         // Delete all operation payloads from sequence number 0 up to but not including 2
         let deleted = store
