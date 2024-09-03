@@ -48,7 +48,5 @@ where
     type Stream: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>>;
     type Session: SyncSession<P, Self::Sink, Self::Stream>;
 
-    fn new(strategy: P) -> Self;
-
     fn session(&self, tx: TX, rx: RX) -> Self::Session;
 }

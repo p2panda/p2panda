@@ -46,10 +46,6 @@ where
     type Stream = EngineStream<RX, <P as SyncProtocol>::Message>;
     type Session = Session<P, Self::Sink, Self::Stream>;
 
-    fn new(protocol: P) -> Engine<P> {
-        Engine { protocol }
-    }
-
     fn session(&self, tx: TX, rx: RX) -> Self::Session {
         // Convert the `AsyncRead` and `AsyncWrite` into framed (typed) `Stream` and `Sink`. We provide a custom
         // `tokio_util::codec::Decoder` and `tokio_util::codec::Encoder` for this purpose.
