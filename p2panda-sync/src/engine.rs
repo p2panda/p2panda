@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
@@ -37,7 +36,7 @@ type EngineStream<RX, M> = FramedRead<Compat<RX>, CborCodec<M>>;
 impl<P, TX, RX> SyncEngine<P, TX, RX> for Engine<P>
 where
     <P as SyncProtocol>::Topic: Send,
-    <P as SyncProtocol>::Message: Serialize + DeserializeOwned + Send,
+    for<'de> <P as SyncProtocol>::Message: Serialize + Send + Deserialize<'de>,
     P: Clone + SyncProtocol,
     TX: AsyncWrite + Send + Unpin,
     RX: AsyncRead + Send + Unpin,
