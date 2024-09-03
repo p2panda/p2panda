@@ -18,7 +18,7 @@ pub enum SyncError {
 #[trait_variant::make(SyncProtocol: Send)]
 pub trait LocalSyncProtocol {
     type Topic;
-    type Message: Clone;
+    type Message;
 
     async fn run(
         self,

@@ -53,9 +53,14 @@ where
     fn session(&self, tx: TX, rx: RX) -> Self::Session {
         // Convert the `AsyncRead` and `AsyncWrite` into framed (typed) `Stream` and `Sink`. We provide a custom
         // `tokio_util::codec::Decoder` and `tokio_util::codec::Encoder` for this purpose.
-        let codec = CborCodec::<<P as SyncProtocol>::Message>::new();
-        let sink = FramedWrite::new(tx.compat_write(), codec.clone());
-        let stream = FramedRead::new(rx.compat(), codec);
+        let sink = FramedWrite::new(
+            tx.compat_write(),
+            CborCodec::<<P as SyncProtocol>::Message>::new(),
+        );
+        let stream = FramedRead::new(
+            rx.compat(),
+            CborCodec::<<P as SyncProtocol>::Message>::new(),
+        );
 
         Session {
             protocol: self.protocol.clone(),
