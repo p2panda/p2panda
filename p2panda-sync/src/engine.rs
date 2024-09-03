@@ -7,7 +7,7 @@ use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
 use crate::codec::CborCodec;
-use crate::traits::{SyncEngine, SyncError, SyncProtocol, SyncSession};
+use crate::traits::{SyncEngine, SyncError, SyncProtocol};
 
 pub struct Engine<P> {
     pub protocol: P,
@@ -19,14 +19,14 @@ pub struct Session<P, SI, ST> {
     stream: ST,
 }
 
-impl<P, SI, ST> SyncSession<P, SI, ST> for Session<P, SI, ST>
+impl<P, SI, ST> Session<P, SI, ST>
 where
     <P as SyncProtocol>::Topic: Send,
     P: SyncProtocol + Send,
     SI: Sink<<P as SyncProtocol>::Message, Error = SyncError> + Send + Unpin,
     ST: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>> + Send + Unpin,
 {
-    async fn run(self, topic: <P as SyncProtocol>::Topic) -> Result<(), SyncError> {
+    pub async fn run(self, topic: <P as SyncProtocol>::Topic) -> Result<(), SyncError> {
         self.protocol.run(topic, self.sink, self.stream).await
     }
 }
@@ -44,9 +44,8 @@ where
 {
     type Sink = EngineSink<TX, <P as SyncProtocol>::Message>;
     type Stream = EngineStream<RX, <P as SyncProtocol>::Message>;
-    type Session = Session<P, Self::Sink, Self::Stream>;
 
-    fn session(&self, tx: TX, rx: RX) -> Self::Session {
+    fn session(&self, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream> {
         // Convert the `AsyncRead` and `AsyncWrite` into framed (typed) `Stream` and `Sink`. We provide a custom
         // `tokio_util::codec::Decoder` and `tokio_util::codec::Encoder` for this purpose.
         let sink = FramedWrite::new(

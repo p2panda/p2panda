@@ -3,6 +3,8 @@
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
 use thiserror::Error;
 
+use crate::engine::Session;
+
 #[derive(Error, Debug)]
 pub enum SyncError {
     #[error("protocol error: {0}")]
@@ -28,16 +30,6 @@ pub trait LocalSyncProtocol {
     ) -> Result<(), SyncError>;
 }
 
-#[trait_variant::make(SyncSession: Send)]
-pub trait LocalSyncSession<P, SI, ST>
-where
-    P: SyncProtocol,
-    SI: Sink<<P as SyncProtocol>::Message, Error = SyncError>,
-    ST: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>>,
-{
-    async fn run(self, topic: <P as SyncProtocol>::Topic) -> Result<(), SyncError>;
-}
-
 pub trait SyncEngine<P, TX, RX>
 where
     P: SyncProtocol,
@@ -46,7 +38,6 @@ where
 {
     type Sink: Sink<<P as SyncProtocol>::Message, Error = SyncError>;
     type Stream: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>>;
-    type Session: SyncSession<P, Self::Sink, Self::Stream>;
 
-    fn session(&self, tx: TX, rx: RX) -> Self::Session;
+    fn session(&self, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream>;
 }

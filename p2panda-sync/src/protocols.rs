@@ -177,7 +177,7 @@ mod tests {
 
     use crate::engine::Engine;
     use crate::protocols::{LogHeightSyncProtocol, Message};
-    use crate::traits::{SyncEngine, SyncError, SyncProtocol, SyncSession};
+    use crate::traits::{SyncEngine, SyncError, SyncProtocol};
 
     fn generate_operation<E: Clone + Serialize>(
         private_key: &PrivateKey,
