@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{operation, Hash, Operation, PublicKey};
+use p2panda_core::{Hash, Operation, PublicKey};
 
 use crate::traits::{OperationStore, StoreError};
 use crate::LogStore;
