@@ -5,38 +5,40 @@ use thiserror::Error;
 
 type SeqNum = u64;
 
-pub trait OperationStore<LogId, Extensions> {
+#[trait_variant::make(OperationStore: Send)]
+pub trait LocalOperationStore<LogId, Extensions> {
     /// Insert an operation.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation
     /// already existed and no insertion occurred.
-    fn insert_operation(
+    async fn insert_operation(
         &mut self,
         operation: Operation<Extensions>,
         log_id: LogId,
     ) -> Result<bool, StoreError>;
 
     /// Get an operation.
-    fn get_operation(&self, hash: Hash) -> Result<Option<Operation<Extensions>>, StoreError>;
+    async fn get_operation(&self, hash: Hash) -> Result<Option<Operation<Extensions>>, StoreError>;
 
     /// Delete an operation.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation
     /// was not found in the store.
-    fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
+    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
 
     /// Delete the payload of an operation.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation
     /// was not found in the store or the payload was already deleted.
-    fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
+    async fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
-pub trait LogStore<LogId, Extensions> {
+#[trait_variant::make(LogStore: Send)]
+pub trait LocalLogStore<LogId, Extensions> {
     /// Get all operations from an authors' log ordered by sequence number.
     ///
     /// Returns an empty Vec when the author or a log with the requested id was not found.
-    fn get_log(
+    async fn get_log(
         &self,
         public_key: PublicKey,
         log_id: LogId,
@@ -48,7 +50,7 @@ pub trait LogStore<LogId, Extensions> {
     /// Get only the latest operation from an authors' log.
     ///
     /// Returns None when the author or a log with the requested id was not found.
-    fn latest_operation(
+    async fn latest_operation(
         &self,
         public_key: PublicKey,
         log_id: LogId,
@@ -58,7 +60,7 @@ pub trait LogStore<LogId, Extensions> {
     ///
     /// Returns `true` when any operations were deleted, returns `false` when
     /// the author or log could not be found, or no operations were deleted.
-    fn delete_operations(
+    async fn delete_operations(
         &mut self,
         public_key: PublicKey,
         log_id: LogId,
@@ -72,7 +74,7 @@ pub trait LogStore<LogId, Extensions> {
     ///
     /// Returns `true` when operations within the requested range were deleted, or `false` when
     /// the author or log could not be found, or no operations were deleted.
-    fn delete_payloads(
+    async fn delete_payloads(
         &mut self,
         public_key: PublicKey,
         log_id: LogId,
