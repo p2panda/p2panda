@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{Hash, Operation, PublicKey};
+use p2panda_core::{operation, Hash, Operation, PublicKey};
 
 use crate::traits::{OperationStore, StoreError};
 use crate::LogStore;
@@ -75,17 +75,15 @@ where
             operation.hash,
         );
 
-        let insertion_occured = self
-            .write_store()
+        let mut store = self.write_store();
+        let insertion_occured = store
             .logs
             .entry((operation.header.public_key, log_id))
             .or_default()
             .insert(entry);
 
         if insertion_occured {
-            self.write_store()
-                .operations
-                .insert(operation.hash, operation);
+            store.operations.insert(operation.hash, operation);
         }
 
         Ok(insertion_occured)
@@ -96,12 +94,11 @@ where
     }
 
     async fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        let Some(removed) = self.write_store().operations.remove(&hash) else {
+        let mut store = self.write_store();
+        let Some(removed) = store.operations.remove(&hash) else {
             return Ok(false);
         };
-
-        self.write_store().logs = self
-            .read_store()
+        store.logs = store
             .logs
             .clone()
             .into_iter()
@@ -143,15 +140,15 @@ where
         log_id: T,
     ) -> Result<Vec<Operation<E>>, StoreError> {
         let mut operations = Vec::new();
-        if let Some(log) = self.read_store().logs.get(&(public_key, log_id)) {
-            log.iter().for_each(|(_, _, hash)| {
-                let read_store = self.read_store();
-                let operation = read_store
+        let store = self.read_store();
+        if let Some(log) = store.logs.get(&(public_key, log_id)) {
+            for (_, _, hash) in log {
+                let operation = store
                     .operations
                     .get(hash)
                     .expect("operation exists in hashmap");
                 operations.push(operation.clone())
-            })
+            }
         };
         Ok(operations)
     }
@@ -161,10 +158,10 @@ where
         public_key: PublicKey,
         log_id: T,
     ) -> Result<Option<Operation<E>>, StoreError> {
-        let latest = match self.read_store().logs.get(&(public_key, log_id)) {
+        let store = self.read_store();
+        let latest = match store.logs.get(&(public_key, log_id)) {
             Some(log) => match log.last() {
                 Some((_, _, hash)) => {
-                    let store = self.read_store();
                     let operation = store.operations.get(hash);
                     operation.cloned()
                 }
@@ -181,18 +178,20 @@ where
         log_id: T,
         before: u64,
     ) -> Result<bool, StoreError> {
-        let mut deletion_occurred = false;
-        if let Some(log) = self.write_store().logs.get_mut(&(public_key, log_id)) {
+        let mut deleted = vec![];
+
+        let mut store = self.write_store();
+        if let Some(log) = store.logs.get_mut(&(public_key, log_id)) {
             log.retain(|(seq_num, _, hash)| {
                 let remove = *seq_num < before;
                 if remove {
-                    deletion_occurred = true;
-                    self.write_store().operations.remove(hash);
+                    deleted.push(*hash);
                 };
                 !remove
-            })
+            });
         };
-        Ok(deletion_occurred)
+        store.operations.retain(|hash, _| !deleted.contains(hash));
+        Ok(!deleted.is_empty())
     }
 
     async fn delete_payloads(
@@ -202,21 +201,26 @@ where
         from: u64,
         to: u64,
     ) -> Result<bool, StoreError> {
-        let mut deletion_occurred = false;
-        if let Some(log) = self.read_store().logs.get(&(public_key, log_id)) {
-            log.iter().for_each(|(seq_num, _, hash)| {
-                if *seq_num >= from && *seq_num < to {
-                    deletion_occurred = true;
-                    let mut store = self.write_store();
-                    let operation = store
-                        .operations
-                        .get_mut(hash)
-                        .expect("operation exists in store");
-                    operation.body = None;
-                };
-            });
-        };
-        Ok(deletion_occurred)
+        let mut deleted = vec![];
+        {
+            let store = self.read_store();
+            if let Some(log) = store.logs.get(&(public_key, log_id)) {
+                log.iter().for_each(|(seq_num, _, hash)| {
+                    if *seq_num >= from && *seq_num < to {
+                        deleted.push(*hash)
+                    };
+                });
+            };
+        }
+        let mut store = self.write_store();
+        for hash in &deleted {
+            let operation = store
+                .operations
+                .get_mut(hash)
+                .expect("operation exists in store");
+            operation.body = None;
+        }
+        Ok(!deleted.is_empty())
     }
 
     fn get_log_heights(&self, log_id: T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
