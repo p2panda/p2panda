@@ -223,8 +223,9 @@ where
         Ok(!deleted.is_empty())
     }
 
-    fn get_log_heights(&self, log_id: T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
+    async fn get_log_heights(&self, log_id: T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
         let log_heights = self
+            .read_store()
             .logs
             .iter()
             .filter_map(|((public_key, inner_log_id), log)| {
