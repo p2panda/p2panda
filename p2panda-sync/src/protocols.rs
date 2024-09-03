@@ -13,6 +13,7 @@ type LogId = String;
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<E = DefaultExtensions> {
     Have(LogHeights),
