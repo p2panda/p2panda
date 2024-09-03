@@ -155,8 +155,6 @@ impl SyncProtocol for LogHeightSyncProtocol {
             }
         }
 
-        // @TODO: should we actually need to do this?
-        sink.close().await?;
         debug!("sync session finished");
 
         Ok(())
