@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Introduce `p2panda-sync` offering generic sync tools and opinionated sync protocols [#549](https://github.com/p2panda/p2panda/pull/549)
 - Introduce blobs functionality, including import, export and download
   [#546](https://github.com/p2panda/p2panda/pull/546)
 - Bump `iroh` dependencies to `0.22.0` [#543](https://github.com/p2panda/p2panda/pull/543)
