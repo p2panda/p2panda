@@ -177,6 +177,25 @@ where
         };
         Ok(deletion_occurred)
     }
+
+    fn get_log_heights(&self, log_id: T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
+        let log_heights = self
+            .logs
+            .iter()
+            .filter_map(|((public_key, inner_log_id), log)| {
+                if *inner_log_id == log_id {
+                    let log_height = log
+                        .last()
+                        .expect("all logs contain at least one operation")
+                        .0;
+                    Some((*public_key, log_height))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(log_heights)
+    }
 }
 
 #[cfg(test)]
