@@ -155,6 +155,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
             }
         }
 
+        sink.close().await?;
         debug!("sync session finished");
 
         Ok(())
