@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["protocols"]
-protocols = ["dep:p2panda-core", "dep:p2panda-store", "dep:ciborium", "core"]
+default = ["core"]
+log-height = ["dep:p2panda-core", "dep:p2panda-store", "core"]
 core = [
+    "dep:anyhow",
+    "dep:ciborium",
+    "dep:serde",
     "dep:tokio",
     "dep:tokio-stream",
     "dep:tokio-util",
-    "dep:serde",
-    "dep:anyhow",
 ]
 
 [dependencies]
