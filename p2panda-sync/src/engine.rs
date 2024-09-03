@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
 use serde::de::DeserializeOwned;
 use serde::Serialize;

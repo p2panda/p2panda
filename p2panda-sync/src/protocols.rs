@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
