@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-use crate::SyncError;
 use crate::codec::CborCodec;
 use crate::traits::{SyncEngine, SyncProtocol};
+use crate::SyncError;
 
 pub struct Engine<P> {
     pub protocol: P,
@@ -35,8 +35,15 @@ where
     SI: Sink<<P as SyncProtocol>::Message, Error = SyncError> + Send + Unpin,
     ST: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>> + Send + Unpin,
 {
-    pub async fn run(self, topic: <P as SyncProtocol>::Topic) -> Result<(), SyncError> {
-        self.protocol.run(topic, self.sink, self.stream).await
+    pub async fn run(
+        self,
+        topic: <P as SyncProtocol>::Topic,
+        context: <P as SyncProtocol>::Context,
+    ) -> Result<(), SyncError>
+    {
+        self.protocol
+            .run(topic, self.sink, self.stream, context)
+            .await
     }
 }
 
@@ -54,7 +61,7 @@ where
     type Sink = EngineSink<TX, <P as SyncProtocol>::Message>;
     type Stream = EngineStream<RX, <P as SyncProtocol>::Message>;
 
-    fn session(&self, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream> {
+    fn session(protocol: P, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream> {
         // Convert the `AsyncRead` and `AsyncWrite` into framed (typed) `Stream` and `Sink`. We provide a custom
         // `tokio_util::codec::Decoder` and `tokio_util::codec::Encoder` for this purpose.
         let sink = FramedWrite::new(
@@ -67,7 +74,7 @@ where
         );
 
         Session {
-            protocol: self.protocol.clone(),
+            protocol,
             stream,
             sink,
         }
@@ -108,12 +115,14 @@ mod tests {
         impl SyncProtocol for MyProtocol {
             type Topic = &'static str;
             type Message = Message;
+            type Context = ();
 
             async fn run(
                 self,
                 topic: Self::Topic,
                 mut sink: impl Sink<Message, Error = SyncError> + Unpin,
                 mut stream: impl Stream<Item = Result<Message, SyncError>> + Unpin,
+                context: Self::Context,
             ) -> Result<(), SyncError> {
                 if topic != TOPIC_ID {
                     return Err(SyncError::Protocol("not my animal topic".to_string()));
@@ -144,11 +153,6 @@ mod tests {
         let peer_a_set =
             HashSet::from(["Cat".to_string(), "Dog".to_string(), "Rabbit".to_string()]);
         let peer_a_set = Arc::new(RwLock::new(peer_a_set));
-        let peer_a_engine = Engine {
-            protocol: MyProtocol {
-                set: peer_a_set.clone(),
-            },
-        };
 
         let peer_b_set = HashSet::from([
             "Cat".to_string(),
@@ -156,11 +160,6 @@ mod tests {
             "Panda".to_string(),
         ]);
         let peer_b_set = Arc::new(RwLock::new(peer_b_set));
-        let peer_b_engine = Engine {
-            protocol: MyProtocol {
-                set: peer_b_set.clone(),
-            },
-        };
 
         // Create a duplex stream which simulate both ends of a bi-directional network connection.
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -168,16 +167,28 @@ mod tests {
         let (peer_b_read, peer_b_write) = tokio::io::split(peer_b);
 
         // Create and spawn a task for running sync sessions for peer a and peer b.
-        let peer_a_session =
-            peer_a_engine.session(peer_a_write.compat_write(), peer_a_read.compat());
+        let peer_protocol_a = MyProtocol {
+            set: peer_a_set.clone(),
+        };
+        let peer_a_session = Engine::session(
+            peer_protocol_a,
+            peer_a_write.compat_write(),
+            peer_a_read.compat(),
+        );
         let handle1 = tokio::spawn(async move {
-            let _ = peer_a_session.run(TOPIC_ID).await.unwrap();
+            let _ = peer_a_session.run(TOPIC_ID, ()).await.unwrap();
         });
 
-        let peer_b_session =
-            peer_b_engine.session(peer_b_write.compat_write(), peer_b_read.compat());
+        let peer_b_protocol = MyProtocol {
+            set: peer_b_set.clone(),
+        };
+        let peer_b_session = Engine::session(
+            peer_b_protocol,
+            peer_b_write.compat_write(),
+            peer_b_read.compat(),
+        );
         let handle2 = tokio::spawn(async move {
-            let _ = peer_b_session.run(TOPIC_ID).await.unwrap();
+            let _ = peer_b_session.run(TOPIC_ID, ()).await.unwrap();
         });
 
         // Wait for both sessions to complete.

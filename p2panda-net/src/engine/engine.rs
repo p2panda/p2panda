@@ -52,6 +52,11 @@ pub enum ToEngineActor {
         delivered_from: PublicKey,
         topic: TopicId,
     },
+    SyncMessage {
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+        topic: TopicId,
+    },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
@@ -174,6 +179,11 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
+            ToEngineActor::SyncMessage {
+                bytes,
+                delivered_from,
+                topic,
+            } => todo!(),
             ToEngineActor::Subscribe {
                 topic,
                 out_tx,
