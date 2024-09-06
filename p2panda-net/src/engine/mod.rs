@@ -4,6 +4,7 @@
 mod engine;
 mod gossip;
 mod message;
+mod sync;
 
 use anyhow::Result;
 use iroh_gossip::net::Gossip;
