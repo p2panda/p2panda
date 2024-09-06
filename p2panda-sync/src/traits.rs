@@ -1,21 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
-use thiserror::Error;
 
-use crate::engine::Session;
-
-#[derive(Error, Debug)]
-pub enum SyncError {
-    #[error("protocol error: {0}")]
-    Protocol(String),
-    #[error("input/output error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("codec error: {0}")]
-    Codec(String),
-    #[error("custom error: {0}")]
-    Custom(String),
-}
+use crate::{engine::Session, SyncError};
 
 #[trait_variant::make(SyncProtocol: Send)]
 pub trait LocalSyncProtocol {

@@ -5,11 +5,21 @@ use serde::{Deserialize, Serialize};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
+use crate::SyncError;
 use crate::codec::CborCodec;
-use crate::traits::{SyncEngine, SyncError, SyncProtocol};
+use crate::traits::{SyncEngine, SyncProtocol};
 
 pub struct Engine<P> {
     pub protocol: P,
+}
+
+impl<P> Engine<P>
+where
+    P: SyncProtocol,
+{
+    pub fn new(protocol: P) -> Self {
+        Engine { protocol }
+    }
 }
 
 pub struct Session<P, SI, ST> {
@@ -73,8 +83,8 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-    use crate::engine::Engine;
-    use crate::traits::{SyncEngine, SyncError, SyncProtocol};
+    use crate::traits::{SyncEngine, SyncProtocol};
+    use crate::{Engine, SyncError};
 
     #[tokio::test]
     async fn protocol_impl() {
