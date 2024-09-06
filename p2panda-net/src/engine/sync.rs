@@ -4,8 +4,11 @@ use anyhow::{Context, Result};
 use futures_lite::{AsyncRead, AsyncWrite};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
-use tokio::sync::mpsc;
-use tracing::{error, warn};
+use p2panda_sync::traits::{SyncEngine, SyncProtocol};
+use p2panda_sync::{Engine, SyncError};
+use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, oneshot};
+use tracing::debug;
 
 use crate::engine::ToEngineActor;
 
@@ -13,24 +16,33 @@ pub enum ToSyncActor {
     Sync {
         peer: PublicKey,
         topic: TopicId,
-        tx: Box<dyn AsyncWrite>,
-        rx: Box<dyn AsyncRead>,
+        tx: Box<dyn AsyncWrite + Send + Unpin>,
+        rx: Box<dyn AsyncRead + Send + Unpin>,
+        result_tx: oneshot::Sender<Result<(), SyncError>>,
     },
 }
 
-pub struct SyncActor {
+pub struct SyncActor<P> {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
     inbox: mpsc::Receiver<ToSyncActor>,
+    sync_engine: Engine<P>,
 }
 
-impl SyncActor {
+impl<P> SyncActor<P>
+where
+    P: Clone + SyncProtocol<Topic = TopicId> + 'static,
+    for<'a> P::Message: Serialize + Deserialize<'a> + Send + 'static,
+{
     pub fn new(
         inbox: mpsc::Receiver<ToSyncActor>,
         engine_actor_tx: mpsc::Sender<ToEngineActor>,
+        protocol: P,
     ) -> Self {
+        let sync_engine = Engine::new(protocol);
         Self {
             engine_actor_tx,
             inbox,
+            sync_engine,
         }
     }
 
@@ -56,7 +68,18 @@ impl SyncActor {
                 topic,
                 tx,
                 rx,
-            } => todo!(),
+                result_tx,
+            } => {
+                debug!(
+                    "Initiate sync session with peer {} over topic {}",
+                    peer, topic
+                );
+                let session = self.sync_engine.session(tx, rx);
+                tokio::spawn(async move {
+                    let result = session.run(topic).await;
+                    result_tx.send(result).expect("sync result message closed");
+                });
+            }
         }
 
         Ok(true)
