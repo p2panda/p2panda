@@ -10,8 +10,9 @@ use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+use crate::protocols::utils::{into_sink, into_stream};
 use crate::traits::SyncProtocol;
-use crate::{into_sink, into_stream, SyncError};
+use crate::SyncError;
 
 type LogId = String;
 type SeqNum = u64;

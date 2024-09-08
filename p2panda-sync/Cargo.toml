@@ -5,15 +5,15 @@ edition = "2021"
 
 [features]
 default = ["core", "log-height"]
-log-height = ["dep:p2panda-core", "dep:p2panda-store", "core"]
+log-height = ["dep:p2panda-core", "dep:p2panda-store", "core", "cbor"]
 core = [
     "dep:anyhow",
-    "dep:ciborium",
     "dep:serde",
     "dep:tokio",
     "dep:tokio-stream",
     "dep:tokio-util",
 ]
+cbor = ["dep:ciborium"]
 
 [dependencies]
 futures = "0.3.30"
