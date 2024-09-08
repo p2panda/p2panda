@@ -91,7 +91,8 @@ impl SyncActor {
                 recv,
                 result_tx,
             } => {
-                self.on_sync(peer, topic, send, recv, result_tx).await?;
+                self.on_sync_message(peer, topic, send, recv, result_tx)
+                    .await?;
             }
             ToSyncActor::RegisterHandler { topic, handler } => {
                 self.handlers.0.insert(topic, handler);
@@ -101,7 +102,7 @@ impl SyncActor {
         Ok(true)
     }
 
-    async fn on_sync(
+    async fn on_sync_message(
         &self,
         peer: PublicKey,
         topic: TopicId,
