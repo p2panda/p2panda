@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt::Display;
-use std::marker::PhantomData;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use iroh_net::key::PublicKey;
 use iroh_quinn::{RecvStream, SendStream};
-use p2panda_sync::traits::{SyncEngine, SyncProtocol};
+use p2panda_sync::traits::SyncProtocol;
 use p2panda_sync::SyncError;
-use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
 use crate::TopicId;
 
-pub enum ToSyncActor<T>
-{
+pub enum ToSyncActor {
     Sync {
         peer: PublicKey,
-        gossip_topic: TopicId,
-        sync_topic: T,
+        protocol: &'static str,
+        topic: TopicId,
         send: SendStream,
         recv: RecvStream,
         live_message_channel: mpsc::Sender<Vec<u8>>,
@@ -27,33 +25,19 @@ pub enum ToSyncActor<T>
     },
 }
 
-pub struct SyncActor<P, E>
-where
-    P::Topic: std::fmt::Debug,
-    P: SyncProtocol<Context = mpsc::Sender<Vec<u8>>>,
-    E: SyncEngine<P, Box<SendStream>, Box<RecvStream>> + 'static,
-{
-    inbox: mpsc::Receiver<ToSyncActor<<P as SyncProtocol>::Topic>>,
+type ProtocolMap = HashMap<&'static str, Arc<dyn SyncProtocol>>;
+
+pub struct SyncActor {
+    inbox: mpsc::Receiver<ToSyncActor>,
     // engine_actor_tx: mpsc::Sender<ToEngineActor>,
-    protocol: P,
-    phantom: PhantomData<E>,
+    protocol_map: ProtocolMap,
 }
 
-impl<P, E> SyncActor<P, E>
-where
-    P::Topic: std::fmt::Debug + Display + Send,
-    P: Clone + SyncProtocol<Context = mpsc::Sender<Vec<u8>>> + 'static,
-    for<'a> P::Message: Serialize + Deserialize<'a> + Send,
-    E: SyncEngine<P, Box<SendStream>, Box<RecvStream>>,
-{
-    pub fn new(
-        inbox: mpsc::Receiver<ToSyncActor<P::Topic>>,
-        protocol: P,
-    ) -> Self {
+impl SyncActor {
+    pub fn new(inbox: mpsc::Receiver<ToSyncActor>, protocol_map: ProtocolMap) -> Self {
         Self {
             inbox,
-            protocol,
-            phantom: PhantomData::default(),
+            protocol_map,
         }
     }
 
@@ -72,96 +56,33 @@ where
         Ok(())
     }
 
-    async fn on_actor_message(&mut self, msg: ToSyncActor<P::Topic>) -> Result<bool> {
+    async fn on_actor_message(&mut self, msg: ToSyncActor) -> Result<bool> {
         match msg {
             ToSyncActor::Sync {
                 peer,
-                gossip_topic,
-                sync_topic,
+                protocol,
+                topic,
                 send,
                 recv,
                 live_message_channel,
                 result_tx,
             } => {
                 debug!(
-                    "Initiate sync session with peer {} over topic {}",
-                    peer, sync_topic
+                    "Initiate sync session with peer {} over topic {:?}",
+                    peer, topic
                 );
-                let session = E::session(self.protocol.clone(), Box::new(send), Box::new(recv));
+                let protocol = self
+                    .protocol_map
+                    .get(protocol)
+                    .expect("unknown protocol")
+                    .clone();
                 tokio::spawn(async move {
-                    let result = session.run(sync_topic, live_message_channel).await;
+                    let result = protocol.run(Box::new(send), Box::new(recv)).await;
                     result_tx.send(result).expect("sync result message closed");
                 });
             }
         }
 
         Ok(true)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use futures_util::{Sink, SinkExt, Stream, StreamExt};
-    use p2panda_sync::traits::SyncProtocol;
-    use p2panda_sync::SyncError;
-    use serde::{Deserialize, Serialize};
-    use tokio::sync::mpsc;
-
-    const TOPIC_ID: &str = "ping_pong";
-
-    // The protocol message types.
-    #[derive(Serialize, Deserialize)]
-    enum Message {
-        Ping,
-        Pong,
-    }
-
-    // Ping pong protocol.
-    #[derive(Clone, Default)]
-    struct MyProtocol {
-        sent_ping: bool,
-        sent_pong: bool,
-        received_ping: bool,
-        received_pong: bool,
-    }
-
-    impl SyncProtocol for MyProtocol {
-        type Topic = &'static str;
-        type Message = Message;
-        type Context = mpsc::Sender<String>;
-
-        async fn run(
-            mut self,
-            topic: Self::Topic,
-            mut sink: impl Sink<Message, Error = SyncError> + Unpin,
-            mut stream: impl Stream<Item = Result<Message, SyncError>> + Unpin,
-            context: mpsc::Sender<String>,
-        ) -> Result<(), SyncError> {
-            if topic != TOPIC_ID {
-                return Err(SyncError::Protocol("we only ping and pong".to_string()));
-            }
-
-            self.sent_ping = true;
-
-            while let Some(result) = stream.next().await {
-                let message = result?;
-
-                match message {
-                    Message::Ping => {
-                        // tx.send("PING".to_string()).await.expect("channel closed");
-                        self.received_ping = true;
-                        sink.send(Message::Pong).await?;
-                        self.sent_pong;
-                    }
-                    Message::Pong => {
-                        // tx.send("PONG".to_string()).await.expect("channel closed");
-                        self.received_pong = true;
-                        break;
-                    }
-                }
-            }
-
-            Ok(())
-        }
     }
 }

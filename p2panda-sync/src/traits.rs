@@ -1,32 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use futures::{AsyncRead, AsyncWrite, Sink, Stream};
+use std::sync::Arc;
 
-use crate::{engine::Session, SyncError};
+use async_trait::async_trait;
+use futures::{AsyncRead, AsyncWrite};
 
-#[trait_variant::make(SyncProtocol: Send)]
-pub trait LocalSyncProtocol {
-    type Topic;
-    type Message;
-    type Context;
+use crate::SyncError;
+
+#[async_trait]
+pub trait SyncProtocol: Send + Sync {
+    fn name(&self) -> &'static str;
 
     async fn run(
-        self,
-        topic: Self::Topic,
-        sink: impl Sink<Self::Message, Error = SyncError> + Send + Unpin,
-        stream: impl Stream<Item = Result<Self::Message, SyncError>> + Send + Unpin,
-        context: Self::Context,
+        self: Arc<Self>,
+        tx: Box<dyn AsyncWrite + Send + Unpin>,
+        rx: Box<dyn AsyncRead + Send + Unpin>,
     ) -> Result<(), SyncError>;
-}
-
-pub trait SyncEngine<P, TX, RX>
-where
-    P: SyncProtocol,
-    TX: AsyncWrite,
-    RX: AsyncRead,
-{
-    type Sink: Sink<<P as SyncProtocol>::Message, Error = SyncError> + Send + Unpin;
-    type Stream: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>> + Send + Unpin;
-
-    fn session(protocol: P, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream>;
 }

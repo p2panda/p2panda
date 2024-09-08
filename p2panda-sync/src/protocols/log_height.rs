@@ -2,14 +2,16 @@
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use async_trait::async_trait;
+use futures::{AsyncRead, AsyncWrite, SinkExt, StreamExt};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Header, Operation, PublicKey};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::traits::{SyncError, SyncProtocol};
+use crate::traits::SyncProtocol;
+use crate::{into_sink, into_stream, SyncError};
 
 type LogId = String;
 type SeqNum = u64;
@@ -35,14 +37,18 @@ where
     }
 }
 
+static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
+
 #[derive(Clone, Debug, Default)]
 pub struct LogHeightSyncProtocol {
-    pub sync_done_sent: bool,
-    pub sync_done_received: bool,
+    pub log_id: LogId,
     pub store: Arc<RwLock<MemoryStore<LogId, DefaultExtensions>>>,
 }
 
 impl LogHeightSyncProtocol {
+    pub fn log_id(&self) -> &LogId {
+        &self.log_id
+    }
     pub fn read_store(&self) -> RwLockReadGuard<MemoryStore<LogId, DefaultExtensions>> {
         self.store.read().expect("error getting read lock on store")
     }
@@ -54,19 +60,27 @@ impl LogHeightSyncProtocol {
     }
 }
 
+#[async_trait]
 impl SyncProtocol for LogHeightSyncProtocol {
-    type Topic = LogId;
-    type Message = Message;
+    fn name(&self) -> &'static str {
+        LOG_HEIGHT_PROTOCOL_NAME
+    }
 
     async fn run(
-        mut self,
-        topic: Self::Topic,
-        mut sink: impl Sink<Self::Message, Error = SyncError> + Unpin,
-        mut stream: impl Stream<Item = Result<Self::Message, SyncError>> + Unpin,
+        self: Arc<Self>,
+        tx: Box<dyn AsyncWrite + Send + Unpin>,
+        rx: Box<dyn AsyncRead + Send + Unpin>,
     ) -> Result<(), SyncError> {
+        let mut sync_done_sent = false;
+        let mut sync_done_received = false;
+
+        let mut sink = into_sink(tx);
+        let mut stream = into_stream(rx);
+
+        let log_id = self.log_id();
         let local_log_heights = self
             .read_store()
-            .get_log_heights(topic.to_string())
+            .get_log_heights(log_id.to_string())
             .expect("memory store error");
 
         sink.send(Message::Have(local_log_heights.clone())).await?;
@@ -81,7 +95,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
 
                     let local_log_heights = self
                         .read_store()
-                        .get_log_heights(topic.to_string())
+                        .get_log_heights(log_id.to_string())
                         .expect("memory store error");
 
                     for (public_key, seq_num) in local_log_heights {
@@ -110,7 +124,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
                         for (public_key, seq_num) in remote_needs {
                             let mut log = self
                                 .read_store()
-                                .get_log(public_key, topic.to_string())
+                                .get_log(public_key, log_id.to_string())
                                 .map_err(|e| SyncError::Protocol(e.to_string()))?;
                             log.split_off(seq_num as usize + 1)
                                 .into_iter()
@@ -124,7 +138,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
                     // As we have processed the remotes `Have` message then we are "done" from
                     // this end.
                     messages.push(Message::SyncDone);
-                    self.sync_done_sent = true;
+                    sync_done_sent = true;
                     messages
                 }
                 Message::Operation(header, body) => {
@@ -134,12 +148,12 @@ impl SyncProtocol for LogHeightSyncProtocol {
                         body: body.clone(),
                     };
                     self.write_store()
-                        .insert_operation(operation, topic.to_string())
+                        .insert_operation(operation, log_id.to_string())
                         .map_err(|e| SyncError::Protocol(e.to_string()))?;
                     vec![]
                 }
                 Message::SyncDone => {
-                    self.sync_done_received = true;
+                    sync_done_received = true;
                     vec![]
                 }
             };
@@ -150,7 +164,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
                 sink.send(message).await?;
             }
 
-            if self.sync_done_received && self.sync_done_sent {
+            if sync_done_received && sync_done_sent {
                 break;
             }
         }
@@ -173,8 +187,7 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-    use crate::engine::Engine;
-    use crate::traits::SyncEngine;
+    use crate::traits::SyncProtocol;
 
     use super::{LogHeightSyncProtocol, Message};
 
@@ -257,15 +270,18 @@ mod tests {
         peer_b.write_all(&message_bytes[..]).await.unwrap();
 
         // Run the sync session (which consumes the above messages)
-        let protocol = LogHeightSyncProtocol {
-            sync_done_sent: false,
-            sync_done_received: false,
+        let protocol = Arc::new(LogHeightSyncProtocol {
+            log_id: TOPIC_ID.to_string(),
             store: Arc::new(RwLock::new(store)),
-        };
-        let engine = Engine { protocol };
-        let session = engine.session(peer_a_write.compat_write(), peer_a_read.compat());
+        });
         let handle = tokio::spawn(async move {
-            let _ = session.run(TOPIC_ID.to_string()).await.unwrap();
+            let _ = protocol
+                .run(
+                    Box::new(peer_a_write.compat_write()),
+                    Box::new(peer_a_read.compat()),
+                )
+                .await
+                .unwrap();
         });
         handle.await.unwrap();
 
@@ -333,43 +349,44 @@ mod tests {
             .unwrap();
 
         // Construct a log height protocol and engine for peer a
-        let peer_a_protocol = LogHeightSyncProtocol {
-            sync_done_sent: false,
-            sync_done_received: false,
+        let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
             store: Arc::new(RwLock::new(store1)),
-        };
-        let peer_a_engine = Engine {
-            protocol: peer_a_protocol.clone(),
-        };
+            log_id: TOPIC_ID.to_string(),
+        });
 
         // Create an empty store for peer a and construct their sync protocol and engine
         let store2 = MemoryStore::default();
-        let peer_b_protocol = LogHeightSyncProtocol {
-            sync_done_sent: false,
-            sync_done_received: false,
+        // Construct a log height protocol and engine for peer a
+        let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
             store: Arc::new(RwLock::new(store2)),
-        };
-        let peer_b_engine = Engine {
-            protocol: peer_b_protocol.clone(),
-        };
+            log_id: TOPIC_ID.to_string(),
+        });
 
         // Create a duplex stream which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
         let (peer_a_read, peer_a_write) = tokio::io::split(peer_a);
         let (peer_b_read, peer_b_write) = tokio::io::split(peer_b);
 
-        // Create a sync session for both peers and spawn them in two separate threads
-        let peer_a_session =
-            peer_a_engine.session(peer_a_write.compat_write(), peer_a_read.compat());
-        let peer_b_session =
-            peer_b_engine.session(peer_b_write.compat_write(), peer_b_read.compat());
-
+        let peer_a_protocol_clone = peer_a_protocol.clone();
         let handle1 = tokio::spawn(async move {
-            peer_a_session.run(TOPIC_ID.to_string()).await.unwrap();
+            peer_a_protocol_clone
+                .run(
+                    Box::new(peer_a_write.compat_write()),
+                    Box::new(peer_a_read.compat()),
+                )
+                .await
+                .unwrap();
         });
 
+        let peer_b_protocol_clone = peer_b_protocol.clone();
         let handle2 = tokio::spawn(async move {
-            peer_b_session.run(TOPIC_ID.to_string()).await.unwrap();
+            peer_b_protocol_clone
+                .run(
+                    Box::new(peer_b_write.compat_write()),
+                    Box::new(peer_b_read.compat()),
+                )
+                .await
+                .unwrap();
         });
 
         // Wait on both to complete
