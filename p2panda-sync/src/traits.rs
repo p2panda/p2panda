@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWrite};
+use futures::{AsyncRead, AsyncWrite, Sink};
 
 use crate::SyncError;
 
@@ -15,5 +15,6 @@ pub trait SyncProtocol: Send + Sync {
         self: Arc<Self>,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
         rx: Box<dyn AsyncRead + Send + Unpin>,
+        app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError>;
 }

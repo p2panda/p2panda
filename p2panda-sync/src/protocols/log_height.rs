@@ -3,7 +3,7 @@
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWrite, SinkExt, StreamExt};
+use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Header, Operation, PublicKey};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
@@ -70,6 +70,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
         self: Arc<Self>,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
         rx: Box<dyn AsyncRead + Send + Unpin>,
+        mut app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -147,9 +148,17 @@ impl SyncProtocol for LogHeightSyncProtocol {
                         header: header.clone(),
                         body: body.clone(),
                     };
-                    self.write_store()
-                        .insert_operation(operation, log_id.to_string())
+                    let inserted = self
+                        .write_store()
+                        .insert_operation(operation.clone(), log_id.to_string())
                         .map_err(|e| SyncError::Protocol(e.to_string()))?;
+
+                    if inserted {
+                        let mut bytes = Vec::new();
+                        ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
+                            .map_err(|e| SyncError::Protocol(e.to_string()))?;
+                        app_tx.send(bytes).await?;
+                    }
                     vec![]
                 }
                 Message::SyncDone => {
@@ -180,12 +189,15 @@ impl SyncProtocol for LogHeightSyncProtocol {
 mod tests {
     use std::sync::{Arc, RwLock};
 
+    use futures::SinkExt;
     use p2panda_core::extensions::DefaultExtensions;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use p2panda_store::{LogStore, MemoryStore, OperationStore};
     use serde::Serialize;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::sync::mpsc;
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+    use tokio_util::sync::PollSender;
 
     use crate::traits::SyncProtocol;
 
@@ -274,11 +286,15 @@ mod tests {
             log_id: TOPIC_ID.to_string(),
             store: Arc::new(RwLock::new(store)),
         });
+        let (app_tx, app_rx) = mpsc::channel(128);
+        let sink =
+            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle = tokio::spawn(async move {
             let _ = protocol
                 .run(
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
+                    Box::new(sink),
                 )
                 .await
                 .unwrap();
@@ -368,22 +384,30 @@ mod tests {
         let (peer_b_read, peer_b_write) = tokio::io::split(peer_b);
 
         let peer_a_protocol_clone = peer_a_protocol.clone();
+        let (app_tx, app_rx) = mpsc::channel(128);
+        let sink =
+            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .run(
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
+                    Box::new(sink),
                 )
                 .await
                 .unwrap();
         });
 
         let peer_b_protocol_clone = peer_b_protocol.clone();
+        let (app_tx, app_rx) = mpsc::channel(128);
+        let sink =
+            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .run(
                     Box::new(peer_b_write.compat_write()),
                     Box::new(peer_b_read.compat()),
+                    Box::new(sink),
                 )
                 .await
                 .unwrap();

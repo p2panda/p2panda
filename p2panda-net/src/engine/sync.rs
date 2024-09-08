@@ -4,14 +4,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use futures_util::SinkExt;
 use iroh_net::key::PublicKey;
 use iroh_quinn::{RecvStream, SendStream};
 use p2panda_sync::traits::SyncProtocol;
 use p2panda_sync::SyncError;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::PollSender;
 use tracing::debug;
 
 use crate::TopicId;
+
+use super::engine::ToEngineActor;
 
 pub enum ToSyncActor {
     Sync {
@@ -29,7 +33,6 @@ type ProtocolMap = HashMap<&'static str, Arc<dyn SyncProtocol>>;
 
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
-    // engine_actor_tx: mpsc::Sender<ToEngineActor>,
     protocol_map: ProtocolMap,
 }
 
@@ -76,8 +79,14 @@ impl SyncActor {
                     .get(protocol)
                     .expect("unknown protocol")
                     .clone();
+
+                let sink = PollSender::new(live_message_channel)
+                    .sink_map_err(|e| SyncError::Protocol(e.to_string()));
+
                 tokio::spawn(async move {
-                    let result = protocol.run(Box::new(send), Box::new(recv)).await;
+                    let result = protocol
+                        .run(Box::new(send), Box::new(recv), Box::new(sink))
+                        .await;
                     result_tx.send(result).expect("sync result message closed");
                 });
             }
