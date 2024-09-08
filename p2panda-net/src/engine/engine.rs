@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
+use p2panda_sync::traits::SyncProtocol;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -17,6 +18,8 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::message::{FromBytes, ToBytes};
 use crate::network::{InEvent, OutEvent};
+
+use super::sync::{SyncActor, ToSyncActor};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -44,6 +47,7 @@ pub enum ToEngineActor {
     },
     Subscribe {
         topic: TopicId,
+        sync: Arc<dyn SyncProtocol + 'static>,
         out_tx: broadcast::Sender<OutEvent>,
         in_rx: mpsc::Receiver<InEvent>,
     },
@@ -71,6 +75,7 @@ pub enum ToEngineActor {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+    sync_actor_tx: mpsc::Sender<ToSyncActor>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -86,12 +91,14 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+        sync_actor_tx: mpsc::Sender<ToSyncActor>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
         Self {
             endpoint,
             gossip_actor_tx,
+            sync_actor_tx,
             inbox,
             network_id,
             network_joined: false,
@@ -101,10 +108,20 @@ impl EngineActor {
         }
     }
 
-    pub async fn run(mut self, mut gossip_actor: GossipActor) -> Result<()> {
+    pub async fn run(
+        mut self,
+        mut gossip_actor: GossipActor,
+        mut sync_actor: SyncActor,
+    ) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
             if let Err(err) = gossip_actor.run().await {
                 error!("gossip recv actor failed: {err:?}");
+            }
+        });
+
+        let sync_handle = tokio::task::spawn(async move {
+            if let Err(err) = sync_actor.run().await {
+                error!("sync recv actor failed: {err:?}");
             }
         });
 
@@ -116,6 +133,7 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
+        sync_handle.await?;
         drop(self);
 
         match shutdown_completed_signal {
@@ -183,13 +201,16 @@ impl EngineActor {
                 bytes,
                 delivered_from,
                 topic,
-            } => todo!(),
+            } => {
+                self.on_sync_message(bytes, delivered_from, topic).await?;
+            }
             ToEngineActor::Subscribe {
                 topic,
+                sync,
                 out_tx,
                 in_rx,
             } => {
-                self.on_subscribe(topic, out_tx, in_rx).await?;
+                self.on_subscribe(topic, sync, out_tx, in_rx).await?;
             }
             ToEngineActor::TopicJoined { topic } => {
                 self.on_topic_joined(topic).await?;
@@ -256,8 +277,28 @@ impl EngineActor {
         let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
             self.gossip_actor_tx
-                .send(ToGossipActor::Join { topic, peers })
+                .send(ToGossipActor::Join {
+                    topic,
+                    peers: peers.clone(),
+                })
                 .await?;
+
+            for peer in peers {
+                // @TODO: establish a connection with each peer
+                let (result_tx, result_rx) = oneshot::channel();
+                self.sync_actor_tx
+                    .send(ToSyncActor::Sync {
+                        peer,
+                        topic,
+                        send: todo!(),
+                        recv: todo!(),
+                        result_tx,
+                    })
+                    .await?;
+
+                // @TODO: Consider what we actually want from waiting on this result.
+                result_rx.await?;
+            }
         }
 
         Ok(())
@@ -318,11 +359,17 @@ impl EngineActor {
     async fn on_subscribe(
         &mut self,
         topic: TopicId,
+        handler: Arc<dyn SyncProtocol + 'static>,
         out_tx: broadcast::Sender<OutEvent>,
         mut in_rx: mpsc::Receiver<InEvent>,
     ) -> Result<()> {
         // Keep an earmark that we're interested in joining this topic
         self.topics.earmark(topic, out_tx).await;
+
+        // Register this sync handler on the sync actor
+        self.sync_actor_tx
+            .send(ToSyncActor::RegisterHandler { topic, handler })
+            .await?;
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
@@ -371,6 +418,22 @@ impl EngineActor {
             if !self.topics.has_successfully_joined(&topic).await {
                 self.join_topic(topic).await?;
             }
+        }
+
+        Ok(())
+    }
+
+    /// Process an message forwarded from the sync actor.
+    async fn on_sync_message(
+        &mut self,
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+        topic: TopicId,
+    ) -> Result<()> {
+        if self.topics.has_joined(&topic).await {
+            self.topics.on_message(topic, bytes, delivered_from).await?;
+        } else {
+            warn!("received message for unknown topic {topic}");
         }
 
         Ok(())
@@ -520,7 +583,7 @@ impl TopicMap {
         inner.joined.contains(topic) || inner.pending_joins.contains(topic)
     }
 
-    /// Handle incoming messages from gossip overlay.
+    /// Handle incoming messages from gossip overlay or sync session.
     ///
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_message(

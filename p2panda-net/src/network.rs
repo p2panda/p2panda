@@ -14,6 +14,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_sync::traits::SyncProtocol;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -22,6 +23,7 @@ use tracing::{debug, error, error_span, warn, Instrument};
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::discovery::{Discovery, DiscoveryMap};
+use crate::engine::sync::SyncProtocolMap;
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
@@ -54,6 +56,7 @@ pub struct NetworkBuilder {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
+    sync: SyncProtocolMap,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
@@ -71,6 +74,7 @@ impl NetworkBuilder {
             gossip_config: None,
             network_id,
             protocols: Default::default(),
+            sync: Default::default(),
             relay_mode: RelayMode::Disabled,
             secret_key: None,
         }
@@ -152,6 +156,12 @@ impl NetworkBuilder {
         self
     }
 
+    /// Adds a sync handler an to existing gossip topics.
+    pub fn sync(mut self, topic: TopicId, handler: impl SyncProtocol + 'static) -> Self {
+        self.sync.add(topic.into(), handler);
+        self
+    }
+
     /// Sets the gossip configuration.
     ///
     /// Configuration parameters define the behavior of the swarm membership (HyParView) and gossip
@@ -222,7 +232,12 @@ impl NetworkBuilder {
             &node_addr.info,
         );
 
-        let engine = Engine::new(self.network_id, endpoint.clone(), gossip.clone());
+        let engine = Engine::new(
+            self.network_id,
+            endpoint.clone(),
+            gossip.clone(),
+            self.sync.clone(),
+        );
         let handshake = Handshake::new(gossip.clone());
 
         // Add direct addresses to address book
@@ -478,10 +493,14 @@ impl Network {
     pub async fn subscribe(
         &self,
         topic: TopicId,
+        sync: impl SyncProtocol + 'static,
     ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
-        self.inner.engine.subscribe(topic, out_tx, in_rx).await?;
+        self.inner
+            .engine
+            .subscribe(topic, sync, out_tx, in_rx)
+            .await?;
         Ok((in_tx, out_rx))
     }
 
@@ -558,15 +577,41 @@ async fn handle_connection(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::Arc;
 
+    use async_trait::async_trait;
+    use futures_lite::{AsyncRead, AsyncWrite};
+    use futures_util::Sink;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
+    use p2panda_sync::traits::SyncProtocol;
+    use p2panda_sync::SyncError;
+    use tracing::debug;
 
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
     use super::{InEvent, OutEvent};
+
+    pub struct DummyProtocol {}
+
+    #[async_trait]
+    impl SyncProtocol for DummyProtocol {
+        fn name(&self) -> &'static str {
+            static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
+            DUMMY_PROTOCOL_NAME
+        }
+        async fn run(
+            self: Arc<Self>,
+            _tx: Box<dyn AsyncWrite + Send + Unpin>,
+            _rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
+        ) -> Result<(), SyncError> {
+            debug!("dummy sync protocol ran");
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn config() {
@@ -614,8 +659,8 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes
-        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
-        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
+        let (tx_1, mut rx_1) = node_1.subscribe([0; 32], DummyProtocol {}).await.unwrap();
+        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32], DummyProtocol {}).await.unwrap();
 
         // Receive the first message for both nodes
         let rx_2_msg = rx_2.recv().await.unwrap();

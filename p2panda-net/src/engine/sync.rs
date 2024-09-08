@@ -5,42 +5,65 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures_util::SinkExt;
+use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_quinn::{RecvStream, SendStream};
 use p2panda_sync::traits::SyncProtocol;
 use p2panda_sync::SyncError;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
-use tracing::debug;
-
-use crate::TopicId;
+use tracing::{debug, error};
 
 use super::engine::ToEngineActor;
 
 pub enum ToSyncActor {
+    RegisterHandler {
+        topic: TopicId,
+        handler: Arc<dyn SyncProtocol + 'static>,
+    },
     Sync {
         peer: PublicKey,
-        protocol: &'static str,
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        live_message_channel: mpsc::Sender<Vec<u8>>,
         result_tx: oneshot::Sender<Result<(), SyncError>>,
     },
 }
 
-type ProtocolMap = HashMap<&'static str, Arc<dyn SyncProtocol>>;
+#[derive(Clone, Default)]
+pub struct SyncProtocolMap(HashMap<TopicId, Arc<dyn SyncProtocol>>);
+
+impl SyncProtocolMap {
+    pub fn add(&mut self, topic: TopicId, handler: impl SyncProtocol + 'static) {
+        self.0.insert(topic, Arc::new(handler));
+    }
+
+    pub fn get(&self, topic: TopicId) -> Option<&Arc<dyn SyncProtocol + 'static>> {
+        self.0.get(&topic)
+    }
+}
+impl std::fmt::Debug for SyncProtocolMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SyncProtocolMap").finish()
+    }
+}
 
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
-    protocol_map: ProtocolMap,
+    handlers: SyncProtocolMap,
+    engine_actor_tx: mpsc::Sender<ToEngineActor>,
 }
 
 impl SyncActor {
-    pub fn new(inbox: mpsc::Receiver<ToSyncActor>, protocol_map: ProtocolMap) -> Self {
+    pub fn new(
+        inbox: mpsc::Receiver<ToSyncActor>,
+        handlers: SyncProtocolMap,
+        engine_actor_tx: mpsc::Sender<ToEngineActor>,
+    ) -> Self {
         Self {
             inbox,
-            protocol_map,
+            handlers,
+            engine_actor_tx,
         }
     }
 
@@ -63,35 +86,69 @@ impl SyncActor {
         match msg {
             ToSyncActor::Sync {
                 peer,
-                protocol,
                 topic,
                 send,
                 recv,
-                live_message_channel,
                 result_tx,
             } => {
-                debug!(
-                    "Initiate sync session with peer {} over topic {:?}",
-                    peer, topic
-                );
-                let protocol = self
-                    .protocol_map
-                    .get(protocol)
-                    .expect("unknown protocol")
-                    .clone();
-
-                let sink = PollSender::new(live_message_channel)
-                    .sink_map_err(|e| SyncError::Protocol(e.to_string()));
-
-                tokio::spawn(async move {
-                    let result = protocol
-                        .run(Box::new(send), Box::new(recv), Box::new(sink))
-                        .await;
-                    result_tx.send(result).expect("sync result message closed");
-                });
+                self.on_sync(peer, topic, send, recv, result_tx).await?;
             }
-        }
+            ToSyncActor::RegisterHandler { topic, handler } => {
+                self.handlers.0.insert(topic, handler);
+            }
+        };
 
         Ok(true)
+    }
+
+    async fn on_sync(
+        &self,
+        peer: PublicKey,
+        topic: TopicId,
+        send: SendStream,
+        recv: RecvStream,
+        result_tx: oneshot::Sender<Result<(), SyncError>>,
+    ) -> Result<()> {
+        debug!(
+            "Initiate sync session with peer {} over topic {:?}",
+            peer, topic
+        );
+
+        // Get the protocol handler for this topic.
+        let Some(protocol) = self.handlers.get(topic).cloned() else {
+            return Err(anyhow::anyhow!("SyncActor error: protocol not found"));
+        };
+
+        // Set up a channel for receiving new application messages.
+        let (tx, mut rx) = mpsc::channel(128);
+        let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+
+        // Spawn a task which runs the sync protocol.
+        tokio::spawn(async move {
+            let result = protocol
+                .run(Box::new(send), Box::new(recv), Box::new(sink))
+                .await;
+            result_tx.send(result).expect("sync result channel closed");
+        });
+
+        // Spawn another task which picks up any new application messages and sends them
+        // on to the engine for handling.
+        let engine_actor_tx = self.engine_actor_tx.clone();
+        tokio::spawn(async move {
+            while let Some(message) = rx.blocking_recv() {
+                if let Err(err) = engine_actor_tx
+                    .send(ToEngineActor::SyncMessage {
+                        bytes: message,
+                        delivered_from: peer,
+                        topic,
+                    })
+                    .await
+                {
+                    error!("error in sync actor: {}", err)
+                };
+            }
+        });
+
+        Ok(())
     }
 }
