@@ -6,8 +6,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use futures_util::SinkExt;
 use iroh_gossip::proto::TopicId;
+use iroh_net::endpoint::{RecvStream, SendStream};
 use iroh_net::key::PublicKey;
-use iroh_quinn::{RecvStream, SendStream};
+// @TODO: See if we can remove the `iroh_quinn` dependency.
+//use iroh_quinn::{RecvStream, SendStream};
 use p2panda_sync::traits::SyncProtocol;
 use p2panda_sync::SyncError;
 use tokio::sync::{mpsc, oneshot};
