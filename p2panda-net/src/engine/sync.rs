@@ -6,10 +6,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use futures_util::SinkExt;
 use iroh_gossip::proto::TopicId;
-use iroh_net::endpoint::{RecvStream, SendStream};
 use iroh_net::key::PublicKey;
 // @TODO: See if we can remove the `iroh_quinn` dependency.
-//use iroh_quinn::{RecvStream, SendStream};
+// @NOTE: I don't _think_ we can because we need access to the "futures-io" feature which iroh_net
+// dosen't expose.
+use iroh_quinn::{RecvStream, SendStream};
 use p2panda_sync::traits::SyncProtocol;
 use p2panda_sync::SyncError;
 use tokio::sync::{mpsc, oneshot};
