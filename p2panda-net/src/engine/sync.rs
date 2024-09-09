@@ -17,10 +17,6 @@ use tracing::{debug, error};
 use super::engine::ToEngineActor;
 
 pub enum ToSyncActor {
-    RegisterHandler {
-        topic: TopicId,
-        handler: Arc<dyn SyncProtocol + 'static>,
-    },
     Sync {
         peer: PublicKey,
         topic: TopicId,
@@ -50,19 +46,19 @@ impl std::fmt::Debug for SyncProtocolMap {
 
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
-    handlers: SyncProtocolMap,
+    sync_protocol: Arc<dyn SyncProtocol + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
 }
 
 impl SyncActor {
     pub fn new(
         inbox: mpsc::Receiver<ToSyncActor>,
-        handlers: SyncProtocolMap,
+        sync_protocol: Arc<dyn SyncProtocol + 'static>,
         engine_actor_tx: mpsc::Sender<ToEngineActor>,
     ) -> Self {
         Self {
             inbox,
-            handlers,
+            sync_protocol,
             engine_actor_tx,
         }
     }
@@ -94,9 +90,6 @@ impl SyncActor {
                 self.on_sync_message(peer, topic, send, recv, result_tx)
                     .await?;
             }
-            ToSyncActor::RegisterHandler { topic, handler } => {
-                self.handlers.0.insert(topic, handler);
-            }
         };
 
         Ok(true)
@@ -115,19 +108,20 @@ impl SyncActor {
             peer, topic
         );
 
-        // Get the protocol handler for this topic.
-        let Some(protocol) = self.handlers.get(topic).cloned() else {
-            return Err(anyhow::anyhow!("SyncActor error: protocol not found"));
-        };
-
         // Set up a channel for receiving new application messages.
         let (tx, mut rx) = mpsc::channel(128);
         let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
         // Spawn a task which runs the sync protocol.
+        let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
             let result = protocol
-                .run(topic.as_bytes(), Box::new(send), Box::new(recv), Box::new(sink))
+                .run(
+                    topic.as_bytes(),
+                    Box::new(send),
+                    Box::new(recv),
+                    Box::new(sink),
+                )
                 .await;
             result_tx.send(result).expect("sync result channel closed");
         });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::sync::Arc;
+use std::fmt::Debug;
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
@@ -8,7 +9,7 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 use crate::{SyncError, TopicId};
 
 #[async_trait]
-pub trait SyncProtocol: Send + Sync {
+pub trait SyncProtocol: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 
     async fn run(

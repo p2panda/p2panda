@@ -34,7 +34,7 @@ impl Engine {
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        sync: SyncProtocolMap,
+        sync_protocol: Arc<dyn SyncProtocol + 'static>,
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
@@ -48,7 +48,7 @@ impl Engine {
             network_id.into(),
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
-        let sync_actor = SyncActor::new(sync_actor_rx, sync, engine_actor_tx.clone());
+        let sync_actor = SyncActor::new(sync_actor_rx, sync_protocol, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
             if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {
@@ -80,14 +80,12 @@ impl Engine {
     pub async fn subscribe(
         &self,
         topic: TopicId,
-        sync: impl SyncProtocol + 'static,
         out_tx: broadcast::Sender<OutEvent>,
         in_rx: mpsc::Receiver<InEvent>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::Subscribe {
                 topic: topic.into(),
-                sync: Arc::new(sync),
                 out_tx,
                 in_rx,
             })

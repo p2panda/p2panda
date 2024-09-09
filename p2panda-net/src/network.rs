@@ -56,7 +56,7 @@ pub struct NetworkBuilder {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync: SyncProtocolMap,
+    sync_protocol: Arc<dyn SyncProtocol + 'static>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
@@ -66,7 +66,7 @@ impl NetworkBuilder {
     ///
     /// The identifier is used during handshake and discovery protocols. Networks must use the
     /// same identifier if they wish to successfully connect and share gossip.
-    pub fn new(network_id: NetworkId) -> Self {
+    pub fn new(network_id: NetworkId, sync_protocol: impl SyncProtocol + 'static) -> Self {
         Self {
             bind_port: None,
             direct_node_addresses: Vec::new(),
@@ -74,15 +74,16 @@ impl NetworkBuilder {
             gossip_config: None,
             network_id,
             protocols: Default::default(),
-            sync: Default::default(),
+            sync_protocol: Arc::new(sync_protocol),
             relay_mode: RelayMode::Disabled,
             secret_key: None,
         }
     }
 
     /// Returns a new instance of `NetworkBuilder` using the given configuration.
-    pub fn from_config(config: Config) -> Self {
-        let mut network_builder = Self::new(config.network_id).bind_port(config.bind_port);
+    pub fn from_config(config: Config, sync_protocol: impl SyncProtocol + 'static) -> Self {
+        let mut network_builder =
+            Self::new(config.network_id, sync_protocol).bind_port(config.bind_port);
 
         for (public_key, addresses, relay_addr) in config.direct_node_addresses {
             network_builder = network_builder.direct_address(public_key, addresses, relay_addr)
@@ -153,12 +154,6 @@ impl NetworkBuilder {
     /// Adds one or more discovery strategy, such as mDNS.
     pub fn discovery(mut self, handler: impl Discovery + 'static) -> Self {
         self.discovery.add(handler);
-        self
-    }
-
-    /// Adds a sync handler an to existing gossip topics.
-    pub fn sync(mut self, topic: TopicId, handler: impl SyncProtocol + 'static) -> Self {
-        self.sync.add(topic.into(), handler);
         self
     }
 
@@ -236,7 +231,7 @@ impl NetworkBuilder {
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
-            self.sync.clone(),
+            self.sync_protocol,
         );
         let handshake = Handshake::new(gossip.clone());
 
@@ -488,19 +483,14 @@ impl Network {
     /// and written to.
     ///
     /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
-    /// up event"). They'll sync data initially (when a sync protocol is given) and then start
-    /// "live" mode via gossip broadcast.
+    /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
-        sync: impl SyncProtocol + 'static,
     ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
-        self.inner
-            .engine
-            .subscribe(topic, sync, out_tx, in_rx)
-            .await?;
+        self.inner.engine.subscribe(topic, out_tx, in_rx).await?;
         Ok((in_tx, out_rx))
     }
 
@@ -594,6 +584,7 @@ mod tests {
 
     use super::{InEvent, OutEvent};
 
+    #[derive(Debug)]
     pub struct DummyProtocol {}
 
     #[async_trait]
@@ -604,7 +595,7 @@ mod tests {
         }
         async fn run(
             self: Arc<Self>,
-            topic: &TopicId,
+            _topic: &TopicId,
             _tx: Box<dyn AsyncWrite + Send + Unpin>,
             _rx: Box<dyn AsyncRead + Send + Unpin>,
             mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
@@ -632,7 +623,7 @@ mod tests {
             relay: Some(relay_address.clone()),
         };
 
-        let builder = NetworkBuilder::from_config(config);
+        let builder = NetworkBuilder::from_config(config, DummyProtocol {});
 
         assert_eq!(builder.bind_port, Some(2024));
         assert_eq!(builder.network_id, [1; 32]);
@@ -650,8 +641,14 @@ mod tests {
     async fn join_gossip_overlay() {
         let network_id = [1; 32];
 
-        let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
-        let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_1 = NetworkBuilder::new(network_id, DummyProtocol {})
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id, DummyProtocol {})
+            .build()
+            .await
+            .unwrap();
 
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
@@ -660,8 +657,8 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes
-        let (tx_1, mut rx_1) = node_1.subscribe([0; 32], DummyProtocol {}).await.unwrap();
-        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32], DummyProtocol {}).await.unwrap();
+        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
+        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
 
         // Receive the first message for both nodes
         let rx_2_msg = rx_2.recv().await.unwrap();

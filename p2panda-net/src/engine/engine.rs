@@ -47,7 +47,6 @@ pub enum ToEngineActor {
     },
     Subscribe {
         topic: TopicId,
-        sync: Arc<dyn SyncProtocol + 'static>,
         out_tx: broadcast::Sender<OutEvent>,
         in_rx: mpsc::Receiver<InEvent>,
     },
@@ -206,11 +205,10 @@ impl EngineActor {
             }
             ToEngineActor::Subscribe {
                 topic,
-                sync,
                 out_tx,
                 in_rx,
             } => {
-                self.on_subscribe(topic, sync, out_tx, in_rx).await?;
+                self.on_subscribe(topic, out_tx, in_rx).await?;
             }
             ToEngineActor::TopicJoined { topic } => {
                 self.on_topic_joined(topic).await?;
@@ -359,17 +357,11 @@ impl EngineActor {
     async fn on_subscribe(
         &mut self,
         topic: TopicId,
-        handler: Arc<dyn SyncProtocol + 'static>,
         out_tx: broadcast::Sender<OutEvent>,
         mut in_rx: mpsc::Receiver<InEvent>,
     ) -> Result<()> {
         // Keep an earmark that we're interested in joining this topic
         self.topics.earmark(topic, out_tx).await;
-
-        // Register this sync handler on the sync actor
-        self.sync_actor_tx
-            .send(ToSyncActor::RegisterHandler { topic, handler })
-            .await?;
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
