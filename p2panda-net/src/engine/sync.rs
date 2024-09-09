@@ -21,7 +21,7 @@ pub enum ToSyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     },
     Accept {
         topic: TopicId,
@@ -29,7 +29,9 @@ pub enum ToSyncActor {
         recv: RecvStream,
         result_tx: oneshot::Sender<Result<(), SyncError>>,
     },
+    Shutdown,
 }
+
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
     sync_protocol: Arc<dyn SyncProtocol + 'static>,
@@ -82,6 +84,7 @@ impl SyncActor {
                 recv,
                 result_tx,
             } => todo!(),
+            ToSyncActor::Shutdown => return Ok(false),
         };
 
         Ok(true)
@@ -93,7 +96,7 @@ impl SyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!(
             "Initiate sync session with peer {} over topic {:?}",
@@ -114,7 +117,8 @@ impl SyncActor {
                     Box::new(recv),
                     Box::new(sink),
                 )
-                .await;
+                .await
+                .map_err(|e| anyhow::anyhow!(e));
             result_tx.send(result).expect("sync result channel closed");
         });
 

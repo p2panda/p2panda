@@ -4,4 +4,4 @@
 mod cbor_codec;
 #[cfg(feature = "log-height")]
 mod log_height;
-mod utils;
+pub mod utils;

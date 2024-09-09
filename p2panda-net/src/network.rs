@@ -8,14 +8,14 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_gossip::proto::Config as GossipConfig;
-use iroh_net::endpoint::{self, TransportConfig};
+use iroh_net::endpoint::TransportConfig;
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::traits::SyncProtocol;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, error_span, warn, Instrument};
@@ -25,9 +25,8 @@ use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
-use crate::message::{FromBytes, ToBytes};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync_connection::{self, SyncConnection, SYNC_CONNECTION_ALPN};
+use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{NetworkId, RelayUrl, TopicId};
 
 // @TODO: Allow a means of injecting new ALPN protocols when a topic is joined. It would include
@@ -180,7 +179,8 @@ impl NetworkBuilder {
         protocol_name: &'static [u8],
         handler: impl ProtocolHandler + 'static,
     ) -> Self {
-        self.protocols.insert(protocol_name, Arc::new(handler));
+        self.protocols
+            .insert(protocol_name.to_vec(), Arc::new(handler));
         self
     }
 
@@ -235,13 +235,14 @@ impl NetworkBuilder {
             &node_addr.info,
         );
 
+        let handshake = Handshake::new(gossip.clone());
+
         let engine = Engine::new(
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
             self.sync_protocol,
         );
-        let handshake = Handshake::new(gossip.clone());
 
         // Add direct addresses to address book
         for mut direct_addr in self.direct_node_addresses {
@@ -269,10 +270,13 @@ impl NetworkBuilder {
         });
 
         // Register core protocols all nodes accept
-        self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip));
-        self.protocols.insert(HANDSHAKE_ALPN, Arc::new(handshake));
-        let protocols = Arc::new(self.protocols);
-        if let Err(err) = inner.endpoint.set_alpns(protocols.alpns()) {
+        self.protocols
+            .insert(GOSSIP_ALPN.to_vec(), Arc::new(gossip.clone()));
+        self.protocols
+            .insert(HANDSHAKE_ALPN.to_vec(), Arc::new(handshake));
+        let protocols = Arc::new(Mutex::new(self.protocols));
+        let alpns = protocols.lock().await.alpns();
+        if let Err(err) = inner.endpoint.set_alpns(alpns) {
             inner.shutdown(protocols).await;
             return Err(err);
         }
@@ -317,7 +321,7 @@ impl NetworkBuilder {
 #[derive(Clone, Debug)]
 pub struct Network {
     inner: Arc<NetworkInner>,
-    protocols: Arc<ProtocolMap>,
+    protocols: Arc<Mutex<ProtocolMap>>,
     task: SharedAbortingJoinHandle<()>,
 }
 
@@ -343,7 +347,7 @@ struct NetworkInner {
 /// peers operating on the same network may be learned. Discovered peers are added to the local
 /// address book so they may be involved in connection and gossip activites.
 impl NetworkInner {
-    async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
+    async fn spawn(self: Arc<Self>, protocols: Arc<Mutex<ProtocolMap>>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
         debug!(
             "listening at: {}{}",
@@ -453,8 +457,11 @@ impl NetworkInner {
     }
 
     /// Closes all connections and shuts down the network engine.
-    async fn shutdown(&self, protocols: Arc<ProtocolMap>) {
+    async fn shutdown(&self, protocols: Arc<Mutex<ProtocolMap>>) {
         // We ignore all errors during shutdown
+        let protocols_lock = protocols.lock().await;
+
+        debug!("close all connections and shutdown the node");
         let _ = tokio::join!(
             // Close the endpoint. Closing the Endpoint is the equivalent of calling
             // Connection::close on all connections: Operations will immediately fail with
@@ -465,7 +472,7 @@ impl NetworkInner {
             // Shutdown engine
             self.engine.shutdown(),
             // Shutdown protocol handlers
-            protocols.shutdown(),
+            protocols_lock.shutdown(),
         );
     }
 }
@@ -501,10 +508,16 @@ impl Network {
         topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
         topic_alpn.extend_from_slice(&topic);
 
-        // @TODO: We need to get the sync actor sender somehow...
-        let sync_actor_tx = ...;
-        let sync_connection = SyncConnection::new(sync_actor_tx);
-        self.protocols.insert(&topic_alpn, Arc::new(sync_connection));
+        let sync_connection = self.inner.engine.sync_connection();
+        let mut protocols = self.protocols.lock().await;
+        protocols.insert(topic_alpn.clone(), Arc::new(sync_connection));
+        let alpns = protocols.alpns();
+        if let Err(err) = self.inner.endpoint.set_alpns(alpns) {
+            self.inner.shutdown(self.protocols.clone()).await;
+            return Err(err);
+        }
+
+        debug!("topic added to protocols map: {topic_alpn:?}");
 
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
@@ -564,7 +577,7 @@ pub enum OutEvent {
 /// a supported ALPN protocol.
 async fn handle_connection(
     mut connecting: iroh_net::endpoint::Connecting,
-    protocols: Arc<ProtocolMap>,
+    protocols: Arc<Mutex<ProtocolMap>>,
 ) {
     let alpn = match connecting.alpn().await {
         Ok(alpn) => alpn,
@@ -573,7 +586,7 @@ async fn handle_connection(
             return;
         }
     };
-    let Some(handler) = protocols.get(&alpn) else {
+    let Some(handler) = protocols.lock().await.get(&alpn) else {
         warn!("ignoring connection: unsupported alpn protocol");
         return;
     };
@@ -586,21 +599,35 @@ async fn handle_connection(
 mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncWrite};
-    use futures_util::Sink;
+    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
+    use futures_util::{Sink, SinkExt};
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
     use p2panda_sync::traits::{AppMessage, SyncProtocol};
+    use p2panda_sync::protocols::utils::{into_sink, into_stream};
     use p2panda_sync::{SyncError, TopicId};
+    use serde::{Deserialize, Serialize};
     use tracing::debug;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
 
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
     use super::{InEvent, OutEvent};
+
+    fn setup_logging() {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+    }
 
     #[derive(Debug)]
     pub struct DummyProtocol {}
@@ -667,6 +694,8 @@ mod tests {
 
     #[tokio::test]
     async fn join_gossip_overlay() {
+        setup_logging();
+
         let network_id = [1; 32];
 
         let node_1 = NetworkBuilder::new(network_id, DummyProtocol {})
@@ -712,6 +741,98 @@ mod tests {
             }
         );
 
+        println!("shutdown nodes");
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+    }
+
+    // The protocol message types.
+    #[derive(Serialize, Deserialize)]
+    enum Message {
+        Ping,
+        Pong,
+    }
+
+    #[derive(Debug, Clone)]
+    struct SimpleProtocol {}
+
+    // A very naive sync protocol.
+    #[async_trait]
+    impl SyncProtocol for SimpleProtocol {
+        fn name(&self) -> &'static str {
+            static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
+            SIMPLE_PROTOCOL_NAME
+        }
+
+        async fn run(
+            self: Arc<Self>,
+            _topic: &TopicId,
+            tx: Box<dyn AsyncWrite + Send + Unpin>,
+            rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
+        ) -> Result<(), SyncError> {
+            debug!("run sync session");
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            sink.send(Message::Ping).await?;
+            debug!("ping message sent");
+
+            while let Some(result) = stream.next().await {
+                let message = result?;
+
+                match message {
+                    Message::Ping => {
+                        debug!("ping message received");
+                        sink.send(Message::Pong).await?;
+                        debug!("pong message sent");
+                    }
+                    Message::Pong => {
+                        debug!("pong message received");
+                        break;
+                    }
+                }
+            }
+
+            debug!("sync session finished");
+
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn ping_pong() {
+        setup_logging();
+
+        let network_id = [1; 32];
+        let topic_id = [0; 32];
+
+        let node_1_protocol = SimpleProtocol {};
+        let node_2_protocol = SimpleProtocol {};
+
+        let node_1 = NetworkBuilder::new(network_id, node_1_protocol)
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id, node_2_protocol)
+            .build()
+            .await
+            .unwrap();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1.add_peer(node_2_addr).await.unwrap();
+        node_2.add_peer(node_1_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes which should kick off sync
+        let _ = node_1.subscribe(topic_id).await.unwrap();
+        let _ = node_2.subscribe(topic_id).await.unwrap();
+
+        // @TODO: Check logging to see that sync messages are not being received
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        println!("shutdown nodes");
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
     }
