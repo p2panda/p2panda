@@ -8,7 +8,7 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_gossip::proto::Config as GossipConfig;
-use iroh_net::endpoint::TransportConfig;
+use iroh_net::endpoint::{self, TransportConfig};
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::util::SharedAbortingJoinHandle;
@@ -25,8 +25,17 @@ use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
+use crate::message::{FromBytes, ToBytes};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
+use crate::sync_connection::{self, SyncConnection, SYNC_CONNECTION_ALPN};
 use crate::{NetworkId, RelayUrl, TopicId};
+
+// @TODO: Allow a means of injecting new ALPN protocols when a topic is joined. It would include
+// the topic plus some base descriptor. Then we have a generic connection handler for all sync
+// connections, but SyncReceive is only called if the APLN is supported locally.
+
+// Put the topic id into the ProtocolMap as an ALPN. Then this gets matched on when handling
+// incoming connections.
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -487,6 +496,16 @@ impl Network {
         &self,
         topic: TopicId,
     ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
+        // Concatenate the connection sync ALPN and topic id.
+        let mut topic_alpn = Vec::new();
+        topic_alpn.push(SYNC_CONNECTION_ALPN);
+        topic_alpn.push(topic.as_bytes());
+
+        // @TODO: We need to get the sync actor sender somehow...
+        let sync_actor_tx = ...;
+        let sync_connection = SyncConnection::new(sync_actor_tx);
+        self.protocols.insert(topic_alpn, Arc::new(sync_connection));
+
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
         self.inner.engine.subscribe(topic, out_tx, in_rx).await?;
