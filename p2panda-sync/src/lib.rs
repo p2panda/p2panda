@@ -16,3 +16,5 @@ pub enum SyncError {
     #[error("custom error: {0}")]
     Custom(String),
 }
+
+pub type TopicId = [u8; 32];

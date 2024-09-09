@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
@@ -12,7 +13,7 @@ use tracing::debug;
 
 use crate::protocols::utils::{into_sink, into_stream};
 use crate::traits::SyncProtocol;
-use crate::SyncError;
+use crate::{SyncError, TopicId};
 
 type LogId = String;
 type SeqNum = u64;
@@ -42,13 +43,13 @@ static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
 
 #[derive(Clone, Debug, Default)]
 pub struct LogHeightSyncProtocol {
-    pub log_id: LogId,
+    pub log_ids: HashMap<TopicId, LogId>,
     pub store: Arc<RwLock<MemoryStore<LogId, DefaultExtensions>>>,
 }
 
 impl LogHeightSyncProtocol {
-    pub fn log_id(&self) -> &LogId {
-        &self.log_id
+    pub fn log_id(&self, topic: &TopicId) -> Option<&LogId> {
+        self.log_ids.get(topic)
     }
     pub fn read_store(&self) -> RwLockReadGuard<MemoryStore<LogId, DefaultExtensions>> {
         self.store.read().expect("error getting read lock on store")
@@ -69,6 +70,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
 
     async fn run(
         self: Arc<Self>,
+        topic: &TopicId,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
         rx: Box<dyn AsyncRead + Send + Unpin>,
         mut app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
@@ -79,7 +81,9 @@ impl SyncProtocol for LogHeightSyncProtocol {
         let mut sink = into_sink(tx);
         let mut stream = into_stream(rx);
 
-        let log_id = self.log_id();
+        let Some(log_id) = self.log_id(&topic) else {
+            return Err(SyncError::Protocol("Unknown topic id".to_string()));
+        };
         let local_log_heights = self
             .read_store()
             .get_log_heights(log_id.to_string())
@@ -188,6 +192,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
 
     use futures::SinkExt;
@@ -235,7 +240,8 @@ mod tests {
 
     #[tokio::test]
     async fn run_sync_strategy() {
-        const TOPIC_ID: &str = "my_topic";
+        const TOPIC_ID: [u8; 32] = [0u8; 32];
+        const LOG_ID: &str = "messages";
 
         // Setup store with 3 operations in it
         let mut store = MemoryStore::<String, DefaultExtensions>::new();
@@ -262,13 +268,13 @@ mod tests {
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
         store
-            .insert_operation(operation0.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation0.clone(), LOG_ID.to_string())
             .unwrap();
         store
-            .insert_operation(operation1.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation1.clone(), LOG_ID.to_string())
             .unwrap();
         store
-            .insert_operation(operation2.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation2.clone(), LOG_ID.to_string())
             .unwrap();
 
         // Create a duplex stream which simulate both ends of a bi-directional network connection
@@ -284,7 +290,7 @@ mod tests {
 
         // Run the sync session (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
-            log_id: TOPIC_ID.to_string(),
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store)),
         });
         let (app_tx, app_rx) = mpsc::channel(128);
@@ -293,6 +299,7 @@ mod tests {
         let handle = tokio::spawn(async move {
             let _ = protocol
                 .run(
+                    &TOPIC_ID,
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
                     Box::new(sink),
@@ -329,7 +336,8 @@ mod tests {
 
     #[tokio::test]
     async fn sync_operation_store() {
-        const TOPIC_ID: &str = "my_topic";
+        const TOPIC_ID: [u8; 32] = [0u8; 32];
+        const LOG_ID: &str = "messages";
 
         // Create a store for peer a and populate it with operations
         let mut store1 = MemoryStore::default();
@@ -356,19 +364,19 @@ mod tests {
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
         store1
-            .insert_operation(operation0.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation0.clone(), LOG_ID.to_string())
             .unwrap();
         store1
-            .insert_operation(operation1.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation1.clone(), LOG_ID.to_string())
             .unwrap();
         store1
-            .insert_operation(operation2.clone(), TOPIC_ID.to_string())
+            .insert_operation(operation2.clone(), LOG_ID.to_string())
             .unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store1)),
-            log_id: TOPIC_ID.to_string(),
         });
 
         // Create an empty store for peer a and construct their sync protocol and engine
@@ -376,7 +384,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
             store: Arc::new(RwLock::new(store2)),
-            log_id: TOPIC_ID.to_string(),
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
         });
 
         // Create a duplex stream which simulate both ends of a bi-directional network connection
@@ -391,6 +399,7 @@ mod tests {
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .run(
+                    &TOPIC_ID,
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
                     Box::new(sink),
@@ -406,6 +415,7 @@ mod tests {
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .run(
+                    &TOPIC_ID,
                     Box::new(peer_b_write.compat_write()),
                     Box::new(peer_b_read.compat()),
                     Box::new(sink),
@@ -420,12 +430,12 @@ mod tests {
         // Check log heights are now equal
         let peer_a_log_heights = peer_a_protocol
             .read_store()
-            .get_log_heights(TOPIC_ID.to_string())
+            .get_log_heights(LOG_ID.to_string())
             .unwrap();
 
         let peer_b_log_heights = peer_b_protocol
             .read_store()
-            .get_log_heights(TOPIC_ID.to_string())
+            .get_log_heights(LOG_ID.to_string())
             .unwrap();
 
         assert_eq!(peer_a_log_heights, peer_b_log_heights);

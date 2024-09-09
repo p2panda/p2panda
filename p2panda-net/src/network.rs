@@ -585,7 +585,7 @@ mod tests {
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
     use p2panda_sync::traits::SyncProtocol;
-    use p2panda_sync::SyncError;
+    use p2panda_sync::{SyncError, TopicId};
     use tracing::debug;
 
     use crate::addrs::DEFAULT_STUN_PORT;
@@ -604,6 +604,7 @@ mod tests {
         }
         async fn run(
             self: Arc<Self>,
+            topic: &TopicId,
             _tx: Box<dyn AsyncWrite + Send + Unpin>,
             _rx: Box<dyn AsyncRead + Send + Unpin>,
             mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,

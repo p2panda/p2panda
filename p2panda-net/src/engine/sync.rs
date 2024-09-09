@@ -127,7 +127,7 @@ impl SyncActor {
         // Spawn a task which runs the sync protocol.
         tokio::spawn(async move {
             let result = protocol
-                .run(Box::new(send), Box::new(recv), Box::new(sink))
+                .run(topic.as_bytes(), Box::new(send), Box::new(recv), Box::new(sink))
                 .await;
             result_tx.send(result).expect("sync result channel closed");
         });
