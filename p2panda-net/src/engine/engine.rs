@@ -18,6 +18,7 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{InEvent, OutEvent};
 use crate::sync_connection::SYNC_CONNECTION_ALPN;
+use crate::{FromBytes, ToBytes};
 
 use super::sync::{SyncActor, ToSyncActor};
 
@@ -290,7 +291,7 @@ impl EngineActor {
                 // Establish a connection with each peer and open a bidirectional stream.
                 let connection = self
                     .endpoint
-                    .connect_by_node_id(peer, &topic_alpn.to_bytes())
+                    .connect_by_node_id(peer, topic.as_bytes())
                     .await?;
                 let (mut send, mut recv) = connection.open_bi().await?;
 
