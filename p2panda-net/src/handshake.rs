@@ -6,7 +6,7 @@ use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_gossip::net::Gossip;
 use iroh_net::endpoint::{Connecting, Connection};
-use tracing::debug_span;
+use tracing::{debug, debug_span};
 
 use crate::protocols::ProtocolHandler;
 
@@ -34,6 +34,7 @@ impl Handshake {
 
 impl ProtocolHandler for Handshake {
     fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
+        debug!("received accept in Handshake protocol handler");
         Box::pin(async move { self.handle_connection(connecting.await?).await })
     }
 }

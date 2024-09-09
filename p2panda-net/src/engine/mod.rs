@@ -6,6 +6,8 @@ mod gossip;
 mod message;
 pub mod sync;
 
+pub use engine::ToEngineActor;
+
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -13,13 +15,14 @@ use iroh_gossip::net::Gossip;
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
-use sync::{SyncActor, SyncProtocolMap};
+use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing::error;
+use tracing::{debug, error};
 
-use crate::engine::engine::{EngineActor, ToEngineActor};
+use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{InEvent, OutEvent};
+use crate::sync_connection::SyncConnection;
 use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
@@ -62,6 +65,10 @@ impl Engine {
         }
     }
 
+    pub fn sync_connection(&self) -> SyncConnection {
+        SyncConnection::new(self.engine_actor_tx.clone())
+    }
+
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })
@@ -99,6 +106,7 @@ impl Engine {
             .send(ToEngineActor::Shutdown { reply })
             .await?;
         reply_rx.await?;
+        debug!("engine shutdown");
         Ok(())
     }
 }

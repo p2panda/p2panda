@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -25,26 +24,9 @@ pub enum ToSyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     },
-}
-
-#[derive(Clone, Default)]
-pub struct SyncProtocolMap(HashMap<TopicId, Arc<dyn SyncProtocol>>);
-
-impl SyncProtocolMap {
-    pub fn add(&mut self, topic: TopicId, handler: impl SyncProtocol + 'static) {
-        self.0.insert(topic, Arc::new(handler));
-    }
-
-    pub fn get(&self, topic: TopicId) -> Option<&Arc<dyn SyncProtocol + 'static>> {
-        self.0.get(&topic)
-    }
-}
-impl std::fmt::Debug for SyncProtocolMap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("SyncProtocolMap").finish()
-    }
+    Shutdown,
 }
 
 pub struct SyncActor {
@@ -93,6 +75,7 @@ impl SyncActor {
                 self.on_sync_message(peer, topic, send, recv, result_tx)
                     .await?;
             }
+            ToSyncActor::Shutdown => return Ok(false),
         };
 
         Ok(true)
@@ -104,7 +87,7 @@ impl SyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!(
             "Initiate sync session with peer {} over topic {:?}",
@@ -125,7 +108,8 @@ impl SyncActor {
                     Box::new(recv),
                     Box::new(sink),
                 )
-                .await;
+                .await
+                .map_err(|e| anyhow::anyhow!(e));
             result_tx.send(result).expect("sync result channel closed");
         });
 
@@ -133,7 +117,7 @@ impl SyncActor {
         // on to the engine for handling.
         let engine_actor_tx = self.engine_actor_tx.clone();
         tokio::spawn(async move {
-            while let Some(message) = rx.blocking_recv() {
+            while let Some(message) = rx.recv().await {
                 if let Err(err) = engine_actor_tx
                     .send(ToEngineActor::SyncMessage {
                         bytes: message,

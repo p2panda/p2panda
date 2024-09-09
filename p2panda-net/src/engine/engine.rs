@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
-use p2panda_sync::traits::SyncProtocol;
+use iroh_quinn::{RecvStream, SendStream};
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -55,6 +55,13 @@ pub enum ToEngineActor {
         bytes: Vec<u8>,
         delivered_from: PublicKey,
         topic: TopicId,
+    },
+    Sync {
+        peer: PublicKey,
+        topic: TopicId,
+        send: SendStream,
+        recv: RecvStream,
+        result_tx: oneshot::Sender<Result<()>>,
     },
     SyncMessage {
         bytes: Vec<u8>,
@@ -197,6 +204,15 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
+            ToEngineActor::Sync {
+                peer,
+                topic,
+                send,
+                recv,
+                result_tx,
+            } => {
+                self.on_sync(peer, topic, send, recv, result_tx).await?;
+            }
             ToEngineActor::SyncMessage {
                 bytes,
                 delivered_from,
@@ -273,11 +289,6 @@ impl EngineActor {
             self.network_joined_pending = true;
         }
 
-        // Concatenate the connection sync ALPN and topic id.
-        let mut topic_alpn = Vec::new();
-        topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
-        topic_alpn.extend_from_slice(topic.as_bytes());
-
         let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
             self.gossip_actor_tx
@@ -287,10 +298,25 @@ impl EngineActor {
                 })
                 .await?;
 
+            debug!("gossip join message sent to actor");
+
+            if topic == self.network_id {
+                debug!("exit cos this is the network id");
+                return Ok(());
+            }
+
+            // Concatenate the connection sync ALPN and topic id.
+            let mut topic_alpn = Vec::new();
+            topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
+            topic_alpn.extend_from_slice(topic.as_bytes());
+
             for peer in peers {
                 // Establish a connection with each peer and open a bidirectional stream.
+                debug!("attempt to connect to peer: {peer} {topic_alpn:?}");
                 let connection = self.endpoint.connect_by_node_id(peer, &topic_alpn).await?;
-                let (mut send, mut recv) = connection.open_bi().await?;
+                debug!("connection established with peer: {peer}");
+                let (send, recv) = connection.open_bi().await?;
+                debug!("bi-directional stream from initiator established");
 
                 let (result_tx, result_rx) = oneshot::channel();
                 self.sync_actor_tx
@@ -304,7 +330,8 @@ impl EngineActor {
                     .await?;
 
                 // @TODO: Consider what we actually want from waiting on this result.
-                result_rx.await?;
+                let result = result_rx.await?;
+                result?;
             }
         }
 
@@ -424,6 +451,26 @@ impl EngineActor {
         Ok(())
     }
 
+    async fn on_sync(
+        &mut self,
+        peer: PublicKey,
+        topic: TopicId,
+        send: SendStream,
+        recv: RecvStream,
+        result_tx: oneshot::Sender<Result<()>>,
+    ) -> Result<()> {
+        self.sync_actor_tx
+            .send(ToSyncActor::Sync {
+                peer,
+                topic,
+                send,
+                recv,
+                result_tx,
+            })
+            .await?;
+        Ok(())
+    }
+
     /// Process an message forwarded from the sync actor.
     async fn on_sync_message(
         &mut self,
@@ -508,6 +555,8 @@ impl EngineActor {
             .send(ToGossipActor::Shutdown)
             .await
             .ok();
+
+        self.sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
         Ok(())
     }
 }

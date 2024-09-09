@@ -11,6 +11,7 @@ use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use futures_util::future::join_all;
 use iroh_net::endpoint::Connecting;
+use tracing::debug;
 
 /// Handler for incoming connections.
 ///
@@ -44,7 +45,7 @@ impl<T: Send + Sync + 'static> IntoArcAny for T {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct ProtocolMap(BTreeMap<&'static [u8], Arc<dyn ProtocolHandler>>);
+pub(super) struct ProtocolMap(BTreeMap<Vec<u8>, Arc<dyn ProtocolHandler>>);
 
 impl ProtocolMap {
     /// Returns the registered protocol handler for an ALPN as a [`Arc<dyn ProtocolHandler>`].
@@ -53,7 +54,7 @@ impl ProtocolMap {
     }
 
     /// Inserts a protocol handler.
-    pub(super) fn insert(&mut self, alpn: &'static [u8], handler: Arc<dyn ProtocolHandler>) {
+    pub(super) fn insert(&mut self, alpn: Vec<u8>, handler: Arc<dyn ProtocolHandler>) {
         self.0.insert(alpn, handler);
     }
 
@@ -67,7 +68,9 @@ impl ProtocolMap {
     /// Calls and awaits [`ProtocolHandler::shutdown`] for all registered handlers concurrently.
     pub(super) async fn shutdown(&self) {
         let handlers = self.0.values().cloned().map(ProtocolHandler::shutdown);
+        debug!("await all handler shutdown handles");
         join_all(handlers).await;
+        debug!("all handlers closed");s
     }
 }
 
