@@ -499,13 +499,13 @@ impl Network {
     ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
         // Concatenate the connection sync ALPN and topic id.
         let mut topic_alpn = Vec::new();
-        topic_alpn.push(SYNC_CONNECTION_ALPN);
-        topic_alpn.push(&topic);
+        topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
+        topic_alpn.extend_from_slice(&topic);
 
         // @TODO: We need to get the sync actor sender somehow...
         let sync_actor_tx = ...;
         let sync_connection = SyncConnection::new(sync_actor_tx);
-        self.protocols.insert(&topic, Arc::new(sync_connection));
+        self.protocols.insert(&topic_alpn, Arc::new(sync_connection));
 
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
