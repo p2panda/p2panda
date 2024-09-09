@@ -275,8 +275,8 @@ impl EngineActor {
 
         // Concatenate the connection sync ALPN and topic id.
         let mut topic_alpn = Vec::new();
-        topic_alpn.push(SYNC_CONNECTION_ALPN);
-        topic_alpn.push(topic.as_bytes());
+        topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
+        topic_alpn.extend_from_slice(topic.as_bytes());
 
         let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
@@ -289,10 +289,7 @@ impl EngineActor {
 
             for peer in peers {
                 // Establish a connection with each peer and open a bidirectional stream.
-                let connection = self
-                    .endpoint
-                    .connect_by_node_id(peer, topic.as_bytes())
-                    .await?;
+                let connection = self.endpoint.connect_by_node_id(peer, &topic_alpn).await?;
                 let (mut send, mut recv) = connection.open_bi().await?;
 
                 let (result_tx, result_rx) = oneshot::channel();
