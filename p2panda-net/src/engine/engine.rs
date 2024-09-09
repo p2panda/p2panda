@@ -16,8 +16,8 @@ use tracing::{debug, error, warn};
 
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
-use crate::message::{FromBytes, ToBytes};
 use crate::network::{InEvent, OutEvent};
+use crate::sync_connection::SYNC_CONNECTION_ALPN;
 
 use super::sync::{SyncActor, ToSyncActor};
 
@@ -272,6 +272,11 @@ impl EngineActor {
             self.network_joined_pending = true;
         }
 
+        // Concatenate the connection sync ALPN and topic id.
+        let mut topic_alpn = Vec::new();
+        topic_alpn.push(SYNC_CONNECTION_ALPN);
+        topic_alpn.push(topic.as_bytes());
+
         let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
             self.gossip_actor_tx
@@ -282,14 +287,20 @@ impl EngineActor {
                 .await?;
 
             for peer in peers {
-                // @TODO: establish a connection with each peer
+                // Establish a connection with each peer and open a bidirectional stream.
+                let connection = self
+                    .endpoint
+                    .connect_by_node_id(peer, &topic_alpn.to_bytes())
+                    .await?;
+                let (mut send, mut recv) = connection.open_bi().await?;
+
                 let (result_tx, result_rx) = oneshot::channel();
                 self.sync_actor_tx
                     .send(ToSyncActor::Sync {
                         peer,
                         topic,
-                        send: todo!(),
-                        recv: todo!(),
+                        send,
+                        recv,
                         result_tx,
                     })
                     .await?;
