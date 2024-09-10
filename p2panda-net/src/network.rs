@@ -602,7 +602,7 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
+    use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, StreamExt};
     use futures_util::{Sink, SinkExt};
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
@@ -738,13 +738,6 @@ mod tests {
         node_2.shutdown().await.unwrap();
     }
 
-    // The protocol message types.
-    #[derive(Serialize, Deserialize)]
-    enum Message {
-        Ping,
-        Pong,
-    }
-
     #[derive(Debug, Clone)]
     struct SimpleProtocol {}
 
@@ -759,34 +752,19 @@ mod tests {
         async fn run(
             self: Arc<Self>,
             _topic: &TopicId,
-            tx: Box<dyn AsyncWrite + Send + Unpin>,
-            rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut tx: Box<dyn AsyncWrite + Send + Unpin>,
+            mut rx: Box<dyn AsyncRead + Send + Unpin>,
             mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
             debug!("run sync session");
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
 
-            sink.send(Message::Ping).await?;
-            debug!("ping message sent");
+            let bytes = [0, 0, 0, 0];
+            tx.write(&bytes).await?;
+            debug!("bytes sent: {bytes:?}");
 
-            while let Some(result) = stream.next().await {
-                let message = result?;
-
-                match message {
-                    Message::Ping => {
-                        debug!("ping message received");
-                        sink.send(Message::Pong).await?;
-                        debug!("pong message sent");
-                    }
-                    Message::Pong => {
-                        debug!("pong message received");
-                        break;
-                    }
-                }
-            }
-
-            debug!("sync session finished");
+            let mut buf = Vec::new();
+            rx.read(&mut buf).await?;
+            debug!("bytes received: {buf:?}");
 
             Ok(())
         }
