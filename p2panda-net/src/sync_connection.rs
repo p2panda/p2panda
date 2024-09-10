@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use tokio::sync::{mpsc, oneshot};
@@ -30,7 +30,7 @@ impl SyncConnection {
         let connection_id = connection.stable_id() as u64;
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
-        let (send, recv) = connection.accept_bi().await?;
+        let (mut send, mut recv) = connection.accept_bi().await?;
 
         // Extract the topic identifier from the ALPN.
         let mut topic = [0; 32];
@@ -38,6 +38,17 @@ impl SyncConnection {
 
         let peer = endpoint::get_remote_node_id(&connection)?;
         debug!("bi-directional stream established with {}", peer);
+
+        //         let bytes = [0, 0, 0, 0];
+        //         send.write_all(&bytes).await?;
+        //         debug!("bytes sent: {bytes:?}");
+        //
+        //         let mut buf = [1, 1, 1, 1];
+        //         recv.read_exact(&mut buf).await?;
+        //         debug!("bytes received: {buf:?}");
+        //
+        //         send.finish().await?;
+        //         send.stopped().await?;
 
         let (result_tx, result_rx) = oneshot::channel();
 
@@ -52,6 +63,7 @@ impl SyncConnection {
             .await?;
 
         result_rx.await?
+        // Ok(())
     }
 }
 

@@ -602,14 +602,13 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, StreamExt};
-    use futures_util::{Sink, SinkExt};
+    use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use futures_util::Sink;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
+    use iroh_quinn::{RecvStream, SendStream};
     use p2panda_core::PrivateKey;
-    use p2panda_sync::protocols::utils::{into_sink, into_stream};
     use p2panda_sync::traits::SyncProtocol;
     use p2panda_sync::{SyncError, TopicId};
-    use serde::{Deserialize, Serialize};
     use tracing::debug;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -759,11 +758,11 @@ mod tests {
             debug!("run sync session");
 
             let bytes = [0, 0, 0, 0];
-            tx.write(&bytes).await?;
+            tx.write_all(&bytes).await.unwrap();
             debug!("bytes sent: {bytes:?}");
 
             let mut buf = [1, 1, 1, 1];
-            rx.read_exact(&mut buf).await?;
+            rx.read_exact(&mut buf).await.unwrap();
             debug!("bytes received: {buf:?}");
 
             Ok(())

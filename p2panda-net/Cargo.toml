@@ -23,7 +23,7 @@ hickory-proto = { version = "0.24.1", optional = true }
 iroh-base = "0.22.0"
 iroh-gossip = "0.22.0"
 iroh-net = "0.22.0"
-iroh-quinn = { version = "0.10.5", features = ["futures-io"] }
+iroh-quinn = { version = "0.10.5", features = [ "futures-io"] }
 p2panda-core = { path = "../p2panda-core" }
 p2panda-sync = { path = "../p2panda-sync" }
 rand = "0.8.5"

@@ -85,8 +85,8 @@ impl SyncActor {
         &self,
         peer: PublicKey,
         topic: TopicId,
-        send: SendStream,
-        recv: RecvStream,
+        mut send: SendStream,
+        mut recv: RecvStream,
         result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!(
@@ -95,41 +95,41 @@ impl SyncActor {
         );
 
         // Set up a channel for receiving new application messages.
-        let (tx, mut rx) = mpsc::channel(128);
-        let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+        // let (tx, mut rx) = mpsc::channel(128);
+        // let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
         // Spawn a task which runs the sync protocol.
-        let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
-            let result = protocol
-                .run(
-                    topic.as_bytes(),
-                    Box::new(send),
-                    Box::new(recv),
-                    Box::new(sink),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!(e));
-            result_tx.send(result).expect("sync result channel closed");
+            let bytes = [0, 0, 0, 0];
+            send.write_all(&bytes).await.unwrap();
+            debug!("bytes sent: {bytes:?}");
+
+            let mut buf = [1, 1, 1, 1];
+            recv.read_exact(&mut buf).await.unwrap();
+            debug!("bytes received: {buf:?}");
+
+            send.finish().await.unwrap();
+            send.stopped().await.unwrap();
+            result_tx.send(Ok(())).expect("sync result channel closed");
         });
 
-        // Spawn another task which picks up any new application messages and sends them
-        // on to the engine for handling.
-        let engine_actor_tx = self.engine_actor_tx.clone();
-        tokio::spawn(async move {
-            while let Some(message) = rx.recv().await {
-                if let Err(err) = engine_actor_tx
-                    .send(ToEngineActor::SyncMessage {
-                        bytes: message,
-                        delivered_from: peer,
-                        topic,
-                    })
-                    .await
-                {
-                    error!("error in sync actor: {}", err)
-                };
-            }
-        });
+        // // Spawn another task which picks up any new application messages and sends them
+        // // on to the engine for handling.
+        // let engine_actor_tx = self.engine_actor_tx.clone();
+        // tokio::spawn(async move {
+        //     while let Some(message) = rx.recv().await {
+        //         if let Err(err) = engine_actor_tx
+        //             .send(ToEngineActor::SyncMessage {
+        //                 bytes: message,
+        //                 delivered_from: peer,
+        //                 topic,
+        //             })
+        //             .await
+        //         {
+        //             error!("error in sync actor: {}", err)
+        //         };
+        //     }
+        // });
 
         Ok(())
     }

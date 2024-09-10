@@ -315,8 +315,19 @@ impl EngineActor {
                 debug!("attempt to connect to peer: {peer} {topic_alpn:?}");
                 let connection = self.endpoint.connect_by_node_id(peer, &topic_alpn).await?;
                 debug!("connection established with peer: {peer}");
-                let (send, recv) = connection.open_bi().await?;
+                let (mut send, mut recv) = connection.open_bi().await?;
                 debug!("bi-directional stream from initiator established");
+
+                //                 let bytes = [0, 0, 0, 0];
+                //                 send.write_all(&bytes).await?;
+                //                 debug!("bytes sent: {bytes:?}");
+                //
+                //                 let mut buf = [1, 1, 1, 1];
+                //                 recv.read_exact(&mut buf).await?;
+                //                 debug!("bytes received: {buf:?}");
+                //
+                //                 send.finish().await?;
+                //                 send.stopped().await?;
 
                 let (result_tx, result_rx) = oneshot::channel();
                 self.sync_actor_tx
