@@ -70,7 +70,7 @@ impl ProtocolMap {
         let handlers = self.0.values().cloned().map(ProtocolHandler::shutdown);
         debug!("await all handler shutdown handles");
         join_all(handlers).await;
-        debug!("all handlers closed");s
+        debug!("all handlers closed");
     }
 }
 
