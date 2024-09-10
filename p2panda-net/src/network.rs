@@ -762,8 +762,8 @@ mod tests {
             tx.write(&bytes).await?;
             debug!("bytes sent: {bytes:?}");
 
-            let mut buf = Vec::new();
-            rx.read(&mut buf).await?;
+            let mut buf = [1, 1, 1, 1];
+            rx.read_exact(&mut buf).await?;
             debug!("bytes received: {buf:?}");
 
             Ok(())
