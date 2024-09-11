@@ -606,8 +606,8 @@ mod tests {
     use futures_util::{Sink, SinkExt};
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
-    use p2panda_sync::traits::{AppMessage, SyncProtocol};
     use p2panda_sync::protocols::utils::{into_sink, into_stream};
+    use p2panda_sync::traits::{AppMessage, SyncProtocol};
     use p2panda_sync::{SyncError, TopicId};
     use serde::{Deserialize, Serialize};
     use tracing::debug;
@@ -764,14 +764,14 @@ mod tests {
             SIMPLE_PROTOCOL_NAME
         }
 
-        async fn run(
+        async fn open(
             self: Arc<Self>,
             _topic: &TopicId,
             tx: Box<dyn AsyncWrite + Send + Unpin>,
             rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
-            debug!("run sync session");
+            debug!("open sync session");
             let mut sink = into_sink(tx);
             let mut stream = into_stream(rx);
 
@@ -783,9 +783,9 @@ mod tests {
 
                 match message {
                     Message::Ping => {
-                        debug!("ping message received");
-                        sink.send(Message::Pong).await?;
-                        debug!("pong message sent");
+                        return Err(SyncError::Protocol(
+                            "unexpected Ping message received".to_string(),
+                        ));
                     }
                     Message::Pong => {
                         debug!("pong message received");
@@ -794,7 +794,36 @@ mod tests {
                 }
             }
 
-            debug!("sync session finished");
+            Ok(())
+        }
+
+        async fn accept(
+            self: Arc<Self>,
+            tx: Box<dyn AsyncWrite + Send + Unpin>,
+            rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        ) -> Result<(), SyncError> {
+            debug!("accept sync session");
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            while let Some(result) = stream.next().await {
+                let message = result?;
+
+                match message {
+                    Message::Ping => {
+                        debug!("ping message received");
+                        sink.send(Message::Pong).await?;
+                        debug!("pong message sent");
+                        break;
+                    }
+                    Message::Pong => {
+                        return Err(SyncError::Protocol(
+                            "unexpected Pong message received".to_string(),
+                        ));
+                    }
+                }
+            }
 
             Ok(())
         }
