@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::protocols::utils::{into_sink, into_stream};
-use crate::traits::SyncProtocol;
+use crate::traits::{AppMessage, SyncProtocol};
 use crate::{SyncError, TopicId};
 
 type LogId = String;
@@ -68,12 +68,12 @@ impl SyncProtocol for LogHeightSyncProtocol {
         LOG_HEIGHT_PROTOCOL_NAME
     }
 
-    async fn run(
+    async fn open(
         self: Arc<Self>,
         topic: &TopicId,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
         rx: Box<dyn AsyncRead + Send + Unpin>,
-        mut app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
+        mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -162,7 +162,7 @@ impl SyncProtocol for LogHeightSyncProtocol {
                         let mut bytes = Vec::new();
                         ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
                             .map_err(|e| SyncError::Protocol(e.to_string()))?;
-                        app_tx.send(bytes).await?;
+                        app_tx.send(AppMessage::Bytes(bytes)).await?;
                     }
                     vec![]
                 }
@@ -187,6 +187,15 @@ impl SyncProtocol for LogHeightSyncProtocol {
         debug!("sync session finished");
 
         Ok(())
+    }
+
+    async fn accept(
+        self: Arc<Self>,
+        tx: Box<dyn AsyncWrite + Send + Unpin>,
+        rx: Box<dyn AsyncRead + Send + Unpin>,
+        mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+    ) -> Result<(), SyncError> {
+        todo!()
     }
 }
 
@@ -298,8 +307,7 @@ mod tests {
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle = tokio::spawn(async move {
             let _ = protocol
-                .run(
-                    &TOPIC_ID,
+                .accept(
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
                     Box::new(sink),
@@ -398,7 +406,7 @@ mod tests {
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
-                .run(
+                .open(
                     &TOPIC_ID,
                     Box::new(peer_a_write.compat_write()),
                     Box::new(peer_a_read.compat()),
@@ -414,8 +422,7 @@ mod tests {
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
-                .run(
-                    &TOPIC_ID,
+                .accept(
                     Box::new(peer_b_write.compat_write()),
                     Box::new(peer_b_read.compat()),
                     Box::new(sink),

@@ -574,7 +574,7 @@ mod tests {
     use futures_util::Sink;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
-    use p2panda_sync::traits::SyncProtocol;
+    use p2panda_sync::traits::{AppMessage, SyncProtocol};
     use p2panda_sync::{SyncError, TopicId};
     use tracing::debug;
 
@@ -593,14 +593,24 @@ mod tests {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
         }
-        async fn run(
+        async fn open(
             self: Arc<Self>,
             _topic: &TopicId,
             _tx: Box<dyn AsyncWrite + Send + Unpin>,
             _rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<Vec<u8>, Error = SyncError> + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
-            debug!("dummy sync protocol ran");
+            debug!("DummyProtocol: open sync session");
+            Ok(())
+        }
+
+        async fn accept(
+            self: Arc<Self>,
+            _tx: Box<dyn AsyncWrite + Send + Unpin>,
+            _rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        ) -> Result<(), SyncError> {
+            debug!("DummyProtocol: accept sync session");
             Ok(())
         }
     }

@@ -285,7 +285,7 @@ impl EngineActor {
                 // @TODO: establish a connection with each peer
                 let (result_tx, result_rx) = oneshot::channel();
                 self.sync_actor_tx
-                    .send(ToSyncActor::Sync {
+                    .send(ToSyncActor::Open {
                         peer,
                         topic,
                         send: todo!(),
