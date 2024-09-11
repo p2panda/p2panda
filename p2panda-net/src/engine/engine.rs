@@ -328,8 +328,8 @@ impl EngineActor {
                     .await?;
 
                 // @TODO: Consider what we actually want from waiting on this result.
-                let result = result_rx.await?;
-                result?;
+                // let result = result_rx.await?;
+                // result?;
             }
         }
 
