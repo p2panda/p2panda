@@ -15,7 +15,7 @@ use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::traits::SyncProtocol;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, error_span, warn, Instrument};
@@ -26,7 +26,7 @@ use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync_connection::{SyncConnection, SYNC_CONNECTION_ALPN};
+use crate::sync_connection::{SYNC_CONNECTION_ALPN};
 use crate::{NetworkId, RelayUrl, TopicId};
 
 // @TODO: Allow a means of injecting new ALPN protocols when a topic is joined. It would include

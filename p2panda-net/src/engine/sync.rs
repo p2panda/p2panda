@@ -9,7 +9,7 @@ use iroh_net::key::PublicKey;
 use iroh_quinn::{RecvStream, SendStream};
 use p2panda_sync::traits::{AppMessage, SyncProtocol};
 use p2panda_sync::SyncError;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
@@ -21,13 +21,11 @@ pub enum ToSyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     },
     Accept {
         peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     },
     Shutdown,
 }
@@ -73,17 +71,12 @@ impl SyncActor {
                 topic,
                 send,
                 recv,
-                result_tx,
             } => {
-                self.on_open_sync(peer, topic, send, recv, result_tx)
-                    .await?;
+                self.on_open_sync(peer, topic, send, recv).await?;
             }
-            ToSyncActor::Accept {
-                peer,
-                send,
-                recv,
-                result_tx,
-            } => self.on_accept_sync(peer, send, recv, result_tx).await?,
+            ToSyncActor::Accept { peer, send, recv } => {
+                self.on_accept_sync(peer, send, recv).await?
+            }
             ToSyncActor::Shutdown => return Ok(false),
         };
 
@@ -96,7 +89,6 @@ impl SyncActor {
         topic: TopicId,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!(
             "Initiate sync session with peer {} over topic {:?}",
@@ -117,9 +109,11 @@ impl SyncActor {
                     Box::new(recv),
                     Box::new(sink),
                 )
-                .await
-                .map_err(|e| anyhow::anyhow!(e));
-            result_tx.send(result).expect("sync result channel closed");
+                .await;
+
+            if let Err(err) = result {
+                error!("{err}");
+            }
         });
 
         // Spawn another task which picks up any new application messages and sends them
@@ -153,7 +147,6 @@ impl SyncActor {
         peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!("Accept sync session with peer {}", peer);
 
@@ -166,9 +159,11 @@ impl SyncActor {
         tokio::spawn(async move {
             let result = protocol
                 .accept(Box::new(send), Box::new(recv), Box::new(sink))
-                .await
-                .map_err(|e| anyhow::anyhow!(e));
-            result_tx.send(result).expect("sync result channel closed");
+                .await;
+
+            if let Err(err) = result {
+                error!("{err}");
+            }
         });
 
         // Spawn another task which picks up any new application messages and sends them

@@ -60,7 +60,6 @@ pub enum ToEngineActor {
         peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     },
     SyncMessage {
         bytes: Vec<u8>,
@@ -207,9 +206,8 @@ impl EngineActor {
                 peer,
                 send,
                 recv,
-                result_tx,
             } => {
-                self.on_accept_sync(peer, send, recv, result_tx).await?;
+                self.on_accept_sync(peer, send, recv).await?;
             }
             ToEngineActor::SyncMessage {
                 bytes,
@@ -314,14 +312,12 @@ impl EngineActor {
                 let (send, recv) = connection.open_bi().await?;
                 debug!("bi-directional stream from initiator established");
 
-                let (result_tx, result_rx) = oneshot::channel();
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
                         peer,
                         topic,
                         send,
                         recv,
-                        result_tx,
                     })
                     .await?;
 
@@ -452,14 +448,12 @@ impl EngineActor {
         peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         self.sync_actor_tx
             .send(ToSyncActor::Accept {
                 peer,
                 send,
                 recv,
-                result_tx,
             })
             .await?;
         Ok(())

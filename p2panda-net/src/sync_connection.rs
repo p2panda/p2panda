@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tracing::{debug, debug_span};
 
 use crate::engine::ToEngineActor;
@@ -34,18 +34,11 @@ impl SyncConnection {
         let peer = endpoint::get_remote_node_id(&connection)?;
         debug!("bi-directional stream established with {}", peer);
 
-        let (result_tx, result_rx) = oneshot::channel();
-
         self.engine_actor_tx
-            .send(ToEngineActor::AcceptSync {
-                peer,
-                send,
-                recv,
-                result_tx,
-            })
+            .send(ToEngineActor::AcceptSync { peer, send, recv })
             .await?;
 
-        result_rx.await?
+        Ok(())
     }
 }
 
