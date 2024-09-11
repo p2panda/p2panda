@@ -776,6 +776,10 @@ mod tests {
                 }
             }
 
+            // @NOTE: It's important to call this method before the streams are dropped, it makes
+            // sure all bytes are flushed from the sink before closing so that no messages are
+            // lost.
+            sink.flush().await?;
             sink.close().await?;
 
             Ok(())
@@ -809,6 +813,10 @@ mod tests {
                 }
             }
 
+            // @NOTE: It's important to call this method before the streams are dropped, it makes
+            // sure all bytes are flushed from the sink before closing so that no messages are
+            // lost.
+            sink.flush().await?;
             sink.close().await?;
 
             Ok(())
