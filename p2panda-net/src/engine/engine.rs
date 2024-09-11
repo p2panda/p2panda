@@ -303,15 +303,13 @@ impl EngineActor {
                 return Ok(());
             }
 
-            // Concatenate the connection sync ALPN and topic id.
-            let mut topic_alpn = Vec::new();
-            topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
-            topic_alpn.extend_from_slice(topic.as_bytes());
-
             for peer in peers {
                 // Establish a connection with each peer and open a bidirectional stream.
-                debug!("attempt to connect to peer: {peer} {topic_alpn:?}");
-                let connection = self.endpoint.connect_by_node_id(peer, &topic_alpn).await?;
+                debug!("attempt to connect to peer: {peer} {SYNC_CONNECTION_ALPN:?}");
+                let connection = self
+                    .endpoint
+                    .connect_by_node_id(peer, &SYNC_CONNECTION_ALPN)
+                    .await?;
                 debug!("connection established with peer: {peer}");
                 let (send, recv) = connection.open_bi().await?;
                 debug!("bi-directional stream from initiator established");

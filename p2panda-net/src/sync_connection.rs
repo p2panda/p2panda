@@ -31,11 +31,6 @@ impl SyncConnection {
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
         let (send, recv) = connection.accept_bi().await?;
-
-        // Extract the topic identifier from the ALPN.
-        let mut topic = [0; 32];
-        topic.copy_from_slice(&alpn[SYNC_CONNECTION_ALPN.len()..]);
-
         let peer = endpoint::get_remote_node_id(&connection)?;
         debug!("bi-directional stream established with {}", peer);
 

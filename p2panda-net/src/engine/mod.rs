@@ -65,7 +65,7 @@ impl Engine {
         }
     }
 
-    pub fn sync_connection(&self) -> SyncConnection {
+    pub fn sync_handler(&self) -> SyncConnection {
         SyncConnection::new(self.engine_actor_tx.clone())
     }
 

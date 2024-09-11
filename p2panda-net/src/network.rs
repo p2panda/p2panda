@@ -26,7 +26,7 @@ use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync_connection::SYNC_CONNECTION_ALPN;
+use crate::sync_connection::{SyncConnection, SYNC_CONNECTION_ALPN};
 use crate::{NetworkId, RelayUrl, TopicId};
 
 // @TODO: Allow a means of injecting new ALPN protocols when a topic is joined. It would include
@@ -179,8 +179,7 @@ impl NetworkBuilder {
         protocol_name: &'static [u8],
         handler: impl ProtocolHandler + 'static,
     ) -> Self {
-        self.protocols
-            .insert(protocol_name.to_vec(), Arc::new(handler));
+        self.protocols.insert(protocol_name, Arc::new(handler));
         self
     }
 
@@ -244,6 +243,8 @@ impl NetworkBuilder {
             self.sync_protocol,
         );
 
+        let sync = engine.sync_handler();
+
         // Add direct addresses to address book
         for mut direct_addr in self.direct_node_addresses {
             if direct_addr.relay_url().is_none() {
@@ -270,14 +271,13 @@ impl NetworkBuilder {
         });
 
         // Register core protocols all nodes accept
-        self.protocols
-            .insert(GOSSIP_ALPN.to_vec(), Arc::new(gossip.clone()));
-        self.protocols
-            .insert(HANDSHAKE_ALPN.to_vec(), Arc::new(handshake));
-        let protocols = Arc::new(Mutex::new(self.protocols));
-        let alpns = protocols.lock().await.alpns();
+        self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
+        self.protocols.insert(HANDSHAKE_ALPN, Arc::new(handshake));
+        self.protocols.insert(SYNC_CONNECTION_ALPN, Arc::new(sync));
+        let protocols = Arc::new(self.protocols.clone());
+        let alpns = self.protocols.alpns();
         if let Err(err) = inner.endpoint.set_alpns(alpns) {
-            inner.shutdown(protocols).await;
+            inner.shutdown(protocols.clone()).await;
             return Err(err);
         }
 
@@ -321,7 +321,7 @@ impl NetworkBuilder {
 #[derive(Clone, Debug)]
 pub struct Network {
     inner: Arc<NetworkInner>,
-    protocols: Arc<Mutex<ProtocolMap>>,
+    protocols: Arc<ProtocolMap>,
     task: SharedAbortingJoinHandle<()>,
 }
 
@@ -347,7 +347,7 @@ struct NetworkInner {
 /// peers operating on the same network may be learned. Discovered peers are added to the local
 /// address book so they may be involved in connection and gossip activites.
 impl NetworkInner {
-    async fn spawn(self: Arc<Self>, protocols: Arc<Mutex<ProtocolMap>>) {
+    async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
         debug!(
             "listening at: {}{}",
@@ -457,10 +457,8 @@ impl NetworkInner {
     }
 
     /// Closes all connections and shuts down the network engine.
-    async fn shutdown(&self, protocols: Arc<Mutex<ProtocolMap>>) {
+    async fn shutdown(&self, protocols: Arc<ProtocolMap>) {
         // We ignore all errors during shutdown
-        let protocols_lock = protocols.lock().await;
-
         debug!("close all connections and shutdown the node");
         let _ = tokio::join!(
             // Close the endpoint. Closing the Endpoint is the equivalent of calling
@@ -472,7 +470,7 @@ impl NetworkInner {
             // Shutdown engine
             self.engine.shutdown(),
             // Shutdown protocol handlers
-            protocols_lock.shutdown(),
+            protocols.shutdown(),
         );
     }
 }
@@ -503,22 +501,6 @@ impl Network {
         &self,
         topic: TopicId,
     ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
-        // Concatenate the connection sync ALPN and topic id.
-        let mut topic_alpn = Vec::new();
-        topic_alpn.extend_from_slice(SYNC_CONNECTION_ALPN);
-        topic_alpn.extend_from_slice(&topic);
-
-        let sync_connection = self.inner.engine.sync_connection();
-        let mut protocols = self.protocols.lock().await;
-        protocols.insert(topic_alpn.clone(), Arc::new(sync_connection));
-        let alpns = protocols.alpns();
-        if let Err(err) = self.inner.endpoint.set_alpns(alpns) {
-            self.inner.shutdown(self.protocols.clone()).await;
-            return Err(err);
-        }
-
-        debug!("topic added to protocols map: {topic_alpn:?}");
-
         let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
         let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
         self.inner.engine.subscribe(topic, out_tx, in_rx).await?;
@@ -577,7 +559,7 @@ pub enum OutEvent {
 /// a supported ALPN protocol.
 async fn handle_connection(
     mut connecting: iroh_net::endpoint::Connecting,
-    protocols: Arc<Mutex<ProtocolMap>>,
+    protocols: Arc<ProtocolMap>,
 ) {
     let alpn = match connecting.alpn().await {
         Ok(alpn) => alpn,
@@ -586,7 +568,7 @@ async fn handle_connection(
             return;
         }
     };
-    let Some(handler) = protocols.lock().await.get(&alpn) else {
+    let Some(handler) = protocols.get(&alpn) else {
         warn!("ignoring connection: unsupported alpn protocol");
         return;
     };
