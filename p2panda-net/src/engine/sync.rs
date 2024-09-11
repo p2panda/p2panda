@@ -126,7 +126,7 @@ impl SyncActor {
         // on to the engine for handling.
         let engine_actor_tx = self.engine_actor_tx.clone();
         tokio::spawn(async move {
-            while let Some(message) = rx.blocking_recv() {
+            while let Some(message) = rx.recv().await {
                 let AppMessage::Bytes(bytes) = message else {
                     error!("expected bytes from app message channel");
                     return;
@@ -175,7 +175,7 @@ impl SyncActor {
         // on to the engine for handling.
         let engine_actor_tx = self.engine_actor_tx.clone();
         tokio::spawn(async move {
-            while let Some(message) = rx.blocking_recv() {
+            while let Some(message) = rx.recv().await {
                 let AppMessage::Topic(topic) = message else {
                     error!("expected topic id from app message channel");
                     return;
