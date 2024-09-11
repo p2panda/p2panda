@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use futures_util::SinkExt;
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
-use iroh_quinn::{RecvStream, SendStream};
+use iroh_quinn::Connection;
 use p2panda_sync::traits::{AppMessage, SyncProtocol};
 use p2panda_sync::SyncError;
 use tokio::sync::mpsc;
@@ -19,13 +19,11 @@ pub enum ToSyncActor {
     Open {
         peer: PublicKey,
         topic: TopicId,
-        send: SendStream,
-        recv: RecvStream,
+        connection: Connection,
     },
     Accept {
         peer: PublicKey,
-        send: SendStream,
-        recv: RecvStream,
+        connection: Connection,
     },
     Shutdown,
 }
@@ -69,13 +67,12 @@ impl SyncActor {
             ToSyncActor::Open {
                 peer,
                 topic,
-                send,
-                recv,
+                connection,
             } => {
-                self.on_open_sync(peer, topic, send, recv).await?;
+                self.on_open_sync(peer, topic, connection).await?;
             }
-            ToSyncActor::Accept { peer, send, recv } => {
-                self.on_accept_sync(peer, send, recv).await?
+            ToSyncActor::Accept { peer, connection } => {
+                self.on_accept_sync(peer, connection).await?
             }
             ToSyncActor::Shutdown => return Ok(false),
         };
@@ -83,12 +80,12 @@ impl SyncActor {
         Ok(true)
     }
 
+    /// Initiate a sync protocol session over a new bi-directional stream on the provided connections.
     async fn on_open_sync(
         &self,
         peer: PublicKey,
         topic: TopicId,
-        send: SendStream,
-        recv: RecvStream,
+        connection: Connection,
     ) -> Result<()> {
         debug!(
             "Initiate sync session with peer {} over topic {:?}",
@@ -99,17 +96,26 @@ impl SyncActor {
         let (tx, mut rx) = mpsc::channel(128);
         let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
-        // Spawn a task which runs the sync protocol.
+        // Spawn a task which opens a bi-directional stream over the provided connection and runs
+        // the sync protocol.
         let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
-            let result = protocol
-                .open(
-                    topic.as_bytes(),
-                    Box::new(send),
-                    Box::new(recv),
-                    Box::new(sink),
-                )
-                .await;
+            let result = async {
+                let (send, recv) = connection
+                    .open_bi()
+                    .await
+                    .map_err(|e| SyncError::Protocol(e.to_string()))?;
+
+                protocol
+                    .open(
+                        topic.as_bytes(),
+                        Box::new(send),
+                        Box::new(recv),
+                        Box::new(sink),
+                    )
+                    .await
+            }
+            .await;
 
             if let Err(err) = result {
                 error!("{err}");
@@ -142,12 +148,8 @@ impl SyncActor {
         Ok(())
     }
 
-    async fn on_accept_sync(
-        &self,
-        peer: PublicKey,
-        send: SendStream,
-        recv: RecvStream,
-    ) -> Result<()> {
+    /// Accept a sync protocol session over a new bi-directional stream on the provided connections.
+    async fn on_accept_sync(&self, peer: PublicKey, connection: Connection) -> Result<()> {
         debug!("Accept sync session with peer {}", peer);
 
         // Set up a channel for receiving new application messages.
@@ -157,9 +159,17 @@ impl SyncActor {
         // Spawn a task which runs the sync protocol.
         let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
-            let result = protocol
-                .accept(Box::new(send), Box::new(recv), Box::new(sink))
-                .await;
+            let result = async {
+                let (send, recv) = connection
+                    .accept_bi()
+                    .await
+                    .map_err(|e| SyncError::Protocol(e.to_string()))?;
+
+                protocol
+                    .accept(Box::new(send), Box::new(recv), Box::new(sink))
+                    .await
+            }
+            .await;
 
             if let Err(err) = result {
                 error!("{err}");

@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
-use iroh_quinn::{RecvStream, SendStream};
+use iroh_quinn::Connection;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -58,8 +58,7 @@ pub enum ToEngineActor {
     },
     AcceptSync {
         peer: PublicKey,
-        send: SendStream,
-        recv: RecvStream,
+        connection: Connection,
     },
     SyncMessage {
         bytes: Vec<u8>,
@@ -202,12 +201,8 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
-            ToEngineActor::AcceptSync {
-                peer,
-                send,
-                recv,
-            } => {
-                self.on_accept_sync(peer, send, recv).await?;
+            ToEngineActor::AcceptSync { peer, connection } => {
+                self.on_accept_sync(peer, connection).await?;
             }
             ToEngineActor::SyncMessage {
                 bytes,
@@ -309,15 +304,12 @@ impl EngineActor {
                     .connect_by_node_id(peer, &SYNC_CONNECTION_ALPN)
                     .await?;
                 debug!("connection established with peer: {peer}");
-                let (send, recv) = connection.open_bi().await?;
-                debug!("bi-directional stream from initiator established");
 
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
                         peer,
                         topic,
-                        send,
-                        recv,
+                        connection,
                     })
                     .await?;
 
@@ -443,18 +435,9 @@ impl EngineActor {
         Ok(())
     }
 
-    async fn on_accept_sync(
-        &mut self,
-        peer: PublicKey,
-        send: SendStream,
-        recv: RecvStream,
-    ) -> Result<()> {
+    async fn on_accept_sync(&mut self, peer: PublicKey, connection: Connection) -> Result<()> {
         self.sync_actor_tx
-            .send(ToSyncActor::Accept {
-                peer,
-                send,
-                recv,
-            })
+            .send(ToSyncActor::Accept { peer, connection })
             .await?;
         Ok(())
     }

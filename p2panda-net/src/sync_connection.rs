@@ -29,13 +29,10 @@ impl SyncConnection {
         let remote_addr = connection.remote_address();
         let connection_id = connection.stable_id() as u64;
         let _span = debug_span!("connection", connection_id, %remote_addr);
-
-        let (send, recv) = connection.accept_bi().await?;
         let peer = endpoint::get_remote_node_id(&connection)?;
-        debug!("bi-directional stream established with {}", peer);
 
         self.engine_actor_tx
-            .send(ToEngineActor::AcceptSync { peer, send, recv })
+            .send(ToEngineActor::AcceptSync { peer, connection })
             .await?;
 
         Ok(())
