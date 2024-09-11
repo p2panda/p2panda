@@ -13,7 +13,7 @@ use iroh_gossip::net::Gossip;
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
-use sync::{SyncActor, SyncProtocolMap};
+use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::error;
 

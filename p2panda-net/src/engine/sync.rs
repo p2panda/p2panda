@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -31,25 +30,6 @@ pub enum ToSyncActor {
         result_tx: oneshot::Sender<Result<(), SyncError>>,
     },
 }
-
-#[derive(Clone, Default)]
-pub struct SyncProtocolMap(HashMap<TopicId, Arc<dyn SyncProtocol>>);
-
-impl SyncProtocolMap {
-    pub fn add(&mut self, topic: TopicId, handler: impl SyncProtocol + 'static) {
-        self.0.insert(topic, Arc::new(handler));
-    }
-
-    pub fn get(&self, topic: TopicId) -> Option<&Arc<dyn SyncProtocol + 'static>> {
-        self.0.get(&topic)
-    }
-}
-impl std::fmt::Debug for SyncProtocolMap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("SyncProtocolMap").finish()
-    }
-}
-
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
     sync_protocol: Arc<dyn SyncProtocol + 'static>,

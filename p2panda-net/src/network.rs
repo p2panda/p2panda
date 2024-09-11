@@ -23,7 +23,6 @@ use tracing::{debug, error, error_span, warn, Instrument};
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::discovery::{Discovery, DiscoveryMap};
-use crate::engine::sync::SyncProtocolMap;
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
