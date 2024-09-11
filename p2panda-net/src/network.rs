@@ -855,8 +855,8 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes which should kick off sync
-        let _ = node_1.subscribe(topic_id).await.unwrap();
-        let _ = node_2.subscribe(topic_id).await.unwrap();
+        let (tx, rx) = node_1.subscribe(topic_id).await.unwrap();
+        let (tx, rx) = node_2.subscribe(topic_id).await.unwrap();
 
         // @TODO: Check logging to see that sync messages are not being received
         tokio::time::sleep(Duration::from_secs(3)).await;
