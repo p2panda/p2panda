@@ -77,6 +77,23 @@ pub struct Header<E = DefaultExtensions> {
     pub extensions: Option<E>,
 }
 
+impl<E> Default for Header<E> {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            public_key: PublicKey::default(),
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: None,
+            previous: vec![],
+            extensions: None,
+        }
+    }
+}
+
 impl<E> Header<E>
 where
     E: Clone + Serialize,

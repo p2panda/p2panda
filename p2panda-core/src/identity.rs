@@ -113,7 +113,7 @@ impl<'a> Arbitrary<'a> for PrivateKey {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Default, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct PublicKey(ed25519_dalek::VerifyingKey);
 
 impl PartialOrd for PublicKey {
