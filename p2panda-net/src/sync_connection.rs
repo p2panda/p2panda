@@ -42,9 +42,8 @@ impl SyncConnection {
         let (result_tx, result_rx) = oneshot::channel();
 
         self.engine_actor_tx
-            .send(ToEngineActor::Sync {
+            .send(ToEngineActor::AcceptSync {
                 peer,
-                topic: topic.into(),
                 send,
                 recv,
                 result_tx,

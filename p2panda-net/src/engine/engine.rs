@@ -56,9 +56,8 @@ pub enum ToEngineActor {
         delivered_from: PublicKey,
         topic: TopicId,
     },
-    Sync {
+    AcceptSync {
         peer: PublicKey,
-        topic: TopicId,
         send: SendStream,
         recv: RecvStream,
         result_tx: oneshot::Sender<Result<()>>,
@@ -204,14 +203,13 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
-            ToEngineActor::Sync {
+            ToEngineActor::AcceptSync {
                 peer,
-                topic,
                 send,
                 recv,
                 result_tx,
             } => {
-                self.on_sync(peer, topic, send, recv, result_tx).await?;
+                self.on_accept_sync(peer, send, recv, result_tx).await?;
             }
             ToEngineActor::SyncMessage {
                 bytes,
@@ -451,18 +449,16 @@ impl EngineActor {
         Ok(())
     }
 
-    async fn on_sync(
+    async fn on_accept_sync(
         &mut self,
         peer: PublicKey,
-        topic: TopicId,
         send: SendStream,
         recv: RecvStream,
         result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         self.sync_actor_tx
-            .send(ToSyncActor::Sync {
+            .send(ToSyncActor::Accept {
                 peer,
-                topic,
                 send,
                 recv,
                 result_tx,

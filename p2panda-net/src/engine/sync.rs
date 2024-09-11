@@ -24,10 +24,10 @@ pub enum ToSyncActor {
         result_tx: oneshot::Sender<Result<()>>,
     },
     Accept {
-        topic: TopicId,
+        peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     },
     Shutdown,
 }
@@ -79,11 +79,11 @@ impl SyncActor {
                     .await?;
             }
             ToSyncActor::Accept {
-                topic,
+                peer,
                 send,
                 recv,
                 result_tx,
-            } => todo!(),
+            } => self.on_accept_sync(peer, send, recv, result_tx).await?,
             ToSyncActor::Shutdown => return Ok(false),
         };
 
@@ -153,7 +153,7 @@ impl SyncActor {
         peer: PublicKey,
         send: SendStream,
         recv: RecvStream,
-        result_tx: oneshot::Sender<Result<(), SyncError>>,
+        result_tx: oneshot::Sender<Result<()>>,
     ) -> Result<()> {
         debug!("Accept sync session with peer {}", peer);
 
@@ -166,7 +166,8 @@ impl SyncActor {
         tokio::spawn(async move {
             let result = protocol
                 .accept(Box::new(send), Box::new(recv), Box::new(sink))
-                .await;
+                .await
+                .map_err(|e| anyhow::anyhow!(e));
             result_tx.send(result).expect("sync result channel closed");
         });
 
