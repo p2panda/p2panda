@@ -81,6 +81,7 @@ where
         LOG_HEIGHT_PROTOCOL_NAME
     }
 
+    #[allow(unused_assignments)]
     async fn open(
         self: Arc<Self>,
         topic: &TopicId,
@@ -159,6 +160,7 @@ where
         Ok(())
     }
 
+    #[allow(unused_assignments)]
     async fn accept(
         self: Arc<Self>,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
