@@ -11,7 +11,7 @@ use tracing::debug_span;
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
 
-pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/";
+pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
 #[allow(dead_code)]
 #[derive(Debug)]
