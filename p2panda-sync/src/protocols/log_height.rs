@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Header, Operation, PublicKey};
-use p2panda_store::{LogStore, MemoryStore, OperationStore};
+use p2panda_store::{LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -125,17 +125,10 @@ where
                         header: header.clone(),
                         body: body.clone(),
                     };
-                    let inserted = self
-                        .write_store()
-                        .insert_operation(operation.clone(), log_id.to_owned())
+                    let mut bytes = Vec::new();
+                    ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
                         .map_err(|e| SyncError::Protocol(e.to_string()))?;
-
-                    if inserted {
-                        let mut bytes = Vec::new();
-                        ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
-                            .map_err(|e| SyncError::Protocol(e.to_string()))?;
-                        app_tx.send(AppMessage::Bytes(bytes)).await?;
-                    }
+                    app_tx.send(AppMessage::Bytes(bytes)).await?;
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
