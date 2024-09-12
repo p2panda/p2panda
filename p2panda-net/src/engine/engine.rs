@@ -275,6 +275,9 @@ impl EngineActor {
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
+    ///
+    /// In addition to gossip activity, a random set of peers is selected for the given topic and
+    /// a sync attempt is run over each successful connection.
     async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
         if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
@@ -289,21 +292,16 @@ impl EngineActor {
                 })
                 .await?;
 
-            debug!("gossip join message sent to actor");
-
+            // Do not attempt peer sync if the topic is the network id.
             if topic == self.network_id {
-                debug!("exit cos this is the network id");
                 return Ok(());
             }
 
             for peer in peers {
-                // Establish a connection with each peer and open a bidirectional stream.
-                debug!("attempt to connect to peer: {peer} {SYNC_CONNECTION_ALPN:?}");
                 let connection = self
                     .endpoint
                     .connect_by_node_id(peer, &SYNC_CONNECTION_ALPN)
                     .await?;
-                debug!("connection established with peer: {peer}");
 
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
@@ -312,10 +310,6 @@ impl EngineActor {
                         connection,
                     })
                     .await?;
-
-                // @TODO: Consider what we actually want from waiting on this result.
-                // let result = result_rx.await?;
-                // result?;
             }
         }
 

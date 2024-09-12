@@ -29,13 +29,6 @@ use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{NetworkId, RelayUrl, TopicId};
 
-// @TODO: Allow a means of injecting new ALPN protocols when a topic is joined. It would include
-// the topic plus some base descriptor. Then we have a generic connection handler for all sync
-// connections, but SyncReceive is only called if the APLN is supported locally.
-
-// Put the topic id into the ProtocolMap as an ALPN. Then this gets matched on when handling
-// incoming connections.
-
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
 
