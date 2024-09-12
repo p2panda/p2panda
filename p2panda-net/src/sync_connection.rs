@@ -6,7 +6,7 @@ use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use tokio::sync::mpsc;
-use tracing::{debug, debug_span};
+use tracing::debug_span;
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
@@ -24,12 +24,11 @@ impl SyncConnection {
         Self { engine_actor_tx }
     }
 
-    async fn handle_connection(&self, alpn: Vec<u8>, connection: Connection) -> Result<()> {
-        debug!("handling connection for alpn: {alpn:?}");
+    async fn handle_connection(&self, connection: Connection) -> Result<()> {
+        let peer = endpoint::get_remote_node_id(&connection)?;
         let remote_addr = connection.remote_address();
         let connection_id = connection.stable_id() as u64;
         let _span = debug_span!("connection", connection_id, %remote_addr);
-        let peer = endpoint::get_remote_node_id(&connection)?;
 
         self.engine_actor_tx
             .send(ToEngineActor::AcceptSync { peer, connection })
@@ -40,11 +39,7 @@ impl SyncConnection {
 }
 
 impl ProtocolHandler for SyncConnection {
-    fn accept(self: Arc<Self>, mut connecting: Connecting) -> BoxedFuture<Result<()>> {
-        debug!("received accept in protocol handler");
-        Box::pin(async move {
-            let alpn = connecting.alpn().await?;
-            self.handle_connection(alpn, connecting.await?).await
-        })
+    fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
+        Box::pin(async move { self.handle_connection(connecting.await?).await })
     }
 }
