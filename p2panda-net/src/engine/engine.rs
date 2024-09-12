@@ -9,6 +9,7 @@ use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use iroh_quinn::Connection;
+use p2panda_sync::traits::AppMessage;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -61,8 +62,12 @@ pub enum ToEngineActor {
         connection: Connection,
     },
     SyncMessage {
-        bytes: Vec<u8>,
+        message: AppMessage,
         delivered_from: PublicKey,
+        topic: TopicId,
+    },
+    SyncDone {
+        peer: PublicKey,
         topic: TopicId,
     },
     Shutdown {
@@ -89,6 +94,7 @@ pub struct EngineActor {
     network_joined_pending: bool,
     peers: PeerMap,
     topics: TopicMap,
+    gossip_buffer: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
 }
 
 impl EngineActor {
@@ -109,6 +115,7 @@ impl EngineActor {
             network_joined_pending: false,
             peers: PeerMap::new(),
             topics: TopicMap::new(),
+            gossip_buffer: Default::default(),
         }
     }
 
@@ -205,11 +212,11 @@ impl EngineActor {
                 self.on_accept_sync(peer, connection).await?;
             }
             ToEngineActor::SyncMessage {
-                bytes,
+                message,
                 delivered_from,
                 topic,
             } => {
-                self.on_sync_message(bytes, delivered_from, topic).await?;
+                self.on_sync_message(message, delivered_from, topic).await?;
             }
             ToEngineActor::Subscribe {
                 topic,
@@ -227,6 +234,16 @@ impl EngineActor {
             }
             ToEngineActor::Shutdown { .. } => {
                 unreachable!("handled in run_inner");
+            }
+            ToEngineActor::SyncDone { peer, topic } => {
+                let buffer = self
+                    .gossip_buffer
+                    .remove(&(peer, topic))
+                    .expect("missing expected gossip buffer");
+
+                for bytes in buffer {
+                    self.on_gossip_message(bytes, peer, topic).await?;
+                }
             }
         }
 
@@ -302,6 +319,8 @@ impl EngineActor {
                     .endpoint
                     .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
                     .await?;
+
+                self.gossip_buffer.insert((peer, topic), Default::default());
 
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
@@ -439,14 +458,22 @@ impl EngineActor {
     /// Process an message forwarded from the sync actor.
     async fn on_sync_message(
         &mut self,
-        bytes: Vec<u8>,
+        message: AppMessage,
         delivered_from: PublicKey,
         topic: TopicId,
     ) -> Result<()> {
-        if self.topics.has_joined(&topic).await {
-            self.topics.on_message(topic, bytes, delivered_from).await?;
-        } else {
-            warn!("received message for unknown topic {topic}");
+        match message {
+            AppMessage::Topic(topic) => {
+                self.gossip_buffer
+                    .insert((delivered_from, topic.into()), Default::default());
+            }
+            AppMessage::Bytes(bytes) => {
+                if self.topics.has_joined(&topic).await {
+                    self.topics.on_message(topic, bytes, delivered_from).await?;
+                } else {
+                    warn!("received message for unknown topic {topic}");
+                }
+            }
         }
 
         Ok(())
@@ -476,7 +503,11 @@ impl EngineActor {
                 }
             }
         } else if self.topics.has_joined(&topic).await {
-            self.topics.on_message(topic, bytes, delivered_from).await?;
+            if let Some(buffer) = self.gossip_buffer.get_mut(&(delivered_from, topic)) {
+                buffer.push(bytes);
+            } else {
+                self.topics.on_message(topic, bytes, delivered_from).await?;
+            }
         } else {
             warn!("received message for unknown topic {topic}");
         }

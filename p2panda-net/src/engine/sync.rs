@@ -119,7 +119,7 @@ impl SyncActor {
 
             if let Err(err) = result {
                 error!("{err}");
-            }
+            };
         });
 
         // Spawn another task which picks up any new application messages and sends them
@@ -127,14 +127,14 @@ impl SyncActor {
         let engine_actor_tx = self.engine_actor_tx.clone();
         tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
-                let AppMessage::Bytes(bytes) = message else {
+                if let AppMessage::Topic(_) = &message {
                     error!("expected bytes from app message channel");
                     return;
                 };
 
                 if let Err(err) = engine_actor_tx
                     .send(ToEngineActor::SyncMessage {
-                        bytes,
+                        message,
                         delivered_from: peer,
                         topic,
                     })
@@ -143,6 +143,10 @@ impl SyncActor {
                     error!("error in sync actor: {}", err)
                 };
             }
+            engine_actor_tx
+                .send(ToEngineActor::SyncDone { peer, topic })
+                .await
+                .expect("engine channel closed");
         });
 
         Ok(())
@@ -180,27 +184,42 @@ impl SyncActor {
         // on to the engine for handling.
         let engine_actor_tx = self.engine_actor_tx.clone();
         tokio::spawn(async move {
+            let mut topic = None;
             while let Some(message) = rx.recv().await {
-                let AppMessage::Topic(topic) = message else {
-                    error!("expected topic id from app message channel");
+                if let AppMessage::Topic(id) = &message {
+                    topic = Some(id.to_owned());
+                }
+
+                let Some(topic_id) = topic else {
+                    error!("topic id not received");
                     return;
                 };
 
-                let AppMessage::Bytes(bytes) = message else {
-                    error!("expected bytes from app message channel");
-                    return;
-                };
                 if let Err(err) = engine_actor_tx
                     .send(ToEngineActor::SyncMessage {
-                        bytes,
+                        message,
                         delivered_from: peer,
-                        topic: topic.into(),
+                        topic: topic_id.into(),
                     })
                     .await
                 {
                     error!("error in sync actor: {}", err)
                 };
             }
+
+            // If topic was never set we didn't receive any messages and so the engine was not
+            // informed it should buffer messages and we can return here.
+            let Some(topic) = topic else {
+                return;
+            };
+
+            engine_actor_tx
+                .send(ToEngineActor::SyncDone {
+                    peer,
+                    topic: topic.into(),
+                })
+                .await
+                .expect("engine channel closed");
         });
 
         Ok(())
