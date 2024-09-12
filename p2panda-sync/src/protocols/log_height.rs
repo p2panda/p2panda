@@ -43,13 +43,8 @@ where
 
 static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
 
-#[derive(Clone, Debug, Default)]
-pub struct LogHeightSyncProtocol<T, E>
-where
-    T: Clone + Debug + Default,
-    E: Clone + Default,
-    MemoryStore<T, E>: Default,
-{
+#[derive(Clone, Debug)]
+pub struct LogHeightSyncProtocol<T, E> {
     pub log_ids: HashMap<TopicId, T>,
     pub store: Arc<RwLock<MemoryStore<T, E>>>,
 }
@@ -58,7 +53,6 @@ impl<T, E> LogHeightSyncProtocol<T, E>
 where
     T: Clone + Debug + Default,
     E: Clone + Default,
-    MemoryStore<T, E>: Default,
 {
     pub fn log_id(&self, topic: &TopicId) -> Option<&T> {
         self.log_ids.get(topic)
@@ -79,7 +73,6 @@ impl<T, E> SyncProtocol for LogHeightSyncProtocol<T, E>
 where
     T: Clone + Debug + Default + Eq + Hash + Send + Sync + for<'a> Deserialize<'a> + Serialize,
     E: Clone + Debug + Default + Send + Sync + for<'a> Deserialize<'a> + Serialize,
-    MemoryStore<T, E>: Default,
 {
     fn name(&self) -> &'static str {
         LOG_HEIGHT_PROTOCOL_NAME
@@ -390,7 +383,7 @@ mod tests {
 
         let received_message1: Message<String, DefaultExtensions> =
             Message::Operation(operation1.header.clone(), operation1.body.clone());
-        let received_message2: Message<String, DefaultExtensions> = 
+        let received_message2: Message<String, DefaultExtensions> =
             Message::Operation(operation2.header.clone(), operation2.body.clone());
         let receive_message3 = Message::<DefaultExtensions>::SyncDone;
         assert_eq!(
