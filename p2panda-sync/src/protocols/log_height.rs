@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
@@ -16,21 +17,21 @@ use crate::protocols::utils::{into_sink, into_stream};
 use crate::traits::{AppMessage, SyncProtocol};
 use crate::{SyncError, TopicId};
 
-type LogId = String;
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum Message<E = DefaultExtensions> {
-    Have(LogId, LogHeights),
+pub enum Message<T, E = DefaultExtensions> {
+    Have(T, LogHeights),
     Operation(Header<E>, Option<Body>),
     SyncDone,
 }
 
 #[cfg(test)]
-impl<E> Message<E>
+impl<T, E> Message<T, E>
 where
+    T: Serialize,
     E: Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -43,28 +44,30 @@ where
 static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
 
 #[derive(Clone, Debug, Default)]
-pub struct LogHeightSyncProtocol<E>
+pub struct LogHeightSyncProtocol<T, E>
 where
+    T: Clone + Debug + Default,
     E: Clone + Default,
-    MemoryStore<LogId, E>: Default,
+    MemoryStore<T, E>: Default,
 {
-    pub log_ids: HashMap<TopicId, LogId>,
-    pub store: Arc<RwLock<MemoryStore<LogId, E>>>,
+    pub log_ids: HashMap<TopicId, T>,
+    pub store: Arc<RwLock<MemoryStore<T, E>>>,
 }
 
-impl<E> LogHeightSyncProtocol<E>
+impl<T, E> LogHeightSyncProtocol<T, E>
 where
+    T: Clone + Debug + Default,
     E: Clone + Default,
-    MemoryStore<LogId, E>: Default,
+    MemoryStore<T, E>: Default,
 {
-    pub fn log_id(&self, topic: &TopicId) -> Option<&LogId> {
+    pub fn log_id(&self, topic: &TopicId) -> Option<&T> {
         self.log_ids.get(topic)
     }
-    pub fn read_store(&self) -> RwLockReadGuard<MemoryStore<LogId, E>> {
+    pub fn read_store(&self) -> RwLockReadGuard<MemoryStore<T, E>> {
         self.store.read().expect("error getting read lock on store")
     }
 
-    pub fn write_store(&self) -> RwLockWriteGuard<MemoryStore<LogId, E>> {
+    pub fn write_store(&self) -> RwLockWriteGuard<MemoryStore<T, E>> {
         self.store
             .write()
             .expect("error getting write lock on store")
@@ -72,10 +75,11 @@ where
 }
 
 #[async_trait]
-impl<E> SyncProtocol for LogHeightSyncProtocol<E>
+impl<T, E> SyncProtocol for LogHeightSyncProtocol<T, E>
 where
+    T: Clone + Debug + Default + Eq + Hash + Send + Sync + for<'a> Deserialize<'a> + Serialize,
     E: Clone + Debug + Default + Send + Sync + for<'a> Deserialize<'a> + Serialize,
-    MemoryStore<LogId, E>: Default,
+    MemoryStore<T, E>: Default,
 {
     fn name(&self) -> &'static str {
         LOG_HEIGHT_PROTOCOL_NAME
@@ -100,11 +104,11 @@ where
         };
         let local_log_heights = self
             .read_store()
-            .get_log_heights(log_id.to_string())
+            .get_log_heights(log_id.to_owned())
             .expect("memory store error");
 
-        sink.send(Message::<E>::Have(
-            log_id.to_string(),
+        sink.send(Message::<T, E>::Have(
+            log_id.to_owned(),
             local_log_heights.clone(),
         ))
         .await?;
@@ -113,7 +117,7 @@ where
         sync_done_sent = true;
 
         while let Some(result) = stream.next().await {
-            let message = result?;
+            let message: Message<T, E> = result?;
             debug!("message received: {:?}", message);
 
             match &message {
@@ -130,7 +134,7 @@ where
                     };
                     let inserted = self
                         .write_store()
-                        .insert_operation(operation.clone(), log_id.to_string())
+                        .insert_operation(operation.clone(), log_id.to_owned())
                         .map_err(|e| SyncError::Protocol(e.to_string()))?;
 
                     if inserted {
@@ -174,16 +178,16 @@ where
         let mut stream = into_stream(rx);
 
         while let Some(result) = stream.next().await {
-            let message: Message<E> = result?;
+            let message: Message<T, E> = result?;
             debug!("message received: {:?}", message);
 
             let mut replies = match &message {
                 Message::Have(log_id, log_heights) => {
-                    let mut messages = vec![];
+                    let mut messages: Vec<Message<T, E>> = vec![];
 
                     let local_log_heights = self
                         .read_store()
-                        .get_log_heights(log_id.to_string())
+                        .get_log_heights(log_id.to_owned())
                         .expect("memory store error");
 
                     for (public_key, seq_num) in local_log_heights {
@@ -212,7 +216,7 @@ where
                         for (public_key, seq_num) in remote_needs {
                             let mut log = self
                                 .read_store()
-                                .get_log(public_key, log_id.to_string())
+                                .get_log(public_key, log_id.to_owned())
                                 .map_err(|e| SyncError::Protocol(e.to_string()))?;
                             log.split_off(seq_num as usize + 1)
                                 .into_iter()
@@ -354,7 +358,7 @@ mod tests {
         let (peer_a_read, peer_a_write) = tokio::io::split(peer_a);
 
         // Write some message into peer_b's send buffer
-        let message1: Message<DefaultExtensions> =
+        let message1: Message<String, DefaultExtensions> =
             Message::Have(LOG_ID.to_string(), vec![(private_key.public_key(), 0)]);
         let message2: Message<DefaultExtensions> = Message::SyncDone;
         let message_bytes = vec![message1.to_bytes(), message2.to_bytes()].concat();
@@ -384,9 +388,9 @@ mod tests {
         let mut buf = Vec::new();
         peer_b.read_to_end(&mut buf).await.unwrap();
 
-        let received_message1 =
+        let received_message1: Message<String, DefaultExtensions> =
             Message::Operation(operation1.header.clone(), operation1.body.clone());
-        let received_message2 =
+        let received_message2: Message<String, DefaultExtensions> = 
             Message::Operation(operation2.header.clone(), operation2.body.clone());
         let receive_message3 = Message::<DefaultExtensions>::SyncDone;
         assert_eq!(
