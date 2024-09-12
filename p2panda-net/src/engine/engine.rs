@@ -300,7 +300,7 @@ impl EngineActor {
             for peer in peers {
                 let connection = self
                     .endpoint
-                    .connect_by_node_id(peer, &SYNC_CONNECTION_ALPN)
+                    .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
                     .await?;
 
                 self.sync_actor_tx

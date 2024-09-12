@@ -95,7 +95,7 @@ where
         let mut sink = into_sink(tx);
         let mut stream = into_stream(rx);
 
-        let Some(log_id) = self.log_id(&topic) else {
+        let Some(log_id) = self.log_id(topic) else {
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
         };
         let local_log_heights = self
