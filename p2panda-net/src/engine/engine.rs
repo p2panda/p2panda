@@ -62,7 +62,7 @@ pub enum ToEngineActor {
     },
     SyncHandshakeSuccess {
         peer: PublicKey,
-        topic: TopicId
+        topic: TopicId,
     },
     SyncMessage {
         bytes: Vec<u8>,
@@ -257,8 +257,7 @@ impl EngineActor {
                 delivered_from,
                 topic,
             } => {
-                self.on_sync_message(bytes, delivered_from, topic)
-                    .await?;
+                self.on_sync_message(bytes, delivered_from, topic).await?;
             }
             ToEngineActor::Subscribe {
                 topic,
@@ -365,8 +364,6 @@ impl EngineActor {
                     .endpoint
                     .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
                     .await?;
-
-                self.gossip_buffer.lock(peer, topic);
 
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
