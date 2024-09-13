@@ -8,6 +8,7 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 
 use crate::{SyncError, TopicId};
 
+#[derive(PartialEq, Debug)]
 pub enum AppMessage {
     Topic(TopicId),
     Bytes(Vec<u8>),

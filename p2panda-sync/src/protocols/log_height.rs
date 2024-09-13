@@ -23,7 +23,7 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<T, E = DefaultExtensions> {
-    Have(T, LogHeights),
+    Have(TopicId, T, LogHeights),
     Operation(Header<E>, Option<Body>),
     SyncDone,
 }
@@ -101,7 +101,8 @@ where
             .expect("memory store error");
 
         sink.send(Message::<T, E>::Have(
-            log_id.to_owned(),
+            topic.clone(),
+            log_id.clone(),
             local_log_heights.clone(),
         ))
         .await?;
@@ -109,12 +110,14 @@ where
         sink.send(Message::SyncDone).await?;
         sync_done_sent = true;
 
+        app_tx.send(AppMessage::Topic(topic.clone())).await?;
+
         while let Some(result) = stream.next().await {
             let message: Message<T, E> = result?;
             debug!("message received: {:?}", message);
 
             match &message {
-                Message::Have(_, _) => {
+                Message::Have(_, _, _) => {
                     return Err(SyncError::Protocol(
                         "unexpected Have message received".to_string(),
                     ))
@@ -155,7 +158,7 @@ where
         self: Arc<Self>,
         tx: Box<dyn AsyncWrite + Send + Unpin>,
         rx: Box<dyn AsyncRead + Send + Unpin>,
-        _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -168,7 +171,8 @@ where
             debug!("message received: {:?}", message);
 
             let mut replies = match &message {
-                Message::Have(log_id, log_heights) => {
+                Message::Have(topic, log_id, log_heights) => {
+                    app_tx.send(AppMessage::Topic(topic.clone())).await?;
                     let mut messages: Vec<Message<T, E>> = vec![];
 
                     let local_log_heights = self
@@ -204,7 +208,7 @@ where
                                 .read_store()
                                 .get_log(public_key, log_id.to_owned())
                                 .map_err(|e| SyncError::Protocol(e.to_string()))?;
-                            log.split_off(seq_num as usize + 1)
+                            log.split_off(seq_num as usize)
                                 .into_iter()
                                 .for_each(|operation| {
                                     messages
@@ -267,7 +271,7 @@ mod tests {
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
     use tokio_util::sync::PollSender;
 
-    use crate::traits::SyncProtocol;
+    use crate::traits::{AppMessage, SyncProtocol};
 
     use super::{LogHeightSyncProtocol, Message};
 
@@ -344,8 +348,11 @@ mod tests {
         let (peer_a_read, peer_a_write) = tokio::io::split(peer_a);
 
         // Write some message into peer_b's send buffer
-        let message1: Message<String, DefaultExtensions> =
-            Message::Have(LOG_ID.to_string(), vec![(private_key.public_key(), 0)]);
+        let message1: Message<String, DefaultExtensions> = Message::Have(
+            TOPIC_ID.clone(),
+            LOG_ID.to_string(),
+            vec![(private_key.public_key(), 0)],
+        );
         let message2: Message<DefaultExtensions> = Message::SyncDone;
         let message_bytes = vec![message1.to_bytes(), message2.to_bytes()].concat();
         peer_b.write_all(&message_bytes[..]).await.unwrap();
@@ -450,9 +457,9 @@ mod tests {
         let (peer_b_read, peer_b_write) = tokio::io::split(peer_b);
 
         let peer_a_protocol_clone = peer_a_protocol.clone();
-        let (app_tx, app_rx) = mpsc::channel(128);
-        let sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
+        let sink = PollSender::new(peer_a_app_tx)
+            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .open(
@@ -466,9 +473,9 @@ mod tests {
         });
 
         let peer_b_protocol_clone = peer_b_protocol.clone();
-        let (app_tx, app_rx) = mpsc::channel(128);
-        let sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
+        let sink = PollSender::new(peer_b_app_tx)
+            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
@@ -483,17 +490,33 @@ mod tests {
         // Wait on both to complete
         let (_, _) = tokio::join!(handle1, handle2);
 
-        // Check log heights are now equal
-        let peer_a_log_heights = peer_a_protocol
-            .read_store()
-            .get_log_heights(LOG_ID.to_string())
+        let mut operation0_bytes = Vec::new();
+        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
+            .unwrap();
+        let mut operation1_bytes = Vec::new();
+        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
+            .unwrap();
+        let mut operation2_bytes = Vec::new();
+        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
             .unwrap();
 
-        let peer_b_log_heights = peer_b_protocol
-            .read_store()
-            .get_log_heights(LOG_ID.to_string())
-            .unwrap();
+        let peer_a_expected_messages = vec![
+            AppMessage::Topic(TOPIC_ID.clone()),
+            AppMessage::Bytes(operation0_bytes),
+            AppMessage::Bytes(operation1_bytes),
+            AppMessage::Bytes(operation2_bytes),
+        ];
 
-        assert_eq!(peer_a_log_heights, peer_b_log_heights);
+        let mut peer_a_messages = Vec::new();
+        peer_a_app_rx.recv_many(&mut peer_a_messages, 10).await;
+
+        assert_eq!(peer_a_messages, peer_a_expected_messages);
+
+        let peer_b_expected_messages = vec![AppMessage::Topic(TOPIC_ID.clone())];
+
+        let mut peer_b_messages = Vec::new();
+        peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
+
+        assert_eq!(peer_b_messages, peer_b_expected_messages);
     }
 }

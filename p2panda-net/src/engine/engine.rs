@@ -9,7 +9,6 @@ use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use iroh_quinn::Connection;
-use p2panda_sync::traits::AppMessage;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -57,12 +56,16 @@ pub enum ToEngineActor {
         delivered_from: PublicKey,
         topic: TopicId,
     },
-    AcceptSync {
+    SyncAccept {
         peer: PublicKey,
         connection: Connection,
     },
+    SyncHandshakeSuccess {
+        peer: PublicKey,
+        topic: TopicId
+    },
     SyncMessage {
-        message: AppMessage,
+        bytes: Vec<u8>,
         delivered_from: PublicKey,
         topic: TopicId,
     },
@@ -81,6 +84,41 @@ pub enum ToEngineActor {
     },
 }
 
+#[derive(Debug, Default)]
+pub struct GossipBuffer {
+    buffers: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
+    counters: HashMap<(PublicKey, TopicId), usize>,
+}
+
+impl GossipBuffer {
+    fn lock(&mut self, peer: PublicKey, topic: TopicId) {
+        let counter = self.counters.entry((peer, topic)).or_default();
+        *counter += 1;
+
+        self.buffers.entry((peer, topic)).or_default();
+
+        assert!(*counter <= 2);
+    }
+
+    fn unlock(&mut self, peer: PublicKey, topic: TopicId) -> usize {
+        match self.counters.get_mut(&(peer, topic)) {
+            Some(counter) => {
+                *counter -= 1;
+                *counter
+            }
+            None => panic!(),
+        }
+    }
+
+    fn drain(&mut self, peer: PublicKey, topic: TopicId) -> Option<Vec<Vec<u8>>> {
+        self.buffers.remove(&(peer, topic))
+    }
+
+    fn buffer(&mut self, peer: PublicKey, topic: TopicId) -> Option<&mut Vec<Vec<u8>>> {
+        self.buffers.get_mut(&(peer, topic))
+    }
+}
+
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -94,7 +132,7 @@ pub struct EngineActor {
     network_joined_pending: bool,
     peers: PeerMap,
     topics: TopicMap,
-    gossip_buffer: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
+    gossip_buffer: GossipBuffer,
 }
 
 impl EngineActor {
@@ -208,15 +246,19 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
-            ToEngineActor::AcceptSync { peer, connection } => {
+            ToEngineActor::SyncAccept { peer, connection } => {
                 self.on_accept_sync(peer, connection).await?;
             }
+            ToEngineActor::SyncHandshakeSuccess { peer, topic } => {
+                self.gossip_buffer.lock(peer, topic);
+            }
             ToEngineActor::SyncMessage {
-                message,
+                bytes,
                 delivered_from,
                 topic,
             } => {
-                self.on_sync_message(message, delivered_from, topic).await?;
+                self.on_sync_message(bytes, delivered_from, topic)
+                    .await?;
             }
             ToEngineActor::Subscribe {
                 topic,
@@ -236,13 +278,17 @@ impl EngineActor {
                 unreachable!("handled in run_inner");
             }
             ToEngineActor::SyncDone { peer, topic } => {
-                let buffer = self
-                    .gossip_buffer
-                    .remove(&(peer, topic))
-                    .expect("missing expected gossip buffer");
+                let counter = self.gossip_buffer.unlock(peer, topic);
 
-                for bytes in buffer {
-                    self.on_gossip_message(bytes, peer, topic).await?;
+                if counter == 0 {
+                    let buffer = self
+                        .gossip_buffer
+                        .drain(peer, topic)
+                        .expect("missing expected gossip buffer");
+
+                    for bytes in buffer {
+                        self.on_gossip_message(bytes, peer, topic).await?;
+                    }
                 }
             }
         }
@@ -320,7 +366,7 @@ impl EngineActor {
                     .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
                     .await?;
 
-                self.gossip_buffer.insert((peer, topic), Default::default());
+                self.gossip_buffer.lock(peer, topic);
 
                 self.sync_actor_tx
                     .send(ToSyncActor::Open {
@@ -458,22 +504,14 @@ impl EngineActor {
     /// Process an message forwarded from the sync actor.
     async fn on_sync_message(
         &mut self,
-        message: AppMessage,
+        bytes: Vec<u8>,
         delivered_from: PublicKey,
         topic: TopicId,
     ) -> Result<()> {
-        match message {
-            AppMessage::Topic(topic) => {
-                self.gossip_buffer
-                    .insert((delivered_from, topic.into()), Default::default());
-            }
-            AppMessage::Bytes(bytes) => {
-                if self.topics.has_joined(&topic).await {
-                    self.topics.on_message(topic, bytes, delivered_from).await?;
-                } else {
-                    warn!("received message for unknown topic {topic}");
-                }
-            }
+        if self.topics.has_joined(&topic).await {
+            self.topics.on_message(topic, bytes, delivered_from).await?;
+        } else {
+            warn!("received message for unknown topic {topic}");
         }
 
         Ok(())
@@ -503,7 +541,7 @@ impl EngineActor {
                 }
             }
         } else if self.topics.has_joined(&topic).await {
-            if let Some(buffer) = self.gossip_buffer.get_mut(&(delivered_from, topic)) {
+            if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic) {
                 buffer.push(bytes);
             } else {
                 self.topics.on_message(topic, bytes, delivered_from).await?;

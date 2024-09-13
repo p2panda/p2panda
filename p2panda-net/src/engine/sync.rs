@@ -125,16 +125,37 @@ impl SyncActor {
         // Spawn another task which picks up any new application messages and sends them
         // on to the engine for handling.
         let engine_actor_tx = self.engine_actor_tx.clone();
+        let mut sync_handshake_success = false;
         tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
-                if let AppMessage::Topic(_) = &message {
+                // We expect the first message to be a topic id
+                if let AppMessage::Topic(id) = &message {
+                    if sync_handshake_success {
+                        error!("topic already received from sync session");
+                        break;
+                    }
+                    sync_handshake_success = true;
+
+                    // Inform the engine that we are expecting sync messages from the peer on this topic
+                    engine_actor_tx
+                        .send(ToEngineActor::SyncHandshakeSuccess {
+                            peer,
+                            topic: id.to_owned().into(),
+                        })
+                        .await
+                        .expect("engine channel closed");
+
+                    continue;
+                }
+
+                let AppMessage::Bytes(bytes) = message else {
                     error!("expected bytes from app message channel");
                     return;
                 };
 
                 if let Err(err) = engine_actor_tx
                     .send(ToEngineActor::SyncMessage {
-                        message,
+                        bytes,
                         delivered_from: peer,
                         topic,
                     })
@@ -186,18 +207,43 @@ impl SyncActor {
         tokio::spawn(async move {
             let mut topic = None;
             while let Some(message) = rx.recv().await {
+                // We expect the first message to be a topic id
                 if let AppMessage::Topic(id) = &message {
+                    // It should only be sent once so topic should be None now
+                    if topic.is_some() {
+                        error!("topic id message already received");
+                        break;
+                    }
+
+                    // Set the topic id
                     topic = Some(id.to_owned());
+
+                    // Inform the engine that we are expecting sync messages from the peer on this topic
+                    engine_actor_tx
+                        .send(ToEngineActor::SyncHandshakeSuccess {
+                            peer,
+                            topic: id.to_owned().into(),
+                        })
+                        .await
+                        .expect("engine channel closed");
+
+                    continue;
                 }
 
+                // If topic id wasn't set yet error here as it must be known to process further messages
                 let Some(topic_id) = topic else {
                     error!("topic id not received");
                     return;
                 };
 
+                let AppMessage::Bytes(bytes) = message else {
+                    error!("expected message bytes");
+                    return;
+                };
+
                 if let Err(err) = engine_actor_tx
                     .send(ToEngineActor::SyncMessage {
-                        message,
+                        bytes,
                         delivered_from: peer,
                         topic: topic_id.into(),
                     })

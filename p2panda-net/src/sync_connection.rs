@@ -31,7 +31,7 @@ impl SyncConnection {
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
         self.engine_actor_tx
-            .send(ToEngineActor::AcceptSync { peer, connection })
+            .send(ToEngineActor::SyncAccept { peer, connection })
             .await?;
 
         Ok(())
