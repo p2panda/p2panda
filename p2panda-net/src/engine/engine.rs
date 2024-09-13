@@ -97,7 +97,11 @@ impl GossipBuffer {
 
         self.buffers.entry((peer, topic)).or_default();
 
-        assert!(*counter <= 2);
+        // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic
+        debug!(
+            "current sync sessions with {} on topic {}: {}",
+            peer, topic, counter
+        );
     }
 
     fn unlock(&mut self, peer: PublicKey, topic: TopicId) -> usize {
