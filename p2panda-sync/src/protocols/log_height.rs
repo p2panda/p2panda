@@ -148,6 +148,9 @@ where
         // lost.
         sink.flush().await?;
         sink.close().await?;
+
+        app_tx.flush().await?;
+        app_tx.close().await?;
         debug!("sync session finished");
 
         Ok(())
@@ -250,6 +253,9 @@ where
         // lost.
         sink.flush().await?;
         sink.close().await?;
+
+        app_tx.flush().await?;
+        app_tx.close().await?;
         debug!("sync session finished");
 
         Ok(())
