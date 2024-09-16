@@ -93,7 +93,7 @@ where
         topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -170,7 +170,7 @@ where
         self: Arc<Self>,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -367,13 +367,13 @@ mod tests {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store)),
         });
-        let sink =
+        let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
-                Box::new(sink),
+                Box::new(&mut sink),
             )
             .await
             .unwrap();
@@ -411,14 +411,14 @@ mod tests {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store)),
         });
-        let sink =
+        let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .open(
                 &TOPIC_ID,
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
-                Box::new(sink),
+                Box::new(&mut sink),
             )
             .await
             .unwrap();
@@ -502,13 +502,13 @@ mod tests {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store)),
         });
-        let sink =
+        let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
-                Box::new(sink),
+                Box::new(&mut sink),
             )
             .await
             .unwrap();
@@ -582,14 +582,14 @@ mod tests {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
             store: Arc::new(RwLock::new(store)),
         });
-        let sink =
+        let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .open(
                 &TOPIC_ID,
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
-                Box::new(sink),
+                Box::new(&mut sink),
             )
             .await
             .unwrap();
@@ -689,7 +689,7 @@ mod tests {
         // Spawn a task which opens a sync session from peer a runs it to completion
         let peer_a_protocol_clone = peer_a_protocol.clone();
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
-        let sink = PollSender::new(peer_a_app_tx)
+        let mut sink = PollSender::new(peer_a_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
@@ -697,7 +697,7 @@ mod tests {
                     &TOPIC_ID,
                     Box::new(&mut peer_a_write.compat_write()),
                     Box::new(&mut peer_a_read.compat()),
-                    Box::new(sink),
+                    Box::new(&mut sink),
                 )
                 .await
                 .unwrap();
@@ -706,14 +706,14 @@ mod tests {
         // Spawn a task which accepts a sync session on peer b runs it to completion
         let peer_b_protocol_clone = peer_b_protocol.clone();
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
-        let sink = PollSender::new(peer_b_app_tx)
+        let mut sink = PollSender::new(peer_b_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
                     Box::new(&mut peer_b_write.compat_write()),
                     Box::new(&mut peer_b_read.compat()),
-                    Box::new(sink),
+                    Box::new(&mut sink),
                 )
                 .await
                 .unwrap();
@@ -815,7 +815,7 @@ mod tests {
         // Spawn a task which opens a sync session from peer a runs it to completion
         let peer_a_protocol_clone = peer_a_protocol.clone();
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
-        let sink = PollSender::new(peer_a_app_tx)
+        let mut sink = PollSender::new(peer_a_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
@@ -823,7 +823,7 @@ mod tests {
                     &TOPIC_ID,
                     Box::new(&mut peer_a_write.compat_write()),
                     Box::new(&mut peer_a_read.compat()),
-                    Box::new(sink),
+                    Box::new(&mut sink),
                 )
                 .await
                 .unwrap();
@@ -832,14 +832,14 @@ mod tests {
         // Spawn a task which accepts a sync session on peer b runs it to completion
         let peer_b_protocol_clone = peer_b_protocol.clone();
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
-        let sink = PollSender::new(peer_b_app_tx)
+        let mut sink = PollSender::new(peer_b_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
                     Box::new(&mut peer_b_write.compat_write()),
                     Box::new(&mut peer_b_read.compat()),
-                    Box::new(sink),
+                    Box::new(&mut sink),
                 )
                 .await
                 .unwrap();

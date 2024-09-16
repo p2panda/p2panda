@@ -17,13 +17,13 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
         topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError>;
 
     async fn accept(
         self: Arc<Self>,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+        app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError>;
 }
