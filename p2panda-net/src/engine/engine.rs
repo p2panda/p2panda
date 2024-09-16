@@ -8,7 +8,6 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
-use iroh_quinn::Connection;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -55,10 +54,6 @@ pub enum ToEngineActor {
         bytes: Vec<u8>,
         delivered_from: PublicKey,
         topic: TopicId,
-    },
-    SyncAccept {
-        peer: PublicKey,
-        connection: Connection,
     },
     SyncHandshakeSuccess {
         peer: PublicKey,
@@ -249,9 +244,6 @@ impl EngineActor {
                 topic,
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
-            }
-            ToEngineActor::SyncAccept { peer, connection } => {
-                self.on_accept_sync(peer, connection).await?;
             }
             ToEngineActor::SyncHandshakeSuccess { peer, topic } => {
                 self.gossip_buffer.lock(peer, topic);
@@ -492,13 +484,6 @@ impl EngineActor {
             }
         }
 
-        Ok(())
-    }
-
-    async fn on_accept_sync(&mut self, peer: PublicKey, connection: Connection) -> Result<()> {
-        self.sync_actor_tx
-            .send(ToSyncActor::Accept { peer, connection })
-            .await?;
         Ok(())
     }
 

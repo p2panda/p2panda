@@ -8,7 +8,7 @@ use iroh_net::endpoint::{self, Connecting, Connection};
 use tokio::sync::mpsc;
 use tracing::debug_span;
 
-use crate::engine::ToEngineActor;
+use crate::engine::sync::ToSyncActor;
 use crate::protocols::ProtocolHandler;
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
@@ -16,11 +16,11 @@ pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct SyncConnection {
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
+    engine_actor_tx: mpsc::Sender<ToSyncActor>,
 }
 
 impl SyncConnection {
-    pub fn new(engine_actor_tx: mpsc::Sender<ToEngineActor>) -> Self {
+    pub fn new(engine_actor_tx: mpsc::Sender<ToSyncActor>) -> Self {
         Self { engine_actor_tx }
     }
 
@@ -31,7 +31,7 @@ impl SyncConnection {
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
         self.engine_actor_tx
-            .send(ToEngineActor::SyncAccept { peer, connection })
+            .send(ToSyncActor::Accept { peer, connection })
             .await?;
 
         Ok(())
