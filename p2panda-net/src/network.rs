@@ -571,38 +571,19 @@ async fn handle_connection(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
+mod sync_protocols {
     use std::sync::Arc;
-    use std::time::Duration;
 
     use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, StreamExt};
+    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
     use futures_util::{Sink, SinkExt};
-    use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::PrivateKey;
     use p2panda_sync::protocols::utils::{into_sink, into_stream};
-    use p2panda_sync::traits::{AppMessage, SyncProtocol};
-    use p2panda_sync::{SyncError, TopicId};
+    use p2panda_sync::traits::SyncProtocol;
+    use p2panda_sync::{AppMessage, SyncError};
     use serde::{Deserialize, Serialize};
     use tracing::debug;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::EnvFilter;
 
-    use crate::addrs::DEFAULT_STUN_PORT;
-    use crate::config::Config;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
-
-    use super::{InEvent, OutEvent};
-
-    fn setup_logging() {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-            .with(EnvFilter::from_default_env())
-            .try_init()
-            .ok();
-    }
+    use crate::TopicId;
 
     #[derive(Debug, Serialize, Deserialize)]
     enum DummyProtocolMessage {
@@ -610,6 +591,7 @@ mod tests {
         Done,
     }
 
+    /// A sync implementation which fulfills basic protocol requirements but nothing more  
     #[derive(Debug)]
     pub struct DummyProtocol {}
 
@@ -687,92 +669,6 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn config() {
-        let direct_node_public_key = PrivateKey::new().public_key();
-        let relay_address: RelayUrl = "https://example.net".parse().unwrap();
-
-        let config = Config {
-            bind_port: 2024,
-            network_id: [1; 32],
-            private_key: Some(PathBuf::new().join("secret-key.txt")),
-            direct_node_addresses: vec![(
-                direct_node_public_key,
-                vec!["0.0.0.0:2026".parse().unwrap()],
-                None,
-            )
-                .into()],
-            relay: Some(relay_address.clone()),
-        };
-
-        let builder = NetworkBuilder::from_config(config, DummyProtocol {});
-
-        assert_eq!(builder.bind_port, Some(2024));
-        assert_eq!(builder.network_id, [1; 32]);
-        assert!(builder.secret_key.is_none());
-        assert_eq!(builder.direct_node_addresses.len(), 1);
-        let relay_node = RelayNode {
-            url: IrohRelayUrl::from(relay_address),
-            stun_only: false,
-            stun_port: DEFAULT_STUN_PORT,
-        };
-        assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
-    }
-
-    #[tokio::test]
-    async fn join_gossip_overlay() {
-        setup_logging();
-
-        let network_id = [1; 32];
-
-        let node_1 = NetworkBuilder::new(network_id, DummyProtocol {})
-            .build()
-            .await
-            .unwrap();
-        let node_2 = NetworkBuilder::new(network_id, DummyProtocol {})
-            .build()
-            .await
-            .unwrap();
-
-        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
-        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
-
-        node_1.add_peer(node_2_addr).await.unwrap();
-        node_2.add_peer(node_1_addr).await.unwrap();
-
-        // Subscribe to the same topic from both nodes
-        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
-        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
-
-        // Receive the first message for both nodes
-        let rx_2_msg = rx_2.recv().await.unwrap();
-        let rx_1_msg = rx_1.recv().await.unwrap();
-
-        // Ensure the gossip-overlay has been joined for the given topic
-        assert!(matches!(rx_1_msg, OutEvent::Ready));
-        assert!(matches!(rx_2_msg, OutEvent::Ready));
-
-        // Broadcast a message and make sure it's received by the other node
-        tx_1.send(InEvent::Message {
-            bytes: "Hello, Node".to_bytes(),
-        })
-        .await
-        .unwrap();
-
-        let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            OutEvent::Message {
-                bytes: "Hello, Node".to_bytes(),
-                delivered_from: node_1.node_id(),
-            }
-        );
-
-        println!("shutdown nodes");
-        node_1.shutdown().await.unwrap();
-        node_2.shutdown().await.unwrap();
-    }
-
     // The protocol message types.
     #[derive(Serialize, Deserialize)]
     enum Message {
@@ -782,9 +678,9 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    struct PingPongProtocol {}
+    pub struct PingPongProtocol {}
 
-    // A very naive sync protocol.
+    /// A ping-pong sync protocol
     #[async_trait]
     impl SyncProtocol for PingPongProtocol {
         fn name(&self) -> &'static str {
@@ -878,6 +774,119 @@ mod tests {
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
+    use p2panda_core::PrivateKey;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
+
+    use crate::addrs::DEFAULT_STUN_PORT;
+    use crate::config::Config;
+    use crate::network::sync_protocols::{DummyProtocol, PingPongProtocol};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
+
+    use super::{InEvent, OutEvent};
+
+    fn setup_logging() {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+    }
+
+    #[tokio::test]
+    async fn config() {
+        let direct_node_public_key = PrivateKey::new().public_key();
+        let relay_address: RelayUrl = "https://example.net".parse().unwrap();
+
+        let config = Config {
+            bind_port: 2024,
+            network_id: [1; 32],
+            private_key: Some(PathBuf::new().join("secret-key.txt")),
+            direct_node_addresses: vec![(
+                direct_node_public_key,
+                vec!["0.0.0.0:2026".parse().unwrap()],
+                None,
+            )
+                .into()],
+            relay: Some(relay_address.clone()),
+        };
+
+        let builder = NetworkBuilder::from_config(config, DummyProtocol {});
+
+        assert_eq!(builder.bind_port, Some(2024));
+        assert_eq!(builder.network_id, [1; 32]);
+        assert!(builder.secret_key.is_none());
+        assert_eq!(builder.direct_node_addresses.len(), 1);
+        let relay_node = RelayNode {
+            url: IrohRelayUrl::from(relay_address),
+            stun_only: false,
+            stun_port: DEFAULT_STUN_PORT,
+        };
+        assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
+    }
+
+    #[tokio::test]
+    async fn join_gossip_overlay() {
+        setup_logging();
+
+        let network_id = [1; 32];
+
+        let node_1 = NetworkBuilder::new(network_id, DummyProtocol {})
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id, DummyProtocol {})
+            .build()
+            .await
+            .unwrap();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1.add_peer(node_2_addr).await.unwrap();
+        node_2.add_peer(node_1_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes
+        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
+        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
+
+        // Receive the first message for both nodes
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        let rx_1_msg = rx_1.recv().await.unwrap();
+
+        // Ensure the gossip-overlay has been joined for the given topic
+        assert!(matches!(rx_1_msg, OutEvent::Ready));
+        assert!(matches!(rx_2_msg, OutEvent::Ready));
+
+        // Broadcast a message and make sure it's received by the other node
+        tx_1.send(InEvent::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            OutEvent::Message {
+                bytes: "Hello, Node".to_bytes(),
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        println!("shutdown nodes");
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
     }
 
     #[tokio::test]
