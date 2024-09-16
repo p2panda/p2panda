@@ -6,13 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
 
-use crate::{SyncError, TopicId};
-
-#[derive(PartialEq, Debug)]
-pub enum AppMessage {
-    Topic(TopicId),
-    Bytes(Vec<u8>),
-}
+use crate::{AppMessage, SyncError, TopicId};
 
 #[async_trait]
 pub trait SyncProtocol: Send + Sync + Debug {
