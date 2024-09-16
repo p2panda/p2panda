@@ -38,7 +38,7 @@ impl Engine {
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        sync_protocol: Arc<dyn SyncProtocol + 'static>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);

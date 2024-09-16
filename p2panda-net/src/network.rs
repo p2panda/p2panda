@@ -56,7 +56,7 @@ pub struct NetworkBuilder {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync_protocol: Arc<dyn SyncProtocol + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
@@ -66,7 +66,10 @@ impl NetworkBuilder {
     ///
     /// The identifier is used during handshake and discovery protocols. Networks must use the
     /// same identifier if they wish to successfully connect and share gossip.
-    pub fn new(network_id: NetworkId, sync_protocol: impl SyncProtocol + 'static) -> Self {
+    pub fn new(
+        network_id: NetworkId,
+        sync_protocol: impl for<'a> SyncProtocol<'a> + 'static,
+    ) -> Self {
         Self {
             bind_port: None,
             direct_node_addresses: Vec::new(),
@@ -81,7 +84,10 @@ impl NetworkBuilder {
     }
 
     /// Returns a new instance of `NetworkBuilder` using the given configuration.
-    pub fn from_config(config: Config, sync_protocol: impl SyncProtocol + 'static) -> Self {
+    pub fn from_config(
+        config: Config,
+        sync_protocol: impl for<'a> SyncProtocol<'a> + 'static,
+    ) -> Self {
         let mut network_builder =
             Self::new(config.network_id, sync_protocol).bind_port(config.bind_port);
 
@@ -596,7 +602,7 @@ mod sync_protocols {
     pub struct DummyProtocol {}
 
     #[async_trait]
-    impl SyncProtocol for DummyProtocol {
+    impl<'a> SyncProtocol<'a> for DummyProtocol {
         fn name(&self) -> &'static str {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
@@ -604,9 +610,9 @@ mod sync_protocols {
         async fn open(
             self: Arc<Self>,
             topic: &TopicId,
-            tx: Box<dyn AsyncWrite + Send + Unpin>,
-            rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: open sync session");
 
@@ -637,9 +643,9 @@ mod sync_protocols {
 
         async fn accept(
             self: Arc<Self>,
-            tx: Box<dyn AsyncWrite + Send + Unpin>,
-            rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
@@ -682,7 +688,7 @@ mod sync_protocols {
 
     /// A ping-pong sync protocol
     #[async_trait]
-    impl SyncProtocol for PingPongProtocol {
+    impl<'a> SyncProtocol<'a> for PingPongProtocol {
         fn name(&self) -> &'static str {
             static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
             SIMPLE_PROTOCOL_NAME
@@ -691,9 +697,9 @@ mod sync_protocols {
         async fn open(
             self: Arc<Self>,
             topic: &TopicId,
-            tx: Box<dyn AsyncWrite + Send + Unpin>,
-            rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("open sync session");
             let mut sink = into_sink(tx);
@@ -736,9 +742,9 @@ mod sync_protocols {
 
         async fn accept(
             self: Arc<Self>,
-            tx: Box<dyn AsyncWrite + Send + Unpin>,
-            rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
             let mut sink = into_sink(tx);

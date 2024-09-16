@@ -30,14 +30,14 @@ pub enum ToSyncActor {
 
 pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
-    sync_protocol: Arc<dyn SyncProtocol + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
 }
 
 impl SyncActor {
     pub fn new(
         inbox: mpsc::Receiver<ToSyncActor>,
-        sync_protocol: Arc<dyn SyncProtocol + 'static>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
         engine_actor_tx: mpsc::Sender<ToEngineActor>,
     ) -> Self {
         Self {
@@ -94,14 +94,14 @@ impl SyncActor {
 
         // Set up a channel for receiving new application messages.
         let (tx, mut rx) = mpsc::channel(128);
-        let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+        let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
         // Spawn a task which opens a bi-directional stream over the provided connection and runs
         // the sync protocol.
         let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
             let result = async {
-                let (send, recv) = connection
+                let (mut send, mut recv) = connection
                     .open_bi()
                     .await
                     .map_err(|e| SyncError::Protocol(e.to_string()))?;
@@ -109,9 +109,9 @@ impl SyncActor {
                 protocol
                     .open(
                         topic.as_bytes(),
-                        Box::new(send),
-                        Box::new(recv),
-                        Box::new(sink),
+                        Box::new(&mut send),
+                        Box::new(&mut recv),
+                        Box::new(&mut sink),
                     )
                     .await
             }
@@ -179,19 +179,23 @@ impl SyncActor {
 
         // Set up a channel for receiving new application messages.
         let (tx, mut rx) = mpsc::channel(128);
-        let sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+        let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
         // Spawn a task which runs the sync protocol.
         let protocol = self.sync_protocol.clone();
         tokio::spawn(async move {
             let result = async {
-                let (send, recv) = connection
+                let (mut send, mut recv) = connection
                     .accept_bi()
                     .await
                     .map_err(|e| SyncError::Protocol(e.to_string()))?;
 
                 protocol
-                    .accept(Box::new(send), Box::new(recv), Box::new(sink))
+                    .accept(
+                        Box::new(&mut send),
+                        Box::new(&mut recv),
+                        Box::new(&mut sink),
+                    )
                     .await
             }
             .await;
