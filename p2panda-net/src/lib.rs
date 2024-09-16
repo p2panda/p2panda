@@ -2,6 +2,7 @@
 
 mod addrs;
 pub mod config;
+mod connection_manager;
 pub mod discovery;
 mod engine;
 mod handshake;
