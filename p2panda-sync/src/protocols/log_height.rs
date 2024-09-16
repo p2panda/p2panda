@@ -101,7 +101,7 @@ where
             .expect("memory store error");
 
         sink.send(Message::<T, E>::Have(
-            topic.clone(),
+            *topic,
             log_id.clone(),
             local_log_heights.clone(),
         ))
@@ -110,7 +110,7 @@ where
         sink.send(Message::SyncDone).await?;
         sync_done_sent = true;
 
-        app_tx.send(AppMessage::Topic(topic.clone())).await?;
+        app_tx.send(AppMessage::Topic(*topic)).await?;
 
         while let Some(result) = stream.next().await {
             let message: Message<T, E> = result?;
@@ -175,7 +175,7 @@ where
 
             let replies = match &message {
                 Message::Have(topic, log_id, log_heights) => {
-                    app_tx.send(AppMessage::Topic(topic.clone())).await?;
+                    app_tx.send(AppMessage::Topic(*topic)).await?;
                     let mut messages: Vec<Message<T, E>> = vec![];
 
                     let local_log_heights = self
