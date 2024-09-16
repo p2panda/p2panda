@@ -6,20 +6,20 @@ use serde::{Deserialize, Serialize};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-pub fn into_stream<M>(
-    rx: Box<dyn AsyncRead + Send + Unpin>,
-) -> impl Stream<Item = Result<M, SyncError>> + Send + Unpin
+pub fn into_stream<'a, M>(
+    rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+) -> impl Stream<Item = Result<M, SyncError>> + Send + Unpin + 'a
 where
-    M: for<'a> Deserialize<'a> + Serialize + Send,
+    M: for<'de> Deserialize<'de> + Serialize + Send + 'a,
 {
     FramedRead::new(rx.compat(), CborCodec::<M>::new())
 }
 
-pub fn into_sink<M>(
-    tx: Box<dyn AsyncWrite + Send + Unpin>,
-) -> impl Sink<M, Error = SyncError> + Send + Unpin
+pub fn into_sink<'a, M>(
+    tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+) -> impl Sink<M, Error = SyncError> + Send + Unpin + 'a
 where
-    M: for<'a> Deserialize<'a> + Serialize + Send,
+    M: for<'de> Deserialize<'de> + Serialize + Send + 'a,
 {
     FramedWrite::new(tx.compat_write(), CborCodec::<M>::new())
 }

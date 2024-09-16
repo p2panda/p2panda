@@ -69,10 +69,19 @@ where
 }
 
 #[async_trait]
-impl<T, E> SyncProtocol for LogHeightSyncProtocol<T, E>
+impl<'a, T, E> SyncProtocol<'a> for LogHeightSyncProtocol<T, E>
 where
-    T: Clone + Debug + Default + Eq + Hash + Send + Sync + for<'a> Deserialize<'a> + Serialize,
-    E: Clone + Debug + Default + Send + Sync + for<'a> Deserialize<'a> + Serialize,
+    T: Clone
+        + Debug
+        + Default
+        + Eq
+        + Hash
+        + Send
+        + Sync
+        + for<'de> Deserialize<'de>
+        + Serialize
+        + 'a,
+    E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
         LOG_HEIGHT_PROTOCOL_NAME
@@ -82,8 +91,8 @@ where
     async fn open(
         self: Arc<Self>,
         topic: &TopicId,
-        tx: Box<dyn AsyncWrite + Send + Unpin>,
-        rx: Box<dyn AsyncRead + Send + Unpin>,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
@@ -159,8 +168,8 @@ where
     #[allow(unused_assignments)]
     async fn accept(
         self: Arc<Self>,
-        tx: Box<dyn AsyncWrite + Send + Unpin>,
-        rx: Box<dyn AsyncRead + Send + Unpin>,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
@@ -362,8 +371,8 @@ mod tests {
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .accept(
-                Box::new(peer_a_write.compat_write()),
-                Box::new(peer_a_read.compat()),
+                Box::new(&mut peer_a_write.compat_write()),
+                Box::new(&mut peer_a_read.compat()),
                 Box::new(sink),
             )
             .await
@@ -407,8 +416,8 @@ mod tests {
         let _ = protocol
             .open(
                 &TOPIC_ID,
-                Box::new(peer_a_write.compat_write()),
-                Box::new(peer_a_read.compat()),
+                Box::new(&mut peer_a_write.compat_write()),
+                Box::new(&mut peer_a_read.compat()),
                 Box::new(sink),
             )
             .await
@@ -497,8 +506,8 @@ mod tests {
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
             .accept(
-                Box::new(peer_a_write.compat_write()),
-                Box::new(peer_a_read.compat()),
+                Box::new(&mut peer_a_write.compat_write()),
+                Box::new(&mut peer_a_read.compat()),
                 Box::new(sink),
             )
             .await
@@ -578,8 +587,8 @@ mod tests {
         let _ = protocol
             .open(
                 &TOPIC_ID,
-                Box::new(peer_a_write.compat_write()),
-                Box::new(peer_a_read.compat()),
+                Box::new(&mut peer_a_write.compat_write()),
+                Box::new(&mut peer_a_read.compat()),
                 Box::new(sink),
             )
             .await
@@ -686,8 +695,8 @@ mod tests {
             peer_a_protocol_clone
                 .open(
                     &TOPIC_ID,
-                    Box::new(peer_a_write.compat_write()),
-                    Box::new(peer_a_read.compat()),
+                    Box::new(&mut peer_a_write.compat_write()),
+                    Box::new(&mut peer_a_read.compat()),
                     Box::new(sink),
                 )
                 .await
@@ -702,8 +711,8 @@ mod tests {
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
-                    Box::new(peer_b_write.compat_write()),
-                    Box::new(peer_b_read.compat()),
+                    Box::new(&mut peer_b_write.compat_write()),
+                    Box::new(&mut peer_b_read.compat()),
                     Box::new(sink),
                 )
                 .await
@@ -812,8 +821,8 @@ mod tests {
             peer_a_protocol_clone
                 .open(
                     &TOPIC_ID,
-                    Box::new(peer_a_write.compat_write()),
-                    Box::new(peer_a_read.compat()),
+                    Box::new(&mut peer_a_write.compat_write()),
+                    Box::new(&mut peer_a_read.compat()),
                     Box::new(sink),
                 )
                 .await
@@ -828,8 +837,8 @@ mod tests {
         let handle2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
-                    Box::new(peer_b_write.compat_write()),
-                    Box::new(peer_b_read.compat()),
+                    Box::new(&mut peer_b_write.compat_write()),
+                    Box::new(&mut peer_b_read.compat()),
                     Box::new(sink),
                 )
                 .await
