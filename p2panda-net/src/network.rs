@@ -577,7 +577,7 @@ mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
+    use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, StreamExt};
     use futures_util::{Sink, SinkExt};
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::PrivateKey;
@@ -604,6 +604,12 @@ mod tests {
             .ok();
     }
 
+    #[derive(Debug, Serialize, Deserialize)]
+    enum DummyProtocolMessage {
+        Topic(TopicId),
+        Done,
+    }
+
     #[derive(Debug)]
     pub struct DummyProtocol {}
 
@@ -615,22 +621,68 @@ mod tests {
         }
         async fn open(
             self: Arc<Self>,
-            _topic: &TopicId,
-            _tx: Box<dyn AsyncWrite + Send + Unpin>,
-            _rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            topic: &TopicId,
+            tx: Box<dyn AsyncWrite + Send + Unpin>,
+            rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: open sync session");
+
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            sink.send(DummyProtocolMessage::Topic(*topic)).await?;
+            sink.send(DummyProtocolMessage::Done).await?;
+            app_tx.send(AppMessage::Topic(*topic)).await?;
+
+            while let Some(result) = stream.next().await {
+                let message: DummyProtocolMessage = result?;
+                debug!("message received: {:?}", message);
+
+                match &message {
+                    DummyProtocolMessage::Topic(_) => panic!(),
+                    DummyProtocolMessage::Done => break,
+                }
+            }
+
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
             Ok(())
         }
 
         async fn accept(
             self: Arc<Self>,
-            _tx: Box<dyn AsyncWrite + Send + Unpin>,
-            _rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            tx: Box<dyn AsyncWrite + Send + Unpin>,
+            rx: Box<dyn AsyncRead + Send + Unpin>,
+            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
+
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            while let Some(result) = stream.next().await {
+                let message: DummyProtocolMessage = result?;
+                debug!("message received: {:?}", message);
+
+                match &message {
+                    DummyProtocolMessage::Topic(topic) => {
+                        app_tx.send(AppMessage::Topic(*topic)).await?
+                    }
+                    DummyProtocolMessage::Done => break,
+                }
+            }
+
+            sink.send(DummyProtocolMessage::Done).await?;
+
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
             Ok(())
         }
     }
@@ -724,16 +776,17 @@ mod tests {
     // The protocol message types.
     #[derive(Serialize, Deserialize)]
     enum Message {
+        Topic(TopicId),
         Ping,
         Pong,
     }
 
     #[derive(Debug, Clone)]
-    struct SimpleProtocol {}
+    struct PingPongProtocol {}
 
     // A very naive sync protocol.
     #[async_trait]
-    impl SyncProtocol for SimpleProtocol {
+    impl SyncProtocol for PingPongProtocol {
         fn name(&self) -> &'static str {
             static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
             SIMPLE_PROTOCOL_NAME
@@ -741,22 +794,26 @@ mod tests {
 
         async fn open(
             self: Arc<Self>,
-            _topic: &TopicId,
+            topic: &TopicId,
             tx: Box<dyn AsyncWrite + Send + Unpin>,
             rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
             debug!("open sync session");
             let mut sink = into_sink(tx);
             let mut stream = into_stream(rx);
 
+            sink.send(Message::Topic(*topic)).await?;
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
+
+            app_tx.send(AppMessage::Topic(*topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
 
                 match message {
+                    Message::Topic(_) => panic!(),
                     Message::Ping => {
                         return Err(SyncError::Protocol(
                             "unexpected Ping message received".to_string(),
@@ -775,6 +832,9 @@ mod tests {
             sink.flush().await?;
             sink.close().await?;
 
+            app_tx.flush().await?;
+            app_tx.close().await?;
+
             Ok(())
         }
 
@@ -782,7 +842,7 @@ mod tests {
             self: Arc<Self>,
             tx: Box<dyn AsyncWrite + Send + Unpin>,
             rx: Box<dyn AsyncRead + Send + Unpin>,
-            mut _app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
+            mut app_tx: Box<dyn Sink<AppMessage, Error = SyncError> + Send + Unpin>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
             let mut sink = into_sink(tx);
@@ -792,6 +852,7 @@ mod tests {
                 let message = result?;
 
                 match message {
+                    Message::Topic(topic) => app_tx.send(AppMessage::Topic(topic)).await?,
                     Message::Ping => {
                         debug!("ping message received");
                         sink.send(Message::Pong).await?;
@@ -812,6 +873,9 @@ mod tests {
             sink.flush().await?;
             sink.close().await?;
 
+            app_tx.flush().await?;
+            app_tx.close().await?;
+
             Ok(())
         }
     }
@@ -823,8 +887,8 @@ mod tests {
         let network_id = [1; 32];
         let topic_id = [0; 32];
 
-        let node_1_protocol = SimpleProtocol {};
-        let node_2_protocol = SimpleProtocol {};
+        let node_1_protocol = PingPongProtocol {};
+        let node_2_protocol = PingPongProtocol {};
 
         let node_1 = NetworkBuilder::new(network_id, node_1_protocol)
             .build()
@@ -853,6 +917,8 @@ mod tests {
             node_2.shutdown().await.unwrap();
         });
 
-        let _ = tokio::join!(handle1, handle2);
+        let (result1, result2) = tokio::join!(handle1, handle2);
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
     }
 }
