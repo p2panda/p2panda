@@ -11,7 +11,7 @@ pub enum SyncError {
     #[error("sync protocol error: {0}")]
     Protocol(String),
 
-    /// I/O error which occurs during stream handling 
+    /// I/O error which occurs during stream handling
     #[error("input/output error: {0}")]
     IoError(#[from] std::io::Error),
 
