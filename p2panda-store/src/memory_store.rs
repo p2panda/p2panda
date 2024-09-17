@@ -67,8 +67,8 @@ where
 {
     async fn insert_operation(
         &mut self,
-        operation: Operation<E>,
-        log_id: T,
+        operation: &Operation<E>,
+        log_id: &T,
     ) -> Result<bool, StoreError> {
         let entry = (
             operation.header.seq_num,
@@ -79,12 +79,14 @@ where
         let mut store = self.write_store();
         let insertion_occured = store
             .logs
-            .entry((operation.header.public_key, log_id))
+            .entry((operation.header.public_key, log_id.to_owned()))
             .or_default()
             .insert(entry);
 
         if insertion_occured {
-            store.operations.insert(operation.hash, operation);
+            store
+                .operations
+                .insert(operation.hash, operation.to_owned());
         }
 
         Ok(insertion_occured)
@@ -137,12 +139,12 @@ where
 {
     async fn get_log(
         &self,
-        public_key: PublicKey,
-        log_id: T,
+        public_key: &PublicKey,
+        log_id: &T,
     ) -> Result<Vec<Operation<E>>, StoreError> {
         let mut operations = Vec::new();
         let store = self.read_store();
-        if let Some(log) = store.logs.get(&(public_key, log_id)) {
+        if let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) {
             for (_, _, hash) in log {
                 let operation = store
                     .operations
@@ -156,11 +158,11 @@ where
 
     async fn latest_operation(
         &self,
-        public_key: PublicKey,
-        log_id: T,
+        public_key: &PublicKey,
+        log_id: &T,
     ) -> Result<Option<Operation<E>>, StoreError> {
         let store = self.read_store();
-        let latest = match store.logs.get(&(public_key, log_id)) {
+        let latest = match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => match log.last() {
                 Some((_, _, hash)) => {
                     let operation = store.operations.get(hash);
@@ -175,14 +177,14 @@ where
 
     async fn delete_operations(
         &mut self,
-        public_key: PublicKey,
-        log_id: T,
+        public_key: &PublicKey,
+        log_id: &T,
         before: u64,
     ) -> Result<bool, StoreError> {
         let mut deleted = vec![];
 
         let mut store = self.write_store();
-        if let Some(log) = store.logs.get_mut(&(public_key, log_id)) {
+        if let Some(log) = store.logs.get_mut(&(*public_key, log_id.to_owned())) {
             log.retain(|(seq_num, _, hash)| {
                 let remove = *seq_num < before;
                 if remove {
@@ -197,15 +199,15 @@ where
 
     async fn delete_payloads(
         &mut self,
-        public_key: PublicKey,
-        log_id: T,
+        public_key: &PublicKey,
+        log_id: &T,
         from: u64,
         to: u64,
     ) -> Result<bool, StoreError> {
         let mut deleted = vec![];
         {
             let store = self.read_store();
-            if let Some(log) = store.logs.get(&(public_key, log_id)) {
+            if let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) {
                 log.iter().for_each(|(seq_num, _, hash)| {
                     if *seq_num >= from && *seq_num < to {
                         deleted.push(*hash)
@@ -224,13 +226,13 @@ where
         Ok(!deleted.is_empty())
     }
 
-    async fn get_log_heights(&self, log_id: T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
+    async fn get_log_heights(&self, log_id: &T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
         let log_heights = self
             .read_store()
             .logs
             .iter()
             .filter_map(|((public_key, inner_log_id), log)| {
-                if *inner_log_id == log_id {
+                if inner_log_id == log_id {
                     let log_height = log
                         .last()
                         .expect("all logs contain at least one operation")
@@ -290,7 +292,7 @@ mod tests {
 
         let operation = generate_operation(&private_key, body, 0, 0, None);
         let inserted = store
-            .insert_operation(operation.clone(), 0)
+            .insert_operation(&operation, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -330,7 +332,7 @@ mod tests {
 
         // Insert the operation into the store, the extension type is inferred
         let inserted = store
-            .insert_operation(operation.clone(), 0)
+            .insert_operation(&operation, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -346,7 +348,7 @@ mod tests {
 
         // Insert one operation
         let inserted = store
-            .insert_operation(operation.clone(), 0)
+            .insert_operation(&operation, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -372,7 +374,7 @@ mod tests {
 
         // Insert one operation
         let inserted = store
-            .insert_operation(operation.clone(), 0)
+            .insert_operation(&operation, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -409,7 +411,7 @@ mod tests {
 
         // Insert one operation
         let inserted = store
-            .insert_operation(operation.clone(), 0)
+            .insert_operation(&operation, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -444,16 +446,16 @@ mod tests {
         let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
 
         store
-            .insert_operation(operation_0.clone(), log_id)
+            .insert_operation(&operation_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_1.clone(), log_id)
+            .insert_operation(&operation_1, &log_id)
             .await
             .expect("no errors");
 
         let log = store
-            .get_log(private_key.public_key(), log_id)
+            .get_log(&private_key.public_key(), &log_id)
             .await
             .expect("no errors");
 
@@ -476,13 +478,13 @@ mod tests {
             generate_operation(&private_key, body_a1, 1, 1, Some(log_a_operation_0.hash));
 
         let inserted = store
-            .insert_operation(log_a_operation_0.clone(), log_a_id)
+            .insert_operation(&log_a_operation_0, &log_a_id)
             .await
             .expect("no errors");
         assert!(inserted);
 
         let inserted = store
-            .insert_operation(log_a_operation_1.clone(), log_a_id)
+            .insert_operation(&log_a_operation_1, &log_a_id)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -494,17 +496,17 @@ mod tests {
             generate_operation(&private_key, body_b1, 1, 4, Some(log_b_operation_0.hash));
 
         store
-            .insert_operation(log_b_operation_0.clone(), log_b_id)
+            .insert_operation(&log_b_operation_0, &log_b_id)
             .await
             .expect("no errors");
 
         store
-            .insert_operation(log_b_operation_1.clone(), log_b_id)
+            .insert_operation(&log_b_operation_1, &log_b_id)
             .await
             .expect("no errors");
 
         let log_a = store
-            .get_log(private_key.public_key(), log_a_id)
+            .get_log(&private_key.public_key(), &log_a_id)
             .await
             .expect("no errors");
 
@@ -513,7 +515,7 @@ mod tests {
         assert_eq!(log_a[1], log_a_operation_1);
 
         let log_b = store
-            .get_log(private_key.public_key(), log_b_id)
+            .get_log(&private_key.public_key(), &log_b_id)
             .await
             .expect("no errors");
 
@@ -532,20 +534,20 @@ mod tests {
 
         let author_a_operation = generate_operation(&private_key_a, body.clone(), 0, 0, None);
         let inserted = store
-            .insert_operation(author_a_operation.clone(), log_id)
+            .insert_operation(&author_a_operation, &log_id)
             .await
             .expect("no errors");
         assert!(inserted);
 
         let author_b_operation = generate_operation(&private_key_b, body, 0, 0, None);
         let inserted = store
-            .insert_operation(author_b_operation.clone(), log_id)
+            .insert_operation(&author_b_operation, &log_id)
             .await
             .expect("no errors");
         assert!(inserted);
 
         let author_a_log = store
-            .get_log(private_key_a.public_key(), log_id)
+            .get_log(&private_key_a.public_key(), &log_id)
             .await
             .expect("no errors");
 
@@ -553,7 +555,7 @@ mod tests {
         assert_eq!(author_a_log[0], author_a_operation);
 
         let author_b_log = store
-            .get_log(private_key_b.public_key(), log_id)
+            .get_log(&private_key_b.public_key(), &log_id)
             .await
             .expect("no errors");
 
@@ -574,16 +576,16 @@ mod tests {
         let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
 
         store
-            .insert_operation(operation_0.clone(), log_id)
+            .insert_operation(&operation_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_1.clone(), log_id)
+            .insert_operation(&operation_1, &log_id)
             .await
             .expect("no errors");
 
         let latest_operation = store
-            .latest_operation(private_key.public_key(), log_id)
+            .latest_operation(&private_key.public_key(), &log_id)
             .await
             .expect("no errors");
 
@@ -605,15 +607,15 @@ mod tests {
         let operation_2 = generate_operation(&private_key, body2, 2, 200, Some(operation_0.hash));
 
         store
-            .insert_operation(operation_0.clone(), log_id)
+            .insert_operation(&operation_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_1.clone(), log_id)
+            .insert_operation(&operation_1, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_2.clone(), log_id)
+            .insert_operation(&operation_2, &log_id)
             .await
             .expect("no errors");
 
@@ -623,7 +625,7 @@ mod tests {
 
         // Delete all operations _before_ seq_num 2
         let deleted = store
-            .delete_operations(private_key.public_key(), log_id, 2)
+            .delete_operations(&private_key.public_key(), &log_id, 2)
             .await
             .expect("no errors");
         assert!(deleted);
@@ -634,14 +636,14 @@ mod tests {
 
         // The remaining operation in the log should be the latest (seq_num == 2)
         let log = store
-            .get_log(private_key.public_key(), log_id)
+            .get_log(&private_key.public_key(), &log_id)
             .await
             .expect("no errors");
         assert_eq!(log[0], operation_2);
 
         // Deleting the same range again should return `false`, meaning no deletion occurred
         let deleted = store
-            .delete_operations(private_key.public_key(), log_id, 2)
+            .delete_operations(&private_key.public_key(), &log_id, 2)
             .await
             .expect("no errors");
         assert!(!deleted);
@@ -663,15 +665,15 @@ mod tests {
             generate_operation(&private_key, body2.clone(), 2, 200, Some(operation_1.hash));
 
         store
-            .insert_operation(operation_0.clone(), log_id)
+            .insert_operation(&operation_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_1.clone(), log_id)
+            .insert_operation(&operation_1, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(operation_2.clone(), log_id)
+            .insert_operation(&operation_2, &log_id)
             .await
             .expect("no errors");
 
@@ -681,13 +683,13 @@ mod tests {
 
         // Delete all operation payloads from sequence number 0 up to but not including 2
         let deleted = store
-            .delete_payloads(private_key.public_key(), log_id, 0, 2)
+            .delete_payloads(&private_key.public_key(), &log_id, 0, 2)
             .await
             .expect("no errors");
         assert!(deleted);
 
         let log = store
-            .get_log(private_key.public_key(), log_id)
+            .get_log(&private_key.public_key(), &log_id)
             .await
             .expect("no errors");
 
