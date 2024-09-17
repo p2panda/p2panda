@@ -74,11 +74,9 @@ impl Engine {
     }
 
     pub fn sync_handler(&self) -> Option<SyncConnection> {
-        if let Some(sync_actor_tx) = &self.sync_actor_tx {
-            Some(SyncConnection::new(sync_actor_tx.clone()))
-        } else {
-            None
-        }
+        self.sync_actor_tx
+            .as_ref()
+            .map(|sync_actor_tx| SyncConnection::new(sync_actor_tx.clone()))
     }
 
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
