@@ -15,7 +15,7 @@ use tracing::debug;
 
 use crate::protocols::utils::{into_sink, into_stream};
 use crate::traits::SyncProtocol;
-use crate::{AppMessage, SyncError, TopicId};
+use crate::{FromSync, SyncError, TopicId};
 
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
@@ -93,7 +93,7 @@ where
         topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+        mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -119,7 +119,7 @@ where
         sink.send(Message::SyncDone).await?;
         sync_done_sent = true;
 
-        app_tx.send(AppMessage::Topic(*topic)).await?;
+        app_tx.send(FromSync::Topic(*topic)).await?;
 
         while let Some(result) = stream.next().await {
             let message: Message<T, E> = result?;
@@ -140,7 +140,7 @@ where
                     let mut bytes = Vec::new();
                     ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
                         .map_err(|e| SyncError::Protocol(e.to_string()))?;
-                    app_tx.send(AppMessage::Bytes(bytes)).await?;
+                    app_tx.send(FromSync::Bytes(bytes)).await?;
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
@@ -170,7 +170,7 @@ where
         self: Arc<Self>,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+        mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
@@ -184,7 +184,7 @@ where
 
             let replies = match &message {
                 Message::Have(topic, log_id, log_heights) => {
-                    app_tx.send(AppMessage::Topic(*topic)).await?;
+                    app_tx.send(FromSync::Topic(*topic)).await?;
                     let mut messages: Vec<Message<T, E>> = vec![];
 
                     let local_log_heights = self
@@ -288,7 +288,7 @@ mod tests {
     use tokio_util::sync::PollSender;
 
     use crate::traits::SyncProtocol;
-    use crate::AppMessage;
+    use crate::FromSync;
 
     use super::{LogHeightSyncProtocol, Message};
 
@@ -384,7 +384,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, vec![AppMessage::Topic(TOPIC_ID)])
+        assert_eq!(messages, vec![FromSync::Topic(TOPIC_ID)])
     }
 
     #[tokio::test]
@@ -436,7 +436,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, vec![AppMessage::Topic(TOPIC_ID)])
+        assert_eq!(messages, vec![FromSync::Topic(TOPIC_ID)])
     }
 
     #[tokio::test]
@@ -525,7 +525,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, [AppMessage::Topic(TOPIC_ID)])
+        assert_eq!(messages, [FromSync::Topic(TOPIC_ID)])
     }
 
     #[tokio::test]
@@ -620,10 +620,10 @@ mod tests {
         assert_eq!(
             messages,
             [
-                AppMessage::Topic(TOPIC_ID),
-                AppMessage::Bytes(operation0_bytes),
-                AppMessage::Bytes(operation1_bytes),
-                AppMessage::Bytes(operation2_bytes)
+                FromSync::Topic(TOPIC_ID),
+                FromSync::Bytes(operation0_bytes),
+                FromSync::Bytes(operation1_bytes),
+                FromSync::Bytes(operation2_bytes)
             ]
         );
     }
@@ -733,10 +733,10 @@ mod tests {
             .unwrap();
 
         let peer_a_expected_messages = vec![
-            AppMessage::Topic(TOPIC_ID.clone()),
-            AppMessage::Bytes(operation0_bytes),
-            AppMessage::Bytes(operation1_bytes),
-            AppMessage::Bytes(operation2_bytes),
+            FromSync::Topic(TOPIC_ID.clone()),
+            FromSync::Bytes(operation0_bytes),
+            FromSync::Bytes(operation1_bytes),
+            FromSync::Bytes(operation2_bytes),
         ];
 
         let mut peer_a_messages = Vec::new();
@@ -744,7 +744,7 @@ mod tests {
 
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
-        let peer_b_expected_messages = vec![AppMessage::Topic(TOPIC_ID.clone())];
+        let peer_b_expected_messages = vec![FromSync::Topic(TOPIC_ID.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
 
@@ -856,9 +856,9 @@ mod tests {
             .unwrap();
 
         let peer_a_expected_messages = vec![
-            AppMessage::Topic(TOPIC_ID.clone()),
-            AppMessage::Bytes(operation1_bytes),
-            AppMessage::Bytes(operation2_bytes),
+            FromSync::Topic(TOPIC_ID.clone()),
+            FromSync::Bytes(operation1_bytes),
+            FromSync::Bytes(operation2_bytes),
         ];
 
         let mut peer_a_messages = Vec::new();
@@ -866,7 +866,7 @@ mod tests {
 
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
-        let peer_b_expected_messages = vec![AppMessage::Topic(TOPIC_ID.clone())];
+        let peer_b_expected_messages = vec![FromSync::Topic(TOPIC_ID.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
 

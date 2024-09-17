@@ -588,7 +588,7 @@ mod sync_protocols {
     use futures_util::{Sink, SinkExt};
     use p2panda_sync::protocols::utils::{into_sink, into_stream};
     use p2panda_sync::traits::SyncProtocol;
-    use p2panda_sync::{AppMessage, SyncError};
+    use p2panda_sync::{FromSync, SyncError};
     use serde::{Deserialize, Serialize};
     use tracing::debug;
 
@@ -615,7 +615,7 @@ mod sync_protocols {
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: open sync session");
 
@@ -624,7 +624,7 @@ mod sync_protocols {
 
             sink.send(DummyProtocolMessage::Topic(*topic)).await?;
             sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(AppMessage::Topic(*topic)).await?;
+            app_tx.send(FromSync::Topic(*topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -648,7 +648,7 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
@@ -661,7 +661,7 @@ mod sync_protocols {
 
                 match &message {
                     DummyProtocolMessage::Topic(topic) => {
-                        app_tx.send(AppMessage::Topic(*topic)).await?
+                        app_tx.send(FromSync::Topic(*topic)).await?
                     }
                     DummyProtocolMessage::Done => break,
                 }
@@ -702,7 +702,7 @@ mod sync_protocols {
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("open sync session");
             let mut sink = into_sink(tx);
@@ -712,7 +712,7 @@ mod sync_protocols {
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
-            app_tx.send(AppMessage::Topic(*topic)).await?;
+            app_tx.send(FromSync::Topic(*topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -747,7 +747,7 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<AppMessage, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
             let mut sink = into_sink(tx);
@@ -757,7 +757,7 @@ mod sync_protocols {
                 let message = result?;
 
                 match message {
-                    Message::Topic(topic) => app_tx.send(AppMessage::Topic(topic)).await?,
+                    Message::Topic(topic) => app_tx.send(FromSync::Topic(topic)).await?,
                     Message::Ping => {
                         debug!("ping message received");
                         sink.send(Message::Pong).await?;

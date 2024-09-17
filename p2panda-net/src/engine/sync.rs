@@ -8,7 +8,7 @@ use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_quinn::Connection;
 use p2panda_sync::traits::SyncProtocol;
-use p2panda_sync::{AppMessage, SyncError};
+use p2panda_sync::{FromSync, SyncError};
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
@@ -129,7 +129,7 @@ impl SyncActor {
         tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
                 // We expect the first message to be a topic id
-                if let AppMessage::Topic(id) = &message {
+                if let FromSync::Topic(id) = &message {
                     if sync_handshake_success {
                         error!("topic already received from sync session");
                         break;
@@ -148,7 +148,7 @@ impl SyncActor {
                     continue;
                 }
 
-                let AppMessage::Bytes(bytes) = message else {
+                let FromSync::Bytes(bytes) = message else {
                     error!("expected bytes from app message channel");
                     return;
                 };
@@ -212,7 +212,7 @@ impl SyncActor {
             let mut topic = None;
             while let Some(message) = rx.recv().await {
                 // We expect the first message to be a topic id
-                if let AppMessage::Topic(id) = &message {
+                if let FromSync::Topic(id) = &message {
                     // It should only be sent once so topic should be None now
                     if topic.is_some() {
                         error!("topic id message already received");
@@ -240,7 +240,7 @@ impl SyncActor {
                     return;
                 };
 
-                let AppMessage::Bytes(bytes) = message else {
+                let FromSync::Bytes(bytes) = message else {
                     error!("expected message bytes");
                     return;
                 };

@@ -20,7 +20,7 @@ pub enum SyncError {
 pub type TopicId = [u8; 32];
 
 #[derive(PartialEq, Debug)]
-pub enum AppMessage {
+pub enum FromSync {
     Topic(TopicId),
     Bytes(Vec<u8>),
 }
