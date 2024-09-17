@@ -790,7 +790,6 @@ mod sync_protocols {
 mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
@@ -983,7 +982,7 @@ mod tests {
         let store_a = MemoryStore::default();
         let protocol_a = LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store_a)),
+            store: store_a,
         };
 
         // Create some operations
@@ -1010,17 +1009,20 @@ mod tests {
         let mut store_b = MemoryStore::default();
         store_b
             .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store_b
             .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store_b
             .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
 
         // Construct log height protocol for peer b
         let protocol_b = LogHeightSyncProtocol {
-            store: Arc::new(RwLock::new(store_b)),
+            store: store_b,
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
         };
 

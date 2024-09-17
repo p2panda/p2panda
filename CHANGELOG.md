@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Sync past state for subscribed topics in `p2panda-net` [#553](https://github.com/p2panda/p2panda/pull/553)
+- Make all store methods async and use interior mutability patterns [#550](https://github.com/p2panda/p2panda/pull/550)
 - Introduce `p2panda-sync` offering generic sync tools and opinionated sync protocols [#549](https://github.com/p2panda/p2panda/pull/549)
 - Introduce blobs functionality, including import, export and download
   [#546](https://github.com/p2panda/p2panda/pull/546)

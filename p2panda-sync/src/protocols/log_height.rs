@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
@@ -46,7 +46,7 @@ static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
 #[derive(Clone, Debug)]
 pub struct LogHeightSyncProtocol<T, E> {
     pub log_ids: HashMap<TopicId, T>,
-    pub store: Arc<RwLock<MemoryStore<T, E>>>,
+    pub store: MemoryStore<T, E>,
 }
 
 impl<T, E> LogHeightSyncProtocol<T, E>
@@ -56,15 +56,6 @@ where
 {
     pub fn log_id(&self, topic: &TopicId) -> Option<&T> {
         self.log_ids.get(topic)
-    }
-    pub fn read_store(&self) -> RwLockReadGuard<MemoryStore<T, E>> {
-        self.store.read().expect("error getting read lock on store")
-    }
-
-    pub fn write_store(&self) -> RwLockWriteGuard<MemoryStore<T, E>> {
-        self.store
-            .write()
-            .expect("error getting write lock on store")
     }
 }
 
@@ -105,8 +96,9 @@ where
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
         };
         let local_log_heights = self
-            .read_store()
+            .store
             .get_log_heights(log_id.to_owned())
+            .await
             .expect("memory store error");
 
         sink.send(Message::<T, E>::Have(
@@ -188,8 +180,9 @@ where
                     let mut messages: Vec<Message<T, E>> = vec![];
 
                     let local_log_heights = self
-                        .read_store()
+                        .store
                         .get_log_heights(log_id.to_owned())
+                        .await
                         .expect("memory store error");
 
                     for (public_key, seq_num) in local_log_heights {
@@ -217,8 +210,9 @@ where
                         // For every log the remote needs send only the operations they are missing.
                         for (public_key, seq_num) in remote_needs {
                             let mut log = self
-                                .read_store()
+                                .store
                                 .get_log(public_key, log_id.to_owned())
+                                .await
                                 .map_err(|e| SyncError::Protocol(e.to_string()))?;
                             log.split_off(seq_num as usize)
                                 .into_iter()
@@ -275,7 +269,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
 
     use futures::SinkExt;
     use p2panda_core::extensions::DefaultExtensions;
@@ -365,7 +359,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store)),
+            store,
         });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -409,7 +403,7 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store)),
+            store,
         });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -470,12 +464,15 @@ mod tests {
         // Insert these operations to the store using `TOPIC_ID` as the log id
         store
             .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store
             .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store
             .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
@@ -500,7 +497,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store)),
+            store,
         });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -580,7 +577,7 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store)),
+            store,
         });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -639,7 +636,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store1)),
+            store: store1,
         });
 
         // Create a store for peer b and populate it with 3 operations
@@ -667,17 +664,20 @@ mod tests {
         // Insert these operations to the store using `TOPIC_ID` as the log id
         store2
             .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store2
             .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store2
             .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
 
         // Construct b log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
-            store: Arc::new(RwLock::new(store2)),
+            store: store2,
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
         });
 
@@ -779,12 +779,13 @@ mod tests {
         let mut store1 = MemoryStore::default();
         store1
             .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
-            store: Arc::new(RwLock::new(store1)),
+            store: store1,
         });
 
         // Create a store for peer b and populate it with 3 operations.
@@ -793,17 +794,20 @@ mod tests {
         // Insert these operations to the store using `TOPIC_ID` as the log id
         store2
             .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store2
             .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
         store2
             .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .await
             .unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
-            store: Arc::new(RwLock::new(store2)),
+            store: store2,
             log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
         });
 
