@@ -926,12 +926,12 @@ mod tests {
         // Subscribe to the same topic from both nodes which should kick off sync
         let handle1 = tokio::spawn(async move {
             let (_tx, _rx) = node_1.subscribe(topic_id).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
             node_1.shutdown().await.unwrap();
         });
         let handle2 = tokio::spawn(async move {
             let (_tx, _rx) = node_2.subscribe(topic_id).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
             node_2.shutdown().await.unwrap();
         });
 
@@ -1049,7 +1049,7 @@ mod tests {
         // Subscribe to the same topic from both nodes which should kick off sync
         let handle1 = tokio::spawn(async move {
             let (_tx, mut from_sync_rx) = node_a.subscribe(TOPIC_ID).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
 
             let mut from_sync_messages = Vec::new();
             while let Ok(message) = from_sync_rx.recv().await {
@@ -1095,7 +1095,7 @@ mod tests {
 
         let handle2 = tokio::spawn(async move {
             let (_tx, mut from_sync_rx) = node_b.subscribe(TOPIC_ID).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
 
             let mut from_sync_messages = Vec::new();
             while let Ok(message) = from_sync_rx.recv().await {
