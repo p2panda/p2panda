@@ -28,6 +28,7 @@ use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tracing::{debug, debug_span, warn};
 
+use crate::connection::ToConnectionActor;
 use crate::protocols::ProtocolHandler;
 
 // @TODO: Look at `PeerMap` in `src/engine/engine.rs`
@@ -36,37 +37,25 @@ use crate::protocols::ProtocolHandler;
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
-// @TODO: Consider naming this `ToConnectionManagerActor` to follow established crate-level naming
-// conventions.
 #[derive(Debug)]
-enum ConnectionEvent {
-    Connect(NodeId),
-    Disconnect(Connection),
-    PeerDiscovered(NodeId, TopicId),
-}
-
-#[derive(Debug)]
-struct ConnectionManager {
+pub struct ConnectionManager {
     active_connections: HashSet<NodeId>,
     address_book: HashMap<NodeId, TopicId>,
     completed_sync_sessions: HashSet<NodeId>,
-    connection_actor_tx: Sender<ConnectionEvent>,
-    // Receiver of peer / topic announcements from the network-wide gossip overlay.
-    discovery_rx: Receiver<ConnectionEvent>,
+    connection_actor_tx: Sender<ToConnectionActor>,
     // @TODO: Add `ToSyncActor` sender to initiate sync.
     endpoint: Endpoint,
 }
 
 impl ConnectionManager {
-    pub fn new(endpoint: Endpoint, discovery_rx: Receiver<ConnectionEvent>) -> Self {
-        let (connection_actor_tx, _connection_actor_rx) = mpsc::channel::<ConnectionEvent>(256);
+    pub fn new(endpoint: Endpoint) -> Self {
+        let (connection_actor_tx, _connection_actor_rx) = mpsc::channel::<ToConnectionActor>(256);
 
         Self {
             active_connections: HashSet::new(),
             address_book: HashMap::new(),
             completed_sync_sessions: HashSet::new(),
             connection_actor_tx,
-            discovery_rx,
             endpoint,
         }
     }
