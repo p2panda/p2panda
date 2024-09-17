@@ -13,12 +13,13 @@ type SeqNum = u64;
 type Timestamp = u64;
 type LogMeta = (SeqNum, Timestamp, Hash);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InnerMemoryStore<T, E> {
     operations: HashMap<Hash, Operation<E>>,
     logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
+#[derive(Clone, Debug)]
 pub struct MemoryStore<T, E> {
     inner: Arc<RwLock<InnerMemoryStore<T, E>>>,
 }
