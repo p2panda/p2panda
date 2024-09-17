@@ -788,11 +788,16 @@ mod sync_protocols {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::PrivateKey;
+    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_store::{MemoryStore, OperationStore};
+    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+    use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
@@ -933,5 +938,184 @@ mod tests {
         let (result1, result2) = tokio::join!(handle1, handle2);
         assert!(result1.is_ok());
         assert!(result2.is_ok());
+    }
+
+    /// Helper method for generating p2panda operations
+    fn generate_operation<E: Clone + Serialize>(
+        private_key: &PrivateKey,
+        body: Body,
+        seq_num: u64,
+        timestamp: u64,
+        backlink: Option<Hash>,
+        extensions: Option<E>,
+    ) -> Operation<E> {
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp,
+            seq_num,
+            backlink,
+            previous: vec![],
+            extensions,
+        };
+        header.sign(&private_key);
+
+        Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        }
+    }
+
+    #[tokio::test]
+    async fn e2e_log_height_sync() {
+        const NETWORK_ID: [u8; 32] = [1; 32];
+        const TOPIC_ID: [u8; 32] = [0u8; 32];
+        const LOG_ID: &str = "messages";
+
+        let peer_a_private_key = PrivateKey::new();
+        let peer_b_private_key = PrivateKey::new();
+
+        // Construct a store and log height protocol for peer a
+        let store_a = MemoryStore::default();
+        let protocol_a = LogHeightSyncProtocol {
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            store: Arc::new(RwLock::new(store_a)),
+        };
+
+        // Create some operations
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let operation0 = generate_operation(&peer_a_private_key, body.clone(), 0, 0, None, None);
+        let operation1 = generate_operation(
+            &peer_a_private_key,
+            body.clone(),
+            1,
+            100,
+            Some(operation0.hash),
+            None,
+        );
+        let operation2 = generate_operation(
+            &peer_a_private_key,
+            body.clone(),
+            2,
+            200,
+            Some(operation1.hash),
+            None,
+        );
+
+        // Create store for peer b and populate with operations
+        let mut store_b = MemoryStore::default();
+        store_b
+            .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .unwrap();
+        store_b
+            .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .unwrap();
+        store_b
+            .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .unwrap();
+
+        // Construct log height protocol for peer b
+        let protocol_b = LogHeightSyncProtocol {
+            store: Arc::new(RwLock::new(store_b)),
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+        };
+
+        // Build peer a's node
+        let node_a = NetworkBuilder::new(NETWORK_ID)
+            .sync(protocol_a)
+            .private_key(peer_a_private_key)
+            .build()
+            .await
+            .unwrap();
+
+        // Build peer b's node
+        let node_b = NetworkBuilder::new(NETWORK_ID)
+            .sync(protocol_b)
+            .private_key(peer_b_private_key.clone())
+            .build()
+            .await
+            .unwrap();
+
+        let node_a_addr = node_a.endpoint().node_addr().await.unwrap();
+        let node_b_addr = node_b.endpoint().node_addr().await.unwrap();
+
+        node_a.add_peer(node_b_addr).await.unwrap();
+        node_b.add_peer(node_a_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes which should kick off sync
+        let handle1 = tokio::spawn(async move {
+            let (_tx, mut from_sync_rx) = node_a.subscribe(TOPIC_ID).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            let mut from_sync_messages = Vec::new();
+            while let Ok(message) = from_sync_rx.recv().await {
+                from_sync_messages.push(message);
+                if from_sync_messages.len() == 4 {
+                    break;
+                }
+            }
+
+            // Construct the messages we expect to receive on the from_sync channel based on the
+            // operations we created earlier.
+            let mut operation0_bytes = Vec::new();
+            ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
+                .unwrap();
+            let mut operation1_bytes = Vec::new();
+            ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
+                .unwrap();
+            let mut operation2_bytes = Vec::new();
+            ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
+                .unwrap();
+
+            let peer_a_expected_messages = vec![
+                OutEvent::Ready,
+                OutEvent::Message {
+                    bytes: operation0_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+                OutEvent::Message {
+                    bytes: operation1_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+                OutEvent::Message {
+                    bytes: operation2_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+            ];
+
+            // Assert we receive the expected messages
+            assert_eq!(from_sync_messages, peer_a_expected_messages);
+
+            node_a.shutdown().await.unwrap();
+        });
+
+        let handle2 = tokio::spawn(async move {
+            let (_tx, mut from_sync_rx) = node_b.subscribe(TOPIC_ID).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            let mut from_sync_messages = Vec::new();
+            while let Ok(message) = from_sync_rx.recv().await {
+                from_sync_messages.push(message);
+                if from_sync_messages.len() == 1 {
+                    break;
+                }
+            }
+            // Assert the channel is now empty
+            assert!(from_sync_rx.is_empty());
+            // Assert we receive the expected messages
+            assert_eq!(from_sync_messages, vec![OutEvent::Ready]);
+
+            node_b.shutdown().await.unwrap();
+        });
+
+        // Wait on both to complete
+        let (result1, result2) = tokio::join!(handle1, handle2);
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok())
     }
 }

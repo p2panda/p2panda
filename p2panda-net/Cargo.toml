@@ -36,3 +36,4 @@ tracing = "0.1.40"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+p2panda-store = { path = "../p2panda-store" }
