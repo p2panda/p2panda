@@ -15,8 +15,11 @@ use tracing::{debug, error, warn};
 
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
-use crate::message::{FromBytes, ToBytes};
 use crate::network::{InEvent, OutEvent};
+use crate::sync_connection::SYNC_CONNECTION_ALPN;
+use crate::{FromBytes, ToBytes};
+
+use super::sync::{SyncActor, ToSyncActor};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -52,6 +55,19 @@ pub enum ToEngineActor {
         delivered_from: PublicKey,
         topic: TopicId,
     },
+    SyncHandshakeSuccess {
+        peer: PublicKey,
+        topic: TopicId,
+    },
+    SyncMessage {
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+        topic: TopicId,
+    },
+    SyncDone {
+        peer: PublicKey,
+        topic: TopicId,
+    },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
@@ -63,9 +79,49 @@ pub enum ToEngineActor {
     },
 }
 
+#[derive(Debug, Default)]
+pub struct GossipBuffer {
+    buffers: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
+    counters: HashMap<(PublicKey, TopicId), usize>,
+}
+
+impl GossipBuffer {
+    fn lock(&mut self, peer: PublicKey, topic: TopicId) {
+        let counter = self.counters.entry((peer, topic)).or_default();
+        *counter += 1;
+
+        self.buffers.entry((peer, topic)).or_default();
+
+        // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic
+        debug!(
+            "current sync sessions with {} on topic {}: {}",
+            peer, topic, counter
+        );
+    }
+
+    fn unlock(&mut self, peer: PublicKey, topic: TopicId) -> usize {
+        match self.counters.get_mut(&(peer, topic)) {
+            Some(counter) => {
+                *counter -= 1;
+                *counter
+            }
+            None => panic!(),
+        }
+    }
+
+    fn drain(&mut self, peer: PublicKey, topic: TopicId) -> Option<Vec<Vec<u8>>> {
+        self.buffers.remove(&(peer, topic))
+    }
+
+    fn buffer(&mut self, peer: PublicKey, topic: TopicId) -> Option<&mut Vec<Vec<u8>>> {
+        self.buffers.get_mut(&(peer, topic))
+    }
+}
+
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -75,33 +131,52 @@ pub struct EngineActor {
     network_joined_pending: bool,
     peers: PeerMap,
     topics: TopicMap,
+    gossip_buffer: GossipBuffer,
 }
 
 impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+        sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
         Self {
             endpoint,
             gossip_actor_tx,
+            sync_actor_tx,
             inbox,
             network_id,
             network_joined: false,
             network_joined_pending: false,
             peers: PeerMap::new(),
             topics: TopicMap::new(),
+            gossip_buffer: Default::default(),
         }
     }
 
-    pub async fn run(mut self, mut gossip_actor: GossipActor) -> Result<()> {
+    pub async fn run(
+        mut self,
+        mut gossip_actor: GossipActor,
+        sync_actor: Option<SyncActor>,
+    ) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
             if let Err(err) = gossip_actor.run().await {
                 error!("gossip recv actor failed: {err:?}");
             }
         });
+
+        let sync_handle = if let Some(mut sync_actor) = sync_actor {
+            let handle = tokio::task::spawn(async move {
+                if let Err(err) = sync_actor.run().await {
+                    error!("sync recv actor failed: {err:?}");
+                }
+            });
+            Some(handle)
+        } else {
+            None
+        };
 
         // Take oneshot sender from outside API awaited by `shutdown` call and fire it as soon as
         // shutdown completed
@@ -111,6 +186,9 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
+        if let Some(sync_handle) = sync_handle {
+            sync_handle.await?;
+        }
         drop(self);
 
         match shutdown_completed_signal {
@@ -174,6 +252,16 @@ impl EngineActor {
             } => {
                 self.on_gossip_message(bytes, delivered_from, topic).await?;
             }
+            ToEngineActor::SyncHandshakeSuccess { peer, topic } => {
+                self.gossip_buffer.lock(peer, topic);
+            }
+            ToEngineActor::SyncMessage {
+                bytes,
+                delivered_from,
+                topic,
+            } => {
+                self.on_sync_message(bytes, delivered_from, topic).await?;
+            }
             ToEngineActor::Subscribe {
                 topic,
                 out_tx,
@@ -190,6 +278,20 @@ impl EngineActor {
             }
             ToEngineActor::Shutdown { .. } => {
                 unreachable!("handled in run_inner");
+            }
+            ToEngineActor::SyncDone { peer, topic } => {
+                let counter = self.gossip_buffer.unlock(peer, topic);
+
+                if counter == 0 {
+                    let buffer = self
+                        .gossip_buffer
+                        .drain(peer, topic)
+                        .expect("missing expected gossip buffer");
+
+                    for bytes in buffer {
+                        self.on_gossip_message(bytes, peer, topic).await?;
+                    }
+                }
             }
         }
 
@@ -238,6 +340,9 @@ impl EngineActor {
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
+    ///
+    /// In addition to gossip activity, a random set of peers is selected for the given topic and
+    /// a sync attempt is run over each successful connection.
     async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
         if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
@@ -246,8 +351,34 @@ impl EngineActor {
         let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
             self.gossip_actor_tx
-                .send(ToGossipActor::Join { topic, peers })
+                .send(ToGossipActor::Join {
+                    topic,
+                    peers: peers.clone(),
+                })
                 .await?;
+
+            // Do not attempt peer sync if the topic is the network id.
+            if topic == self.network_id {
+                return Ok(());
+            }
+
+            for peer in peers {
+                // Only initiate sync if there is a sync actor channel present.
+                if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                    let connection = self
+                        .endpoint
+                        .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
+                        .await?;
+
+                    sync_actor_tx
+                        .send(ToSyncActor::Open {
+                            peer,
+                            topic,
+                            connection,
+                        })
+                        .await?;
+                }
+            }
         }
 
         Ok(())
@@ -366,6 +497,22 @@ impl EngineActor {
         Ok(())
     }
 
+    /// Process an message forwarded from the sync actor.
+    async fn on_sync_message(
+        &mut self,
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+        topic: TopicId,
+    ) -> Result<()> {
+        if self.topics.has_joined(&topic).await {
+            self.topics.on_message(topic, bytes, delivered_from).await?;
+        } else {
+            warn!("received message for unknown topic {topic}");
+        }
+
+        Ok(())
+    }
+
     /// Process an inbound message from the network.
     async fn on_gossip_message(
         &mut self,
@@ -390,7 +537,11 @@ impl EngineActor {
                 }
             }
         } else if self.topics.has_joined(&topic).await {
-            self.topics.on_message(topic, bytes, delivered_from).await?;
+            if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic) {
+                buffer.push(bytes);
+            } else {
+                self.topics.on_message(topic, bytes, delivered_from).await?;
+            }
         } else {
             warn!("received message for unknown topic {topic}");
         }
@@ -434,6 +585,10 @@ impl EngineActor {
             .send(ToGossipActor::Shutdown)
             .await
             .ok();
+
+        if let Some(sync_actor_tx) = &self.sync_actor_tx {
+            sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
+        };
         Ok(())
     }
 }
@@ -510,7 +665,7 @@ impl TopicMap {
         inner.joined.contains(topic) || inner.pending_joins.contains(topic)
     }
 
-    /// Handle incoming messages from gossip overlay.
+    /// Handle incoming messages from gossip overlay or sync session.
     ///
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_message(

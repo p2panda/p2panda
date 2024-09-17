@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["core"]
-log-height = ["dep:p2panda-core", "dep:p2panda-store", "core"]
+default = ["core", "log-height"]
+log-height = ["dep:p2panda-core", "dep:p2panda-store", "core", "cbor"]
 core = [
     "dep:anyhow",
-    "dep:ciborium",
     "dep:serde",
     "dep:tokio",
     "dep:tokio-stream",
     "dep:tokio-util",
 ]
+cbor = ["dep:ciborium"]
 
 [dependencies]
 futures = "0.3.30"
@@ -31,6 +31,7 @@ tokio = { version = "1.39.3", features = ["rt", "macros"], optional = true }
 tracing = "0.1.40"
 thiserror = "1.0.63"
 trait-variant = "0.1.2"
+async-trait = "0.1.82"
 
 [dev-dependencies]
 tokio = { version = "1.39.3", features = ["rt", "macros", "net", "io-util"] }

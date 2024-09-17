@@ -14,6 +14,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_sync::traits::SyncProtocol;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -25,6 +26,7 @@ use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
+use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
@@ -54,6 +56,7 @@ pub struct NetworkBuilder {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
@@ -71,6 +74,7 @@ impl NetworkBuilder {
             gossip_config: None,
             network_id,
             protocols: Default::default(),
+            sync_protocol: None,
             relay_mode: RelayMode::Disabled,
             secret_key: None,
         }
@@ -152,6 +156,12 @@ impl NetworkBuilder {
         self
     }
 
+    /// Sets the sync protocol for this network.
+    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a> + 'static) -> Self {
+        self.sync_protocol = Some(Arc::new(protocol));
+        self
+    }
+
     /// Sets the gossip configuration.
     ///
     /// Configuration parameters define the behavior of the swarm membership (HyParView) and gossip
@@ -222,8 +232,14 @@ impl NetworkBuilder {
             &node_addr.info,
         );
 
-        let engine = Engine::new(self.network_id, endpoint.clone(), gossip.clone());
         let handshake = Handshake::new(gossip.clone());
+
+        let engine = Engine::new(
+            self.network_id,
+            endpoint.clone(),
+            gossip.clone(),
+            self.sync_protocol,
+        );
 
         // Add direct addresses to address book
         for mut direct_addr in self.direct_node_addresses {
@@ -239,6 +255,8 @@ impl NetworkBuilder {
             engine.add_peer(direct_addr.clone()).await?;
         }
 
+        let sync_handler = engine.sync_handler();
+
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
             relay,
@@ -251,11 +269,17 @@ impl NetworkBuilder {
         });
 
         // Register core protocols all nodes accept
-        self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip));
+        self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
         self.protocols.insert(HANDSHAKE_ALPN, Arc::new(handshake));
-        let protocols = Arc::new(self.protocols);
-        if let Err(err) = inner.endpoint.set_alpns(protocols.alpns()) {
-            inner.shutdown(protocols).await;
+        // If a sync protocol has not been configured then sync handler is None
+        if let Some(sync_handler) = sync_handler {
+            self.protocols
+                .insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler));
+        };
+        let protocols = Arc::new(self.protocols.clone());
+        let alpns = self.protocols.alpns();
+        if let Err(err) = inner.endpoint.set_alpns(alpns) {
+            inner.shutdown(protocols.clone()).await;
             return Err(err);
         }
 
@@ -437,6 +461,7 @@ impl NetworkInner {
     /// Closes all connections and shuts down the network engine.
     async fn shutdown(&self, protocols: Arc<ProtocolMap>) {
         // We ignore all errors during shutdown
+        debug!("close all connections and shutdown the node");
         let _ = tokio::join!(
             // Close the endpoint. Closing the Endpoint is the equivalent of calling
             // Connection::close on all connections: Operations will immediately fail with
@@ -473,8 +498,7 @@ impl Network {
     /// and written to.
     ///
     /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
-    /// up event"). They'll sync data initially (when a sync protocol is given) and then start
-    /// "live" mode via gossip broadcast.
+    /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
@@ -556,17 +580,242 @@ async fn handle_connection(
 }
 
 #[cfg(test)]
+mod sync_protocols {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
+    use futures_util::{Sink, SinkExt};
+    use p2panda_sync::protocols::utils::{into_sink, into_stream};
+    use p2panda_sync::traits::SyncProtocol;
+    use p2panda_sync::{FromSync, SyncError};
+    use serde::{Deserialize, Serialize};
+    use tracing::debug;
+
+    use crate::TopicId;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    enum DummyProtocolMessage {
+        Topic(TopicId),
+        Done,
+    }
+
+    /// A sync implementation which fulfills basic protocol requirements but nothing more  
+    #[derive(Debug)]
+    pub struct DummyProtocol {}
+
+    #[async_trait]
+    impl<'a> SyncProtocol<'a> for DummyProtocol {
+        fn name(&self) -> &'static str {
+            static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
+            DUMMY_PROTOCOL_NAME
+        }
+        async fn open(
+            self: Arc<Self>,
+            topic: &TopicId,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        ) -> Result<(), SyncError> {
+            debug!("DummyProtocol: open sync session");
+
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            sink.send(DummyProtocolMessage::Topic(*topic)).await?;
+            sink.send(DummyProtocolMessage::Done).await?;
+            app_tx.send(FromSync::Topic(*topic)).await?;
+
+            while let Some(result) = stream.next().await {
+                let message: DummyProtocolMessage = result?;
+                debug!("message received: {:?}", message);
+
+                match &message {
+                    DummyProtocolMessage::Topic(_) => panic!(),
+                    DummyProtocolMessage::Done => break,
+                }
+            }
+
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
+            Ok(())
+        }
+
+        async fn accept(
+            self: Arc<Self>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        ) -> Result<(), SyncError> {
+            debug!("DummyProtocol: accept sync session");
+
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            while let Some(result) = stream.next().await {
+                let message: DummyProtocolMessage = result?;
+                debug!("message received: {:?}", message);
+
+                match &message {
+                    DummyProtocolMessage::Topic(topic) => {
+                        app_tx.send(FromSync::Topic(*topic)).await?
+                    }
+                    DummyProtocolMessage::Done => break,
+                }
+            }
+
+            sink.send(DummyProtocolMessage::Done).await?;
+
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
+            Ok(())
+        }
+    }
+
+    // The protocol message types.
+    #[derive(Serialize, Deserialize)]
+    enum Message {
+        Topic(TopicId),
+        Ping,
+        Pong,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PingPongProtocol {}
+
+    /// A ping-pong sync protocol
+    #[async_trait]
+    impl<'a> SyncProtocol<'a> for PingPongProtocol {
+        fn name(&self) -> &'static str {
+            static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
+            SIMPLE_PROTOCOL_NAME
+        }
+
+        async fn open(
+            self: Arc<Self>,
+            topic: &TopicId,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        ) -> Result<(), SyncError> {
+            debug!("open sync session");
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            sink.send(Message::Topic(*topic)).await?;
+            sink.send(Message::Ping).await?;
+            debug!("ping message sent");
+
+            app_tx.send(FromSync::Topic(*topic)).await?;
+
+            while let Some(result) = stream.next().await {
+                let message = result?;
+
+                match message {
+                    Message::Topic(_) => panic!(),
+                    Message::Ping => {
+                        return Err(SyncError::Protocol(
+                            "unexpected Ping message received".to_string(),
+                        ));
+                    }
+                    Message::Pong => {
+                        debug!("pong message received");
+                        break;
+                    }
+                }
+            }
+
+            // @NOTE: It's important to call this method before the streams are dropped, it makes
+            // sure all bytes are flushed from the sink before closing so that no messages are
+            // lost.
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
+
+            Ok(())
+        }
+
+        async fn accept(
+            self: Arc<Self>,
+            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        ) -> Result<(), SyncError> {
+            debug!("accept sync session");
+            let mut sink = into_sink(tx);
+            let mut stream = into_stream(rx);
+
+            while let Some(result) = stream.next().await {
+                let message = result?;
+
+                match message {
+                    Message::Topic(topic) => app_tx.send(FromSync::Topic(topic)).await?,
+                    Message::Ping => {
+                        debug!("ping message received");
+                        sink.send(Message::Pong).await?;
+                        debug!("pong message sent");
+                        break;
+                    }
+                    Message::Pong => {
+                        return Err(SyncError::Protocol(
+                            "unexpected Pong message received".to_string(),
+                        ));
+                    }
+                }
+            }
+
+            // @NOTE: It's important to call this method before the streams are dropped, it makes
+            // sure all bytes are flushed from the sink before closing so that no messages are
+            // lost.
+            sink.flush().await?;
+            sink.close().await?;
+
+            app_tx.flush().await?;
+            app_tx.close().await?;
+
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::{Arc, RwLock};
+    use std::time::Duration;
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::PrivateKey;
+    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_store::{MemoryStore, OperationStore};
+    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+    use serde::Serialize;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
 
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
+    use crate::network::sync_protocols::PingPongProtocol;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
     use super::{InEvent, OutEvent};
+
+    fn setup_logging() {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+    }
 
     #[tokio::test]
     async fn config() {
@@ -602,6 +851,8 @@ mod tests {
 
     #[tokio::test]
     async fn join_gossip_overlay() {
+        setup_logging();
+
         let network_id = [1; 32];
 
         let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
@@ -641,7 +892,230 @@ mod tests {
             }
         );
 
+        println!("shutdown nodes");
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn ping_pong() {
+        setup_logging();
+
+        let network_id = [1; 32];
+        let topic_id = [0; 32];
+
+        let ping_pong = PingPongProtocol {};
+
+        let node_1 = NetworkBuilder::new(network_id)
+            .sync(ping_pong.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .sync(ping_pong)
+            .build()
+            .await
+            .unwrap();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1.add_peer(node_2_addr).await.unwrap();
+        node_2.add_peer(node_1_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes which should kick off sync
+        let handle1 = tokio::spawn(async move {
+            let (_tx, _rx) = node_1.subscribe(topic_id).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            node_1.shutdown().await.unwrap();
+        });
+        let handle2 = tokio::spawn(async move {
+            let (_tx, _rx) = node_2.subscribe(topic_id).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            node_2.shutdown().await.unwrap();
+        });
+
+        let (result1, result2) = tokio::join!(handle1, handle2);
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+    }
+
+    /// Helper method for generating p2panda operations
+    fn generate_operation<E: Clone + Serialize>(
+        private_key: &PrivateKey,
+        body: Body,
+        seq_num: u64,
+        timestamp: u64,
+        backlink: Option<Hash>,
+        extensions: Option<E>,
+    ) -> Operation<E> {
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp,
+            seq_num,
+            backlink,
+            previous: vec![],
+            extensions,
+        };
+        header.sign(&private_key);
+
+        Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        }
+    }
+
+    #[tokio::test]
+    async fn e2e_log_height_sync() {
+        const NETWORK_ID: [u8; 32] = [1; 32];
+        const TOPIC_ID: [u8; 32] = [0u8; 32];
+        const LOG_ID: &str = "messages";
+
+        let peer_a_private_key = PrivateKey::new();
+        let peer_b_private_key = PrivateKey::new();
+
+        // Construct a store and log height protocol for peer a
+        let store_a = MemoryStore::default();
+        let protocol_a = LogHeightSyncProtocol {
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            store: Arc::new(RwLock::new(store_a)),
+        };
+
+        // Create some operations
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let operation0 = generate_operation(&peer_a_private_key, body.clone(), 0, 0, None, None);
+        let operation1 = generate_operation(
+            &peer_a_private_key,
+            body.clone(),
+            1,
+            100,
+            Some(operation0.hash),
+            None,
+        );
+        let operation2 = generate_operation(
+            &peer_a_private_key,
+            body.clone(),
+            2,
+            200,
+            Some(operation1.hash),
+            None,
+        );
+
+        // Create store for peer b and populate with operations
+        let mut store_b = MemoryStore::default();
+        store_b
+            .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .unwrap();
+        store_b
+            .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .unwrap();
+        store_b
+            .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .unwrap();
+
+        // Construct log height protocol for peer b
+        let protocol_b = LogHeightSyncProtocol {
+            store: Arc::new(RwLock::new(store_b)),
+            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+        };
+
+        // Build peer a's node
+        let node_a = NetworkBuilder::new(NETWORK_ID)
+            .sync(protocol_a)
+            .private_key(peer_a_private_key)
+            .build()
+            .await
+            .unwrap();
+
+        // Build peer b's node
+        let node_b = NetworkBuilder::new(NETWORK_ID)
+            .sync(protocol_b)
+            .private_key(peer_b_private_key.clone())
+            .build()
+            .await
+            .unwrap();
+
+        let node_a_addr = node_a.endpoint().node_addr().await.unwrap();
+        let node_b_addr = node_b.endpoint().node_addr().await.unwrap();
+
+        node_a.add_peer(node_b_addr).await.unwrap();
+        node_b.add_peer(node_a_addr).await.unwrap();
+
+        // Subscribe to the same topic from both nodes which should kick off sync
+        let handle1 = tokio::spawn(async move {
+            let (_tx, mut from_sync_rx) = node_a.subscribe(TOPIC_ID).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+
+            let mut from_sync_messages = Vec::new();
+            while let Ok(message) = from_sync_rx.recv().await {
+                from_sync_messages.push(message);
+                if from_sync_messages.len() == 4 {
+                    break;
+                }
+            }
+
+            // Construct the messages we expect to receive on the from_sync channel based on the
+            // operations we created earlier.
+            let mut operation0_bytes = Vec::new();
+            ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
+                .unwrap();
+            let mut operation1_bytes = Vec::new();
+            ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
+                .unwrap();
+            let mut operation2_bytes = Vec::new();
+            ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
+                .unwrap();
+
+            let peer_a_expected_messages = vec![
+                OutEvent::Ready,
+                OutEvent::Message {
+                    bytes: operation0_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+                OutEvent::Message {
+                    bytes: operation1_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+                OutEvent::Message {
+                    bytes: operation2_bytes.clone(),
+                    delivered_from: peer_b_private_key.public_key(),
+                },
+            ];
+
+            // Assert we receive the expected messages
+            assert_eq!(from_sync_messages, peer_a_expected_messages);
+
+            node_a.shutdown().await.unwrap();
+        });
+
+        let handle2 = tokio::spawn(async move {
+            let (_tx, mut from_sync_rx) = node_b.subscribe(TOPIC_ID).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+
+            let mut from_sync_messages = Vec::new();
+            while let Ok(message) = from_sync_rx.recv().await {
+                from_sync_messages.push(message);
+                if from_sync_messages.len() == 1 {
+                    break;
+                }
+            }
+            // Assert the channel is now empty
+            assert!(from_sync_rx.is_empty());
+            // Assert we receive the expected messages
+            assert_eq!(from_sync_messages, vec![OutEvent::Ready]);
+
+            node_b.shutdown().await.unwrap();
+        });
+
+        // Wait on both to complete
+        let (result1, result2) = tokio::join!(handle1, handle2);
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok())
     }
 }

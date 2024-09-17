@@ -7,7 +7,7 @@ use serde::Serialize;
 use tokio_util::bytes::Buf;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::traits::SyncError;
+use crate::SyncError;
 
 #[derive(Clone, Debug)]
 pub struct CborCodec<T> {

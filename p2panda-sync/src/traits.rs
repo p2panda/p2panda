@@ -1,43 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use futures::{AsyncRead, AsyncWrite, Sink, Stream};
-use thiserror::Error;
+use std::fmt::Debug;
+use std::sync::Arc;
 
-use crate::engine::Session;
+use async_trait::async_trait;
+use futures::{AsyncRead, AsyncWrite, Sink};
 
-#[derive(Error, Debug)]
-pub enum SyncError {
-    #[error("protocol error: {0}")]
-    Protocol(String),
-    #[error("input/output error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("codec error: {0}")]
-    Codec(String),
-    #[error("custom error: {0}")]
-    Custom(String),
-}
+use crate::{FromSync, SyncError, TopicId};
 
-#[trait_variant::make(SyncProtocol: Send)]
-pub trait LocalSyncProtocol {
-    type Topic;
-    type Message;
+#[async_trait]
+pub trait SyncProtocol<'a>: Send + Sync + Debug {
+    fn name(&self) -> &'static str;
 
-    async fn run(
-        self,
-        topic: Self::Topic,
-        sink: impl Sink<Self::Message, Error = SyncError> + Send + Unpin,
-        stream: impl Stream<Item = Result<Self::Message, SyncError>> + Send + Unpin,
+    async fn open(
+        self: Arc<Self>,
+        topic: &TopicId,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError>;
-}
 
-pub trait SyncEngine<P, TX, RX>
-where
-    P: SyncProtocol,
-    TX: AsyncWrite,
-    RX: AsyncRead,
-{
-    type Sink: Sink<<P as SyncProtocol>::Message, Error = SyncError>;
-    type Stream: Stream<Item = Result<<P as SyncProtocol>::Message, SyncError>>;
-
-    fn session(&self, tx: TX, rx: RX) -> Session<P, Self::Sink, Self::Stream>;
+    async fn accept(
+        self: Arc<Self>,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+    ) -> Result<(), SyncError>;
 }
