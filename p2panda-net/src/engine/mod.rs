@@ -28,7 +28,7 @@ use crate::{NetworkId, TopicId};
 #[derive(Debug)]
 pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
-    sync_actor_tx: mpsc::Sender<ToSyncActor>,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     #[allow(dead_code)]
     actor_handle: SharedAbortingJoinHandle<()>,
 }
@@ -38,11 +38,18 @@ impl Engine {
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
-        let (sync_actor_tx, sync_actor_rx) = mpsc::channel(256);
+        let (sync_actor, sync_actor_tx) = match sync_protocol {
+            Some(protocol) => {
+                let (tx, rx) = mpsc::channel(256);
+                let actor = SyncActor::new(rx, protocol, engine_actor_tx.clone());
+                (Some(actor), Some(tx))
+            }
+            None => (None, None),
+        };
 
         let engine_actor = EngineActor::new(
             endpoint,
@@ -52,7 +59,6 @@ impl Engine {
             network_id.into(),
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
-        let sync_actor = SyncActor::new(sync_actor_rx, sync_protocol, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
             if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {
@@ -67,8 +73,12 @@ impl Engine {
         }
     }
 
-    pub fn sync_handler(&self) -> SyncConnection {
-        SyncConnection::new(self.sync_actor_tx.clone())
+    pub fn sync_handler(&self) -> Option<SyncConnection> {
+        if let Some(sync_actor_tx) = &self.sync_actor_tx {
+            Some(SyncConnection::new(sync_actor_tx.clone()))
+        } else {
+            None
+        }
     }
 
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {

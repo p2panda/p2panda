@@ -121,7 +121,7 @@ impl GossipBuffer {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    sync_actor_tx: mpsc::Sender<ToSyncActor>,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -138,7 +138,7 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-        sync_actor_tx: mpsc::Sender<ToSyncActor>,
+        sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
@@ -159,7 +159,7 @@ impl EngineActor {
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor,
-        mut sync_actor: SyncActor,
+        sync_actor: Option<SyncActor>,
     ) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
             if let Err(err) = gossip_actor.run().await {
@@ -167,11 +167,16 @@ impl EngineActor {
             }
         });
 
-        let sync_handle = tokio::task::spawn(async move {
-            if let Err(err) = sync_actor.run().await {
-                error!("sync recv actor failed: {err:?}");
-            }
-        });
+        let sync_handle = if let Some(mut sync_actor) = sync_actor {
+            let handle = tokio::task::spawn(async move {
+                if let Err(err) = sync_actor.run().await {
+                    error!("sync recv actor failed: {err:?}");
+                }
+            });
+            Some(handle)
+        } else {
+            None
+        };
 
         // Take oneshot sender from outside API awaited by `shutdown` call and fire it as soon as
         // shutdown completed
@@ -181,7 +186,9 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
-        sync_handle.await?;
+        if let Some(sync_handle) = sync_handle {
+            sync_handle.await?;
+        }
         drop(self);
 
         match shutdown_completed_signal {
@@ -356,18 +363,21 @@ impl EngineActor {
             }
 
             for peer in peers {
-                let connection = self
-                    .endpoint
-                    .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
-                    .await?;
+                // Only initiate sync if there is a sync actor channel present.
+                if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                    let connection = self
+                        .endpoint
+                        .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
+                        .await?;
 
-                self.sync_actor_tx
-                    .send(ToSyncActor::Open {
-                        peer,
-                        topic,
-                        connection,
-                    })
-                    .await?;
+                    sync_actor_tx
+                        .send(ToSyncActor::Open {
+                            peer,
+                            topic,
+                            connection,
+                        })
+                        .await?;
+                }
             }
         }
 
@@ -576,7 +586,9 @@ impl EngineActor {
             .await
             .ok();
 
-        self.sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
+        if let Some(sync_actor_tx) = &self.sync_actor_tx {
+            sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
+        };
         Ok(())
     }
 }

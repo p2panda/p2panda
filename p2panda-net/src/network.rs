@@ -56,7 +56,7 @@ pub struct NetworkBuilder {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
@@ -66,10 +66,7 @@ impl NetworkBuilder {
     ///
     /// The identifier is used during handshake and discovery protocols. Networks must use the
     /// same identifier if they wish to successfully connect and share gossip.
-    pub fn new(
-        network_id: NetworkId,
-        sync_protocol: impl for<'a> SyncProtocol<'a> + 'static,
-    ) -> Self {
+    pub fn new(network_id: NetworkId) -> Self {
         Self {
             bind_port: None,
             direct_node_addresses: Vec::new(),
@@ -77,19 +74,15 @@ impl NetworkBuilder {
             gossip_config: None,
             network_id,
             protocols: Default::default(),
-            sync_protocol: Arc::new(sync_protocol),
+            sync_protocol: None,
             relay_mode: RelayMode::Disabled,
             secret_key: None,
         }
     }
 
     /// Returns a new instance of `NetworkBuilder` using the given configuration.
-    pub fn from_config(
-        config: Config,
-        sync_protocol: impl for<'a> SyncProtocol<'a> + 'static,
-    ) -> Self {
-        let mut network_builder =
-            Self::new(config.network_id, sync_protocol).bind_port(config.bind_port);
+    pub fn from_config(config: Config) -> Self {
+        let mut network_builder = Self::new(config.network_id).bind_port(config.bind_port);
 
         for (public_key, addresses, relay_addr) in config.direct_node_addresses {
             network_builder = network_builder.direct_address(public_key, addresses, relay_addr)
@@ -160,6 +153,12 @@ impl NetworkBuilder {
     /// Adds one or more discovery strategy, such as mDNS.
     pub fn discovery(mut self, handler: impl Discovery + 'static) -> Self {
         self.discovery.add(handler);
+        self
+    }
+
+    /// Sets the sync protocol for this network.
+    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a> + 'static) -> Self {
+        self.sync_protocol = Some(Arc::new(protocol));
         self
     }
 
@@ -242,8 +241,6 @@ impl NetworkBuilder {
             self.sync_protocol,
         );
 
-        let sync = engine.sync_handler();
-
         // Add direct addresses to address book
         for mut direct_addr in self.direct_node_addresses {
             if direct_addr.relay_url().is_none() {
@@ -257,6 +254,8 @@ impl NetworkBuilder {
 
             engine.add_peer(direct_addr.clone()).await?;
         }
+
+        let sync_handler = engine.sync_handler();
 
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
@@ -272,7 +271,11 @@ impl NetworkBuilder {
         // Register core protocols all nodes accept
         self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
         self.protocols.insert(HANDSHAKE_ALPN, Arc::new(handshake));
-        self.protocols.insert(SYNC_CONNECTION_ALPN, Arc::new(sync));
+        // If a sync protocol has not been configured then sync handler is None
+        if let Some(sync_handler) = sync_handler {
+            self.protocols
+                .insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler));
+        };
         let protocols = Arc::new(self.protocols.clone());
         let alpns = self.protocols.alpns();
         if let Err(err) = inner.endpoint.set_alpns(alpns) {
@@ -796,7 +799,7 @@ mod tests {
 
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
-    use crate::network::sync_protocols::{DummyProtocol, PingPongProtocol};
+    use crate::network::sync_protocols::PingPongProtocol;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
     use super::{InEvent, OutEvent};
@@ -827,7 +830,7 @@ mod tests {
             relay: Some(relay_address.clone()),
         };
 
-        let builder = NetworkBuilder::from_config(config, DummyProtocol {});
+        let builder = NetworkBuilder::from_config(config);
 
         assert_eq!(builder.bind_port, Some(2024));
         assert_eq!(builder.network_id, [1; 32]);
@@ -847,14 +850,8 @@ mod tests {
 
         let network_id = [1; 32];
 
-        let node_1 = NetworkBuilder::new(network_id, DummyProtocol {})
-            .build()
-            .await
-            .unwrap();
-        let node_2 = NetworkBuilder::new(network_id, DummyProtocol {})
-            .build()
-            .await
-            .unwrap();
+        let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
 
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
@@ -902,14 +899,15 @@ mod tests {
         let network_id = [1; 32];
         let topic_id = [0; 32];
 
-        let node_1_protocol = PingPongProtocol {};
-        let node_2_protocol = PingPongProtocol {};
+        let ping_pong = PingPongProtocol {};
 
-        let node_1 = NetworkBuilder::new(network_id, node_1_protocol)
+        let node_1 = NetworkBuilder::new(network_id)
+            .sync(ping_pong.clone())
             .build()
             .await
             .unwrap();
-        let node_2 = NetworkBuilder::new(network_id, node_2_protocol)
+        let node_2 = NetworkBuilder::new(network_id)
+            .sync(ping_pong)
             .build()
             .await
             .unwrap();
