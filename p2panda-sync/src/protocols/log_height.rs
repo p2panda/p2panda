@@ -97,7 +97,7 @@ where
         };
         let local_log_heights = self
             .store
-            .get_log_heights(log_id.to_owned())
+            .get_log_heights(log_id)
             .await
             .expect("memory store error");
 
@@ -181,7 +181,7 @@ where
 
                     let local_log_heights = self
                         .store
-                        .get_log_heights(log_id.to_owned())
+                        .get_log_heights(log_id)
                         .await
                         .expect("memory store error");
 
@@ -211,7 +211,7 @@ where
                         for (public_key, seq_num) in remote_needs {
                             let mut log = self
                                 .store
-                                .get_log(public_key, log_id.to_owned())
+                                .get_log(&public_key, log_id)
                                 .await
                                 .map_err(|e| SyncError::Protocol(e.to_string()))?;
                             log.split_off(seq_num as usize)
@@ -337,7 +337,7 @@ mod tests {
     #[tokio::test]
     async fn sync_no_operations_accept() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
 
         let store = MemoryStore::<String, DefaultExtensions>::new();
 
@@ -351,14 +351,14 @@ mod tests {
 
         // Write some message into peer_b's send buffer
         let message_bytes = to_bytes(vec![
-            Message::Have(TOPIC_ID.clone(), LOG_ID.to_string(), vec![]),
+            Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
             Message::SyncDone,
         ]);
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
         // Accept a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store,
         });
         let mut sink =
@@ -384,7 +384,7 @@ mod tests {
     #[tokio::test]
     async fn sync_no_operations_open() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
 
         let store = MemoryStore::<String, DefaultExtensions>::new();
 
@@ -402,7 +402,7 @@ mod tests {
 
         // Open a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store,
         });
         let mut sink =
@@ -421,7 +421,7 @@ mod tests {
         assert_message_bytes(
             peer_b_read,
             vec![
-                Message::Have(TOPIC_ID.clone(), LOG_ID.to_string(), vec![]),
+                Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
                 Message::SyncDone,
             ],
         )
@@ -436,7 +436,7 @@ mod tests {
     #[tokio::test]
     async fn sync_operations_accept() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
 
         // Setup store with 3 operations in it
         let mut store = MemoryStore::<String, DefaultExtensions>::new();
@@ -462,18 +462,9 @@ mod tests {
         );
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
-        store
-            .insert_operation(operation0.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store
-            .insert_operation(operation1.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store
-            .insert_operation(operation2.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
+        store.insert_operation(&operation0, &log_id).await.unwrap();
+        store.insert_operation(&operation1, &log_id).await.unwrap();
+        store.insert_operation(&operation2, &log_id).await.unwrap();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -485,7 +476,7 @@ mod tests {
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String, DefaultExtensions>> = vec![
-            Message::Have(TOPIC_ID.clone(), LOG_ID.to_string(), vec![]),
+            Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -496,7 +487,7 @@ mod tests {
 
         // Accept a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store,
         });
         let mut sink =
@@ -528,7 +519,7 @@ mod tests {
     #[tokio::test]
     async fn sync_operations_open() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
         let store = MemoryStore::<String, DefaultExtensions>::new();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
@@ -576,7 +567,7 @@ mod tests {
 
         // Open a sync session on peer a (which consumes the above messages)
         let protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store,
         });
         let mut sink =
@@ -595,7 +586,7 @@ mod tests {
         assert_message_bytes(
             peer_b_read,
             vec![
-                Message::Have(TOPIC_ID.clone(), LOG_ID.to_string(), vec![]),
+                Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
                 Message::SyncDone,
             ],
         )
@@ -628,14 +619,14 @@ mod tests {
     #[tokio::test]
     async fn e2e_sync() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
 
         // Create an empty store for peer a
         let store1 = MemoryStore::default();
 
         // Construct a log height protocol and engine for peer a
         let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store: store1,
         });
 
@@ -662,23 +653,14 @@ mod tests {
         );
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
-        store2
-            .insert_operation(operation0.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store2
-            .insert_operation(operation1.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store2
-            .insert_operation(operation2.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
+        store2.insert_operation(&operation0, &log_id).await.unwrap();
+        store2.insert_operation(&operation1, &log_id).await.unwrap();
+        store2.insert_operation(&operation2, &log_id).await.unwrap();
 
         // Construct b log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
             store: store2,
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
         });
 
         // Duplex streams which simulate both ends of a bi-directional network connection
@@ -754,7 +736,7 @@ mod tests {
     #[tokio::test]
     async fn e2e_partial_sync() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
         let operation0 = generate_operation(&private_key, body.clone(), 0, 0, None, None);
@@ -777,14 +759,11 @@ mod tests {
 
         // Create a store for peer a and populate it with one operation
         let mut store1 = MemoryStore::default();
-        store1
-            .insert_operation(operation0.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
+        store1.insert_operation(&operation0, &log_id).await.unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store: store1,
         });
 
@@ -792,23 +771,14 @@ mod tests {
         let mut store2 = MemoryStore::default();
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
-        store2
-            .insert_operation(operation0.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store2
-            .insert_operation(operation1.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
-        store2
-            .insert_operation(operation2.clone(), LOG_ID.to_string())
-            .await
-            .unwrap();
+        store2.insert_operation(&operation0, &log_id).await.unwrap();
+        store2.insert_operation(&operation1, &log_id).await.unwrap();
+        store2.insert_operation(&operation2, &log_id).await.unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
             store: store2,
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
         });
 
         // Duplex streams which simulate both ends of a bi-directional network connection

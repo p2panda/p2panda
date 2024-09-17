@@ -973,7 +973,7 @@ mod tests {
     async fn e2e_log_height_sync() {
         const NETWORK_ID: [u8; 32] = [1; 32];
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        const LOG_ID: &str = "messages";
+        let log_id = String::from("messages");
 
         let peer_a_private_key = PrivateKey::new();
         let peer_b_private_key = PrivateKey::new();
@@ -981,7 +981,7 @@ mod tests {
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
         let protocol_a = LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
             store: store_a,
         };
 
@@ -1008,22 +1008,22 @@ mod tests {
         // Create store for peer b and populate with operations
         let mut store_b = MemoryStore::default();
         store_b
-            .insert_operation(operation0.clone(), LOG_ID.to_string())
+            .insert_operation(&operation0, &log_id)
             .await
             .unwrap();
         store_b
-            .insert_operation(operation1.clone(), LOG_ID.to_string())
+            .insert_operation(&operation1, &log_id)
             .await
             .unwrap();
         store_b
-            .insert_operation(operation2.clone(), LOG_ID.to_string())
+            .insert_operation(&operation2, &log_id)
             .await
             .unwrap();
 
         // Construct log height protocol for peer b
         let protocol_b = LogHeightSyncProtocol {
             store: store_b,
-            log_ids: HashMap::from([(TOPIC_ID, LOG_ID.to_string())]),
+            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
         };
 
         // Build peer a's node

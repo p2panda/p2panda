@@ -13,8 +13,8 @@ pub trait LocalOperationStore<LogId, Extensions> {
     /// already existed and no insertion occurred.
     async fn insert_operation(
         &mut self,
-        operation: Operation<Extensions>,
-        log_id: LogId,
+        operation: &Operation<Extensions>,
+        log_id: &LogId,
     ) -> Result<bool, StoreError>;
 
     /// Get an operation.
@@ -40,20 +40,21 @@ pub trait LocalLogStore<LogId, Extensions> {
     /// Returns an empty Vec when the author or a log with the requested id was not found.
     async fn get_log(
         &self,
-        public_key: PublicKey,
-        log_id: LogId,
+        public_key: &PublicKey,
+        log_id: &LogId,
     ) -> Result<Vec<Operation<Extensions>>, StoreError>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
-    async fn get_log_heights(&self, log_id: LogId) -> Result<Vec<(PublicKey, SeqNum)>, StoreError>;
+    async fn get_log_heights(&self, log_id: &LogId)
+        -> Result<Vec<(PublicKey, SeqNum)>, StoreError>;
 
     /// Get only the latest operation from an authors' log.
     ///
     /// Returns None when the author or a log with the requested id was not found.
     async fn latest_operation(
         &self,
-        public_key: PublicKey,
-        log_id: LogId,
+        public_key: &PublicKey,
+        log_id: &LogId,
     ) -> Result<Option<Operation<Extensions>>, StoreError>;
 
     /// Delete all operations in a log before the given sequence number.
@@ -62,8 +63,8 @@ pub trait LocalLogStore<LogId, Extensions> {
     /// the author or log could not be found, or no operations were deleted.
     async fn delete_operations(
         &mut self,
-        public_key: PublicKey,
-        log_id: LogId,
+        public_key: &PublicKey,
+        log_id: &LogId,
         before: u64,
     ) -> Result<bool, StoreError>;
 
@@ -76,8 +77,8 @@ pub trait LocalLogStore<LogId, Extensions> {
     /// the author or log could not be found, or no operations were deleted.
     async fn delete_payloads(
         &mut self,
-        public_key: PublicKey,
-        log_id: LogId,
+        public_key: &PublicKey,
+        log_id: &LogId,
         from: u64,
         to: u64,
     ) -> Result<bool, StoreError>;
