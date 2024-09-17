@@ -21,3 +21,7 @@ Highlights are marked with a pancake 🥞
   services [#540](https://github.com/p2panda/p2panda/pull/540)
 - Introduce all core p2panda types [#535](https://github.com/p2panda/p2panda/pull/535)
 - Introduce basic storage traits w/ MemoryStore implementation [#536](https://github.com/p2panda/p2panda/pull/536)
+
+### Changed
+
+- Handle non-copy store method parameters by reference [#558](https://github.com/p2panda/p2panda/pull/558)
