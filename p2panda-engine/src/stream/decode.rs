@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 use futures_util::stream::{Fuse, FusedStream};
@@ -7,51 +8,58 @@ use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::{Body, Header};
 use pin_project_lite::pin_project;
+use serde::de::DeserializeOwned;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{decode_operation, DecodeError, RawOperation};
 
-pub trait DecodeExt: Stream<Item = RawOperation> {
-    fn decode(self) -> Decode<Self>
+pub trait DecodeExt<E>: Stream<Item = RawOperation> {
+    fn decode(self) -> Decode<Self, E>
     where
+        E: DeserializeOwned,
         Self: Sized,
     {
         Decode::new(self)
     }
 }
 
-impl<T: ?Sized> DecodeExt for T where T: Stream<Item = RawOperation> {}
+impl<T: ?Sized, E> DecodeExt<E> for T where T: Stream<Item = RawOperation> {}
 
 pin_project! {
     #[derive(Debug)]
     #[must_use = "streams do nothing unless polled"]
-    pub struct Decode<St>
+    pub struct Decode<St, E>
     where
         St: Stream<Item = RawOperation>,
+        E: DeserializeOwned,
     {
         #[pin]
         stream: Fuse<St>,
+        _marker: PhantomData<E>,
     }
 }
 
-impl<St> Decode<St>
+impl<St, E> Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
+    E: DeserializeOwned,
 {
-    pub(super) fn new(stream: St) -> Decode<St> {
+    pub(super) fn new(stream: St) -> Decode<St, E> {
         Decode {
             stream: stream.fuse(),
+            _marker: PhantomData,
         }
     }
 
     delegate_access_inner!(stream, St, (.));
 }
 
-impl<St> Stream for Decode<St>
+impl<St, E> Stream for Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
+    E: DeserializeOwned,
 {
-    type Item = Result<(Header, Option<Body>), DecodeError>;
+    type Item = Result<(Header<E>, Option<Body>), DecodeError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
@@ -62,18 +70,20 @@ where
     }
 }
 
-impl<St: FusedStream> FusedStream for Decode<St>
+impl<St: FusedStream, E> FusedStream for Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
+    E: DeserializeOwned,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated()
     }
 }
 
-impl<S> Sink<RawOperation> for Decode<S>
+impl<S, E> Sink<RawOperation> for Decode<S, E>
 where
     S: Stream<Item = RawOperation> + Sink<RawOperation>,
+    E: DeserializeOwned,
 {
     type Error = S::Error;
 
