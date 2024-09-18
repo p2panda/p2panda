@@ -68,6 +68,10 @@ where
             decode_operation(&header, body.as_ref().map(|body| body.as_ref()))
         }))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.stream.size_hint()
+    }
 }
 
 impl<St: FusedStream, E> FusedStream for Decode<St, E>
