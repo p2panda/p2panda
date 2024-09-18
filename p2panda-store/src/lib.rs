@@ -4,4 +4,4 @@ pub mod memory_store;
 pub mod traits;
 
 pub use memory_store::MemoryStore;
-pub use traits::{TopicMap, LogStore, OperationStore, StoreError};
+pub use traits::{LogStore, OperationStore, StoreError, TopicMap};
