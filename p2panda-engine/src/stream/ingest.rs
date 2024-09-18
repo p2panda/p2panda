@@ -81,35 +81,35 @@ where
         let mut store = self.store.clone();
         let mut this = self.project();
 
-        let res = match this.stream.as_mut().poll_next(cx) {
-            Poll::Ready(operation) => operation,
-            Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
-        };
+        loop {
+            let res = match this.stream.as_mut().poll_next(cx) {
+                Poll::Ready(operation) => operation,
+                Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
+            };
+            let Some((header, body)) = res else {
+                // Either external stream or buffer stream or ended, so we stop here as well
+                return Poll::Ready(None);
+            };
 
-        let Some((header, body)) = res else {
-            // Either external stream or buffer stream or ended, so we stop here as well
-            return Poll::Ready(None);
-        };
+            let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
+            pin_mut!(ingest_fut);
+            let ingest_res = ready!(ingest_fut.poll(cx));
 
-        let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
-        pin_mut!(ingest_fut);
-        let res = ready!(ingest_fut.poll(cx));
+            match ingest_res {
+                Ok(IngestResult::Retry(header, body, _)) => {
+                    let Ok(_) = ready!(this.ooo_buffer_tx.poll_ready(cx)) else {
+                        break Poll::Ready(None);
+                    };
 
-        match res {
-            Ok(IngestResult::Retry(header, body, _)) => {
-                match this.ooo_buffer_tx.try_send((header, body)) {
-                    Ok(_) => Poll::Pending,
-                    Err(err) => {
-                        if err.is_full() {
-                            Poll::Pending
-                        } else {
-                            Poll::Ready(None)
-                        }
-                    }
+                    let Ok(_) = this.ooo_buffer_tx.start_send((header, body)) else {
+                        break Poll::Ready(None);
+                    };
+
+                    continue;
                 }
+                Ok(IngestResult::Complete(operation)) => return Poll::Ready(Some(Ok(operation))),
+                Err(err) => return Poll::Ready(Some(Err(err))),
             }
-            Ok(IngestResult::Complete(operation)) => Poll::Ready(Some(Ok(operation))),
-            Err(err) => Poll::Ready(Some(Err(err))),
         }
     }
 }
@@ -181,16 +181,16 @@ mod tests {
             let stream = iter(items)
                 .decode()
                 .filter_map(|item| async {
-                    println!("{:?}", item);
+                    println!("{item:?}");
                     match item {
                         Ok((header, body)) => Some((header, body)),
                         Err(_) => None,
                     }
                 })
-                .ingest(store, 16);
+                .ingest(store, 200);
 
-            let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
-            assert!(res.is_ok());
+            let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
+            assert_eq!(res.len(), 100);
         }
     }
 }

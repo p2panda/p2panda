@@ -105,7 +105,8 @@ mod tests {
     #[tokio::test]
     async fn decode() {
         let stream = mock_stream().decode();
-        let result: Result<Vec<(Header, Option<Body>)>, _> = stream.take(5).try_collect().await;
-        assert!(result.is_ok());
+        let result: Vec<(Header, Option<Body>)> =
+            stream.take(5).try_collect().await.expect("not fail");
+        assert_eq!(result.len(), 5);
     }
 }
