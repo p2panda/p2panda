@@ -15,7 +15,7 @@ use iroh_gossip::net::Gossip;
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
-use sync::{SyncActor, ToSyncActor};
+use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error};
 
@@ -29,7 +29,6 @@ use crate::{NetworkId, TopicId};
 pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
     connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
-    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     #[allow(dead_code)]
     actor_handle: SharedAbortingJoinHandle<()>,
 }
@@ -69,7 +68,7 @@ impl Engine {
             endpoint,
             gossip_actor_tx,
             connection_actor_tx.clone(),
-            sync_actor_tx.clone(),
+            sync_actor_tx,
             engine_actor_rx,
             network_id.into(),
         );
@@ -87,7 +86,6 @@ impl Engine {
         Self {
             engine_actor_tx,
             connection_actor_tx,
-            sync_actor_tx,
             actor_handle: actor_handle.into(),
         }
     }
