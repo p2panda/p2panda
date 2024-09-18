@@ -5,11 +5,13 @@ use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::Connection;
 use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc;
+use tracing::debug;
 
 use crate::connection::manager::ConnectionManager;
 use crate::engine::sync::ToSyncActor;
 
 #[derive(Debug)]
+/// Connection events.
 pub enum ToConnectionActor {
     /// Process a newly discovered peer and topic.
     PeerDiscovered { peer: NodeId, topic: TopicId },
@@ -57,6 +59,8 @@ impl ConnectionActor {
     }
 
     pub async fn run(&mut self) -> Result<()> {
+        debug!("running connection actor!");
+
         loop {
             tokio::select! {
                 msg = self.inbox.recv() => {
@@ -72,9 +76,12 @@ impl ConnectionActor {
     }
 
     async fn on_actor_message(&mut self, msg: ToConnectionActor) -> Result<bool> {
+        // @TODO: Consider implementing Display for nicer logging of `ToConnectionActor` events.
+        debug!("connection event: {msg:?}");
+
         match msg {
             ToConnectionActor::PeerDiscovered { peer, topic } => {
-                self.handle_peer_discovered(peer, topic)
+                self.handle_peer_discovered(peer, topic).await?
             }
             ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
             ToConnectionActor::Connected { peer, connection } => {
@@ -89,8 +96,10 @@ impl ConnectionActor {
         Ok(true)
     }
 
-    fn handle_peer_discovered(&mut self, peer: NodeId, topic: TopicId) {
-        self.connection_manager.add_peer(peer, topic);
+    async fn handle_peer_discovered(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+        self.connection_manager.add_peer(peer, topic).await?;
+
+        Ok(())
     }
 
     async fn handle_connect(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
