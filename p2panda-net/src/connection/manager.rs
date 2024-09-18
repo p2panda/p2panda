@@ -7,8 +7,7 @@ use iroh_net::endpoint::Connection;
 use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc::Sender;
 
-use crate::connection::ToConnectionActor;
-use crate::sync_connection::SYNC_CONNECTION_ALPN;
+use crate::connection::{ToConnectionActor, SYNC_CONNECTION_ALPN};
 
 #[derive(Debug)]
 pub struct ConnectionManager {

@@ -22,11 +22,11 @@ use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
+use crate::connection::SYNC_CONNECTION_ALPN;
 use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.

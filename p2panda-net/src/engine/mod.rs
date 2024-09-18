@@ -19,11 +19,10 @@ use sync::{SyncActor, ToSyncActor};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error};
 
-use crate::connection::{ConnectionActor, ToConnectionActor};
+use crate::connection::{ConnectionActor, SyncConnection, ToConnectionActor};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{InEvent, OutEvent};
-use crate::sync_connection::SyncConnection;
 use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
