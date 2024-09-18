@@ -138,11 +138,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use futures_util::StreamExt;
+    use futures_util::stream::iter;
+    use futures_util::{StreamExt, TryStreamExt};
+    use p2panda_core::Operation;
     use p2panda_store::MemoryStore;
-    use pin_utils::pin_mut;
+    use rand::seq::SliceRandom;
 
     use crate::extensions::StreamName;
+    use crate::operation::{IngestError, RawOperation};
     use crate::stream::decode::DecodeExt;
     use crate::test_utils::{mock_stream, Extensions};
 
@@ -163,10 +166,31 @@ mod tests {
             })
             .ingest(store, 16);
 
-        pin_mut!(stream);
+        let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
+        assert!(res.is_ok());
+    }
 
-        while let Some(test) = stream.next().await {
-            println!("{test:?}");
+    #[tokio::test]
+    async fn out_of_order() {
+        for _ in 0..10 {
+            let store = MemoryStore::<StreamName, Extensions>::new();
+
+            let mut items: Vec<RawOperation> = mock_stream().take(100).collect().await;
+            items.shuffle(&mut rand::thread_rng());
+
+            let stream = iter(items)
+                .decode()
+                .filter_map(|item| async {
+                    println!("{:?}", item);
+                    match item {
+                        Ok((header, body)) => Some((header, body)),
+                        Err(_) => None,
+                    }
+                })
+                .ingest(store, 16);
+
+            let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
+            assert!(res.is_ok());
         }
     }
 }
