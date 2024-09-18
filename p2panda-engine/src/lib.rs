@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-mod decode;
 mod macros;
 mod operation;
+mod stream;
 #[cfg(test)]
 mod test_utils;
 
-pub use decode::{Decode, DecodeExt};
+pub use stream::decode::{Decode, DecodeExt};

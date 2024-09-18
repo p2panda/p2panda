@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 ciborium = "0.2.2"
+futures-channel = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
 p2panda-core = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
 p2panda-store = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
