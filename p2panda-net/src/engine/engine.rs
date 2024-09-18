@@ -13,10 +13,10 @@ use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, warn};
 
+use crate::connection::{ConnectionActor, ToConnectionActor};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{InEvent, OutEvent};
-use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{FromBytes, ToBytes};
 
 use super::sync::{SyncActor, ToSyncActor};
@@ -121,6 +121,7 @@ impl GossipBuffer {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+    connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
     sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
@@ -138,6 +139,7 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+        connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
@@ -145,6 +147,7 @@ impl EngineActor {
         Self {
             endpoint,
             gossip_actor_tx,
+            connection_actor_tx,
             sync_actor_tx,
             inbox,
             network_id,
@@ -159,6 +162,7 @@ impl EngineActor {
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor,
+        connection_actor: Option<ConnectionActor>,
         sync_actor: Option<SyncActor>,
     ) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
@@ -166,6 +170,17 @@ impl EngineActor {
                 error!("gossip recv actor failed: {err:?}");
             }
         });
+
+        let connection_handle = if let Some(mut connection_actor) = connection_actor {
+            let handle = tokio::task::spawn(async move {
+                if let Err(err) = connection_actor.run().await {
+                    error!("connection recv actor failed: {err:?}");
+                }
+            });
+            Some(handle)
+        } else {
+            None
+        };
 
         let sync_handle = if let Some(mut sync_actor) = sync_actor {
             let handle = tokio::task::spawn(async move {
@@ -186,6 +201,9 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
+        if let Some(connection_handle) = connection_handle {
+            connection_handle.await?;
+        }
         if let Some(sync_handle) = sync_handle {
             sync_handle.await?;
         }
@@ -363,6 +381,17 @@ impl EngineActor {
             }
 
             for peer in peers {
+                // @TODO: Is this the best place to send this event?
+                // Seems like it, since this is when we first become aware that our node is
+                // interested in a new topic.
+                if let Some(connection_actor_tx) = &self.connection_actor_tx {
+                    connection_actor_tx
+                        .send(ToConnectionActor::PeerDiscovered { peer, topic })
+                        .await?;
+                }
+
+                // @TODO: Remove later.
+                /*
                 // Only initiate sync if there is a sync actor channel present.
                 if let Some(sync_actor_tx) = &self.sync_actor_tx {
                     let connection = self
@@ -378,6 +407,7 @@ impl EngineActor {
                         })
                         .await?;
                 }
+                */
             }
         }
 
