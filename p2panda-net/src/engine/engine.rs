@@ -381,33 +381,13 @@ impl EngineActor {
             }
 
             for peer in peers {
-                // @TODO: Is this the best place to send this event?
-                // Seems like it, since this is when we first become aware that our node is
-                // interested in a new topic.
+                // @TODO: Consider moving this invocation to `NeighborUp` or similar.
+                // Then the connection manager can deal with limiting connections etc.
                 if let Some(connection_actor_tx) = &self.connection_actor_tx {
                     connection_actor_tx
-                        .send(ToConnectionActor::PeerDiscovered { peer, topic })
+                        .send(ToConnectionActor::Connect { peer, topic })
                         .await?;
                 }
-
-                // @TODO: Remove later.
-                /*
-                // Only initiate sync if there is a sync actor channel present.
-                if let Some(sync_actor_tx) = &self.sync_actor_tx {
-                    let connection = self
-                        .endpoint
-                        .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
-                        .await?;
-
-                    sync_actor_tx
-                        .send(ToSyncActor::Open {
-                            peer,
-                            topic,
-                            connection,
-                        })
-                        .await?;
-                }
-                */
             }
         }
 
@@ -440,6 +420,7 @@ impl EngineActor {
         if topic == self.network_id {
             self.announce_topics().await?;
         }
+
         Ok(())
     }
 
@@ -616,9 +597,17 @@ impl EngineActor {
             .await
             .ok();
 
+        if let Some(connection_actor_tx) = &self.connection_actor_tx {
+            connection_actor_tx
+                .send(ToConnectionActor::Shutdown)
+                .await
+                .ok();
+        };
+
         if let Some(sync_actor_tx) = &self.sync_actor_tx {
             sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
         };
+
         Ok(())
     }
 }
