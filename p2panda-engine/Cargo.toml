@@ -10,6 +10,7 @@ futures-util = { version = "0.3.30", features = ["sink"] }
 p2panda-core = { path = "../p2panda-core" }
 p2panda-store = { path = "../p2panda-store" }
 pin-project = "1.1.5"
+pin-utils = "0.1.0"
 serde = { version = "1.0.210", features = ["derive"] }
 thiserror = "1.0.63"
 

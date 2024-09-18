@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::future::Future;
 use std::pin::Pin;
 
 use futures_channel::mpsc;
@@ -13,7 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
-use crate::operation::IngestError;
+use crate::operation::{ingest_operation, IngestError, IngestResult};
 use crate::{PruneFlag, StreamName};
 
 pub trait IngestExt<S, E>: Stream<Item = (Header<E>, Option<Body>)> {
@@ -73,9 +74,10 @@ where
     S: Clone + OperationStore<StreamName, E> + LogStore<StreamName, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
 {
-    type Item = Result<Operation, IngestError>;
+    type Item = Result<Operation<E>, IngestError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut store = self.store.clone();
         let mut this = self.project();
 
         let res = match this.stream.as_mut().poll_next(cx) {
@@ -83,12 +85,27 @@ where
             Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
         };
 
-        let Some(operation) = res else {
+        let Some((header, body)) = res else {
             // Either external stream or buffer stream or ended, so we stop here as well
             return Poll::Ready(None);
         };
 
-        Poll::Pending
+        let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
+        pin_utils::pin_mut!(ingest_fut);
+
+        let res = ready!(ingest_fut.poll(cx));
+
+        match res {
+            Ok(IngestResult::Retry(header, body, _)) => {
+                if let Err(_) = this.ooo_buffer_tx.start_send((header, body)) {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Pending
+                }
+            }
+            Ok(IngestResult::Complete(operation)) => Poll::Ready(Some(Ok(operation))),
+            Err(err) => Poll::Ready(Some(Err(err))),
+        }
     }
 }
 
@@ -115,4 +132,36 @@ where
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use futures_util::StreamExt;
+    use p2panda_store::MemoryStore;
+    use pin_utils::pin_mut;
+
+    use crate::stream::decode::DecodeExt;
+    use crate::test_utils::{mock_stream, Extensions};
+    use crate::StreamName;
+
+    use super::IngestExt;
+
+    #[tokio::test]
+    async fn decode() {
+        let store = MemoryStore::<StreamName, Extensions>::new();
+
+        let stream = mock_stream()
+            .take(5)
+            .decode()
+            .filter_map(|item| async {
+                match item {
+                    Ok((header, body)) => Some((header, body)),
+                    Err(_) => None,
+                }
+            })
+            .ingest(store, 16);
+
+        pin_mut!(stream);
+
+        while let Some(test) = stream.next().await {
+            println!("{test:?}");
+        }
+    }
+}

@@ -6,10 +6,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StreamName(PublicKey, Option<String>);
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+impl StreamName {
+    pub fn new(public_key: PublicKey, name: Option<&str>) -> Self {
+        Self(public_key, name.map(|value| value.to_owned()))
+    }
+}
+
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PruneFlag(bool);
 
 impl PruneFlag {
+    pub fn new(flag: bool) -> Self {
+        Self(flag)
+    }
+
     pub fn is_set(&self) -> bool {
         self.0
     }
