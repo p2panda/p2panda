@@ -992,6 +992,8 @@ mod tests {
 
     #[tokio::test]
     async fn e2e_log_height_sync() {
+        setup_logging();
+
         const NETWORK_ID: [u8; 32] = [1; 32];
         const TOPIC_ID: [u8; 32] = [0u8; 32];
         let log_id = String::from("messages");
