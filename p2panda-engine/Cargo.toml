@@ -9,7 +9,7 @@ futures-channel = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
 p2panda-core = { path = "../p2panda-core" }
 p2panda-store = { path = "../p2panda-store" }
-pin-project-lite = "0.2.14"
+pin-project = "1.1.5"
 serde = { version = "1.0.210", features = ["derive"] }
 thiserror = "1.0.63"
 

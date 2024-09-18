@@ -7,7 +7,7 @@ use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::{Body, Header};
-use pin_project_lite::pin_project;
+use pin_project::pin_project;
 use serde::de::DeserializeOwned;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
@@ -25,18 +25,17 @@ pub trait DecodeExt<E>: Stream<Item = RawOperation> {
 
 impl<T: ?Sized, E> DecodeExt<E> for T where T: Stream<Item = RawOperation> {}
 
-pin_project! {
-    #[derive(Debug)]
-    #[must_use = "streams do nothing unless polled"]
-    pub struct Decode<St, E>
-    where
-        St: Stream<Item = RawOperation>,
-        E: DeserializeOwned,
-    {
-        #[pin]
-        stream: Fuse<St>,
-        _marker: PhantomData<E>,
-    }
+#[derive(Debug)]
+#[pin_project]
+#[must_use = "streams do nothing unless polled"]
+pub struct Decode<St, E>
+where
+    St: Stream<Item = RawOperation>,
+    E: DeserializeOwned,
+{
+    #[pin]
+    stream: Fuse<St>,
+    _marker: PhantomData<E>,
 }
 
 impl<St, E> Decode<St, E>

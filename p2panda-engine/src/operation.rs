@@ -80,7 +80,7 @@ pub enum IngestResult<E> {
     ///
     /// The number indicates how many operations we are lacking before we can attempt validation
     /// again.
-    Retry(Operation<E>, u64),
+    Retry(Header<E>, Option<Body>, u64),
 }
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
@@ -92,7 +92,7 @@ pub enum IngestResult<E> {
 ///
 /// The trait bounds requires the operation header to contain a prune flag and stream name as
 /// specified by the core p2panda specification.
-pub async fn ingest_operation<S, L, E>(
+pub async fn ingest_operation<S, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
@@ -146,7 +146,7 @@ where
                             // We observe a gap in the log and therefore can't validate the
                             // backlink yet
                             OperationError::SeqNumNonIncremental(expected, given) => {
-                                return Ok(IngestResult::Retry(operation, expected - given))
+                                return Ok(IngestResult::Retry(operation.header, operation.body, expected - given))
                             }
                             _ => unreachable!("other error cases have been handled before"),
                         }
@@ -155,7 +155,8 @@ where
                 // We're missing the whole log so far
                 None => {
                     return Ok(IngestResult::Retry(
-                        operation.clone(),
+                        operation.header.clone(),
+                        operation.body.clone(),
                         operation.header.seq_num,
                     ))
                 }
