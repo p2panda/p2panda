@@ -18,20 +18,16 @@
 // - Ensure maximum concurrent connection limit is respected
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 use anyhow::Result;
-use futures_lite::future::Boxed as BoxedFuture;
 use iroh_gossip::proto::TopicId;
-use iroh_net::endpoint::{self, Connecting, Connection};
+use iroh_net::endpoint::{self, Connection};
 use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, debug_span, warn};
+use tracing::{debug, warn};
 
 use crate::connection::ToConnectionActor;
-use crate::protocols::ProtocolHandler;
-
-pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
+use crate::sync_connection::SYNC_CONNECTION_ALPN;
 
 // @TODO: Look at `PeerMap` in `src/engine/engine.rs`
 // That contains some address book functionality.
@@ -91,18 +87,21 @@ impl ConnectionManager {
         Ok(())
     }
 
-    /// Accept an inbound connection and begin the sync handshake if a previous session has not
-    /// already been successfully completed.
+    /// Accept an inbound connection if an active connection does not currently exist for the given
+    /// peer and then begin the sync handshake if a previous session has not already been
+    /// successfully completed.
     pub async fn accept_connection(&mut self, peer: NodeId, connection: Connection) -> Result<()> {
-        // @TODO: I think sync completion status tracking should be the responsibility of the sync
-        // engine. We should simply be passing along the message here.
-        if !self.sync_completed(&peer) {
-            self.activate_connection(peer);
-            self.listen_for_disconnection(connection.clone()).await?;
+        if !self.currently_connected(&peer) {
+            // @TODO: I think sync completion status tracking should be the responsibility of the sync
+            // engine. We should simply be passing along the message here.
+            if !self.sync_completed(&peer) {
+                self.activate_connection(peer);
+                self.listen_for_disconnection(connection.clone()).await?;
 
-            self.connection_actor_tx
-                .send(ToConnectionActor::Sync { peer, connection })
-                .await?;
+                self.connection_actor_tx
+                    .send(ToConnectionActor::Sync { peer, connection })
+                    .await?;
+            }
         }
 
         Ok(())
@@ -151,33 +150,20 @@ impl ConnectionManager {
         let _ = self.active_connections.insert(peer);
     }
 
-    pub fn add_peer(&mut self, peer: NodeId, topic: TopicId) {
-        self.address_book.insert(peer, topic);
-    }
-
-    fn remove_peer(&mut self, peer: &NodeId) {
-        self.address_book.remove(peer);
-    }
-
-    pub async fn handle_connection(&self, connection: Connection) -> Result<()> {
-        let peer = endpoint::get_remote_node_id(&connection)?;
-
-        if !self.currently_connected(&peer) {
-            let remote_addr = connection.remote_address();
-            let connection_id = connection.stable_id() as u64;
-            let _span = debug_span!("sync connection", connection_id, %remote_addr);
-
+    /// Add the given peer and topic to the address book.
+    ///
+    /// Attempt an outbound connection if the peer-topic combination was not already known.
+    pub async fn add_peer(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+        if self.address_book.insert(peer, topic).is_none() {
             self.connection_actor_tx
-                .send(ToConnectionActor::Connected { peer, connection })
+                .send(ToConnectionActor::Connect { peer, topic })
                 .await?;
         }
 
         Ok(())
     }
-}
 
-impl ProtocolHandler for ConnectionManager {
-    fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
-        Box::pin(async move { self.handle_connection(connecting.await?).await })
+    fn remove_peer(&mut self, peer: &NodeId) {
+        self.address_book.remove(peer);
     }
 }
