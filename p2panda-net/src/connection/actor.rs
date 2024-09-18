@@ -5,7 +5,7 @@ use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::Connection;
 use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::connection::manager::ConnectionManager;
 use crate::engine::sync::ToSyncActor;
@@ -13,8 +13,6 @@ use crate::engine::sync::ToSyncActor;
 #[derive(Debug)]
 /// Connection events.
 pub enum ToConnectionActor {
-    /// Process a newly discovered peer and topic.
-    PeerDiscovered { peer: NodeId, topic: TopicId },
     /// Initiate an outbound connection with the given peer and topic.
     Connect { peer: NodeId, topic: TopicId },
     /// Handle an inbound connection.
@@ -27,8 +25,8 @@ pub enum ToConnectionActor {
         peer: NodeId,
         connection: Connection,
     },
-    /// Close the connection.
-    Disconnect { connection: Connection },
+    /// Terminate the actor.
+    Shutdown,
 }
 
 /// Orchestrate connection state transitions.
@@ -40,22 +38,24 @@ pub struct ConnectionActor {
     connection_manager: ConnectionManager,
     sync_actor_tx: mpsc::Sender<ToSyncActor>,
     inbox: mpsc::Receiver<ToConnectionActor>,
+    connection_actor_tx: mpsc::Sender<ToConnectionActor>,
 }
 
 impl ConnectionActor {
-    pub fn new(
-        endpoint: Endpoint,
-        inbox: mpsc::Receiver<ToConnectionActor>,
-        sync_actor_tx: mpsc::Sender<ToSyncActor>,
-    ) -> Self {
-        let (connection_actor_tx, inbox) = mpsc::channel::<ToConnectionActor>(256);
-        let connection_manager = ConnectionManager::new(endpoint, connection_actor_tx);
+    pub fn new(endpoint: Endpoint, sync_actor_tx: mpsc::Sender<ToSyncActor>) -> Self {
+        let (connection_actor_tx, inbox) = mpsc::channel(256);
+        let connection_manager = ConnectionManager::new(endpoint, connection_actor_tx.clone());
 
         Self {
             connection_manager,
             inbox,
+            connection_actor_tx,
             sync_actor_tx,
         }
+    }
+
+    pub fn sender(&self) -> mpsc::Sender<ToConnectionActor> {
+        self.connection_actor_tx.clone()
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -65,8 +65,13 @@ impl ConnectionActor {
             tokio::select! {
                 msg = self.inbox.recv() => {
                     let msg = msg.context("inbox closed")?;
-                    if !self.on_actor_message(msg).await.context("on_actor_message")? {
-                        break;
+                    match self.on_actor_message(msg).await {
+                        Err(err) => error!("failed to process connection event: {err:?}"),
+                        Ok(result) => {
+                            if !result {
+                                break
+                            }
+                        }
                     }
                 },
             }
@@ -80,9 +85,6 @@ impl ConnectionActor {
         debug!("connection event: {msg:?}");
 
         match msg {
-            ToConnectionActor::PeerDiscovered { peer, topic } => {
-                self.handle_peer_discovered(peer, topic).await?
-            }
             ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
             ToConnectionActor::Connected { peer, connection } => {
                 self.handle_connected(peer, connection).await?
@@ -90,16 +92,10 @@ impl ConnectionActor {
             ToConnectionActor::Sync { peer, connection } => {
                 self.handle_sync(peer, connection).await?
             }
-            ToConnectionActor::Disconnect { connection } => self.handle_disconnect(connection)?,
+            ToConnectionActor::Shutdown => return Ok(false),
         }
 
         Ok(true)
-    }
-
-    async fn handle_peer_discovered(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
-        self.connection_manager.add_peer(peer, topic).await?;
-
-        Ok(())
     }
 
     async fn handle_connect(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
@@ -128,12 +124,6 @@ impl ConnectionActor {
         self.sync_actor_tx
             .send(ToSyncActor::Accept { peer, connection })
             .await?;
-
-        Ok(())
-    }
-
-    fn handle_disconnect(&mut self, connection: Connection) -> Result<()> {
-        self.connection_manager.disconnect(connection)?;
 
         Ok(())
     }
