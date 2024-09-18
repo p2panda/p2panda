@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Introduce `TopicMap` trait [#560](https://github.com/p2panda/p2panda/pull/560)
 - Sync past state for subscribed topics in `p2panda-net` [#553](https://github.com/p2panda/p2panda/pull/553)
 - Make all store methods async and use interior mutability patterns [#550](https://github.com/p2panda/p2panda/pull/550)
 - Introduce `p2panda-sync` offering generic sync tools and opinionated sync protocols [#549](https://github.com/p2panda/p2panda/pull/549)
