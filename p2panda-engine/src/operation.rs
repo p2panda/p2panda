@@ -23,8 +23,8 @@ pub fn decode_operation<E>(
 where
     E: DeserializeOwned,
 {
-    let header = ciborium::from_reader::<Header<E>, _>(header)
-        .map_err(|err| Into::<DecodeError>::into(err))?;
+    let header =
+        ciborium::from_reader::<Header<E>, _>(header).map_err(Into::<DecodeError>::into)?;
     let body = body.map(Body::new);
     Ok((header, body))
 }

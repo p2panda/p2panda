@@ -9,7 +9,6 @@ use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::{Body, Extension, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
-// use pin_project_lite::pin_project;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
