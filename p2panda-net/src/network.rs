@@ -795,7 +795,7 @@ mod tests {
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+    use p2panda_sync::protocols::log_height::{LogHeightSyncProtocol, TopicMap};
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -804,7 +804,7 @@ mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
 
     use super::{InEvent, OutEvent};
 
@@ -969,6 +969,25 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Debug)]
+    struct LogIdTopicMap(HashMap<TopicId, String>);
+
+    impl LogIdTopicMap {
+        pub fn new() -> Self {
+            LogIdTopicMap(HashMap::new())
+        }
+    }
+
+    impl TopicMap<String> for LogIdTopicMap {
+        fn get(&self, topic: &TopicId) -> Option<&String> {
+            self.0.get(topic)
+        }
+
+        fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
+            self.0.insert(topic, scope)
+        }
+    }
+
     #[tokio::test]
     async fn e2e_log_height_sync() {
         const NETWORK_ID: [u8; 32] = [1; 32];
@@ -980,8 +999,10 @@ mod tests {
 
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
+        let mut topic_map = LogIdTopicMap::new();
+        topic_map.insert(TOPIC_ID, log_id.clone());
         let protocol_a = LogHeightSyncProtocol {
-            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
+            topic_map: topic_map.clone(),
             store: store_a,
         };
 
@@ -1022,8 +1043,8 @@ mod tests {
 
         // Construct log height protocol for peer b
         let protocol_b = LogHeightSyncProtocol {
+            topic_map,
             store: store_b,
-            log_ids: HashMap::from([(TOPIC_ID, log_id.clone())]),
         };
 
         // Build peer a's node
