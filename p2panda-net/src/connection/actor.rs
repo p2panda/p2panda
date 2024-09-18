@@ -25,6 +25,8 @@ pub enum ToConnectionActor {
         peer: NodeId,
         connection: Connection,
     },
+    /// Log successfully sync session.
+    SyncComplete { peer: NodeId, topic: TopicId },
     /// Terminate the actor.
     Shutdown,
 }
@@ -92,6 +94,9 @@ impl ConnectionActor {
             ToConnectionActor::Sync { peer, connection } => {
                 self.handle_sync(peer, connection).await?
             }
+            ToConnectionActor::SyncComplete { peer, topic } => {
+                self.handle_sync_complete(peer, topic).await?
+            }
             ToConnectionActor::Shutdown => return Ok(false),
         }
 
@@ -126,5 +131,9 @@ impl ConnectionActor {
             .await?;
 
         Ok(())
+    }
+
+    async fn handle_sync_complete(&self, peer: NodeId, topic: TopicId) -> Result<()> {
+        todo!()
     }
 }
