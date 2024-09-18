@@ -7,8 +7,8 @@ edition = "2021"
 ciborium = "0.2.2"
 futures-channel = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
-p2panda-core = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
-p2panda-store = { git = "https://github.com/p2panda/p2panda.git", branch = "v2" }
+p2panda-core = { path = "../p2panda-core" }
+p2panda-store = { path = "../p2panda-store" }
 pin-project-lite = "0.2.14"
 serde = { version = "1.0.210", features = ["derive"] }
 thiserror = "1.0.63"
