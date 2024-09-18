@@ -147,7 +147,7 @@ where
                             // We observe a gap in the log and therefore can't validate the
                             // backlink yet
                             OperationError::SeqNumNonIncremental(expected, given) => {
-                                return Ok(IngestResult::Retry(operation.header, operation.body, expected - given))
+                                return Ok(IngestResult::Retry(operation.header, operation.body, given - expected))
                             }
                             _ => unreachable!("other error cases have been handled before"),
                         }
