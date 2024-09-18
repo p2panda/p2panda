@@ -5,8 +5,8 @@ use futures_util::Stream;
 use p2panda_core::{Body, Extension, Header, PrivateKey};
 use serde::{Deserialize, Serialize};
 
+use crate::extensions::{PruneFlag, StreamName};
 use crate::operation::RawOperation;
-use crate::{PruneFlag, StreamName};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extensions {
@@ -28,6 +28,7 @@ impl Extension<PruneFlag> for Extensions {
 
 pub fn mock_stream() -> impl Stream<Item = RawOperation> {
     let private_key = PrivateKey::new();
+    let public_key = private_key.public_key();
     let body = Body::new(b"Hello, Penguin!");
 
     let mut backlink = None;
@@ -35,8 +36,13 @@ pub fn mock_stream() -> impl Stream<Item = RawOperation> {
 
     stream! {
         loop {
+            let extensions = Extensions {
+                stream_name: StreamName::new(public_key, Some("chat")),
+                ..Default::default()
+            };
+
             let mut header = Header::<Extensions> {
-                public_key: private_key.public_key(),
+                public_key,
                 version: 1,
                 signature: None,
                 payload_size: body.size(),
@@ -45,10 +51,7 @@ pub fn mock_stream() -> impl Stream<Item = RawOperation> {
                 seq_num,
                 backlink,
                 previous: vec![],
-                extensions: Some(Extensions {
-                    stream_name: StreamName::new(private_key.public_key(), Some("test")),
-                    prune_flag: PruneFlag::default(),
-                }),
+                extensions: Some(extensions),
             };
             header.sign(&private_key);
 

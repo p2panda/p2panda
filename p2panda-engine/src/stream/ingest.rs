@@ -3,19 +3,20 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use futures_channel::mpsc;
+use futures_channel::mpsc::{self};
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::{Body, Extension, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
+use pin_utils::pin_mut;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::extensions::{PruneFlag, StreamName};
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
-use crate::{PruneFlag, StreamName};
 
 pub trait IngestExt<S, E>: Stream<Item = (Header<E>, Option<Body>)> {
     fn ingest(self, store: S, ooo_buffer_size: usize) -> Ingest<Self, S, E>
@@ -91,16 +92,20 @@ where
         };
 
         let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
-        pin_utils::pin_mut!(ingest_fut);
-
+        pin_mut!(ingest_fut);
         let res = ready!(ingest_fut.poll(cx));
 
         match res {
             Ok(IngestResult::Retry(header, body, _)) => {
-                if let Err(_) = this.ooo_buffer_tx.start_send((header, body)) {
-                    Poll::Ready(None)
-                } else {
-                    Poll::Pending
+                match this.ooo_buffer_tx.try_send((header, body)) {
+                    Ok(_) => Poll::Pending,
+                    Err(err) => {
+                        if err.is_full() {
+                            Poll::Pending
+                        } else {
+                            Poll::Ready(None)
+                        }
+                    }
                 }
             }
             Ok(IngestResult::Complete(operation)) => Poll::Ready(Some(Ok(operation))),
@@ -137,14 +142,14 @@ mod tests {
     use p2panda_store::MemoryStore;
     use pin_utils::pin_mut;
 
+    use crate::extensions::StreamName;
     use crate::stream::decode::DecodeExt;
     use crate::test_utils::{mock_stream, Extensions};
-    use crate::StreamName;
 
     use super::IngestExt;
 
     #[tokio::test]
-    async fn decode() {
+    async fn ingest() {
         let store = MemoryStore::<StreamName, Extensions>::new();
 
         let stream = mock_stream()

@@ -5,10 +5,11 @@ use p2panda_core::{
     validate_backlink, validate_operation, Body, Extension, Header, Operation, OperationError,
 };
 use p2panda_store::{LogStore, OperationStore, StoreError};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use thiserror::Error;
 
-use crate::{PruneFlag, StreamName};
+use crate::extensions::{PruneFlag, StreamName};
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
