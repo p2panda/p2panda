@@ -794,8 +794,8 @@ mod tests {
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::protocols::log_height::{LogHeightSyncProtocol, TopicMap};
+    use p2panda_store::{MemoryStore, OperationStore, TopicMap};
+    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -978,12 +978,14 @@ mod tests {
         }
     }
 
-    impl TopicMap<String> for LogIdTopicMap {
+    impl TopicMap<TopicId, String> for LogIdTopicMap {
         fn get(&self, topic: &TopicId) -> Option<&String> {
             self.0.get(topic)
         }
+    }
 
-        fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
+    impl LogIdTopicMap {
+        pub fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
             self.0.insert(topic, scope)
         }
     }

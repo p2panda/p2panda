@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Header, Operation, PublicKey};
-use p2panda_store::{LogStore, MemoryStore};
+use p2panda_store::{LogStore, MemoryStore, TopicMap};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -18,12 +18,6 @@ use crate::{FromSync, SyncError, TopicId};
 
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
-
-pub trait TopicMap<T> {
-    fn insert(&mut self, topic: TopicId, scope: T) -> Option<T>;
-
-    fn get(&self, topic: &TopicId) -> Option<&T>;
-}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -54,21 +48,10 @@ pub struct LogHeightSyncProtocol<S, T, E> {
     pub store: MemoryStore<T, E>,
 }
 
-impl<S, T, E> LogHeightSyncProtocol<S, T, E>
-where
-    S: Debug + TopicMap<T>,
-    T: Clone + Debug + Default,
-    E: Clone + Default,
-{
-    pub fn log_id(&self, topic: &TopicId) -> Option<&T> {
-        self.topic_map.get(topic)
-    }
-}
-
 #[async_trait]
 impl<'a, S, T, E> SyncProtocol<'a> for LogHeightSyncProtocol<S, T, E>
 where
-    S: Debug + TopicMap<T> + Send + Sync,
+    S: Debug + TopicMap<TopicId, T> + Send + Sync,
     T: Clone
         + Debug
         + Default
@@ -99,7 +82,7 @@ where
         let mut sink = into_sink(tx);
         let mut stream = into_stream(rx);
 
-        let Some(log_id) = self.log_id(topic) else {
+        let Some(log_id) = self.topic_map.get(topic) else {
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
         };
         let local_log_heights = self
@@ -300,15 +283,15 @@ mod tests {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
         }
-    }
-
-    impl TopicMap<String> for LogIdTopicMap {
-        fn get(&self, topic: &TopicId) -> Option<&String> {
-            self.0.get(topic)
-        }
 
         fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
             self.0.insert(topic, scope)
+        }
+    }
+
+    impl TopicMap<TopicId, String> for LogIdTopicMap {
+        fn get(&self, topic: &TopicId) -> Option<&String> {
+            self.0.get(topic)
         }
     }
 
