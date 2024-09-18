@@ -25,17 +25,17 @@ use futures_lite::future::Boxed as BoxedFuture;
 use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use iroh_net::{Endpoint, NodeId};
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, debug_span, warn};
 
 use crate::connection::ToConnectionActor;
 use crate::protocols::ProtocolHandler;
 
+pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
+
 // @TODO: Look at `PeerMap` in `src/engine/engine.rs`
 // That contains some address book functionality.
 // Be sure we're not duplicating efforts.
-
-pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
 #[derive(Debug)]
 pub struct ConnectionManager {
@@ -43,14 +43,11 @@ pub struct ConnectionManager {
     address_book: HashMap<NodeId, TopicId>,
     completed_sync_sessions: HashSet<NodeId>,
     connection_actor_tx: Sender<ToConnectionActor>,
-    // @TODO: Add `ToSyncActor` sender to initiate sync.
     endpoint: Endpoint,
 }
 
 impl ConnectionManager {
-    pub fn new(endpoint: Endpoint) -> Self {
-        let (connection_actor_tx, _connection_actor_rx) = mpsc::channel::<ToConnectionActor>(256);
-
+    pub fn new(endpoint: Endpoint, connection_actor_tx: Sender<ToConnectionActor>) -> Self {
         Self {
             active_connections: HashSet::new(),
             address_book: HashMap::new(),
@@ -86,13 +83,7 @@ impl ConnectionManager {
     /// Close the given connection and remove the associated peer from the set of active
     /// connections.
     pub fn disconnect(&mut self, connection: Connection) -> Result<()> {
-        // @NOTE: Only call this after any related `SendStream` has been flushed with `finish()`.
-        // Calling `flush()` is the responsibility of the sync engine / actor.
         connection.close(0u8.into(), b"close from disconnect");
-
-        // @TODO: Handle the case where the connection is not explicitly closed, but has closed due
-        // to error.
-        // We could spawn a task where we listen for `closed()` event for each active connection.
 
         let peer = endpoint::get_remote_node_id(&connection)?;
         self.active_connections.remove(&peer);
@@ -100,14 +91,38 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Accept an inbound connection and begin the sync handshake if a previous session has not
+    /// already been successfully completed.
+    pub async fn accept_connection(&mut self, peer: NodeId, connection: Connection) -> Result<()> {
+        // @TODO: I think tracking sync completion status should be the responsibility of the sync
+        // engine. We should simply be passing along the message here.
+        if !self.sync_completed(&peer) {
+            self.activate_connection(peer);
+            self.listen_for_disconnection(connection.clone()).await?;
+
+            self.connection_actor_tx
+                .send(ToConnectionActor::Sync { peer, connection })
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Listen for closure of the connection; this may occur due to an error or because of an
     /// action taken by the remote peer.
-    async fn listen_for_disconnection(&self, connection: Connection) -> Result<()> {
+    pub async fn listen_for_disconnection(&self, connection: Connection) -> Result<()> {
+        let connection_actor_tx = self.connection_actor_tx.clone();
+
         tokio::task::spawn(async move {
             let reason = connection.closed().await;
             debug!("sync connection closed: {reason}");
 
-            // @TODO: Send `Disconnect` event on local message bus.
+            if let Err(err) = connection_actor_tx
+                .send(ToConnectionActor::Disconnect { connection })
+                .await
+            {
+                warn!("connection actor sender: {err}")
+            }
         })
         .await?;
 
@@ -121,56 +136,41 @@ impl ConnectionManager {
     }
 
     /// Query the sync state of the given peer.
-    fn sync_completed(&self, peer: &NodeId) -> bool {
+    pub fn sync_completed(&self, peer: &NodeId) -> bool {
         self.completed_sync_sessions.contains(peer)
     }
 
     /// Query the connection state of the given peer.
-    fn currently_connected(&self, peer: &NodeId) -> bool {
+    pub fn currently_connected(&self, peer: &NodeId) -> bool {
         self.active_connections.contains(peer)
     }
 
-    /// Handle an inbound connection attempt for the SYNC_CONNECTION ALPN.
-    ///
-    /// The connection will be dropped if one has already been established and is currently active.
-    ///
-    /// The sync actor will be invoked with the connection if a successful sync session has not
-    /// previously been completed with the connecting peer.
-    pub async fn handle_connection(&mut self, connection: Connection) -> Result<()> {
-        let peer = endpoint::get_remote_node_id(&connection)?;
-
-        if self.currently_connected(&peer) {
-            self.disconnect(connection)?
-        } else {
-            let remote_addr = connection.remote_address();
-            let connection_id = connection.stable_id() as u64;
-            let _span = debug_span!("sync connection", connection_id, %remote_addr);
-
-            // @TODO: Consider using a `Connected` event to avoid issues around mutability of
-            // `self`.
-
-            if !self.sync_completed(&peer) {
-                self.active_connections.insert(peer);
-
-                // @TODO: Spawn `closed()` listener.
-
-                // @TODO: Send the connection to the sync actor.
-                //
-                // self.engine_actor_tx
-                //    .send(ToEngineActor::SyncAccept { peer, connection })
-                //    .await?;
-            }
-        }
-
-        Ok(())
+    pub fn activate_connection(&mut self, peer: NodeId) {
+        let _ = self.active_connections.insert(peer);
     }
 
-    fn add_peer(&mut self, peer: NodeId, topic: TopicId) {
+    pub fn add_peer(&mut self, peer: NodeId, topic: TopicId) {
         self.address_book.insert(peer, topic);
     }
 
     fn remove_peer(&mut self, peer: &NodeId) {
         self.address_book.remove(peer);
+    }
+
+    pub async fn handle_connection(&self, connection: Connection) -> Result<()> {
+        let peer = endpoint::get_remote_node_id(&connection)?;
+
+        if !self.currently_connected(&peer) {
+            let remote_addr = connection.remote_address();
+            let connection_id = connection.stable_id() as u64;
+            let _span = debug_span!("sync connection", connection_id, %remote_addr);
+
+            self.connection_actor_tx
+                .send(ToConnectionActor::Connected { peer, connection })
+                .await?;
+        }
+
+        Ok(())
     }
 }
 
