@@ -29,7 +29,7 @@ pub enum ToConnectionActor {
     Disconnect { connection: Connection },
 }
 
-/// Orchestrates connection state transitions.
+/// Orchestrate connection state transitions.
 ///
 /// The connection actor is responsible for processing connection events and invoking connection
 /// manager methods.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Connection manager.
 //
 // Minimal functionality for first-pass:
@@ -7,8 +9,6 @@
 // - Connect to new peers
 // - Handle inbound peer connections
 // - Invoke sync sessions
-// - Record successful sync sessions
-//   - I think...this may be a concern of the sync actor
 // - Disconnect cleanly
 //
 // Second-pass features:
@@ -94,7 +94,7 @@ impl ConnectionManager {
     /// Accept an inbound connection and begin the sync handshake if a previous session has not
     /// already been successfully completed.
     pub async fn accept_connection(&mut self, peer: NodeId, connection: Connection) -> Result<()> {
-        // @TODO: I think tracking sync completion status should be the responsibility of the sync
+        // @TODO: I think sync completion status tracking should be the responsibility of the sync
         // engine. We should simply be passing along the message here.
         if !self.sync_completed(&peer) {
             self.activate_connection(peer);
@@ -129,12 +129,14 @@ impl ConnectionManager {
         Ok(())
     }
 
+    // @TODO: This should be removed if sync state tracking is added in the sync engine.
     /// Log sync as completed for the given peer.
     fn complete_sync(&mut self, peer: NodeId) {
         // Ignore the returned `bool`.
         let _ = self.completed_sync_sessions.insert(peer);
     }
 
+    // @TODO: This should be removed if sync state tracking is added in the sync engine.
     /// Query the sync state of the given peer.
     pub fn sync_completed(&self, peer: &NodeId) -> bool {
         self.completed_sync_sessions.contains(peer)
