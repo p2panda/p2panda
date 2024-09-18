@@ -92,5 +92,5 @@ pub enum StoreError {
 
 /// Trait used for mapping a generic topic to a single or collection of logs
 pub trait TopicMap<K, V> {
-    fn get(&self, topic: &K) -> Option<&V>;
+    fn get(&self, topic: &K) -> Option<V>;
 }

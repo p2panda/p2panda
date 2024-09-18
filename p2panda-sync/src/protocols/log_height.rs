@@ -87,7 +87,7 @@ where
         };
         let local_log_heights = self
             .store
-            .get_log_heights(log_id)
+            .get_log_heights(&log_id)
             .await
             .expect("memory store error");
 
@@ -290,8 +290,8 @@ mod tests {
     }
 
     impl TopicMap<TopicId, String> for LogIdTopicMap {
-        fn get(&self, topic: &TopicId) -> Option<&String> {
-            self.0.get(topic)
+        fn get(&self, topic: &TopicId) -> Option<String> {
+            self.0.get(topic).cloned()
         }
     }
 

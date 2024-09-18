@@ -979,8 +979,8 @@ mod tests {
     }
 
     impl TopicMap<TopicId, String> for LogIdTopicMap {
-        fn get(&self, topic: &TopicId) -> Option<&String> {
-            self.0.get(topic)
+        fn get(&self, topic: &TopicId) -> Option<String> {
+            self.0.get(topic).cloned()
         }
     }
 
