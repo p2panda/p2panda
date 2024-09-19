@@ -48,11 +48,16 @@ impl Engine {
         {
             Some(protocol) => {
                 let (sync_actor_tx, sync_actor_rx) = mpsc::channel(256);
-                let sync_actor = SyncActor::new(sync_actor_rx, protocol, engine_actor_tx.clone());
-
                 let connection_actor =
                     ConnectionActor::new(endpoint.clone(), sync_actor_tx.clone());
                 let connection_actor_tx = connection_actor.sender();
+
+                let sync_actor = SyncActor::new(
+                    sync_actor_rx,
+                    protocol,
+                    engine_actor_tx.clone(),
+                    connection_actor_tx.clone(),
+                );
 
                 (
                     Some(sync_actor),

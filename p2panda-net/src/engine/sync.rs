@@ -13,6 +13,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
+use crate::connection::ToConnectionActor;
+
 use super::engine::ToEngineActor;
 
 pub enum ToSyncActor {
@@ -32,6 +34,7 @@ pub struct SyncActor {
     inbox: mpsc::Receiver<ToSyncActor>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
+    connection_actor_tx: mpsc::Sender<ToConnectionActor>,
 }
 
 impl SyncActor {
@@ -39,11 +42,13 @@ impl SyncActor {
         inbox: mpsc::Receiver<ToSyncActor>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
         engine_actor_tx: mpsc::Sender<ToEngineActor>,
+        connection_actor_tx: mpsc::Sender<ToConnectionActor>,
     ) -> Self {
         Self {
             inbox,
             sync_protocol,
             engine_actor_tx,
+            connection_actor_tx,
         }
     }
 
@@ -99,6 +104,7 @@ impl SyncActor {
         // Spawn a task which opens a bi-directional stream over the provided connection and runs
         // the sync protocol.
         let protocol = self.sync_protocol.clone();
+        let connection_actor_tx = self.connection_actor_tx.clone();
         tokio::spawn(async move {
             let result = async {
                 let (mut send, mut recv) = connection
@@ -117,9 +123,18 @@ impl SyncActor {
             }
             .await;
 
-            if let Err(err) = result {
+            if let Err(err) = &result {
                 error!("{err}");
             };
+
+            connection_actor_tx
+                .send(ToConnectionActor::SyncComplete {
+                    peer,
+                    topic,
+                    result,
+                })
+                .await
+                .expect("connection channel closed");
         });
 
         // Spawn another task which picks up any new application messages and sends them

@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::Connection;
 use iroh_net::{Endpoint, NodeId};
+use p2panda_sync::SyncError;
 use tokio::sync::mpsc;
 use tracing::{debug, error};
 
@@ -14,11 +15,18 @@ use crate::engine::sync::ToSyncActor;
 /// Connection events.
 pub enum ToConnectionActor {
     /// Initiate an outbound connection with the given peer and topic.
-    Connect { peer: NodeId, topic: TopicId },
+    Connect {
+        peer: NodeId,
+        topic: TopicId,
+    },
     /// Handle an inbound connection.
     Connected {
         peer: NodeId,
         connection: Connection,
+    },
+    UpdatePeerTopics {
+        peer: NodeId,
+        topics: Vec<TopicId>,
     },
     /// Ask the sync engine to accept a session.
     Sync {
@@ -26,7 +34,11 @@ pub enum ToConnectionActor {
         connection: Connection,
     },
     /// Log successfully sync session.
-    SyncComplete { peer: NodeId, topic: TopicId },
+    SyncComplete {
+        peer: NodeId,
+        topic: TopicId,
+        result: Result<(), SyncError>,
+    },
     /// Terminate the actor.
     Shutdown,
 }
@@ -87,17 +99,23 @@ impl ConnectionActor {
         debug!("connection event: {msg:?}");
 
         match msg {
-            ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
+            // ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
             ToConnectionActor::Connected { peer, connection } => {
                 self.handle_connected(peer, connection).await?
             }
             ToConnectionActor::Sync { peer, connection } => {
                 self.handle_sync(peer, connection).await?
             }
-            ToConnectionActor::SyncComplete { peer, topic } => {
-                self.handle_sync_complete(peer, topic).await?
-            }
+            ToConnectionActor::SyncComplete {
+                peer,
+                topic,
+                result,
+            } => self.handle_sync_complete(peer, topic, result).await?,
             ToConnectionActor::Shutdown => return Ok(false),
+            ToConnectionActor::UpdatePeerTopics { peer, topics } => {
+                self.handle_update_peer(peer, topics).await?;
+            }
+            ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
         }
 
         Ok(true)
@@ -108,7 +126,7 @@ impl ConnectionActor {
             self.sync_actor_tx
                 .send(ToSyncActor::Open {
                     peer,
-                    topic,
+                    topic: topic.into(),
                     connection,
                 })
                 .await?;
@@ -125,6 +143,26 @@ impl ConnectionActor {
         Ok(())
     }
 
+    async fn handle_update_peer(&mut self, peer: NodeId, topics: Vec<TopicId>) -> Result<()> {
+        self.connection_manager
+            .update_peer_topics(peer, topics.clone())
+            .await?;
+        //
+        //         if let Some(connection) = self.connection_manager.connect(peer).await? {
+        //             for topic in topics {
+        //                 self.sync_actor_tx
+        //                     .send(ToSyncActor::Open {
+        //                         peer,
+        //                         topic,
+        //                         connection: connection.clone(),
+        //                     })
+        //                     .await?;
+        //             }
+        //         };
+
+        Ok(())
+    }
+
     async fn handle_sync(&self, peer: NodeId, connection: Connection) -> Result<()> {
         self.sync_actor_tx
             .send(ToSyncActor::Accept { peer, connection })
@@ -133,7 +171,14 @@ impl ConnectionActor {
         Ok(())
     }
 
-    async fn handle_sync_complete(&self, peer: NodeId, topic: TopicId) -> Result<()> {
-        todo!()
+    async fn handle_sync_complete(
+        &mut self,
+        peer: NodeId,
+        topic: TopicId,
+        _result: Result<(), SyncError>,
+    ) -> Result<()> {
+        // @TODO: handle the case when the sync session completed with an error
+        self.connection_manager.complete_sync(&peer, topic);
+        Ok(())
     }
 }

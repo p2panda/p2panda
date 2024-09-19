@@ -94,7 +94,7 @@ impl GossipBuffer {
 
         // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic
         debug!(
-            "current sync sessions with {} on topic {}: {}",
+            "lock gossip buffer with {} on topic {}: {}",
             peer, topic, counter
         );
     }
@@ -103,6 +103,10 @@ impl GossipBuffer {
         match self.counters.get_mut(&(peer, topic)) {
             Some(counter) => {
                 *counter -= 1;
+                debug!(
+                    "unlock gossip buffer with {} on topic {}: {}",
+                    peer, topic, counter
+                );
                 *counter
             }
             None => panic!(),
@@ -379,16 +383,6 @@ impl EngineActor {
             if topic == self.network_id {
                 return Ok(());
             }
-
-            for peer in peers {
-                // @TODO: Consider moving this invocation to `NeighborUp` or similar.
-                // Then the connection manager can deal with limiting connections etc.
-                if let Some(connection_actor_tx) = &self.connection_actor_tx {
-                    connection_actor_tx
-                        .send(ToConnectionActor::Connect { peer, topic })
-                        .await?;
-                }
-            }
         }
 
         Ok(())
@@ -572,7 +566,15 @@ impl EngineActor {
         );
 
         // Register earmarked topics from other peers
-        self.peers.on_announcement(topics, delivered_from);
+        self.peers.on_announcement(topics.clone(), delivered_from);
+
+        if let Some(tx) = &self.connection_actor_tx {
+            tx.send(ToConnectionActor::UpdatePeerTopics {
+                peer: delivered_from,
+                topics: topics,
+            })
+            .await?;
+        }
 
         // And optimistically try to join them if there's an overlap with our interests
         self.join_earmarked_topics().await?;

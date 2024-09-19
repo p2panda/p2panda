@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
+use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::Connection;
 use iroh_net::{Endpoint, NodeId};
 use tokio::sync::mpsc::Sender;
@@ -11,7 +12,9 @@ use crate::connection::{ToConnectionActor, SYNC_CONNECTION_ALPN};
 
 #[derive(Debug)]
 pub struct ConnectionManager {
-    completed_sync_sessions: HashSet<NodeId>,
+    peers: HashMap<NodeId, HashSet<TopicId>>,
+    outbound_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
+    sync_complete: HashMap<TopicId, HashSet<NodeId>>,
     connection_actor_tx: Sender<ToConnectionActor>,
     endpoint: Endpoint,
 }
@@ -19,10 +22,43 @@ pub struct ConnectionManager {
 impl ConnectionManager {
     pub fn new(endpoint: Endpoint, connection_actor_tx: Sender<ToConnectionActor>) -> Self {
         Self {
-            completed_sync_sessions: HashSet::new(),
+            peers: HashMap::new(),
+            outbound_sync_sessions: HashMap::new(),
+            sync_complete: HashMap::new(),
             connection_actor_tx,
             endpoint,
         }
+    }
+
+    pub async fn update_peer_topics(&mut self, peer: NodeId, topics: Vec<TopicId>) -> Result<()> {
+        let new_topics = HashSet::from_iter(topics.into_iter());
+        let peer_topics = self.peers.entry(peer).or_default();
+        let difference = new_topics.difference(peer_topics);
+
+        for topic in difference {
+            let outbound_peers = self
+                .outbound_sync_sessions
+                .entry(*topic)
+                .or_insert(HashSet::new());
+
+            let sync_complete = self
+                .sync_complete
+                .entry(*topic)
+                .or_default()
+                .contains(&peer);
+
+            if !outbound_peers.contains(&peer) && !sync_complete {
+                outbound_peers.insert(peer);
+                self.connection_actor_tx
+                    .send(ToConnectionActor::Connect {
+                        peer,
+                        topic: *topic,
+                    })
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Attempt to connect with the given peer.
@@ -50,12 +86,11 @@ impl ConnectionManager {
     }
 
     /// Log sync as completed for the given peer.
-    fn complete_sync(&mut self, peer: NodeId) -> bool {
-        self.completed_sync_sessions.insert(peer)
-    }
-
-    /// Query the sync state of the given peer.
-    pub fn sync_completed(&self, peer: &NodeId) -> bool {
-        self.completed_sync_sessions.contains(peer)
+    pub fn complete_sync(&mut self, peer: &NodeId, topic: TopicId) {
+        self.sync_complete.entry(topic).or_default().insert(*peer);
+        self.outbound_sync_sessions
+            .get_mut(&topic)
+            .expect("outbound sync session exists")
+            .remove(peer);
     }
 }

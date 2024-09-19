@@ -172,7 +172,7 @@ impl GossipActor {
                 self.engine_actor_tx
                     .send(ToEngineActor::NeighborUp { topic, peer })
                     .await?;
-            }
+            },
             // @TODO: Unmatched variants are `Joined(Vec<NodeId>)` and `Received(Message)`
             _ => (),
         }
