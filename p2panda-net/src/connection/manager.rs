@@ -13,8 +13,8 @@ use crate::connection::{ToConnectionActor, SYNC_CONNECTION_ALPN};
 
 #[derive(Debug)]
 pub struct ConnectionManager {
-    peers: HashMap<NodeId, HashSet<TopicId>>,
-    outbound_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
+    known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
+    active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     connection_actor_tx: Sender<ToConnectionActor>,
     endpoint: Endpoint,
@@ -23,8 +23,8 @@ pub struct ConnectionManager {
 impl ConnectionManager {
     pub fn new(endpoint: Endpoint, connection_actor_tx: Sender<ToConnectionActor>) -> Self {
         Self {
-            peers: HashMap::new(),
-            outbound_sync_sessions: HashMap::new(),
+            known_peer_topics: HashMap::new(),
+            active_sync_sessions: HashMap::new(),
             completed_sync_sessions: HashMap::new(),
             connection_actor_tx,
             endpoint,
@@ -35,15 +35,12 @@ impl ConnectionManager {
     /// currently underway and a successful sync session has not already been completed.
     pub async fn update_peer_topics(&mut self, peer: NodeId, topics: Vec<TopicId>) -> Result<()> {
         let new_topics = HashSet::from_iter(topics.into_iter());
-        let old_topics = self.peers.entry(peer).or_default();
+        let old_topics = self.known_peer_topics.entry(peer).or_default();
         let difference = new_topics.difference(old_topics);
 
         for topic in difference {
             // Peers with whom we have active outbound sync sessions for this topic.
-            let outbound_peers = self
-                .outbound_sync_sessions
-                .entry(*topic)
-                .or_insert(HashSet::new());
+            let active_peers = self.active_sync_sessions.entry(*topic).or_default();
 
             // Have we already completed a successful sync session with this peer?
             let sync_complete = self
@@ -53,8 +50,8 @@ impl ConnectionManager {
                 .contains(&peer);
 
             // Attempt connection in order to initiate a sync session.
-            if !outbound_peers.contains(&peer) && !sync_complete {
-                outbound_peers.insert(peer);
+            if !active_peers.contains(&peer) && !sync_complete {
+                active_peers.insert(peer);
                 self.connection_actor_tx
                     .send(ToConnectionActor::Connect {
                         peer,
@@ -95,17 +92,17 @@ impl ConnectionManager {
     pub fn complete_failed_sync(&mut self, peer: NodeId, topic: TopicId, _err: SyncError) {
         // @TODO: Add peer to the retry queue.
 
-        self.outbound_sync_sessions
+        self.active_sync_sessions
             .get_mut(&topic)
-            .expect("outbound sync session exists")
+            .expect("active outbound sync session exists")
             .remove(&peer);
     }
 
     /// Update sync session status for the given peer.
     pub fn complete_successful_sync(&mut self, peer: NodeId, topic: TopicId) {
-        self.outbound_sync_sessions
+        self.active_sync_sessions
             .get_mut(&topic)
-            .expect("outbound sync session exists")
+            .expect("active outbound sync session exists")
             .remove(&peer);
         self.completed_sync_sessions
             .entry(topic)
