@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
+
 use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::endpoint::Connection;
@@ -40,6 +42,35 @@ pub enum ToConnectionActor {
     Shutdown,
 }
 
+impl Display for ToConnectionActor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ToConnectionActor::Connect { peer, topic } => {
+                write!(f, "connect to peer {peer} on topic {topic}")
+            }
+            ToConnectionActor::Connected { peer, .. } => {
+                write!(f, "connected to peer {peer}")
+            }
+            ToConnectionActor::UpdatePeerTopics { peer, topics } => {
+                write!(f, "update topics for peer {peer}: {topics:?}")
+            }
+            ToConnectionActor::Sync { peer, .. } => {
+                write!(f, "accept sync session with peer {peer}")
+            }
+            ToConnectionActor::SyncSucceeded { peer, topic } => {
+                write!(f, "sync succeeded with peer {peer} on topic {topic}")
+            }
+            ToConnectionActor::SyncFailed { peer, topic, err } => {
+                write!(
+                    f,
+                    "sync failed with peer {peer} on topic {topic} due to {err}"
+                )
+            }
+            ToConnectionActor::Shutdown => write!(f, "shutdown the actor"),
+        }
+    }
+}
+
 /// Orchestrate connection state transitions.
 ///
 /// The connection actor is responsible for processing connection events and invoking connection
@@ -70,8 +101,6 @@ impl ConnectionActor {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        debug!("running connection actor!");
-
         loop {
             tokio::select! {
                 msg = self.inbox.recv() => {
@@ -92,11 +121,9 @@ impl ConnectionActor {
     }
 
     async fn on_actor_message(&mut self, msg: ToConnectionActor) -> Result<bool> {
-        // @TODO: Consider implementing Display for nicer logging of `ToConnectionActor` events.
-        debug!("connection event: {msg:?}");
+        debug!("{msg}");
 
         match msg {
-            // ToConnectionActor::Connect { peer, topic } => self.handle_connect(peer, topic).await?,
             ToConnectionActor::Connected { peer, connection } => {
                 self.handle_connected(peer, connection).await?
             }
