@@ -195,3 +195,61 @@ pub enum IngestError {
     #[error(transparent)]
     StoreError(#[from] StoreError),
 }
+
+#[cfg(test)]
+mod tests {
+    use p2panda_core::{Hash, Header, PrivateKey};
+    use p2panda_store::MemoryStore;
+
+    use crate::extensions::StreamName;
+    use crate::operation::{ingest_operation, IngestResult};
+    use crate::test_utils::Extensions;
+
+    #[tokio::test]
+    async fn retry_result() {
+        let mut store = MemoryStore::<StreamName, Extensions>::new();
+        let private_key = PrivateKey::new();
+
+        // 1. Create a regular first operation in a log
+        let extensions = Extensions {
+            stream_name: StreamName::new(private_key.public_key(), Some("chat")),
+            ..Default::default()
+        };
+
+        let mut header = Header::<Extensions> {
+            public_key: private_key.public_key(),
+            version: 1,
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(extensions.clone()),
+        };
+        header.sign(&private_key);
+
+        let result = ingest_operation(&mut store, header, None).await;
+        assert!(matches!(result, Ok(IngestResult::Complete(_))));
+
+        // 2. Create an operation which has already advanced in the log (it has a backlink and
+        //    higher sequence number)
+        let mut header = Header::<Extensions> {
+            public_key: private_key.public_key(),
+            version: 1,
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 12, // we'll be missing 11 operations between the first and this one
+            backlink: Some(Hash::new(b"mock operation")),
+            previous: vec![],
+            extensions: Some(extensions),
+        };
+        header.sign(&private_key);
+
+        let result = ingest_operation(&mut store, header, None).await;
+        assert!(matches!(result, Ok(IngestResult::Retry(_, None, 11))));
+    }
+}

@@ -10,8 +10,8 @@ use crate::operation::RawOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extensions {
-    stream_name: StreamName,
-    prune_flag: PruneFlag,
+    pub stream_name: StreamName,
+    pub prune_flag: PruneFlag,
 }
 
 impl Extension<StreamName> for Extensions {
