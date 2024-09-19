@@ -106,6 +106,7 @@ where
             //    buffer and try again later, otherwise forward the result of ingest to the
             //    consumer.
             match ingest_res {
+                // @TODO: Remove the item from buffer if we've tried for too many times
                 Ok(IngestResult::Retry(header, body, _)) => {
                     // Push operation back into the internal queue, if something goes wrong here
                     // this must be an critical failure
