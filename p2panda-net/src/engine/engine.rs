@@ -568,10 +568,11 @@ impl EngineActor {
         // Register earmarked topics from other peers
         self.peers.on_announcement(topics.clone(), delivered_from);
 
+        // Inform the connection manager about the peer topics
         if let Some(tx) = &self.connection_actor_tx {
             tx.send(ToConnectionActor::UpdatePeerTopics {
                 peer: delivered_from,
-                topics: topics,
+                topics,
             })
             .await?;
         }
