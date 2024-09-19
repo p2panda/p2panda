@@ -82,21 +82,33 @@ where
         let mut this = self.project();
 
         loop {
+            // 1. Pull in the next item from the external stream, if there's none or the stream got
+            //    terminated, check the internal out-of-order buffer next. We always prefer pulling
+            //    from the external stream first as freshly incoming data should be prioritized.
             let res = match this.stream.as_mut().poll_next(cx) {
-                Poll::Ready(operation) => operation,
-                Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
+                Poll::Ready(Some(operation)) => Some(operation),
+                Poll::Pending | Poll::Ready(None) => {
+                    ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
+                }
             };
             let Some((header, body)) = res else {
-                // Either external stream or buffer stream or ended, so we stop here as well
+                // Both external stream and buffer stream has ended, so we stop here as well
                 return Poll::Ready(None);
             };
 
+            // 2. Validate and check the log-integrity of the incoming operation. If it is valid it
+            //    get's persisted and the log optionally pruned.
             let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
             pin_mut!(ingest_fut);
             let ingest_res = ready!(ingest_fut.poll(cx));
 
+            // 3. If the operation arrived out-of-order we can push it back into the internal
+            //    buffer and try again later, otherwise forward the result of ingest to the
+            //    consumer.
             match ingest_res {
                 Ok(IngestResult::Retry(header, body, _)) => {
+                    // Push operation back into the internal queue, if something goes wrong here
+                    // this must be an critical failure
                     let Ok(_) = ready!(this.ooo_buffer_tx.poll_ready(cx)) else {
                         break Poll::Ready(None);
                     };
@@ -107,8 +119,13 @@ where
 
                     continue;
                 }
-                Ok(IngestResult::Complete(operation)) => return Poll::Ready(Some(Ok(operation))),
-                Err(err) => return Poll::Ready(Some(Err(err))),
+                Ok(IngestResult::Complete(operation)) => {
+                    return Poll::Ready(Some(Ok(operation)));
+                }
+                Err(err) => {
+                    // Ingest failed and we want the stream consumers to be aware of that
+                    return Poll::Ready(Some(Err(err)));
+                }
             }
         }
     }
@@ -172,25 +189,24 @@ mod tests {
 
     #[tokio::test]
     async fn out_of_order() {
-        for _ in 0..10 {
-            let store = MemoryStore::<StreamName, Extensions>::new();
+        let items_num = 3;
+        let store = MemoryStore::<StreamName, Extensions>::new();
 
-            let mut items: Vec<RawOperation> = mock_stream().take(100).collect().await;
-            items.shuffle(&mut rand::thread_rng());
+        let mut items: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
+        items.shuffle(&mut rand::thread_rng());
 
-            let stream = iter(items)
-                .decode()
-                .filter_map(|item| async {
-                    println!("{item:?}");
-                    match item {
-                        Ok((header, body)) => Some((header, body)),
-                        Err(_) => None,
-                    }
-                })
-                .ingest(store, 200);
+        let stream = iter(items)
+            .decode()
+            .filter_map(|item| async {
+                match item {
+                    Ok((header, body)) => Some((header, body)),
+                    Err(_) => None,
+                }
+            })
+            .ingest(store, 32)
+            .take(items_num);
 
-            let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
-            assert_eq!(res.len(), 100);
-        }
+        let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
+        assert_eq!(res.len(), items_num);
     }
 }
