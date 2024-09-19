@@ -86,10 +86,15 @@ where
             //    terminated, check the internal out-of-order buffer next. We always prefer pulling
             //    from the external stream first as freshly incoming data should be prioritized.
             let res = match this.stream.as_mut().poll_next(cx) {
-                Poll::Ready(Some(operation)) => Some(operation),
-                Poll::Pending | Poll::Ready(None) => {
-                    ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
-                }
+                Poll::Ready(Some((header, body))) => Some((header, body)),
+                Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
+                Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
+                    Poll::Ready(Some((header, body))) => Some((header, body)),
+                    Poll::Ready(None) => None,
+                    // If there's no value coming from the buffer _and_ the external stream is
+                    // terminated, we can be sure nothing will come anymore
+                    Poll::Pending => None,
+                },
             };
             let Some((header, body)) = res else {
                 // Both external stream and buffer stream has ended, so we stop here as well
@@ -182,9 +187,7 @@ mod tests {
                     Err(_) => None,
                 }
             })
-            .ingest(store, 16)
-            // @TODO: How can we make ingest be aware of that the stream has stopped?
-            .take(5);
+            .ingest(store, 16);
 
         let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
         assert!(res.is_ok());
@@ -192,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn out_of_order() {
-        let items_num = 3;
+        let items_num = 10;
         let store = MemoryStore::<StreamName, Extensions>::new();
 
         let mut items: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
@@ -206,9 +209,7 @@ mod tests {
                     Err(_) => None,
                 }
             })
-            .ingest(store, 32)
-            // @TODO: How can we make ingest be aware of that the stream has stopped?
-            .take(items_num);
+            .ingest(store, 32);
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
         assert_eq!(res.len(), items_num);
