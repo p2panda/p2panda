@@ -123,16 +123,15 @@ impl SyncActor {
             }
             .await;
 
-            if let Err(err) = &result {
-                error!("{err}");
+            // Notify the connection actor of the sync result.
+            let sync_result = if let Err(err) = result {
+                ToConnectionActor::SyncFailed { peer, topic, err }
+            } else {
+                ToConnectionActor::SyncSucceeded { peer, topic }
             };
 
             connection_actor_tx
-                .send(ToConnectionActor::SyncComplete {
-                    peer,
-                    topic,
-                    result,
-                })
+                .send(sync_result)
                 .await
                 .expect("connection channel closed");
         });

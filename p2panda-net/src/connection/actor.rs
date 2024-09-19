@@ -15,29 +15,26 @@ use crate::engine::sync::ToSyncActor;
 /// Connection events.
 pub enum ToConnectionActor {
     /// Initiate an outbound connection with the given peer and topic.
-    Connect {
-        peer: NodeId,
-        topic: TopicId,
-    },
+    Connect { peer: NodeId, topic: TopicId },
     /// Handle an inbound connection.
     Connected {
         peer: NodeId,
         connection: Connection,
     },
-    UpdatePeerTopics {
-        peer: NodeId,
-        topics: Vec<TopicId>,
-    },
+    /// Register new topics of interest for a peer.
+    UpdatePeerTopics { peer: NodeId, topics: Vec<TopicId> },
     /// Ask the sync engine to accept a session.
     Sync {
         peer: NodeId,
         connection: Connection,
     },
-    /// Log successfully sync session.
-    SyncComplete {
+    /// Log successful sync session.
+    SyncSucceeded { peer: NodeId, topic: TopicId },
+    /// Log unsuccessful sync session.
+    SyncFailed {
         peer: NodeId,
         topic: TopicId,
-        result: Result<(), SyncError>,
+        err: SyncError,
     },
     /// Terminate the actor.
     Shutdown,
@@ -106,11 +103,12 @@ impl ConnectionActor {
             ToConnectionActor::Sync { peer, connection } => {
                 self.handle_sync(peer, connection).await?
             }
-            ToConnectionActor::SyncComplete {
-                peer,
-                topic,
-                result,
-            } => self.handle_sync_complete(peer, topic, result).await?,
+            ToConnectionActor::SyncSucceeded { peer, topic } => {
+                self.handle_sync_succeeded(peer, topic).await?
+            }
+            ToConnectionActor::SyncFailed { peer, topic, err } => {
+                self.handle_sync_failed(peer, topic, err).await?
+            }
             ToConnectionActor::Shutdown => return Ok(false),
             ToConnectionActor::UpdatePeerTopics { peer, topics } => {
                 self.handle_update_peer(peer, topics).await?;
@@ -126,7 +124,7 @@ impl ConnectionActor {
             self.sync_actor_tx
                 .send(ToSyncActor::Open {
                     peer,
-                    topic: topic.into(),
+                    topic,
                     connection,
                 })
                 .await?;
@@ -147,18 +145,6 @@ impl ConnectionActor {
         self.connection_manager
             .update_peer_topics(peer, topics.clone())
             .await?;
-        //
-        //         if let Some(connection) = self.connection_manager.connect(peer).await? {
-        //             for topic in topics {
-        //                 self.sync_actor_tx
-        //                     .send(ToSyncActor::Open {
-        //                         peer,
-        //                         topic,
-        //                         connection: connection.clone(),
-        //                     })
-        //                     .await?;
-        //             }
-        //         };
 
         Ok(())
     }
@@ -171,14 +157,22 @@ impl ConnectionActor {
         Ok(())
     }
 
-    async fn handle_sync_complete(
+    async fn handle_sync_succeeded(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+        self.connection_manager
+            .complete_successful_sync(peer, topic);
+
+        Ok(())
+    }
+
+    async fn handle_sync_failed(
         &mut self,
         peer: NodeId,
         topic: TopicId,
-        _result: Result<(), SyncError>,
+        err: SyncError,
     ) -> Result<()> {
-        // @TODO: handle the case when the sync session completed with an error
-        self.connection_manager.complete_sync(&peer, topic);
+        self.connection_manager
+            .complete_failed_sync(peer, topic, err);
+
         Ok(())
     }
 }
