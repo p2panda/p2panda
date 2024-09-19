@@ -181,7 +181,9 @@ mod tests {
                     Err(_) => None,
                 }
             })
-            .ingest(store, 16);
+            .ingest(store, 16)
+            // @TODO: How can we make ingest be aware of that the stream has stopped?
+            .take(5);
 
         let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
         assert!(res.is_ok());
@@ -204,6 +206,7 @@ mod tests {
                 }
             })
             .ingest(store, 32)
+            // @TODO: How can we make ingest be aware of that the stream has stopped?
             .take(items_num);
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
