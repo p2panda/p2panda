@@ -4,20 +4,22 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use futures_lite::StreamExt;
+use futures_util::future::{MapErr, Shared};
+use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_gossip::proto::Config as GossipConfig;
 use iroh_net::endpoint::TransportConfig;
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
-use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::traits::SyncProtocol;
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
@@ -292,7 +294,9 @@ impl NetworkBuilder {
 
         let network = Network {
             inner,
-            task: task.into(),
+            task: AbortOnDropHandle::new(task)
+                .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
+                .shared(),
             protocols,
         };
 
@@ -317,6 +321,8 @@ impl NetworkBuilder {
     }
 }
 
+type JoinErrToStr = Box<dyn Fn(JoinError) -> String + Send + Sync + 'static>;
+
 /// Controls a p2panda-net node, including handling of connections, discovery and gossip.
 // @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
 #[allow(dead_code)]
@@ -324,7 +330,12 @@ impl NetworkBuilder {
 pub struct Network {
     inner: Arc<NetworkInner>,
     protocols: Arc<ProtocolMap>,
-    task: SharedAbortingJoinHandle<()>,
+    // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
+    // - `Shared` allows us to `task.await` from all `Network` clones
+    //   - Acts like an `Arc` around the inner future
+    // - `MapErr` is needed to map the `JoinError` to a `String`, since `JoinError` is `!Clone`
+    // - `AbortOnDropHandle` ensures the `task` is cancelled when all `Network`s are dropped
+    task: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
 #[allow(dead_code)]

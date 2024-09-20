@@ -18,7 +18,7 @@ pub use message::{FromBytes, ToBytes};
 pub use network::{Network, NetworkBuilder, RelayMode};
 pub use protocols::ProtocolHandler;
 
-pub use iroh_net::util::SharedAbortingJoinHandle;
+pub use tokio_util::task::AbortOnDropHandle;
 
 pub type NetworkId = [u8; 32];
 

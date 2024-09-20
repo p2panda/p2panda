@@ -12,11 +12,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use iroh_gossip::net::Gossip;
-use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
 use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
 
 use crate::connection::{ConnectionActor, SyncConnection, ToConnectionActor};
@@ -30,7 +30,7 @@ pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
     connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
     #[allow(dead_code)]
-    actor_handle: SharedAbortingJoinHandle<()>,
+    actor_handle: Arc<AbortOnDropHandle<()>>,
 }
 
 impl Engine {
@@ -91,7 +91,7 @@ impl Engine {
         Self {
             engine_actor_tx,
             connection_actor_tx,
-            actor_handle: actor_handle.into(),
+            actor_handle: Arc::new(AbortOnDropHandle::new(actor_handle)),
         }
     }
 

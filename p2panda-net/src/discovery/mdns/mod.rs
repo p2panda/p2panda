@@ -5,6 +5,7 @@ mod socket;
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -12,8 +13,8 @@ use flume::Sender;
 use futures_lite::StreamExt;
 use hickory_proto::rr::Name;
 use iroh_base::base32;
-use iroh_net::util::AbortingJoinHandle;
 use iroh_net::NodeAddr;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::discovery::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
 use crate::discovery::mdns::socket::{send, socket_v4};
@@ -35,7 +36,7 @@ enum Message {
 #[derive(Debug)]
 pub struct LocalDiscovery {
     #[allow(dead_code)]
-    handle: AbortingJoinHandle<()>,
+    handle: Arc<AbortOnDropHandle<()>>,
     tx: Sender<Message>,
 }
 
@@ -123,7 +124,7 @@ impl LocalDiscovery {
         });
 
         Ok(Self {
-            handle: handle.into(),
+            handle: Arc::new(AbortOnDropHandle::new(handle)),
             tx,
         })
     }
