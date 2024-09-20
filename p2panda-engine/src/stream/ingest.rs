@@ -86,16 +86,15 @@ where
         let mut this = self.project();
 
         loop {
-            // 1. Pull in the next item from the external stream, if there's none or the stream got
-            //    terminated, check the internal out-of-order buffer next. We always prefer pulling
-            //    from the external stream first as freshly incoming data should be prioritized.
-            //
-            //    If the buffer ran full we prioritize pulling from it first to re-attempt ingest
-            //    for this item.
+            // 1. Pull in the next item from the external stream or out-of-order buffer.
             let res = {
+                // If the buffer ran full we prioritize pulling from it first, re-attempting
+                // ingest. This avoids clogging up the pipeline
                 if this.ooo_buffer_rx.size_hint().0 == *this.ooo_buffer_size {
                     ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
                 } else {
+                    // Otherwise prefer pulling from the external stream first as freshly incoming
+                    // data should be prioritized
                     match this.stream.as_mut().poll_next(cx) {
                         Poll::Ready(Some((header, body))) => Some(IngestAttempt(header, body, 1)),
                         Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
