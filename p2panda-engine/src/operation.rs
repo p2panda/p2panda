@@ -97,7 +97,7 @@ pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
-) -> Result<IngestResult<E>, IngestError>
+) -> Result<IngestResult<E>, IngestError<E>>
 where
     S: OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
@@ -181,7 +181,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum IngestError {
+pub enum IngestError<E> {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
     /// the p2panda specification.
     #[error("operation validation failed: {0}")]
@@ -194,6 +194,9 @@ pub enum IngestError {
     /// Critical storage failure occurred. This is usually a reason to panic.
     #[error(transparent)]
     StoreError(#[from] StoreError),
+
+    #[error("too many attempts to ingest out-of-order operation ({2} behind in log)")]
+    MaxAttemptsReached(Header<E>, Option<Body>, u64),
 }
 
 #[cfg(test)]
