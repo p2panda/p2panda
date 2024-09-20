@@ -20,6 +20,17 @@ use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
 pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>)> {
+    /// Checks incoming operations against their log integrity and persists them automatically in a
+    /// given store.
+    ///
+    /// Every given operation needs to implement a "prune flag" in their header as specified by the
+    /// p2panda protocol. Ingest will make sure to accordingly validate based on the given prune
+    /// status and automatically remove past items from the log.
+    ///
+    /// This ingest implementation holds an internal buffer for operations which come in "out of
+    /// order". The buffer size determines the maximum number of out-of-order operations in a row
+    /// this method can handle. This means that given a buffer size of for example 100, we can
+    /// handle a worst-case unordered, fully reversed log with 100 items without problem.
     fn ingest(self, store: S, ooo_buffer_size: usize) -> Ingest<Self, S, L, E>
     where
         S: OperationStore<L, E> + LogStore<L, E>,
