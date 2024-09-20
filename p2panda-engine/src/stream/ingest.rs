@@ -127,8 +127,8 @@ where
                 Ok(IngestResult::Retry(header, body, num_missing)) => {
                     // The number of max. reattempts is equal the size of the buffer. As long as
                     // the buffer is just a FIFO queue it doesn't make sense to optimize over
-                    // different parameters as in a worst-case distribution of items this will be
-                    // the minimum size
+                    // different parameters as in a worst-case distribution of items (exact
+                    // reverse) this will be the max. and min. required bound
                     if counter > *this.ooo_buffer_size {
                         return Poll::Ready(Some(Err(IngestError::MaxAttemptsReached(
                             header,
