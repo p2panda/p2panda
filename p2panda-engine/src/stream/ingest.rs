@@ -90,7 +90,7 @@ where
     S: Clone + OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
-    type Item = Result<Operation<E>, IngestError<E>>;
+    type Item = Result<Operation<E>, IngestError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut store = self.store.clone();
@@ -141,8 +141,6 @@ where
                     // reverse) this will be the max. and min. required bound
                     if counter > *this.ooo_buffer_size {
                         return Poll::Ready(Some(Err(IngestError::MaxAttemptsReached(
-                            header,
-                            body,
                             num_missing,
                         ))));
                     }
@@ -228,8 +226,7 @@ mod tests {
             })
             .ingest(store, 16);
 
-        let res: Result<Vec<Operation<Extensions>>, IngestError<Extensions>> =
-            stream.try_collect().await;
+        let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
         assert!(res.is_ok());
     }
 
