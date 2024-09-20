@@ -26,3 +26,4 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Handle non-copy store method parameters by reference [#558](https://github.com/p2panda/p2panda/pull/558)
+- Handle operation header and body as bytes in log height sync [#561](https://github.com/p2panda/p2panda/pull/561)
