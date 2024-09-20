@@ -2,13 +2,13 @@
 
 mod addrs;
 pub mod config;
+mod connection;
 pub mod discovery;
 mod engine;
 mod handshake;
 mod message;
 pub mod network;
 mod protocols;
-mod sync_connection;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;

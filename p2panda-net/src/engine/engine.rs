@@ -13,10 +13,10 @@ use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, warn};
 
+use crate::connection::{ConnectionActor, ToConnectionActor};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{InEvent, OutEvent};
-use crate::sync_connection::SYNC_CONNECTION_ALPN;
 use crate::{FromBytes, ToBytes};
 
 use super::sync::{SyncActor, ToSyncActor};
@@ -94,7 +94,7 @@ impl GossipBuffer {
 
         // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic
         debug!(
-            "current sync sessions with {} on topic {}: {}",
+            "lock gossip buffer with {} on topic {}: {}",
             peer, topic, counter
         );
     }
@@ -103,6 +103,10 @@ impl GossipBuffer {
         match self.counters.get_mut(&(peer, topic)) {
             Some(counter) => {
                 *counter -= 1;
+                debug!(
+                    "unlock gossip buffer with {} on topic {}: {}",
+                    peer, topic, counter
+                );
                 *counter
             }
             None => panic!(),
@@ -121,6 +125,7 @@ impl GossipBuffer {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+    connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
     sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
@@ -138,6 +143,7 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+        connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
@@ -145,6 +151,7 @@ impl EngineActor {
         Self {
             endpoint,
             gossip_actor_tx,
+            connection_actor_tx,
             sync_actor_tx,
             inbox,
             network_id,
@@ -159,6 +166,7 @@ impl EngineActor {
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor,
+        connection_actor: Option<ConnectionActor>,
         sync_actor: Option<SyncActor>,
     ) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
@@ -166,6 +174,17 @@ impl EngineActor {
                 error!("gossip recv actor failed: {err:?}");
             }
         });
+
+        let connection_handle = if let Some(mut connection_actor) = connection_actor {
+            let handle = tokio::task::spawn(async move {
+                if let Err(err) = connection_actor.run().await {
+                    error!("connection recv actor failed: {err:?}");
+                }
+            });
+            Some(handle)
+        } else {
+            None
+        };
 
         let sync_handle = if let Some(mut sync_actor) = sync_actor {
             let handle = tokio::task::spawn(async move {
@@ -186,6 +205,9 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
+        if let Some(connection_handle) = connection_handle {
+            connection_handle.await?;
+        }
         if let Some(sync_handle) = sync_handle {
             sync_handle.await?;
         }
@@ -361,24 +383,6 @@ impl EngineActor {
             if topic == self.network_id {
                 return Ok(());
             }
-
-            for peer in peers {
-                // Only initiate sync if there is a sync actor channel present.
-                if let Some(sync_actor_tx) = &self.sync_actor_tx {
-                    let connection = self
-                        .endpoint
-                        .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
-                        .await?;
-
-                    sync_actor_tx
-                        .send(ToSyncActor::Open {
-                            peer,
-                            topic,
-                            connection,
-                        })
-                        .await?;
-                }
-            }
         }
 
         Ok(())
@@ -410,6 +414,7 @@ impl EngineActor {
         if topic == self.network_id {
             self.announce_topics().await?;
         }
+
         Ok(())
     }
 
@@ -561,7 +566,16 @@ impl EngineActor {
         );
 
         // Register earmarked topics from other peers
-        self.peers.on_announcement(topics, delivered_from);
+        self.peers.on_announcement(topics.clone(), delivered_from);
+
+        // Inform the connection manager about the peer topics
+        if let Some(tx) = &self.connection_actor_tx {
+            tx.send(ToConnectionActor::UpdatePeerTopics {
+                peer: delivered_from,
+                topics,
+            })
+            .await?;
+        }
 
         // And optimistically try to join them if there's an overlap with our interests
         self.join_earmarked_topics().await?;
@@ -586,9 +600,17 @@ impl EngineActor {
             .await
             .ok();
 
+        if let Some(connection_actor_tx) = &self.connection_actor_tx {
+            connection_actor_tx
+                .send(ToConnectionActor::Shutdown)
+                .await
+                .ok();
+        };
+
         if let Some(sync_actor_tx) = &self.sync_actor_tx {
             sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
         };
+
         Ok(())
     }
 }

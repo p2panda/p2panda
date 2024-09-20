@@ -6,9 +6,9 @@ use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use tokio::sync::mpsc;
-use tracing::debug_span;
+use tracing::{debug, debug_span};
 
-use crate::engine::sync::ToSyncActor;
+use crate::connection::ToConnectionActor;
 use crate::protocols::ProtocolHandler;
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
@@ -16,22 +16,26 @@ pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct SyncConnection {
-    engine_actor_tx: mpsc::Sender<ToSyncActor>,
+    connection_actor_tx: mpsc::Sender<ToConnectionActor>,
 }
 
 impl SyncConnection {
-    pub fn new(engine_actor_tx: mpsc::Sender<ToSyncActor>) -> Self {
-        Self { engine_actor_tx }
+    pub fn new(connection_actor_tx: mpsc::Sender<ToConnectionActor>) -> Self {
+        Self {
+            connection_actor_tx,
+        }
     }
 
     async fn handle_connection(&self, connection: Connection) -> Result<()> {
+        debug!("handling inbound sync connection!");
+
         let peer = endpoint::get_remote_node_id(&connection)?;
         let remote_addr = connection.remote_address();
         let connection_id = connection.stable_id() as u64;
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
-        self.engine_actor_tx
-            .send(ToSyncActor::Accept { peer, connection })
+        self.connection_actor_tx
+            .send(ToConnectionActor::Connected { peer, connection })
             .await?;
 
         Ok(())

@@ -15,20 +15,20 @@ use iroh_gossip::net::Gossip;
 use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
-use sync::{SyncActor, ToSyncActor};
+use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error};
 
+use crate::connection::{ConnectionActor, SyncConnection, ToConnectionActor};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{InEvent, OutEvent};
-use crate::sync_connection::SyncConnection;
 use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
 pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
-    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
+    connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
     #[allow(dead_code)]
     actor_handle: SharedAbortingJoinHandle<()>,
 }
@@ -42,41 +42,63 @@ impl Engine {
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
-        let (sync_actor, sync_actor_tx) = match sync_protocol {
+
+        // Only setup the sync and connection actors if a sync protocol has been provided.
+        let (sync_actor, sync_actor_tx, connection_actor, connection_actor_tx) = match sync_protocol
+        {
             Some(protocol) => {
-                let (tx, rx) = mpsc::channel(256);
-                let actor = SyncActor::new(rx, protocol, engine_actor_tx.clone());
-                (Some(actor), Some(tx))
+                let (sync_actor_tx, sync_actor_rx) = mpsc::channel(256);
+                let connection_actor =
+                    ConnectionActor::new(endpoint.clone(), sync_actor_tx.clone());
+                let connection_actor_tx = connection_actor.sender();
+
+                let sync_actor = SyncActor::new(
+                    sync_actor_rx,
+                    protocol,
+                    engine_actor_tx.clone(),
+                    connection_actor_tx.clone(),
+                );
+
+                (
+                    Some(sync_actor),
+                    Some(sync_actor_tx),
+                    Some(connection_actor),
+                    Some(connection_actor_tx),
+                )
             }
-            None => (None, None),
+            None => (None, None, None, None),
         };
 
         let engine_actor = EngineActor::new(
             endpoint,
             gossip_actor_tx,
-            sync_actor_tx.clone(),
+            connection_actor_tx.clone(),
+            sync_actor_tx,
             engine_actor_rx,
             network_id.into(),
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
-            if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {
+            if let Err(err) = engine_actor
+                .run(gossip_actor, connection_actor, sync_actor)
+                .await
+            {
                 error!("engine actor failed: {err:?}");
             }
         });
 
         Self {
             engine_actor_tx,
-            sync_actor_tx,
+            connection_actor_tx,
             actor_handle: actor_handle.into(),
         }
     }
 
     pub fn sync_handler(&self) -> Option<SyncConnection> {
-        self.sync_actor_tx
+        self.connection_actor_tx
             .as_ref()
-            .map(|sync_actor_tx| SyncConnection::new(sync_actor_tx.clone()))
+            .map(|connection_actor_tx| SyncConnection::new(connection_actor_tx.clone()))
     }
 
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
