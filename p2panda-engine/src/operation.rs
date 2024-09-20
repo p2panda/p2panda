@@ -195,6 +195,8 @@ pub enum IngestError {
     #[error(transparent)]
     StoreError(#[from] StoreError),
 
+    /// Some implementations might optimistically retry to ingest operations which arrived
+    /// out-of-order. This error comes up when all given attempts have been exhausted.
     #[error("too many attempts to ingest out-of-order operation ({0} behind in log)")]
     MaxAttemptsReached(u64),
 }
