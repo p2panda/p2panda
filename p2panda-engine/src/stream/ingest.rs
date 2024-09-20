@@ -229,6 +229,7 @@ mod tests {
         let store = MemoryStore::<StreamName, Extensions>::new();
 
         let mut items: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
+        // Reverse all items, to ingest with a worst-case out-of-order sample set
         items.reverse();
 
         let stream = iter(items)
@@ -239,10 +240,9 @@ mod tests {
                     Err(_) => None,
                 }
             })
-            // If the random distribution over the sample set is equal, it makes sense to keep the
-            // buffer size at least as big as the sample size (giving each item a chance even if
-            // they're in a completly wrong place). Like this we can guarantee that ingest (and
-            // this test) will be successful
+            // Since the sample set ordering is worst-case (fully reversed), it makes sense to keep
+            // the buffer size at least as big as the sample size. Like this we can guarantee that
+            // ingest (and this test) will be successful
             .ingest(store, items_num);
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
