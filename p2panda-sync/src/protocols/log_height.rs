@@ -6,8 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
-use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{Body, Header, Operation, PublicKey};
+use p2panda_core::PublicKey;
 use p2panda_store::{LogStore, MemoryStore, TopicMap};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -21,17 +20,16 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum Message<T = String, E = DefaultExtensions> {
+pub enum Message<T = String> {
     Have(TopicId, T, LogHeights),
-    Operation(Header<E>, Option<Body>),
+    RawOperation(Vec<u8>),
     SyncDone,
 }
 
 #[cfg(test)]
-impl<T, E> Message<T, E>
+impl<T> Message<T>
 where
     T: Serialize,
-    E: Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -91,7 +89,7 @@ where
             .await
             .expect("memory store error");
 
-        sink.send(Message::<T, E>::Have(
+        sink.send(Message::<T>::Have(
             *topic,
             log_id.clone(),
             local_log_heights.clone(),
@@ -104,24 +102,16 @@ where
         app_tx.send(FromSync::Topic(*topic)).await?;
 
         while let Some(result) = stream.next().await {
-            let message: Message<T, E> = result?;
+            let message: Message<T> = result?;
             debug!("message received: {:?}", message);
 
-            match &message {
+            match message {
                 Message::Have(_, _, _) => {
                     return Err(SyncError::Protocol(
                         "unexpected Have message received".to_string(),
                     ))
                 }
-                Message::Operation(header, body) => {
-                    let operation = Operation {
-                        hash: header.hash(),
-                        header: header.clone(),
-                        body: body.clone(),
-                    };
-                    let mut bytes = Vec::new();
-                    ciborium::into_writer(&(operation.header, operation.body), &mut bytes)
-                        .map_err(|e| SyncError::Protocol(e.to_string()))?;
+                Message::RawOperation(bytes) => {
                     app_tx.send(FromSync::Bytes(bytes)).await?;
                 }
                 Message::SyncDone => {
@@ -161,13 +151,13 @@ where
         let mut stream = into_stream(rx);
 
         while let Some(result) = stream.next().await {
-            let message: Message<T, E> = result?;
+            let message: Message<T> = result?;
             debug!("message received: {:?}", message);
 
             let replies = match &message {
                 Message::Have(topic, log_id, log_heights) => {
                     app_tx.send(FromSync::Topic(*topic)).await?;
-                    let mut messages: Vec<Message<T, E>> = vec![];
+                    let mut messages: Vec<Message<T>> = vec![];
 
                     let local_log_heights = self
                         .store
@@ -207,8 +197,14 @@ where
                             log.split_off(seq_num as usize)
                                 .into_iter()
                                 .for_each(|operation| {
-                                    messages
-                                        .push(Message::Operation(operation.header, operation.body))
+                                    let mut bytes = Vec::new();
+                                    ciborium::into_writer(
+                                        &(operation.header, operation.body),
+                                        &mut bytes,
+                                    )
+                                    .expect("invalid operation found in store");
+
+                                    messages.push(Message::RawOperation(bytes))
                                 });
                         }
                     }
@@ -220,7 +216,7 @@ where
 
                     messages
                 }
-                Message::Operation(_, _) => {
+                Message::RawOperation(_) => {
                     return Err(SyncError::Protocol(
                         "unexpected operation received".to_string(),
                     ));
@@ -336,7 +332,7 @@ mod tests {
         );
     }
 
-    fn to_bytes(messages: Vec<Message<String, DefaultExtensions>>) -> Vec<u8> {
+    fn to_bytes(messages: Vec<Message<String>>) -> Vec<u8> {
         messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -482,7 +478,7 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages: Vec<Message<String, DefaultExtensions>> = vec![
+        let messages: Vec<Message<String>> = vec![
             Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
             Message::SyncDone,
         ];
@@ -508,10 +504,20 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        let messages: Vec<Message<String, DefaultExtensions>> = vec![
-            Message::Operation(operation0.header.clone(), operation0.body.clone()),
-            Message::Operation(operation1.header.clone(), operation1.body.clone()),
-            Message::Operation(operation2.header.clone(), operation2.body.clone()),
+        let mut operation0_bytes = Vec::new();
+        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
+            .unwrap();
+        let mut operation1_bytes = Vec::new();
+        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
+            .unwrap();
+        let mut operation2_bytes = Vec::new();
+        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
+            .unwrap();
+
+        let messages: Vec<Message<String>> = vec![
+            Message::RawOperation(operation0_bytes),
+            Message::RawOperation(operation1_bytes),
+            Message::RawOperation(operation2_bytes),
             Message::SyncDone,
         ];
         assert_message_bytes(peer_b_read, messages).await;
@@ -559,10 +565,19 @@ mod tests {
         );
 
         // Write some message into peer_b's send buffer
-        let messages: Vec<Message<String, DefaultExtensions>> = vec![
-            Message::Operation(operation0.header.clone(), operation0.body.clone()),
-            Message::Operation(operation1.header.clone(), operation1.body.clone()),
-            Message::Operation(operation2.header.clone(), operation2.body.clone()),
+        let mut operation0_bytes = Vec::new();
+        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
+            .unwrap();
+        let mut operation1_bytes = Vec::new();
+        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
+            .unwrap();
+        let mut operation2_bytes = Vec::new();
+        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
+            .unwrap();
+        let messages: Vec<Message<String>> = vec![
+            Message::RawOperation(operation0_bytes.clone()),
+            Message::RawOperation(operation1_bytes.clone()),
+            Message::RawOperation(operation2_bytes.clone()),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -598,16 +613,6 @@ mod tests {
         .await;
 
         // Assert that peer a sent the expected messages on it's app channel
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
         assert_eq!(
