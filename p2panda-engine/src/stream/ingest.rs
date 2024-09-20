@@ -195,7 +195,6 @@ mod tests {
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::Operation;
     use p2panda_store::MemoryStore;
-    use rand::seq::SliceRandom;
 
     use crate::extensions::StreamName;
     use crate::operation::{IngestError, RawOperation};
@@ -230,7 +229,7 @@ mod tests {
         let store = MemoryStore::<StreamName, Extensions>::new();
 
         let mut items: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
-        items.shuffle(&mut rand::thread_rng());
+        items.reverse();
 
         let stream = iter(items)
             .decode()
