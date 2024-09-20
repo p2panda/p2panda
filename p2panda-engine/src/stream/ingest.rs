@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 use futures_channel::mpsc::{self};
@@ -14,31 +15,31 @@ use pin_utils::pin_mut;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::extensions::{PruneFlag, StreamName};
+use crate::extensions::PruneFlag;
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
-pub trait IngestExt<S, E>: Stream<Item = (Header<E>, Option<Body>)> {
-    fn ingest(self, store: S, ooo_buffer_size: usize) -> Ingest<Self, S, E>
+pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>)> {
+    fn ingest(self, store: S, ooo_buffer_size: usize) -> Ingest<Self, S, L, E>
     where
-        S: OperationStore<StreamName, E> + LogStore<StreamName, E>,
-        E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+        S: OperationStore<L, E> + LogStore<L, E>,
+        E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
         Self: Sized,
     {
         Ingest::new(self, store, ooo_buffer_size)
     }
 }
 
-impl<T: ?Sized, S, E> IngestExt<S, E> for T where T: Stream<Item = (Header<E>, Option<Body>)> {}
+impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where T: Stream<Item = (Header<E>, Option<Body>)> {}
 
 #[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
-pub struct Ingest<St, S, E>
+pub struct Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>)>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
-    S: OperationStore<StreamName, E> + LogStore<StreamName, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
 {
     #[pin]
     stream: Fuse<St>,
@@ -46,15 +47,16 @@ where
     ooo_buffer_tx: mpsc::Sender<(Header<E>, Option<Body>)>,
     #[pin]
     ooo_buffer_rx: mpsc::Receiver<(Header<E>, Option<Body>)>,
+    _marker: PhantomData<L>,
 }
 
-impl<St, S, E> Ingest<St, S, E>
+impl<St, S, L, E> Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>)>,
-    S: OperationStore<StreamName, E> + LogStore<StreamName, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
-    pub(super) fn new(stream: St, store: S, ooo_buffer_size: usize) -> Ingest<St, S, E> {
+    pub(super) fn new(stream: St, store: S, ooo_buffer_size: usize) -> Ingest<St, S, L, E> {
         let (ooo_buffer_tx, ooo_buffer_rx) =
             mpsc::channel::<(Header<E>, Option<Body>)>(ooo_buffer_size);
 
@@ -63,17 +65,18 @@ where
             stream: stream.fuse(),
             ooo_buffer_tx,
             ooo_buffer_rx,
+            _marker: PhantomData,
         }
     }
 
     delegate_access_inner!(stream, St, (.));
 }
 
-impl<St, S, E> Stream for Ingest<St, S, E>
+impl<St, S, L, E> Stream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>)>,
-    S: Clone + OperationStore<StreamName, E> + LogStore<StreamName, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+    S: Clone + OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     type Item = Result<Operation<E>, IngestError>;
 
@@ -90,10 +93,10 @@ where
                 Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
                 Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
                     Poll::Ready(Some((header, body))) => Some((header, body)),
-                    Poll::Ready(None) => None,
                     // If there's no value coming from the buffer _and_ the external stream is
                     // terminated, we can be sure nothing will come anymore
                     Poll::Pending => None,
+                    Poll::Ready(None) => None,
                 },
             };
             let Some((header, body)) = res else {
@@ -103,7 +106,7 @@ where
 
             // 2. Validate and check the log-integrity of the incoming operation. If it is valid it
             //    get's persisted and the log optionally pruned.
-            let ingest_fut = async { ingest_operation::<S, E>(&mut store, header, body).await };
+            let ingest_fut = async { ingest_operation::<S, L, E>(&mut store, header, body).await };
             pin_mut!(ingest_fut);
             let ingest_res = ready!(ingest_fut.poll(cx));
 
@@ -137,22 +140,22 @@ where
     }
 }
 
-impl<St: FusedStream, S, E> FusedStream for Ingest<St, S, E>
+impl<St: FusedStream, S, L, E> FusedStream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>)>,
-    S: Clone + OperationStore<StreamName, E> + LogStore<StreamName, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+    S: Clone + OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated() && self.ooo_buffer_rx.is_terminated()
     }
 }
 
-impl<St, S, E> Sink<(Header<E>, Option<Body>)> for Ingest<St, S, E>
+impl<St, S, L, E> Sink<(Header<E>, Option<Body>)> for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>)> + Sink<(Header<E>, Option<Body>)>,
-    S: OperationStore<StreamName, E> + LogStore<StreamName, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     type Error = St::Error;
 

@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::extensions::{PruneFlag, StreamName};
+use crate::extensions::PruneFlag;
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -91,16 +91,16 @@ pub enum IngestResult<E> {
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
 ///
-/// The trait bounds requires the operation header to contain a prune flag and stream name as
-/// specified by the core p2panda specification.
-pub async fn ingest_operation<S, E>(
+/// The trait bounds requires the operation header to contain a prune flag as specified by the core
+/// p2panda specification.
+pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
 ) -> Result<IngestResult<E>, IngestError>
 where
-    S: OperationStore<StreamName, E> + LogStore<StreamName, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<StreamName> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     let operation = Operation {
         hash: header.hash(),
@@ -114,10 +114,10 @@ where
 
     let already_exists = store.get_operation(operation.hash).await?.is_some();
     if !already_exists {
-        let stream_name: StreamName = operation
+        let log_id: L = operation
             .header
             .extract()
-            .ok_or(IngestError::MissingHeaderExtension("stream_name".into()))?;
+            .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
         let prune_flag: PruneFlag = operation
             .header
             .extract()
@@ -128,7 +128,7 @@ where
         // @TODO: Move this into `p2panda-core`
         if !prune_flag.is_set() && operation.header.seq_num > 0 {
             let latest_operation = store
-                .latest_operation(&operation.header.public_key, &stream_name)
+                .latest_operation(&operation.header.public_key, &log_id)
                 .await?;
 
             match latest_operation {
@@ -164,13 +164,13 @@ where
             }
         }
 
-        store.insert_operation(&operation, &stream_name).await?;
+        store.insert_operation(&operation, &log_id).await?;
 
         if prune_flag.is_set() {
             store
                 .delete_operations(
                     &operation.header.public_key,
-                    &stream_name,
+                    &log_id,
                     operation.header.seq_num,
                 )
                 .await?;
