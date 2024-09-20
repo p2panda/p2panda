@@ -7,7 +7,7 @@ use std::pin::Pin;
 use futures_channel::mpsc::{self};
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
-use futures_util::{ready, select, Sink, Stream, StreamExt};
+use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::{Body, Extension, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
@@ -64,8 +64,6 @@ where
         max_attempts: usize,
     ) -> Ingest<St, S, L, E> {
         let (ooo_buffer_tx, ooo_buffer_rx) = mpsc::channel::<IngestAttempt<E>>(ooo_buffer_size);
-
-        let stream = select! {};
 
         Ingest {
             store,
