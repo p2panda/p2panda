@@ -4,7 +4,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
@@ -417,7 +417,17 @@ impl NetworkInner {
                     break;
                 },
                 // Handle incoming p2p connections
-                Some(connecting) = self.endpoint.accept() => {
+                Some(incoming) = self.endpoint.accept() => {
+                    // @TODO: This is the point at which we can reject the connection if
+                    // limits have been reached.
+                    let connecting = match incoming.accept() {
+                        Ok(connecting) => connecting,
+                        Err(err) => {
+                            warn!("incoming connection failed: {err:#}");
+                            // This may be caused by retransmitted datagrams so we continue.
+                            continue;
+                        },
+                    };
                     let protocols = protocols.clone();
                     join_set.spawn(async move {
                         handle_connection(connecting, protocols).await;
