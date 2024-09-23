@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_blobs::protocol::ALPN;
+use iroh_blobs::provider::{self, EventSender};
 use iroh_blobs::store::Store;
 use iroh_blobs::util::local_pool::LocalPoolHandle;
 use iroh_net::endpoint::Connecting;
@@ -27,23 +28,14 @@ impl<S: Store> BlobsProtocol<S> {
 impl<S: Store> ProtocolHandler for BlobsProtocol<S> {
     fn accept(self: Arc<Self>, conn: Connecting) -> BoxedFuture<Result<()>> {
         Box::pin(async move {
-            iroh_blobs::provider::handle_connection(
+            provider::handle_connection(
                 conn.await?,
                 self.store.clone(),
-                MockEventSender,
+                EventSender::default(),
                 self.rt.clone(),
             )
             .await;
             Ok(())
         })
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MockEventSender;
-
-impl iroh_blobs::provider::EventSender for MockEventSender {
-    fn send(&self, _event: iroh_blobs::provider::Event) -> futures_lite::future::Boxed<()> {
-        Box::pin(std::future::ready(()))
     }
 }
