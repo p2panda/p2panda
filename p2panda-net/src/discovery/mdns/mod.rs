@@ -5,7 +5,6 @@ mod socket;
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -36,7 +35,7 @@ enum Message {
 #[derive(Debug)]
 pub struct LocalDiscovery {
     #[allow(dead_code)]
-    handle: Arc<AbortOnDropHandle<()>>,
+    handle: AbortOnDropHandle<()>,
     tx: Sender<Message>,
 }
 
@@ -124,7 +123,7 @@ impl LocalDiscovery {
         });
 
         Ok(Self {
-            handle: Arc::new(AbortOnDropHandle::new(handle)),
+            handle: AbortOnDropHandle::new(handle),
             tx,
         })
     }

@@ -11,11 +11,14 @@ pub use engine::ToEngineActor;
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures_util::future::{MapErr, Shared};
+use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::traits::SyncProtocol;
 use sync::SyncActor;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
 
@@ -23,14 +26,14 @@ use crate::connection::{ConnectionActor, SyncConnection, ToConnectionActor};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{InEvent, OutEvent};
-use crate::{NetworkId, TopicId};
+use crate::{JoinErrToStr, NetworkId, TopicId};
 
 #[derive(Debug)]
 pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
     connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
     #[allow(dead_code)]
-    actor_handle: Arc<AbortOnDropHandle<()>>,
+    actor_handle: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
 impl Engine {
@@ -88,10 +91,14 @@ impl Engine {
             }
         });
 
+        let actor_drop_handle = AbortOnDropHandle::new(actor_handle)
+            .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
+            .shared();
+
         Self {
             engine_actor_tx,
             connection_actor_tx,
-            actor_handle: Arc::new(AbortOnDropHandle::new(actor_handle)),
+            actor_handle: actor_drop_handle,
         }
     }
 

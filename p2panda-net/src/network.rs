@@ -29,7 +29,7 @@ use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::{NetworkId, RelayUrl, TopicId};
+use crate::{JoinErrToStr, NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -295,12 +295,13 @@ impl NetworkBuilder {
             .spawn(protocols.clone())
             .instrument(error_span!("node", me=%node_addr.node_id.fmt_short()));
         let task = tokio::task::spawn(fut);
+        let task_handle = AbortOnDropHandle::new(task)
+            .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
+            .shared();
 
         let network = Network {
             inner,
-            task: AbortOnDropHandle::new(task)
-                .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
-                .shared(),
+            task: task_handle,
             protocols,
         };
 
@@ -324,8 +325,6 @@ impl NetworkBuilder {
         Ok(network)
     }
 }
-
-type JoinErrToStr = Box<dyn Fn(JoinError) -> String + Send + Sync + 'static>;
 
 /// Controls a p2panda-net node, including handling of connections, discovery and gossip.
 // @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)

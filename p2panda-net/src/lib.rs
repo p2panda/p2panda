@@ -17,9 +17,11 @@ pub use discovery::mdns::LocalDiscovery;
 pub use message::{FromBytes, ToBytes};
 pub use network::{Network, NetworkBuilder, RelayMode};
 pub use protocols::ProtocolHandler;
-
 pub use tokio_util::task::AbortOnDropHandle;
 
-pub type NetworkId = [u8; 32];
+// This is used in the construction of the shared `AbortOnDropHandle`.
+pub(crate) type JoinErrToStr =
+    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
+pub type NetworkId = [u8; 32];
 pub type TopicId = [u8; 32];
