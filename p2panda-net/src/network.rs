@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,9 +33,6 @@ use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
-
-/// Maximum number of parallel QUIC connections.
-const MAX_CONNECTIONS: u32 = 1024;
 
 /// Timeout duration for discovery of at least one peer's direct address.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
@@ -216,12 +213,19 @@ impl NetworkBuilder {
                 ),
             };
 
+            // @TODO: Expose finer-grained config options. Right now we only provide the option of
+            // defining the IPv4 port; everything else is hard-coded.
+            let bind_port = self.bind_port.unwrap_or(DEFAULT_BIND_PORT);
+            let socket_address_v4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, bind_port);
+            let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, bind_port + 1, 0, 0);
+
             Endpoint::builder()
                 .transport_config(transport_config)
                 .secret_key(secret_key.clone())
                 .relay_mode(relay_mode)
-                .concurrent_connections(MAX_CONNECTIONS)
-                .bind(self.bind_port.unwrap_or(DEFAULT_BIND_PORT))
+                .bind_addr_v4(socket_address_v4)
+                .bind_addr_v6(socket_address_v6)
+                .bind()
                 .await?
         };
 
