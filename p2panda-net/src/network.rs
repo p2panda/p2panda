@@ -388,10 +388,6 @@ impl NetworkInner {
                     tokio::select! {
                         // Learn about our direct addresses and changes to them
                         Some(endpoints) = addrs_stream.next() => {
-                            if let Err(err) = inner.gossip.update_direct_addresses(&endpoints) {
-                                warn!("Failed to update direct addresses for gossip: {err:?}");
-                            }
-
                             let direct_addresses = endpoints.iter().map(|endpoint| endpoint.addr).collect();
                             my_node_addr.info.direct_addresses = direct_addresses;
                             if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
