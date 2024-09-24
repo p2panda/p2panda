@@ -88,6 +88,7 @@ pub enum IngestResult<E> {
 ///
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
+// @TODO: Move this into `p2panda-core`
 pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
@@ -113,7 +114,6 @@ where
     if !already_exists {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation
-        // @TODO: Move this into `p2panda-core`
         if !prune_flag && operation.header.seq_num > 0 {
             let latest_operation = store
                 .latest_operation(&operation.header.public_key, log_id)

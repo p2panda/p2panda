@@ -69,6 +69,13 @@ where
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     pub(super) fn new(stream: St, store: S, ooo_buffer_size: usize) -> Ingest<St, S, L, E> {
+        // @TODO(adz): We can optimize for the internal out-of-order buffer even more as it's FIFO
+        // nature is not optimal. A sorted list (by seq num, maybe even grouped by public key)
+        // might be more efficient, though I'm not sure about optimal implementations yet, so
+        // benchmarks and more real-world experience might make sense before we attempt any of
+        // this.
+        //
+        // Also, using an mpsc for the internal buffer seems overkill.
         let (ooo_buffer_tx, ooo_buffer_rx) = mpsc::channel::<IngestAttempt<E>>(ooo_buffer_size);
 
         Ingest {
