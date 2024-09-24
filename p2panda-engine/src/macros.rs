@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+/// Forward `Sink` to underlying `Stream`.
 macro_rules! delegate_sink {
     ($field:ident, $item:ty) => {
         fn poll_ready(
@@ -29,6 +30,8 @@ macro_rules! delegate_sink {
     };
 }
 
+/// Common methods for `Stream` or `Sink` implementations to acquire pinned mutable access to
+/// projected inner fields.
 macro_rules! delegate_access_inner {
     ($field:ident, $inner:ty, ($($ind:tt)*)) => {
         /// Acquires a reference to the underlying sink or stream that this combinator is pulling
