@@ -126,7 +126,16 @@ where
 
             // 2. Validate and check the log-integrity of the incoming operation. If it is valid it
             //    get's persisted and the log optionally pruned.
-            let ingest_fut = async { ingest_operation::<S, L, E>(&mut store, header, body).await };
+            let ingest_fut = async {
+                let log_id: L = header
+                    .extract()
+                    .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
+                let prune_flag: PruneFlag = header
+                    .extract()
+                    .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
+                ingest_operation::<S, L, E>(&mut store, header, body, &log_id, prune_flag.is_set())
+                    .await
+            };
             pin_mut!(ingest_fut);
             let ingest_res = ready!(ingest_fut.poll(cx));
 

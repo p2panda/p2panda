@@ -2,14 +2,12 @@
 
 use ciborium::de::Error as CiboriumError;
 use p2panda_core::{
-    validate_backlink, validate_operation, Body, Extension, Header, Operation, OperationError,
+    validate_backlink, validate_operation, Body, Header, Operation, OperationError,
 };
 use p2panda_store::{LogStore, OperationStore, StoreError};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
-
-use crate::extensions::PruneFlag;
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -86,21 +84,20 @@ pub enum IngestResult<E> {
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
 ///
-/// This method also automatically prunes the log when a prune flag was set in the header.
+/// This method also automatically prunes the log when a prune flag was set.
 ///
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
-///
-/// The trait bounds requires the operation header to contain a prune flag as specified by the core
-/// p2panda specification.
 pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
+    log_id: &L,
+    prune_flag: bool,
 ) -> Result<IngestResult<E>, IngestError>
 where
     S: OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    E: Clone + Serialize + DeserializeOwned,
 {
     let operation = Operation {
         hash: header.hash(),
@@ -114,21 +111,12 @@ where
 
     let already_exists = store.get_operation(operation.hash).await?.is_some();
     if !already_exists {
-        let log_id: L = operation
-            .header
-            .extract()
-            .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
-        let prune_flag: PruneFlag = operation
-            .header
-            .extract()
-            .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
-
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation
         // @TODO: Move this into `p2panda-core`
-        if !prune_flag.is_set() && operation.header.seq_num > 0 {
+        if !prune_flag && operation.header.seq_num > 0 {
             let latest_operation = store
-                .latest_operation(&operation.header.public_key, &log_id)
+                .latest_operation(&operation.header.public_key, log_id)
                 .await?;
 
             match latest_operation {
@@ -164,13 +152,13 @@ where
             }
         }
 
-        store.insert_operation(&operation, &log_id).await?;
+        store.insert_operation(&operation, log_id).await?;
 
-        if prune_flag.is_set() {
+        if prune_flag {
             store
                 .delete_operations(
                     &operation.header.public_key,
-                    &log_id,
+                    log_id,
                     operation.header.seq_num,
                 )
                 .await?;
@@ -206,22 +194,17 @@ mod tests {
     use p2panda_core::{Hash, Header, PrivateKey};
     use p2panda_store::MemoryStore;
 
-    use crate::extensions::StreamName;
     use crate::operation::{ingest_operation, IngestResult};
     use crate::test_utils::Extensions;
 
     #[tokio::test]
     async fn retry_result() {
-        let mut store = MemoryStore::<StreamName, Extensions>::new();
+        let mut store = MemoryStore::<usize, Extensions>::new();
         let private_key = PrivateKey::new();
+        let log_id = 1;
 
         // 1. Create a regular first operation in a log
-        let extensions = Extensions {
-            stream_name: StreamName::new(private_key.public_key(), Some("chat")),
-            ..Default::default()
-        };
-
-        let mut header = Header::<Extensions> {
+        let mut header = Header {
             public_key: private_key.public_key(),
             version: 1,
             signature: None,
@@ -231,16 +214,16 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: Some(extensions.clone()),
+            extensions: None,
         };
         header.sign(&private_key);
 
-        let result = ingest_operation(&mut store, header, None).await;
+        let result = ingest_operation(&mut store, header, None, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Complete(_))));
 
         // 2. Create an operation which has already advanced in the log (it has a backlink and
         //    higher sequence number)
-        let mut header = Header::<Extensions> {
+        let mut header = Header {
             public_key: private_key.public_key(),
             version: 1,
             signature: None,
@@ -250,11 +233,11 @@ mod tests {
             seq_num: 12, // we'll be missing 11 operations between the first and this one
             backlink: Some(Hash::new(b"mock operation")),
             previous: vec![],
-            extensions: Some(extensions),
+            extensions: None,
         };
         header.sign(&private_key);
 
-        let result = ingest_operation(&mut store, header, None).await;
+        let result = ingest_operation(&mut store, header, None, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Retry(_, None, 11))));
     }
 }
