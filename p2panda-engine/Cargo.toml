@@ -1,0 +1,22 @@
+[package]
+name = "p2panda-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ciborium = "0.2.2"
+futures-channel = "0.3.30"
+futures-util = { version = "0.3.30", features = ["sink"] }
+p2panda-core = { path = "../p2panda-core" }
+p2panda-store = { path = "../p2panda-store" }
+pin-project = "1.1.5"
+pin-utils = "0.1.0"
+serde = { version = "1.0.210", features = ["derive"] }
+thiserror = "1.0.63"
+
+[dev-dependencies]
+async-stream = "0.3.5"
+tokio = { version = "1.40.0", features = ["rt", "macros"] }
+
+[lints]
+workspace = true
