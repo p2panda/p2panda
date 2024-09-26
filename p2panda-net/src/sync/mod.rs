@@ -39,12 +39,8 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
     let (tx, mut rx) = mpsc::channel(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
-    // Spawn a task which opens a bi-directional stream over the provided connection and runs
-    // the sync protocol.
-    let protocol = sync_protocol.clone();
-
-    // Spawn another task which picks up any new application messages and sends them
-    // on to the engine for handling.
+    // Spawn a task which picks up any new application messages and sends them on to the engine
+    // for handling.
     let mut sync_handshake_success = false;
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
@@ -91,7 +87,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
     });
 
     // Run the sync protocol.
-    let result = protocol
+    let result = sync_protocol
         .open(
             topic.as_bytes(),
             Box::new(&mut send),
@@ -122,11 +118,8 @@ pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unp
     let (tx, mut rx) = mpsc::channel(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
 
-    // Spawn a task which runs the sync protocol.
-    let protocol = sync_protocol.clone();
-
-    // Spawn another task which picks up any new application messages and sends them
-    // on to the engine for handling.
+    // Spawn a task which picks up any new application messages and sends them on to the engine
+    // for handling.
     tokio::spawn(async move {
         let mut topic = None;
         while let Some(message) = rx.recv().await {
@@ -192,7 +185,7 @@ pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unp
     });
 
     // Run the sync protocol.
-    let result = protocol
+    let result = sync_protocol
         .accept(
             Box::new(&mut send),
             Box::new(&mut recv),
