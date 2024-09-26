@@ -45,15 +45,13 @@ impl Engine {
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
         // Create a sync manager if a sync protocol has been provided.
-        let sync_manager = if let Some(ref sync_protocol) = sync_protocol {
-            Some(SyncManager::new(
+        let sync_manager = sync_protocol.as_ref().map(|sync_protocol| {
+            SyncManager::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
-            ))
-        } else {
-            None
-        };
+            )
+        });
 
         let engine_actor = EngineActor::new(
             endpoint,
