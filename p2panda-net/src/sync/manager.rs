@@ -11,12 +11,11 @@ use p2panda_sync::SyncError;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
-use crate::connection::sync;
-use crate::connection::SYNC_CONNECTION_ALPN;
 use crate::engine::ToEngineActor;
+use crate::sync::{self, SYNC_CONNECTION_ALPN};
 
 #[derive(Debug)]
-pub struct ConnectionManager {
+pub struct SyncManager {
     known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
     active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
@@ -25,7 +24,7 @@ pub struct ConnectionManager {
     sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
 }
 
-impl ConnectionManager {
+impl SyncManager {
     pub fn new(
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor>,

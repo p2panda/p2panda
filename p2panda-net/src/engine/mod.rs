@@ -20,10 +20,10 @@ use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
 
-use crate::connection::{ConnectionManager, SyncConnection};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{InEvent, OutEvent};
+use crate::sync::{SyncConnection, SyncManager};
 use crate::{JoinErrToStr, NetworkId, TopicId};
 
 #[derive(Debug)]
@@ -44,9 +44,9 @@ impl Engine {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        // Create a connection manager if a sync protocol has been provided.
-        let connection_manager = if sync_protocol.is_some() {
-            Some(ConnectionManager::new(
+        // Create a sync manager if a sync protocol has been provided.
+        let sync_manager = if sync_protocol.is_some() {
+            Some(SyncManager::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
@@ -58,7 +58,7 @@ impl Engine {
         let engine_actor = EngineActor::new(
             endpoint,
             gossip_actor_tx,
-            connection_manager,
+            sync_manager,
             engine_actor_rx,
             network_id.into(),
         );

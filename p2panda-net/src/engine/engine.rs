@@ -13,10 +13,10 @@ use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, warn};
 
-use crate::connection::ConnectionManager;
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{InEvent, OutEvent};
+use crate::sync::SyncManager;
 use crate::{FromBytes, ToBytes};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
@@ -123,7 +123,7 @@ impl GossipBuffer {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    connection_manager: Option<ConnectionManager>,
+    sync_manager: Option<SyncManager>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -140,14 +140,14 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-        connection_manager: Option<ConnectionManager>,
+        sync_manager: Option<SyncManager>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
         Self {
             endpoint,
             gossip_actor_tx,
-            connection_manager,
+            sync_manager,
             inbox,
             network_id,
             network_joined: false,
@@ -534,8 +534,8 @@ impl EngineActor {
         //
         // NOTE: This will only return once sync has been attempted with all novel peer-topic
         // combinations.
-        if let Some(ref mut connection_manager) = self.connection_manager {
-            connection_manager
+        if let Some(ref mut sync_manager) = self.sync_manager {
+            sync_manager
                 .update_peer_topics(delivered_from, topics)
                 .await?;
         }

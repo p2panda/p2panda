@@ -10,9 +10,9 @@ use p2panda_sync::SyncError;
 use tokio::sync::mpsc;
 use tracing::{debug, debug_span};
 
-use crate::connection::sync;
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
+use crate::sync;
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
