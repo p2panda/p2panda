@@ -34,8 +34,7 @@ impl SyncConnection {
         }
     }
 
-    // Handle an inbound connection using the `SYNC_CONNECTION_ALPN` and run a sync session with
-    // the remote peer.
+    /// Handle an inbound connection using the `SYNC_CONNECTION_ALPN` and accept a sync session.
     async fn handle_connection(&self, connection: Connection) -> Result<()> {
         debug!("handling inbound sync connection...");
         let peer = endpoint::get_remote_node_id(&connection)?;

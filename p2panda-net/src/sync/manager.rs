@@ -83,10 +83,7 @@ impl SyncManager {
         Ok(())
     }
 
-    /// Attempt to connect with the given peer.
-    ///
-    /// A `None` value will be returned if a connection has already been established and is
-    /// currently active.
+    /// Attempt to connect with the given peer and initiate a sync session.
     pub async fn connect(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
         debug!("attempting peer connection for sync");
 
