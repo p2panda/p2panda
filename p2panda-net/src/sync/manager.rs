@@ -21,14 +21,14 @@ pub struct SyncManager {
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     engine_actor_tx: Sender<ToEngineActor>,
     endpoint: Endpoint,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
 }
 
 impl SyncManager {
     pub fn new(
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor>,
-        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     ) -> Self {
         Self {
             known_peer_topics: HashMap::new(),
@@ -45,8 +45,9 @@ impl SyncManager {
     pub async fn update_peer_topics(&mut self, peer: NodeId, topics: Vec<TopicId>) -> Result<()> {
         debug!("updating peer topics in connection manager");
 
-        let known_topics = self.known_peer_topics.get(&peer);
+        // Create a list of (previously) unknown topics that we might like to sync over.
         let mut new_topics = Vec::new();
+        let known_topics = self.known_peer_topics.get(&peer);
         if let Some(known_topics) = known_topics {
             for topic in topics {
                 if !known_topics.contains(&topic) {
@@ -100,10 +101,7 @@ impl SyncManager {
             .await
             .map_err(|e| SyncError::Protocol(e.to_string()))?;
 
-        let sync_protocol = self
-            .sync_protocol
-            .clone()
-            .expect("sync protocol has been defined");
+        let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
         // Run a sync session as the initiator.
@@ -126,7 +124,7 @@ impl SyncManager {
             debug!("sync success: initiate");
             self.complete_successful_sync(peer, topic)
         } else {
-            debug!("sync failure. initiate");
+            debug!("sync failure: initiate");
             self.complete_failed_sync(peer, topic)
         }
 
