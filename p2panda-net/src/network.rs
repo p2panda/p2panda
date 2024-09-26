@@ -657,10 +657,8 @@ mod sync_protocols {
             }
 
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
+
             Ok(())
         }
 
@@ -690,10 +688,8 @@ mod sync_protocols {
             sink.send(DummyProtocolMessage::Done).await?;
 
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
+
             Ok(())
         }
     }
@@ -751,14 +747,9 @@ mod sync_protocols {
                 }
             }
 
-            // @NOTE: It's important to call this method before the streams are dropped, it makes
-            // sure all bytes are flushed from the sink before closing so that no messages are
-            // lost.
+            // Flush all bytes so that no messages are lost.
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
 
             Ok(())
         }
@@ -792,14 +783,8 @@ mod sync_protocols {
                 }
             }
 
-            // @NOTE: It's important to call this method before the streams are dropped, it makes
-            // sure all bytes are flushed from the sink before closing so that no messages are
-            // lost.
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
 
             Ok(())
         }
@@ -1119,7 +1104,6 @@ mod tests {
                 .unwrap();
 
             let peer_a_expected_messages = vec![
-                OutEvent::Ready,
                 OutEvent::Message {
                     bytes: operation0_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
@@ -1132,6 +1116,7 @@ mod tests {
                     bytes: operation2_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
+                OutEvent::Ready,
             ];
 
             // Assert we receive the expected messages
