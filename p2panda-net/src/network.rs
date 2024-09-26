@@ -1104,6 +1104,7 @@ mod tests {
                 .unwrap();
 
             let peer_a_expected_messages = vec![
+                OutEvent::Ready,
                 OutEvent::Message {
                     bytes: operation0_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
@@ -1116,7 +1117,6 @@ mod tests {
                     bytes: operation2_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                OutEvent::Ready,
             ];
 
             // Assert we receive the expected messages

@@ -324,9 +324,6 @@ impl EngineActor {
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
-    ///
-    /// In addition to gossip activity, a random set of peers is selected for the given topic and
-    /// a sync attempt is run over each successful connection.
     async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
         if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
@@ -530,6 +527,9 @@ impl EngineActor {
         // Register earmarked topics from other peers
         self.peers.on_announcement(topics.clone(), delivered_from);
 
+        // And optimistically try to join them if there's an overlap with our interests
+        self.join_earmarked_topics().await?;
+
         // Inform the connection manager about the peer topics
         //
         // NOTE: This will only return once sync has been attempted with all novel peer-topic
@@ -539,9 +539,6 @@ impl EngineActor {
                 .update_peer_topics(delivered_from, topics)
                 .await?;
         }
-
-        // And optimistically try to join them if there's an overlap with our interests
-        self.join_earmarked_topics().await?;
 
         Ok(())
     }
