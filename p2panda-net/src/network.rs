@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
+use futures_util::future::{MapErr, Shared};
+use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_gossip::proto::Config as GossipConfig;
 use iroh_net::endpoint::TransportConfig;
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
-use iroh_net::util::SharedAbortingJoinHandle;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::traits::SyncProtocol;
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
@@ -27,13 +29,10 @@ use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::{NetworkId, RelayUrl, TopicId};
+use crate::{JoinErrToStr, NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
-
-/// Maximum number of parallel QUIC connections.
-const MAX_CONNECTIONS: u32 = 1024;
 
 /// Timeout duration for discovery of at least one peer's direct address.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
@@ -214,12 +213,19 @@ impl NetworkBuilder {
                 ),
             };
 
+            // @TODO: Expose finer-grained config options. Right now we only provide the option of
+            // defining the IPv4 port; everything else is hard-coded.
+            let bind_port = self.bind_port.unwrap_or(DEFAULT_BIND_PORT);
+            let socket_address_v4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, bind_port);
+            let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, bind_port + 1, 0, 0);
+
             Endpoint::builder()
                 .transport_config(transport_config)
                 .secret_key(secret_key.clone())
                 .relay_mode(relay_mode)
-                .concurrent_connections(MAX_CONNECTIONS)
-                .bind(self.bind_port.unwrap_or(DEFAULT_BIND_PORT))
+                .bind_addr_v4(socket_address_v4)
+                .bind_addr_v6(socket_address_v6)
+                .bind()
                 .await?
         };
 
@@ -289,10 +295,13 @@ impl NetworkBuilder {
             .spawn(protocols.clone())
             .instrument(error_span!("node", me=%node_addr.node_id.fmt_short()));
         let task = tokio::task::spawn(fut);
+        let task_handle = AbortOnDropHandle::new(task)
+            .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
+            .shared();
 
         let network = Network {
             inner,
-            task: task.into(),
+            task: task_handle,
             protocols,
         };
 
@@ -324,7 +333,12 @@ impl NetworkBuilder {
 pub struct Network {
     inner: Arc<NetworkInner>,
     protocols: Arc<ProtocolMap>,
-    task: SharedAbortingJoinHandle<()>,
+    // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
+    // - `Shared` allows us to `task.await` from all `Network` clones
+    //   - Acts like an `Arc` around the inner future
+    // - `MapErr` is needed to map the `JoinError` to a `String`, since `JoinError` is `!Clone`
+    // - `AbortOnDropHandle` ensures the `task` is cancelled when all `Network`s are dropped
+    task: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
 #[allow(dead_code)]
@@ -373,10 +387,6 @@ impl NetworkInner {
                     tokio::select! {
                         // Learn about our direct addresses and changes to them
                         Some(endpoints) = addrs_stream.next() => {
-                            if let Err(err) = inner.gossip.update_direct_addresses(&endpoints) {
-                                warn!("Failed to update direct addresses for gossip: {err:?}");
-                            }
-
                             let direct_addresses = endpoints.iter().map(|endpoint| endpoint.addr).collect();
                             my_node_addr.info.direct_addresses = direct_addresses;
                             if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
@@ -406,7 +416,17 @@ impl NetworkInner {
                     break;
                 },
                 // Handle incoming p2p connections
-                Some(connecting) = self.endpoint.accept() => {
+                Some(incoming) = self.endpoint.accept() => {
+                    // @TODO: This is the point at which we can reject the connection if
+                    // limits have been reached.
+                    let connecting = match incoming.accept() {
+                        Ok(connecting) => connecting,
+                        Err(err) => {
+                            warn!("incoming connection failed: {err:#}");
+                            // This may be caused by retransmitted datagrams so we continue.
+                            continue;
+                        },
+                    };
                     let protocols = protocols.clone();
                     join_set.spawn(async move {
                         handle_connection(connecting, protocols).await;

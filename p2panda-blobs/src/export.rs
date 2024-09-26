@@ -7,13 +7,13 @@ use anyhow::Context;
 use iroh_base::hash::Hash as IrohHash;
 use iroh_blobs::export::ExportProgress;
 use iroh_blobs::store::{ExportMode, MapEntry, Store};
-use iroh_blobs::util::progress::{FlumeProgressSender, IdGenerator, ProgressSender};
+use iroh_blobs::util::progress::{AsyncChannelProgressSender, IdGenerator, ProgressSender};
 use p2panda_core::Hash;
 use tracing::trace;
 
 pub async fn export_blob<S: Store>(store: &S, hash: Hash, outpath: &PathBuf) -> anyhow::Result<()> {
-    let (sender, _receiver) = flume::bounded(1024);
-    let progress = FlumeProgressSender::new(sender);
+    let (sender, _receiver) = async_channel::bounded(1024);
+    let progress = AsyncChannelProgressSender::new(sender);
 
     if let Some(parent) = outpath.parent() {
         tokio::fs::create_dir_all(parent).await?;

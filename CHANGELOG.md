@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Bump `iroh` dependencies to `0.25.0` [#562](https://github.com/p2panda/p2panda/pull/562)
 - Implement sync connection manager [#559](https://github.com/p2panda/p2panda/pull/559)
 - Introduce `TopicMap` trait [#560](https://github.com/p2panda/p2panda/pull/560)
 - Sync past state for subscribed topics in `p2panda-net` [#553](https://github.com/p2panda/p2panda/pull/553)
