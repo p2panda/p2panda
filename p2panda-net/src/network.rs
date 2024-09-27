@@ -24,11 +24,11 @@ use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
-use crate::connection::SYNC_CONNECTION_ALPN;
 use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
+use crate::sync::SYNC_CONNECTION_ALPN;
 use crate::{JoinErrToStr, NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
@@ -657,10 +657,8 @@ mod sync_protocols {
             }
 
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
+
             Ok(())
         }
 
@@ -690,10 +688,8 @@ mod sync_protocols {
             sink.send(DummyProtocolMessage::Done).await?;
 
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
+
             Ok(())
         }
     }
@@ -751,14 +747,9 @@ mod sync_protocols {
                 }
             }
 
-            // @NOTE: It's important to call this method before the streams are dropped, it makes
-            // sure all bytes are flushed from the sink before closing so that no messages are
-            // lost.
+            // Flush all bytes so that no messages are lost.
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
 
             Ok(())
         }
@@ -792,14 +783,8 @@ mod sync_protocols {
                 }
             }
 
-            // @NOTE: It's important to call this method before the streams are dropped, it makes
-            // sure all bytes are flushed from the sink before closing so that no messages are
-            // lost.
             sink.flush().await?;
-            sink.close().await?;
-
             app_tx.flush().await?;
-            app_tx.close().await?;
 
             Ok(())
         }

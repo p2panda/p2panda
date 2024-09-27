@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Refactor sync connection manager [#563](https://github.com/p2panda/p2panda/pull/563)
 - Bump `iroh` dependencies to `0.25.0` [#562](https://github.com/p2panda/p2panda/pull/562)
 - Implement sync connection manager [#559](https://github.com/p2panda/p2panda/pull/559)
 - Introduce `TopicMap` trait [#560](https://github.com/p2panda/p2panda/pull/560)

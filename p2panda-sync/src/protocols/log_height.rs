@@ -124,14 +124,10 @@ where
             }
         }
 
-        // @NOTE: It's important to call this method before the streams are dropped, it makes
-        // sure all bytes are flushed from the sink before closing so that no messages are
-        // lost.
+        // Flush all bytes so that no messages are lost.
         sink.flush().await?;
-        sink.close().await?;
-
         app_tx.flush().await?;
-        app_tx.close().await?;
+
         debug!("sync session finished");
 
         Ok(())
@@ -238,14 +234,10 @@ where
             }
         }
 
-        // @NOTE: It's important to call this method before the streams are dropped, it makes
-        // sure all bytes are flushed from the sink before closing so that no messages are
-        // lost.
+        // Flush all bytes so that no messages are lost.
         sink.flush().await?;
-        sink.close().await?;
-
         app_tx.flush().await?;
-        app_tx.close().await?;
+
         debug!("sync session finished");
 
         Ok(())

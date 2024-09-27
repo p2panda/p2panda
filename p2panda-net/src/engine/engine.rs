@@ -13,13 +13,11 @@ use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
 use tracing::{debug, error, warn};
 
-use crate::connection::{ConnectionActor, ToConnectionActor};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{InEvent, OutEvent};
+use crate::sync::SyncManager;
 use crate::{FromBytes, ToBytes};
-
-use super::sync::{SyncActor, ToSyncActor};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -125,8 +123,7 @@ impl GossipBuffer {
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
-    sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
+    sync_manager: Option<SyncManager>,
     inbox: mpsc::Receiver<ToEngineActor>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -143,16 +140,14 @@ impl EngineActor {
     pub fn new(
         endpoint: Endpoint,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-        connection_actor_tx: Option<mpsc::Sender<ToConnectionActor>>,
-        sync_actor_tx: Option<mpsc::Sender<ToSyncActor>>,
+        sync_manager: Option<SyncManager>,
         inbox: mpsc::Receiver<ToEngineActor>,
         network_id: TopicId,
     ) -> Self {
         Self {
             endpoint,
             gossip_actor_tx,
-            connection_actor_tx,
-            sync_actor_tx,
+            sync_manager,
             inbox,
             network_id,
             network_joined: false,
@@ -163,39 +158,12 @@ impl EngineActor {
         }
     }
 
-    pub async fn run(
-        mut self,
-        mut gossip_actor: GossipActor,
-        connection_actor: Option<ConnectionActor>,
-        sync_actor: Option<SyncActor>,
-    ) -> Result<()> {
+    pub async fn run(mut self, mut gossip_actor: GossipActor) -> Result<()> {
         let gossip_handle = tokio::task::spawn(async move {
             if let Err(err) = gossip_actor.run().await {
                 error!("gossip recv actor failed: {err:?}");
             }
         });
-
-        let connection_handle = if let Some(mut connection_actor) = connection_actor {
-            let handle = tokio::task::spawn(async move {
-                if let Err(err) = connection_actor.run().await {
-                    error!("connection recv actor failed: {err:?}");
-                }
-            });
-            Some(handle)
-        } else {
-            None
-        };
-
-        let sync_handle = if let Some(mut sync_actor) = sync_actor {
-            let handle = tokio::task::spawn(async move {
-                if let Err(err) = sync_actor.run().await {
-                    error!("sync recv actor failed: {err:?}");
-                }
-            });
-            Some(handle)
-        } else {
-            None
-        };
 
         // Take oneshot sender from outside API awaited by `shutdown` call and fire it as soon as
         // shutdown completed
@@ -205,12 +173,6 @@ impl EngineActor {
         }
 
         gossip_handle.await?;
-        if let Some(connection_handle) = connection_handle {
-            connection_handle.await?;
-        }
-        if let Some(sync_handle) = sync_handle {
-            sync_handle.await?;
-        }
         drop(self);
 
         match shutdown_completed_signal {
@@ -362,9 +324,6 @@ impl EngineActor {
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
-    ///
-    /// In addition to gossip activity, a random set of peers is selected for the given topic and
-    /// a sync attempt is run over each successful connection.
     async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
         if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
@@ -568,17 +527,18 @@ impl EngineActor {
         // Register earmarked topics from other peers
         self.peers.on_announcement(topics.clone(), delivered_from);
 
-        // Inform the connection manager about the peer topics
-        if let Some(tx) = &self.connection_actor_tx {
-            tx.send(ToConnectionActor::UpdatePeerTopics {
-                peer: delivered_from,
-                topics,
-            })
-            .await?;
-        }
-
         // And optimistically try to join them if there's an overlap with our interests
         self.join_earmarked_topics().await?;
+
+        // Inform the connection manager about the peer topics
+        //
+        // NOTE: This will only return once sync has been attempted with all novel peer-topic
+        // combinations.
+        if let Some(ref mut sync_manager) = self.sync_manager {
+            sync_manager
+                .update_peer_topics(delivered_from, topics)
+                .await?;
+        }
 
         Ok(())
     }
@@ -599,17 +559,6 @@ impl EngineActor {
             .send(ToGossipActor::Shutdown)
             .await
             .ok();
-
-        if let Some(connection_actor_tx) = &self.connection_actor_tx {
-            connection_actor_tx
-                .send(ToConnectionActor::Shutdown)
-                .await
-                .ok();
-        };
-
-        if let Some(sync_actor_tx) = &self.sync_actor_tx {
-            sync_actor_tx.send(ToSyncActor::Shutdown).await.ok();
-        };
 
         Ok(())
     }
