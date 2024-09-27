@@ -20,8 +20,7 @@ pub use protocols::ProtocolHandler;
 pub use tokio_util::task::AbortOnDropHandle;
 
 // This is used in the construction of the shared `AbortOnDropHandle`.
-pub type JoinErrToStr =
-    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
+pub type JoinErrToStr = Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 pub type NetworkId = [u8; 32];
 pub type TopicId = [u8; 32];
