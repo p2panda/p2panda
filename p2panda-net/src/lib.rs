@@ -4,7 +4,6 @@ mod addrs;
 pub mod config;
 pub mod discovery;
 mod engine;
-mod handshake;
 mod message;
 pub mod network;
 mod protocols;

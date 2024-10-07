@@ -26,7 +26,6 @@ use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
-use crate::handshake::{Handshake, HANDSHAKE_ALPN};
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::SYNC_CONNECTION_ALPN;
 use crate::{JoinErrToStr, NetworkId, RelayUrl, TopicId};
@@ -238,8 +237,6 @@ impl NetworkBuilder {
             &node_addr.info,
         );
 
-        let handshake = Handshake::new(gossip.clone());
-
         let engine = Engine::new(
             self.network_id,
             endpoint.clone(),
@@ -276,7 +273,6 @@ impl NetworkBuilder {
 
         // Register core protocols all nodes accept
         self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
-        self.protocols.insert(HANDSHAKE_ALPN, Arc::new(handshake));
         // If a sync protocol has not been configured then sync handler is None
         if let Some(sync_handler) = sync_handler {
             self.protocols
