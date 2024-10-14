@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["core", "log-height"]
-log-height = ["dep:p2panda-core", "dep:p2panda-store", "core", "cbor"]
+default = ["core"]
 core = [
     "dep:anyhow",
     "dep:serde",
@@ -14,6 +13,7 @@ core = [
     "dep:tokio-util",
 ]
 cbor = ["dep:ciborium"]
+log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 
 [dependencies]
 futures = "0.3.30"

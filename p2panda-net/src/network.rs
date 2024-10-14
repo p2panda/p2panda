@@ -610,9 +610,8 @@ mod sync_protocols {
     use async_trait::async_trait;
     use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
     use futures_util::{Sink, SinkExt};
-    use p2panda_sync::protocols::utils::{into_sink, into_stream};
-    use p2panda_sync::SyncProtocol;
-    use p2panda_sync::{FromSync, SyncError};
+    use p2panda_sync::cbor::{into_cbor_sink, into_cbor_stream};
+    use p2panda_sync::{FromSync, SyncError, SyncProtocol};
     use serde::{Deserialize, Serialize};
     use tracing::debug;
 
@@ -643,8 +642,8 @@ mod sync_protocols {
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: open sync session");
 
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             sink.send(DummyProtocolMessage::Topic(*topic)).await?;
             sink.send(DummyProtocolMessage::Done).await?;
@@ -674,8 +673,8 @@ mod sync_protocols {
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -725,8 +724,8 @@ mod sync_protocols {
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("open sync session");
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             sink.send(Message::Topic(*topic)).await?;
             sink.send(Message::Ping).await?;
@@ -765,8 +764,8 @@ mod sync_protocols {
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -804,7 +803,7 @@ mod tests {
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore, TopicMap};
-    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+    use p2panda_sync::log_sync::LogSyncProtocol;
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -1010,7 +1009,7 @@ mod tests {
         let store_a = MemoryStore::default();
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol_a = LogHeightSyncProtocol {
+        let protocol_a = LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store_a,
         };
@@ -1051,7 +1050,7 @@ mod tests {
             .unwrap();
 
         // Construct log height protocol for peer b
-        let protocol_b = LogHeightSyncProtocol {
+        let protocol_b = LogSyncProtocol {
             topic_map,
             store: store_b,
         };

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod protocols;
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "log-sync")]
+pub mod log_sync;
 
 use std::fmt::Debug;
 use std::sync::Arc;
