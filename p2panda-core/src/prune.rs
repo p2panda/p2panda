@@ -4,6 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{validate_backlink, Header, OperationError};
 
+/// Alternative backlink validation method for logs which allow pruning.
+///
+/// When a "prune flag" is set in an operation, an author signals to others that all operations can
+/// be deleted (including payloads) in that log _before_ it.
+///
+/// As soon as a prune flag was set for an operation we don't expect the header of a backlink,
+/// otherwise we go on with validation as usual.
+///
+/// Use this method instead of [`validate_backlink`] if you want to support prunable logs.
 pub fn validate_prunable_backlink<E>(
     past_header: Option<&Header<E>>,
     header: &Header<E>,
