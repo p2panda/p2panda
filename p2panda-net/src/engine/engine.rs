@@ -693,8 +693,8 @@ impl TopicMap {
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let (out_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
-        out_tx.send(FromNetwork::SyncMessage {
+        let (from_network_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
+        from_network_tx.send(FromNetwork::SyncMessage {
             header,
             payload,
             delivered_from: to_public_key(delivered_from),

@@ -37,7 +37,7 @@ where
     }
 }
 
-static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_sync";
+static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
 
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<S, T, E> {
@@ -62,7 +62,7 @@ where
     E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
-        LOG_HEIGHT_PROTOCOL_NAME
+        LOG_SYNC_PROTOCOL_NAME
     }
 
     #[allow(unused_assignments)]
