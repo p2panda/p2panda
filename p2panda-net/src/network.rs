@@ -16,7 +16,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
-use p2panda_sync::traits::SyncProtocol;
+use p2panda_sync::SyncProtocol;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -611,7 +611,7 @@ mod sync_protocols {
     use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
     use futures_util::{Sink, SinkExt};
     use p2panda_sync::protocols::utils::{into_sink, into_stream};
-    use p2panda_sync::traits::SyncProtocol;
+    use p2panda_sync::SyncProtocol;
     use p2panda_sync::{FromSync, SyncError};
     use serde::{Deserialize, Serialize};
     use tracing::debug;

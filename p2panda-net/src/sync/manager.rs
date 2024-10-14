@@ -6,8 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use iroh_gossip::proto::TopicId;
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::traits::SyncProtocol;
-use p2panda_sync::SyncError;
+use p2panda_sync::{SyncError, SyncProtocol};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 

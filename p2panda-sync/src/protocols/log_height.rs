@@ -12,8 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::protocols::utils::{into_sink, into_stream};
-use crate::traits::SyncProtocol;
-use crate::{FromSync, SyncError, TopicId};
+use crate::{FromSync, SyncError, SyncProtocol, TopicId};
 
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
@@ -259,8 +258,7 @@ mod tests {
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
     use tokio_util::sync::PollSender;
 
-    use crate::traits::SyncProtocol;
-    use crate::{FromSync, TopicId};
+    use crate::{FromSync, TopicId, SyncProtocol};
 
     use super::{LogHeightSyncProtocol, Message, TopicMap};
 
