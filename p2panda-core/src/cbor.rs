@@ -1,23 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Utility methods to encode or decode values in [CBOR] format.
+//!
+//! As per p2panda specification data-types like operation headers are encoded in the Concise
+//! Binary Object Representation (CBOR) format.
+//!
+//! [CBOR]: https://cbor.io/
 use ciborium::de::Error as DeserializeError;
 use ciborium::ser::Error as SerializeError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::Header;
-
-pub fn encode_header<E: Serialize>(header: &Header<E>) -> Result<Vec<u8>, EncodeError> {
+/// Serializes a value into CBOR format.
+pub fn encode_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodeError> {
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(header, &mut bytes).map_err(Into::<EncodeError>::into)?;
+    ciborium::ser::into_writer(value, &mut bytes).map_err(Into::<EncodeError>::into)?;
     Ok(bytes)
 }
 
-pub fn decode_header<E: for<'a> Deserialize<'a>>(bytes: &[u8]) -> Result<Header<E>, DecodeError> {
-    let header = ciborium::from_reader::<Header<E>, _>(bytes).map_err(Into::<DecodeError>::into)?;
-    Ok(header)
+/// Deserializes a value which was formatted in CBOR.
+pub fn decode_cbor<T: for<'a> Deserialize<'a>>(bytes: &[u8]) -> Result<T, DecodeError> {
+    let value = ciborium::from_reader::<T, _>(bytes).map_err(Into::<DecodeError>::into)?;
+    Ok(value)
 }
 
+/// An error occurred during CBOR serialization.
 #[derive(Debug, Error)]
 pub enum EncodeError {
     /// An error occurred while writing bytes.
@@ -42,6 +49,7 @@ impl From<SerializeError<std::io::Error>> for EncodeError {
     }
 }
 
+/// An error occurred during CBOR deserialization.
 #[derive(Debug, Error)]
 pub enum DecodeError {
     /// An error occurred while reading bytes.
@@ -88,7 +96,7 @@ mod tests {
     use crate::extensions::DefaultExtensions;
     use crate::{Body, Header, PrivateKey};
 
-    use super::{decode_header, encode_header};
+    use super::{decode_cbor, encode_cbor};
 
     #[test]
     fn encode_decode() {
@@ -102,8 +110,8 @@ mod tests {
         };
         header.sign(&private_key);
 
-        let bytes = encode_header(&header).unwrap();
-        let header_again: Header<DefaultExtensions> = decode_header(&bytes).unwrap();
+        let bytes = encode_cbor(&header).unwrap();
+        let header_again: Header<DefaultExtensions> = decode_cbor(&bytes).unwrap();
 
         assert_eq!(header.hash(), header_again.hash());
     }

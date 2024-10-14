@@ -4,7 +4,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::cbor::{decode_header, encode_header, DecodeError};
+use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
 use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
@@ -100,7 +100,7 @@ where
     E: Clone + Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        encode_header(self)
+        encode_cbor(self)
             // We can be sure that all values in this module are serializable and _if_ ciborium
             // still fails then because of something really bad ..
             .expect("CBOR encoder failed due to an critical IO error")
@@ -163,7 +163,7 @@ impl TryFrom<&[u8]> for Header {
     type Error = DecodeError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        decode_header(value)
+        decode_cbor(value)
     }
 }
 
