@@ -7,8 +7,8 @@ pub mod log_sync;
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use thiserror::Error;
 
+use thiserror::Error;
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
 

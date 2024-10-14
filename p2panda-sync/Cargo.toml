@@ -4,20 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["core"]
-core = [
-    "dep:anyhow",
+cbor = [
+    "dep:ciborium",
     "dep:serde",
     "dep:tokio",
     "dep:tokio-stream",
     "dep:tokio-util",
 ]
-cbor = ["dep:ciborium"]
 log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 
 [dependencies]
+async-trait = "0.1.82"
+ciborium = { version = "0.2.2", optional = true }
 futures = "0.3.30"
-anyhow = { version = "1.0.86", optional = true }
 p2panda-core = { path = "../p2panda-core", optional = true }
 p2panda-store = { path = "../p2panda-store", optional = true }
 serde = { version = "1.0.208", optional = true }
@@ -26,12 +25,9 @@ tokio-util = { version = "0.7.11", features = [
     "codec",
     "compat",
 ], optional = true }
-ciborium = { version = "0.2.2", optional = true }
 tokio = { version = "1.39.3", features = ["rt", "macros"], optional = true }
-tracing = "0.1.40"
 thiserror = "1.0.63"
-trait-variant = "0.1.2"
-async-trait = "0.1.82"
+tracing = "0.1.40"
 
 [dev-dependencies]
 tokio = { version = "1.39.3", features = ["rt", "macros", "net", "io-util"] }
