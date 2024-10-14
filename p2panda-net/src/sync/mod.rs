@@ -88,7 +88,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
 
     // Run the sync protocol.
     let result = sync_protocol
-        .open(
+        .initiate(
             topic.as_bytes(),
             Box::new(&mut send),
             Box::new(&mut recv),
@@ -97,7 +97,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
         .await;
 
     if let Err(err) = result {
-        error!("sync protocol open failed: {err}");
+        error!("sync protocol initiation failed: {err}");
     }
 
     Ok(())

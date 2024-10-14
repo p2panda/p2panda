@@ -18,7 +18,7 @@ pub type TopicId = [u8; 32];
 pub trait SyncProtocol<'a>: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 
-    async fn open(
+    async fn initiate(
         self: Arc<Self>,
         topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,

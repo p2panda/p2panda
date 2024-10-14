@@ -638,14 +638,14 @@ mod sync_protocols {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
         }
-        async fn open(
+        async fn initiate(
             self: Arc<Self>,
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
-            debug!("DummyProtocol: open sync session");
+            debug!("DummyProtocol: initiate sync session");
 
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
@@ -721,14 +721,14 @@ mod sync_protocols {
             SIMPLE_PROTOCOL_NAME
         }
 
-        async fn open(
+        async fn initiate(
             self: Arc<Self>,
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
-            debug!("open sync session");
+            debug!("initiate sync session");
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
