@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use p2panda_core::{PrivateKey, PublicKey, Signature};
-use p2panda_net::network::{InEvent, OutEvent};
+use p2panda_net::network::{FromGossipOverlay, ToGossipOverlay};
 use p2panda_net::{LocalDiscovery, NetworkBuilder};
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -36,10 +36,10 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         while let Ok(event) = rx.recv().await {
             match event {
-                OutEvent::Ready => {
+                FromGossipOverlay::Ready => {
                     ready_tx.send(()).await.ok();
                 }
-                OutEvent::Message {
+                FromGossipOverlay::Message {
                     bytes,
                     delivered_from,
                 } => match Message::decode_and_verify(&bytes) {
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
     while let Some(text) = line_rx.recv().await {
         let bytes = Message::sign_and_encode(&private_key, &text)?;
-        tx.send(InEvent::Message { bytes }).await.ok();
+        tx.send(ToGossipOverlay::Message { bytes }).await.ok();
     }
 
     tokio::signal::ctrl_c().await?;

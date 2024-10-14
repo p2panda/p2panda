@@ -322,21 +322,6 @@ impl NetworkBuilder {
     }
 }
 
-/// Controls a p2panda-net node, including handling of connections, discovery and gossip.
-// @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub struct Network {
-    inner: Arc<NetworkInner>,
-    protocols: Arc<ProtocolMap>,
-    // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
-    // - `Shared` allows us to `task.await` from all `Network` clones
-    //   - Acts like an `Arc` around the inner future
-    // - `MapErr` is needed to map the `JoinError` to a `String`, since `JoinError` is `!Clone`
-    // - `AbortOnDropHandle` ensures the `task` is cancelled when all `Network`s are dropped
-    task: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
-}
-
 #[allow(dead_code)]
 #[derive(Debug)]
 struct NetworkInner {
@@ -493,6 +478,21 @@ impl NetworkInner {
     }
 }
 
+/// Controls a p2panda-net node, including handling of connections, discovery and gossip.
+// @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct Network {
+    inner: Arc<NetworkInner>,
+    protocols: Arc<ProtocolMap>,
+    // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
+    // - `Shared` allows us to `task.await` from all `Network` clones
+    //   - Acts like an `Arc` around the inner future
+    // - `MapErr` is needed to map the `JoinError` to a `String`, since `JoinError` is `!Clone`
+    // - `AbortOnDropHandle` ensures the `task` is cancelled when all `Network`s are dropped
+    task: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
+}
+
 impl Network {
     /// Returns the public key of the local network.
     pub fn node_id(&self) -> PublicKey {
@@ -510,19 +510,25 @@ impl Network {
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
     }
 
-    /// Subscribes to a topic and returns a bi-directional stream from which can be read from
-    /// and written to.
+    /// Subscribes to a topic and returns a bi-directional stream that can be read from and
+    /// written to.
     ///
     /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
     /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
-    ) -> Result<(mpsc::Sender<InEvent>, broadcast::Receiver<OutEvent>)> {
-        let (in_tx, in_rx) = mpsc::channel::<InEvent>(128);
-        let (out_tx, out_rx) = broadcast::channel::<OutEvent>(128);
-        self.inner.engine.subscribe(topic, out_tx, in_rx).await?;
-        Ok((in_tx, out_rx))
+    ) -> Result<(
+        mpsc::Sender<ToGossipOverlay>,
+        broadcast::Receiver<FromGossipOverlay>,
+    )> {
+        let (to_gossip_tx, to_gossip_rx) = mpsc::channel::<ToGossipOverlay>(128);
+        let (from_gossip_tx, from_gossip_rx) = broadcast::channel::<FromGossipOverlay>(128);
+        self.inner
+            .engine
+            .subscribe(topic, from_gossip_tx, to_gossip_rx)
+            .await?;
+        Ok((to_gossip_tx, from_gossip_rx))
     }
 
     /// Returns a handle to the network endpoint.
@@ -554,16 +560,14 @@ impl Network {
 
 #[derive(Clone, Debug)]
 /// An event to be broadcast to the gossip-overlay.
-pub enum InEvent {
+pub enum ToGossipOverlay {
     Message { bytes: Vec<u8> },
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// An event received from the gossip-overlay.
-// @TODO: Maybe consider renaming these two enums...
-// Could be switched to OutboundEvent and InboundEvent (in relation to the gossip-overlay).
-pub enum OutEvent {
+pub enum FromGossipOverlay {
     Ready,
     Message {
         bytes: Vec<u8>,
@@ -807,7 +811,7 @@ mod tests {
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
 
-    use super::{InEvent, OutEvent};
+    use super::{FromGossipOverlay, ToGossipOverlay};
 
     fn setup_logging() {
         tracing_subscriber::registry()
@@ -873,11 +877,11 @@ mod tests {
         let rx_1_msg = rx_1.recv().await.unwrap();
 
         // Ensure the gossip-overlay has been joined for the given topic
-        assert!(matches!(rx_1_msg, OutEvent::Ready));
-        assert!(matches!(rx_2_msg, OutEvent::Ready));
+        assert!(matches!(rx_1_msg, FromGossipOverlay::Ready));
+        assert!(matches!(rx_2_msg, FromGossipOverlay::Ready));
 
         // Broadcast a message and make sure it's received by the other node
-        tx_1.send(InEvent::Message {
+        tx_1.send(ToGossipOverlay::Message {
             bytes: "Hello, Node".to_bytes(),
         })
         .await
@@ -886,7 +890,7 @@ mod tests {
         let rx_2_msg = rx_2.recv().await.unwrap();
         assert_eq!(
             rx_2_msg,
-            OutEvent::Message {
+            FromGossipOverlay::Message {
                 bytes: "Hello, Node".to_bytes(),
                 delivered_from: node_1.node_id(),
             }
@@ -1100,16 +1104,16 @@ mod tests {
                 .unwrap();
 
             let peer_a_expected_messages = vec![
-                OutEvent::Ready,
-                OutEvent::Message {
+                FromGossipOverlay::Ready,
+                FromGossipOverlay::Message {
                     bytes: operation0_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                OutEvent::Message {
+                FromGossipOverlay::Message {
                     bytes: operation1_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                OutEvent::Message {
+                FromGossipOverlay::Message {
                     bytes: operation2_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
@@ -1135,7 +1139,7 @@ mod tests {
             // Assert the channel is now empty
             assert!(from_sync_rx.is_empty());
             // Assert we receive the expected messages
-            assert_eq!(from_sync_messages, vec![OutEvent::Ready]);
+            assert_eq!(from_sync_messages, vec![FromGossipOverlay::Ready]);
 
             node_b.shutdown().await.unwrap();
         });
