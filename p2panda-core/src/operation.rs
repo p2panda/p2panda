@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
 use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
@@ -86,7 +87,7 @@ impl<E> Default for Header<E> {
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
-            seq_num: 1,
+            seq_num: 0,
             backlink: None,
             previous: vec![],
             extensions: None,
@@ -99,14 +100,10 @@ where
     E: Clone + Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-
-        ciborium::ser::into_writer(&self, &mut bytes)
+        encode_cbor(self)
             // We can be sure that all values in this module are serializable and _if_ ciborium
             // still fails then because of something really bad ..
-            .expect("CBOR encoder failed due to an critical IO error");
-
-        bytes
+            .expect("CBOR encoder failed due to an critical IO error")
     }
 
     pub fn sign(&mut self, private_key: &PrivateKey) {
@@ -162,6 +159,14 @@ impl<E> Header<E> {
     }
 }
 
+impl TryFrom<&[u8]> for Header {
+    type Error = DecodeError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        decode_cbor(value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Body(pub(super) Vec<u8>);
 
@@ -180,6 +185,18 @@ impl Body {
 
     pub fn size(&self) -> u64 {
         self.0.len() as u64
+    }
+}
+
+impl From<&[u8]> for Body {
+    fn from(value: &[u8]) -> Self {
+        Body::new(value)
+    }
+}
+
+impl From<Vec<u8>> for Body {
+    fn from(value: Vec<u8>) -> Self {
+        Body(value)
     }
 }
 
