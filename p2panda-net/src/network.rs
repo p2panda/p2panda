@@ -807,8 +807,9 @@ mod tests {
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_store::{MemoryStore, OperationStore, TopicMap};
+    use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::LogSyncProtocol;
+    use p2panda_sync::TopicMap;
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;

@@ -89,8 +89,3 @@ pub enum StoreError {
     #[error("Error occurred in OperationStore: {0}")]
     OperationStoreError(String),
 }
-
-/// Trait used for mapping a generic topic to a single or collection of logs
-pub trait TopicMap<K, V> {
-    fn get(&self, topic: &K) -> Option<V>;
-}

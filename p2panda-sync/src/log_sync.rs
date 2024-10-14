@@ -7,12 +7,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, MemoryStore, TopicMap};
+use p2panda_store::{LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::{FromSync, SyncError, SyncProtocol, TopicId};
+use crate::{FromSync, SyncError, SyncProtocol, TopicId, TopicMap};
 
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
