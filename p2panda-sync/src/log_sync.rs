@@ -21,7 +21,7 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<T = String> {
     Have(TopicId, T, LogHeights),
-    RawOperation(Vec<u8>),
+    Operation(Vec<u8>),
     SyncDone,
 }
 
@@ -110,7 +110,7 @@ where
                         "unexpected Have message received".to_string(),
                     ))
                 }
-                Message::RawOperation(bytes) => {
+                Message::Operation(bytes) => {
                     app_tx.send(FromSync::Bytes(bytes)).await?;
                 }
                 Message::SyncDone => {
@@ -199,7 +199,7 @@ where
                                     )
                                     .expect("invalid operation found in store");
 
-                                    messages.push(Message::RawOperation(bytes))
+                                    messages.push(Message::Operation(bytes))
                                 });
                         }
                     }
@@ -211,7 +211,7 @@ where
 
                     messages
                 }
-                Message::RawOperation(_) => {
+                Message::Operation(_) => {
                     return Err(SyncError::Protocol(
                         "unexpected operation received".to_string(),
                     ));
@@ -505,9 +505,9 @@ mod tests {
             .unwrap();
 
         let messages: Vec<Message<String>> = vec![
-            Message::RawOperation(operation0_bytes),
-            Message::RawOperation(operation1_bytes),
-            Message::RawOperation(operation2_bytes),
+            Message::Operation(operation0_bytes),
+            Message::Operation(operation1_bytes),
+            Message::Operation(operation2_bytes),
             Message::SyncDone,
         ];
         assert_message_bytes(peer_b_read, messages).await;
@@ -565,9 +565,9 @@ mod tests {
         ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
             .unwrap();
         let messages: Vec<Message<String>> = vec![
-            Message::RawOperation(operation0_bytes.clone()),
-            Message::RawOperation(operation1_bytes.clone()),
-            Message::RawOperation(operation2_bytes.clone()),
+            Message::Operation(operation0_bytes.clone()),
+            Message::Operation(operation1_bytes.clone()),
+            Message::Operation(operation2_bytes.clone()),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
