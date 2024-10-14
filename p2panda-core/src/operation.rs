@@ -100,7 +100,7 @@ where
     E: Clone + Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        encode_header(&self)
+        encode_header(self)
             // We can be sure that all values in this module are serializable and _if_ ciborium
             // still fails then because of something really bad ..
             .expect("CBOR encoder failed due to an critical IO error")
