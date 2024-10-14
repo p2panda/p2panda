@@ -573,8 +573,13 @@ pub enum ToNetwork {
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// An event received from the network.
 pub enum FromNetwork {
-    Message {
+    GossipMessage {
         bytes: Vec<u8>,
+        delivered_from: PublicKey,
+    },
+    SyncMessage {
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
     },
 }
@@ -889,7 +894,7 @@ mod tests {
         let rx_2_msg = rx_2.recv().await.unwrap();
         assert_eq!(
             rx_2_msg,
-            FromNetwork::Message {
+            FromNetwork::GossipMessage {
                 bytes: "Hello, Node".to_bytes(),
                 delivered_from: node_1.node_id(),
             }
@@ -1094,27 +1099,20 @@ mod tests {
 
             // Construct the messages we expect to receive on the from_sync channel based on the
             // operations we created earlier.
-            let mut operation0_bytes = Vec::new();
-            ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-                .unwrap();
-            let mut operation1_bytes = Vec::new();
-            ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-                .unwrap();
-            let mut operation2_bytes = Vec::new();
-            ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-                .unwrap();
-
             let peer_a_expected_messages = vec![
-                FromNetwork::Message {
-                    bytes: operation0_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation0.header.to_bytes(),
+                    payload: operation0.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromNetwork::Message {
-                    bytes: operation1_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation1.header.to_bytes(),
+                    payload: operation1.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromNetwork::Message {
-                    bytes: operation2_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation2.header.to_bytes(),
+                    payload: operation2.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
             ];

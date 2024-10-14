@@ -8,9 +8,9 @@ pub mod log_sync;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use thiserror::Error;
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
+use thiserror::Error;
 
 pub type TopicId = [u8; 32];
 
@@ -56,5 +56,5 @@ pub enum SyncError {
 #[derive(PartialEq, Debug)]
 pub enum FromSync {
     Topic(TopicId),
-    Bytes(Vec<u8>),
+    Data(Vec<u8>, Option<Vec<u8>>),
 }

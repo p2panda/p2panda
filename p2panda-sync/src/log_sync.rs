@@ -21,7 +21,7 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<T = String> {
     Have(TopicId, T, LogHeights),
-    Operation(Vec<u8>),
+    Operation(Vec<u8>, Option<Vec<u8>>),
     SyncDone,
 }
 
@@ -110,8 +110,8 @@ where
                         "unexpected Have message received".to_string(),
                     ))
                 }
-                Message::Operation(bytes) => {
-                    app_tx.send(FromSync::Bytes(bytes)).await?;
+                Message::Operation(header, payload) => {
+                    app_tx.send(FromSync::Data(header, payload)).await?;
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
@@ -192,14 +192,10 @@ where
                             log.split_off(seq_num as usize)
                                 .into_iter()
                                 .for_each(|operation| {
-                                    let mut bytes = Vec::new();
-                                    ciborium::into_writer(
-                                        &(operation.header, operation.body),
-                                        &mut bytes,
-                                    )
-                                    .expect("invalid operation found in store");
-
-                                    messages.push(Message::Operation(bytes))
+                                    messages.push(Message::Operation(
+                                        operation.header.to_bytes(),
+                                        operation.body.map(|body| body.to_bytes()),
+                                    ))
                                 });
                         }
                     }
@@ -211,7 +207,7 @@ where
 
                     messages
                 }
-                Message::Operation(_) => {
+                Message::Operation(_, _) => {
                     return Err(SyncError::Protocol(
                         "unexpected operation received".to_string(),
                     ));
@@ -494,20 +490,19 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let messages: Vec<Message<String>> = vec![
-            Message::Operation(operation0_bytes),
-            Message::Operation(operation1_bytes),
-            Message::Operation(operation2_bytes),
+            Message::Operation(
+                operation0.header.to_bytes(),
+                operation0.body.map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
             Message::SyncDone,
         ];
         assert_message_bytes(peer_b_read, messages).await;
@@ -555,19 +550,19 @@ mod tests {
         );
 
         // Write some message into peer_b's send buffer
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
         let messages: Vec<Message<String>> = vec![
-            Message::Operation(operation0_bytes.clone()),
-            Message::Operation(operation1_bytes.clone()),
-            Message::Operation(operation2_bytes.clone()),
+            Message::Operation(
+                operation0.header.to_bytes(),
+                operation0.body.clone().map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation1.header.to_bytes(),
+                operation1.body.clone().map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation2.header.to_bytes(),
+                operation2.body.clone().map(|body| body.to_bytes()),
+            ),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -609,9 +604,18 @@ mod tests {
             messages,
             [
                 FromSync::Topic(TOPIC_ID),
-                FromSync::Bytes(operation0_bytes),
-                FromSync::Bytes(operation1_bytes),
-                FromSync::Bytes(operation2_bytes)
+                FromSync::Data(
+                    operation0.header.to_bytes(),
+                    operation0.body.map(|body| body.to_bytes()),
+                ),
+                FromSync::Data(
+                    operation1.header.to_bytes(),
+                    operation1.body.map(|body| body.to_bytes()),
+                ),
+                FromSync::Data(
+                    operation2.header.to_bytes(),
+                    operation2.body.map(|body| body.to_bytes()),
+                ),
             ]
         );
     }
@@ -706,21 +710,20 @@ mod tests {
         // Wait on both to complete
         let (_, _) = tokio::join!(handle1, handle2);
 
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Bytes(operation0_bytes),
-            FromSync::Bytes(operation1_bytes),
-            FromSync::Bytes(operation2_bytes),
+            FromSync::Data(
+                operation0.header.to_bytes(),
+                operation0.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
         ];
 
         let mut peer_a_messages = Vec::new();
@@ -826,17 +829,16 @@ mod tests {
         // Wait on both to complete
         let (_, _) = tokio::join!(handle1, handle2);
 
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Bytes(operation1_bytes),
-            FromSync::Bytes(operation2_bytes),
+            FromSync::Data(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
         ];
 
         let mut peer_a_messages = Vec::new();

@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         while let Ok(event) = rx.recv().await {
             match event {
-                FromNetwork::Message {
+                FromNetwork::GossipMessage {
                     bytes,
                     delivered_from,
                 } => match Message::decode_and_verify(&bytes) {
@@ -47,6 +47,7 @@ async fn main() -> Result<()> {
                         eprintln!("invalid message from {delivered_from}: {err}");
                     }
                 },
+                _ => panic!("no sync messages expected"),
             }
         }
     });

@@ -63,14 +63,15 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
                 continue;
             }
 
-            let FromSync::Bytes(bytes) = message else {
+            let FromSync::Data(header, payload) = message else {
                 error!("expected bytes from app message channel");
                 return;
             };
 
             if let Err(err) = engine_actor_tx
                 .send(ToEngineActor::SyncMessage {
-                    bytes,
+                    header,
+                    payload,
                     delivered_from: peer,
                     topic,
                 })
@@ -151,14 +152,15 @@ pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unp
                 return;
             };
 
-            let FromSync::Bytes(bytes) = message else {
+            let FromSync::Data(header, payload) = message else {
                 error!("expected message bytes");
                 return;
             };
 
             if let Err(err) = engine_actor_tx
                 .send(ToEngineActor::SyncMessage {
-                    bytes,
+                    header,
+                    payload,
                     delivered_from: peer,
                     topic: topic_id.into(),
                 })
