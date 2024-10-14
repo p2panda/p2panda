@@ -31,6 +31,26 @@ pub trait LocalOperationStore<LogId, Extensions> {
     async fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
+#[trait_variant::make(RawStore: Send)]
+pub trait LocalRawStore<LogId, Extensions> {
+    /// Insert "raw" header and optional body bytes into store.
+    ///
+    /// Returns `true` when the insert occurred, or `false` when the operation already existed and
+    /// no insertion occurred.
+    async fn insert_raw_operation(
+        &mut self,
+        header_bytes: &[u8],
+        body_bytes: Option<&[u8]>,
+        log_id: &LogId,
+    ) -> Result<bool, StoreError>;
+
+    /// Get "raw" header and body bytes of operation from store.
+    async fn get_raw_operation(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError>;
+}
+
 #[trait_variant::make(LogStore: Send)]
 pub trait LocalLogStore<LogId, Extensions> {
     /// Get all operations from an authors' log ordered by sequence number.
