@@ -15,7 +15,7 @@ use tracing::{debug, error, warn};
 
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
-use crate::network::{InEvent, OutEvent};
+use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::SyncManager;
 use crate::{FromBytes, ToBytes};
 
@@ -45,8 +45,8 @@ pub enum ToEngineActor {
     },
     Subscribe {
         topic: TopicId,
-        out_tx: broadcast::Sender<OutEvent>,
-        in_rx: mpsc::Receiver<InEvent>,
+        from_network_tx: broadcast::Sender<FromNetwork>,
+        to_network_rx: mpsc::Receiver<ToNetwork>,
     },
     Received {
         bytes: Vec<u8>,
@@ -248,10 +248,11 @@ impl EngineActor {
             }
             ToEngineActor::Subscribe {
                 topic,
-                out_tx,
-                in_rx,
+                from_network_tx,
+                to_network_rx,
             } => {
-                self.on_subscribe(topic, out_tx, in_rx).await?;
+                self.on_subscribe(topic, from_network_tx, to_network_rx)
+                    .await?;
             }
             ToEngineActor::TopicJoined { topic } => {
                 self.on_topic_joined(topic).await?;
@@ -403,11 +404,11 @@ impl EngineActor {
     async fn on_subscribe(
         &mut self,
         topic: TopicId,
-        out_tx: broadcast::Sender<OutEvent>,
-        mut in_rx: mpsc::Receiver<InEvent>,
+        from_network_tx: broadcast::Sender<FromNetwork>,
+        mut to_network_rx: mpsc::Receiver<ToNetwork>,
     ) -> Result<()> {
         // Keep an earmark that we're interested in joining this topic
-        self.topics.earmark(topic, out_tx).await;
+        self.topics.earmark(topic, from_network_tx).await;
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
@@ -420,7 +421,7 @@ impl EngineActor {
             let gossip_actor_tx = self.gossip_actor_tx.clone();
             let topics = self.topics.clone();
             tokio::task::spawn(async move {
-                while let Some(event) = in_rx.recv().await {
+                while let Some(event) = to_network_rx.recv().await {
                     if !topics.has_successfully_joined(&topic).await {
                         // @TODO: We're dropping messages silently for now, later we want to buffer
                         // them somewhere until we've joined the topic gossip
@@ -428,7 +429,7 @@ impl EngineActor {
                     }
 
                     let result = match event {
-                        InEvent::Message { bytes } => {
+                        ToNetwork::Message { bytes } => {
                             gossip_actor_tx
                                 .send(ToGossipActor::Broadcast { topic, bytes })
                                 .await
@@ -571,7 +572,7 @@ struct TopicMap {
 
 #[derive(Debug)]
 struct TopicMapInner {
-    earmarked: HashMap<TopicId, broadcast::Sender<OutEvent>>,
+    earmarked: HashMap<TopicId, broadcast::Sender<FromNetwork>>,
     pending_joins: HashSet<TopicId>,
     joined: HashSet<TopicId>,
 }
@@ -589,9 +590,13 @@ impl TopicMap {
     }
 
     /// Mark a topic of interest to our node.
-    pub async fn earmark(&mut self, topic: TopicId, out_tx: broadcast::Sender<OutEvent>) {
+    pub async fn earmark(
+        &mut self,
+        topic: TopicId,
+        from_network_tx: broadcast::Sender<FromNetwork>,
+    ) {
         let mut inner = self.inner.write().await;
-        inner.earmarked.insert(topic, out_tx);
+        inner.earmarked.insert(topic, from_network_tx);
         inner.pending_joins.insert(topic);
     }
 
@@ -615,8 +620,8 @@ impl TopicMap {
             inner.joined.insert(topic);
 
             // If any subscribers, inform them that this channel is ready for messages now
-            if let Some(out_tx) = inner.earmarked.get(&topic) {
-                out_tx.send(OutEvent::Ready)?;
+            if let Some(from_network_tx) = inner.earmarked.get(&topic) {
+                from_network_tx.send(FromNetwork::Ready)?;
             }
         }
 
@@ -646,8 +651,8 @@ impl TopicMap {
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let out_tx = inner.earmarked.get(&topic).context("on_message")?;
-        out_tx.send(OutEvent::Message {
+        let from_network_tx = inner.earmarked.get(&topic).context("on_message")?;
+        from_network_tx.send(FromNetwork::Message {
             bytes,
             delivered_from: to_public_key(delivered_from),
         })?;
