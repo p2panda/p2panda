@@ -518,12 +518,9 @@ impl Network {
     pub async fn subscribe(
         &self,
         topic: TopicId,
-    ) -> Result<(
-        mpsc::Sender<ToGossipOverlay>,
-        broadcast::Receiver<FromGossipOverlay>,
-    )> {
-        let (to_gossip_tx, to_gossip_rx) = mpsc::channel::<ToGossipOverlay>(128);
-        let (from_gossip_tx, from_gossip_rx) = broadcast::channel::<FromGossipOverlay>(128);
+    ) -> Result<(mpsc::Sender<ToNetwork>, broadcast::Receiver<FromNetwork>)> {
+        let (to_gossip_tx, to_gossip_rx) = mpsc::channel::<ToNetwork>(128);
+        let (from_gossip_tx, from_gossip_rx) = broadcast::channel::<FromNetwork>(128);
         self.inner
             .engine
             .subscribe(topic, from_gossip_tx, to_gossip_rx)
@@ -559,15 +556,15 @@ impl Network {
 }
 
 #[derive(Clone, Debug)]
-/// An event to be broadcast to the gossip-overlay.
-pub enum ToGossipOverlay {
+/// An event to be broadcast to the network.
+pub enum ToNetwork {
     Message { bytes: Vec<u8> },
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// An event received from the gossip-overlay.
-pub enum FromGossipOverlay {
+/// An event received from the network.
+pub enum FromNetwork {
     Ready,
     Message {
         bytes: Vec<u8>,
@@ -811,7 +808,7 @@ mod tests {
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
 
-    use super::{FromGossipOverlay, ToGossipOverlay};
+    use super::{FromNetwork, ToNetwork};
 
     fn setup_logging() {
         tracing_subscriber::registry()
@@ -877,11 +874,11 @@ mod tests {
         let rx_1_msg = rx_1.recv().await.unwrap();
 
         // Ensure the gossip-overlay has been joined for the given topic
-        assert!(matches!(rx_1_msg, FromGossipOverlay::Ready));
-        assert!(matches!(rx_2_msg, FromGossipOverlay::Ready));
+        assert!(matches!(rx_1_msg, FromNetwork::Ready));
+        assert!(matches!(rx_2_msg, FromNetwork::Ready));
 
         // Broadcast a message and make sure it's received by the other node
-        tx_1.send(ToGossipOverlay::Message {
+        tx_1.send(ToNetwork::Message {
             bytes: "Hello, Node".to_bytes(),
         })
         .await
@@ -890,7 +887,7 @@ mod tests {
         let rx_2_msg = rx_2.recv().await.unwrap();
         assert_eq!(
             rx_2_msg,
-            FromGossipOverlay::Message {
+            FromNetwork::Message {
                 bytes: "Hello, Node".to_bytes(),
                 delivered_from: node_1.node_id(),
             }
@@ -1104,16 +1101,16 @@ mod tests {
                 .unwrap();
 
             let peer_a_expected_messages = vec![
-                FromGossipOverlay::Ready,
-                FromGossipOverlay::Message {
+                FromNetwork::Ready,
+                FromNetwork::Message {
                     bytes: operation0_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromGossipOverlay::Message {
+                FromNetwork::Message {
                     bytes: operation1_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromGossipOverlay::Message {
+                FromNetwork::Message {
                     bytes: operation2_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
                 },
@@ -1139,7 +1136,7 @@ mod tests {
             // Assert the channel is now empty
             assert!(from_sync_rx.is_empty());
             // Assert we receive the expected messages
-            assert_eq!(from_sync_messages, vec![FromGossipOverlay::Ready]);
+            assert_eq!(from_sync_messages, vec![FromNetwork::Ready]);
 
             node_b.shutdown().await.unwrap();
         });

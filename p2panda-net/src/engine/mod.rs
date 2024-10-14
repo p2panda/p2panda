@@ -22,7 +22,7 @@ use tracing::{debug, error};
 
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
-use crate::network::{FromGossipOverlay, ToGossipOverlay};
+use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::{SyncConnection, SyncManager};
 use crate::{JoinErrToStr, NetworkId, TopicId};
 
@@ -103,14 +103,14 @@ impl Engine {
     pub async fn subscribe(
         &self,
         topic: TopicId,
-        from_gossip_tx: broadcast::Sender<FromGossipOverlay>,
-        to_gossip_rx: mpsc::Receiver<ToGossipOverlay>,
+        from_network_tx: broadcast::Sender<FromNetwork>,
+        to_network_rx: mpsc::Receiver<ToNetwork>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::Subscribe {
                 topic: topic.into(),
-                from_gossip_tx,
-                to_gossip_rx,
+                from_network_tx,
+                to_network_rx,
             })
             .await?;
         Ok(())
