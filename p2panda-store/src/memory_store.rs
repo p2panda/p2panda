@@ -16,6 +16,7 @@ type LogMeta = (SeqNum, Timestamp, Hash);
 #[derive(Clone, Debug)]
 pub struct InnerMemoryStore<T, E> {
     operations: HashMap<Hash, Operation<E>>,
+    raw: HashMap<Hash, (Vec<u8>, Option<Vec<u8>>)>,
     logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
@@ -27,9 +28,11 @@ pub struct MemoryStore<T, E> {
 impl<T, E> MemoryStore<T, E> {
     pub fn new() -> Self {
         let inner = InnerMemoryStore {
-            operations: Default::default(),
-            logs: Default::default(),
+            operations: HashMap::new(),
+            raw: HashMap::new(),
+            logs: HashMap::new(),
         };
+
         Self {
             inner: Arc::new(RwLock::new(inner)),
         }
@@ -38,13 +41,7 @@ impl<T, E> MemoryStore<T, E> {
 
 impl<T> Default for MemoryStore<T, DefaultExtensions> {
     fn default() -> Self {
-        let inner = InnerMemoryStore {
-            operations: Default::default(),
-            logs: Default::default(),
-        };
-        Self {
-            inner: Arc::new(RwLock::new(inner)),
-        }
+        Self::new()
     }
 }
 
