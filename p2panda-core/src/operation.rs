@@ -86,7 +86,7 @@ impl<E> Default for Header<E> {
             payload_size: 0,
             payload_hash: None,
             timestamp: 0,
-            seq_num: 1,
+            seq_num: 0,
             backlink: None,
             previous: vec![],
             extensions: None,
