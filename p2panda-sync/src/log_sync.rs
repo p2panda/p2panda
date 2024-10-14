@@ -37,7 +37,7 @@ where
     }
 }
 
-static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
+static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_sync";
 
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<S, T, E> {
