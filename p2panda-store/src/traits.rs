@@ -3,8 +3,6 @@
 use p2panda_core::{Hash, Operation, PublicKey};
 use thiserror::Error;
 
-type SeqNum = u64;
-
 #[trait_variant::make(OperationStore: Send)]
 pub trait LocalOperationStore<LogId, Extensions> {
     /// Insert an operation.
@@ -45,8 +43,7 @@ pub trait LocalLogStore<LogId, Extensions> {
     ) -> Result<Vec<Operation<Extensions>>, StoreError>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
-    async fn get_log_heights(&self, log_id: &LogId)
-        -> Result<Vec<(PublicKey, SeqNum)>, StoreError>;
+    async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, StoreError>;
 
     /// Get only the latest operation from an authors' log.
     ///
