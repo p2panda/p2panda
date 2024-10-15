@@ -47,6 +47,7 @@ pub enum ToEngineActor {
         topic: TopicId,
         from_network_tx: broadcast::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
+        gossip_ready_tx: oneshot::Sender<()>,
     },
     Received {
         bytes: Vec<u8>,
@@ -250,8 +251,9 @@ impl EngineActor {
                 topic,
                 from_network_tx,
                 to_network_rx,
+                gossip_ready_tx,
             } => {
-                self.on_subscribe(topic, from_network_tx, to_network_rx)
+                self.on_subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
                     .await?;
             }
             ToEngineActor::TopicJoined { topic } => {
@@ -406,9 +408,12 @@ impl EngineActor {
         topic: TopicId,
         from_network_tx: broadcast::Sender<FromNetwork>,
         mut to_network_rx: mpsc::Receiver<ToNetwork>,
+        gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         // Keep an earmark that we're interested in joining this topic
-        self.topics.earmark(topic, from_network_tx).await;
+        self.topics
+            .earmark(topic, from_network_tx, gossip_ready_tx)
+            .await;
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
@@ -572,7 +577,7 @@ struct TopicMap {
 
 #[derive(Debug)]
 struct TopicMapInner {
-    earmarked: HashMap<TopicId, broadcast::Sender<FromNetwork>>,
+    earmarked: HashMap<TopicId, (broadcast::Sender<FromNetwork>, Option<oneshot::Sender<()>>)>,
     pending_joins: HashSet<TopicId>,
     joined: HashSet<TopicId>,
 }
@@ -594,9 +599,12 @@ impl TopicMap {
         &mut self,
         topic: TopicId,
         from_network_tx: broadcast::Sender<FromNetwork>,
+        gossip_ready_tx: oneshot::Sender<()>,
     ) {
         let mut inner = self.inner.write().await;
-        inner.earmarked.insert(topic, from_network_tx);
+        inner
+            .earmarked
+            .insert(topic, (from_network_tx, Some(gossip_ready_tx)));
         inner.pending_joins.insert(topic);
     }
 
@@ -619,9 +627,15 @@ impl TopicMap {
         if inner.pending_joins.remove(&topic) {
             inner.joined.insert(topic);
 
-            // If any subscribers, inform them that this channel is ready for messages now
-            if let Some(from_network_tx) = inner.earmarked.get(&topic) {
-                from_network_tx.send(FromNetwork::Ready)?;
+            // Inform local topic subscribers that the gossip overlay has been joined and is ready
+            // for messages.
+            if let Some((_from_network_tx, gossip_ready_tx)) = inner.earmarked.get_mut(&topic) {
+                // We need the `Sender` to be owned so we take it and replace with `None`.
+                if let Some(oneshot_tx) = gossip_ready_tx.take() {
+                    if oneshot_tx.send(()).is_err() {
+                        warn!("gossip topic oneshot ready receiver dropped")
+                    }
+                }
             }
         }
 
@@ -651,7 +665,8 @@ impl TopicMap {
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let from_network_tx = inner.earmarked.get(&topic).context("on_message")?;
+        let (from_network_tx, _gossip_ready_tx) =
+            inner.earmarked.get(&topic).context("on_message")?;
         from_network_tx.send(FromNetwork::Message {
             bytes,
             delivered_from: to_public_key(delivered_from),

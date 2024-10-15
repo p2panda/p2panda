@@ -30,15 +30,11 @@ async fn main() -> Result<()> {
         .build()
         .await?;
 
-    let (tx, mut rx) = network.subscribe(topic_id).await?;
-    let (ready_tx, mut ready_rx) = mpsc::channel::<()>(1);
+    let (tx, mut rx, ready) = network.subscribe(topic_id).await?;
 
     tokio::task::spawn(async move {
         while let Ok(event) = rx.recv().await {
             match event {
-                FromNetwork::Ready => {
-                    ready_tx.send(()).await.ok();
-                }
                 FromNetwork::Message {
                     bytes,
                     delivered_from,
@@ -55,7 +51,7 @@ async fn main() -> Result<()> {
     });
 
     println!(".. waiting for peers to join ..");
-    let _ = ready_rx.recv().await;
+    let _ = ready.await;
     println!("found other peers, you're ready to chat!");
 
     let (line_tx, mut line_rx) = mpsc::channel(1);
