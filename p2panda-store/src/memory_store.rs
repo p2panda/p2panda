@@ -16,7 +16,7 @@ type LogMeta = (SeqNum, Timestamp, Hash);
 #[derive(Clone, Debug)]
 pub struct InnerMemoryStore<T, E> {
     operations: HashMap<Hash, Operation<E>>,
-    raw: HashMap<Hash, (Vec<u8>, Option<Vec<u8>>)>,
+    raw_headers: HashMap<Hash, Vec<u8>>,
     logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
@@ -29,7 +29,7 @@ impl<T, E> MemoryStore<T, E> {
     pub fn new() -> Self {
         let inner = InnerMemoryStore {
             operations: HashMap::new(),
-            raw: HashMap::new(),
+            raw_headers: HashMap::new(),
             logs: HashMap::new(),
         };
 
@@ -136,24 +136,9 @@ where
     T: Send + Sync,
     E: Clone + Send + Sync,
 {
-    async fn insert_raw_operation(
-        &mut self,
-        hash: Hash,
-        header_bytes: &[u8],
-        body_bytes: Option<&[u8]>,
-    ) -> Result<bool, StoreError> {
+    async fn insert_raw_header(&mut self, hash: Hash, bytes: &[u8]) -> Result<bool, StoreError> {
         let mut store = self.write_store();
-        let insertion_occured = store
-            .raw
-            .insert(
-                hash,
-                (
-                    header_bytes.to_vec(),
-                    body_bytes.map(|bytes| bytes.to_vec()),
-                ),
-            )
-            .is_none();
-        Ok(insertion_occured)
+        Ok(store.raw_headers.insert(hash, bytes.to_vec()).is_none())
     }
 
     async fn get_raw_operation(
@@ -161,22 +146,21 @@ where
         hash: Hash,
     ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError> {
         let store = self.read_store();
-        Ok(store.raw.get(&hash).cloned())
-    }
-
-    async fn delete_raw_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        let mut store = self.write_store();
-        Ok(store.raw.remove(&hash).is_some())
-    }
-
-    async fn delete_raw_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
-        let mut store = self.write_store();
-        if let Some(operation) = store.raw.get_mut(&hash) {
-            operation.1 = None;
-            Ok(true)
-        } else {
-            Ok(false)
+        match store.raw_headers.get(&hash) {
+            Some(raw_header) => match store.operations.get(&hash) {
+                Some(operation) => Ok(Some((
+                    raw_header.to_owned(),
+                    operation.body.as_ref().map(|body| body.to_bytes()),
+                ))),
+                None => Ok(None),
+            },
+            None => Ok(None),
         }
+    }
+
+    async fn delete_raw_header(&mut self, hash: Hash) -> Result<bool, StoreError> {
+        let mut store = self.write_store();
+        Ok(store.raw_headers.remove(&hash).is_some())
     }
 }
 
@@ -323,7 +307,7 @@ mod tests {
             previous: vec![],
             extensions: None,
         };
-        header.sign(&private_key);
+        header.sign(private_key);
 
         Operation {
             hash: header.hash(),
