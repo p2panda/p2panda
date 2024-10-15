@@ -285,7 +285,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{traits::OperationStore, LogStore};
+    use crate::{LogStore, OperationStore};
 
     use super::MemoryStore;
 
