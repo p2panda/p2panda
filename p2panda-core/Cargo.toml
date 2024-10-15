@@ -6,6 +6,10 @@ edition = "2021"
 [lints]
 workspace = true
 
+[features]
+default = ["prune"]
+prune = []
+
 [dependencies]
 arbitrary = { version = "1.3.2", optional = true, features = ["derive"] }
 blake3 = "1.5.1"

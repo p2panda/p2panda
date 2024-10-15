@@ -5,6 +5,8 @@ pub mod extensions;
 pub mod hash;
 pub mod identity;
 pub mod operation;
+#[cfg(feature = "prune")]
+pub mod prune;
 mod serde;
 
 pub use extensions::Extension;
