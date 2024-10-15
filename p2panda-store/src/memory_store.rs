@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Hash, Operation, PublicKey};
 
-use crate::traits::{OperationStore, StoreError};
+use crate::traits::{OperationStore, RawStore, StoreError};
 use crate::LogStore;
 
 type SeqNum = u64;
@@ -47,13 +47,15 @@ impl<T> Default for MemoryStore<T, DefaultExtensions> {
 
 impl<T, E> MemoryStore<T, E> {
     pub fn read_store(&self) -> RwLockReadGuard<InnerMemoryStore<T, E>> {
-        self.inner.read().expect("error getting read lock on store")
+        self.inner
+            .read()
+            .expect("acquire shared read access on store")
     }
 
     pub fn write_store(&self) -> RwLockWriteGuard<InnerMemoryStore<T, E>> {
         self.inner
             .write()
-            .expect("error getting write lock on store")
+            .expect("acquire exclusive write access on store")
     }
 }
 
@@ -126,6 +128,40 @@ where
         } else {
             Ok(false)
         }
+    }
+}
+
+impl<T, E> RawStore<E> for MemoryStore<T, E>
+where
+    T: Send + Sync,
+    E: Clone + Send + Sync,
+{
+    async fn insert_raw_operation(
+        &mut self,
+        header_bytes: &[u8],
+        body_bytes: Option<&[u8]>,
+    ) -> Result<bool, StoreError> {
+        let mut store = self.write_store();
+        let hash = Hash::new(header_bytes);
+        let insertion_occured = store
+            .raw
+            .insert(
+                hash,
+                (
+                    header_bytes.to_vec(),
+                    body_bytes.map(|bytes| bytes.to_vec()),
+                ),
+            )
+            .is_some();
+        Ok(insertion_occured)
+    }
+
+    async fn get_raw_operation(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError> {
+        let store = self.read_store();
+        Ok(store.raw.get(&hash).cloned())
     }
 }
 
