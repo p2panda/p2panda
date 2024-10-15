@@ -33,11 +33,6 @@ pub fn validate_prunable_backlink<E>(
 where
     E: Clone + Serialize + for<'a> Deserialize<'a>,
 {
-    assert!(
-        !(past_header.is_some() && header.seq_num == 0),
-        "operation can't have backlink at seq_num = 0"
-    );
-
     // If no pruning flag is set, we expect the log to have integrity with the previously given
     // operation
     if !prune_flag && header.seq_num > 0 {
