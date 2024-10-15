@@ -7,8 +7,8 @@ use thiserror::Error;
 pub trait LocalOperationStore<LogId, Extensions> {
     /// Insert an operation.
     ///
-    /// Returns `true` when the insert occurred, or `false` when the operation
-    /// already existed and no insertion occurred.
+    /// Returns `true` when the insert occurred, or `false` when the operation already existed and
+    /// no insertion occurred.
     async fn insert_operation(
         &mut self,
         operation: &Operation<Extensions>,
@@ -20,19 +20,19 @@ pub trait LocalOperationStore<LogId, Extensions> {
 
     /// Delete an operation.
     ///
-    /// Returns `true` when the removal occurred and `false` when the operation
-    /// was not found in the store.
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store.
     async fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
 
     /// Delete the payload of an operation.
     ///
-    /// Returns `true` when the removal occurred and `false` when the operation
-    /// was not found in the store or the payload was already deleted.
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store or the payload was already deleted.
     async fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
 #[trait_variant::make(RawStore: Send)]
-pub trait LocalRawStore<LogId, Extensions> {
+pub trait LocalRawStore<Extensions> {
     /// Insert "raw" header and optional body bytes into store.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation already existed and
@@ -41,7 +41,6 @@ pub trait LocalRawStore<LogId, Extensions> {
         &mut self,
         header_bytes: &[u8],
         body_bytes: Option<&[u8]>,
-        log_id: &LogId,
     ) -> Result<bool, StoreError>;
 
     /// Get "raw" header and body bytes of operation from store.
@@ -76,8 +75,8 @@ pub trait LocalLogStore<LogId, Extensions> {
 
     /// Delete all operations in a log before the given sequence number.
     ///
-    /// Returns `true` when any operations were deleted, returns `false` when
-    /// the author or log could not be found, or no operations were deleted.
+    /// Returns `true` when any operations were deleted, returns `false` when the author or log
+    /// could not be found, or no operations were deleted.
     async fn delete_operations(
         &mut self,
         public_key: &PublicKey,
@@ -87,11 +86,11 @@ pub trait LocalLogStore<LogId, Extensions> {
 
     /// Delete a range of operation payloads in an authors' log.
     ///
-    /// The range of deleted payloads includes it's lower bound `from` but excludes the upper
-    /// bound `to`.
+    /// The range of deleted payloads includes it's lower bound `from` but excludes the upper bound
+    /// `to`.
     ///
-    /// Returns `true` when operations within the requested range were deleted, or `false` when
-    /// the author or log could not be found, or no operations were deleted.
+    /// Returns `true` when operations within the requested range were deleted, or `false` when the
+    /// author or log could not be found, or no operations were deleted.
     async fn delete_payloads(
         &mut self,
         public_key: &PublicKey,
