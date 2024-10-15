@@ -15,10 +15,9 @@ use iroh_base::base32;
 use iroh_net::NodeAddr;
 use tokio_util::task::AbortOnDropHandle;
 
-use crate::discovery::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
-use crate::discovery::mdns::socket::{send, socket_v4};
-use crate::discovery::{BoxedStream, Discovery, DiscoveryEvent};
-use crate::NetworkId;
+use crate::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
+use crate::mdns::socket::{send, socket_v4};
+use crate::{BoxedStream, Discovery, DiscoveryEvent};
 
 const MDNS_PROVENANCE: &str = "mdns";
 const MDNS_QUERY_INTERVAL: Duration = Duration::from_millis(1000);
@@ -130,7 +129,7 @@ impl LocalDiscovery {
 }
 
 impl Discovery for LocalDiscovery {
-    fn subscribe(&self, network_id: NetworkId) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
+    fn subscribe(&self, network_id: [u8; 32]) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
         let (subscribe_tx, subscribe_rx) = flume::bounded(16);
         let service_tx = self.tx.clone();
         let service_name =

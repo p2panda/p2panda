@@ -1,0 +1,23 @@
+[package]
+name = "p2panda-discovery"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["mdns"]
+mdns = ["dep:hickory-proto", "dep:socket2"]
+
+[dependencies]
+anyhow = "1.0.86"
+flume = "0.11.0"
+futures-buffered = "0.2.8"
+futures-lite = "2.3.0"
+hickory-proto = { version = "0.24.1", optional = true }
+iroh-base = "0.25.0"
+iroh-net = "0.25.0"
+socket2 = { version = "0.5.7", optional = true }
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec", "io-util", "io"] }
+tracing = "0.1.40"
+
+[dev-dependencies]

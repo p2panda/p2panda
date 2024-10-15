@@ -10,7 +10,7 @@ use hickory_proto::rr::{rdata, DNSClass, Name, RData, Record, RecordType};
 use iroh_net::{NodeAddr, NodeId};
 use tracing::{debug, trace};
 
-use crate::discovery::mdns::ServiceName;
+use crate::mdns::ServiceName;
 
 pub enum MulticastDNSMessage {
     Query(ServiceName),
