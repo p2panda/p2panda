@@ -49,6 +49,18 @@ pub trait LocalRawStore<Extensions> {
         &self,
         hash: Hash,
     ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError>;
+
+    /// Delete "raw" header and optioanl body bytes from store.
+    ///
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store.
+    async fn delete_raw_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
+
+    /// Delete the "raw" payload of an operation.
+    ///
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store or the payload was already deleted.
+    async fn delete_raw_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
 }
 
 #[trait_variant::make(LogStore: Send)]

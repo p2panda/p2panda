@@ -163,6 +163,21 @@ where
         let store = self.read_store();
         Ok(store.raw.get(&hash).cloned())
     }
+
+    async fn delete_raw_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
+        let mut store = self.write_store();
+        Ok(store.raw.remove(&hash).is_some())
+    }
+
+    async fn delete_raw_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
+        let mut store = self.write_store();
+        if let Some(operation) = store.raw.get_mut(&hash) {
+            operation.1 = None;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 impl<T, E> LogStore<T, E> for MemoryStore<T, E>
