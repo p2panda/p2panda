@@ -105,12 +105,14 @@ impl Engine {
         topic: TopicId,
         from_network_tx: broadcast::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
+        gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::Subscribe {
                 topic: topic.into(),
                 from_network_tx,
                 to_network_rx,
+                gossip_ready_tx,
             })
             .await?;
         Ok(())

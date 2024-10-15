@@ -16,7 +16,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::traits::SyncProtocol;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -511,21 +511,29 @@ impl Network {
     }
 
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and
-    /// written to.
+    /// written to, along with a oneshot receiver to be informed when the gossip overlay has been
+    /// joined.
     ///
     /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
     /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
-    ) -> Result<(mpsc::Sender<ToNetwork>, broadcast::Receiver<FromNetwork>)> {
-        let (to_gossip_tx, to_gossip_rx) = mpsc::channel::<ToNetwork>(128);
-        let (from_gossip_tx, from_gossip_rx) = broadcast::channel::<FromNetwork>(128);
+    ) -> Result<(
+        mpsc::Sender<ToNetwork>,
+        broadcast::Receiver<FromNetwork>,
+        oneshot::Receiver<()>,
+    )> {
+        let (to_network_tx, to_network_rx) = mpsc::channel::<ToNetwork>(128);
+        let (from_network_tx, from_network_rx) = broadcast::channel::<FromNetwork>(128);
+        let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
+
         self.inner
             .engine
-            .subscribe(topic, from_gossip_tx, to_gossip_rx)
+            .subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
             .await?;
-        Ok((to_gossip_tx, from_gossip_rx))
+
+        Ok((to_network_tx, from_network_rx, gossip_ready_rx))
     }
 
     /// Returns a handle to the network endpoint.
@@ -565,7 +573,6 @@ pub enum ToNetwork {
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// An event received from the network.
 pub enum FromNetwork {
-    Ready,
     Message {
         bytes: Vec<u8>,
         delivered_from: PublicKey,
@@ -866,16 +873,12 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes
-        let (tx_1, mut rx_1) = node_1.subscribe([0; 32]).await.unwrap();
-        let (_tx_2, mut rx_2) = node_2.subscribe([0; 32]).await.unwrap();
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe([0; 32]).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe([0; 32]).await.unwrap();
 
-        // Receive the first message for both nodes
-        let rx_2_msg = rx_2.recv().await.unwrap();
-        let rx_1_msg = rx_1.recv().await.unwrap();
-
-        // Ensure the gossip-overlay has been joined for the given topic
-        assert!(matches!(rx_1_msg, FromNetwork::Ready));
-        assert!(matches!(rx_2_msg, FromNetwork::Ready));
+        // Ensure the gossip-overlay has been joined by both nodes for the given topic
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
 
         // Broadcast a message and make sure it's received by the other node
         tx_1.send(ToNetwork::Message {
@@ -926,12 +929,12 @@ mod tests {
 
         // Subscribe to the same topic from both nodes which should kick off sync
         let handle1 = tokio::spawn(async move {
-            let (_tx, _rx) = node_1.subscribe(topic_id).await.unwrap();
+            let (_tx, _rx, _ready) = node_1.subscribe(topic_id).await.unwrap();
             tokio::time::sleep(Duration::from_secs(2)).await;
             node_1.shutdown().await.unwrap();
         });
         let handle2 = tokio::spawn(async move {
-            let (_tx, _rx) = node_2.subscribe(topic_id).await.unwrap();
+            let (_tx, _rx, _ready) = node_2.subscribe(topic_id).await.unwrap();
             tokio::time::sleep(Duration::from_secs(2)).await;
             node_2.shutdown().await.unwrap();
         });
@@ -1077,13 +1080,15 @@ mod tests {
 
         // Subscribe to the same topic from both nodes which should kick off sync
         let handle1 = tokio::spawn(async move {
-            let (_tx, mut from_sync_rx) = node_a.subscribe(TOPIC_ID).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            let (_tx, mut from_sync_rx, ready) = node_a.subscribe(TOPIC_ID).await.unwrap();
+
+            // Wait until the gossip overlay has been joined for TOPIC_ID
+            assert!(ready.await.is_ok());
 
             let mut from_sync_messages = Vec::new();
             while let Ok(message) = from_sync_rx.recv().await {
                 from_sync_messages.push(message);
-                if from_sync_messages.len() == 4 {
+                if from_sync_messages.len() == 3 {
                     break;
                 }
             }
@@ -1101,7 +1106,6 @@ mod tests {
                 .unwrap();
 
             let peer_a_expected_messages = vec![
-                FromNetwork::Ready,
                 FromNetwork::Message {
                     bytes: operation0_bytes.clone(),
                     delivered_from: peer_b_private_key.public_key(),
@@ -1123,20 +1127,13 @@ mod tests {
         });
 
         let handle2 = tokio::spawn(async move {
-            let (_tx, mut from_sync_rx) = node_b.subscribe(TOPIC_ID).await.unwrap();
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            let (_tx, _from_sync_rx, ready) = node_b.subscribe(TOPIC_ID).await.unwrap();
 
-            let mut from_sync_messages = Vec::new();
-            while let Ok(message) = from_sync_rx.recv().await {
-                from_sync_messages.push(message);
-                if from_sync_messages.len() == 1 {
-                    break;
-                }
-            }
-            // Assert the channel is now empty
-            assert!(from_sync_rx.is_empty());
-            // Assert we receive the expected messages
-            assert_eq!(from_sync_messages, vec![FromNetwork::Ready]);
+            // Wait until the gossip overlay has been joined for TOPIC_ID
+            assert!(ready.await.is_ok());
+
+            // Sleep for a moment to ensure sync has time to complete
+            tokio::time::sleep(Duration::from_secs(2)).await;
 
             node_b.shutdown().await.unwrap();
         });
