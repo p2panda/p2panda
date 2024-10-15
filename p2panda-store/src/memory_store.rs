@@ -138,11 +138,11 @@ where
 {
     async fn insert_raw_operation(
         &mut self,
+        hash: Hash,
         header_bytes: &[u8],
         body_bytes: Option<&[u8]>,
     ) -> Result<bool, StoreError> {
         let mut store = self.write_store();
-        let hash = Hash::new(header_bytes);
         let insertion_occured = store
             .raw
             .insert(

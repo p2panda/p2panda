@@ -39,6 +39,7 @@ pub trait LocalRawStore<Extensions> {
     /// no insertion occurred.
     async fn insert_raw_operation(
         &mut self,
+        hash: Hash,
         header_bytes: &[u8],
         body_bytes: Option<&[u8]>,
     ) -> Result<bool, StoreError>;
