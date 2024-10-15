@@ -9,6 +9,18 @@ use crate::{validate_backlink, Header, OperationError};
 /// When a "prune flag" is set in an operation, an author signals to others that all operations can
 /// be deleted (including payloads) in that log _before_ it.
 ///
+/// ```text
+/// Log of Author A with six Operations:
+///
+/// [ 0 ] <-- can be removed
+/// [ 1 ] <-- can be removed
+/// [ 2 ] <-- can be removed
+/// [ 3 ] <-- prune flag = true
+/// [ 4 ]
+/// [ 5 ]
+/// ...
+/// ```
+///
 /// As soon as a prune flag was set for an operation we don't expect the header of a backlink,
 /// otherwise we go on with validation as usual.
 ///
