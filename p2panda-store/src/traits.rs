@@ -104,16 +104,14 @@ pub trait LocalLogStore<LogId, Extensions> {
 
 #[trait_variant::make(RawLogStore: Send)]
 pub trait LocalRawLogStore<LogId, Extensions> {
-    /// Get "raw" header and body bytes from an authors' log ordered by sequence number from a
-    /// defined sequence number. If `from` is 0 the whole log is returned.
+    /// Get all "raw" header and body bytes from an authors' log ordered by sequence number.
     ///
-    /// Returns an empty list when the author or a log with the requested id was not found.
+    /// Returns `None` when the author or a log with the requested id was not found.
     async fn get_raw_log(
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-        from: u64,
-    ) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>, StoreError>;
+    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, StoreError>;
 
     /// Get the latest "raw" header and optional body bytes from an authors' log.
     ///

@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Hash, Operation, PublicKey};
 
-use crate::traits::{OperationStore, RawStore, StoreError};
+use crate::traits::{OperationStore, RawLogStore, RawStore, StoreError};
 use crate::LogStore;
 
 type SeqNum = u64;
@@ -214,7 +214,6 @@ where
         before: u64,
     ) -> Result<bool, StoreError> {
         let mut deleted = vec![];
-
         let mut store = self.write_store();
         if let Some(log) = store.logs.get_mut(&(*public_key, log_id.to_owned())) {
             log.retain(|(seq_num, _, hash)| {
@@ -276,6 +275,87 @@ where
             })
             .collect();
         Ok(log_heights)
+    }
+}
+
+impl<T, E> RawLogStore<T, E> for MemoryStore<T, E>
+where
+    T: Clone + Send + Sync + Eq + std::hash::Hash + Default + std::fmt::Debug,
+    E: Clone + Send + Sync,
+{
+    async fn get_raw_log(
+        &self,
+        public_key: &PublicKey,
+        log_id: &T,
+    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, StoreError> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut result = Vec::new();
+                for (_, _, hash) in log {
+                    let Some(raw_header) = store.raw_headers.get(hash) else {
+                        return Ok(None);
+                    };
+                    let operation = store.operations.get(hash).expect("exists in hash map");
+                    result.push((
+                        raw_header.to_owned(),
+                        operation.body.as_ref().map(|body| body.to_bytes()),
+                    ));
+                }
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn latest_raw_operation(
+        &self,
+        public_key: &PublicKey,
+        log_id: &T,
+    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError> {
+        let store = self.read_store();
+
+        let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) else {
+            return Ok(None);
+        };
+
+        let Some((_, _, hash)) = log.last() else {
+            return Ok(None);
+        };
+
+        let Some(raw_header) = store.raw_headers.get(hash) else {
+            return Ok(None);
+        };
+
+        let Some(operation) = store.operations.get(hash) else {
+            return Ok(None);
+        };
+
+        Ok(Some((
+            raw_header.to_owned(),
+            operation.body.as_ref().map(|body| body.to_bytes()),
+        )))
+    }
+
+    async fn delete_raw_headers(
+        &mut self,
+        public_key: &PublicKey,
+        log_id: &T,
+        before: u64,
+    ) -> Result<bool, StoreError> {
+        let mut deleted = Vec::new();
+        let mut store = self.write_store();
+        if let Some(log) = store.logs.get_mut(&(*public_key, log_id.to_owned())) {
+            log.retain(|(seq_num, _, hash)| {
+                let remove = *seq_num < before;
+                if remove {
+                    deleted.push(*hash);
+                };
+                !remove
+            });
+        };
+        store.raw_headers.retain(|hash, _| !deleted.contains(hash));
+        Ok(!deleted.is_empty())
     }
 }
 
