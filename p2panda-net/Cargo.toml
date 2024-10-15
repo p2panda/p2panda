@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 anyhow = "1.0.86"
+async-trait = "0.1.82"
 ciborium = { version = "0.2.2", optional = true }
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
