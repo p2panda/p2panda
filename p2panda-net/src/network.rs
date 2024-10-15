@@ -15,6 +15,7 @@ use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::traits::SyncProtocol;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
@@ -24,7 +25,6 @@ use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
-use crate::discovery::{Discovery, DiscoveryMap};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::SYNC_CONNECTION_ALPN;

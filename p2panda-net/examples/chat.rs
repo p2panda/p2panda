@@ -1,7 +1,8 @@
 use anyhow::{bail, Result};
 use p2panda_core::{PrivateKey, PublicKey, Signature};
+use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::network::{FromNetwork, ToNetwork};
-use p2panda_net::{LocalDiscovery, NetworkBuilder};
+use p2panda_net::NetworkBuilder;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
