@@ -805,6 +805,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
@@ -980,25 +981,25 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<TopicId, String>);
+    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
 
     impl LogIdTopicMap {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
         }
+
+        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
+            self.0.insert(topic, log_ids)
+        }
     }
 
+    #[async_trait]
     impl TopicMap<TopicId, String> for LogIdTopicMap {
-        fn get(&self, topic: &TopicId) -> Option<String> {
+        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
             self.0.get(topic).cloned()
         }
     }
-
-    impl LogIdTopicMap {
-        pub fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
-            self.0.insert(topic, scope)
-        }
-    }
+    
 
     #[tokio::test]
     async fn e2e_log_height_sync() {
@@ -1014,7 +1015,7 @@ mod tests {
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol_a = LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store_a,
