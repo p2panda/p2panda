@@ -4,6 +4,7 @@ members = [
     "fuzz",
     "p2panda-blobs",
     "p2panda-core",
+    "p2panda-discovery",
     "p2panda-engine",
     "p2panda-net",
     "p2panda-store",

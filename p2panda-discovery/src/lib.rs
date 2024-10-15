@@ -11,12 +11,10 @@ use futures_buffered::MergeBounded;
 use futures_lite::stream::Stream;
 use iroh_net::NodeAddr;
 
-use crate::NetworkId;
-
 pub type BoxedStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 
 #[derive(Debug, Default)]
-pub(crate) struct DiscoveryMap {
+pub struct DiscoveryMap {
     services: Vec<Box<dyn Discovery>>,
 }
 
@@ -26,13 +24,14 @@ impl DiscoveryMap {
         Self { services }
     }
 
+    #[allow(dead_code)]
     pub fn add(&mut self, service: impl Discovery + 'static) {
         self.services.push(Box::new(service));
     }
 }
 
 impl Discovery for DiscoveryMap {
-    fn subscribe(&self, network_id: NetworkId) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
+    fn subscribe(&self, network_id: [u8; 32]) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
         let streams = self
             .services
             .iter()
@@ -59,7 +58,7 @@ pub struct DiscoveryEvent {
 pub trait Discovery: Debug + Send + Sync {
     fn update_local_address(&self, node_addr: &NodeAddr) -> Result<()>;
 
-    fn subscribe(&self, _network_id: NetworkId) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
+    fn subscribe(&self, _network_id: [u8; 32]) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
         None
     }
 }
