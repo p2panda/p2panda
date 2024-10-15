@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Move discovery from `p2panda-net` into new `p2panda-discovery` crate [#571](https://github.com/p2panda/p2panda/pull/571) 
 - Replace `Ready` network message with oneshot receiver on subscribe [#570](https://github.com/p2panda/p2panda/pull/570)
 - Refactor sync connection manager [#563](https://github.com/p2panda/p2panda/pull/563)
 - Bump `iroh` dependencies to `0.25.0` [#562](https://github.com/p2panda/p2panda/pull/562)
