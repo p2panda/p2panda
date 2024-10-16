@@ -18,8 +18,5 @@ pub use tokio_util::task::AbortOnDropHandle;
 #[cfg(feature = "log-sync")]
 pub use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
 
-// This is used in the construction of the shared `AbortOnDropHandle`.
-pub type JoinErrToStr = Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
-
 pub type NetworkId = [u8; 32];
 pub type TopicId = [u8; 32];

@@ -28,13 +28,17 @@ use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::SYNC_CONNECTION_ALPN;
-use crate::{JoinErrToStr, NetworkId, RelayUrl, TopicId};
+use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
 
 /// Timeout duration for discovery of at least one peer's direct address.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
+
+// This is used in the construction of the shared `AbortOnDropHandle`.
+pub(crate) type JoinErrToStr =
+    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 #[derive(Debug, PartialEq)]
 pub enum RelayMode {
