@@ -5,8 +5,9 @@ edition = "2021"
 
 [features]
 default = ["cbor", "mdns-discovery"]
-mdns-discovery = ["p2panda-discovery/mdns"]
 cbor = ["dep:ciborium"]
+log-sync = []
+mdns-discovery = ["p2panda-discovery/mdns"]
 
 [lints]
 workspace = true
