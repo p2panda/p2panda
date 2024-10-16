@@ -1,9 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod protocols;
-pub mod traits;
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "log-sync")]
+pub mod log_sync;
 
+use std::fmt::Debug;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use futures::{AsyncRead, AsyncWrite, Sink};
 use thiserror::Error;
+
+pub type TopicId = [u8; 32];
+
+/// Trait used for mapping a generic topic to a single or collection of logs
+pub trait TopicMap<K, V> {
+    fn get(&self, topic: &K) -> Option<V>;
+}
+
+#[async_trait]
+pub trait SyncProtocol<'a>: Send + Sync + Debug {
+    fn name(&self) -> &'static str;
+
+    async fn initiate(
+        self: Arc<Self>,
+        topic: &TopicId,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+    ) -> Result<(), SyncError>;
+
+    async fn accept(
+        self: Arc<Self>,
+        tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
+        rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+    ) -> Result<(), SyncError>;
+}
 
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -24,10 +58,8 @@ pub enum SyncError {
     Custom(String),
 }
 
-pub type TopicId = [u8; 32];
-
 #[derive(PartialEq, Debug)]
 pub enum FromSync {
     Topic(TopicId),
-    Bytes(Vec<u8>),
+    Data(Vec<u8>, Option<Vec<u8>>),
 }

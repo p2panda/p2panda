@@ -12,8 +12,7 @@ use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
-use p2panda_sync::traits::SyncProtocol;
-use p2panda_sync::{FromSync, SyncError};
+use p2panda_sync::{FromSync, SyncError, SyncProtocol};
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
@@ -64,14 +63,15 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
                 continue;
             }
 
-            let FromSync::Bytes(bytes) = message else {
+            let FromSync::Data(header, payload) = message else {
                 error!("expected bytes from app message channel");
                 return;
             };
 
             if let Err(err) = engine_actor_tx
                 .send(ToEngineActor::SyncMessage {
-                    bytes,
+                    header,
+                    payload,
                     delivered_from: peer,
                     topic,
                 })
@@ -88,7 +88,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
 
     // Run the sync protocol.
     let result = sync_protocol
-        .open(
+        .initiate(
             topic.as_bytes(),
             Box::new(&mut send),
             Box::new(&mut recv),
@@ -97,7 +97,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
         .await;
 
     if let Err(err) = result {
-        error!("sync protocol open failed: {err}");
+        error!("sync protocol initiation failed: {err}");
     }
 
     Ok(())
@@ -152,14 +152,15 @@ pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unp
                 return;
             };
 
-            let FromSync::Bytes(bytes) = message else {
+            let FromSync::Data(header, payload) = message else {
                 error!("expected message bytes");
                 return;
             };
 
             if let Err(err) = engine_actor_tx
                 .send(ToEngineActor::SyncMessage {
-                    bytes,
+                    header,
+                    payload,
                     delivered_from: peer,
                     topic: topic_id.into(),
                 })

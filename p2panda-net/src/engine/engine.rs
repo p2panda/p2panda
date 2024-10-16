@@ -59,7 +59,8 @@ pub enum ToEngineActor {
         topic: TopicId,
     },
     SyncMessage {
-        bytes: Vec<u8>,
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
         topic: TopicId,
     },
@@ -241,11 +242,13 @@ impl EngineActor {
                 self.gossip_buffer.lock(peer, topic);
             }
             ToEngineActor::SyncMessage {
-                bytes,
+                header,
+                payload,
                 delivered_from,
                 topic,
             } => {
-                self.on_sync_message(bytes, delivered_from, topic).await?;
+                self.on_sync_message(header, payload, delivered_from, topic)
+                    .await?;
             }
             ToEngineActor::Subscribe {
                 topic,
@@ -470,12 +473,15 @@ impl EngineActor {
     /// Process an message forwarded from the sync actor.
     async fn on_sync_message(
         &mut self,
-        bytes: Vec<u8>,
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
         topic: TopicId,
     ) -> Result<()> {
         if self.topics.has_joined(&topic).await {
-            self.topics.on_message(topic, bytes, delivered_from).await?;
+            self.topics
+                .on_sync_message(topic, header, payload, delivered_from)
+                .await?;
         } else {
             warn!("received message for unknown topic {topic}");
         }
@@ -510,7 +516,9 @@ impl EngineActor {
             if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic) {
                 buffer.push(bytes);
             } else {
-                self.topics.on_message(topic, bytes, delivered_from).await?;
+                self.topics
+                    .on_gossip_message(topic, bytes, delivered_from)
+                    .await?;
             }
         } else {
             warn!("received message for unknown topic {topic}");
@@ -655,10 +663,10 @@ impl TopicMap {
         inner.joined.contains(topic) || inner.pending_joins.contains(topic)
     }
 
-    /// Handle incoming messages from gossip overlay or sync session.
+    /// Handle incoming messages from gossip.
     ///
     /// This method forwards messages to the subscribers for the given topic.
-    pub async fn on_message(
+    pub async fn on_gossip_message(
         &self,
         topic: TopicId,
         bytes: Vec<u8>,
@@ -666,9 +674,29 @@ impl TopicMap {
     ) -> Result<()> {
         let inner = self.inner.read().await;
         let (from_network_tx, _gossip_ready_tx) =
-            inner.earmarked.get(&topic).context("on_message")?;
-        from_network_tx.send(FromNetwork::Message {
+            inner.earmarked.get(&topic).context("on_gossip_message")?;
+        from_network_tx.send(FromNetwork::GossipMessage {
             bytes,
+            delivered_from: to_public_key(delivered_from),
+        })?;
+        Ok(())
+    }
+
+    /// Handle incoming messages from sync.
+    ///
+    /// This method forwards messages to the subscribers for the given topic.
+    pub async fn on_sync_message(
+        &self,
+        topic: TopicId,
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        delivered_from: PublicKey,
+    ) -> Result<()> {
+        let inner = self.inner.read().await;
+        let (from_network_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
+        from_network_tx.send(FromNetwork::SyncMessage {
+            header,
+            payload,
             delivered_from: to_public_key(delivered_from),
         })?;
         Ok(())

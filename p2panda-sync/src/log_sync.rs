@@ -7,13 +7,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, MemoryStore, TopicMap};
+use p2panda_store::{LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::protocols::utils::{into_sink, into_stream};
-use crate::traits::SyncProtocol;
-use crate::{FromSync, SyncError, TopicId};
+use crate::cbor::{into_cbor_sink, into_cbor_stream};
+use crate::{FromSync, SyncError, SyncProtocol, TopicId, TopicMap};
 
 type SeqNum = u64;
 pub type LogHeights = Vec<(PublicKey, SeqNum)>;
@@ -22,7 +21,7 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<T = String> {
     Have(TopicId, T, LogHeights),
-    RawOperation(Vec<u8>),
+    Operation(Vec<u8>, Option<Vec<u8>>),
     SyncDone,
 }
 
@@ -38,16 +37,16 @@ where
     }
 }
 
-static LOG_HEIGHT_PROTOCOL_NAME: &str = "p2panda/log_height";
+static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
 
 #[derive(Clone, Debug)]
-pub struct LogHeightSyncProtocol<S, T, E> {
+pub struct LogSyncProtocol<S, T, E> {
     pub topic_map: S,
     pub store: MemoryStore<T, E>,
 }
 
 #[async_trait]
-impl<'a, S, T, E> SyncProtocol<'a> for LogHeightSyncProtocol<S, T, E>
+impl<'a, S, T, E> SyncProtocol<'a> for LogSyncProtocol<S, T, E>
 where
     S: Debug + TopicMap<TopicId, T> + Send + Sync,
     T: Clone
@@ -63,11 +62,11 @@ where
     E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
-        LOG_HEIGHT_PROTOCOL_NAME
+        LOG_SYNC_PROTOCOL_NAME
     }
 
     #[allow(unused_assignments)]
-    async fn open(
+    async fn initiate(
         self: Arc<Self>,
         topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
@@ -77,8 +76,8 @@ where
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
 
-        let mut sink = into_sink(tx);
-        let mut stream = into_stream(rx);
+        let mut sink = into_cbor_sink(tx);
+        let mut stream = into_cbor_stream(rx);
 
         let Some(log_id) = self.topic_map.get(topic) else {
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
@@ -111,8 +110,8 @@ where
                         "unexpected Have message received".to_string(),
                     ))
                 }
-                Message::RawOperation(bytes) => {
-                    app_tx.send(FromSync::Bytes(bytes)).await?;
+                Message::Operation(header, payload) => {
+                    app_tx.send(FromSync::Data(header, payload)).await?;
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
@@ -143,8 +142,8 @@ where
         let mut sync_done_sent = false;
         let mut sync_done_received = false;
 
-        let mut sink = into_sink(tx);
-        let mut stream = into_stream(rx);
+        let mut sink = into_cbor_sink(tx);
+        let mut stream = into_cbor_stream(rx);
 
         while let Some(result) = stream.next().await {
             let message: Message<T> = result?;
@@ -193,14 +192,10 @@ where
                             log.split_off(seq_num as usize)
                                 .into_iter()
                                 .for_each(|operation| {
-                                    let mut bytes = Vec::new();
-                                    ciborium::into_writer(
-                                        &(operation.header, operation.body),
-                                        &mut bytes,
-                                    )
-                                    .expect("invalid operation found in store");
-
-                                    messages.push(Message::RawOperation(bytes))
+                                    messages.push(Message::Operation(
+                                        operation.header.to_bytes(),
+                                        operation.body.map(|body| body.to_bytes()),
+                                    ))
                                 });
                         }
                     }
@@ -212,7 +207,7 @@ where
 
                     messages
                 }
-                Message::RawOperation(_) => {
+                Message::Operation(_, _) => {
                     return Err(SyncError::Protocol(
                         "unexpected operation received".to_string(),
                     ));
@@ -259,10 +254,9 @@ mod tests {
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
     use tokio_util::sync::PollSender;
 
-    use crate::traits::SyncProtocol;
-    use crate::{FromSync, TopicId};
+    use crate::{FromSync, SyncProtocol, TopicId};
 
-    use super::{LogHeightSyncProtocol, Message, TopicMap};
+    use super::{LogSyncProtocol, Message, TopicMap};
 
     #[derive(Clone, Debug)]
     struct LogIdTopicMap(HashMap<TopicId, String>);
@@ -356,7 +350,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol = Arc::new(LogHeightSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
@@ -399,11 +393,11 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol = Arc::new(LogHeightSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
-            .open(
+            .initiate(
                 &TOPIC_ID,
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
@@ -483,7 +477,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol = Arc::new(LogHeightSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
@@ -496,20 +490,19 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let messages: Vec<Message<String>> = vec![
-            Message::RawOperation(operation0_bytes),
-            Message::RawOperation(operation1_bytes),
-            Message::RawOperation(operation2_bytes),
+            Message::Operation(
+                operation0.header.to_bytes(),
+                operation0.body.map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
             Message::SyncDone,
         ];
         assert_message_bytes(peer_b_read, messages).await;
@@ -557,19 +550,19 @@ mod tests {
         );
 
         // Write some message into peer_b's send buffer
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
         let messages: Vec<Message<String>> = vec![
-            Message::RawOperation(operation0_bytes.clone()),
-            Message::RawOperation(operation1_bytes.clone()),
-            Message::RawOperation(operation2_bytes.clone()),
+            Message::Operation(
+                operation0.header.to_bytes(),
+                operation0.body.clone().map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation1.header.to_bytes(),
+                operation1.body.clone().map(|body| body.to_bytes()),
+            ),
+            Message::Operation(
+                operation2.header.to_bytes(),
+                operation2.body.clone().map(|body| body.to_bytes()),
+            ),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -581,11 +574,11 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol = Arc::new(LogHeightSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let _ = protocol
-            .open(
+            .initiate(
                 &TOPIC_ID,
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
@@ -611,9 +604,18 @@ mod tests {
             messages,
             [
                 FromSync::Topic(TOPIC_ID),
-                FromSync::Bytes(operation0_bytes),
-                FromSync::Bytes(operation1_bytes),
-                FromSync::Bytes(operation2_bytes)
+                FromSync::Data(
+                    operation0.header.to_bytes(),
+                    operation0.body.map(|body| body.to_bytes()),
+                ),
+                FromSync::Data(
+                    operation1.header.to_bytes(),
+                    operation1.body.map(|body| body.to_bytes()),
+                ),
+                FromSync::Data(
+                    operation2.header.to_bytes(),
+                    operation2.body.map(|body| body.to_bytes()),
+                ),
             ]
         );
     }
@@ -629,7 +631,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
+        let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store1,
         });
@@ -662,7 +664,7 @@ mod tests {
         store2.insert_operation(&operation2, &log_id).await.unwrap();
 
         // Construct b log height protocol and engine for peer a
-        let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
+        let peer_b_protocol = Arc::new(LogSyncProtocol {
             topic_map,
             store: store2,
         });
@@ -679,7 +681,7 @@ mod tests {
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
-                .open(
+                .initiate(
                     &TOPIC_ID,
                     Box::new(&mut peer_a_write.compat_write()),
                     Box::new(&mut peer_a_read.compat()),
@@ -708,21 +710,20 @@ mod tests {
         // Wait on both to complete
         let (_, _) = tokio::join!(handle1, handle2);
 
-        let mut operation0_bytes = Vec::new();
-        ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-            .unwrap();
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Bytes(operation0_bytes),
-            FromSync::Bytes(operation1_bytes),
-            FromSync::Bytes(operation2_bytes),
+            FromSync::Data(
+                operation0.header.to_bytes(),
+                operation0.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
         ];
 
         let mut peer_a_messages = Vec::new();
@@ -768,7 +769,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let peer_a_protocol = Arc::new(LogHeightSyncProtocol {
+        let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store1,
         });
@@ -782,7 +783,7 @@ mod tests {
         store2.insert_operation(&operation2, &log_id).await.unwrap();
 
         // Construct a log height protocol and engine for peer a
-        let peer_b_protocol = Arc::new(LogHeightSyncProtocol {
+        let peer_b_protocol = Arc::new(LogSyncProtocol {
             topic_map,
             store: store2,
         });
@@ -799,7 +800,7 @@ mod tests {
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
         let handle1 = tokio::spawn(async move {
             peer_a_protocol_clone
-                .open(
+                .initiate(
                     &TOPIC_ID,
                     Box::new(&mut peer_a_write.compat_write()),
                     Box::new(&mut peer_a_read.compat()),
@@ -828,17 +829,16 @@ mod tests {
         // Wait on both to complete
         let (_, _) = tokio::join!(handle1, handle2);
 
-        let mut operation1_bytes = Vec::new();
-        ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-            .unwrap();
-        let mut operation2_bytes = Vec::new();
-        ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-            .unwrap();
-
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Bytes(operation1_bytes),
-            FromSync::Bytes(operation2_bytes),
+            FromSync::Data(
+                operation1.header.to_bytes(),
+                operation1.body.map(|body| body.to_bytes()),
+            ),
+            FromSync::Data(
+                operation2.header.to_bytes(),
+                operation2.body.map(|body| body.to_bytes()),
+            ),
         ];
 
         let mut peer_a_messages = Vec::new();

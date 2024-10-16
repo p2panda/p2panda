@@ -14,7 +14,7 @@ use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::{Endpoint, NodeAddr};
-use p2panda_sync::traits::SyncProtocol;
+use p2panda_sync::SyncProtocol;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;

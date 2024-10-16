@@ -16,7 +16,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
-use p2panda_sync::traits::SyncProtocol;
+use p2panda_sync::SyncProtocol;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -573,8 +573,13 @@ pub enum ToNetwork {
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// An event received from the network.
 pub enum FromNetwork {
-    Message {
+    GossipMessage {
         bytes: Vec<u8>,
+        delivered_from: PublicKey,
+    },
+    SyncMessage {
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
     },
 }
@@ -610,9 +615,8 @@ mod sync_protocols {
     use async_trait::async_trait;
     use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
     use futures_util::{Sink, SinkExt};
-    use p2panda_sync::protocols::utils::{into_sink, into_stream};
-    use p2panda_sync::traits::SyncProtocol;
-    use p2panda_sync::{FromSync, SyncError};
+    use p2panda_sync::cbor::{into_cbor_sink, into_cbor_stream};
+    use p2panda_sync::{FromSync, SyncError, SyncProtocol};
     use serde::{Deserialize, Serialize};
     use tracing::debug;
 
@@ -634,17 +638,17 @@ mod sync_protocols {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
         }
-        async fn open(
+        async fn initiate(
             self: Arc<Self>,
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
-            debug!("DummyProtocol: open sync session");
+            debug!("DummyProtocol: initiate sync session");
 
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             sink.send(DummyProtocolMessage::Topic(*topic)).await?;
             sink.send(DummyProtocolMessage::Done).await?;
@@ -674,8 +678,8 @@ mod sync_protocols {
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -717,16 +721,16 @@ mod sync_protocols {
             SIMPLE_PROTOCOL_NAME
         }
 
-        async fn open(
+        async fn initiate(
             self: Arc<Self>,
             topic: &TopicId,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
-            debug!("open sync session");
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            debug!("initiate sync session");
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             sink.send(Message::Topic(*topic)).await?;
             sink.send(Message::Ping).await?;
@@ -765,8 +769,8 @@ mod sync_protocols {
             mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
-            let mut sink = into_sink(tx);
-            let mut stream = into_stream(rx);
+            let mut sink = into_cbor_sink(tx);
+            let mut stream = into_cbor_stream(rx);
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -803,8 +807,9 @@ mod tests {
 
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_store::{MemoryStore, OperationStore, TopicMap};
-    use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+    use p2panda_store::{MemoryStore, OperationStore};
+    use p2panda_sync::log_sync::LogSyncProtocol;
+    use p2panda_sync::TopicMap;
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -890,7 +895,7 @@ mod tests {
         let rx_2_msg = rx_2.recv().await.unwrap();
         assert_eq!(
             rx_2_msg,
-            FromNetwork::Message {
+            FromNetwork::GossipMessage {
                 bytes: "Hello, Node".to_bytes(),
                 delivered_from: node_1.node_id(),
             }
@@ -1010,7 +1015,7 @@ mod tests {
         let store_a = MemoryStore::default();
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, log_id.clone());
-        let protocol_a = LogHeightSyncProtocol {
+        let protocol_a = LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store_a,
         };
@@ -1051,7 +1056,7 @@ mod tests {
             .unwrap();
 
         // Construct log height protocol for peer b
-        let protocol_b = LogHeightSyncProtocol {
+        let protocol_b = LogSyncProtocol {
             topic_map,
             store: store_b,
         };
@@ -1095,27 +1100,20 @@ mod tests {
 
             // Construct the messages we expect to receive on the from_sync channel based on the
             // operations we created earlier.
-            let mut operation0_bytes = Vec::new();
-            ciborium::into_writer(&(operation0.header, operation0.body), &mut operation0_bytes)
-                .unwrap();
-            let mut operation1_bytes = Vec::new();
-            ciborium::into_writer(&(operation1.header, operation1.body), &mut operation1_bytes)
-                .unwrap();
-            let mut operation2_bytes = Vec::new();
-            ciborium::into_writer(&(operation2.header, operation2.body), &mut operation2_bytes)
-                .unwrap();
-
             let peer_a_expected_messages = vec![
-                FromNetwork::Message {
-                    bytes: operation0_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation0.header.to_bytes(),
+                    payload: operation0.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromNetwork::Message {
-                    bytes: operation1_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation1.header.to_bytes(),
+                    payload: operation1.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
-                FromNetwork::Message {
-                    bytes: operation2_bytes.clone(),
+                FromNetwork::SyncMessage {
+                    header: operation2.header.to_bytes(),
+                    payload: operation2.body.map(|body| body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
             ];
