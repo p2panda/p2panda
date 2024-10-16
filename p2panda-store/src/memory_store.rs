@@ -6,8 +6,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Hash, Operation, PublicKey};
 
-use crate::traits::{OperationStore, RawLogStore, RawStore, StoreError};
-use crate::LogStore;
+use crate::{LogStore, OperationStore, RawLogStore, RawStore, StoreError};
 
 type SeqNum = u64;
 type Timestamp = u64;
