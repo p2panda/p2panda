@@ -84,6 +84,8 @@ where
         };
 
         // Get local log heights for all authors who have published under the requested logs.
+        // @TODO: this will require changes soon when `get_log_heights` method includes the public
+        // key as an argument.
         let mut local_log_heights = Vec::new();
         for log_id in log_ids {
             let log_heights = self
