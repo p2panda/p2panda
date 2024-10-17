@@ -83,7 +83,7 @@ where
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
         };
 
-        // Get local log heights for all authors who have published under the requested logs.
+        // Get local log heights for all authors who have published under the requested log ids.
         // @TODO: this will require changes soon when `get_log_heights` method includes the public
         // key as an argument.
         let mut local_log_heights = Vec::new();
