@@ -6,60 +6,54 @@ pub mod memory_store;
 #[cfg(feature = "memory")]
 pub use memory_store::MemoryStore;
 
-use p2panda_core::{Hash, Operation, PublicKey};
-use thiserror::Error;
+use p2panda_core::{Body, Hash, Header, PublicKey};
 
 #[trait_variant::make(OperationStore: Send)]
 pub trait LocalOperationStore<LogId, Extensions> {
+    type Error;
+
     /// Insert an operation.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation already existed and
     /// no insertion occurred.
     async fn insert_operation(
         &mut self,
-        operation: &Operation<Extensions>,
+        hash: Hash,
+        header: &Header<Extensions>,
+        body: Option<&Body>,
+        header_bytes: &[u8],
         log_id: &LogId,
-    ) -> Result<bool, StoreError>;
+    ) -> Result<bool, Self::Error>;
 
     /// Get an operation.
-    async fn get_operation(&self, hash: Hash) -> Result<Option<Operation<Extensions>>, StoreError>;
-
-    /// Delete an operation.
-    ///
-    /// Returns `true` when the removal occurred and `false` when the operation was not found in
-    /// the store.
-    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError>;
-
-    /// Delete the payload of an operation.
-    ///
-    /// Returns `true` when the removal occurred and `false` when the operation was not found in
-    /// the store or the payload was already deleted.
-    async fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError>;
-}
-
-#[trait_variant::make(RawStore: Send)]
-pub trait LocalRawStore<Extensions> {
-    /// Insert "raw" header bytes into store.
-    ///
-    /// Returns `true` when the insert occurred, or `false` when the header already existed and no
-    /// insertion occurred.
-    async fn insert_raw_header(&mut self, hash: Hash, bytes: &[u8]) -> Result<bool, StoreError>;
+    async fn get_operation(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error>;
 
     /// Get "raw" header and body bytes of operation from store.
     async fn get_raw_operation(
         &self,
         hash: Hash,
-    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError>;
+    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, Self::Error>;
 
-    /// Delete "raw" header bytes from store.
+    /// Delete an operation.
     ///
-    /// Returns `true` when the removal occurred and `false` when the header was not found in
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
     /// the store.
-    async fn delete_raw_header(&mut self, hash: Hash) -> Result<bool, StoreError>;
+    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, Self::Error>;
+
+    /// Delete the payload of an operation.
+    ///
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store or the payload was already deleted.
+    async fn delete_payload(&mut self, hash: Hash) -> Result<bool, Self::Error>;
 }
 
 #[trait_variant::make(LogStore: Send)]
 pub trait LocalLogStore<LogId, Extensions> {
+    type Error;
+
     /// Get all operations from an authors' log ordered by sequence number.
     ///
     /// Returns an empty Vec when the author or a log with the requested id was not found.
@@ -67,10 +61,19 @@ pub trait LocalLogStore<LogId, Extensions> {
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-    ) -> Result<Vec<Operation<Extensions>>, StoreError>;
+    ) -> Result<Option<Vec<(Header<Extensions>, Option<Body>)>>, Self::Error>;
+
+    /// Get all "raw" header and body bytes from an authors' log ordered by sequence number.
+    ///
+    /// Returns `None` when the author or a log with the requested id was not found.
+    async fn get_raw_log(
+        &self,
+        public_key: &PublicKey,
+        log_id: &LogId,
+    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, Self::Error>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
-    async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, StoreError>;
+    async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, Self::Error>;
 
     /// Get only the latest operation from an authors' log.
     ///
@@ -79,7 +82,7 @@ pub trait LocalLogStore<LogId, Extensions> {
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-    ) -> Result<Option<Operation<Extensions>>, StoreError>;
+    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error>;
 
     /// Delete all operations in a log before the given sequence number.
     ///
@@ -90,7 +93,7 @@ pub trait LocalLogStore<LogId, Extensions> {
         public_key: &PublicKey,
         log_id: &LogId,
         before: u64,
-    ) -> Result<bool, StoreError>;
+    ) -> Result<bool, Self::Error>;
 
     /// Delete a range of operation payloads in an authors' log.
     ///
@@ -105,43 +108,5 @@ pub trait LocalLogStore<LogId, Extensions> {
         log_id: &LogId,
         from: u64,
         to: u64,
-    ) -> Result<bool, StoreError>;
-}
-
-#[trait_variant::make(RawLogStore: Send)]
-pub trait LocalRawLogStore<LogId, Extensions> {
-    /// Get all "raw" header and body bytes from an authors' log ordered by sequence number.
-    ///
-    /// Returns `None` when the author or a log with the requested id was not found.
-    async fn get_raw_log(
-        &self,
-        public_key: &PublicKey,
-        log_id: &LogId,
-    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, StoreError>;
-
-    /// Get the latest "raw" header and optional body bytes from an authors' log.
-    ///
-    /// Returns `None` when the author or a log with the requested id was not found.
-    async fn latest_raw_operation(
-        &self,
-        public_key: &PublicKey,
-        log_id: &LogId,
-    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, StoreError>;
-
-    /// Delete all "raw" header bytes in a log before the given sequence number.
-    ///
-    /// Returns `true` when any raw headers were deleted, returns `false` when the author or log
-    /// could not be found, or no headers were deleted.
-    async fn delete_raw_headers(
-        &mut self,
-        public_key: &PublicKey,
-        log_id: &LogId,
-        before: u64,
-    ) -> Result<bool, StoreError>;
-}
-
-#[derive(Error, Debug)]
-pub enum StoreError {
-    #[error("Error occurred in OperationStore: {0}")]
-    OperationStoreError(String),
+    ) -> Result<bool, Self::Error>;
 }

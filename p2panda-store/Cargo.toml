@@ -12,7 +12,6 @@ memory = []
 
 [dependencies]
 p2panda-core = { path = "../p2panda-core" }
-thiserror = "1.0.61"
 trait-variant = "0.1.2"
 
 [dev-dependencies]
