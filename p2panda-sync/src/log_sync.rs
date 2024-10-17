@@ -73,7 +73,6 @@ where
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
-        let mut sync_done_sent = false;
         let mut sync_done_received = false;
 
         let mut sink = into_cbor_sink(tx);
@@ -102,7 +101,6 @@ where
 
         // As we initiated this sync session we are done after sending the `Have` message.
         sink.send(Message::SyncDone).await?;
-        sync_done_sent = true;
 
         // Announce the topic of the sync session to the app layer.
         app_tx.send(FromSync::Topic(*topic)).await?;
@@ -127,7 +125,7 @@ where
                 }
             };
 
-            if sync_done_received && sync_done_sent {
+            if sync_done_received {
                 break;
             }
         }
