@@ -261,7 +261,7 @@ where
     E: Clone + Serialize,
 {
     let mut log = store
-        .get_log(&public_key, &log_id)
+        .get_log(public_key, log_id)
         .await
         .map_err(|e| SyncError::Protocol(e.to_string()))?;
 

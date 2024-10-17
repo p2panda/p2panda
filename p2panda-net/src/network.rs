@@ -999,7 +999,6 @@ mod tests {
             self.0.get(topic).cloned()
         }
     }
-    
 
     #[tokio::test]
     async fn e2e_log_height_sync() {
