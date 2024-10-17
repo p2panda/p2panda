@@ -22,9 +22,9 @@ use tracing::{debug, error};
 
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
-use crate::network::{FromNetwork, ToNetwork};
+use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::{SyncConnection, SyncManager};
-use crate::{JoinErrToStr, NetworkId, TopicId};
+use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
 pub struct Engine {
