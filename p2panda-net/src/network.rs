@@ -339,15 +339,15 @@ struct NetworkInner {
     secret_key: SecretKey,
 }
 
-/// Spawns a network.
-///
-/// Local network sockets are bound and a task is started to listen for direct addresses changes
-/// for the local endpoint. Inbound connection attempts to these endpoints are passed to a handler.
-///
-/// Any registered discovery services are subscribed to so that the identifiers and addresses of
-/// peers operating on the same network may be learned. Discovered peers are added to the local
-/// address book so they may be involved in connection and gossip activites.
 impl NetworkInner {
+    /// Spawns a network.
+    ///
+    /// Local network sockets are bound and a task is started to listen for direct addresses changes
+    /// for the local endpoint. Inbound connection attempts to these endpoints are passed to a handler.
+    ///
+    /// Any registered discovery services are subscribed to so that the identifiers and addresses of
+    /// peers operating on the same network may be learned. Discovered peers are added to the local
+    /// address book so they may be involved in connection and gossip activites.
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
         debug!(
@@ -482,8 +482,18 @@ impl NetworkInner {
     }
 }
 
-/// Controls a p2panda-net node, including handling of connections, discovery and gossip.
-// @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
+/// An API for interacting with the p2panda networking stack; returned by `NetworkBuilder::build()`.
+///
+/// The primary feature of the `Network` is the ability to subscribe to one or more topics and
+/// exchange messages over those topics with remote peers. Replication can be conducted exclusively
+/// in "live-mode" or may include the synchronisation of past state, thereby ensuring eventual
+/// consistency among all peers for a given topic. Replication and discovery strategies are defined
+/// in the `NetworkBuilder`.
+///
+/// In addition to topic subscription, `Network` offers a way to access information about the local
+/// network such as the node ID and direct addresses. It also provides a convenient means to add the
+/// address of a remote peer and to query the addresses of all known peers.
+///
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Network {
@@ -541,6 +551,11 @@ impl Network {
     }
 
     /// Returns a handle to the network endpoint.
+    ///
+    /// The `Endpoint` exposes low-level networking functionality such as the ability to connect to
+    /// specific peers, accept connections, query local socket addresses and more. This level of
+    /// control is unlikely to be required in most cases but has been exposed for the convenience
+    /// of advanced users.
     pub fn endpoint(&self) -> &Endpoint {
         &self.inner.endpoint
     }
