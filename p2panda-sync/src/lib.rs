@@ -15,8 +15,9 @@ use thiserror::Error;
 pub type TopicId = [u8; 32];
 
 /// Trait used for mapping a generic topic to a single or collection of logs
+#[async_trait]
 pub trait TopicMap<K, V> {
-    fn get(&self, topic: &K) -> Option<V>;
+    async fn get(&self, topic: &K) -> Option<Vec<V>>;
 }
 
 #[async_trait]

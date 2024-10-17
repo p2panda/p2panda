@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
+use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::PublicKey;
 use p2panda_store::{LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ pub type LogHeights = Vec<(PublicKey, SeqNum)>;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Message<T = String> {
-    Have(TopicId, T, LogHeights),
+    Have(TopicId, Vec<(T, LogHeights)>),
     Operation(Vec<u8>, Option<Vec<u8>>),
     SyncDone,
 }
@@ -65,7 +66,6 @@ where
         LOG_SYNC_PROTOCOL_NAME
     }
 
-    #[allow(unused_assignments)]
     async fn initiate(
         self: Arc<Self>,
         topic: &TopicId,
@@ -73,44 +73,53 @@ where
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
-        let mut sync_done_sent = false;
         let mut sync_done_received = false;
 
         let mut sink = into_cbor_sink(tx);
         let mut stream = into_cbor_stream(rx);
 
-        let Some(log_id) = self.topic_map.get(topic) else {
+        // Get the log ids which are associated with this topic.
+        let Some(log_ids) = self.topic_map.get(topic).await else {
             return Err(SyncError::Protocol("Unknown topic id".to_string()));
         };
-        let local_log_heights = self
-            .store
-            .get_log_heights(&log_id)
-            .await
-            .expect("memory store error");
 
-        sink.send(Message::<T>::Have(
-            *topic,
-            log_id.clone(),
-            local_log_heights.clone(),
-        ))
-        .await?;
-        // As we initiated this sync session we are done after sending the Have message.
+        // Get local log heights for all authors who have published under the requested log ids.
+        // @TODO: this will require changes soon when `get_log_heights` method includes the public
+        // key as an argument.
+        let mut local_log_heights = Vec::new();
+        for log_id in log_ids {
+            let log_heights = self
+                .store
+                .get_log_heights(&log_id)
+                .await
+                .expect("memory store error");
+
+            local_log_heights.push((log_id, log_heights));
+        }
+
+        // Send our `Have` message to the remote peer.
+        sink.send(Message::<T>::Have(*topic, local_log_heights.clone()))
+            .await?;
+
+        // As we initiated this sync session we are done after sending the `Have` message.
         sink.send(Message::SyncDone).await?;
-        sync_done_sent = true;
 
+        // Announce the topic of the sync session to the app layer.
         app_tx.send(FromSync::Topic(*topic)).await?;
 
+        // Consume messages arriving on the receive stream.
         while let Some(result) = stream.next().await {
             let message: Message<T> = result?;
             debug!("message received: {:?}", message);
 
             match message {
-                Message::Have(_, _, _) => {
+                Message::Have(_, _) => {
                     return Err(SyncError::Protocol(
                         "unexpected Have message received".to_string(),
                     ))
                 }
                 Message::Operation(header, payload) => {
+                    // Forward data received from the remote to the app layer.
                     app_tx.send(FromSync::Data(header, payload)).await?;
                 }
                 Message::SyncDone => {
@@ -118,7 +127,7 @@ where
                 }
             };
 
-            if sync_done_received && sync_done_sent {
+            if sync_done_received {
                 break;
             }
         }
@@ -132,7 +141,6 @@ where
         Ok(())
     }
 
-    #[allow(unused_assignments)]
     async fn accept(
         self: Arc<Self>,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
@@ -149,63 +157,72 @@ where
             let message: Message<T> = result?;
             debug!("message received: {:?}", message);
 
-            let replies = match &message {
-                Message::Have(topic, log_id, log_heights) => {
+            match &message {
+                Message::Have(topic, remote_log_heights) => {
+                    // Announce the topic id that we received from the initiating peer.
                     app_tx.send(FromSync::Topic(*topic)).await?;
-                    let mut messages: Vec<Message<T>> = vec![];
 
-                    let local_log_heights = self
-                        .store
-                        .get_log_heights(log_id)
-                        .await
-                        .expect("memory store error");
+                    // Get the log ids which are associated with this topic.
+                    let Some(log_ids) = self.topic_map.get(topic).await else {
+                        return Err(SyncError::Protocol("Unknown topic id".to_string()));
+                    };
 
-                    for (public_key, seq_num) in local_log_heights {
-                        let mut remote_needs = vec![];
+                    let remote_log_heights_map: HashMap<T, Vec<(PublicKey, u64)>> =
+                        remote_log_heights.clone().into_iter().collect();
 
-                        for (remote_pub_key, remote_seq_num) in log_heights.iter() {
-                            // For logs where both peers know of the author, compare seq numbers
-                            // and if ours is higher then we know the peer needs to be sent the
-                            // newer operations we have.
-                            if *remote_pub_key == public_key && *remote_seq_num < seq_num {
-                                remote_needs.push((public_key, *remote_seq_num + 1));
+                    // For every log id we need to:
+                    // - retrieve the local log heights for all contributing authors
+                    // - compare our local log heights with those sent from the remote peer
+                    // - send any operations the remote peer is missing
+                    for log_id in log_ids {
+                        let local_log_heights = self
+                            .store
+                            .get_log_heights(&log_id)
+                            .await
+                            .expect("memory store error");
+
+                        for (public_key, seq_num) in local_log_heights {
+                            let Some(remote_log_heights) = remote_log_heights_map.get(&log_id)
+                            else {
+                                // The remote peer didn't request logs with this id.
                                 continue;
                             };
-                        }
 
-                        // If the author is not known by both peers, then see if _we_ are the
-                        // ones who know of log the remote needs.
-                        if !log_heights
-                            .iter()
-                            .any(|(remote_public_key, _)| public_key == *remote_public_key)
-                        {
-                            remote_needs.push((public_key, 0));
-                        }
+                            for (remote_pub_key, remote_seq_num) in remote_log_heights.iter() {
+                                // Compare log heights sent by the remote with our local logs, if
+                                // our logs are more advanced calculate and send operations the
+                                // remote is missing.
+                                if *remote_pub_key == public_key && *remote_seq_num < seq_num {
+                                    let messages = remote_needs(
+                                        &self.store,
+                                        &log_id,
+                                        &public_key,
+                                        *remote_seq_num + 1,
+                                    )
+                                    .await?;
+                                    sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
+                                        .await?;
+                                };
+                            }
 
-                        // For every log the remote needs send only the operations they are missing.
-                        for (public_key, seq_num) in remote_needs {
-                            let mut log = self
-                                .store
-                                .get_log(&public_key, log_id)
-                                .await
-                                .map_err(|e| SyncError::Protocol(e.to_string()))?;
-                            log.split_off(seq_num as usize)
-                                .into_iter()
-                                .for_each(|operation| {
-                                    messages.push(Message::Operation(
-                                        operation.header.to_bytes(),
-                                        operation.body.map(|body| body.to_bytes()),
-                                    ))
-                                });
+                            // If we know of an author the remote does not yet know about send all
+                            // their operations.
+                            if !remote_log_heights
+                                .iter()
+                                .any(|(remote_public_key, _)| public_key == *remote_public_key)
+                            {
+                                let messages =
+                                    remote_needs(&self.store, &log_id, &public_key, 0).await?;
+                                sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
+                                    .await?;
+                            }
                         }
                     }
 
                     // As we have processed the remotes `Have` message then we are "done" from
                     // this end.
-                    messages.push(Message::SyncDone);
+                    sink.send(Message::SyncDone).await?;
                     sync_done_sent = true;
-
-                    messages
                 }
                 Message::Operation(_, _) => {
                     return Err(SyncError::Protocol(
@@ -214,15 +231,8 @@ where
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
-                    vec![]
                 }
             };
-
-            // @TODO: we'd rather process all messages at once using `send_all`. For this
-            // we need to turn `replies` into a stream.
-            for message in replies {
-                sink.send(message).await?;
-            }
 
             if sync_done_received && sync_done_sent {
                 break;
@@ -239,11 +249,42 @@ where
     }
 }
 
+// Helper method for getting only the operations a peer needs from a log and composing them into
+// the expected message format.
+async fn remote_needs<T, E>(
+    store: &impl LogStore<T, E>,
+    log_id: &T,
+    public_key: &PublicKey,
+    from: SeqNum,
+) -> Result<Vec<Message<T>>, SyncError>
+where
+    E: Clone + Serialize,
+{
+    let mut log = store
+        .get_log(public_key, log_id)
+        .await
+        .map_err(|e| SyncError::Protocol(e.to_string()))?;
+
+    let messages: Vec<Message<T>> = log
+        .split_off(from as usize)
+        .into_iter()
+        .map(|operation| {
+            Message::Operation(
+                operation.header.to_bytes(),
+                operation.body.map(|body| body.to_bytes()),
+            )
+        })
+        .collect();
+
+    Ok(messages)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use async_trait::async_trait;
     use futures::SinkExt;
     use p2panda_core::extensions::DefaultExtensions;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
@@ -259,20 +300,21 @@ mod tests {
     use super::{LogSyncProtocol, Message, TopicMap};
 
     #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<TopicId, String>);
+    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
 
     impl LogIdTopicMap {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
         }
 
-        fn insert(&mut self, topic: TopicId, scope: String) -> Option<String> {
-            self.0.insert(topic, scope)
+        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
+            self.0.insert(topic, log_ids)
         }
     }
 
+    #[async_trait]
     impl TopicMap<TopicId, String> for LogIdTopicMap {
-        fn get(&self, topic: &TopicId) -> Option<String> {
+        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
             self.0.get(topic).cloned()
         }
     }
@@ -342,14 +384,14 @@ mod tests {
 
         // Write some message into peer_b's send buffer
         let message_bytes = to_bytes(vec![
-            Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
+            Message::Have(TOPIC_ID.clone(), vec![(log_id.clone(), vec![])]),
             Message::SyncDone,
         ]);
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -392,7 +434,7 @@ mod tests {
 
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -410,7 +452,7 @@ mod tests {
         assert_message_bytes(
             peer_b_read,
             vec![
-                Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
+                Message::Have(TOPIC_ID.clone(), vec![(log_id.clone(), vec![])]),
                 Message::SyncDone,
             ],
         )
@@ -465,7 +507,7 @@ mod tests {
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String>> = vec![
-            Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
+            Message::Have(TOPIC_ID.clone(), vec![(log_id.clone(), vec![])]),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -476,7 +518,7 @@ mod tests {
 
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -573,7 +615,7 @@ mod tests {
 
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
@@ -591,7 +633,7 @@ mod tests {
         assert_message_bytes(
             peer_b_read,
             vec![
-                Message::Have(TOPIC_ID.clone(), log_id.clone(), vec![]),
+                Message::Have(TOPIC_ID.clone(), vec![(log_id.clone(), vec![])]),
                 Message::SyncDone,
             ],
         )
@@ -630,7 +672,7 @@ mod tests {
 
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store1,
@@ -768,7 +810,7 @@ mod tests {
 
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, log_id.clone());
+        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store1,
