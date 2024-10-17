@@ -508,10 +508,9 @@ pub struct Network {
 }
 
 impl Network {
-    /// Returns the public key of the local network.
-    pub fn node_id(&self) -> PublicKey {
-        PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
-            .expect("public key already checked")
+    /// Adds a peer to the local network address book.
+    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
+        self.inner.engine.add_peer(node_addr).await
     }
 
     /// Returns the direct addresses of the local network.
@@ -522,6 +521,38 @@ impl Network {
             .next()
             .await
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
+    }
+
+    /// Returns a handle to the network endpoint.
+    ///
+    /// The `Endpoint` exposes low-level networking functionality such as the ability to connect to
+    /// specific peers, accept connections, query local socket addresses and more. This level of
+    /// control is unlikely to be required in most cases but has been exposed for the convenience
+    /// of advanced users.
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.inner.endpoint
+    }
+
+    /// Returns the addresses of all known peers.
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+        self.inner.engine.known_peers().await
+    }
+
+    /// Returns the public key of the local network.
+    pub fn node_id(&self) -> PublicKey {
+        PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
+            .expect("public key already checked")
+    }
+
+    /// Terminates the main network task and shuts down the network.
+    pub async fn shutdown(self) -> Result<()> {
+        // Trigger shutdown of the main run task by activating the cancel token
+        self.inner.cancel_token.cancel();
+
+        // Wait for the main task to terminate
+        self.task.await.map_err(|err| anyhow!(err))?;
+
+        Ok(())
     }
 
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and
@@ -548,37 +579,6 @@ impl Network {
             .await?;
 
         Ok((to_network_tx, from_network_rx, gossip_ready_rx))
-    }
-
-    /// Returns a handle to the network endpoint.
-    ///
-    /// The `Endpoint` exposes low-level networking functionality such as the ability to connect to
-    /// specific peers, accept connections, query local socket addresses and more. This level of
-    /// control is unlikely to be required in most cases but has been exposed for the convenience
-    /// of advanced users.
-    pub fn endpoint(&self) -> &Endpoint {
-        &self.inner.endpoint
-    }
-
-    /// Adds a peer to the local network address book.
-    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
-        self.inner.engine.add_peer(node_addr).await
-    }
-
-    /// Returns the addresses of all known peers.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
-        self.inner.engine.known_peers().await
-    }
-
-    /// Terminates the main network task and shuts down the network.
-    pub async fn shutdown(self) -> Result<()> {
-        // Trigger shutdown of the main run task by activating the cancel token
-        self.inner.cancel_token.cancel();
-
-        // Wait for the main task to terminate
-        self.task.await.map_err(|err| anyhow!(err))?;
-
-        Ok(())
     }
 }
 
