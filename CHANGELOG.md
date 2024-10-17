@@ -33,3 +33,4 @@ Highlights are marked with a pancake 🥞
 - Handle non-copy store method parameters by reference [#558](https://github.com/p2panda/p2panda/pull/558)
 - Handle operation header and body as bytes in log height sync [#561](https://github.com/p2panda/p2panda/pull/561)
 - Better naming and module structure in `p2panda-sync` [#568](https://github.com/p2panda/p2panda/pull/568)
+- Make `TopicMap::get` method async and return `Vec<T>` [#573](https://github.com/p2panda/p2panda/pull/573)
