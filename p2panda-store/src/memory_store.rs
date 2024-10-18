@@ -118,6 +118,10 @@ where
         }
     }
 
+    async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error> {
+        Ok(self.read_store().operations.contains_key(&hash))
+    }
+
     async fn delete_operation(&mut self, hash: Hash) -> Result<bool, Self::Error> {
         let mut store = self.write_store();
         let Some((_, header, _, _)) = store.operations.remove(&hash) else {
@@ -391,6 +395,7 @@ mod tests {
             .await
             .expect("no errors");
         assert!(inserted);
+        assert!(store.has_operation(hash).await.expect("no error"));
 
         let (header_again, body_again) = store
             .get_operation(hash)
@@ -440,6 +445,7 @@ mod tests {
 
         let deleted_operation = store.get_operation(hash).await.expect("no error");
         assert!(deleted_operation.is_none());
+        assert!(!store.has_operation(hash).await.expect("no error"));
 
         let deleted_raw_operation = store.get_raw_operation(hash).await.expect("no error");
         assert!(deleted_raw_operation.is_none());
@@ -468,6 +474,7 @@ mod tests {
             .expect("no error")
             .expect("operation exist");
         assert!(no_body.is_none());
+        assert!(store.has_operation(hash).await.expect("no error"));
 
         let (_, no_body) = store
             .get_raw_operation(hash)

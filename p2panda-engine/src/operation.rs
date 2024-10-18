@@ -37,10 +37,9 @@ where
     }
 
     let already_exists = store
-        .get_operation(operation.hash)
+        .has_operation(operation.hash)
         .await
-        .map_err(|err| IngestError::StoreError(err.to_string()))?
-        .is_some();
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
     if !already_exists {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation

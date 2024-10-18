@@ -36,6 +36,9 @@ pub trait LocalOperationStore<LogId, Extensions> {
     /// Get "raw" header and body bytes of operation from store.
     async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error>;
 
+    /// Returns `true` if operation exists in store.
+    async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error>;
+
     /// Delete an operation.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation was not found in
