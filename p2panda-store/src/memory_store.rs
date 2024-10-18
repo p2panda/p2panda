@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::{BTreeSet, HashMap};
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -65,7 +66,7 @@ where
     LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
     Extensions: Clone + Send + Sync,
 {
-    type Error = ();
+    type Error = Infallible;
 
     async fn insert_operation(
         &mut self,
@@ -157,7 +158,7 @@ where
     LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
     Extensions: Clone + Send + Sync,
 {
-    type Error = ();
+    type Error = Infallible;
 
     async fn get_log(
         &self,
