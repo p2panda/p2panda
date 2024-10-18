@@ -296,27 +296,7 @@ mod tests {
 
     use super::{LogSyncProtocol, Message, TopicMap};
 
-    #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
-
-    impl LogIdTopicMap {
-        pub fn new() -> Self {
-            Self(HashMap::new())
-        }
-
-        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
-            self.0.insert(topic, log_ids)
-        }
-    }
-
-    #[async_trait]
-    impl TopicMap<TopicId, String> for LogIdTopicMap {
-        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
-            self.0.get(topic).cloned()
-        }
-    }
-
-    fn generate_operation<E: Clone + Serialize>(
+    fn create_operation<E: Clone + Serialize>(
         private_key: &PrivateKey,
         body: &Body,
         seq_num: u64,
@@ -339,6 +319,26 @@ mod tests {
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
+    }
+
+    #[derive(Clone, Debug)]
+    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
+
+    impl LogIdTopicMap {
+        pub fn new() -> Self {
+            Self(HashMap::new())
+        }
+
+        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
+            self.0.insert(topic, log_ids)
+        }
+    }
+
+    #[async_trait]
+    impl TopicMap<TopicId, String> for LogIdTopicMap {
+        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
+            self.0.get(topic).cloned()
+        }
     }
 
     async fn assert_message_bytes(mut rx: ReadHalf<DuplexStream>, messages: Vec<Message<String>>) {
@@ -468,11 +468,11 @@ mod tests {
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body, 0, 0, None, None);
+            create_operation(&private_key, &body, 0, 0, None, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
         let (hash_2, header_2, header_bytes_2) =
-            generate_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
 
         store
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -556,23 +556,11 @@ mod tests {
         let body = Body::new("Hello, Sloth!".as_bytes());
 
         let (hash_0, _, header_bytes_0) =
-            generate_operation::<DefaultExtensions>(&private_key, &body, 0, 0, None, None);
-        let (hash_1, _, header_bytes_1) = generate_operation::<DefaultExtensions>(
-            &private_key,
-            &body,
-            1,
-            100,
-            Some(hash_0),
-            None,
-        );
-        let (_, _, header_bytes_2) = generate_operation::<DefaultExtensions>(
-            &private_key,
-            &body,
-            2,
-            200,
-            Some(hash_1),
-            None,
-        );
+            create_operation::<DefaultExtensions>(&private_key, &body, 0, 0, None, None);
+        let (hash_1, _, header_bytes_1) =
+            create_operation::<DefaultExtensions>(&private_key, &body, 1, 100, Some(hash_0), None);
+        let (_, _, header_bytes_2) =
+            create_operation::<DefaultExtensions>(&private_key, &body, 2, 200, Some(hash_1), None);
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String>> = vec![
@@ -649,11 +637,11 @@ mod tests {
         let body = Body::new("Hello, Sloth!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body, 0, 0, None, None);
+            create_operation(&private_key, &body, 0, 0, None, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
         let (hash_2, header_2, header_bytes_2) =
-            generate_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
 
         store_2
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -741,11 +729,11 @@ mod tests {
         let body = Body::new("Hello, Sloth!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body, 0, 0, None, None);
+            create_operation(&private_key, &body, 0, 0, None, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
         let (hash_2, header_2, header_bytes_2) =
-            generate_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
 
         // Create a store for peer a and populate it with one operation
         let mut store_1 = MemoryStore::default();

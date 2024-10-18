@@ -306,7 +306,7 @@ mod tests {
 
     use super::MemoryStore;
 
-    fn generate_operation(
+    fn create_operation(
         private_key: &PrivateKey,
         body: &Body,
         seq_num: u64,
@@ -336,7 +336,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
@@ -384,7 +384,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
@@ -418,7 +418,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
         // Insert one operation
         let inserted = store
@@ -452,7 +452,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
@@ -487,9 +487,9 @@ mod tests {
         let body_1 = Body::new("hello again!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body_0, 0, 0, None);
+            create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
@@ -535,9 +535,9 @@ mod tests {
         let body_a0 = Body::new("hello from log a!".as_bytes());
         let body_a1 = Body::new("hello from log a again!".as_bytes());
         let (hash_a0, header_a0, header_bytes_a0) =
-            generate_operation(&private_key, &body_a0, 0, 0, None);
+            create_operation(&private_key, &body_a0, 0, 0, None);
         let (hash_a1, header_a1, header_bytes_a1) =
-            generate_operation(&private_key, &body_a1, 1, 1, Some(hash_a0));
+            create_operation(&private_key, &body_a1, 1, 1, Some(hash_a0));
 
         let inserted = store
             .insert_operation(
@@ -566,9 +566,9 @@ mod tests {
         let body_b0 = Body::new("hello from log b!".as_bytes());
         let body_b1 = Body::new("hello from log b again!".as_bytes());
         let (hash_b0, header_b0, header_bytes_b0) =
-            generate_operation(&private_key, &body_b0, 0, 3, None);
+            create_operation(&private_key, &body_b0, 0, 3, None);
         let (hash_b1, header_b1, header_bytes_b1) =
-            generate_operation(&private_key, &body_b1, 1, 4, Some(hash_b0));
+            create_operation(&private_key, &body_b1, 1, 4, Some(hash_b0));
 
         store
             .insert_operation(
@@ -622,7 +622,7 @@ mod tests {
         let body = Body::new("hello!".as_bytes());
 
         let (hash_a, header_a, header_bytes_a) =
-            generate_operation(&private_key_a, &body, 0, 0, None);
+            create_operation(&private_key_a, &body, 0, 0, None);
         let inserted = store
             .insert_operation(hash_a, &header_a, Some(&body), &header_bytes_a, &log_id)
             .await
@@ -630,7 +630,7 @@ mod tests {
         assert!(inserted);
 
         let (hash_b, header_b, header_bytes_b) =
-            generate_operation(&private_key_b, &body, 0, 0, None);
+            create_operation(&private_key_b, &body, 0, 0, None);
         let inserted = store
             .insert_operation(hash_b, &header_b, Some(&body), &header_bytes_b, &log_id)
             .await
@@ -666,9 +666,9 @@ mod tests {
         let body_1 = Body::new("hello again!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body_0, 0, 0, None);
+            create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
@@ -700,11 +700,11 @@ mod tests {
         let body_2 = Body::new("final hello!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body_0, 0, 0, None);
+            create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
         let (hash_2, header_2, header_bytes_2) =
-            generate_operation(&private_key, &body_2, 2, 200, Some(hash_1));
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
@@ -761,11 +761,11 @@ mod tests {
         let body_2 = Body::new("final hello!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
-            generate_operation(&private_key, &body_0, 0, 0, None);
+            create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            generate_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
         let (hash_2, header_2, header_bytes_2) =
-            generate_operation(&private_key, &body_2, 2, 200, Some(hash_1));
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
