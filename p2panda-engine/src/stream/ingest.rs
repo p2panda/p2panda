@@ -17,7 +17,7 @@ use serde::Serialize;
 
 use crate::extensions::PruneFlag;
 use crate::macros::{delegate_access_inner, delegate_sink};
-use crate::operation::{ingest_operation, IngestError, IngestResult};
+use crate::operation::{ingest_and_prune_operation, IngestError, IngestResult};
 
 pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)> {
     /// Checks incoming operations against their log integrity and persists them automatically in a
@@ -145,7 +145,7 @@ where
                 let prune_flag: PruneFlag = header
                     .extract()
                     .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
-                ingest_operation::<S, L, E>(
+                ingest_and_prune_operation::<S, L, E>(
                     &mut store,
                     header,
                     body,

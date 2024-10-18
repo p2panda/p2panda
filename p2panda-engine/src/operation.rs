@@ -10,11 +10,92 @@ use thiserror::Error;
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
 ///
+/// If the operation seems valid but we're still lacking information (as it might have arrived
+/// out-of-order) this method does not fail but indicates that we might have to retry again later.
+///
+/// This method does not apply any automatic pruning of the log after ingesting the operation. If
+/// you're interested in such implementation, check out the [`ingest_and_prune_operation`] method.
+pub async fn ingest_operation<S, L, E>(
+    store: &mut S,
+    header: Header<E>,
+    body: Option<Body>,
+    header_bytes: Vec<u8>,
+    log_id: &L,
+) -> Result<IngestResult<E>, IngestError>
+where
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Clone + Serialize + DeserializeOwned,
+{
+    let operation = Operation {
+        hash: header.hash(),
+        header,
+        body,
+    };
+
+    if let Err(err) = validate_operation(&operation) {
+        return Err(IngestError::InvalidOperation(err));
+    }
+
+    if store
+        .has_operation(operation.hash)
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?
+    {
+        return Ok(IngestResult::Complete(operation));
+    }
+
+    if operation.header.seq_num > 0 {
+        let Some((latest_header, _)) = store
+            .latest_operation(&operation.header.public_key, log_id)
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?
+        else {
+            // We're missing the whole log so far
+            return Ok(IngestResult::Retry(
+                operation.header.clone(),
+                operation.body.clone(),
+                header_bytes,
+                operation.header.seq_num,
+            ));
+        };
+
+        if let Err(err) = validate_backlink(&latest_header, &operation.header) {
+            match err {
+                // We observe a gap in the log and therefore can't validate the backlink yet
+                OperationError::SeqNumNonIncremental(expected, given) => {
+                    return Ok(IngestResult::Retry(
+                        operation.header,
+                        operation.body,
+                        header_bytes,
+                        given - expected,
+                    ))
+                }
+                _ => return Err(IngestError::InvalidOperation(err)),
+            }
+        }
+    }
+
+    store
+        .insert_operation(
+            operation.hash,
+            &operation.header,
+            operation.body.as_ref(),
+            &header_bytes,
+            log_id,
+        )
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
+    Ok(IngestResult::Complete(operation))
+}
+
+/// Checks an incoming operation for log integrity and persists it into the store when valid.
+///
 /// This method also automatically prunes the log when a prune flag was set.
 ///
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
-pub async fn ingest_operation<S, L, E>(
+pub async fn ingest_and_prune_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
@@ -36,73 +117,70 @@ where
         return Err(IngestError::InvalidOperation(err));
     }
 
-    let already_exists = store
+    if store
         .has_operation(operation.hash)
         .await
-        .map_err(|err| IngestError::StoreError(err.to_string()))?;
-    if !already_exists {
-        // If no pruning flag is set, we expect the log to have integrity with the previously given
-        // operation
-        if !prune_flag && operation.header.seq_num > 0 {
-            let latest_operation = store
-                .latest_operation(&operation.header.public_key, log_id)
-                .await
-                .map_err(|err| IngestError::StoreError(err.to_string()))?;
+        .map_err(|err| IngestError::StoreError(err.to_string()))?
+    {
+        return Ok(IngestResult::Complete(operation));
+    }
 
-            match latest_operation {
-                Some(latest_operation) => {
-                    if let Err(err) = validate_backlink(&latest_operation.0, &operation.header) {
-                        match err {
-                            // These errors signify that the sequence number is monotonic
-                            // incrementing and correct, however the backlink does not match
-                            OperationError::BacklinkMismatch
-                            | OperationError::BacklinkMissing
-                            // Log can only contain operations from one author
-                            | OperationError::TooManyAuthors => {
-                                return Err(IngestError::InvalidOperation(err))
-                            }
-                            // We observe a gap in the log and therefore can't validate the
-                            // backlink yet
-                            OperationError::SeqNumNonIncremental(expected, given) => {
-                                return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, given - expected))
-                            }
-                            _ => unreachable!("other error cases have been handled before"),
-                        }
-                    }
+    // If no pruning flag is set, we expect the log to have integrity with the previously given
+    // operation
+    if !prune_flag && operation.header.seq_num > 0 {
+        let Some((latest_header, _)) = store
+            .latest_operation(&operation.header.public_key, log_id)
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?
+        else {
+            // We're missing the whole log so far
+            return Ok(IngestResult::Retry(
+                operation.header.clone(),
+                operation.body.clone(),
+                header_bytes,
+                operation.header.seq_num,
+            ));
+        };
+
+        if let Err(err) = validate_backlink(&latest_header, &operation.header) {
+            match err {
+                // These errors signify that the sequence number is monotonic incrementing and
+                // correct, however the backlink does not match
+                OperationError::BacklinkMismatch
+                | OperationError::BacklinkMissing
+                // Log can only contain operations from one author
+                | OperationError::TooManyAuthors => {
+                    return Err(IngestError::InvalidOperation(err))
                 }
-                // We're missing the whole log so far
-                None => {
-                    return Ok(IngestResult::Retry(
-                        operation.header.clone(),
-                        operation.body.clone(),
-                        header_bytes,
-                        operation.header.seq_num,
-                    ))
+                // We observe a gap in the log and therefore can't validate the backlink yet
+                OperationError::SeqNumNonIncremental(expected, given) => {
+                    return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, given - expected))
                 }
+                _ => unreachable!("other error cases have been handled before"),
             }
         }
+    }
 
+    store
+        .insert_operation(
+            operation.hash,
+            &operation.header,
+            operation.body.as_ref(),
+            &header_bytes,
+            log_id,
+        )
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
+    if prune_flag {
         store
-            .insert_operation(
-                operation.hash,
-                &operation.header,
-                operation.body.as_ref(),
-                &header_bytes,
+            .delete_operations(
+                &operation.header.public_key,
                 log_id,
+                operation.header.seq_num,
             )
             .await
             .map_err(|err| IngestError::StoreError(err.to_string()))?;
-
-        if prune_flag {
-            store
-                .delete_operations(
-                    &operation.header.public_key,
-                    log_id,
-                    operation.header.seq_num,
-                )
-                .await
-                .map_err(|err| IngestError::StoreError(err.to_string()))?;
-        }
     }
 
     Ok(IngestResult::Complete(operation))
@@ -147,7 +225,7 @@ mod tests {
     use p2panda_core::{Hash, Header, PrivateKey};
     use p2panda_store::MemoryStore;
 
-    use crate::operation::{ingest_operation, IngestResult};
+    use crate::operation::{ingest_and_prune_operation, IngestResult};
     use crate::test_utils::Extensions;
 
     #[tokio::test]
@@ -172,7 +250,9 @@ mod tests {
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
 
-        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
+        let result =
+            ingest_and_prune_operation(&mut store, header, None, header_bytes, &log_id, false)
+                .await;
         assert!(matches!(result, Ok(IngestResult::Complete(_))));
 
         // 2. Create an operation which has already advanced in the log (it has a backlink and
@@ -192,7 +272,9 @@ mod tests {
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
 
-        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
+        let result =
+            ingest_and_prune_operation(&mut store, header, None, header_bytes, &log_id, false)
+                .await;
         assert!(matches!(result, Ok(IngestResult::Retry(_, None, _, 11))));
     }
 }
