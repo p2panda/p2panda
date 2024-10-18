@@ -19,7 +19,7 @@ use crate::extensions::PruneFlag;
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
-pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>)> {
+pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)> {
     /// Checks incoming operations against their log integrity and persists them automatically in a
     /// given store.
     ///
@@ -41,14 +41,17 @@ pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>)> {
     }
 }
 
-impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where T: Stream<Item = (Header<E>, Option<Body>)> {}
+impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
+    T: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>
+{
+}
 
 #[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
 pub struct Ingest<St, S, L, E>
 where
-    St: Stream<Item = (Header<E>, Option<Body>)>,
+    St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
     S: OperationStore<L, E> + LogStore<L, E>,
 {
@@ -64,7 +67,7 @@ where
 
 impl<St, S, L, E> Ingest<St, S, L, E>
 where
-    St: Stream<Item = (Header<E>, Option<Body>)>,
+    St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
@@ -93,7 +96,7 @@ where
 
 impl<St, S, L, E> Stream for Ingest<St, S, L, E>
 where
-    St: Stream<Item = (Header<E>, Option<Body>)>,
+    St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: Clone + OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
@@ -114,7 +117,9 @@ where
                     // Otherwise prefer pulling from the external stream first as freshly incoming
                     // data should be prioritized
                     match this.stream.as_mut().poll_next(cx) {
-                        Poll::Ready(Some((header, body))) => Some(IngestAttempt(header, body, 1)),
+                        Poll::Ready(Some((header, body, header_bytes))) => {
+                            Some(IngestAttempt(header, body, header_bytes, 1))
+                        }
                         Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
                         Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
                             Poll::Ready(Some(attempt)) => Some(attempt),
@@ -126,7 +131,7 @@ where
                     }
                 }
             };
-            let Some(IngestAttempt(header, body, counter)) = res else {
+            let Some(IngestAttempt(header, body, header_bytes, counter)) = res else {
                 // Both external stream and buffer stream has ended, so we stop here as well
                 return Poll::Ready(None);
             };
@@ -140,8 +145,15 @@ where
                 let prune_flag: PruneFlag = header
                     .extract()
                     .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
-                ingest_operation::<S, L, E>(&mut store, header, body, &log_id, prune_flag.is_set())
-                    .await
+                ingest_operation::<S, L, E>(
+                    &mut store,
+                    header,
+                    body,
+                    header_bytes,
+                    &log_id,
+                    prune_flag.is_set(),
+                )
+                .await
             };
             pin_mut!(ingest_fut);
             let ingest_res = ready!(ingest_fut.poll(cx));
@@ -150,7 +162,7 @@ where
             //    buffer and try again later (attempted for a configured number of times),
             //    otherwise forward the result of ingest to the consumer.
             match ingest_res {
-                Ok(IngestResult::Retry(header, body, num_missing)) => {
+                Ok(IngestResult::Retry(header, body, header_bytes, num_missing)) => {
                     // The number of max. reattempts is equal the size of the buffer. As long as
                     // the buffer is just a FIFO queue it doesn't make sense to optimize over
                     // different parameters as in a worst-case distribution of items (exact
@@ -167,10 +179,12 @@ where
                         break Poll::Ready(None);
                     };
 
-                    let Ok(_) =
-                        this.ooo_buffer_tx
-                            .start_send(IngestAttempt(header, body, counter + 1))
-                    else {
+                    let Ok(_) = this.ooo_buffer_tx.start_send(IngestAttempt(
+                        header,
+                        body,
+                        header_bytes,
+                        counter + 1,
+                    )) else {
                         break Poll::Ready(None);
                     };
 
@@ -190,7 +204,7 @@ where
 
 impl<St: FusedStream, S, L, E> FusedStream for Ingest<St, S, L, E>
 where
-    St: Stream<Item = (Header<E>, Option<Body>)>,
+    St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: Clone + OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
@@ -199,29 +213,30 @@ where
     }
 }
 
-impl<St, S, L, E> Sink<(Header<E>, Option<Body>)> for Ingest<St, S, L, E>
+impl<St, S, L, E> Sink<(Header<E>, Option<Body>, Vec<u8>)> for Ingest<St, S, L, E>
 where
-    St: Stream<Item = (Header<E>, Option<Body>)> + Sink<(Header<E>, Option<Body>)>,
+    St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>
+        + Sink<(Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E>,
     E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
 {
     type Error = St::Error;
 
-    delegate_sink!(stream, (Header<E>, Option<Body>));
+    delegate_sink!(stream, (Header<E>, Option<Body>, Vec<u8>));
 }
 
 #[derive(Debug)]
-struct IngestAttempt<E>(Header<E>, Option<Body>, usize);
+struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, usize);
 
 #[cfg(test)]
 mod tests {
     use futures_util::stream::iter;
     use futures_util::{StreamExt, TryStreamExt};
-    use p2panda_core::Operation;
+    use p2panda_core::{Operation, RawOperation};
     use p2panda_store::MemoryStore;
 
     use crate::extensions::StreamName;
-    use crate::operation::{IngestError, RawOperation};
+    use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
     use crate::test_utils::{mock_stream, Extensions};
 
@@ -236,7 +251,7 @@ mod tests {
             .decode()
             .filter_map(|item| async {
                 match item {
-                    Ok((header, body)) => Some((header, body)),
+                    Ok((header, body, header_bytes)) => Some((header, body, header_bytes)),
                     Err(_) => None,
                 }
             })
@@ -259,7 +274,7 @@ mod tests {
             .decode()
             .filter_map(|item| async {
                 match item {
-                    Ok((header, body)) => Some((header, body)),
+                    Ok((header, body, header_bytes)) => Some((header, body, header_bytes)),
                     Err(_) => None,
                 }
             })

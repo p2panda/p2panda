@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{Body, Hash, Header, PublicKey};
+use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
 use crate::{LogStore, OperationStore};
 
@@ -108,10 +108,7 @@ where
         }
     }
 
-    async fn get_raw_operation(
-        &self,
-        hash: Hash,
-    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, Self::Error> {
+    async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
         match self.read_store().operations.get(&hash) {
             Some((_, _, body, header_bytes)) => Ok(Some((
                 header_bytes.clone(),
@@ -184,7 +181,7 @@ where
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, Self::Error> {
+    ) -> Result<Option<Vec<RawOperation>>, Self::Error> {
         let store = self.read_store();
         match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => {
@@ -301,7 +298,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{extensions::DefaultExtensions, Body, Hash, Header, PrivateKey};
+    use p2panda_core::extensions::DefaultExtensions;
+    use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
     use crate::{LogStore, OperationStore};

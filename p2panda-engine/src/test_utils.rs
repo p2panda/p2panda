@@ -2,11 +2,10 @@
 
 use async_stream::stream;
 use futures_util::Stream;
-use p2panda_core::{Body, Extension, Header, PrivateKey};
+use p2panda_core::{Body, Extension, Header, PrivateKey, RawOperation};
 use serde::{Deserialize, Serialize};
 
 use crate::extensions::{PruneFlag, StreamName};
-use crate::operation::RawOperation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extensions {

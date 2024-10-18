@@ -8,7 +8,7 @@ use std::fmt::{Debug, Display};
 #[cfg(feature = "memory")]
 pub use memory_store::MemoryStore;
 
-use p2panda_core::{Body, Hash, Header, PublicKey};
+use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
 #[trait_variant::make(OperationStore: Send)]
 pub trait LocalOperationStore<LogId, Extensions> {
@@ -34,10 +34,7 @@ pub trait LocalOperationStore<LogId, Extensions> {
     ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error>;
 
     /// Get "raw" header and body bytes of operation from store.
-    async fn get_raw_operation(
-        &self,
-        hash: Hash,
-    ) -> Result<Option<(Vec<u8>, Option<Vec<u8>>)>, Self::Error>;
+    async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error>;
 
     /// Delete an operation.
     ///
@@ -72,7 +69,7 @@ pub trait LocalLogStore<LogId, Extensions> {
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-    ) -> Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>, Self::Error>;
+    ) -> Result<Option<Vec<RawOperation>>, Self::Error>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
     async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, Self::Error>;
