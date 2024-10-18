@@ -270,7 +270,7 @@ where
         .unwrap_or_default()
         .split_off(from as usize)
         .into_iter()
-        .map(|(header_bytes, body_bytes)| Message::Operation(header_bytes, body_bytes))
+        .map(|(header, payload)| Message::Operation(header, payload))
         .collect();
 
     Ok(messages)
