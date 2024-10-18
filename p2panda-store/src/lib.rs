@@ -3,6 +3,8 @@
 #[cfg(feature = "memory")]
 pub mod memory_store;
 
+use std::fmt::{Debug, Display};
+
 #[cfg(feature = "memory")]
 pub use memory_store::MemoryStore;
 
@@ -10,7 +12,7 @@ use p2panda_core::{Body, Hash, Header, PublicKey};
 
 #[trait_variant::make(OperationStore: Send)]
 pub trait LocalOperationStore<LogId, Extensions> {
-    type Error;
+    type Error: Display + Debug;
 
     /// Insert an operation.
     ///
@@ -52,7 +54,7 @@ pub trait LocalOperationStore<LogId, Extensions> {
 
 #[trait_variant::make(LogStore: Send)]
 pub trait LocalLogStore<LogId, Extensions> {
-    type Error;
+    type Error: Display + Debug;
 
     /// Get all operations from an authors' log ordered by sequence number.
     ///
