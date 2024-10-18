@@ -387,14 +387,12 @@ mod tests {
 
         let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
 
-        // Insert one operation
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
 
-        // Retrieve it agin
         let (header_again, body_again) = store
             .get_operation(hash)
             .await
@@ -402,7 +400,16 @@ mod tests {
             .expect("operation exist");
 
         assert_eq!(header.hash(), header_again.hash());
-        assert_eq!(Some(body), body_again);
+        assert_eq!(Some(body.clone()), body_again);
+
+        let (header_bytes_again, body_bytes_again) = store
+            .get_raw_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+
+        assert_eq!(header_bytes_again, header_bytes);
+        assert_eq!(body_bytes_again, Some(body.to_bytes()));
     }
 
     #[tokio::test]
@@ -432,11 +439,11 @@ mod tests {
         assert_eq!(store.read_store().logs.len(), 0);
         assert_eq!(store.read_store().operations.len(), 0);
 
-        // Try to get the operation
         let deleted_operation = store.get_operation(hash).await.expect("no error");
-
-        // It isn't there anymore
         assert!(deleted_operation.is_none());
+
+        let deleted_raw_operation = store.get_raw_operation(hash).await.expect("no error");
+        assert!(deleted_raw_operation.is_none());
     }
 
     #[tokio::test]
@@ -448,19 +455,23 @@ mod tests {
 
         let (hash, header, header_bytes) = generate_operation(&private_key, &body, 0, 0, None);
 
-        // Insert one operation
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
 
-        // Delete the payload
         assert!(store.delete_payload(hash).await.expect("no error"));
 
-        // Retrieve the operation again
         let (_, no_body) = store
             .get_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+        assert!(no_body.is_none());
+
+        let (_, no_body) = store
+            .get_raw_operation(hash)
             .await
             .expect("no error")
             .expect("operation exist");
@@ -499,6 +510,20 @@ mod tests {
         assert_eq!(log.len(), 2);
         assert_eq!(log[0].0.hash(), hash_0);
         assert_eq!(log[1].0.hash(), hash_1);
+        assert_eq!(log[0].1, Some(body_0.clone()));
+        assert_eq!(log[1].1, Some(body_1.clone()));
+
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0, header_bytes_0);
+        assert_eq!(log[1].0, header_bytes_1);
+        assert_eq!(log[0].1, Some(body_0.to_bytes()));
+        assert_eq!(log[1].1, Some(body_1.to_bytes()));
     }
 
     #[tokio::test]
