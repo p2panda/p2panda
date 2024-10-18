@@ -816,8 +816,8 @@ mod tests {
 
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Data(header_bytes_0, Some(body.to_bytes())),
             FromSync::Data(header_bytes_1, Some(body.to_bytes())),
+            FromSync::Data(header_bytes_2, Some(body.to_bytes())),
         ];
 
         let mut peer_a_messages = Vec::new();
