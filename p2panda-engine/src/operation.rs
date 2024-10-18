@@ -1,86 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use ciborium::de::Error as CiboriumError;
 use p2panda_core::{
     validate_backlink, validate_operation, Body, Header, Operation, OperationError,
 };
-use p2panda_store::{LogStore, OperationStore, StoreError};
+use p2panda_store::{LogStore, OperationStore};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
-
-/// Encoded bytes of an operation header and optional body.
-pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
-
-/// Decodes operation header and optional body represented as CBOR bytes.
-///
-/// Fails when payload contains invalid encoding.
-pub fn decode_operation<E>(
-    header: &[u8],
-    body: Option<&[u8]>,
-) -> Result<(Header<E>, Option<Body>), DecodeError>
-where
-    E: DeserializeOwned,
-{
-    let header =
-        ciborium::from_reader::<Header<E>, _>(header).map_err(Into::<DecodeError>::into)?;
-    let body = body.map(Body::new);
-    Ok((header, body))
-}
-
-#[derive(Debug, Error)]
-pub enum DecodeError {
-    /// An error occurred while reading bytes
-    ///
-    /// Contains the underlying error returned while reading.
-    #[error("an error occurred while reading bytes: {0}")]
-    Io(std::io::Error),
-
-    /// An error occurred while parsing bytes
-    ///
-    /// Contains the offset into the stream where the syntax error occurred.
-    #[error("an error occurred while parsing bytes at position {0}")]
-    Syntax(usize),
-
-    /// An error occurred while processing a parsed value
-    ///
-    /// Contains a description of the error that occurred and (optionally) the offset into the
-    /// stream indicating the start of the item being processed when the error occurred.
-    #[error("an error occurred while processing a parsed value at position {0:?}: {1}")]
-    Semantic(Option<usize>, String),
-
-    /// The input caused serde to recurse too much
-    ///
-    /// This error prevents a stack overflow.
-    #[error("recursion limit exceeded while decoding")]
-    RecursionLimitExceeded,
-}
-
-impl From<CiboriumError<std::io::Error>> for DecodeError {
-    fn from(value: CiboriumError<std::io::Error>) -> Self {
-        match value {
-            CiboriumError::Io(err) => DecodeError::Io(err),
-            CiboriumError::Syntax(offset) => DecodeError::Syntax(offset),
-            CiboriumError::Semantic(offset, description) => {
-                DecodeError::Semantic(offset, description)
-            }
-            CiboriumError::RecursionLimitExceeded => DecodeError::RecursionLimitExceeded,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum IngestResult<E> {
-    /// Operation has been successfully validated and persisted.
-    Complete(Operation<E>),
-
-    /// We're missing previous operations before we can try validating the backlink of this
-    /// operation.
-    ///
-    /// The number indicates how many operations we are lacking before we can attempt validation
-    /// again.
-    Retry(Header<E>, Option<Body>, u64),
-}
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
 ///
@@ -88,11 +14,11 @@ pub enum IngestResult<E> {
 ///
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
-// @TODO: Move this into `p2panda-core`
 pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
     body: Option<Body>,
+    header_bytes: Vec<u8>,
     log_id: &L,
     prune_flag: bool,
 ) -> Result<IngestResult<E>, IngestError>
@@ -110,19 +36,22 @@ where
         return Err(IngestError::InvalidOperation(err));
     }
 
-    let already_exists = store.get_operation(operation.hash).await?.is_some();
+    let already_exists = store
+        .has_operation(operation.hash)
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
     if !already_exists {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation
         if !prune_flag && operation.header.seq_num > 0 {
             let latest_operation = store
                 .latest_operation(&operation.header.public_key, log_id)
-                .await?;
+                .await
+                .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
             match latest_operation {
                 Some(latest_operation) => {
-                    if let Err(err) = validate_backlink(&latest_operation.header, &operation.header)
-                    {
+                    if let Err(err) = validate_backlink(&latest_operation.0, &operation.header) {
                         match err {
                             // These errors signify that the sequence number is monotonic
                             // incrementing and correct, however the backlink does not match
@@ -135,7 +64,7 @@ where
                             // We observe a gap in the log and therefore can't validate the
                             // backlink yet
                             OperationError::SeqNumNonIncremental(expected, given) => {
-                                return Ok(IngestResult::Retry(operation.header, operation.body, given - expected))
+                                return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, given - expected))
                             }
                             _ => unreachable!("other error cases have been handled before"),
                         }
@@ -146,13 +75,23 @@ where
                     return Ok(IngestResult::Retry(
                         operation.header.clone(),
                         operation.body.clone(),
+                        header_bytes,
                         operation.header.seq_num,
                     ))
                 }
             }
         }
 
-        store.insert_operation(&operation, log_id).await?;
+        store
+            .insert_operation(
+                operation.hash,
+                &operation.header,
+                operation.body.as_ref(),
+                &header_bytes,
+                log_id,
+            )
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
         if prune_flag {
             store
@@ -161,11 +100,25 @@ where
                     log_id,
                     operation.header.seq_num,
                 )
-                .await?;
+                .await
+                .map_err(|err| IngestError::StoreError(err.to_string()))?;
         }
     }
 
     Ok(IngestResult::Complete(operation))
+}
+
+#[derive(Debug)]
+pub enum IngestResult<E> {
+    /// Operation has been successfully validated and persisted.
+    Complete(Operation<E>),
+
+    /// We're missing previous operations before we can try validating the backlink of this
+    /// operation.
+    ///
+    /// The number indicates how many operations we are lacking before we can attempt validation
+    /// again.
+    Retry(Header<E>, Option<Body>, Vec<u8>, u64),
 }
 
 #[derive(Debug, Error)]
@@ -180,8 +133,8 @@ pub enum IngestError {
     MissingHeaderExtension(String),
 
     /// Critical storage failure occurred. This is usually a reason to panic.
-    #[error(transparent)]
-    StoreError(#[from] StoreError),
+    #[error("critical storage failure: {0}")]
+    StoreError(String),
 
     /// Some implementations might optimistically retry to ingest operations which arrived
     /// out-of-order. This error comes up when all given attempts have been exhausted.
@@ -217,8 +170,9 @@ mod tests {
             extensions: None,
         };
         header.sign(&private_key);
+        let header_bytes = header.to_bytes();
 
-        let result = ingest_operation(&mut store, header, None, &log_id, false).await;
+        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Complete(_))));
 
         // 2. Create an operation which has already advanced in the log (it has a backlink and
@@ -236,8 +190,9 @@ mod tests {
             extensions: None,
         };
         header.sign(&private_key);
+        let header_bytes = header.to_bytes();
 
-        let result = ingest_operation(&mut store, header, None, &log_id, false).await;
-        assert!(matches!(result, Ok(IngestResult::Retry(_, None, 11))));
+        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
+        assert!(matches!(result, Ok(IngestResult::Retry(_, None, _, 11))));
     }
 }

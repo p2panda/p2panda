@@ -9,6 +9,9 @@ use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
+/// Encoded bytes of an operation header and optional body.
+pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
+
 #[derive(Clone, Debug)]
 pub struct Operation<E = DefaultExtensions> {
     pub hash: Hash,

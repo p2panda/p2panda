@@ -811,7 +811,7 @@ mod tests {
 
     use async_trait::async_trait;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::LogSyncProtocol;
     use p2panda_sync::TopicMap;
@@ -833,6 +833,31 @@ mod tests {
             .with(EnvFilter::from_default_env())
             .try_init()
             .ok();
+    }
+
+    fn create_operation<E: Clone + Serialize>(
+        private_key: &PrivateKey,
+        body: &Body,
+        seq_num: u64,
+        timestamp: u64,
+        backlink: Option<Hash>,
+        extensions: Option<E>,
+    ) -> (Hash, Header<E>, Vec<u8>) {
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp,
+            seq_num,
+            backlink,
+            previous: vec![],
+            extensions,
+        };
+        header.sign(&private_key);
+        let header_bytes = header.to_bytes();
+        (header.hash(), header, header_bytes)
     }
 
     #[tokio::test]
@@ -954,36 +979,6 @@ mod tests {
         assert!(result2.is_ok());
     }
 
-    /// Helper method for generating p2panda operations
-    fn generate_operation<E: Clone + Serialize>(
-        private_key: &PrivateKey,
-        body: Body,
-        seq_num: u64,
-        timestamp: u64,
-        backlink: Option<Hash>,
-        extensions: Option<E>,
-    ) -> Operation<E> {
-        let mut header = Header {
-            version: 1,
-            public_key: private_key.public_key(),
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: Some(body.hash()),
-            timestamp,
-            seq_num,
-            backlink,
-            previous: vec![],
-            extensions,
-        };
-        header.sign(&private_key);
-
-        Operation {
-            hash: header.hash(),
-            header,
-            body: Some(body),
-        }
-    }
-
     #[derive(Clone, Debug)]
     struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
 
@@ -1010,6 +1005,7 @@ mod tests {
 
         const NETWORK_ID: [u8; 32] = [1; 32];
         const TOPIC_ID: [u8; 32] = [0u8; 32];
+
         let log_id = String::from("messages");
 
         let peer_a_private_key = PrivateKey::new();
@@ -1026,36 +1022,25 @@ mod tests {
 
         // Create some operations
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let operation0 = generate_operation(&peer_a_private_key, body.clone(), 0, 0, None, None);
-        let operation1 = generate_operation(
-            &peer_a_private_key,
-            body.clone(),
-            1,
-            100,
-            Some(operation0.hash),
-            None,
-        );
-        let operation2 = generate_operation(
-            &peer_a_private_key,
-            body.clone(),
-            2,
-            200,
-            Some(operation1.hash),
-            None,
-        );
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&peer_a_private_key, &body, 0, 0, None, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&peer_a_private_key, &body, 1, 100, Some(hash_0), None);
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&peer_a_private_key, &body, 2, 200, Some(hash_1), None);
 
         // Create store for peer b and populate with operations
         let mut store_b = MemoryStore::default();
         store_b
-            .insert_operation(&operation0, &log_id)
+            .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
             .await
             .unwrap();
         store_b
-            .insert_operation(&operation1, &log_id)
+            .insert_operation(hash_1, &header_1, Some(&body), &header_bytes_1, &log_id)
             .await
             .unwrap();
         store_b
-            .insert_operation(&operation2, &log_id)
+            .insert_operation(hash_2, &header_2, Some(&body), &header_bytes_2, &log_id)
             .await
             .unwrap();
 
@@ -1106,18 +1091,18 @@ mod tests {
             // operations we created earlier.
             let peer_a_expected_messages = vec![
                 FromNetwork::SyncMessage {
-                    header: operation0.header.to_bytes(),
-                    payload: operation0.body.map(|body| body.to_bytes()),
+                    header: header_bytes_0.to_vec(),
+                    payload: Some(body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
                 FromNetwork::SyncMessage {
-                    header: operation1.header.to_bytes(),
-                    payload: operation1.body.map(|body| body.to_bytes()),
+                    header: header_bytes_1.to_vec(),
+                    payload: Some(body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
                 FromNetwork::SyncMessage {
-                    header: operation2.header.to_bytes(),
-                    payload: operation2.body.map(|body| body.to_bytes()),
+                    header: header_bytes_2.to_vec(),
+                    payload: Some(body.to_bytes()),
                     delivered_from: peer_b_private_key.public_key(),
                 },
             ];

@@ -16,7 +16,7 @@ pub use protocols::ProtocolHandler;
 pub use tokio_util::task::AbortOnDropHandle;
 
 #[cfg(feature = "log-sync")]
-pub use p2panda_sync::protocols::log_height::LogHeightSyncProtocol;
+pub use p2panda_sync::log_sync::LogSyncProtocol;
 
 pub type NetworkId = [u8; 32];
 pub type TopicId = [u8; 32];
