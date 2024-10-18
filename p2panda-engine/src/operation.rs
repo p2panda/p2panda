@@ -8,26 +8,12 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
-#[derive(Debug)]
-pub enum IngestResult<E> {
-    /// Operation has been successfully validated and persisted.
-    Complete(Operation<E>),
-
-    /// We're missing previous operations before we can try validating the backlink of this
-    /// operation.
-    ///
-    /// The number indicates how many operations we are lacking before we can attempt validation
-    /// again.
-    Retry(Header<E>, Option<Body>, Vec<u8>, u64),
-}
-
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
 ///
 /// This method also automatically prunes the log when a prune flag was set.
 ///
 /// If the operation seems valid but we're still lacking information (as it might have arrived
 /// out-of-order) this method does not fail but indicates that we might have to retry again later.
-// @TODO: Move this into `p2panda-core`
 pub async fn ingest_operation<S, L, E>(
     store: &mut S,
     header: Header<E>,
@@ -121,6 +107,19 @@ where
     }
 
     Ok(IngestResult::Complete(operation))
+}
+
+#[derive(Debug)]
+pub enum IngestResult<E> {
+    /// Operation has been successfully validated and persisted.
+    Complete(Operation<E>),
+
+    /// We're missing previous operations before we can try validating the backlink of this
+    /// operation.
+    ///
+    /// The number indicates how many operations we are lacking before we can attempt validation
+    /// again.
+    Retry(Header<E>, Option<Body>, Vec<u8>, u64),
 }
 
 #[derive(Debug, Error)]
