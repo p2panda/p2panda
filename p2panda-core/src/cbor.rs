@@ -6,6 +6,8 @@
 //! Binary Object Representation (CBOR) format.
 //!
 //! [CBOR]: https://cbor.io/
+use std::io::Read;
+
 use ciborium::de::Error as DeserializeError;
 use ciborium::ser::Error as SerializeError;
 use serde::{Deserialize, Serialize};
@@ -19,8 +21,8 @@ pub fn encode_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodeError> {
 }
 
 /// Deserializes a value which was formatted in CBOR.
-pub fn decode_cbor<T: for<'a> Deserialize<'a>>(bytes: &[u8]) -> Result<T, DecodeError> {
-    let value = ciborium::from_reader::<T, _>(bytes).map_err(Into::<DecodeError>::into)?;
+pub fn decode_cbor<T: for<'a> Deserialize<'a>, R: Read>(reader: R) -> Result<T, DecodeError> {
+    let value = ciborium::from_reader::<T, R>(reader).map_err(Into::<DecodeError>::into)?;
     Ok(value)
 }
 
@@ -111,7 +113,7 @@ mod tests {
         header.sign(&private_key);
 
         let bytes = encode_cbor(&header).unwrap();
-        let header_again: Header<DefaultExtensions> = decode_cbor(&bytes).unwrap();
+        let header_again: Header<DefaultExtensions> = decode_cbor(&bytes[..]).unwrap();
 
         assert_eq!(header.hash(), header_again.hash());
     }

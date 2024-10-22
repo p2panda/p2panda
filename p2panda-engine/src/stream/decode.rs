@@ -64,7 +64,7 @@ where
         let mut this = self.project();
         let res = ready!(this.stream.as_mut().poll_next(cx));
         Poll::Ready(res.map(|(header_bytes, body_bytes)| {
-            match decode_cbor::<Header<E>>(&header_bytes) {
+            match decode_cbor::<Header<E>, _>(&header_bytes[..]) {
                 Ok(header) => Ok((header, body_bytes.map(Body::from), header_bytes)),
                 Err(err) => Err(err),
             }

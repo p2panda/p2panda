@@ -35,7 +35,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
 
     // Set up a channel for receiving new application messages.
     let (tx, mut rx) = mpsc::channel(128);
-    let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+    let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
 
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
@@ -115,7 +115,7 @@ pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unp
 
     // Set up a channel for receiving new application messages.
     let (tx, mut rx) = mpsc::channel(128);
-    let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Protocol(e.to_string()));
+    let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
 
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
