@@ -4,7 +4,7 @@ mod handler;
 mod manager;
 
 pub use handler::{SyncConnection, SYNC_CONNECTION_ALPN};
-pub use manager::SyncManager;
+pub use manager::{SyncManager, ToSyncManager};
 
 use std::sync::Arc;
 
