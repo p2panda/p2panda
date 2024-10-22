@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use iroh_gossip::proto::TopicId;
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::{SyncError, SyncProtocol};
+use p2panda_sync::SyncProtocol;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
@@ -92,10 +92,7 @@ impl SyncManager {
             .await?;
 
         // Create a bidirectional stream on the connection.
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| SyncError::Protocol(e.to_string()))?;
+        let (mut send, mut recv) = connection.open_bi().await?;
 
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();

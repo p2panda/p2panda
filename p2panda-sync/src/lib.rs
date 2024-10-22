@@ -26,7 +26,7 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
 
     async fn initiate(
         self: Arc<Self>,
-        topic: &TopicId,
+        topic_id: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
@@ -42,21 +42,39 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
 
 #[derive(Error, Debug)]
 pub enum SyncError {
-    /// Error which can occur in a running sync session.
-    #[error("sync protocol error: {0}")]
-    Protocol(String),
+    /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
+    ///
+    /// Indicates that the sync protocol was not correctly followed, for example due to unexpected
+    /// or missing messages, invalid encoding, etc.
+    ///
+    /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
+    /// potentially deny-listing if communication failed too often.
+    #[error("sync session failed due to unexpected protocol behaviour of remote peer: {0}")]
+    RemoteUnexpectedBehaviour(String),
 
-    /// I/O error which occurs during stream handling.
-    #[error("input/output error: {0}")]
-    IoError(#[from] std::io::Error),
+    /// Remote peer didn't show any activity for some time.
+    ///
+    /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
+    /// potentially deny-listing if communication failed too often.
+    #[error("sync session failed due to remote peer timeout")]
+    RemoteTimeout,
 
-    /// Error which occurs when encoding or decoding protocol messages.
-    #[error("codec error: {0}")]
-    Codec(String),
+    /// Critical error due to system failure on our end.
+    ///
+    /// This indicates that our system is running out of resources (storage layer failure etc.) or
+    /// we have a buggy implementation.
+    #[error("sync session failed due critical system error: {0}")]
+    Critical(String),
+}
 
-    /// Custom error to handle other cases.
-    #[error("custom error: {0}")]
-    Custom(String),
+/// Concerts critical I/O error which occurs during stream handling into [`SyncError`].
+///
+/// This is usually a critical system failure indicating an implementation bug or lacking resources
+/// on the user's machine.
+impl From<std::io::Error> for SyncError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Critical(format!("internal i/o stream error {err}"))
+    }
 }
 
 #[derive(PartialEq, Debug)]
