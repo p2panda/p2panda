@@ -17,7 +17,7 @@ use tracing::{debug, error, warn};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
-use crate::sync::{SyncManager, ToSyncManager};
+use crate::sync::manager::{SyncManager, ToSyncManager};
 use crate::{FromBytes, ToBytes};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.

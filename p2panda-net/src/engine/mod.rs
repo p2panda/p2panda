@@ -23,7 +23,8 @@ use tracing::{debug, error};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
-use crate::sync::{SyncConnection, SyncManager};
+use crate::sync::manager::SyncManager;
+use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
@@ -44,22 +45,17 @@ impl Engine {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        let (sync_manager_tx, sync_manager_rx) = if sync_protocol.is_some() {
-            let (tx, rx) = mpsc::channel(256);
-            (Some(tx), Some(rx))
+        // Create a sync manager with channel sender if a sync protocol has been provided.
+        let (sync_manager, sync_manager_tx) = if let Some(ref sync_protocol) = sync_protocol {
+            let (sync_manager, sync_manager_tx) = SyncManager::new(
+                endpoint.clone(),
+                engine_actor_tx.clone(),
+                sync_protocol.clone(),
+            );
+            (Some(sync_manager), Some(sync_manager_tx))
         } else {
             (None, None)
         };
-
-        // Create a sync manager if a sync protocol has been provided.
-        let sync_manager = sync_protocol.as_ref().map(|sync_protocol| {
-            SyncManager::new(
-                endpoint.clone(),
-                engine_actor_tx.clone(),
-                sync_manager_rx,
-                sync_protocol.clone(),
-            )
-        });
 
         let engine_actor = EngineActor::new(
             endpoint,
