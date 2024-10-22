@@ -67,7 +67,7 @@ pub enum SyncError {
     Critical(String),
 }
 
-/// Concerts critical I/O error which occurs during stream handling into [`SyncError`].
+/// Converts critical I/O error which occurs during stream handling into [`SyncError`].
 ///
 /// This is usually a critical system failure indicating an implementation bug or lacking resources
 /// on the user's machine.
