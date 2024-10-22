@@ -38,7 +38,6 @@ where
     }
 }
 
-// @TODO(adz): Does this need a version number?
 static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
 
 #[derive(Clone, Debug)]
