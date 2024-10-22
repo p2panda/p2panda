@@ -562,14 +562,7 @@ impl EngineActor {
         self.join_earmarked_topics().await?;
 
         // Inform the connection manager about the peer topics
-        //
-        // NOTE: This will only return once sync has been attempted with all novel peer-topic
-        // combinations.
         if let Some(sync_manager_tx) = &self.sync_manager_tx {
-            //sync_manager
-            //    .update_peer_topics(delivered_from, topics)
-            //    .await?;
-
             let peer_topics = ToSyncManager::new(delivered_from, topics);
             sync_manager_tx.send(peer_topics).await?
         }
