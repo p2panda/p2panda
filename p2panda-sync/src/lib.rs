@@ -26,7 +26,7 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
 
     async fn initiate(
         self: Arc<Self>,
-        topic_id: &TopicId,
+        topic: &TopicId,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
         app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
