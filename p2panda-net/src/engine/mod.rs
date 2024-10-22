@@ -44,26 +44,34 @@ impl Engine {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
+        let (sync_manager_tx, sync_manager_rx) = if sync_protocol.is_some() {
+            let (tx, rx) = mpsc::channel(256);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
         // Create a sync manager if a sync protocol has been provided.
         let sync_manager = sync_protocol.as_ref().map(|sync_protocol| {
             SyncManager::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
+                sync_manager_rx,
                 sync_protocol.clone(),
             )
         });
 
         let engine_actor = EngineActor::new(
             endpoint,
-            gossip_actor_tx,
-            sync_manager,
             engine_actor_rx,
+            gossip_actor_tx,
+            sync_manager_tx,
             network_id.into(),
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
-            if let Err(err) = engine_actor.run(gossip_actor).await {
+            if let Err(err) = engine_actor.run(gossip_actor, sync_manager).await {
                 error!("engine actor failed: {err:?}");
             }
         });
