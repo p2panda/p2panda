@@ -42,19 +42,19 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
 
 #[derive(Error, Debug)]
 pub enum SyncError {
-    /// Error which can occur in a running sync session
+    /// Error which can occur in a running sync session.
     #[error("sync protocol error: {0}")]
     Protocol(String),
 
-    /// I/O error which occurs during stream handling
+    /// I/O error which occurs during stream handling.
     #[error("input/output error: {0}")]
     IoError(#[from] std::io::Error),
 
-    /// Error which occurs when encoding or decoding protocol messages
+    /// Error which occurs when encoding or decoding protocol messages.
     #[error("codec error: {0}")]
     Codec(String),
 
-    /// Custom error to handle other cases
+    /// Custom error to handle other cases.
     #[error("custom error: {0}")]
     Custom(String),
 }

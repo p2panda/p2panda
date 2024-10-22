@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::{BTreeSet, HashMap};
+use std::convert::Infallible;
+use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{Hash, Operation, PublicKey};
+use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
-use crate::traits::{OperationStore, StoreError};
-use crate::LogStore;
+use crate::{LogStore, OperationStore};
 
 type SeqNum = u64;
 type Timestamp = u64;
+type RawHeader = Vec<u8>;
+
 type LogMeta = (SeqNum, Timestamp, Hash);
+type StoredOperation<T, E> = (T, Header<E>, Option<Body>, RawHeader);
 
 #[derive(Clone, Debug)]
 pub struct InnerMemoryStore<T, E> {
-    operations: HashMap<Hash, Operation<E>>,
+    operations: HashMap<Hash, StoredOperation<T, E>>,
     logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
 }
 
@@ -27,9 +31,10 @@ pub struct MemoryStore<T, E> {
 impl<T, E> MemoryStore<T, E> {
     pub fn new() -> Self {
         let inner = InnerMemoryStore {
-            operations: Default::default(),
-            logs: Default::default(),
+            operations: HashMap::new(),
+            logs: HashMap::new(),
         };
+
         Self {
             inner: Arc::new(RwLock::new(inner)),
         }
@@ -38,67 +43,88 @@ impl<T, E> MemoryStore<T, E> {
 
 impl<T> Default for MemoryStore<T, DefaultExtensions> {
     fn default() -> Self {
-        let inner = InnerMemoryStore {
-            operations: Default::default(),
-            logs: Default::default(),
-        };
-        Self {
-            inner: Arc::new(RwLock::new(inner)),
-        }
+        Self::new()
     }
 }
 
 impl<T, E> MemoryStore<T, E> {
     pub fn read_store(&self) -> RwLockReadGuard<InnerMemoryStore<T, E>> {
-        self.inner.read().expect("error getting read lock on store")
+        self.inner
+            .read()
+            .expect("acquire shared read access on store")
     }
 
     pub fn write_store(&self) -> RwLockWriteGuard<InnerMemoryStore<T, E>> {
         self.inner
             .write()
-            .expect("error getting write lock on store")
+            .expect("acquire exclusive write access on store")
     }
 }
 
-impl<T, E> OperationStore<T, E> for MemoryStore<T, E>
+impl<LogId, Extensions> OperationStore<LogId, Extensions> for MemoryStore<LogId, Extensions>
 where
-    T: Clone + Send + Sync + Eq + std::hash::Hash + Default + std::fmt::Debug,
-    E: Clone + Send + Sync,
+    LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
+    Extensions: Clone + Send + Sync,
 {
+    type Error = Infallible;
+
     async fn insert_operation(
         &mut self,
-        operation: &Operation<E>,
-        log_id: &T,
-    ) -> Result<bool, StoreError> {
-        let entry = (
-            operation.header.seq_num,
-            operation.header.timestamp,
-            operation.hash,
-        );
-
+        hash: Hash,
+        header: &Header<Extensions>,
+        body: Option<&Body>,
+        header_bytes: &[u8],
+        log_id: &LogId,
+    ) -> Result<bool, Self::Error> {
         let mut store = self.write_store();
+
+        let log_meta = (header.seq_num, header.timestamp, hash);
         let insertion_occured = store
             .logs
-            .entry((operation.header.public_key, log_id.to_owned()))
+            .entry((header.public_key, log_id.to_owned()))
             .or_default()
-            .insert(entry);
+            .insert(log_meta);
 
         if insertion_occured {
-            store
-                .operations
-                .insert(operation.hash, operation.to_owned());
+            let entry = (
+                log_id.to_owned(),
+                header.to_owned(),
+                body.cloned(),
+                header_bytes.to_vec(),
+            );
+            store.operations.insert(hash, entry);
         }
 
         Ok(insertion_occured)
     }
 
-    async fn get_operation(&self, hash: Hash) -> Result<Option<Operation<E>>, StoreError> {
-        Ok(self.read_store().operations.get(&hash).cloned())
+    async fn get_operation(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error> {
+        match self.read_store().operations.get(&hash) {
+            Some((_, header, body, _)) => Ok(Some((header.clone(), body.clone()))),
+            None => Ok(None),
+        }
     }
 
-    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, StoreError> {
+    async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
+        match self.read_store().operations.get(&hash) {
+            Some((_, _, body, header_bytes)) => Ok(Some((
+                header_bytes.clone(),
+                body.as_ref().map(|body| body.to_bytes()),
+            ))),
+            None => Ok(None),
+        }
+    }
+
+    async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error> {
+        Ok(self.read_store().operations.contains_key(&hash))
+    }
+
+    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, Self::Error> {
         let mut store = self.write_store();
-        let Some(removed) = store.operations.remove(&hash) else {
+        let Some((_, header, _, _)) = store.operations.remove(&hash) else {
             return Ok(false);
         };
         store.logs = store
@@ -106,11 +132,7 @@ where
             .clone()
             .into_iter()
             .filter_map(|(key, mut log)| {
-                log.remove(&(
-                    removed.header.seq_num,
-                    removed.header.timestamp,
-                    removed.hash,
-                ));
+                log.remove(&(header.seq_num, header.timestamp, hash));
                 if log.is_empty() {
                     None
                 } else {
@@ -122,9 +144,9 @@ where
         Ok(true)
     }
 
-    async fn delete_payload(&mut self, hash: Hash) -> Result<bool, StoreError> {
+    async fn delete_payload(&mut self, hash: Hash) -> Result<bool, Self::Error> {
         if let Some(operation) = self.write_store().operations.get_mut(&hash) {
-            operation.body = None;
+            operation.2 = None;
             Ok(true)
         } else {
             Ok(false)
@@ -132,57 +154,85 @@ where
     }
 }
 
-impl<T, E> LogStore<T, E> for MemoryStore<T, E>
+impl<LogId, Extensions> LogStore<LogId, Extensions> for MemoryStore<LogId, Extensions>
 where
-    T: Clone + Send + Sync + Eq + std::hash::Hash + Default + std::fmt::Debug,
-    E: Clone + Send + Sync,
+    LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
+    Extensions: Clone + Send + Sync,
 {
+    type Error = Infallible;
+
     async fn get_log(
         &self,
         public_key: &PublicKey,
-        log_id: &T,
-    ) -> Result<Vec<Operation<E>>, StoreError> {
-        let mut operations = Vec::new();
+        log_id: &LogId,
+    ) -> Result<Option<Vec<(Header<Extensions>, Option<Body>)>>, Self::Error> {
         let store = self.read_store();
-        if let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) {
-            for (_, _, hash) in log {
-                let operation = store
-                    .operations
-                    .get(hash)
-                    .expect("operation exists in hashmap");
-                operations.push(operation.clone())
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut result = Vec::new();
+                for (_, _, hash) in log {
+                    let (_, header, body, _) =
+                        store.operations.get(hash).expect("exists in hash map");
+                    result.push((header.to_owned(), body.to_owned()));
+                }
+                Ok(Some(result))
             }
-        };
-        Ok(operations)
+            None => Ok(None),
+        }
+    }
+
+    async fn get_raw_log(
+        &self,
+        public_key: &PublicKey,
+        log_id: &LogId,
+    ) -> Result<Option<Vec<RawOperation>>, Self::Error> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut result = Vec::new();
+                for (_, _, hash) in log {
+                    let (_, _, body, header_bytes) =
+                        store.operations.get(hash).expect("exists in hash map");
+                    result.push((
+                        header_bytes.clone(),
+                        body.as_ref().map(|body| body.to_bytes()),
+                    ));
+                }
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn latest_operation(
         &self,
         public_key: &PublicKey,
-        log_id: &T,
-    ) -> Result<Option<Operation<E>>, StoreError> {
+        log_id: &LogId,
+    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error> {
         let store = self.read_store();
-        let latest = match store.logs.get(&(*public_key, log_id.to_owned())) {
-            Some(log) => match log.last() {
-                Some((_, _, hash)) => {
-                    let operation = store.operations.get(hash);
-                    operation.cloned()
-                }
-                None => None,
-            },
-            None => None,
+
+        let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) else {
+            return Ok(None);
         };
-        Ok(latest)
+
+        let Some((_, _, hash)) = log.last() else {
+            return Ok(None);
+        };
+
+        let Some((_, header, body, _)) = store.operations.get(hash) else {
+            return Ok(None);
+        };
+
+        Ok(Some((header.to_owned(), body.to_owned())))
     }
 
     async fn delete_operations(
         &mut self,
         public_key: &PublicKey,
-        log_id: &T,
+        log_id: &LogId,
         before: u64,
-    ) -> Result<bool, StoreError> {
+    ) -> Result<bool, Self::Error> {
         let mut deleted = vec![];
-
         let mut store = self.write_store();
         if let Some(log) = store.logs.get_mut(&(*public_key, log_id.to_owned())) {
             log.retain(|(seq_num, _, hash)| {
@@ -200,10 +250,10 @@ where
     async fn delete_payloads(
         &mut self,
         public_key: &PublicKey,
-        log_id: &T,
+        log_id: &LogId,
         from: u64,
         to: u64,
-    ) -> Result<bool, StoreError> {
+    ) -> Result<bool, Self::Error> {
         let mut deleted = vec![];
         {
             let store = self.read_store();
@@ -221,12 +271,15 @@ where
                 .operations
                 .get_mut(hash)
                 .expect("operation exists in store");
-            operation.body = None;
+            operation.2 = None;
         }
         Ok(!deleted.is_empty())
     }
 
-    async fn get_log_heights(&self, log_id: &T) -> Result<Vec<(PublicKey, SeqNum)>, StoreError> {
+    async fn get_log_heights(
+        &self,
+        log_id: &LogId,
+    ) -> Result<Vec<(PublicKey, SeqNum)>, Self::Error> {
         let log_heights = self
             .read_store()
             .logs
@@ -249,20 +302,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_core::extensions::DefaultExtensions;
+    use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{traits::OperationStore, LogStore};
+    use crate::{LogStore, OperationStore};
 
     use super::MemoryStore;
 
-    fn generate_operation(
+    fn create_operation(
         private_key: &PrivateKey,
-        body: Body,
+        body: &Body,
         seq_num: u64,
         timestamp: u64,
         backlink: Option<Hash>,
-    ) -> Operation {
+    ) -> (Hash, Header<DefaultExtensions>, Vec<u8>) {
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
@@ -275,13 +329,9 @@ mod tests {
             previous: vec![],
             extensions: None,
         };
-        header.sign(&private_key);
-
-        Operation {
-            hash: header.hash(),
-            header,
-            body: Some(body),
-        }
+        header.sign(private_key);
+        let header_bytes = header.to_bytes();
+        (header.hash(), header, header_bytes)
     }
 
     #[tokio::test]
@@ -290,9 +340,9 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let operation = generate_operation(&private_key, body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
         let inserted = store
-            .insert_operation(&operation, &0)
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -324,15 +374,9 @@ mod tests {
         };
         header.sign(&private_key);
 
-        let operation = Operation {
-            hash: header.hash(),
-            header,
-            body: Some(body),
-        };
-
         // Insert the operation into the store, the extension type is inferred
         let inserted = store
-            .insert_operation(&operation, &0)
+            .insert_operation(header.hash(), &header, Some(&body), &header.to_bytes(), &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -344,23 +388,32 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let operation = generate_operation(&private_key, body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
-        // Insert one operation
         let inserted = store
-            .insert_operation(&operation, &0)
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
+        assert!(store.has_operation(hash).await.expect("no error"));
 
-        // Retrieve it agin
-        let retreived_operation = store
-            .get_operation(operation.hash)
+        let (header_again, body_again) = store
+            .get_operation(hash)
             .await
             .expect("no error")
-            .expect("operation exists");
+            .expect("operation exist");
 
-        assert_eq!(operation, retreived_operation);
+        assert_eq!(header.hash(), header_again.hash());
+        assert_eq!(Some(body.clone()), body_again);
+
+        let (header_bytes_again, body_bytes_again) = store
+            .get_raw_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+
+        assert_eq!(header_bytes_again, header_bytes);
+        assert_eq!(body_bytes_again, Some(body.to_bytes()));
     }
 
     #[tokio::test]
@@ -370,11 +423,11 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let operation = generate_operation(&private_key, body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
         // Insert one operation
         let inserted = store
-            .insert_operation(&operation, &0)
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -384,20 +437,18 @@ mod tests {
         assert_eq!(store.read_store().operations.len(), 1);
 
         // Delete the operation
-        assert!(store
-            .delete_operation(operation.hash)
-            .await
-            .expect("no error"));
+        assert!(store.delete_operation(hash).await.expect("no error"));
 
         // We expect no logs and no operations
         assert_eq!(store.read_store().logs.len(), 0);
         assert_eq!(store.read_store().operations.len(), 0);
 
-        // Try to get the operation
-        let deleted_operation = store.get_operation(operation.hash).await.expect("no error");
-
-        // It isn't there anymore
+        let deleted_operation = store.get_operation(hash).await.expect("no error");
         assert!(deleted_operation.is_none());
+        assert!(!store.has_operation(hash).await.expect("no error"));
+
+        let deleted_raw_operation = store.get_raw_operation(hash).await.expect("no error");
+        assert!(deleted_raw_operation.is_none());
     }
 
     #[tokio::test]
@@ -407,30 +458,30 @@ mod tests {
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
-        let operation = generate_operation(&private_key, body, 0, 0, None);
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
-        // Insert one operation
         let inserted = store
-            .insert_operation(&operation, &0)
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
 
-        // Delete the payload
-        assert!(store
-            .delete_payload(operation.hash)
-            .await
-            .expect("no error"));
+        assert!(store.delete_payload(hash).await.expect("no error"));
 
-        // Retrieve the operation again
-        let operation_no_payload = store
-            .get_operation(operation.hash)
+        let (_, no_body) = store
+            .get_operation(hash)
             .await
             .expect("no error")
-            .expect("operation exists");
+            .expect("operation exist");
+        assert!(no_body.is_none());
+        assert!(store.has_operation(hash).await.expect("no error"));
 
-        // The value of body is `None`
-        assert!(operation_no_payload.body.is_none());
+        let (_, no_body) = store
+            .get_raw_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+        assert!(no_body.is_none());
     }
 
     #[tokio::test]
@@ -439,29 +490,46 @@ mod tests {
         let private_key = PrivateKey::new();
         let log_id = 0;
 
-        let body0 = Body::new("hello!".as_bytes());
-        let body1 = Body::new("hello again!".as_bytes());
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
 
-        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
-        let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
 
         store
-            .insert_operation(&operation_0, &log_id)
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_1, &log_id)
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
             .await
             .expect("no errors");
 
         let log = store
             .get_log(&private_key.public_key(), &log_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
         assert_eq!(log.len(), 2);
-        assert_eq!(log[0], operation_0);
-        assert_eq!(log[1], operation_1);
+        assert_eq!(log[0].0.hash(), hash_0);
+        assert_eq!(log[1].0.hash(), hash_1);
+        assert_eq!(log[0].1, Some(body_0.clone()));
+        assert_eq!(log[1].1, Some(body_1.clone()));
+
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0, header_bytes_0);
+        assert_eq!(log[1].0, header_bytes_1);
+        assert_eq!(log[0].1, Some(body_0.to_bytes()));
+        assert_eq!(log[1].1, Some(body_1.to_bytes()));
     }
 
     #[tokio::test]
@@ -473,55 +541,83 @@ mod tests {
 
         let body_a0 = Body::new("hello from log a!".as_bytes());
         let body_a1 = Body::new("hello from log a again!".as_bytes());
-        let log_a_operation_0 = generate_operation(&private_key, body_a0, 0, 0, None);
-        let log_a_operation_1 =
-            generate_operation(&private_key, body_a1, 1, 1, Some(log_a_operation_0.hash));
+        let (hash_a0, header_a0, header_bytes_a0) =
+            create_operation(&private_key, &body_a0, 0, 0, None);
+        let (hash_a1, header_a1, header_bytes_a1) =
+            create_operation(&private_key, &body_a1, 1, 1, Some(hash_a0));
 
         let inserted = store
-            .insert_operation(&log_a_operation_0, &log_a_id)
+            .insert_operation(
+                hash_a0,
+                &header_a0,
+                Some(&body_a0),
+                &header_bytes_a0,
+                &log_a_id,
+            )
             .await
             .expect("no errors");
         assert!(inserted);
 
         let inserted = store
-            .insert_operation(&log_a_operation_1, &log_a_id)
+            .insert_operation(
+                hash_a1,
+                &header_a1,
+                Some(&body_a1),
+                &header_bytes_a1,
+                &log_a_id,
+            )
             .await
             .expect("no errors");
         assert!(inserted);
 
         let body_b0 = Body::new("hello from log b!".as_bytes());
         let body_b1 = Body::new("hello from log b again!".as_bytes());
-        let log_b_operation_0 = generate_operation(&private_key, body_b0, 0, 3, None);
-        let log_b_operation_1 =
-            generate_operation(&private_key, body_b1, 1, 4, Some(log_b_operation_0.hash));
+        let (hash_b0, header_b0, header_bytes_b0) =
+            create_operation(&private_key, &body_b0, 0, 3, None);
+        let (hash_b1, header_b1, header_bytes_b1) =
+            create_operation(&private_key, &body_b1, 1, 4, Some(hash_b0));
 
         store
-            .insert_operation(&log_b_operation_0, &log_b_id)
+            .insert_operation(
+                hash_b0,
+                &header_b0,
+                Some(&body_b0),
+                &header_bytes_b0,
+                &log_b_id,
+            )
             .await
             .expect("no errors");
 
         store
-            .insert_operation(&log_b_operation_1, &log_b_id)
+            .insert_operation(
+                hash_b1,
+                &header_b1,
+                Some(&body_b1),
+                &header_bytes_b1,
+                &log_b_id,
+            )
             .await
             .expect("no errors");
 
         let log_a = store
             .get_log(&private_key.public_key(), &log_a_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
         assert_eq!(log_a.len(), 2);
-        assert_eq!(log_a[0], log_a_operation_0);
-        assert_eq!(log_a[1], log_a_operation_1);
+        assert_eq!(log_a[0].0.hash(), header_a0.hash());
+        assert_eq!(log_a[1].0.hash(), header_a1.hash());
 
         let log_b = store
             .get_log(&private_key.public_key(), &log_b_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
         assert_eq!(log_b.len(), 2);
-        assert_eq!(log_b[0], log_b_operation_0);
-        assert_eq!(log_b[1], log_b_operation_1);
+        assert_eq!(log_b[0].0.hash(), header_b0.hash());
+        assert_eq!(log_b[1].0.hash(), header_b1.hash());
     }
 
     #[tokio::test]
@@ -532,16 +628,18 @@ mod tests {
         let log_id = 0;
         let body = Body::new("hello!".as_bytes());
 
-        let author_a_operation = generate_operation(&private_key_a, body.clone(), 0, 0, None);
+        let (hash_a, header_a, header_bytes_a) =
+            create_operation(&private_key_a, &body, 0, 0, None);
         let inserted = store
-            .insert_operation(&author_a_operation, &log_id)
+            .insert_operation(hash_a, &header_a, Some(&body), &header_bytes_a, &log_id)
             .await
             .expect("no errors");
         assert!(inserted);
 
-        let author_b_operation = generate_operation(&private_key_b, body, 0, 0, None);
+        let (hash_b, header_b, header_bytes_b) =
+            create_operation(&private_key_b, &body, 0, 0, None);
         let inserted = store
-            .insert_operation(&author_b_operation, &log_id)
+            .insert_operation(hash_b, &header_b, Some(&body), &header_bytes_b, &log_id)
             .await
             .expect("no errors");
         assert!(inserted);
@@ -549,18 +647,20 @@ mod tests {
         let author_a_log = store
             .get_log(&private_key_a.public_key(), &log_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
         assert_eq!(author_a_log.len(), 1);
-        assert_eq!(author_a_log[0], author_a_operation);
+        assert_eq!(author_a_log[0].0.hash(), header_a.hash());
 
         let author_b_log = store
             .get_log(&private_key_b.public_key(), &log_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
         assert_eq!(author_b_log.len(), 1);
-        assert_eq!(author_b_log[0], author_b_operation);
+        assert_eq!(author_b_log[0].0.hash(), header_b.hash());
     }
 
     #[tokio::test]
@@ -569,27 +669,31 @@ mod tests {
         let private_key = PrivateKey::new();
         let log_id = 0;
 
-        let body0 = Body::new("hello!".as_bytes());
-        let body1 = Body::new("hello again!".as_bytes());
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
 
-        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
-        let operation_1 = generate_operation(&private_key, body1, 1, 0, Some(operation_0.hash));
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
 
         store
-            .insert_operation(&operation_0, &log_id)
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_1, &log_id)
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
             .await
             .expect("no errors");
 
-        let latest_operation = store
+        let (latest_header, latest_body) = store
             .latest_operation(&private_key.public_key(), &log_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("there's an operation");
 
-        assert_eq!(latest_operation, Some(operation_1));
+        assert_eq!(latest_header.hash(), header_1.hash());
+        assert_eq!(latest_body, Some(body_1));
     }
 
     #[tokio::test]
@@ -598,24 +702,27 @@ mod tests {
         let private_key = PrivateKey::new();
         let log_id = 0;
 
-        let body0 = Body::new("hello!".as_bytes());
-        let body1 = Body::new("hello again!".as_bytes());
-        let body2 = Body::new("final hello!".as_bytes());
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("final hello!".as_bytes());
 
-        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
-        let operation_1 = generate_operation(&private_key, body1, 1, 100, Some(operation_0.hash));
-        let operation_2 = generate_operation(&private_key, body2, 2, 200, Some(operation_0.hash));
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
 
         store
-            .insert_operation(&operation_0, &log_id)
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_1, &log_id)
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_2, &log_id)
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &log_id)
             .await
             .expect("no errors");
 
@@ -638,8 +745,9 @@ mod tests {
         let log = store
             .get_log(&private_key.public_key(), &log_id)
             .await
-            .expect("no errors");
-        assert_eq!(log[0], operation_2);
+            .expect("no errors")
+            .expect("log should exist");
+        assert_eq!(log[0].0.hash(), header_2.hash());
 
         // Deleting the same range again should return `false`, meaning no deletion occurred
         let deleted = store
@@ -655,25 +763,27 @@ mod tests {
         let private_key = PrivateKey::new();
         let log_id = 0;
 
-        let body0 = Body::new("hello!".as_bytes());
-        let body1 = Body::new("hello again!".as_bytes());
-        let body2 = Body::new("final hello!".as_bytes());
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("final hello!".as_bytes());
 
-        let operation_0 = generate_operation(&private_key, body0, 0, 0, None);
-        let operation_1 = generate_operation(&private_key, body1, 1, 100, Some(operation_0.hash));
-        let operation_2 =
-            generate_operation(&private_key, body2.clone(), 2, 200, Some(operation_1.hash));
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
 
         store
-            .insert_operation(&operation_0, &log_id)
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_1, &log_id)
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
             .await
             .expect("no errors");
         store
-            .insert_operation(&operation_2, &log_id)
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &log_id)
             .await
             .expect("no errors");
 
@@ -691,10 +801,11 @@ mod tests {
         let log = store
             .get_log(&private_key.public_key(), &log_id)
             .await
-            .expect("no errors");
+            .expect("no errors")
+            .expect("log should exist");
 
-        assert_eq!(log[0].body, None);
-        assert_eq!(log[1].body, None);
-        assert_eq!(log[2].body, Some(body2));
+        assert_eq!(log[0].1, None);
+        assert_eq!(log[1].1, None);
+        assert_eq!(log[2].1, Some(body_2));
     }
 }

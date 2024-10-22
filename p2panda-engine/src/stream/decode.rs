@@ -6,12 +6,12 @@ use std::pin::Pin;
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
-use p2panda_core::{Body, Header};
+use p2panda_core::cbor::{decode_cbor, DecodeError};
+use p2panda_core::{Body, Header, RawOperation};
 use pin_project::pin_project;
 use serde::de::DeserializeOwned;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
-use crate::operation::{decode_operation, DecodeError, RawOperation};
 
 pub trait DecodeExt<E>: Stream<Item = RawOperation> {
     fn decode(self) -> Decode<Self, E>
@@ -58,13 +58,16 @@ where
     St: Stream<Item = RawOperation>,
     E: DeserializeOwned,
 {
-    type Item = Result<(Header<E>, Option<Body>), DecodeError>;
+    type Item = Result<(Header<E>, Option<Body>, Vec<u8>), DecodeError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
         let res = ready!(this.stream.as_mut().poll_next(cx));
-        Poll::Ready(res.map(|(header, body)| {
-            decode_operation(&header, body.as_ref().map(|body| body.as_ref()))
+        Poll::Ready(res.map(|(header_bytes, body_bytes)| {
+            match decode_cbor::<Header<E>>(&header_bytes) {
+                Ok(header) => Ok((header, body_bytes.map(Body::from), header_bytes)),
+                Err(err) => Err(err),
+            }
         }))
     }
 
@@ -105,7 +108,7 @@ mod tests {
     #[tokio::test]
     async fn decode() {
         let stream = mock_stream().decode();
-        let result: Vec<(Header, Option<Body>)> =
+        let result: Vec<(Header, Option<Body>, Vec<u8>)> =
             stream.take(5).try_collect().await.expect("not fail");
         assert_eq!(result.len(), 5);
     }

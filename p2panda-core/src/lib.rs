@@ -13,5 +13,6 @@ pub use extensions::Extension;
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
 pub use operation::{
-    validate_backlink, validate_header, validate_operation, Body, Header, Operation, OperationError,
+    validate_backlink, validate_header, validate_operation, Body, Header, Operation,
+    OperationError, RawOperation,
 };

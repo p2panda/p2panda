@@ -260,20 +260,16 @@ async fn remote_needs<T, E>(
 where
     E: Clone + Serialize,
 {
-    let mut log = store
-        .get_log(public_key, log_id)
+    let log = store
+        .get_raw_log(public_key, log_id)
         .await
-        .map_err(|e| SyncError::Protocol(e.to_string()))?;
+        .map_err(|err| SyncError::Custom(format!("could not retrieve log from store: {err}")))?;
 
     let messages: Vec<Message<T>> = log
+        .unwrap_or_default()
         .split_off(from as usize)
         .into_iter()
-        .map(|operation| {
-            Message::Operation(
-                operation.header.to_bytes(),
-                operation.body.map(|body| body.to_bytes()),
-            )
-        })
+        .map(|(header, payload)| Message::Operation(header, payload))
         .collect();
 
     Ok(messages)
@@ -287,7 +283,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::SinkExt;
     use p2panda_core::extensions::DefaultExtensions;
-    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use serde::Serialize;
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf};
@@ -299,34 +295,14 @@ mod tests {
 
     use super::{LogSyncProtocol, Message, TopicMap};
 
-    #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
-
-    impl LogIdTopicMap {
-        pub fn new() -> Self {
-            LogIdTopicMap(HashMap::new())
-        }
-
-        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
-            self.0.insert(topic, log_ids)
-        }
-    }
-
-    #[async_trait]
-    impl TopicMap<TopicId, String> for LogIdTopicMap {
-        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
-            self.0.get(topic).cloned()
-        }
-    }
-
-    fn generate_operation<E: Clone + Serialize>(
+    fn create_operation<E: Clone + Serialize>(
         private_key: &PrivateKey,
-        body: Body,
+        body: &Body,
         seq_num: u64,
         timestamp: u64,
         backlink: Option<Hash>,
         extensions: Option<E>,
-    ) -> Operation<E> {
+    ) -> (Hash, Header<E>, Vec<u8>) {
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
@@ -340,11 +316,27 @@ mod tests {
             extensions,
         };
         header.sign(&private_key);
+        let header_bytes = header.to_bytes();
+        (header.hash(), header, header_bytes)
+    }
 
-        Operation {
-            hash: header.hash(),
-            header,
-            body: Some(body),
+    #[derive(Clone, Debug)]
+    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
+
+    impl LogIdTopicMap {
+        pub fn new() -> Self {
+            Self(HashMap::new())
+        }
+
+        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
+            self.0.insert(topic, log_ids)
+        }
+    }
+
+    #[async_trait]
+    impl TopicMap<TopicId, String> for LogIdTopicMap {
+        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
+            self.0.get(topic).cloned()
         }
     }
 
@@ -467,35 +459,32 @@ mod tests {
     #[tokio::test]
     async fn sync_operations_accept() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
-        let log_id = String::from("messages");
 
-        // Setup store with 3 operations in it
-        let mut store = MemoryStore::<String, DefaultExtensions>::new();
+        let log_id = String::from("messages");
         let private_key = PrivateKey::new();
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
-        let operation0 = generate_operation(&private_key, body.clone(), 0, 0, None, None);
-        let operation1 = generate_operation(
-            &private_key,
-            body.clone(),
-            1,
-            100,
-            Some(operation0.hash),
-            None,
-        );
-        let operation2 = generate_operation(
-            &private_key,
-            body.clone(),
-            2,
-            200,
-            Some(operation1.hash),
-            None,
-        );
+        let mut store = MemoryStore::<String, DefaultExtensions>::new();
 
-        // Insert these operations to the store using `TOPIC_ID` as the log id
-        store.insert_operation(&operation0, &log_id).await.unwrap();
-        store.insert_operation(&operation1, &log_id).await.unwrap();
-        store.insert_operation(&operation2, &log_id).await.unwrap();
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
+            .await
+            .unwrap();
+        store
+            .insert_operation(hash_1, &header_1, Some(&body), &header_bytes_1, &log_id)
+            .await
+            .unwrap();
+        store
+            .insert_operation(hash_2, &header_2, Some(&body), &header_bytes_2, &log_id)
+            .await
+            .unwrap();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -533,18 +522,9 @@ mod tests {
 
         // Assert that peer a sent peer b the expected messages
         let messages: Vec<Message<String>> = vec![
-            Message::Operation(
-                operation0.header.to_bytes(),
-                operation0.body.map(|body| body.to_bytes()),
-            ),
-            Message::Operation(
-                operation1.header.to_bytes(),
-                operation1.body.map(|body| body.to_bytes()),
-            ),
-            Message::Operation(
-                operation2.header.to_bytes(),
-                operation2.body.map(|body| body.to_bytes()),
-            ),
+            Message::Operation(header_bytes_0, Some(body.to_bytes())),
+            Message::Operation(header_bytes_1, Some(body.to_bytes())),
+            Message::Operation(header_bytes_2, Some(body.to_bytes())),
             Message::SyncDone,
         ];
         assert_message_bytes(peer_b_read, messages).await;
@@ -558,6 +538,7 @@ mod tests {
     #[tokio::test]
     async fn sync_operations_open() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
+
         let log_id = String::from("messages");
         let store = MemoryStore::<String, DefaultExtensions>::new();
 
@@ -572,39 +553,19 @@ mod tests {
         // Create operations which will be sent to peer a
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let operation0: Operation<DefaultExtensions> =
-            generate_operation(&private_key, body.clone(), 0, 0, None, None);
-        let operation1: Operation<DefaultExtensions> = generate_operation(
-            &private_key,
-            body.clone(),
-            1,
-            100,
-            Some(operation0.hash),
-            None,
-        );
-        let operation2: Operation<DefaultExtensions> = generate_operation(
-            &private_key,
-            body.clone(),
-            2,
-            200,
-            Some(operation1.hash),
-            None,
-        );
+
+        let (hash_0, _, header_bytes_0) =
+            create_operation::<DefaultExtensions>(&private_key, &body, 0, 0, None, None);
+        let (hash_1, _, header_bytes_1) =
+            create_operation::<DefaultExtensions>(&private_key, &body, 1, 100, Some(hash_0), None);
+        let (_, _, header_bytes_2) =
+            create_operation::<DefaultExtensions>(&private_key, &body, 2, 200, Some(hash_1), None);
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String>> = vec![
-            Message::Operation(
-                operation0.header.to_bytes(),
-                operation0.body.clone().map(|body| body.to_bytes()),
-            ),
-            Message::Operation(
-                operation1.header.to_bytes(),
-                operation1.body.clone().map(|body| body.to_bytes()),
-            ),
-            Message::Operation(
-                operation2.header.to_bytes(),
-                operation2.body.clone().map(|body| body.to_bytes()),
-            ),
+            Message::Operation(header_bytes_0.clone(), Some(body.to_bytes())),
+            Message::Operation(header_bytes_1.clone(), Some(body.to_bytes())),
+            Message::Operation(header_bytes_2.clone(), Some(body.to_bytes())),
             Message::SyncDone,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
@@ -646,18 +607,9 @@ mod tests {
             messages,
             [
                 FromSync::Topic(TOPIC_ID),
-                FromSync::Data(
-                    operation0.header.to_bytes(),
-                    operation0.body.map(|body| body.to_bytes()),
-                ),
-                FromSync::Data(
-                    operation1.header.to_bytes(),
-                    operation1.body.map(|body| body.to_bytes()),
-                ),
-                FromSync::Data(
-                    operation2.header.to_bytes(),
-                    operation2.body.map(|body| body.to_bytes()),
-                ),
+                FromSync::Data(header_bytes_0, Some(body.to_bytes())),
+                FromSync::Data(header_bytes_1, Some(body.to_bytes())),
+                FromSync::Data(header_bytes_2, Some(body.to_bytes())),
             ]
         );
     }
@@ -668,47 +620,45 @@ mod tests {
         let log_id = String::from("messages");
 
         // Create an empty store for peer a
-        let store1 = MemoryStore::default();
+        let store_1 = MemoryStore::default();
 
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
-            store: store1,
+            store: store_1,
         });
 
         // Create a store for peer b and populate it with 3 operations
-        let mut store2 = MemoryStore::default();
+        let mut store_2 = MemoryStore::default();
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let operation0 = generate_operation(&private_key, body.clone(), 0, 0, None, None);
-        let operation1 = generate_operation(
-            &private_key,
-            body.clone(),
-            1,
-            100,
-            Some(operation0.hash),
-            None,
-        );
-        let operation2 = generate_operation(
-            &private_key,
-            body.clone(),
-            2,
-            200,
-            Some(operation1.hash),
-            None,
-        );
 
-        // Insert these operations to the store using `TOPIC_ID` as the log id
-        store2.insert_operation(&operation0, &log_id).await.unwrap();
-        store2.insert_operation(&operation1, &log_id).await.unwrap();
-        store2.insert_operation(&operation2, &log_id).await.unwrap();
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+
+        store_2
+            .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
+            .await
+            .unwrap();
+        store_2
+            .insert_operation(hash_1, &header_1, Some(&body), &header_bytes_1, &log_id)
+            .await
+            .unwrap();
+        store_2
+            .insert_operation(hash_2, &header_2, Some(&body), &header_bytes_2, &log_id)
+            .await
+            .unwrap();
 
         // Construct b log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogSyncProtocol {
             topic_map,
-            store: store2,
+            store: store_2,
         });
 
         // Duplex streams which simulate both ends of a bi-directional network connection
@@ -721,7 +671,7 @@ mod tests {
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
         let mut sink = PollSender::new(peer_a_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
-        let handle1 = tokio::spawn(async move {
+        let handle_1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .initiate(
                     &TOPIC_ID,
@@ -738,7 +688,7 @@ mod tests {
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
         let mut sink = PollSender::new(peer_b_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
-        let handle2 = tokio::spawn(async move {
+        let handle_2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
                     Box::new(&mut peer_b_write.compat_write()),
@@ -749,85 +699,77 @@ mod tests {
                 .unwrap();
         });
 
-        // Wait on both to complete
-        let (_, _) = tokio::join!(handle1, handle2);
+        // Wait for both to complete
+        let (_, _) = tokio::join!(handle_1, handle_2);
 
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Data(
-                operation0.header.to_bytes(),
-                operation0.body.map(|body| body.to_bytes()),
-            ),
-            FromSync::Data(
-                operation1.header.to_bytes(),
-                operation1.body.map(|body| body.to_bytes()),
-            ),
-            FromSync::Data(
-                operation2.header.to_bytes(),
-                operation2.body.map(|body| body.to_bytes()),
-            ),
+            FromSync::Data(header_bytes_0, Some(body.to_bytes())),
+            FromSync::Data(header_bytes_1, Some(body.to_bytes())),
+            FromSync::Data(header_bytes_2, Some(body.to_bytes())),
         ];
 
         let mut peer_a_messages = Vec::new();
         peer_a_app_rx.recv_many(&mut peer_a_messages, 10).await;
-
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
         let peer_b_expected_messages = vec![FromSync::Topic(TOPIC_ID.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
-
         assert_eq!(peer_b_messages, peer_b_expected_messages);
     }
 
     #[tokio::test]
     async fn e2e_partial_sync() {
         const TOPIC_ID: [u8; 32] = [0u8; 32];
+
         let log_id = String::from("messages");
         let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let operation0 = generate_operation(&private_key, body.clone(), 0, 0, None, None);
-        let operation1 = generate_operation(
-            &private_key,
-            body.clone(),
-            1,
-            100,
-            Some(operation0.hash),
-            None,
-        );
-        let operation2 = generate_operation(
-            &private_key,
-            body.clone(),
-            2,
-            200,
-            Some(operation1.hash),
-            None,
-        );
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
 
         // Create a store for peer a and populate it with one operation
-        let mut store1 = MemoryStore::default();
-        store1.insert_operation(&operation0, &log_id).await.unwrap();
+        let mut store_1 = MemoryStore::default();
+        store_1
+            .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
+            .await
+            .unwrap();
 
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let peer_a_protocol = Arc::new(LogSyncProtocol {
             topic_map: topic_map.clone(),
-            store: store1,
+            store: store_1,
         });
 
-        // Create a store for peer b and populate it with 3 operations.
-        let mut store2 = MemoryStore::default();
+        // Create a store for peer b and populate it with 3 operations
+        let mut store_2 = MemoryStore::default();
 
         // Insert these operations to the store using `TOPIC_ID` as the log id
-        store2.insert_operation(&operation0, &log_id).await.unwrap();
-        store2.insert_operation(&operation1, &log_id).await.unwrap();
-        store2.insert_operation(&operation2, &log_id).await.unwrap();
+        store_2
+            .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
+            .await
+            .unwrap();
+        store_2
+            .insert_operation(hash_1, &header_1, Some(&body), &header_bytes_1, &log_id)
+            .await
+            .unwrap();
+        store_2
+            .insert_operation(hash_2, &header_2, Some(&body), &header_bytes_2, &log_id)
+            .await
+            .unwrap();
 
         // Construct a log height protocol and engine for peer a
         let peer_b_protocol = Arc::new(LogSyncProtocol {
             topic_map,
-            store: store2,
+            store: store_2,
         });
 
         // Duplex streams which simulate both ends of a bi-directional network connection
@@ -840,7 +782,7 @@ mod tests {
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
         let mut sink = PollSender::new(peer_a_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
-        let handle1 = tokio::spawn(async move {
+        let handle_1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .initiate(
                     &TOPIC_ID,
@@ -857,7 +799,7 @@ mod tests {
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
         let mut sink = PollSender::new(peer_b_app_tx)
             .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
-        let handle2 = tokio::spawn(async move {
+        let handle_2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
                     Box::new(&mut peer_b_write.compat_write()),
@@ -868,30 +810,22 @@ mod tests {
                 .unwrap();
         });
 
-        // Wait on both to complete
-        let (_, _) = tokio::join!(handle1, handle2);
+        // Wait for both to complete
+        let (_, _) = tokio::join!(handle_1, handle_2);
 
         let peer_a_expected_messages = vec![
             FromSync::Topic(TOPIC_ID.clone()),
-            FromSync::Data(
-                operation1.header.to_bytes(),
-                operation1.body.map(|body| body.to_bytes()),
-            ),
-            FromSync::Data(
-                operation2.header.to_bytes(),
-                operation2.body.map(|body| body.to_bytes()),
-            ),
+            FromSync::Data(header_bytes_1, Some(body.to_bytes())),
+            FromSync::Data(header_bytes_2, Some(body.to_bytes())),
         ];
 
         let mut peer_a_messages = Vec::new();
         peer_a_app_rx.recv_many(&mut peer_a_messages, 10).await;
-
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
         let peer_b_expected_messages = vec![FromSync::Topic(TOPIC_ID.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
-
         assert_eq!(peer_b_messages, peer_b_expected_messages);
     }
 }
