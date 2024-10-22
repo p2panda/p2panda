@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
-use p2panda_sync::{SyncError, SyncProtocol};
+use p2panda_sync::SyncProtocol;
 use tokio::sync::mpsc;
 use tracing::{debug, debug_span};
 
@@ -42,10 +42,7 @@ impl SyncConnection {
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
         // Create a bidirectional stream on the connection.
-        let (mut send, mut recv) = connection
-            .accept_bi()
-            .await
-            .map_err(|e| SyncError::Protocol(e.to_string()))?;
+        let (mut send, mut recv) = connection.accept_bi().await?;
 
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
