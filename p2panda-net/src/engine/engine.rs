@@ -561,10 +561,16 @@ impl EngineActor {
         // And optimistically try to join them if there's an overlap with our interests
         self.join_earmarked_topics().await?;
 
-        // Inform the connection manager about the peer topics
+        // Inform the connection manager about any peer-topic combinations which are of interest to
+        // us
         if let Some(sync_manager_tx) = &self.sync_manager_tx {
-            let peer_topics = ToSyncManager::new(delivered_from, topics);
-            sync_manager_tx.send(peer_topics).await?
+            let topics_of_interest = self.topics.earmarked().await;
+            for topic in &topics {
+                if topics_of_interest.contains(topic) {
+                    let peer_topic = ToSyncManager::new(delivered_from, *topic);
+                    sync_manager_tx.send(peer_topic).await?
+                }
+            }
         }
 
         Ok(())
