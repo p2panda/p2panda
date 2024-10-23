@@ -57,9 +57,12 @@ impl SyncAttempt {
 
 #[derive(Debug, Error)]
 enum SyncAttemptError {
-    #[error("connection error")]
+    /// Error occurred while attempting to connect to a peer or while attempting to open a
+    /// bidirectional stream.
+    #[error("sync attempt failed due to connection or stream error")]
     Connection,
-    #[error("sync error")]
+    /// Error occurred while initiating a sync session.
+    #[error("sync attempt failed due to sync protocol error")]
     Sync,
 }
 
