@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
@@ -9,7 +9,7 @@ use iroh_net::{Endpoint, NodeId};
 use p2panda_sync::SyncProtocol;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::Duration;
+use tokio::time::{self, Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -20,19 +20,21 @@ use crate::sync::{self, SYNC_CONNECTION_ALPN};
 //
 // This value will be used to determine the send timeout if the sync queue is full at the time
 // an attempt is scheduled or rescheduled.
-const SYNC_QUEUE_SEND_TIMEOUT: u64 = 100;
+const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+const SYNC_ATTEMPT_SCHEDULE_INTERVAL: Duration = Duration::from_millis(500);
+const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
 pub struct ToSyncManager {
     peer: NodeId,
-    topics: Vec<TopicId>,
+    topic: TopicId,
 }
 
 impl ToSyncManager {
-    pub(crate) fn new(peer: NodeId, topics: Vec<TopicId>) -> Self {
-        Self { peer, topics }
+    pub(crate) fn new(peer: NodeId, topic: TopicId) -> Self {
+        Self { peer, topic }
     }
 }
 
@@ -64,6 +66,7 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncManager {
+    pending_sync_sessions: VecDeque<(NodeId, TopicId)>,
     active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     endpoint: Endpoint,
@@ -82,10 +85,11 @@ impl SyncManager {
         engine_actor_tx: Sender<ToEngineActor>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     ) -> (Self, Sender<ToSyncManager>) {
-        let (sync_queue_tx, sync_queue_rx) = mpsc::channel(128);
+        let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
         let sync_manager = Self {
+            pending_sync_sessions: VecDeque::new(),
             active_sync_sessions: HashMap::new(),
             completed_sync_sessions: HashMap::new(),
             endpoint,
@@ -107,7 +111,7 @@ impl SyncManager {
             self.sync_queue_tx.send(sync_attempt).await?;
         } else {
             self.sync_queue_tx
-                .send_timeout(sync_attempt, Duration::from_millis(SYNC_QUEUE_SEND_TIMEOUT))
+                .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
                 .await?;
         }
 
@@ -123,6 +127,17 @@ impl SyncManager {
         Ok(())
     }
 
+    /// Pull the next peer and topic combination from the set of pending sessions and schedule a
+    /// sync connection attempt.
+    async fn schedule_next_attempt(&mut self) -> Result<()> {
+        if let Some(peer_topic) = self.pending_sync_sessions.pop_back() {
+            let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1);
+            self.schedule_attempt(sync_attempt).await?;
+        }
+
+        Ok(())
+    }
+
     /// The sync connection event loop.
     ///
     /// Listens and responds to three kinds of events
@@ -130,6 +145,8 @@ impl SyncManager {
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A new peer and topic combination received from the engine
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
+        let mut sync_attempt_schedule_interval = time::interval(SYNC_ATTEMPT_SCHEDULE_INTERVAL);
+
         loop {
             tokio::select! {
                 biased;
@@ -143,14 +160,23 @@ impl SyncManager {
                        .connect_and_sync(sync_attempt.peer, sync_attempt.topic)
                        .await
                    {
-                       Ok(()) => self.complete_successful_sync(sync_attempt),
+                       Ok(()) => {
+                           self.complete_successful_sync(sync_attempt);
+                           self.schedule_next_attempt().await?
+                       }
                        Err(err) => self.complete_failed_sync(sync_attempt, err).await?,
                    }
                 },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
-                    if let Err(err) = self.update_peer_topics(msg.peer, msg.topics).await {
+                    if let Err(err) = self.update_peer_topics(msg.peer, msg.topic).await {
                         warn!("failed to update peer topics: {}", err)
+                    }
+                }
+                _ = sync_attempt_schedule_interval.tick() => {
+                    if let Some((peer, topic)) = self.pending_sync_sessions.pop_front() {
+                        let sync_attempt = SyncAttempt::new(peer, topic);
+                        self.schedule_attempt(sync_attempt).await?
                     }
                 }
             }
@@ -159,41 +185,46 @@ impl SyncManager {
         Ok(())
     }
 
-    /// Store a newly discovered peer and topic combination and schedule a sync connection
-    /// attempt if one is not currently underway and a successful sync session has not
-    /// already been completed.
-    async fn update_peer_topics(&mut self, peer: NodeId, topics: Vec<TopicId>) -> Result<()> {
+    fn is_active(&self, peer: &NodeId, topic: &TopicId) -> bool {
+        if let Some(peers) = self.active_sync_sessions.get(topic) {
+            peers.contains(peer)
+        } else {
+            false
+        }
+    }
+
+    fn is_complete(&self, peer: &NodeId, topic: &TopicId) -> bool {
+        if let Some(peers) = self.completed_sync_sessions.get(topic) {
+            peers.contains(peer)
+        } else {
+            false
+        }
+    }
+
+    fn is_pending(&self, peer: NodeId, topic: TopicId) -> bool {
+        self.pending_sync_sessions.contains(&(peer, topic))
+    }
+
+    /// Store a newly discovered peer and topic combination.
+    async fn update_peer_topics(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
         debug!("updating peer topics in connection manager");
 
-        // Create a list of (previously) unknown topics that we might like to sync over.
-        let mut new_topics = Vec::new();
-        let known_topics = self.known_peer_topics.get(&peer);
-        if let Some(known_topics) = known_topics {
-            for topic in topics {
-                if !known_topics.contains(&topic) {
-                    new_topics.push(topic)
-                }
-            }
+        // Insert the peer-topic combination into our set of known peers.
+        if let Some(known_topics) = self.known_peer_topics.get_mut(&peer) {
+            known_topics.insert(topic);
         } else {
-            new_topics = topics
+            let mut topics = HashSet::new();
+            topics.insert(topic);
+            self.known_peer_topics.insert(peer, topics);
         }
 
-        for topic in new_topics {
-            // Peers with whom we have active outbound sync sessions for this topic.
-            let active_peers = self.active_sync_sessions.entry(topic).or_default();
-
-            // Have we already completed a successful sync session with this peer?
-            let sync_complete = self
-                .completed_sync_sessions
-                .entry(topic)
-                .or_default()
-                .contains(&peer);
-
-            // Schedule a sync attempt.
-            if !active_peers.contains(&peer) && !sync_complete {
-                let sync_attempt = SyncAttempt::new(peer, topic);
-                self.schedule_attempt(sync_attempt).await?;
-            }
+        // Insert the peer-topic combination into the set of pending sync sessions if it is not
+        // already pending, active or complete.
+        if !self.is_active(&peer, &topic)
+            && !self.is_complete(&peer, &topic)
+            && !self.is_pending(peer, topic)
+        {
+            self.pending_sync_sessions.push_back((peer, topic))
         }
 
         Ok(())
