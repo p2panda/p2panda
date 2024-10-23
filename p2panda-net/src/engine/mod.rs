@@ -23,7 +23,8 @@ use tracing::{debug, error};
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
-use crate::sync::{SyncConnection, SyncManager};
+use crate::sync::manager::SyncManager;
+use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
@@ -44,26 +45,29 @@ impl Engine {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        // Create a sync manager if a sync protocol has been provided.
-        let sync_manager = sync_protocol.as_ref().map(|sync_protocol| {
-            SyncManager::new(
+        // Create a sync manager with channel sender if a sync protocol has been provided.
+        let (sync_manager, sync_manager_tx) = if let Some(ref sync_protocol) = sync_protocol {
+            let (sync_manager, sync_manager_tx) = SyncManager::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
-            )
-        });
+            );
+            (Some(sync_manager), Some(sync_manager_tx))
+        } else {
+            (None, None)
+        };
 
         let engine_actor = EngineActor::new(
             endpoint,
-            gossip_actor_tx,
-            sync_manager,
             engine_actor_rx,
+            gossip_actor_tx,
+            sync_manager_tx,
             network_id.into(),
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
-            if let Err(err) = engine_actor.run(gossip_actor).await {
+            if let Err(err) = engine_actor.run(gossip_actor, sync_manager).await {
                 error!("engine actor failed: {err:?}");
             }
         });
