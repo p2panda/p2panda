@@ -9,7 +9,7 @@ use iroh_net::{Endpoint, NodeId};
 use p2panda_sync::SyncProtocol;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{self, Duration};
+use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -21,7 +21,6 @@ use crate::sync::{self, SYNC_CONNECTION_ALPN};
 // This value will be used to determine the send timeout if the sync queue is full at the time
 // an attempt is scheduled or rescheduled.
 const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
-const SYNC_ATTEMPT_SCHEDULE_INTERVAL: Duration = Duration::from_millis(500);
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 
@@ -133,9 +132,15 @@ impl SyncManager {
     /// Pull the next peer and topic combination from the set of pending sessions and schedule a
     /// sync connection attempt.
     async fn schedule_next_attempt(&mut self) -> Result<()> {
-        if let Some(peer_topic) = self.pending_sync_sessions.pop_back() {
+        if let Some(peer_topic) = self.pending_sync_sessions.pop_front() {
             let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1);
-            self.schedule_attempt(sync_attempt).await?;
+
+            // Scheduling the attempt will fail if the sync queue is full.
+            // In that case, we return the peer and topic combination to the buffer of pending
+            // sync sessions.
+            if self.schedule_attempt(sync_attempt).await.is_err() {
+                self.pending_sync_sessions.push_back(peer_topic)
+            }
         }
 
         Ok(())
@@ -148,8 +153,6 @@ impl SyncManager {
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A new peer and topic combination received from the engine
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
-        let mut sync_attempt_schedule_interval = time::interval(SYNC_ATTEMPT_SCHEDULE_INTERVAL);
-
         loop {
             tokio::select! {
                 biased;
@@ -163,24 +166,17 @@ impl SyncManager {
                        .connect_and_sync(sync_attempt.peer, sync_attempt.topic)
                        .await
                    {
-                       Ok(()) => {
-                           self.complete_successful_sync(sync_attempt);
-                           self.schedule_next_attempt().await?
-                       }
+                       Ok(()) => self.complete_successful_sync(sync_attempt).await?,
                        Err(err) => self.complete_failed_sync(sync_attempt, err).await?,
                    }
                 },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
-                    if let Err(err) = self.update_peer_topics(msg.peer, msg.topic).await {
-                        warn!("failed to update peer topics: {}", err)
-                    }
-                }
-                _ = sync_attempt_schedule_interval.tick() => {
-                    if let Some((peer, topic)) = self.pending_sync_sessions.pop_front() {
-                        let sync_attempt = SyncAttempt::new(peer, topic);
-                        self.schedule_attempt(sync_attempt).await?
-                    }
+                    let peer = msg.peer;
+                    let topic = msg.topic;
+
+                    self.update_peer_topics(peer, topic).await;
+                    self.schedule_next_attempt().await?
                 }
             }
         }
@@ -188,6 +184,7 @@ impl SyncManager {
         Ok(())
     }
 
+    /// Do we have an active sync session underway for the given peer topic combination?
     fn is_active(&self, peer: &NodeId, topic: &TopicId) -> bool {
         if let Some(peers) = self.active_sync_sessions.get(topic) {
             peers.contains(peer)
@@ -196,6 +193,7 @@ impl SyncManager {
         }
     }
 
+    /// Do we have a complete sync session for the given peer topic combination?
     fn is_complete(&self, peer: &NodeId, topic: &TopicId) -> bool {
         if let Some(peers) = self.completed_sync_sessions.get(topic) {
             peers.contains(peer)
@@ -204,12 +202,13 @@ impl SyncManager {
         }
     }
 
+    /// Do we have a pending sync session for the given peer topic combination?
     fn is_pending(&self, peer: NodeId, topic: TopicId) -> bool {
         self.pending_sync_sessions.contains(&(peer, topic))
     }
 
     /// Store a newly discovered peer and topic combination.
-    async fn update_peer_topics(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+    async fn update_peer_topics(&mut self, peer: NodeId, topic: TopicId) {
         debug!("updating peer topics in connection manager");
 
         // Insert the peer-topic combination into our set of known peers.
@@ -221,16 +220,13 @@ impl SyncManager {
             self.known_peer_topics.insert(peer, topics);
         }
 
-        // Insert the peer-topic combination into the set of pending sync sessions if it is not
-        // already pending, active or complete.
+        // Conditionally insert the peer-topic combination into the set of pending sync sessions.
         if !self.is_active(&peer, &topic)
             && !self.is_complete(&peer, &topic)
             && !self.is_pending(peer, topic)
         {
             self.pending_sync_sessions.push_back((peer, topic))
         }
-
-        Ok(())
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
@@ -273,33 +269,30 @@ impl SyncManager {
     }
 
     /// Remove the given topic from the set of active sync sessions for the given peer. Reschedule
-    /// a sync attempt if the failure was caused by a connection error. Drop the attempt if the
-    /// failure occurred due to a sync protocol error.
+    /// a sync attempt if the failure was caused by a connection error. Otherwise, drop the attempt
+    /// and schedule the next pending attempt.
     async fn complete_failed_sync(&mut self, sync_attempt: SyncAttempt, err: Error) -> Result<()> {
         self.active_sync_sessions
             .get_mut(&sync_attempt.topic)
             .expect("active outbound sync session exists")
             .remove(&sync_attempt.peer);
 
-        match err.downcast_ref() {
-            Some(SyncAttemptError::Connection) => {
-                warn!("sync attempt failed due to connection error");
-                if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
-                    self.reschedule_attempt(sync_attempt).await?;
-                }
+        if let Some(SyncAttemptError::Connection) = err.downcast_ref() {
+            warn!("sync attempt failed due to connection error");
+            if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
+                self.reschedule_attempt(sync_attempt).await?;
+                return Ok(());
             }
-            Some(SyncAttemptError::Sync) => {
-                error!("sync attempt failed due to protocol error");
-            }
-            _ => (),
         }
+
+        self.schedule_next_attempt().await?;
 
         Ok(())
     }
 
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
-    /// to the set of completed sync sessions.
-    fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt) {
+    /// to the set of completed sync sessions. Then schedule the next pending attempt.
+    async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt) -> Result<()> {
         self.active_sync_sessions
             .get_mut(&sync_attempt.topic)
             .expect("active outbound sync session exists")
@@ -309,5 +302,9 @@ impl SyncManager {
             .entry(sync_attempt.topic)
             .or_default()
             .insert(sync_attempt.peer);
+
+        self.schedule_next_attempt().await?;
+
+        Ok(())
     }
 }
