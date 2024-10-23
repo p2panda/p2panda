@@ -9,12 +9,18 @@ use iroh_net::{Endpoint, NodeId};
 use p2panda_sync::SyncProtocol;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
 
+// A duration in milliseconds.
+//
+// This value will be used to determine the send timeout if the sync queue is full at the time
+// an attempt is scheduled or rescheduled.
+const SYNC_QUEUE_SEND_TIMEOUT: u64 = 100;
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
@@ -64,7 +70,6 @@ pub(crate) struct SyncManager {
     engine_actor_tx: Sender<ToEngineActor>,
     inbox: Receiver<ToSyncManager>,
     known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
-    max_retry_attempts: u8,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
     sync_queue_rx: Receiver<SyncAttempt>,
@@ -87,7 +92,6 @@ impl SyncManager {
             engine_actor_tx,
             inbox: sync_manager_rx,
             known_peer_topics: HashMap::new(),
-            max_retry_attempts: MAX_RETRY_ATTEMPTS,
             sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
@@ -97,9 +101,15 @@ impl SyncManager {
     }
 
     /// Add a peer and topic combination to the sync connection queue.
-    async fn schedule_attempt(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
-        let sync_attempt = SyncAttempt::new(peer, topic);
-        self.sync_queue_tx.send(sync_attempt).await?;
+    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt) -> Result<()> {
+        // Only send if the queue is not full; this prevents the possibility of blocking on send.
+        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
+            self.sync_queue_tx.send(sync_attempt).await?;
+        } else {
+            self.sync_queue_tx
+                .send_timeout(sync_attempt, Duration::from_millis(SYNC_QUEUE_SEND_TIMEOUT))
+                .await?;
+        }
 
         Ok(())
     }
@@ -108,7 +118,7 @@ impl SyncManager {
     /// previous attempts.
     async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt) -> Result<()> {
         sync_attempt.attempts += 1;
-        self.sync_queue_tx.send(sync_attempt).await?;
+        self.schedule_attempt(sync_attempt).await?;
 
         Ok(())
     }
@@ -139,7 +149,9 @@ impl SyncManager {
                 },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
-                    self.update_peer_topics(msg.peer, msg.topics).await?
+                    if let Err(err) = self.update_peer_topics(msg.peer, msg.topics).await {
+                        warn!("failed to update peer topics: {}", err)
+                    }
                 }
             }
         }
@@ -179,7 +191,8 @@ impl SyncManager {
 
             // Schedule a sync attempt.
             if !active_peers.contains(&peer) && !sync_complete {
-                self.schedule_attempt(peer, topic).await?;
+                let sync_attempt = SyncAttempt::new(peer, topic);
+                self.schedule_attempt(sync_attempt).await?;
             }
         }
 
@@ -237,7 +250,7 @@ impl SyncManager {
         match err.downcast_ref() {
             Some(SyncAttemptError::Connection) => {
                 warn!("sync attempt failed due to connection error");
-                if sync_attempt.attempts <= self.max_retry_attempts {
+                if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
                     self.reschedule_attempt(sync_attempt).await?;
                 }
             }
