@@ -166,12 +166,13 @@ impl EngineActor {
         mut gossip_actor: GossipActor,
         sync_manager: Option<SyncManager>,
     ) -> Result<()> {
-        let sync_manager_token = CancellationToken::new();
-        let cloned_sync_manager_token = sync_manager_token.clone();
+        // Used to shutdown the sync manager.
+        let shutdown_token = CancellationToken::new();
+        let cloned_shutdown_token = shutdown_token.clone();
 
         if let Some(sync_manager) = sync_manager {
             tokio::task::spawn(async move {
-                if let Err(err) = sync_manager.run(cloned_sync_manager_token).await {
+                if let Err(err) = sync_manager.run(cloned_shutdown_token).await {
                     error!("sync manager failed to run: {err:?}");
                 }
             });
@@ -190,7 +191,7 @@ impl EngineActor {
             error!(?err, "error during shutdown");
         }
 
-        sync_manager_token.cancel();
+        shutdown_token.cancel();
         gossip_handle.await?;
         drop(self);
 
