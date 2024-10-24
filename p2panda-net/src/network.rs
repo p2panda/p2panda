@@ -98,7 +98,8 @@ impl NetworkBuilder {
         network_builder
     }
 
-    /// Sets or overwrites the the local bind port.
+    /// Sets or overwrites the local bind port for IPv4 and IPv6 sockets.
+    /// Note that IPv6 sockets are bound to the specified port + 1.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
         self
@@ -116,9 +117,9 @@ impl NetworkBuilder {
     /// Sets the relay used by the local network to facilitate the establishment of direct
     /// connections.
     ///
-    /// Relay nodes are STUN servers to help establishing a peer-to-peer connection if either or
-    /// both of the peers are behind a NAT. If this connection attempt fails, the relay node might
-    /// offer a proxy functionality on top, which will help to relay the data in that case.
+    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if either
+    /// or both of the peers are behind a NAT. THe relay node might offer proxy functionality if
+    /// the connection attempt fails, which will serve to relay the data in that case.
     pub fn relay(mut self, url: RelayUrl, stun_only: bool, stun_port: u16) -> Self {
         self.relay_mode = RelayMode::Custom(RelayNode {
             url: url.into(),
@@ -130,9 +131,9 @@ impl NetworkBuilder {
 
     /// Sets the direct address of a peer, identified by their public key (node id).
     ///
-    /// If given a direct address, it should be reachable without the aid of a STUN / relay node.
-    /// If the direct connection attempt fails (for example because of a NAT or Firewall) the relay
-    /// node of that peer needs to be given, so we can re-attempt establishing a connection with it.
+    /// The direct address should be reachable without the aid of a STUN / relay node. However, if
+    /// the direct connection attempt might fail (for example, because of a NAT or Firewall), the
+    /// relay node of that peer can be supplied to allow a connection re-attempt.
     ///
     /// If no relay address is given but turns out to be required, we optimistically try to use our
     /// own relay node instead (if specified). This might still fail, as we can't know if the peer
@@ -159,6 +160,9 @@ impl NetworkBuilder {
     }
 
     /// Sets the sync protocol for this network.
+    ///
+    /// If a sync protocol is provided, a sync session will be completed before entering gossip
+    /// mode with any known peers with whom we share topics of interest.
     pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a> + 'static) -> Self {
         self.sync_protocol = Some(Arc::new(protocol));
         self
@@ -173,7 +177,7 @@ impl NetworkBuilder {
         self
     }
 
-    /// Adds protocols for network communication.
+    /// Adds protocols for network communication, such as gossip and sync.
     pub fn protocol(
         mut self,
         protocol_name: &'static [u8],
@@ -186,8 +190,9 @@ impl NetworkBuilder {
     /// Returns a handle to a newly-spawned instance of `Network`.
     ///
     /// A peer-to-peer endpoint is created and bound to a QUIC socket, after which the gossip,
-    /// engine and handshake handlers are instantiated. Direct addresses for network peers are
-    /// added to the engine from the address book and core protocols are registered.
+    /// engine and handshake handlers are instantiated. A sync handler is also instantiated if a
+    /// sync protolc is provided. Direct addresses for network peers are added to the engine from
+    /// the address book and core protocols are registered.
     ///
     /// After configuration and registration processes are complete, the network is spawned and an
     /// attempt is made to retrieve a direct address for a network peer so that a connection
@@ -559,8 +564,9 @@ impl Network {
     /// written to, along with a oneshot receiver to be informed when the gossip overlay has been
     /// joined.
     ///
-    /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
-    /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
+    /// Peers subscribed to a topic can be discovered by others via the gossip overlay ("neighbor
+    /// up event"). They'll sync data initially, if a sync protocol has been provided, and then
+    /// start "live-mode" via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
