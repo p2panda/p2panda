@@ -128,9 +128,6 @@ pub struct EngineActor {
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     sync_manager_tx: Option<mpsc::Sender<ToSyncManager>>,
     inbox: mpsc::Receiver<ToEngineActor>,
-    // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
-    // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
-    // network-wide gossip overlay).
     network_id: TopicId,
     network_joined: bool,
     network_joined_pending: bool,
@@ -233,7 +230,7 @@ impl EngineActor {
                 _ = join_topics_interval.tick() => {
                     self.join_earmarked_topics().await?;
                 },
-                // Frequently announce the topics we're interested in in the network-wide gossip
+                // Frequently announce the topics we're interested in to the network-wide gossip
                 _ = announce_topics_interval.tick(), if self.network_joined => {
                     self.announce_topics().await?;
                 },
@@ -345,9 +342,10 @@ impl EngineActor {
         Ok(())
     }
 
-    // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
-    // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
+    ///
+    /// The topic may represent the network-wide topic (used for discovering peers and the topics
+    /// they're interested in) or it may refer directly to a particular topic of interest.
     async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
         if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;

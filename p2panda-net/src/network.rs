@@ -98,7 +98,8 @@ impl NetworkBuilder {
         network_builder
     }
 
-    /// Sets or overwrites the the local bind port.
+    /// Sets or overwrites the local bind port for IPv4 and IPv6 sockets.
+    /// Note that IPv6 sockets are bound to the specified port + 1.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
         self
@@ -116,9 +117,9 @@ impl NetworkBuilder {
     /// Sets the relay used by the local network to facilitate the establishment of direct
     /// connections.
     ///
-    /// Relay nodes are STUN servers to help establishing a peer-to-peer connection if either or
-    /// both of the peers are behind a NAT. If this connection attempt fails, the relay node might
-    /// offer a proxy functionality on top, which will help to relay the data in that case.
+    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if either
+    /// or both of the peers are behind a NAT. THe relay node might offer proxy functionality if
+    /// the connection attempt fails, which will serve to relay the data in that case.
     pub fn relay(mut self, url: RelayUrl, stun_only: bool, stun_port: u16) -> Self {
         self.relay_mode = RelayMode::Custom(RelayNode {
             url: url.into(),
@@ -130,9 +131,9 @@ impl NetworkBuilder {
 
     /// Sets the direct address of a peer, identified by their public key (node id).
     ///
-    /// If given a direct address, it should be reachable without the aid of a STUN / relay node.
-    /// If the direct connection attempt fails (for example because of a NAT or Firewall) the relay
-    /// node of that peer needs to be given, so we can re-attempt establishing a connection with it.
+    /// The direct address should be reachable without the aid of a STUN / relay node. However, if
+    /// the direct connection attempt might fail (for example, because of a NAT or Firewall), the
+    /// relay node of that peer can be supplied to allow a connection re-attempt.
     ///
     /// If no relay address is given but turns out to be required, we optimistically try to use our
     /// own relay node instead (if specified). This might still fail, as we can't know if the peer
@@ -159,6 +160,9 @@ impl NetworkBuilder {
     }
 
     /// Sets the sync protocol for this network.
+    ///
+    /// If a sync protocol is provided, a sync session will be completed before entering gossip
+    /// mode with any known peers with whom we share topics of interest.
     pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a> + 'static) -> Self {
         self.sync_protocol = Some(Arc::new(protocol));
         self
@@ -173,7 +177,7 @@ impl NetworkBuilder {
         self
     }
 
-    /// Adds protocols for network communication.
+    /// Adds protocols for network communication, such as gossip and sync.
     pub fn protocol(
         mut self,
         protocol_name: &'static [u8],
@@ -186,8 +190,9 @@ impl NetworkBuilder {
     /// Returns a handle to a newly-spawned instance of `Network`.
     ///
     /// A peer-to-peer endpoint is created and bound to a QUIC socket, after which the gossip,
-    /// engine and handshake handlers are instantiated. Direct addresses for network peers are
-    /// added to the engine from the address book and core protocols are registered.
+    /// engine and handshake handlers are instantiated. A sync handler is also instantiated if a
+    /// sync protolc is provided. Direct addresses for network peers are added to the engine from
+    /// the address book and core protocols are registered.
     ///
     /// After configuration and registration processes are complete, the network is spawned and an
     /// attempt is made to retrieve a direct address for a network peer so that a connection
@@ -339,15 +344,15 @@ struct NetworkInner {
     secret_key: SecretKey,
 }
 
-/// Spawns a network.
-///
-/// Local network sockets are bound and a task is started to listen for direct addresses changes
-/// for the local endpoint. Inbound connection attempts to these endpoints are passed to a handler.
-///
-/// Any registered discovery services are subscribed to so that the identifiers and addresses of
-/// peers operating on the same network may be learned. Discovered peers are added to the local
-/// address book so they may be involved in connection and gossip activites.
 impl NetworkInner {
+    /// Spawns a network.
+    ///
+    /// Local network sockets are bound and a task is started to listen for direct addresses changes
+    /// for the local endpoint. Inbound connection attempts to these endpoints are passed to a handler.
+    ///
+    /// Any registered discovery services are subscribed to so that the identifiers and addresses of
+    /// peers operating on the same network may be learned. Discovered peers are added to the local
+    /// address book so they may be involved in connection and gossip activites.
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
         debug!(
@@ -482,8 +487,18 @@ impl NetworkInner {
     }
 }
 
-/// Controls a p2panda-net node, including handling of connections, discovery and gossip.
-// @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
+/// An API for interacting with the p2panda networking stack; returned by `NetworkBuilder::build()`.
+///
+/// The primary feature of the `Network` is the ability to subscribe to one or more topics and
+/// exchange messages over those topics with remote peers. Replication can be conducted exclusively
+/// in "live-mode" or may include the synchronisation of past state, thereby ensuring eventual
+/// consistency among all peers for a given topic. Replication and discovery strategies are defined
+/// in the `NetworkBuilder`.
+///
+/// In addition to topic subscription, `Network` offers a way to access information about the local
+/// network such as the node ID and direct addresses. It also provides a convenient means to add the
+/// address of a remote peer and to query the addresses of all known peers.
+///
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Network {
@@ -498,10 +513,9 @@ pub struct Network {
 }
 
 impl Network {
-    /// Returns the public key of the local network.
-    pub fn node_id(&self) -> PublicKey {
-        PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
-            .expect("public key already checked")
+    /// Adds a peer to the local network address book.
+    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
+        self.inner.engine.add_peer(node_addr).await
     }
 
     /// Returns the direct addresses of the local network.
@@ -514,12 +528,45 @@ impl Network {
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
     }
 
+    /// Returns a handle to the network endpoint.
+    ///
+    /// The `Endpoint` exposes low-level networking functionality such as the ability to connect to
+    /// specific peers, accept connections, query local socket addresses and more. This level of
+    /// control is unlikely to be required in most cases but has been exposed for the convenience
+    /// of advanced users.
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.inner.endpoint
+    }
+
+    /// Returns the addresses of all known peers.
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+        self.inner.engine.known_peers().await
+    }
+
+    /// Returns the public key of the local network.
+    pub fn node_id(&self) -> PublicKey {
+        PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
+            .expect("public key already checked")
+    }
+
+    /// Terminates the main network task and shuts down the network.
+    pub async fn shutdown(self) -> Result<()> {
+        // Trigger shutdown of the main run task by activating the cancel token
+        self.inner.cancel_token.cancel();
+
+        // Wait for the main task to terminate
+        self.task.await.map_err(|err| anyhow!(err))?;
+
+        Ok(())
+    }
+
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and
     /// written to, along with a oneshot receiver to be informed when the gossip overlay has been
     /// joined.
     ///
-    /// Peers subscribed to a topic can be discovered by others via the gossiping overlay ("neighbor
-    /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
+    /// Peers subscribed to a topic can be discovered by others via the gossip overlay ("neighbor
+    /// up event"). They'll sync data initially, if a sync protocol has been provided, and then
+    /// start "live-mode" via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: TopicId,
@@ -538,32 +585,6 @@ impl Network {
             .await?;
 
         Ok((to_network_tx, from_network_rx, gossip_ready_rx))
-    }
-
-    /// Returns a handle to the network endpoint.
-    pub fn endpoint(&self) -> &Endpoint {
-        &self.inner.endpoint
-    }
-
-    /// Adds a peer to the local network address book.
-    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
-        self.inner.engine.add_peer(node_addr).await
-    }
-
-    /// Returns the addresses of all known peers.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
-        self.inner.engine.known_peers().await
-    }
-
-    /// Terminates the main network task and shuts down the network.
-    pub async fn shutdown(self) -> Result<()> {
-        // Trigger shutdown of the main run task by activating the cancel token
-        self.inner.cancel_token.cancel();
-
-        // Wait for the main task to terminate
-        self.task.await.map_err(|err| anyhow!(err))?;
-
-        Ok(())
     }
 }
 
