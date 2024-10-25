@@ -126,7 +126,7 @@ impl GossipBuffer {
 pub struct EngineActor<T> {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    sync_manager_tx: Option<mpsc::Sender<ToSyncManager>>,
+    sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
@@ -147,7 +147,7 @@ where
         endpoint: Endpoint,
         inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-        sync_manager_tx: Option<mpsc::Sender<ToSyncManager>>,
+        sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
         network_id: TopicId,
     ) -> Self {
         Self {
@@ -572,9 +572,14 @@ where
         // us
         if let Some(sync_manager_tx) = &self.sync_manager_tx {
             let topics_of_interest = self.topics.earmarked().await;
-            for topic in &topics {
-                if topics_of_interest.contains(topic) {
-                    let peer_topic = ToSyncManager::new(delivered_from, *topic);
+            for topic_id in &topics {
+                if topics_of_interest.contains(topic_id) {
+                    let topic = self
+                        .topics
+                        .get(topic_id)
+                        .await
+                        .expect("expected topic to be present in topic map");
+                    let peer_topic = ToSyncManager::new(delivered_from, topic);
                     sync_manager_tx.send(peer_topic).await?
                 }
             }
@@ -636,6 +641,14 @@ where
                 joined: HashSet::new(),
             })),
         }
+    }
+
+    pub async fn get(&self, topic_id: &TopicId) -> Option<T> {
+        let inner = self.inner.read().await;
+        inner
+            .earmarked
+            .get(topic_id)
+            .map(|(topic, _, _)| topic.clone())
     }
 
     /// Mark a topic of interest to our node.

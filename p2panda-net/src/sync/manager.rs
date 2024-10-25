@@ -27,13 +27,13 @@ const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncManager {
+pub struct ToSyncManager<T> {
     peer: NodeId,
-    topic: TopicId,
+    topic: T,
 }
 
-impl ToSyncManager {
-    pub(crate) fn new(peer: NodeId, topic: TopicId) -> Self {
+impl<T> ToSyncManager<T> {
+    pub(crate) fn new(peer: NodeId, topic: T) -> Self {
         Self { peer, topic }
     }
 }
@@ -74,7 +74,7 @@ pub(crate) struct SyncManager<T> {
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
-    inbox: Receiver<ToSyncManager>,
+    inbox: Receiver<ToSyncManager<T>>,
     known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
@@ -91,7 +91,7 @@ where
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
-    ) -> (Self, Sender<ToSyncManager>) {
+    ) -> (Self, Sender<ToSyncManager<T>>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
@@ -180,8 +180,12 @@ where
                     let msg = msg.context("sync manager inbox closed")?;
                     let peer = msg.peer;
                     let topic = msg.topic;
+                    let topic_id = topic.id().into();
 
-                    self.update_peer_topics(peer, topic).await;
+                    // Keep track of all concrete topics we will be running sync sessions
+                    // over.
+                    self.topic_map.insert(topic_id, topic.clone());
+                    self.update_peer_topics(peer, topic_id).await;
                     self.schedule_next_attempt().await?
                 }
             }
@@ -257,6 +261,8 @@ where
         let topic = self
             .topic_map
             .get(&topic)
+            // @TODO: I'm not sure if this case can ever occur, if it can, it would be best to
+            // have a concrete sync error type like: `TopicNotKnown` or similar...
             .expect("all topics have been added to the topic map");
 
         // Run a sync session as the initiator.

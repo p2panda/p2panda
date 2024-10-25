@@ -1014,18 +1014,19 @@ mod tests {
         setup_logging();
 
         const NETWORK_ID: [u8; 32] = [1; 32];
-        let topic = String::from("event_logs");
-        let log_id = 0;
 
         let peer_a_private_key = PrivateKey::new();
-        let peer_a_logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
-
         let peer_b_private_key = PrivateKey::new();
+
+        let topic = String::from("event_logs");
+        let log_id = 0;
+        let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
+
+        let mut topic_map = LogIdTopicMap::new();
+        topic_map.insert(topic.clone(), logs);
 
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
-        let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(topic.clone(), peer_a_logs);
         let protocol_a = LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store_a,
