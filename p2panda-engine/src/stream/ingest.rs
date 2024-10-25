@@ -235,10 +235,9 @@ mod tests {
     use p2panda_core::{Operation, RawOperation};
     use p2panda_store::MemoryStore;
 
-    use crate::extensions::StreamName;
     use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
-    use crate::test_utils::{mock_stream, Extensions};
+    use crate::test_utils::{mock_stream, Extensions, StreamName};
 
     use super::IngestExt;
 
