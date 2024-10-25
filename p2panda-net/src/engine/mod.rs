@@ -27,6 +27,8 @@ use crate::sync::manager::SyncManager;
 use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
 
+/// The `Engine` is responsible for instantiating various system actors (including engine,
+/// gossip and sync connection actors) and exposes an API for interacting with the engine actor.
 #[derive(Debug)]
 pub struct Engine {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
@@ -83,12 +85,7 @@ impl Engine {
         }
     }
 
-    pub fn sync_handler(&self) -> Option<SyncConnection> {
-        self.sync_protocol.as_ref().map(|sync_protocol| {
-            SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
-        })
-    }
-
+    /// Adds the given peer address to the engine actor.
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })
@@ -96,6 +93,7 @@ impl Engine {
         Ok(())
     }
 
+    /// Retrieves the node addresses of all peers the engine actor currently knows about.
     pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
         let (reply, reply_rx) = oneshot::channel();
         self.engine_actor_tx
@@ -104,6 +102,18 @@ impl Engine {
         reply_rx.await?
     }
 
+    /// Sends a shutdown signal to the engine actor and waits for a confirmation reply.
+    pub async fn shutdown(&self) -> Result<()> {
+        let (reply, reply_rx) = oneshot::channel();
+        self.engine_actor_tx
+            .send(ToEngineActor::Shutdown { reply })
+            .await?;
+        reply_rx.await?;
+        debug!("engine shutdown");
+        Ok(())
+    }
+
+    /// Subscribes to the given topic and provides a channel for network message passing.
     pub async fn subscribe(
         &self,
         topic: TopicId,
@@ -122,13 +132,12 @@ impl Engine {
         Ok(())
     }
 
-    pub async fn shutdown(&self) -> Result<()> {
-        let (reply, reply_rx) = oneshot::channel();
-        self.engine_actor_tx
-            .send(ToEngineActor::Shutdown { reply })
-            .await?;
-        reply_rx.await?;
-        debug!("engine shutdown");
-        Ok(())
+    // @TODO: This method feels like the odd-one-out in this module.
+    // Could we move it somewhere else?
+    /// Returns a sync connection protocol handler for inbound connections.
+    pub fn sync_handler(&self) -> Option<SyncConnection> {
+        self.sync_protocol.as_ref().map(|sync_protocol| {
+            SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
+        })
     }
 }
