@@ -98,7 +98,7 @@ impl NetworkBuilder {
         network_builder
     }
 
-    /// Sets or overwrites the local bind port for IPv4 and IPv6 sockets.
+    /// Sets or overwrites the local bind port for IPv4 sockets.
     /// Note that IPv6 sockets are bound to the specified port + 1.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
@@ -117,8 +117,8 @@ impl NetworkBuilder {
     /// Sets the relay used by the local network to facilitate the establishment of direct
     /// connections.
     ///
-    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if either
-    /// or both of the peers are behind a NAT. THe relay node might offer proxy functionality if
+    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if one
+    /// or both of the peers are behind a NAT. The relay node might offer proxy functionality if
     /// the connection attempt fails, which will serve to relay the data in that case.
     pub fn relay(mut self, url: RelayUrl, stun_only: bool, stun_port: u16) -> Self {
         self.relay_mode = RelayMode::Custom(RelayNode {
@@ -487,7 +487,7 @@ impl NetworkInner {
     }
 }
 
-/// An API for interacting with the p2panda networking stack; returned by `NetworkBuilder::build()`.
+/// An API for interacting with the p2panda networking stack.
 ///
 /// The primary feature of the `Network` is the ability to subscribe to one or more topics and
 /// exchange messages over those topics with remote peers. Replication can be conducted exclusively
@@ -498,7 +498,6 @@ impl NetworkInner {
 /// In addition to topic subscription, `Network` offers a way to access information about the local
 /// network such as the node ID and direct addresses. It also provides a convenient means to add the
 /// address of a remote peer and to query the addresses of all known peers.
-///
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Network {
