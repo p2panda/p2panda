@@ -66,9 +66,7 @@ where
                         // @TODO
                         panic!("{}", err);
                     }
-                    err => Err(SyncError::RemoteUnexpectedBehaviour(format!(
-                        "CBOR codec failed decoding message from remote peer, {err}"
-                    ))),
+                    err => Err(SyncError::InvalidEncoding(err.to_string())),
                 }
             }
         }

@@ -45,19 +45,20 @@ pub enum SyncError {
     /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
     ///
     /// Indicates that the sync protocol was not correctly followed, for example due to unexpected
-    /// or missing messages, invalid encoding, etc.
+    /// or missing messages, etc.
     ///
     /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
     /// potentially deny-listing if communication failed too often.
     #[error("sync session failed due to unexpected protocol behaviour of remote peer: {0}")]
-    RemoteUnexpectedBehaviour(String),
+    UnexpectedBehaviour(String),
 
-    /// Remote peer didn't show any activity for some time.
+    /// Error due to invalid encoding of a message sent by remote peer.
     ///
-    /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
-    /// potentially deny-listing if communication failed too often.
-    #[error("sync session failed due to remote peer timeout")]
-    RemoteTimeout,
+    /// Note that this error is intended for receiving messages from _remote_ peers which we can't
+    /// decode properly. If we fail with encoding our _own_ messages we should rather consider this
+    /// an `Critical` error type, as it likely means that there's a buggy implementation.
+    #[error("sync session failed due to invalid encoding of message sent by remote peer: {0}")]
+    InvalidEncoding(String),
 
     /// Critical error due to system failure on our end.
     ///
