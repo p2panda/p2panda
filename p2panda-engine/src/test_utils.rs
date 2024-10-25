@@ -18,7 +18,14 @@ impl StreamName {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extensions {
+    #[serde(rename = "s")]
     pub stream_name: StreamName,
+
+    #[serde(
+        rename = "p",
+        skip_serializing_if = "PruneFlag::is_set",
+        default = "PruneFlag::default"
+    )]
     pub prune_flag: PruneFlag,
 }
 
