@@ -4,9 +4,6 @@
 pub mod cbor;
 #[cfg(feature = "log-sync")]
 pub mod log_sync;
-#[cfg(feature = "log-sync")]
-// TODO: move into log_sync.rs
-pub mod log_sync_new;
 
 use std::fmt::Debug;
 use std::sync::Arc;
