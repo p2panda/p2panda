@@ -52,19 +52,19 @@ pub enum RelayMode {
 /// All peers can subscribe to multiple topics in this overlay and hook into a data stream per
 /// topic where they'll send and receive data.
 #[derive(Debug)]
-pub struct NetworkBuilder {
+pub struct NetworkBuilder<T> {
     bind_port: Option<u16>,
     direct_node_addresses: Vec<NodeAddr>,
     discovery: DiscoveryMap,
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
 }
 
-impl NetworkBuilder {
+impl<T> NetworkBuilder<T> {
     /// Returns a new instance of `NetworkBuilder` using the given network identifier.
     ///
     /// The identifier is used during handshake and discovery protocols. Networks must use the
@@ -160,7 +160,7 @@ impl NetworkBuilder {
     }
 
     /// Sets the sync protocol for this network.
-    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a> + 'static) -> Self {
+    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a, T> + 'static) -> Self {
         self.sync_protocol = Some(Arc::new(protocol));
         self
     }
@@ -194,7 +194,7 @@ impl NetworkBuilder {
     /// attempt is made to retrieve a direct address for a network peer so that a connection
     /// attempt may be made. If no address is retrieved within the timeout limit, the network is
     /// shut down and an error is returned.
-    pub async fn build<T>(mut self) -> Result<Network<T>>
+    pub async fn build(mut self) -> Result<Network<T>>
     where
         T: Topic + 'static,
     {
@@ -634,39 +634,38 @@ mod sync_protocols {
     use serde::{Deserialize, Serialize};
     use tracing::debug;
 
-    use crate::TopicId;
-
     #[derive(Debug, Serialize, Deserialize)]
     enum DummyProtocolMessage {
-        Topic(TopicId),
+        Topic(String),
         Done,
     }
 
-    /// A sync implementation which fulfills basic protocol requirements but nothing more  
+    /// A sync implementation which fulfills basic protocol requirements but nothing more
     #[derive(Debug)]
     pub struct DummyProtocol {}
 
     #[async_trait]
-    impl<'a> SyncProtocol<'a> for DummyProtocol {
+    impl<'a> SyncProtocol<'a, String> for DummyProtocol {
         fn name(&self) -> &'static str {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
         }
         async fn initiate(
             self: Arc<Self>,
-            topic: &TopicId,
+            topic: String,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync<String>, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: initiate sync session");
 
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(DummyProtocolMessage::Topic(*topic)).await?;
+            sink.send(DummyProtocolMessage::Topic(topic.clone()))
+                .await?;
             sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(FromSync::Topic(*topic)).await?;
+            app_tx.send(FromSync::Topic(topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -688,7 +687,7 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync<String>, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
@@ -701,7 +700,7 @@ mod sync_protocols {
 
                 match &message {
                     DummyProtocolMessage::Topic(topic) => {
-                        app_tx.send(FromSync::Topic(*topic)).await?
+                        app_tx.send(FromSync::Topic(topic.clone())).await?
                     }
                     DummyProtocolMessage::Done => break,
                 }
@@ -719,7 +718,7 @@ mod sync_protocols {
     // The protocol message types.
     #[derive(Serialize, Deserialize)]
     enum Message {
-        Topic(TopicId),
+        Topic(u64),
         Ping,
         Pong,
     }
@@ -729,7 +728,7 @@ mod sync_protocols {
 
     /// A ping-pong sync protocol
     #[async_trait]
-    impl<'a> SyncProtocol<'a> for PingPongProtocol {
+    impl<'a> SyncProtocol<'a, u64> for PingPongProtocol {
         fn name(&self) -> &'static str {
             static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
             SIMPLE_PROTOCOL_NAME
@@ -737,20 +736,20 @@ mod sync_protocols {
 
         async fn initiate(
             self: Arc<Self>,
-            topic: &TopicId,
+            topic: u64,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync<u64>, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("initiate sync session");
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(Message::Topic(*topic)).await?;
+            sink.send(Message::Topic(topic)).await?;
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
-            app_tx.send(FromSync::Topic(*topic)).await?;
+            app_tx.send(FromSync::Topic(topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -780,7 +779,7 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<&'a mut (dyn Sink<FromSync<u64>, Error = SyncError> + Send + Unpin)>,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
             let mut sink = into_cbor_sink(tx);
@@ -823,7 +822,7 @@ mod tests {
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::log_sync::LogSyncProtocol;
+    use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
     use p2panda_sync::TopicMap;
     use serde::Serialize;
     use tracing_subscriber::layer::SubscriberExt;
@@ -833,7 +832,7 @@ mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
 
     use super::{FromNetwork, ToNetwork};
 
@@ -888,7 +887,7 @@ mod tests {
             relay: Some(relay_address.clone()),
         };
 
-        let builder = NetworkBuilder::from_config(config);
+        let builder = NetworkBuilder::<String>::from_config(config);
 
         assert_eq!(builder.bind_port, Some(2024));
         assert_eq!(builder.network_id, [1; 32]);
@@ -907,6 +906,7 @@ mod tests {
         setup_logging();
 
         let network_id = [1; 32];
+        let topic = String::from("chat");
 
         let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
         let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
@@ -918,8 +918,8 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes
-        let (tx_1, _rx_1, ready_1) = node_1.subscribe([0; 32]).await.unwrap();
-        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe([0; 32]).await.unwrap();
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
 
         // Ensure the gossip-overlay has been joined by both nodes for the given topic
         assert!(ready_2.await.is_ok());
@@ -951,7 +951,7 @@ mod tests {
         setup_logging();
 
         let network_id = [1; 32];
-        let topic_id = [0; 32];
+        let topic = 123456;
 
         let ping_pong = PingPongProtocol {};
 
@@ -974,12 +974,12 @@ mod tests {
 
         // Subscribe to the same topic from both nodes which should kick off sync
         let handle1 = tokio::spawn(async move {
-            let (_tx, _rx, _ready) = node_1.subscribe(topic_id).await.unwrap();
+            let (_tx, _rx, _ready) = node_1.subscribe(topic).await.unwrap();
             tokio::time::sleep(Duration::from_secs(2)).await;
             node_1.shutdown().await.unwrap();
         });
         let handle2 = tokio::spawn(async move {
-            let (_tx, _rx, _ready) = node_2.subscribe(topic_id).await.unwrap();
+            let (_tx, _rx, _ready) = node_2.subscribe(topic).await.unwrap();
             tokio::time::sleep(Duration::from_secs(2)).await;
             node_2.shutdown().await.unwrap();
         });
@@ -990,21 +990,21 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<TopicId, Vec<String>>);
+    struct LogIdTopicMap(HashMap<String, Logs<u64>>);
 
     impl LogIdTopicMap {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
         }
 
-        fn insert(&mut self, topic: TopicId, log_ids: Vec<String>) -> Option<Vec<String>> {
-            self.0.insert(topic, log_ids)
+        fn insert(&mut self, topic: String, logs: Logs<u64>) -> Option<Logs<u64>> {
+            self.0.insert(topic, logs)
         }
     }
 
     #[async_trait]
-    impl TopicMap<TopicId, String> for LogIdTopicMap {
-        async fn get(&self, topic: &TopicId) -> Option<Vec<String>> {
+    impl TopicMap<String, Logs<u64>> for LogIdTopicMap {
+        async fn get(&self, topic: &String) -> Option<Logs<u64>> {
             self.0.get(topic).cloned()
         }
     }
@@ -1014,17 +1014,18 @@ mod tests {
         setup_logging();
 
         const NETWORK_ID: [u8; 32] = [1; 32];
-        const TOPIC_ID: [u8; 32] = [0u8; 32];
-
-        let log_id = String::from("messages");
+        let topic = String::from("event_logs");
+        let log_id = 0;
 
         let peer_a_private_key = PrivateKey::new();
+        let peer_a_logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
+
         let peer_b_private_key = PrivateKey::new();
 
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
         let mut topic_map = LogIdTopicMap::new();
-        topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
+        topic_map.insert(topic.clone(), peer_a_logs);
         let protocol_a = LogSyncProtocol {
             topic_map: topic_map.clone(),
             store: store_a,
@@ -1083,8 +1084,9 @@ mod tests {
         node_b.add_peer(node_a_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes which should kick off sync
+        let topic_clone = topic.clone();
         let handle1 = tokio::spawn(async move {
-            let (_tx, mut from_sync_rx, ready) = node_a.subscribe(TOPIC_ID).await.unwrap();
+            let (_tx, mut from_sync_rx, ready) = node_a.subscribe(topic_clone).await.unwrap();
 
             // Wait until the gossip overlay has been joined for TOPIC_ID
             assert!(ready.await.is_ok());
@@ -1124,7 +1126,7 @@ mod tests {
         });
 
         let handle2 = tokio::spawn(async move {
-            let (_tx, _from_sync_rx, ready) = node_b.subscribe(TOPIC_ID).await.unwrap();
+            let (_tx, _from_sync_rx, ready) = node_b.subscribe(topic).await.unwrap();
 
             // Wait until the gossip overlay has been joined for TOPIC_ID
             assert!(ready.await.is_ok());

@@ -36,7 +36,7 @@ where
     S: Store,
 {
     pub async fn from_builder(
-        network_builder: NetworkBuilder,
+        network_builder: NetworkBuilder<T>,
         store: S,
     ) -> Result<(Network<T>, Self)> {
         // Calls `num_cpus::get()` to define thread count.

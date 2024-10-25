@@ -24,7 +24,7 @@ pub async fn initiate_sync<T, S, R>(
     mut recv: &mut R,
     peer: PublicKey,
     topic: T,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 ) -> Result<()>
 where
@@ -38,17 +38,23 @@ where
     );
 
     // Set up a channel for receiving new application messages.
-    let (tx, mut rx) = mpsc::channel(128);
+    let (tx, mut rx) = mpsc::channel::<FromSync<T>>(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
 
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
     let mut sync_handshake_success = false;
-    let topic_clone = topic.clone();
+    let topic_id = topic.id();
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
             // We expect the first message to be a topic id
-            if let FromSync::Topic(id) = &message {
+            // @TODO: We don't need to receive the topic from within the sync session as we
+            // already have it in outer method (since we are the initiator). Do we still want to
+            // follow this pattern (matching the acceptor) or not? It is worth considering that
+            // the sync scope portion of a topic may have change since the network subscription
+            // occurred, if that is the correct behavior then this is actually a good way to
+            // receive the most current topic state.
+            if let FromSync::Topic(_topic) = &message {
                 if sync_handshake_success {
                     error!("topic already received from sync session");
                     break;
@@ -59,7 +65,7 @@ where
                 engine_actor_tx
                     .send(ToEngineActor::SyncHandshakeSuccess {
                         peer,
-                        topic: id.to_owned().into(),
+                        topic: topic_id.into(),
                     })
                     .await
                     .expect("engine channel closed");
@@ -77,7 +83,7 @@ where
                     header,
                     payload,
                     delivered_from: peer,
-                    topic: topic_clone.id().into(),
+                    topic: topic_id.into(),
                 })
                 .await
             {
@@ -87,7 +93,7 @@ where
         engine_actor_tx
             .send(ToEngineActor::SyncDone {
                 peer,
-                topic: topic_clone.id().into(),
+                topic: topic_id.into(),
             })
             .await
             .expect("engine channel closed");
@@ -98,7 +104,7 @@ where
         .initiate(
             // @TODO: When generic topic is implemented in `p2panda-sync` we can pass the topic
             // directly here.
-            &topic.id(),
+            topic,
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
@@ -118,7 +124,7 @@ pub async fn accept_sync<T, S, R>(
     mut send: &mut S,
     mut recv: &mut R,
     peer: PublicKey,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 ) -> Result<()>
 where
@@ -129,30 +135,30 @@ where
     debug!("accept sync session with peer {}", peer);
 
     // Set up a channel for receiving new application messages.
-    let (tx, mut rx) = mpsc::channel(128);
+    let (tx, mut rx) = mpsc::channel::<FromSync<T>>(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
 
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
     tokio::spawn(async move {
-        let mut topic = None;
+        let mut topic_id = None;
         while let Some(message) = rx.recv().await {
             // We expect the first message to be a topic id
-            if let FromSync::Topic(id) = &message {
+            if let FromSync::Topic(topic) = &message {
                 // It should only be sent once so topic should be None now
-                if topic.is_some() {
-                    error!("topic id message already received");
+                if topic_id.is_some() {
+                    error!("topic message already received");
                     break;
                 }
 
                 // Set the topic id
-                topic = Some(id.to_owned());
+                topic_id = Some(topic.id().to_owned());
 
                 // Inform the engine that we are expecting sync messages from the peer on this topic
                 engine_actor_tx
                     .send(ToEngineActor::SyncHandshakeSuccess {
                         peer,
-                        topic: id.to_owned().into(),
+                        topic: topic.id().into(),
                     })
                     .await
                     .expect("engine channel closed");
@@ -161,7 +167,7 @@ where
             }
 
             // If topic id wasn't set yet error here as it must be known to process further messages
-            let Some(topic_id) = topic else {
+            let Some(topic_id) = topic_id else {
                 error!("topic id not received");
                 return;
             };
@@ -186,14 +192,14 @@ where
 
         // If topic was never set we didn't receive any messages and so the engine was not
         // informed it should buffer messages and we can return here.
-        let Some(topic) = topic else {
+        let Some(topic_id) = topic_id else {
             return;
         };
 
         engine_actor_tx
             .send(ToEngineActor::SyncDone {
                 peer,
-                topic: topic.into(),
+                topic: topic_id.into(),
             })
             .await
             .expect("engine channel closed");

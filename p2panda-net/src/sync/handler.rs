@@ -18,7 +18,7 @@ pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct SyncConnection<T> {
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 }
 
@@ -27,7 +27,7 @@ where
     T: Topic + 'static,
 {
     pub fn new(
-        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
         engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     ) -> Self {
         Self {

@@ -76,7 +76,7 @@ pub(crate) struct SyncManager<T> {
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncManager>,
     known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
     sync_queue_rx: Receiver<SyncAttempt>,
     topic_map: HashMap<TopicId, T>,
@@ -90,7 +90,7 @@ where
     pub(crate) fn new(
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
-        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     ) -> (Self, Sender<ToSyncManager>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);

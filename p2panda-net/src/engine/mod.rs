@@ -31,7 +31,7 @@ use crate::{NetworkId, Topic};
 #[derive(Debug)]
 pub struct Engine<T> {
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     #[allow(dead_code)]
     actor_handle: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
@@ -44,7 +44,7 @@ where
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);

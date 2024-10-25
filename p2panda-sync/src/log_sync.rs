@@ -354,8 +354,8 @@ mod tests {
             LogHeightTopicMap(HashMap::new())
         }
 
-        fn insert(&mut self, topic: &str, scope: Logs<u64>) -> Option<Logs<u64>> {
-            self.0.insert(topic.to_string(), scope)
+        fn insert(&mut self, topic: &str, logs: Logs<u64>) -> Option<Logs<u64>> {
+            self.0.insert(topic.to_string(), logs)
         }
     }
 
