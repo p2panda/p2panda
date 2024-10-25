@@ -614,16 +614,15 @@ struct TopicMap<T> {
     inner: Arc<RwLock<TopicMapInner<T>>>,
 }
 
+type TopicMeta<T> = (
+    T,
+    broadcast::Sender<FromNetwork>,
+    Option<oneshot::Sender<()>>,
+);
+
 #[derive(Debug)]
 struct TopicMapInner<T> {
-    earmarked: HashMap<
-        TopicId,
-        (
-            T,
-            broadcast::Sender<FromNetwork>,
-            Option<oneshot::Sender<()>>,
-        ),
-    >,
+    earmarked: HashMap<TopicId, TopicMeta<T>>,
     pending_joins: HashSet<TopicId>,
     joined: HashSet<TopicId>,
 }

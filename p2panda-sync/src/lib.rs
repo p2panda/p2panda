@@ -13,7 +13,7 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 use thiserror::Error;
 
 /// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
-/// the scope for a particular session should be identified. Sync protocol users should provide an
+/// the scope for a particular session should be identified. Sync protocol users can provide an
 /// implementation of `TopicMap` so that a scope `S` can be retrieved for a specific topic `T`
 /// when a peer initiates or accepts a sync session.
 #[async_trait]
