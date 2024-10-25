@@ -9,25 +9,29 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
-use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use p2panda_sync::{FromSync, SyncError, SyncProtocol};
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
-use crate::engine::ToEngineActor;
+use crate::{engine::ToEngineActor, Topic};
 
 /// Initiate a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
-pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unpin>(
+pub async fn initiate_sync<T, S, R>(
     mut send: &mut S,
     mut recv: &mut R,
     peer: PublicKey,
-    topic: TopicId,
+    topic: T,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
-) -> Result<()> {
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+) -> Result<()>
+where
+    T: Topic + 'static,
+    S: AsyncWrite + Send + Unpin,
+    R: AsyncRead + Send + Unpin,
+{
     debug!(
         "initiate sync session with peer {} over topic {:?}",
         peer, topic
@@ -40,6 +44,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
     let mut sync_handshake_success = false;
+    let topic_clone = topic.clone();
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
             // We expect the first message to be a topic id
@@ -72,7 +77,7 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
                     header,
                     payload,
                     delivered_from: peer,
-                    topic,
+                    topic: topic_clone.id().into(),
                 })
                 .await
             {
@@ -80,7 +85,10 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
             };
         }
         engine_actor_tx
-            .send(ToEngineActor::SyncDone { peer, topic })
+            .send(ToEngineActor::SyncDone {
+                peer,
+                topic: topic_clone.id().into(),
+            })
             .await
             .expect("engine channel closed");
     });
@@ -88,7 +96,9 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
     // Run the sync protocol.
     let result = sync_protocol
         .initiate(
-            topic.as_bytes(),
+            // @TODO: When generic topic is implemented in `p2panda-sync` we can pass the topic
+            // directly here.
+            &topic.id(),
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
@@ -104,13 +114,18 @@ pub async fn initiate_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + U
 
 /// Accept a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
-pub async fn accept_sync<S: AsyncWrite + Send + Unpin, R: AsyncRead + Send + Unpin>(
+pub async fn accept_sync<T, S, R>(
     mut send: &mut S,
     mut recv: &mut R,
     peer: PublicKey,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
-) -> Result<()> {
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+) -> Result<()>
+where
+    T: Topic + 'static,
+    S: AsyncWrite + Send + Unpin,
+    R: AsyncRead + Send + Unpin,
+{
     debug!("accept sync session with peer {}", peer);
 
     // Set up a channel for receiving new application messages.

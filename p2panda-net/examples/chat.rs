@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     setup_logging();
 
     let network_id = [0; 32];
-    let topic_id = [1; 32];
+    let topic_id = "my_chat".to_string();
 
     let private_key = PrivateKey::new();
 

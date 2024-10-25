@@ -18,7 +18,7 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncManager};
-use crate::{FromBytes, ToBytes};
+use crate::{FromBytes, ToBytes, Topic};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -36,7 +36,7 @@ const ANNOUNCE_TOPICS_INTERVAL: Duration = Duration::from_millis(2200);
 /// How often do we try to join the topics we're interested in.
 const JOIN_TOPICS_INTERVAL: Duration = Duration::from_millis(1200);
 
-pub enum ToEngineActor {
+pub enum ToEngineActor<T> {
     AddPeer {
         node_addr: NodeAddr,
     },
@@ -45,7 +45,7 @@ pub enum ToEngineActor {
         peer: PublicKey,
     },
     Subscribe {
-        topic: TopicId,
+        topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
@@ -123,11 +123,11 @@ impl GossipBuffer {
     }
 }
 
-pub struct EngineActor {
+pub struct EngineActor<T> {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     sync_manager_tx: Option<mpsc::Sender<ToSyncManager>>,
-    inbox: mpsc::Receiver<ToEngineActor>,
+    inbox: mpsc::Receiver<ToEngineActor<T>>,
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
     // network-wide gossip overlay).
@@ -135,14 +135,17 @@ pub struct EngineActor {
     network_joined: bool,
     network_joined_pending: bool,
     peers: PeerMap,
-    topics: TopicMap,
+    topics: TopicMap<T>,
     gossip_buffer: GossipBuffer,
 }
 
-impl EngineActor {
+impl<T> EngineActor<T>
+where
+    T: Topic + 'static,
+{
     pub fn new(
         endpoint: Endpoint,
-        inbox: mpsc::Receiver<ToEngineActor>,
+        inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_manager_tx: Option<mpsc::Sender<ToSyncManager>>,
         network_id: TopicId,
@@ -163,8 +166,8 @@ impl EngineActor {
 
     pub async fn run(
         mut self,
-        mut gossip_actor: GossipActor,
-        sync_manager: Option<SyncManager>,
+        mut gossip_actor: GossipActor<T>,
+        sync_manager: Option<SyncManager<T>>,
     ) -> Result<()> {
         // Used to shutdown the sync manager.
         let shutdown_token = CancellationToken::new();
@@ -241,7 +244,7 @@ impl EngineActor {
         }
     }
 
-    async fn on_actor_message(&mut self, msg: ToEngineActor) -> Result<()> {
+    async fn on_actor_message(&mut self, msg: ToEngineActor<T>) -> Result<()> {
         match msg {
             ToEngineActor::AddPeer { node_addr } => {
                 self.add_peer(node_addr).await?;
@@ -426,20 +429,20 @@ impl EngineActor {
     /// - Announce our topics of interest to the network.
     async fn on_subscribe(
         &mut self,
-        topic: TopicId,
+        topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
         mut to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         // Keep an earmark that we're interested in joining this topic
         self.topics
-            .earmark(topic, from_network_tx, gossip_ready_tx)
+            .earmark(topic.clone(), from_network_tx, gossip_ready_tx)
             .await;
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
-        if !self.topics.has_joined(&topic).await {
-            self.join_topic(topic).await?;
+        if !self.topics.has_joined(&topic.id().into()).await {
+            self.join_topic(topic.id().into()).await?;
         }
 
         // Task to establish a channel for sending messages into gossip overlay
@@ -448,7 +451,7 @@ impl EngineActor {
             let topics = self.topics.clone();
             tokio::task::spawn(async move {
                 while let Some(event) = to_network_rx.recv().await {
-                    if !topics.has_successfully_joined(&topic).await {
+                    if !topics.has_successfully_joined(&topic.id().into()).await {
                         // @TODO: We're dropping messages silently for now, later we want to buffer
                         // them somewhere until we've joined the topic gossip
                         continue;
@@ -457,7 +460,10 @@ impl EngineActor {
                     let result = match event {
                         ToNetwork::Message { bytes } => {
                             gossip_actor_tx
-                                .send(ToGossipActor::Broadcast { topic, bytes })
+                                .send(ToGossipActor::Broadcast {
+                                    topic: topic.id().into(),
+                                    bytes,
+                                })
                                 .await
                         }
                     };
@@ -599,18 +605,28 @@ impl EngineActor {
 }
 
 #[derive(Clone, Debug)]
-struct TopicMap {
-    inner: Arc<RwLock<TopicMapInner>>,
+struct TopicMap<T> {
+    inner: Arc<RwLock<TopicMapInner<T>>>,
 }
 
 #[derive(Debug)]
-struct TopicMapInner {
-    earmarked: HashMap<TopicId, (broadcast::Sender<FromNetwork>, Option<oneshot::Sender<()>>)>,
+struct TopicMapInner<T> {
+    earmarked: HashMap<
+        TopicId,
+        (
+            T,
+            broadcast::Sender<FromNetwork>,
+            Option<oneshot::Sender<()>>,
+        ),
+    >,
     pending_joins: HashSet<TopicId>,
     joined: HashSet<TopicId>,
 }
 
-impl TopicMap {
+impl<T> TopicMap<T>
+where
+    T: Topic,
+{
     /// Generate an empty topic map.
     pub fn new() -> Self {
         Self {
@@ -625,15 +641,16 @@ impl TopicMap {
     /// Mark a topic of interest to our node.
     pub async fn earmark(
         &mut self,
-        topic: TopicId,
+        topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) {
         let mut inner = self.inner.write().await;
-        inner
-            .earmarked
-            .insert(topic, (from_network_tx, Some(gossip_ready_tx)));
-        inner.pending_joins.insert(topic);
+        inner.earmarked.insert(
+            topic.id().into(),
+            (topic.clone(), from_network_tx, Some(gossip_ready_tx)),
+        );
+        inner.pending_joins.insert(topic.id().into());
     }
 
     /// Remove a topic of interest to our node.
@@ -657,7 +674,7 @@ impl TopicMap {
 
             // Inform local topic subscribers that the gossip overlay has been joined and is ready
             // for messages.
-            if let Some((_from_network_tx, gossip_ready_tx)) = inner.earmarked.get_mut(&topic) {
+            if let Some((_, _, gossip_ready_tx)) = inner.earmarked.get_mut(&topic) {
                 // We need the `Sender` to be owned so we take it and replace with `None`.
                 if let Some(oneshot_tx) = gossip_ready_tx.take() {
                     if oneshot_tx.send(()).is_err() {
@@ -693,7 +710,7 @@ impl TopicMap {
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let (from_network_tx, _gossip_ready_tx) =
+        let (_, from_network_tx, _gossip_ready_tx) =
             inner.earmarked.get(&topic).context("on_gossip_message")?;
         from_network_tx.send(FromNetwork::GossipMessage {
             bytes,
@@ -713,7 +730,7 @@ impl TopicMap {
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let (from_network_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
+        let (_, from_network_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
         from_network_tx.send(FromNetwork::SyncMessage {
             header,
             payload,

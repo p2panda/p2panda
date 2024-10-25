@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Debug;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,7 +29,7 @@ use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::SYNC_CONNECTION_ALPN;
-use crate::{NetworkId, RelayUrl, TopicId};
+use crate::{NetworkId, RelayUrl, Topic};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -193,7 +194,10 @@ impl NetworkBuilder {
     /// attempt is made to retrieve a direct address for a network peer so that a connection
     /// attempt may be made. If no address is retrieved within the timeout limit, the network is
     /// shut down and an error is returned.
-    pub async fn build(mut self) -> Result<Network> {
+    pub async fn build<T>(mut self) -> Result<Network<T>>
+    where
+        T: Topic + 'static,
+    {
         let secret_key = self.secret_key.unwrap_or(SecretKey::generate());
 
         let relay: Option<RelayNode> = match self.relay_mode {
@@ -328,12 +332,12 @@ impl NetworkBuilder {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-struct NetworkInner {
+struct NetworkInner<T> {
     cancel_token: CancellationToken,
     relay: Option<RelayNode>,
     discovery: DiscoveryMap,
     endpoint: Endpoint,
-    engine: Engine,
+    engine: Engine<T>,
     gossip: Gossip,
     network_id: NetworkId,
     secret_key: SecretKey,
@@ -347,7 +351,10 @@ struct NetworkInner {
 /// Any registered discovery services are subscribed to so that the identifiers and addresses of
 /// peers operating on the same network may be learned. Discovered peers are added to the local
 /// address book so they may be involved in connection and gossip activites.
-impl NetworkInner {
+impl<T> NetworkInner<T>
+where
+    T: Topic + 'static,
+{
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
         debug!(
@@ -486,8 +493,8 @@ impl NetworkInner {
 // @TODO: Go into more detail about the network capabilities and API (usage recommendations etc.)
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
-pub struct Network {
-    inner: Arc<NetworkInner>,
+pub struct Network<T> {
+    inner: Arc<NetworkInner<T>>,
     protocols: Arc<ProtocolMap>,
     // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
     // - `Shared` allows us to `task.await` from all `Network` clones
@@ -497,7 +504,10 @@ pub struct Network {
     task: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
-impl Network {
+impl<T> Network<T>
+where
+    T: Topic + 'static,
+{
     /// Returns the public key of the local network.
     pub fn node_id(&self) -> PublicKey {
         PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
@@ -522,7 +532,7 @@ impl Network {
     /// up event"). They'll sync data initially and then start "live" mode via gossip broadcast.
     pub async fn subscribe(
         &self,
-        topic: TopicId,
+        topic: T,
     ) -> Result<(
         mpsc::Sender<ToNetwork>,
         broadcast::Receiver<FromNetwork>,

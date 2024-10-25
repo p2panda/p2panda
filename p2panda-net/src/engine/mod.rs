@@ -7,6 +7,7 @@ mod message;
 
 pub use engine::ToEngineActor;
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -25,17 +26,20 @@ use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::manager::SyncManager;
 use crate::sync::SyncConnection;
-use crate::{NetworkId, TopicId};
+use crate::{NetworkId, Topic};
 
 #[derive(Debug)]
-pub struct Engine {
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
+pub struct Engine<T> {
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
     #[allow(dead_code)]
     actor_handle: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
-impl Engine {
+impl<T> Engine<T>
+where
+    T: Clone + Debug + Send + Sync + Topic + 'static,
+{
     pub fn new(
         network_id: NetworkId,
         endpoint: Endpoint,
@@ -83,7 +87,7 @@ impl Engine {
         }
     }
 
-    pub fn sync_handler(&self) -> Option<SyncConnection> {
+    pub fn sync_handler(&self) -> Option<SyncConnection<T>> {
         self.sync_protocol.as_ref().map(|sync_protocol| {
             SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
         })
@@ -106,14 +110,14 @@ impl Engine {
 
     pub async fn subscribe(
         &self,
-        topic: TopicId,
+        topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::Subscribe {
-                topic: topic.into(),
+                topic,
                 from_network_tx,
                 to_network_rx,
                 gossip_ready_tx,

@@ -11,21 +11,24 @@ use tracing::{debug, debug_span};
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
-use crate::sync;
+use crate::{sync, Topic};
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct SyncConnection {
+pub struct SyncConnection<T> {
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 }
 
-impl SyncConnection {
+impl<T> SyncConnection<T>
+where
+    T: Topic + 'static,
+{
     pub fn new(
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
-        engine_actor_tx: mpsc::Sender<ToEngineActor>,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     ) -> Self {
         Self {
             sync_protocol,
@@ -66,7 +69,10 @@ impl SyncConnection {
     }
 }
 
-impl ProtocolHandler for SyncConnection {
+impl<T> ProtocolHandler for SyncConnection<T>
+where
+    T: Topic + 'static,
+{
     fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
         Box::pin(async move { self.handle_connection(connecting.await?).await })
     }

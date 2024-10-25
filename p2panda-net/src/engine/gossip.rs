@@ -14,6 +14,7 @@ use tokio_stream::StreamMap;
 use tracing::{error, warn};
 
 use crate::engine::ToEngineActor;
+use crate::Topic;
 
 #[derive(Debug)]
 pub enum ToGossipActor {
@@ -31,8 +32,8 @@ pub enum ToGossipActor {
     Shutdown,
 }
 
-pub struct GossipActor {
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
+pub struct GossipActor<T> {
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     gossip: Gossip,
     gossip_events: StreamMap<TopicId, GossipReceiver>,
     gossip_senders: HashMap<TopicId, GossipSender>,
@@ -42,11 +43,14 @@ pub struct GossipActor {
     want_join: HashSet<TopicId>,
 }
 
-impl GossipActor {
+impl<T> GossipActor<T>
+where
+    T: Topic + 'static,
+{
     pub fn new(
         inbox: mpsc::Receiver<ToGossipActor>,
         gossip: Gossip,
-        engine_actor_tx: mpsc::Sender<ToEngineActor>,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     ) -> Self {
         Self {
             engine_actor_tx,

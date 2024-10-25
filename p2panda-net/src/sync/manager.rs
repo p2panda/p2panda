@@ -15,6 +15,7 @@ use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
+use crate::Topic;
 
 // A duration in milliseconds.
 //
@@ -67,24 +68,28 @@ enum SyncAttemptError {
 
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
-pub(crate) struct SyncManager {
+pub(crate) struct SyncManager<T> {
     pending_sync_sessions: VecDeque<(NodeId, TopicId)>,
     active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
     endpoint: Endpoint,
-    engine_actor_tx: Sender<ToEngineActor>,
+    engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncManager>,
     known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
     sync_queue_rx: Receiver<SyncAttempt>,
+    topic_map: HashMap<TopicId, T>,
 }
 
-impl SyncManager {
+impl<T> SyncManager<T>
+where
+    T: Topic + 'static,
+{
     /// Create a new instance of the `SyncManager` and return it along with a channel sender.
     pub(crate) fn new(
         endpoint: Endpoint,
-        engine_actor_tx: Sender<ToEngineActor>,
+        engine_actor_tx: Sender<ToEngineActor<T>>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
     ) -> (Self, Sender<ToSyncManager>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
@@ -101,6 +106,7 @@ impl SyncManager {
             sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
+            topic_map: HashMap::new(),
         };
 
         (sync_manager, sync_manager_tx)
@@ -248,12 +254,17 @@ impl SyncManager {
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
+        let topic = self
+            .topic_map
+            .get(&topic)
+            .expect("all topics have been added to the topic map");
+
         // Run a sync session as the initiator.
         sync::initiate_sync(
             &mut send,
             &mut recv,
             peer,
-            topic,
+            topic.clone(),
             sync_protocol,
             engine_actor_tx,
         )
