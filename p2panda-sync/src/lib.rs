@@ -4,6 +4,9 @@
 pub mod cbor;
 #[cfg(feature = "log-sync")]
 pub mod log_sync;
+#[cfg(feature = "log-sync")]
+// TODO: move into log_sync.rs
+pub mod log_sync_new;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -12,31 +15,28 @@ use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
 use thiserror::Error;
 
-pub type TopicId = [u8; 32];
-
-/// Trait used for mapping a generic topic to a single or collection of logs
 #[async_trait]
-pub trait TopicMap<K, V> {
-    async fn get(&self, topic: &K) -> Option<Vec<V>>;
+pub trait TopicMap<T, S> {
+    async fn get(&self, topic: &T) -> Option<S>;
 }
 
 #[async_trait]
-pub trait SyncProtocol<'a>: Send + Sync + Debug {
+pub trait SyncProtocol<T, 'a>: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 
     async fn initiate(
         self: Arc<Self>,
-        topic: &TopicId,
+        topic: T,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync<T>, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError>;
 
     async fn accept(
         self: Arc<Self>,
         tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
         rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-        app_tx: Box<&'a mut (dyn Sink<FromSync, Error = SyncError> + Send + Unpin)>,
+        app_tx: Box<&'a mut (dyn Sink<FromSync<T>, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError>;
 }
 
@@ -79,7 +79,7 @@ impl From<std::io::Error> for SyncError {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum FromSync {
-    Topic(TopicId),
+pub enum FromSync<T> {
+    Topic(T),
     Data(Vec<u8>, Option<Vec<u8>>),
 }
