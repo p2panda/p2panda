@@ -26,14 +26,13 @@ use crate::{FromBytes, ToBytes};
 /// establish connections. As soon as we've joined the gossip we will learn about more peers.
 const JOIN_PEERS_SAMPLE_LEN: usize = 7;
 
-/// In what frequency do we attempt joining the network-wide gossip overlay over a newly, randomly
-/// sampled set of peers.
+/// Frequency of attempts to join the network-wide gossip overlay.
 const JOIN_NETWORK_INTERVAL: Duration = Duration::from_millis(900);
 
-/// How often do we announce the list of our subscribed topics.
+/// Frequency of locally-subscribed topic announcements (to network peers).
 const ANNOUNCE_TOPICS_INTERVAL: Duration = Duration::from_millis(2200);
 
-/// How often do we try to join the topics we're interested in.
+/// Frequency of attempts to join gossip overlays for locally-subscribed topics.
 const JOIN_TOPICS_INTERVAL: Duration = Duration::from_millis(1200);
 
 pub enum ToEngineActor {
@@ -80,6 +79,8 @@ pub enum ToEngineActor {
     },
 }
 
+// @TODO: This feels out of place here. Can we move it into a separate module, or maybe into the
+// gossip actor?
 #[derive(Debug, Default)]
 pub struct GossipBuffer {
     buffers: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
@@ -123,6 +124,7 @@ impl GossipBuffer {
     }
 }
 
+/// The core event orchestrator of the networking layer.
 pub struct EngineActor {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -158,6 +160,8 @@ impl EngineActor {
         }
     }
 
+    /// Runs the sync manager and gossip actor, sets up shutdown handlers and spawns the engine
+    /// event loop.
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor,
@@ -201,6 +205,10 @@ impl EngineActor {
         }
     }
 
+    /// Runs the event loop of the engine actor.
+    ///
+    /// Interval-based timers are used to trigger attempts to join the network-wide and
+    /// topic-specific gossip overlays, as well as to announce the locally-subscribed topics.
     async fn run_inner(&mut self) -> Result<oneshot::Sender<()>> {
         let mut join_network_interval = interval(JOIN_NETWORK_INTERVAL);
         let mut announce_topics_interval = interval(ANNOUNCE_TOPICS_INTERVAL);
@@ -596,6 +604,8 @@ impl EngineActor {
     }
 }
 
+// @TODO: TopicMap and PeerMap also feel out of place. Might be nice to have them in a separate
+// module(s). That'll help to keep the engine actor module lean and focused.
 #[derive(Clone, Debug)]
 struct TopicMap {
     inner: Arc<RwLock<TopicMapInner>>,
