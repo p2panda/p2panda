@@ -571,7 +571,6 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Create operations which will be sent to peer a
-        let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
         let (hash_0, _, header_bytes_0) =
@@ -654,7 +653,6 @@ mod tests {
 
         // Create a store for peer b and populate it with 3 operations
         let mut store_2 = MemoryStore::default();
-        let private_key = PrivateKey::new();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
