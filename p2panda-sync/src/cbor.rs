@@ -58,17 +58,13 @@ where
         let reader = src.reader();
         let result: Result<Self::Item, _> = decode_cbor(reader);
         match result {
-            // If we read the item, we also need to advance the underlying buffer.
             Ok(item) => Ok(Some(item)),
-            Err(ref error) => {
-                match error {
-                    DecodeError::Io(err) => {
-                        // @TODO
-                        panic!("{}", err);
-                    }
-                    err => Err(SyncError::InvalidEncoding(err.to_string())),
-                }
-            }
+            Err(ref error) => match error {
+                DecodeError::Io(err) => Err(SyncError::Critical(format!(
+                    "CBOR codec failed decoding message due to i/o error, {err}"
+                ))),
+                err => Err(SyncError::InvalidEncoding(err.to_string())),
+            },
         }
     }
 }

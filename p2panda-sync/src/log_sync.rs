@@ -109,7 +109,7 @@ where
 
             match message {
                 Message::Have(_, _) => {
-                    return Err(SyncError::RemoteUnexpectedBehaviour(
+                    return Err(SyncError::UnexpectedBehaviour(
                         "unexpected \"have\" message received".to_string(),
                     ))
                 }
@@ -159,7 +159,7 @@ where
 
                     // Get the log ids which are associated with this topic.
                     let Some(log_ids) = self.topic_map.get(topic).await else {
-                        return Err(SyncError::RemoteUnexpectedBehaviour(format!(
+                        return Err(SyncError::UnexpectedBehaviour(format!(
                             "unknown topic {topic:?} requested from remote peer"
                         )));
                     };
@@ -223,7 +223,7 @@ where
                     sync_done_sent = true;
                 }
                 Message::Operation(_, _) => {
-                    return Err(SyncError::RemoteUnexpectedBehaviour(
+                    return Err(SyncError::UnexpectedBehaviour(
                         "unexpected \"operation\" message received".to_string(),
                     ));
                 }

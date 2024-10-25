@@ -748,7 +748,7 @@ mod sync_protocols {
                 match message {
                     Message::Topic(_) => panic!(),
                     Message::Ping => {
-                        return Err(SyncError::RemoteUnexpectedBehaviour(
+                        return Err(SyncError::UnexpectedBehaviour(
                             "unexpected Ping message received".to_string(),
                         ));
                     }
@@ -788,7 +788,7 @@ mod sync_protocols {
                         break;
                     }
                     Message::Pong => {
-                        return Err(SyncError::RemoteUnexpectedBehaviour(
+                        return Err(SyncError::UnexpectedBehaviour(
                             "unexpected Pong message received".to_string(),
                         ));
                     }
