@@ -5,7 +5,6 @@ edition = "2021"
 
 [features]
 cbor = [
-    "dep:ciborium",
     "dep:serde",
     "dep:tokio",
     "dep:tokio-stream",
@@ -15,7 +14,6 @@ log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 
 [dependencies]
 async-trait = "0.1.82"
-ciborium = { version = "0.2.2", optional = true }
 futures = "0.3.30"
 p2panda-core = { path = "../p2panda-core", optional = true }
 p2panda-store = { path = "../p2panda-store", optional = true }

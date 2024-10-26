@@ -42,21 +42,40 @@ pub trait SyncProtocol<'a>: Send + Sync + Debug {
 
 #[derive(Error, Debug)]
 pub enum SyncError {
-    /// Error which can occur in a running sync session.
-    #[error("sync protocol error: {0}")]
-    Protocol(String),
+    /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
+    ///
+    /// Indicates that the sync protocol was not correctly followed, for example due to unexpected
+    /// or missing messages, etc.
+    ///
+    /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
+    /// potentially deny-listing if communication failed too often.
+    #[error("sync session failed due to unexpected protocol behaviour of remote peer: {0}")]
+    UnexpectedBehaviour(String),
 
-    /// I/O error which occurs during stream handling.
-    #[error("input/output error: {0}")]
-    IoError(#[from] std::io::Error),
+    /// Error due to invalid encoding of a message sent by remote peer.
+    ///
+    /// Note that this error is intended for receiving messages from _remote_ peers which we can't
+    /// decode properly. If we fail with encoding our _own_ messages we should rather consider this
+    /// an `Critical` error type, as it likely means that there's a buggy implementation.
+    #[error("sync session failed due to invalid encoding of message sent by remote peer: {0}")]
+    InvalidEncoding(String),
 
-    /// Error which occurs when encoding or decoding protocol messages.
-    #[error("codec error: {0}")]
-    Codec(String),
+    /// Critical error due to system failure on our end.
+    ///
+    /// This indicates that our system is running out of resources (storage layer failure etc.) or
+    /// we have a buggy implementation.
+    #[error("sync session failed due critical system error: {0}")]
+    Critical(String),
+}
 
-    /// Custom error to handle other cases.
-    #[error("custom error: {0}")]
-    Custom(String),
+/// Converts critical I/O error which occurs during stream handling into [`SyncError`].
+///
+/// This is usually a critical system failure indicating an implementation bug or lacking resources
+/// on the user's machine.
+impl From<std::io::Error> for SyncError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Critical(format!("internal i/o stream error {err}"))
+    }
 }
 
 #[derive(PartialEq, Debug)]

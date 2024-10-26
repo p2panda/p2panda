@@ -32,9 +32,7 @@ where
     T: Serialize,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        ciborium::into_writer(&self, &mut bytes).expect("type can be serialized");
-        bytes
+        p2panda_core::cbor::encode_cbor(&self).expect("type can be serialized")
     }
 }
 
@@ -78,44 +76,41 @@ where
         let mut sink = into_cbor_sink(tx);
         let mut stream = into_cbor_stream(rx);
 
-        // Get the log ids which are associated with this topic.
+        // Get the log ids which are associated with this topic
         let Some(log_ids) = self.topic_map.get(topic).await else {
-            return Err(SyncError::Protocol("Unknown topic id".to_string()));
+            return Err(SyncError::Critical(format!("unknown {topic:?} topic")));
         };
 
-        // Get local log heights for all authors who have published under the requested log ids.
+        // Get local log heights for all authors who have published under the requested log ids
         // @TODO: this will require changes soon when `get_log_heights` method includes the public
         // key as an argument.
         let mut local_log_heights = Vec::new();
         for log_id in log_ids {
-            let log_heights = self
-                .store
-                .get_log_heights(&log_id)
-                .await
-                .expect("memory store error");
-
+            let log_heights = self.store.get_log_heights(&log_id).await.map_err(|err| {
+                SyncError::Critical(format!("can't retreive log heights from store, {err}"))
+            })?;
             local_log_heights.push((log_id, log_heights));
         }
 
-        // Send our `Have` message to the remote peer.
+        // Send our `Have` message to the remote peer
         sink.send(Message::<T>::Have(*topic, local_log_heights.clone()))
             .await?;
 
-        // As we initiated this sync session we are done after sending the `Have` message.
+        // As we initiated this sync session we are done after sending the `Have` message
         sink.send(Message::SyncDone).await?;
 
-        // Announce the topic of the sync session to the app layer.
+        // Announce the topic of the sync session to the app layer
         app_tx.send(FromSync::Topic(*topic)).await?;
 
-        // Consume messages arriving on the receive stream.
+        // Consume messages arriving on the receive stream
         while let Some(result) = stream.next().await {
             let message: Message<T> = result?;
             debug!("message received: {:?}", message);
 
             match message {
                 Message::Have(_, _) => {
-                    return Err(SyncError::Protocol(
-                        "unexpected Have message received".to_string(),
+                    return Err(SyncError::UnexpectedBehaviour(
+                        "unexpected \"have\" message received".to_string(),
                     ))
                 }
                 Message::Operation(header, payload) => {
@@ -164,34 +159,37 @@ where
 
                     // Get the log ids which are associated with this topic.
                     let Some(log_ids) = self.topic_map.get(topic).await else {
-                        return Err(SyncError::Protocol("Unknown topic id".to_string()));
+                        return Err(SyncError::UnexpectedBehaviour(format!(
+                            "unknown topic {topic:?} requested from remote peer"
+                        )));
                     };
 
                     let remote_log_heights_map: HashMap<T, Vec<(PublicKey, u64)>> =
                         remote_log_heights.clone().into_iter().collect();
 
                     // For every log id we need to:
-                    // - retrieve the local log heights for all contributing authors
-                    // - compare our local log heights with those sent from the remote peer
-                    // - send any operations the remote peer is missing
+                    // * Retrieve the local log heights for all contributing authors
+                    // * Compare our local log heights with those sent from the remote peer
+                    // * Send any operations the remote peer is missing
                     for log_id in log_ids {
-                        let local_log_heights = self
-                            .store
-                            .get_log_heights(&log_id)
-                            .await
-                            .expect("memory store error");
+                        let local_log_heights =
+                            self.store.get_log_heights(&log_id).await.map_err(|err| {
+                                SyncError::Critical(format!(
+                                    "can't retreive log heights from store, {err}"
+                                ))
+                            })?;
 
                         for (public_key, seq_num) in local_log_heights {
                             let Some(remote_log_heights) = remote_log_heights_map.get(&log_id)
                             else {
-                                // The remote peer didn't request logs with this id.
+                                // The remote peer didn't request logs with this id
                                 continue;
                             };
 
                             for (remote_pub_key, remote_seq_num) in remote_log_heights.iter() {
                                 // Compare log heights sent by the remote with our local logs, if
                                 // our logs are more advanced calculate and send operations the
-                                // remote is missing.
+                                // remote is missing
                                 if *remote_pub_key == public_key && *remote_seq_num < seq_num {
                                     let messages = remote_needs(
                                         &self.store,
@@ -206,7 +204,7 @@ where
                             }
 
                             // If we know of an author the remote does not yet know about send all
-                            // their operations.
+                            // their operations
                             if !remote_log_heights
                                 .iter()
                                 .any(|(remote_public_key, _)| public_key == *remote_public_key)
@@ -220,13 +218,13 @@ where
                     }
 
                     // As we have processed the remotes `Have` message then we are "done" from
-                    // this end.
+                    // this end
                     sink.send(Message::SyncDone).await?;
                     sync_done_sent = true;
                 }
                 Message::Operation(_, _) => {
-                    return Err(SyncError::Protocol(
-                        "unexpected operation received".to_string(),
+                    return Err(SyncError::UnexpectedBehaviour(
+                        "unexpected \"operation\" message received".to_string(),
                     ));
                 }
                 Message::SyncDone => {
@@ -263,7 +261,7 @@ where
     let log = store
         .get_raw_log(public_key, log_id)
         .await
-        .map_err(|err| SyncError::Custom(format!("could not retrieve log from store: {err}")))?;
+        .map_err(|err| SyncError::Critical(format!("could not retrieve log from store, {err}")))?;
 
     let messages: Vec<Message<T>> = log
         .unwrap_or_default()
@@ -291,7 +289,7 @@ mod tests {
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
     use tokio_util::sync::PollSender;
 
-    use crate::{FromSync, SyncProtocol, TopicId};
+    use crate::{FromSync, SyncError, SyncProtocol, TopicId};
 
     use super::{LogSyncProtocol, Message, TopicMap};
 
@@ -386,7 +384,7 @@ mod tests {
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+            PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
@@ -429,7 +427,7 @@ mod tests {
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+            PollSender::new(app_tx).sink_map_err(|err| crate::SyncError::Critical(err.to_string()));
         let _ = protocol
             .initiate(
                 &TOPIC_ID,
@@ -510,7 +508,7 @@ mod tests {
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+            PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
@@ -579,7 +577,7 @@ mod tests {
         topic_map.insert(TOPIC_ID, vec![log_id.clone()]);
         let protocol = Arc::new(LogSyncProtocol { topic_map, store });
         let mut sink =
-            PollSender::new(app_tx).sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+            PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
             .initiate(
                 &TOPIC_ID,
@@ -669,8 +667,8 @@ mod tests {
         // Spawn a task which opens a sync session from peer a runs it to completion
         let peer_a_protocol_clone = peer_a_protocol.clone();
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
-        let mut sink = PollSender::new(peer_a_app_tx)
-            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let mut sink =
+            PollSender::new(peer_a_app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let handle_1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .initiate(
@@ -686,8 +684,8 @@ mod tests {
         // Spawn a task which accepts a sync session on peer b runs it to completion
         let peer_b_protocol_clone = peer_b_protocol.clone();
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
-        let mut sink = PollSender::new(peer_b_app_tx)
-            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let mut sink =
+            PollSender::new(peer_b_app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let handle_2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
@@ -780,8 +778,8 @@ mod tests {
         // Spawn a task which opens a sync session from peer a runs it to completion
         let peer_a_protocol_clone = peer_a_protocol.clone();
         let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
-        let mut sink = PollSender::new(peer_a_app_tx)
-            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let mut sink =
+            PollSender::new(peer_a_app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let handle_1 = tokio::spawn(async move {
             peer_a_protocol_clone
                 .initiate(
@@ -797,8 +795,8 @@ mod tests {
         // Spawn a task which accepts a sync session on peer b runs it to completion
         let peer_b_protocol_clone = peer_b_protocol.clone();
         let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
-        let mut sink = PollSender::new(peer_b_app_tx)
-            .sink_map_err(|e| crate::SyncError::Protocol(e.to_string()));
+        let mut sink =
+            PollSender::new(peer_b_app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let handle_2 = tokio::spawn(async move {
             peer_b_protocol_clone
                 .accept(
