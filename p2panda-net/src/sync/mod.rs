@@ -48,15 +48,9 @@ where
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
             // We expect the first message to be a topic id
-            // @TODO: We don't need to receive the topic from within the sync session as we
-            // already have it in outer method (since we are the initiator). Do we still want to
-            // follow this pattern (matching the acceptor) or not? It is worth considering that
-            // the sync scope portion of a topic may have change since the network subscription
-            // occurred, if that is the correct behavior then this is actually a good way to
-            // receive the most current topic state.
-            if let FromSync::Topic(_topic) = &message {
+            if let FromSync::HandshakeSuccess(_) = &message {
                 if sync_handshake_success {
-                    error!("topic already received from sync session");
+                    error!("received handshake success message twice");
                     break;
                 }
                 sync_handshake_success = true;
@@ -138,7 +132,7 @@ where
         let mut topic_id = None;
         while let Some(message) = rx.recv().await {
             // We expect the first message to be a topic id
-            if let FromSync::Topic(topic) = &message {
+            if let FromSync::HandshakeSuccess(topic) = &message {
                 // It should only be sent once so topic should be None now
                 if topic_id.is_some() {
                     error!("topic message already received");

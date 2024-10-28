@@ -672,7 +672,7 @@ mod sync_protocols {
             sink.send(DummyProtocolMessage::Topic(topic.clone()))
                 .await?;
             sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(FromSync::Topic(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -709,7 +709,7 @@ mod sync_protocols {
 
                 match &message {
                     DummyProtocolMessage::Topic(topic) => {
-                        app_tx.send(FromSync::Topic(topic.clone())).await?
+                        app_tx.send(FromSync::HandshakeSuccess(topic.clone())).await?
                     }
                     DummyProtocolMessage::Done => break,
                 }
@@ -760,7 +760,7 @@ mod sync_protocols {
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
-            app_tx.send(FromSync::Topic(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -802,7 +802,7 @@ mod sync_protocols {
                 let message = result?;
 
                 match message {
-                    Message::Topic(topic) => app_tx.send(FromSync::Topic(topic)).await?,
+                    Message::Topic(topic) => app_tx.send(FromSync::HandshakeSuccess(topic)).await?,
                     Message::Ping => {
                         debug!("ping message received");
                         sink.send(Message::Pong).await?;

@@ -117,7 +117,7 @@ where
         sink.send(Message::SyncDone).await?;
 
         // Announce the topic of the sync session to the app layer.
-        app_tx.send(FromSync::Topic(topic)).await?;
+        app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
         // Consume messages arriving on the receive stream.
         while let Some(result) = stream.next().await {
@@ -172,7 +172,9 @@ where
             match &message {
                 Message::Have(topic, remote_log_heights) => {
                     // Announce the topic id that we received from the initiating peer.
-                    app_tx.send(FromSync::Topic(topic.clone())).await?;
+                    app_tx
+                        .send(FromSync::HandshakeSuccess(topic.clone()))
+                        .await?;
 
                     // Get the log ids which are associated with this topic.
                     let Some(logs) = self.topic_map.get(topic).await else {
@@ -447,7 +449,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, vec![FromSync::Topic(topic)])
+        assert_eq!(messages, vec![FromSync::HandshakeSuccess(topic)])
     }
 
     #[tokio::test]
@@ -494,7 +496,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, vec![FromSync::Topic(topic)])
+        assert_eq!(messages, vec![FromSync::HandshakeSuccess(topic)])
     }
 
     #[tokio::test]
@@ -573,7 +575,7 @@ mod tests {
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(messages, [FromSync::Topic(topic)])
+        assert_eq!(messages, [FromSync::HandshakeSuccess(topic)])
     }
 
     #[tokio::test]
@@ -648,7 +650,7 @@ mod tests {
         assert_eq!(
             messages,
             [
-                FromSync::Topic(topic),
+                FromSync::HandshakeSuccess(topic),
                 FromSync::Data(header_bytes_0, Some(body.to_bytes())),
                 FromSync::Data(header_bytes_1, Some(body.to_bytes())),
                 FromSync::Data(header_bytes_2, Some(body.to_bytes())),
@@ -747,7 +749,7 @@ mod tests {
         let (_, _) = tokio::join!(handle_1, handle_2);
 
         let peer_a_expected_messages = vec![
-            FromSync::Topic(topic.clone()),
+            FromSync::HandshakeSuccess(topic.clone()),
             FromSync::Data(header_bytes_0, Some(body.to_bytes())),
             FromSync::Data(header_bytes_1, Some(body.to_bytes())),
             FromSync::Data(header_bytes_2, Some(body.to_bytes())),
@@ -757,7 +759,7 @@ mod tests {
         peer_a_app_rx.recv_many(&mut peer_a_messages, 10).await;
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
-        let peer_b_expected_messages = vec![FromSync::Topic(topic.clone())];
+        let peer_b_expected_messages = vec![FromSync::HandshakeSuccess(topic.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
         assert_eq!(peer_b_messages, peer_b_expected_messages);
@@ -860,7 +862,7 @@ mod tests {
         let (_, _) = tokio::join!(handle_1, handle_2);
 
         let peer_a_expected_messages = vec![
-            FromSync::Topic(topic.clone()),
+            FromSync::HandshakeSuccess(topic.clone()),
             FromSync::Data(header_bytes_1, Some(body.to_bytes())),
             FromSync::Data(header_bytes_2, Some(body.to_bytes())),
         ];
@@ -869,7 +871,7 @@ mod tests {
         peer_a_app_rx.recv_many(&mut peer_a_messages, 10).await;
         assert_eq!(peer_a_messages, peer_a_expected_messages);
 
-        let peer_b_expected_messages = vec![FromSync::Topic(topic.clone())];
+        let peer_b_expected_messages = vec![FromSync::HandshakeSuccess(topic.clone())];
         let mut peer_b_messages = Vec::new();
         peer_b_app_rx.recv_many(&mut peer_b_messages, 10).await;
         assert_eq!(peer_b_messages, peer_b_expected_messages);

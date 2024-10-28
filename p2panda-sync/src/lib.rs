@@ -92,7 +92,10 @@ impl From<std::io::Error> for SyncError {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum FromSync<T> {
-    Topic(T),
+pub enum FromSync<T>
+where
+    T: Topic,
+{
+    HandshakeSuccess(T),
     Data(Vec<u8>, Option<Vec<u8>>),
 }
