@@ -40,6 +40,7 @@ const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
 pub(crate) type JoinErrToStr =
     Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
+/// Relay server configuration mode.
 #[derive(Debug, PartialEq)]
 pub enum RelayMode {
     Disabled,
