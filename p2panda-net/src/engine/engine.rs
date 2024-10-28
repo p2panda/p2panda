@@ -442,8 +442,8 @@ where
 
         // If we haven't joined a gossip overlay for this topic yet, optimistically try to do it
         // now. If this fails we will retry later in our main loop
-        if !self.topics.has_joined(&topic.id().into()).await {
-            self.join_topic(topic.id().into()).await?;
+        if !self.topics.has_joined(&topic.id()).await {
+            self.join_topic(topic.id()).await?;
         }
 
         // Task to establish a channel for sending messages into gossip overlay
@@ -452,7 +452,7 @@ where
             let topics = self.topics.clone();
             tokio::task::spawn(async move {
                 while let Some(event) = to_network_rx.recv().await {
-                    if !topics.has_successfully_joined(&topic.id().into()).await {
+                    if !topics.has_successfully_joined(&topic.id()).await {
                         // @TODO: We're dropping messages silently for now, later we want to buffer
                         // them somewhere until we've joined the topic gossip
                         continue;
@@ -462,7 +462,7 @@ where
                         ToNetwork::Message { bytes } => {
                             gossip_actor_tx
                                 .send(ToGossipActor::Broadcast {
-                                    topic_id: topic.id().into(),
+                                    topic_id: topic.id(),
                                     bytes,
                                 })
                                 .await
@@ -664,10 +664,10 @@ where
     ) {
         let mut inner = self.inner.write().await;
         inner.earmarked.insert(
-            topic.id().into(),
+            topic.id(),
             (topic.clone(), from_network_tx, Some(gossip_ready_tx)),
         );
-        inner.pending_joins.insert(topic.id().into());
+        inner.pending_joins.insert(topic.id());
     }
 
     /// Remove a topic of interest to our node.

@@ -709,7 +709,9 @@ mod sync_protocols {
 
                 match &message {
                     DummyProtocolMessage::Topic(topic) => {
-                        app_tx.send(FromSync::HandshakeSuccess(topic.clone())).await?
+                        app_tx
+                            .send(FromSync::HandshakeSuccess(topic.clone()))
+                            .await?
                     }
                     DummyProtocolMessage::Done => break,
                 }

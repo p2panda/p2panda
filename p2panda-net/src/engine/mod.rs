@@ -66,7 +66,7 @@ where
             engine_actor_rx,
             gossip_actor_tx,
             sync_manager_tx,
-            network_id.into(),
+            network_id,
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
