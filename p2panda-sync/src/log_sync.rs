@@ -15,6 +15,8 @@ use tracing::debug;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::{FromSync, SyncError, SyncProtocol, Topic, TopicMap};
 
+static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
+
 type SeqNum = u64;
 pub type LogHeights<T> = Vec<(T, SeqNum)>;
 pub type Logs<T> = HashMap<PublicKey, Vec<T>>;
@@ -37,8 +39,6 @@ where
         p2panda_core::cbor::encode_cbor(&self).expect("type can be serialized")
     }
 }
-
-static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
 
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<TM, L, E> {
@@ -85,8 +85,6 @@ where
         };
 
         // Get local log heights for all authors who have published under the requested log ids
-        // @TODO: this will require changes soon when `get_log_heights` method includes the public
-        // key as an argument.
         let mut local_log_heights = Vec::new();
         for (public_key, log_ids) in logs {
             let mut log_heights = Vec::new();
@@ -96,7 +94,7 @@ where
                     .latest_operation(&public_key, &log_id)
                     .await
                     .map_err(|err| {
-                        SyncError::Critical(format!("can't retreive log heights from store, {err}"))
+                        SyncError::Critical(format!("can't retrieve log heights from store, {err}"))
                     })?;
 
                 if let Some((header, _)) = latest {
@@ -171,7 +169,8 @@ where
 
             match &message {
                 Message::Have(topic, remote_log_heights) => {
-                    // Announce the topic id that we received from the initiating peer.
+                    // Signal that the "handshake" phase of this protocol is complete as we
+                    // received the topic.
                     app_tx
                         .send(FromSync::HandshakeSuccess(topic.clone()))
                         .await?;
@@ -186,24 +185,12 @@ where
                     let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
                         remote_log_heights.clone().into_iter().collect();
 
-                    // For every log id we need to:
-                    // * Retrieve the local log heights for all contributing authors
-                    // * Compare our local log heights with those sent from the remote peer
-                    // * Send any operations the remote peer is missing
+                    // Now that the topic has been translated into a collection of logs we want to
+                    // compare our own local log heights with what the remote sent for this topic.
+                    // If our logs are more advanced for any log we should send the missing operations.
                     for (public_key, log_ids) in logs {
-                        let Some(remote_log_heights) = remote_log_heights_map.get(&public_key)
-                        else {
-                            for log_id in log_ids {
-                                let messages =
-                                    remote_needs::<T, L, E>(&self.store, &log_id, &public_key, 0)
-                                        .await?;
-                                sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
-                                    .await?;
-                            }
-                            continue;
-                        };
-
                         for log_id in log_ids {
+                            // For all logs in this topic scope get the local height.
                             let latest_operation = self
                                 .store
                                 .latest_operation(&public_key, &log_id)
@@ -216,29 +203,33 @@ where
 
                             let log_height = match latest_operation {
                                 Some((header, _)) => header.seq_num,
+                                // If we don't have this log then continue onto the next without
+                                // sending any messages.
                                 None => continue,
                             };
 
-                            let Some((_, remote_log_height)) = remote_log_heights
-                                .iter()
-                                .find(|(id, _seq_num)| *id == log_id)
-                            else {
-                                let messages =
-                                    remote_needs(&self.store, &log_id, &public_key, 0).await?;
-                                sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
-                                    .await?;
-                                continue;
+                            // Calculate from which seq num in the log the remote needs operations.
+                            let remote_needs_from = match remote_log_heights_map.get(&public_key) {
+                                Some(log_heights) => {
+                                    match log_heights.iter().find(|(id, _)| *id == log_id) {
+                                        // The log is known by the remote, take their log height
+                                        // and plus one.
+                                        Some((_, log_height)) => log_height + 1,
+                                        // The log is not known, they need from seq num 0
+                                        None => 0,
+                                    }
+                                }
+                                // The author is not known, they need from seq num 0
+                                None => 0,
                             };
 
-                            // Compare log heights sent by the remote with our local logs, if
-                            // our logs are more advanced calculate and send operations the
-                            // remote is missing.
-                            if *remote_log_height < log_height {
-                                let messages = remote_needs(
+                            // If we have operations the remote needs then send them now.
+                            if remote_needs_from <= log_height {
+                                let messages: Vec<Message<T, L>> = remote_needs(
                                     &self.store,
                                     &log_id,
                                     &public_key,
-                                    *remote_log_height + 1,
+                                    remote_needs_from,
                                 )
                                 .await?;
                                 sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
