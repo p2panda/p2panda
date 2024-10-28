@@ -65,7 +65,7 @@ where
                 engine_actor_tx
                     .send(ToEngineActor::SyncHandshakeSuccess {
                         peer,
-                        topic: topic_id.into(),
+                        topic_id: topic_id.into(),
                     })
                     .await
                     .expect("engine channel closed");
@@ -83,7 +83,7 @@ where
                     header,
                     payload,
                     delivered_from: peer,
-                    topic: topic_id.into(),
+                    topic_id: topic_id.into(),
                 })
                 .await
             {
@@ -93,7 +93,7 @@ where
         engine_actor_tx
             .send(ToEngineActor::SyncDone {
                 peer,
-                topic: topic_id.into(),
+                topic_id: topic_id.into(),
             })
             .await
             .expect("engine channel closed");
@@ -158,7 +158,7 @@ where
                 engine_actor_tx
                     .send(ToEngineActor::SyncHandshakeSuccess {
                         peer,
-                        topic: topic.id().into(),
+                        topic_id: topic.id().into(),
                     })
                     .await
                     .expect("engine channel closed");
@@ -182,7 +182,7 @@ where
                     header,
                     payload,
                     delivered_from: peer,
-                    topic: topic_id.into(),
+                    topic_id: topic_id.into(),
                 })
                 .await
             {
@@ -199,7 +199,7 @@ where
         engine_actor_tx
             .send(ToEngineActor::SyncDone {
                 peer,
-                topic: topic_id.into(),
+                topic_id: topic_id.into(),
             })
             .await
             .expect("engine channel closed");

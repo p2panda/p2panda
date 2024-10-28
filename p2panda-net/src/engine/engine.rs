@@ -42,7 +42,7 @@ pub enum ToEngineActor<T> {
         node_addr: NodeAddr,
     },
     NeighborUp {
-        topic: TopicId,
+        topic_id: TopicId,
         peer: PublicKey,
     },
     Subscribe {
@@ -54,27 +54,27 @@ pub enum ToEngineActor<T> {
     Received {
         bytes: Vec<u8>,
         delivered_from: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     },
     SyncHandshakeSuccess {
         peer: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     },
     SyncMessage {
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     },
     SyncDone {
         peer: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
     TopicJoined {
-        topic: TopicId,
+        topic_id: TopicId,
     },
     KnownPeers {
         reply: oneshot::Sender<Result<Vec<NodeAddr>>>,
@@ -88,26 +88,26 @@ pub struct GossipBuffer {
 }
 
 impl GossipBuffer {
-    fn lock(&mut self, peer: PublicKey, topic: TopicId) {
-        let counter = self.counters.entry((peer, topic)).or_default();
+    fn lock(&mut self, peer: PublicKey, topic_id: TopicId) {
+        let counter = self.counters.entry((peer, topic_id)).or_default();
         *counter += 1;
 
-        self.buffers.entry((peer, topic)).or_default();
+        self.buffers.entry((peer, topic_id)).or_default();
 
-        // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic
+        // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic_id
         debug!(
             "lock gossip buffer with {} on topic {}: {}",
-            peer, topic, counter
+            peer, topic_id, counter
         );
     }
 
-    fn unlock(&mut self, peer: PublicKey, topic: TopicId) -> usize {
-        match self.counters.get_mut(&(peer, topic)) {
+    fn unlock(&mut self, peer: PublicKey, topic_id: TopicId) -> usize {
+        match self.counters.get_mut(&(peer, topic_id)) {
             Some(counter) => {
                 *counter -= 1;
                 debug!(
                     "unlock gossip buffer with {} on topic {}: {}",
-                    peer, topic, counter
+                    peer, topic_id, counter
                 );
                 *counter
             }
@@ -115,12 +115,12 @@ impl GossipBuffer {
         }
     }
 
-    fn drain(&mut self, peer: PublicKey, topic: TopicId) -> Option<Vec<Vec<u8>>> {
-        self.buffers.remove(&(peer, topic))
+    fn drain(&mut self, peer: PublicKey, topic_id: TopicId) -> Option<Vec<Vec<u8>>> {
+        self.buffers.remove(&(peer, topic_id))
     }
 
-    fn buffer(&mut self, peer: PublicKey, topic: TopicId) -> Option<&mut Vec<Vec<u8>>> {
-        self.buffers.get_mut(&(peer, topic))
+    fn buffer(&mut self, peer: PublicKey, topic_id: TopicId) -> Option<&mut Vec<Vec<u8>>> {
+        self.buffers.get_mut(&(peer, topic_id))
     }
 }
 
@@ -250,26 +250,27 @@ where
             ToEngineActor::AddPeer { node_addr } => {
                 self.add_peer(node_addr).await?;
             }
-            ToEngineActor::NeighborUp { topic, peer } => {
-                self.on_peer_joined(topic, peer).await?;
+            ToEngineActor::NeighborUp { topic_id, peer } => {
+                self.on_peer_joined(topic_id, peer).await?;
             }
             ToEngineActor::Received {
                 bytes,
                 delivered_from,
-                topic,
+                topic_id,
             } => {
-                self.on_gossip_message(bytes, delivered_from, topic).await?;
+                self.on_gossip_message(bytes, delivered_from, topic_id)
+                    .await?;
             }
-            ToEngineActor::SyncHandshakeSuccess { peer, topic } => {
-                self.gossip_buffer.lock(peer, topic);
+            ToEngineActor::SyncHandshakeSuccess { peer, topic_id } => {
+                self.gossip_buffer.lock(peer, topic_id);
             }
             ToEngineActor::SyncMessage {
                 header,
                 payload,
                 delivered_from,
-                topic,
+                topic_id,
             } => {
-                self.on_sync_message(header, payload, delivered_from, topic)
+                self.on_sync_message(header, payload, delivered_from, topic_id)
                     .await?;
             }
             ToEngineActor::Subscribe {
@@ -281,8 +282,8 @@ where
                 self.on_subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
                     .await?;
             }
-            ToEngineActor::TopicJoined { topic } => {
-                self.on_topic_joined(topic).await?;
+            ToEngineActor::TopicJoined { topic_id } => {
+                self.on_topic_joined(topic_id).await?;
             }
             ToEngineActor::KnownPeers { reply } => {
                 let list = self.peers.known_peers();
@@ -291,17 +292,17 @@ where
             ToEngineActor::Shutdown { .. } => {
                 unreachable!("handled in run_inner");
             }
-            ToEngineActor::SyncDone { peer, topic } => {
-                let counter = self.gossip_buffer.unlock(peer, topic);
+            ToEngineActor::SyncDone { peer, topic_id } => {
+                let counter = self.gossip_buffer.unlock(peer, topic_id);
 
                 if counter == 0 {
                     let buffer = self
                         .gossip_buffer
-                        .drain(peer, topic)
+                        .drain(peer, topic_id)
                         .expect("missing expected gossip buffer");
 
                     for bytes in buffer {
-                        self.on_gossip_message(bytes, peer, topic).await?;
+                        self.on_gossip_message(bytes, peer, topic_id).await?;
                     }
                 }
             }
@@ -352,22 +353,22 @@ where
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
-    async fn join_topic(&mut self, topic: TopicId) -> Result<()> {
-        if topic == self.network_id && !self.network_joined_pending && !self.network_joined {
+    async fn join_topic(&mut self, topic_id: TopicId) -> Result<()> {
+        if topic_id == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
         }
 
-        let peers = self.peers.random_set(&topic, JOIN_PEERS_SAMPLE_LEN);
+        let peers = self.peers.random_set(&topic_id, JOIN_PEERS_SAMPLE_LEN);
         if !peers.is_empty() {
             self.gossip_actor_tx
                 .send(ToGossipActor::Join {
-                    topic,
+                    topic_id,
                     peers: peers.clone(),
                 })
                 .await?;
 
-            // Do not attempt peer sync if the topic is the network id.
-            if topic == self.network_id {
+            // Do not attempt peer sync if the topic_id is the network id.
+            if topic_id == self.network_id {
                 return Ok(());
             }
         }
@@ -377,14 +378,14 @@ where
 
     /// Update the join status for the given topic, if it is of interest to our node, and announce
     /// all topics.
-    async fn on_topic_joined(&mut self, topic: TopicId) -> Result<()> {
-        if topic == self.network_id {
+    async fn on_topic_joined(&mut self, topic_id: TopicId) -> Result<()> {
+        if topic_id == self.network_id {
             self.network_joined_pending = false;
             self.network_joined = true;
         }
 
-        self.topics.set_joined(topic).await?;
-        if topic == self.network_id {
+        self.topics.set_joined(topic_id).await?;
+        if topic_id == self.network_id {
             self.announce_topics().await?;
         }
 
@@ -393,12 +394,12 @@ where
 
     /// Register the topic and public key of a peer who just joined the network.
     /// If the topic is of interest to our node, announce all topics.
-    async fn on_peer_joined(&mut self, topic: TopicId, peer_id: PublicKey) -> Result<()> {
+    async fn on_peer_joined(&mut self, topic_id: TopicId, peer_id: PublicKey) -> Result<()> {
         // Add the peer to our address book if they are not already known to us
         if !self.peers.known_peers.contains_key(&peer_id) {
-            self.peers.add_peer(topic, NodeAddr::new(peer_id));
+            self.peers.add_peer(topic_id, NodeAddr::new(peer_id));
         }
-        if topic == self.network_id {
+        if topic_id == self.network_id {
             self.announce_topics().await?;
         }
 
@@ -414,7 +415,7 @@ where
 
         self.gossip_actor_tx
             .send(ToGossipActor::Broadcast {
-                topic: self.network_id,
+                topic_id: self.network_id,
                 bytes,
             })
             .await?;
@@ -462,7 +463,7 @@ where
                         ToNetwork::Message { bytes } => {
                             gossip_actor_tx
                                 .send(ToGossipActor::Broadcast {
-                                    topic: topic.id().into(),
+                                    topic_id: topic.id().into(),
                                     bytes,
                                 })
                                 .await
@@ -501,14 +502,14 @@ where
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     ) -> Result<()> {
-        if self.topics.has_joined(&topic).await {
+        if self.topics.has_joined(&topic_id).await {
             self.topics
-                .on_sync_message(topic, header, payload, delivered_from)
+                .on_sync_message(topic_id, header, payload, delivered_from)
                 .await?;
         } else {
-            warn!("received message for unknown topic {topic}");
+            warn!("received message for unknown topic {topic_id}");
         }
 
         Ok(())
@@ -519,9 +520,9 @@ where
         &mut self,
         bytes: Vec<u8>,
         delivered_from: PublicKey,
-        topic: TopicId,
+        topic_id: TopicId,
     ) -> Result<()> {
-        if topic == self.network_id {
+        if topic_id == self.network_id {
             // Message coming from network-wide gossip overlay
             let Ok(message) = NetworkMessage::from_bytes(&bytes) else {
                 warn!(
@@ -537,16 +538,16 @@ where
                     self.on_announcement_message(topics, delivered_from).await?;
                 }
             }
-        } else if self.topics.has_joined(&topic).await {
-            if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic) {
+        } else if self.topics.has_joined(&topic_id).await {
+            if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic_id) {
                 buffer.push(bytes);
             } else {
                 self.topics
-                    .on_gossip_message(topic, bytes, delivered_from)
+                    .on_gossip_message(topic_id, bytes, delivered_from)
                     .await?;
             }
         } else {
-            warn!("received message for unknown topic {topic}");
+            warn!("received message for unknown topic {topic_id}");
         }
 
         Ok(())
@@ -591,10 +592,10 @@ where
 
     #[allow(dead_code)]
     /// Deregister our interest in the given topic and leave the gossip overlay.
-    async fn leave_topic(&mut self, topic: TopicId) -> Result<()> {
-        self.topics.remove_earmark(&topic).await;
+    async fn leave_topic(&mut self, topic_id: TopicId) -> Result<()> {
+        self.topics.remove_earmark(&topic_id).await;
         self.gossip_actor_tx
-            .send(ToGossipActor::Leave { topic })
+            .send(ToGossipActor::Leave { topic_id })
             .await?;
         Ok(())
     }
@@ -680,14 +681,14 @@ where
     }
 
     /// Mark that we've successfully joined a gossip overlay for this topic.
-    pub async fn set_joined(&mut self, topic: TopicId) -> Result<()> {
+    pub async fn set_joined(&mut self, topic_id: TopicId) -> Result<()> {
         let mut inner = self.inner.write().await;
-        if inner.pending_joins.remove(&topic) {
-            inner.joined.insert(topic);
+        if inner.pending_joins.remove(&topic_id) {
+            inner.joined.insert(topic_id);
 
             // Inform local topic subscribers that the gossip overlay has been joined and is ready
             // for messages.
-            if let Some((_, _, gossip_ready_tx)) = inner.earmarked.get_mut(&topic) {
+            if let Some((_, _, gossip_ready_tx)) = inner.earmarked.get_mut(&topic_id) {
                 // We need the `Sender` to be owned so we take it and replace with `None`.
                 if let Some(oneshot_tx) = gossip_ready_tx.take() {
                     if oneshot_tx.send(()).is_err() {
@@ -718,13 +719,13 @@ where
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_gossip_message(
         &self,
-        topic: TopicId,
+        topic_id: TopicId,
         bytes: Vec<u8>,
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
         let (_, from_network_tx, _gossip_ready_tx) =
-            inner.earmarked.get(&topic).context("on_gossip_message")?;
+            inner.earmarked.get(&topic_id).context("on_gossip_message")?;
         from_network_tx.send(FromNetwork::GossipMessage {
             bytes,
             delivered_from: to_public_key(delivered_from),
@@ -737,13 +738,13 @@ where
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_sync_message(
         &self,
-        topic: TopicId,
+        topic_id: TopicId,
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let (_, from_network_tx, _) = inner.earmarked.get(&topic).context("on_sync_message")?;
+        let (_, from_network_tx, _) = inner.earmarked.get(&topic_id).context("on_sync_message")?;
         from_network_tx.send(FromNetwork::SyncMessage {
             header,
             payload,
@@ -777,7 +778,7 @@ impl PeerMap {
     /// If the peer is already known, their node addresses and relay URL are updated.
     /// If not, the peer and their addresses are added to the address book and the local topic
     /// updater is called.
-    pub fn add_peer(&mut self, topic: TopicId, node_addr: NodeAddr) -> Option<NodeAddr> {
+    pub fn add_peer(&mut self, topic_id: TopicId, node_addr: NodeAddr) -> Option<NodeAddr> {
         let public_key = node_addr.node_id;
 
         // If the given peer is already known to us, only update the direct addresses and relay url
@@ -793,7 +794,7 @@ impl PeerMap {
             }
             Some(addr.clone())
         } else {
-            self.on_announcement(vec![topic], public_key);
+            self.on_announcement(vec![topic_id], public_key);
             self.known_peers.insert(public_key, node_addr)
         }
     }
