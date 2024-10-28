@@ -63,10 +63,7 @@ where
 
                 // Inform the engine that we are expecting sync messages from the peer on this topic
                 engine_actor_tx
-                    .send(ToEngineActor::SyncHandshakeSuccess {
-                        peer,
-                        topic_id: topic_id.into(),
-                    })
+                    .send(ToEngineActor::SyncHandshakeSuccess { peer, topic_id })
                     .await
                     .expect("engine channel closed");
 
@@ -83,7 +80,7 @@ where
                     header,
                     payload,
                     delivered_from: peer,
-                    topic_id: topic_id.into(),
+                    topic_id,
                 })
                 .await
             {
@@ -91,10 +88,7 @@ where
             };
         }
         engine_actor_tx
-            .send(ToEngineActor::SyncDone {
-                peer,
-                topic_id: topic_id.into(),
-            })
+            .send(ToEngineActor::SyncDone { peer, topic_id })
             .await
             .expect("engine channel closed");
     });
@@ -158,7 +152,7 @@ where
                 engine_actor_tx
                     .send(ToEngineActor::SyncHandshakeSuccess {
                         peer,
-                        topic_id: topic.id().into(),
+                        topic_id: topic.id(),
                     })
                     .await
                     .expect("engine channel closed");
@@ -182,7 +176,7 @@ where
                     header,
                     payload,
                     delivered_from: peer,
-                    topic_id: topic_id.into(),
+                    topic_id,
                 })
                 .await
             {
@@ -197,10 +191,7 @@ where
         };
 
         engine_actor_tx
-            .send(ToEngineActor::SyncDone {
-                peer,
-                topic_id: topic_id.into(),
-            })
+            .send(ToEngineActor::SyncDone { peer, topic_id })
             .await
             .expect("engine channel closed");
     });

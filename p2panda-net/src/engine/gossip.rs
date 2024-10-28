@@ -6,7 +6,6 @@ use anyhow::{Context, Result};
 use futures_lite::StreamExt;
 use futures_util::FutureExt;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
-use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use p2panda_sync::Topic;
 use tokio::sync::mpsc;
@@ -19,15 +18,15 @@ use crate::engine::ToEngineActor;
 #[derive(Debug)]
 pub enum ToGossipActor {
     Broadcast {
-        topic_id: TopicId,
+        topic_id: [u8; 32],
         bytes: Vec<u8>,
     },
     Join {
-        topic_id: TopicId,
+        topic_id: [u8; 32],
         peers: Vec<PublicKey>,
     },
     Leave {
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     Shutdown,
 }
@@ -35,12 +34,12 @@ pub enum ToGossipActor {
 pub struct GossipActor<T> {
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     gossip: Gossip,
-    gossip_events: StreamMap<TopicId, GossipReceiver>,
-    gossip_senders: HashMap<TopicId, GossipSender>,
+    gossip_events: StreamMap<[u8; 32], GossipReceiver>,
+    gossip_senders: HashMap<[u8; 32], GossipSender>,
     inbox: mpsc::Receiver<ToGossipActor>,
-    joined: HashSet<TopicId>,
-    pending_joins: JoinSet<(TopicId, Result<GossipTopic>)>,
-    want_join: HashSet<TopicId>,
+    joined: HashSet<[u8; 32]>,
+    pending_joins: JoinSet<([u8; 32], Result<GossipTopic>)>,
+    want_join: HashSet<[u8; 32]>,
 }
 
 impl<T> GossipActor<T>
@@ -103,14 +102,17 @@ where
             ToGossipActor::Broadcast { topic_id, bytes } => {
                 if let Some(gossip_tx) = self.gossip_senders.get(&topic_id) {
                     if let Err(err) = gossip_tx.broadcast(bytes.into()).await {
-                        error!(topic_id = %topic_id, "failed to broadcast gossip msg: {}", err)
+                        error!(
+                            topic_id = "{topic_id:?}",
+                            "failed to broadcast gossip msg: {}", err
+                        )
                     }
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {
                 let gossip = self.gossip.clone();
                 let fut = async move {
-                    let stream = gossip.join(topic_id, peers).await?;
+                    let stream = gossip.join(topic_id.into(), peers).await?;
 
                     Ok(stream)
                 }
@@ -135,7 +137,7 @@ where
         Ok(true)
     }
 
-    async fn on_gossip_event(&mut self, event: Option<(TopicId, Result<Event>)>) -> Result<()> {
+    async fn on_gossip_event(&mut self, event: Option<([u8; 32], Result<Event>)>) -> Result<()> {
         let (topic_id, event) = event.context("gossip event channel closed")?;
         let event = match event {
             Ok(Event::Gossip(event)) => event,
@@ -144,24 +146,35 @@ where
                 return Ok(());
             }
             Err(err) => {
-                error!(topic_id = %topic_id, "gossip receiver error: {}", err);
+                error!(topic_id = "{topic_id:?}", "gossip receiver error: {}", err);
                 return Ok(());
             }
         };
 
         if !self.joined.contains(&topic_id) && !self.want_join.contains(&topic_id) {
-            error!(topic_id = %topic_id, "received gossip event for unknown topic");
+            error!(
+                topic_id = "{topic_id:?}",
+                "received gossip event for unknown topic"
+            );
             return Ok(());
         }
 
         if let Err(err) = self.on_gossip_event_inner(topic_id, event).await {
-            error!(topic_id = %topic_id, ?err, "failed to process gossip event");
+            error!(
+                topic_id = "{topic_id:?}",
+                ?err,
+                "failed to process gossip event"
+            );
         }
 
         Ok(())
     }
 
-    async fn on_gossip_event_inner(&mut self, topic_id: TopicId, event: GossipEvent) -> Result<()> {
+    async fn on_gossip_event_inner(
+        &mut self,
+        topic_id: [u8; 32],
+        event: GossipEvent,
+    ) -> Result<()> {
         match event {
             GossipEvent::Received(msg) => {
                 self.engine_actor_tx
@@ -183,7 +196,7 @@ where
         Ok(())
     }
 
-    async fn on_joined(&mut self, topic_id: TopicId, stream: GossipTopic) -> Result<()> {
+    async fn on_joined(&mut self, topic_id: [u8; 32], stream: GossipTopic) -> Result<()> {
         self.joined.insert(topic_id);
 
         // Split the gossip stream and insert handles to the receiver and sender

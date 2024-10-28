@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_sync::Topic;
@@ -42,7 +41,7 @@ pub enum ToEngineActor<T> {
         node_addr: NodeAddr,
     },
     NeighborUp {
-        topic_id: TopicId,
+        topic_id: [u8; 32],
         peer: PublicKey,
     },
     Subscribe {
@@ -54,27 +53,27 @@ pub enum ToEngineActor<T> {
     Received {
         bytes: Vec<u8>,
         delivered_from: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     SyncHandshakeSuccess {
         peer: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     SyncMessage {
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     SyncDone {
         peer: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
     TopicJoined {
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     },
     KnownPeers {
         reply: oneshot::Sender<Result<Vec<NodeAddr>>>,
@@ -83,12 +82,12 @@ pub enum ToEngineActor<T> {
 
 #[derive(Debug, Default)]
 pub struct GossipBuffer {
-    buffers: HashMap<(PublicKey, TopicId), Vec<Vec<u8>>>,
-    counters: HashMap<(PublicKey, TopicId), usize>,
+    buffers: HashMap<(PublicKey, [u8; 32]), Vec<Vec<u8>>>,
+    counters: HashMap<(PublicKey, [u8; 32]), usize>,
 }
 
 impl GossipBuffer {
-    fn lock(&mut self, peer: PublicKey, topic_id: TopicId) {
+    fn lock(&mut self, peer: PublicKey, topic_id: [u8; 32]) {
         let counter = self.counters.entry((peer, topic_id)).or_default();
         *counter += 1;
 
@@ -96,17 +95,17 @@ impl GossipBuffer {
 
         // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic_id
         debug!(
-            "lock gossip buffer with {} on topic {}: {}",
+            "lock gossip buffer with {} on topic {:?}: {}",
             peer, topic_id, counter
         );
     }
 
-    fn unlock(&mut self, peer: PublicKey, topic_id: TopicId) -> usize {
+    fn unlock(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> usize {
         match self.counters.get_mut(&(peer, topic_id)) {
             Some(counter) => {
                 *counter -= 1;
                 debug!(
-                    "unlock gossip buffer with {} on topic {}: {}",
+                    "unlock gossip buffer with {} on topic {:?}: {}",
                     peer, topic_id, counter
                 );
                 *counter
@@ -115,11 +114,11 @@ impl GossipBuffer {
         }
     }
 
-    fn drain(&mut self, peer: PublicKey, topic_id: TopicId) -> Option<Vec<Vec<u8>>> {
+    fn drain(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> Option<Vec<Vec<u8>>> {
         self.buffers.remove(&(peer, topic_id))
     }
 
-    fn buffer(&mut self, peer: PublicKey, topic_id: TopicId) -> Option<&mut Vec<Vec<u8>>> {
+    fn buffer(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> Option<&mut Vec<Vec<u8>>> {
         self.buffers.get_mut(&(peer, topic_id))
     }
 }
@@ -132,7 +131,7 @@ pub struct EngineActor<T> {
     // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
     // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
     // network-wide gossip overlay).
-    network_id: TopicId,
+    network_id: [u8; 32],
     network_joined: bool,
     network_joined_pending: bool,
     peers: PeerMap,
@@ -149,7 +148,7 @@ where
         inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
-        network_id: TopicId,
+        network_id: [u8; 32],
     ) -> Self {
         Self {
             endpoint,
@@ -353,7 +352,7 @@ where
     // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
     // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
-    async fn join_topic(&mut self, topic_id: TopicId) -> Result<()> {
+    async fn join_topic(&mut self, topic_id: [u8; 32]) -> Result<()> {
         if topic_id == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
         }
@@ -378,7 +377,7 @@ where
 
     /// Update the join status for the given topic, if it is of interest to our node, and announce
     /// all topics.
-    async fn on_topic_joined(&mut self, topic_id: TopicId) -> Result<()> {
+    async fn on_topic_joined(&mut self, topic_id: [u8; 32]) -> Result<()> {
         if topic_id == self.network_id {
             self.network_joined_pending = false;
             self.network_joined = true;
@@ -394,7 +393,7 @@ where
 
     /// Register the topic and public key of a peer who just joined the network.
     /// If the topic is of interest to our node, announce all topics.
-    async fn on_peer_joined(&mut self, topic_id: TopicId, peer_id: PublicKey) -> Result<()> {
+    async fn on_peer_joined(&mut self, topic_id: [u8; 32], peer_id: PublicKey) -> Result<()> {
         // Add the peer to our address book if they are not already known to us
         if !self.peers.known_peers.contains_key(&peer_id) {
             self.peers.add_peer(topic_id, NodeAddr::new(peer_id));
@@ -487,9 +486,9 @@ where
 
     /// Join all earmarked topics which have not yet been successfully joined.
     async fn join_earmarked_topics(&mut self) -> Result<()> {
-        for topic in self.topics.earmarked().await {
-            if !self.topics.has_successfully_joined(&topic).await {
-                self.join_topic(topic).await?;
+        for topic_id in self.topics.earmarked().await {
+            if !self.topics.has_successfully_joined(&topic_id).await {
+                self.join_topic(topic_id).await?;
             }
         }
 
@@ -502,14 +501,14 @@ where
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     ) -> Result<()> {
         if self.topics.has_joined(&topic_id).await {
             self.topics
                 .on_sync_message(topic_id, header, payload, delivered_from)
                 .await?;
         } else {
-            warn!("received message for unknown topic {topic_id}");
+            warn!("received message for unknown topic {topic_id:?}");
         }
 
         Ok(())
@@ -520,7 +519,7 @@ where
         &mut self,
         bytes: Vec<u8>,
         delivered_from: PublicKey,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
     ) -> Result<()> {
         if topic_id == self.network_id {
             // Message coming from network-wide gossip overlay
@@ -534,8 +533,9 @@ where
 
             // So far we're only expecting one message type on the network-wide overlay
             match message {
-                NetworkMessage::Announcement(_, topics) => {
-                    self.on_announcement_message(topics, delivered_from).await?;
+                NetworkMessage::Announcement(_, topic_ids) => {
+                    self.on_announcement_message(topic_ids, delivered_from)
+                        .await?;
                 }
             }
         } else if self.topics.has_joined(&topic_id).await {
@@ -547,7 +547,7 @@ where
                     .await?;
             }
         } else {
-            warn!("received message for unknown topic {topic_id}");
+            warn!("received message for unknown topic {topic_id:?}");
         }
 
         Ok(())
@@ -556,16 +556,17 @@ where
     /// Process an announcement message from the gossip overlay.
     async fn on_announcement_message(
         &mut self,
-        topics: Vec<TopicId>,
+        topic_ids: Vec<[u8; 32]>,
         delivered_from: PublicKey,
     ) -> Result<()> {
         debug!(
             "received announcement of peer {} {:?}",
-            delivered_from, topics
+            delivered_from, topic_ids
         );
 
         // Register earmarked topics from other peers
-        self.peers.on_announcement(topics.clone(), delivered_from);
+        self.peers
+            .on_announcement(topic_ids.clone(), delivered_from);
 
         // And optimistically try to join them if there's an overlap with our interests
         self.join_earmarked_topics().await?;
@@ -574,7 +575,7 @@ where
         // us
         if let Some(sync_manager_tx) = &self.sync_manager_tx {
             let topics_of_interest = self.topics.earmarked().await;
-            for topic_id in &topics {
+            for topic_id in &topic_ids {
                 if topics_of_interest.contains(topic_id) {
                     let topic = self
                         .topics
@@ -592,7 +593,7 @@ where
 
     #[allow(dead_code)]
     /// Deregister our interest in the given topic and leave the gossip overlay.
-    async fn leave_topic(&mut self, topic_id: TopicId) -> Result<()> {
+    async fn leave_topic(&mut self, topic_id: [u8; 32]) -> Result<()> {
         self.topics.remove_earmark(&topic_id).await;
         self.gossip_actor_tx
             .send(ToGossipActor::Leave { topic_id })
@@ -624,9 +625,9 @@ type TopicMeta<T> = (
 
 #[derive(Debug)]
 struct TopicMapInner<T> {
-    earmarked: HashMap<TopicId, TopicMeta<T>>,
-    pending_joins: HashSet<TopicId>,
-    joined: HashSet<TopicId>,
+    earmarked: HashMap<[u8; 32], TopicMeta<T>>,
+    pending_joins: HashSet<[u8; 32]>,
+    joined: HashSet<[u8; 32]>,
 }
 
 impl<T> TopicMap<T>
@@ -644,7 +645,7 @@ where
         }
     }
 
-    pub async fn get(&self, topic_id: &TopicId) -> Option<T> {
+    pub async fn get(&self, topic_id: &[u8; 32]) -> Option<T> {
         let inner = self.inner.read().await;
         inner
             .earmarked
@@ -668,20 +669,20 @@ where
     }
 
     /// Remove a topic of interest to our node.
-    pub async fn remove_earmark(&mut self, topic: &TopicId) {
+    pub async fn remove_earmark(&mut self, topic_id: &[u8; 32]) {
         let mut inner = self.inner.write().await;
-        inner.earmarked.remove(topic);
-        inner.pending_joins.remove(topic);
+        inner.earmarked.remove(topic_id);
+        inner.pending_joins.remove(topic_id);
     }
 
     /// Return a list of topics of interest to our node.
-    pub async fn earmarked(&self) -> Vec<TopicId> {
+    pub async fn earmarked(&self) -> Vec<[u8; 32]> {
         let inner = self.inner.read().await;
         inner.earmarked.keys().cloned().collect()
     }
 
     /// Mark that we've successfully joined a gossip overlay for this topic.
-    pub async fn set_joined(&mut self, topic_id: TopicId) -> Result<()> {
+    pub async fn set_joined(&mut self, topic_id: [u8; 32]) -> Result<()> {
         let mut inner = self.inner.write().await;
         if inner.pending_joins.remove(&topic_id) {
             inner.joined.insert(topic_id);
@@ -702,16 +703,16 @@ where
     }
 
     /// Return true if we've successfully joined a gossip overlay for this topic.
-    pub async fn has_successfully_joined(&self, topic: &TopicId) -> bool {
+    pub async fn has_successfully_joined(&self, topic_id: &[u8; 32]) -> bool {
         let inner = self.inner.read().await;
-        inner.joined.contains(topic)
+        inner.joined.contains(topic_id)
     }
 
     /// Return true if there's either a pending or successfully joined gossip overlay for this
     /// topic.
-    pub async fn has_joined(&self, topic: &TopicId) -> bool {
+    pub async fn has_joined(&self, topic_id: &[u8; 32]) -> bool {
         let inner = self.inner.read().await;
-        inner.joined.contains(topic) || inner.pending_joins.contains(topic)
+        inner.joined.contains(topic_id) || inner.pending_joins.contains(topic_id)
     }
 
     /// Handle incoming messages from gossip.
@@ -719,13 +720,15 @@ where
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_gossip_message(
         &self,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
         bytes: Vec<u8>,
         delivered_from: PublicKey,
     ) -> Result<()> {
         let inner = self.inner.read().await;
-        let (_, from_network_tx, _gossip_ready_tx) =
-            inner.earmarked.get(&topic_id).context("on_gossip_message")?;
+        let (_, from_network_tx, _gossip_ready_tx) = inner
+            .earmarked
+            .get(&topic_id)
+            .context("on_gossip_message")?;
         from_network_tx.send(FromNetwork::GossipMessage {
             bytes,
             delivered_from: to_public_key(delivered_from),
@@ -738,7 +741,7 @@ where
     /// This method forwards messages to the subscribers for the given topic.
     pub async fn on_sync_message(
         &self,
-        topic_id: TopicId,
+        topic_id: [u8; 32],
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
@@ -756,7 +759,7 @@ where
 
 struct PeerMap {
     known_peers: HashMap<NodeId, NodeAddr>,
-    topics: HashMap<TopicId, Vec<PublicKey>>,
+    topics: HashMap<[u8; 32], Vec<PublicKey>>,
 }
 
 impl PeerMap {
@@ -778,7 +781,7 @@ impl PeerMap {
     /// If the peer is already known, their node addresses and relay URL are updated.
     /// If not, the peer and their addresses are added to the address book and the local topic
     /// updater is called.
-    pub fn add_peer(&mut self, topic_id: TopicId, node_addr: NodeAddr) -> Option<NodeAddr> {
+    pub fn add_peer(&mut self, topic_id: [u8; 32], node_addr: NodeAddr) -> Option<NodeAddr> {
         let public_key = node_addr.node_id;
 
         // If the given peer is already known to us, only update the direct addresses and relay url
@@ -801,25 +804,25 @@ impl PeerMap {
 
     /// Update the topics our node knows about, including the public key of the peer who announced
     /// the topic.
-    pub fn on_announcement(&mut self, topics: Vec<TopicId>, delivered_from: PublicKey) {
-        for topic in topics {
-            match self.topics.get_mut(&topic) {
+    pub fn on_announcement(&mut self, topics: Vec<[u8; 32]>, delivered_from: PublicKey) {
+        for topic_id in topics {
+            match self.topics.get_mut(&topic_id) {
                 Some(list) => {
                     if !list.contains(&delivered_from) {
                         list.push(delivered_from)
                     }
                 }
                 None => {
-                    self.topics.insert(topic, vec![delivered_from]);
+                    self.topics.insert(topic_id, vec![delivered_from]);
                 }
             }
         }
     }
 
     /// Return a random set of known peers with an interest in the given topic.
-    pub fn random_set(&self, topic: &TopicId, size: usize) -> Vec<NodeId> {
+    pub fn random_set(&self, topic_id: &[u8; 32], size: usize) -> Vec<NodeId> {
         self.topics
-            .get(topic)
+            .get(topic_id)
             .unwrap_or(&vec![])
             .iter()
             .choose_multiple(&mut rand::thread_rng(), size)

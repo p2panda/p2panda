@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
-use iroh_gossip::proto::TopicId;
 use iroh_net::{Endpoint, NodeId};
 use p2panda_sync::{SyncProtocol, Topic};
 use thiserror::Error;
@@ -40,12 +39,12 @@ impl<T> ToSyncManager<T> {
 #[derive(Debug)]
 struct SyncAttempt {
     peer: NodeId,
-    topic: TopicId,
+    topic: [u8; 32],
     attempts: u8,
 }
 
 impl SyncAttempt {
-    fn new(peer: NodeId, topic: TopicId) -> Self {
+    fn new(peer: NodeId, topic: [u8; 32]) -> Self {
         Self {
             peer,
             topic,
@@ -68,17 +67,17 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncManager<T> {
-    pending_sync_sessions: VecDeque<(NodeId, TopicId)>,
-    active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
-    completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
+    pending_sync_sessions: VecDeque<(NodeId, [u8; 32])>,
+    active_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
+    completed_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncManager<T>>,
-    known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
+    known_peer_topics: HashMap<NodeId, HashSet<[u8; 32]>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
     sync_queue_rx: Receiver<SyncAttempt>,
-    topic_map: HashMap<TopicId, T>,
+    topic_map: HashMap<[u8; 32], T>,
 }
 
 impl<T> SyncManager<T>
@@ -179,12 +178,11 @@ where
                     let msg = msg.context("sync manager inbox closed")?;
                     let peer = msg.peer;
                     let topic = msg.topic;
-                    let topic_id = topic.id().into();
 
                     // Keep track of all concrete topics we will be running sync sessions
                     // over.
-                    self.topic_map.insert(topic_id, topic.clone());
-                    self.update_peer_topics(peer, topic_id).await;
+                    self.topic_map.insert(topic.id(), topic.clone());
+                    self.update_peer_topics(peer, topic.id()).await;
                     self.schedule_next_attempt().await?
                 }
             }
@@ -194,7 +192,7 @@ where
     }
 
     /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &NodeId, topic: &TopicId) -> bool {
+    fn is_active(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
         if let Some(peers) = self.active_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -203,7 +201,7 @@ where
     }
 
     /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &NodeId, topic: &TopicId) -> bool {
+    fn is_complete(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
         if let Some(peers) = self.completed_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -212,12 +210,12 @@ where
     }
 
     /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: NodeId, topic: TopicId) -> bool {
+    fn is_pending(&self, peer: NodeId, topic: [u8; 32]) -> bool {
         self.pending_sync_sessions.contains(&(peer, topic))
     }
 
     /// Store a newly discovered peer and topic combination.
-    async fn update_peer_topics(&mut self, peer: NodeId, topic: TopicId) {
+    async fn update_peer_topics(&mut self, peer: NodeId, topic: [u8; 32]) {
         debug!("updating peer topics in connection manager");
 
         // Insert the peer-topic combination into our set of known peers.
@@ -239,7 +237,7 @@ where
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+    async fn connect_and_sync(&mut self, peer: NodeId, topic: [u8; 32]) -> Result<()> {
         debug!("attempting peer connection for sync");
 
         let connection = self
