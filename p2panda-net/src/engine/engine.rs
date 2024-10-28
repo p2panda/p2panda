@@ -469,7 +469,7 @@ where
                     };
 
                     if let Err(err) = result {
-                        error!("failed broadcasting message to gossip for topic {topic}: {err}");
+                        error!("failed broadcasting message to gossip for topic {topic:?}: {err}");
                         break;
                     }
                 }

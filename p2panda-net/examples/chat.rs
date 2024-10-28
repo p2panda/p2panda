@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use p2panda_core::{PrivateKey, PublicKey, Signature};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::network::{FromNetwork, ToNetwork};
-use p2panda_net::NetworkBuilder;
+use p2panda_net::{NetworkBuilder, Topic};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -17,12 +17,27 @@ pub fn setup_logging() {
         .ok();
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub struct ChatTopic(String, [u8; 32]);
+
+impl ChatTopic {
+    pub fn new(name: &str) -> Self {
+        Self(name.to_owned(), [0; 32])
+    }
+}
+
+impl Topic for ChatTopic {
+    fn id(&self) -> [u8; 32] {
+        self.1.clone()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();
 
     let network_id = [0; 32];
-    let topic_id = "my_chat".to_string();
+    let topic = ChatTopic::new("my_chat");
 
     let private_key = PrivateKey::new();
 
@@ -31,7 +46,7 @@ async fn main() -> Result<()> {
         .build()
         .await?;
 
-    let (tx, mut rx, ready) = network.subscribe(topic_id).await?;
+    let (tx, mut rx, ready) = network.subscribe(topic).await?;
 
     tokio::task::spawn(async move {
         while let Ok(event) = rx.recv().await {

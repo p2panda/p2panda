@@ -634,9 +634,11 @@ mod sync_protocols {
     use serde::{Deserialize, Serialize};
     use tracing::debug;
 
+    use super::tests::TestTopic;
+
     #[derive(Debug, Serialize, Deserialize)]
     enum DummyProtocolMessage {
-        Topic(String),
+        Topic(TestTopic),
         Done,
     }
 
@@ -645,17 +647,19 @@ mod sync_protocols {
     pub struct DummyProtocol {}
 
     #[async_trait]
-    impl<'a> SyncProtocol<'a, String> for DummyProtocol {
+    impl<'a> SyncProtocol<'a, TestTopic> for DummyProtocol {
         fn name(&self) -> &'static str {
             static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
             DUMMY_PROTOCOL_NAME
         }
         async fn initiate(
             self: Arc<Self>,
-            topic: String,
+            topic: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync<String>, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<
+                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
+            >,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: initiate sync session");
 
@@ -687,7 +691,9 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync<String>, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<
+                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
+            >,
         ) -> Result<(), SyncError> {
             debug!("DummyProtocol: accept sync session");
 
@@ -718,7 +724,7 @@ mod sync_protocols {
     // The protocol message types.
     #[derive(Serialize, Deserialize)]
     enum Message {
-        Topic(u64),
+        Topic(TestTopic),
         Ping,
         Pong,
     }
@@ -728,7 +734,7 @@ mod sync_protocols {
 
     /// A ping-pong sync protocol
     #[async_trait]
-    impl<'a> SyncProtocol<'a, u64> for PingPongProtocol {
+    impl<'a> SyncProtocol<'a, TestTopic> for PingPongProtocol {
         fn name(&self) -> &'static str {
             static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
             SIMPLE_PROTOCOL_NAME
@@ -736,16 +742,18 @@ mod sync_protocols {
 
         async fn initiate(
             self: Arc<Self>,
-            topic: u64,
+            topic: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync<u64>, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<
+                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
+            >,
         ) -> Result<(), SyncError> {
             debug!("initiate sync session");
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(Message::Topic(topic)).await?;
+            sink.send(Message::Topic(topic.clone())).await?;
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
@@ -779,7 +787,9 @@ mod sync_protocols {
             self: Arc<Self>,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<&'a mut (dyn Sink<FromSync<u64>, Error = SyncError> + Send + Unpin)>,
+            mut app_tx: Box<
+                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
+            >,
         ) -> Result<(), SyncError> {
             debug!("accept sync session");
             let mut sink = into_cbor_sink(tx);
@@ -824,7 +834,7 @@ mod tests {
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
     use p2panda_sync::TopicMap;
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
@@ -832,7 +842,7 @@ mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, Topic};
 
     use super::{FromNetwork, ToNetwork};
 
@@ -901,12 +911,27 @@ mod tests {
         assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
     }
 
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+    pub struct TestTopic(String, [u8; 32]);
+
+    impl TestTopic {
+        pub fn new(name: &str) -> Self {
+            Self(name.to_owned(), [0; 32])
+        }
+    }
+
+    impl Topic for TestTopic {
+        fn id(&self) -> [u8; 32] {
+            self.1.clone()
+        }
+    }
+
     #[tokio::test]
     async fn join_gossip_overlay() {
         setup_logging();
 
         let network_id = [1; 32];
-        let topic = String::from("chat");
+        let topic = TestTopic::new("chat");
 
         let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
         let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
@@ -951,7 +976,7 @@ mod tests {
         setup_logging();
 
         let network_id = [1; 32];
-        let topic = 123456;
+        let topic = TestTopic::new("ping_pong");
 
         let ping_pong = PingPongProtocol {};
 
@@ -973,8 +998,9 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
 
         // Subscribe to the same topic from both nodes which should kick off sync
+        let topic_clone = topic.clone();
         let handle1 = tokio::spawn(async move {
-            let (_tx, _rx, _ready) = node_1.subscribe(topic).await.unwrap();
+            let (_tx, _rx, _ready) = node_1.subscribe(topic_clone).await.unwrap();
             tokio::time::sleep(Duration::from_secs(2)).await;
             node_1.shutdown().await.unwrap();
         });
@@ -990,21 +1016,27 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct LogIdTopicMap(HashMap<String, Logs<u64>>);
+    struct LogIdTopicMap<T>(HashMap<T, Logs<u64>>);
 
-    impl LogIdTopicMap {
+    impl<T> LogIdTopicMap<T>
+    where
+        T: Topic,
+    {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
         }
 
-        fn insert(&mut self, topic: String, logs: Logs<u64>) -> Option<Logs<u64>> {
+        fn insert(&mut self, topic: T, logs: Logs<u64>) -> Option<Logs<u64>> {
             self.0.insert(topic, logs)
         }
     }
 
     #[async_trait]
-    impl TopicMap<String, Logs<u64>> for LogIdTopicMap {
-        async fn get(&self, topic: &String) -> Option<Logs<u64>> {
+    impl<T> TopicMap<T, Logs<u64>> for LogIdTopicMap<T>
+    where
+        T: Topic,
+    {
+        async fn get(&self, topic: &T) -> Option<Logs<u64>> {
             self.0.get(topic).cloned()
         }
     }
@@ -1018,7 +1050,7 @@ mod tests {
         let peer_a_private_key = PrivateKey::new();
         let peer_b_private_key = PrivateKey::new();
 
-        let topic = String::from("event_logs");
+        let topic = TestTopic::new("event_logs");
         let log_id = 0;
         let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
 

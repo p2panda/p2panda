@@ -8,13 +8,13 @@ pub mod network;
 mod protocols;
 mod sync;
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::hash::Hash;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
 pub use message::{FromBytes, ToBytes};
 pub use network::{Network, NetworkBuilder, RelayMode};
-use p2panda_core::Hash;
 pub use protocols::ProtocolHandler;
 pub use tokio_util::task::AbortOnDropHandle;
 
@@ -29,15 +29,6 @@ pub type NetworkId = [u8; 32];
 /// a sync protocol has been provided, attempt to synchronize past state.
 ///
 /// The `Topic` trait must be implemented on any user defined topic types.
-pub trait Topic: Clone + Debug + Display + Send + Sync {
+pub trait Topic: Clone + Debug + Eq + Hash + Eq + Send + Sync {
     fn id(&self) -> [u8; 32];
-}
-
-impl<T> Topic for T
-where
-    T: Clone + Debug + Display + Send + Sync,
-{
-    fn id(&self) -> [u8; 32] {
-        Hash::new(self.to_string().as_bytes()).as_bytes().to_owned()
-    }
 }
