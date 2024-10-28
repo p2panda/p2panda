@@ -17,7 +17,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
-use p2panda_sync::SyncProtocol;
+use p2panda_sync::{SyncProtocol, Topic};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -29,7 +29,7 @@ use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::SYNC_CONNECTION_ALPN;
-use crate::{NetworkId, RelayUrl, Topic};
+use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -64,7 +64,10 @@ pub struct NetworkBuilder<T> {
     secret_key: Option<SecretKey>,
 }
 
-impl<T> NetworkBuilder<T> {
+impl<T> NetworkBuilder<T>
+where
+    T: Topic,
+{
     /// Returns a new instance of `NetworkBuilder` using the given network identifier.
     ///
     /// The identifier is used during handshake and discovery protocols. Networks must use the
@@ -196,7 +199,7 @@ impl<T> NetworkBuilder<T> {
     /// shut down and an error is returned.
     pub async fn build(mut self) -> Result<Network<T>>
     where
-        T: Topic + 'static,
+        T: Topic + TopicId + 'static,
     {
         let secret_key = self.secret_key.unwrap_or(SecretKey::generate());
 
@@ -353,7 +356,7 @@ struct NetworkInner<T> {
 /// address book so they may be involved in connection and gossip activites.
 impl<T> NetworkInner<T>
 where
-    T: Topic + 'static,
+    T: Topic + TopicId + 'static,
 {
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
@@ -506,7 +509,7 @@ pub struct Network<T> {
 
 impl<T> Network<T>
 where
-    T: Topic + 'static,
+    T: Topic + TopicId + 'static,
 {
     /// Returns the public key of the local network.
     pub fn node_id(&self) -> PublicKey {
@@ -833,7 +836,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
-    use p2panda_sync::TopicMap;
+    use p2panda_sync::{Topic, TopicMap};
     use serde::{Deserialize, Serialize};
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -842,7 +845,7 @@ mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, Topic};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
 
     use super::{FromNetwork, ToNetwork};
 
@@ -879,6 +882,23 @@ mod tests {
         (header.hash(), header, header_bytes)
     }
 
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+    pub struct TestTopic(String, [u8; 32]);
+
+    impl TestTopic {
+        pub fn new(name: &str) -> Self {
+            Self(name.to_owned(), [0; 32])
+        }
+    }
+
+    impl Topic for TestTopic {}
+
+    impl TopicId for TestTopic {
+        fn id(&self) -> [u8; 32] {
+            self.1.clone()
+        }
+    }
+
     #[tokio::test]
     async fn config() {
         let direct_node_public_key = PrivateKey::new().public_key();
@@ -897,7 +917,7 @@ mod tests {
             relay: Some(relay_address.clone()),
         };
 
-        let builder = NetworkBuilder::<String>::from_config(config);
+        let builder = NetworkBuilder::<TestTopic>::from_config(config);
 
         assert_eq!(builder.bind_port, Some(2024));
         assert_eq!(builder.network_id, [1; 32]);
@@ -909,21 +929,6 @@ mod tests {
             stun_port: DEFAULT_STUN_PORT,
         };
         assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
-    pub struct TestTopic(String, [u8; 32]);
-
-    impl TestTopic {
-        pub fn new(name: &str) -> Self {
-            Self(name.to_owned(), [0; 32])
-        }
-    }
-
-    impl Topic for TestTopic {
-        fn id(&self) -> [u8; 32] {
-            self.1.clone()
-        }
     }
 
     #[tokio::test]

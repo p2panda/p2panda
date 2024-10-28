@@ -15,7 +15,7 @@ use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::{Endpoint, NodeAddr};
-use p2panda_sync::SyncProtocol;
+use p2panda_sync::{SyncProtocol, Topic};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
@@ -26,7 +26,7 @@ use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::manager::SyncManager;
 use crate::sync::SyncConnection;
-use crate::{NetworkId, Topic};
+use crate::{NetworkId, TopicId};
 
 #[derive(Debug)]
 pub struct Engine<T> {
@@ -38,7 +38,7 @@ pub struct Engine<T> {
 
 impl<T> Engine<T>
 where
-    T: Clone + Debug + Send + Sync + Topic + 'static,
+    T: Topic + TopicId + 'static,
 {
     pub fn new(
         network_id: NetworkId,

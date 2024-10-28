@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::{FromSync, SyncError, SyncProtocol, TopicMap};
+use crate::{FromSync, SyncError, SyncProtocol, Topic, TopicMap};
 
 type SeqNum = u64;
 pub type LogHeights<T> = Vec<(T, SeqNum)>;
@@ -49,7 +49,7 @@ pub struct LogSyncProtocol<TM, L, E> {
 #[async_trait]
 impl<'a, T, TM, L, E> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E>
 where
-    T: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>,
+    T: Topic,
     TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
     L: Clone
         + Debug
@@ -311,13 +311,13 @@ mod tests {
     use p2panda_core::extensions::DefaultExtensions;
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf};
     use tokio::sync::mpsc;
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
     use tokio_util::sync::PollSender;
 
-    use crate::{FromSync, SyncError, SyncProtocol};
+    use crate::{FromSync, SyncError, SyncProtocol, Topic};
 
     use super::{LogSyncProtocol, Logs, Message, TopicMap};
 
@@ -346,26 +346,47 @@ mod tests {
         (header.hash(), header, header_bytes)
     }
 
-    #[derive(Clone, Debug)]
-    struct LogHeightTopicMap(HashMap<String, Logs<u64>>);
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+    pub struct LogHeightTopic(String, [u8; 32]);
 
-    impl LogHeightTopicMap {
+    impl LogHeightTopic {
+        pub fn new(name: &str) -> Self {
+            Self(name.to_owned(), [0; 32])
+        }
+    }
+
+    impl Topic for LogHeightTopic {}
+
+    #[derive(Clone, Debug)]
+    struct LogHeightTopicMap<T>(HashMap<T, Logs<u64>>);
+
+    impl<T> LogHeightTopicMap<T>
+    where
+        T: Topic,
+    {
         pub fn new() -> Self {
             LogHeightTopicMap(HashMap::new())
         }
 
-        fn insert(&mut self, topic: &str, logs: Logs<u64>) -> Option<Logs<u64>> {
-            self.0.insert(topic.to_string(), logs)
+        fn insert(&mut self, topic: &T, logs: Logs<u64>) -> Option<Logs<u64>> {
+            self.0.insert(topic.clone(), logs)
         }
     }
 
     #[async_trait]
-    impl TopicMap<String, Logs<u64>> for LogHeightTopicMap {
-        async fn get(&self, topic: &String) -> Option<Logs<u64>> {
+    impl<T> TopicMap<T, Logs<u64>> for LogHeightTopicMap<T>
+    where
+        T: Topic,
+    {
+        async fn get(&self, topic: &T) -> Option<Logs<u64>> {
             self.0.get(topic).cloned()
         }
     }
-    async fn assert_message_bytes(mut rx: ReadHalf<DuplexStream>, messages: Vec<Message<String>>) {
+
+    async fn assert_message_bytes(
+        mut rx: ReadHalf<DuplexStream>,
+        messages: Vec<Message<LogHeightTopic>>,
+    ) {
         let mut buf = Vec::new();
         rx.read_to_end(&mut buf).await.unwrap();
         assert_eq!(
@@ -377,7 +398,7 @@ mod tests {
         );
     }
 
-    fn to_bytes(messages: Vec<Message<String>>) -> Vec<u8> {
+    fn to_bytes(messages: Vec<Message<LogHeightTopic>>) -> Vec<u8> {
         messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -386,7 +407,7 @@ mod tests {
 
     #[tokio::test]
     async fn sync_no_operations_accept() {
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::new();
         let store = MemoryStore::<u64, DefaultExtensions>::new();
 
@@ -431,7 +452,7 @@ mod tests {
 
     #[tokio::test]
     async fn sync_no_operations_open() {
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::new();
         let store = MemoryStore::<u64, DefaultExtensions>::new();
 
@@ -480,7 +501,7 @@ mod tests {
     async fn sync_operations_accept() {
         let private_key = PrivateKey::new();
         let log_id = 0;
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
         let mut store = MemoryStore::<u64, DefaultExtensions>::new();
@@ -515,8 +536,10 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages: Vec<Message<String>> =
-            vec![Message::Have(topic.clone(), vec![]), Message::SyncDone];
+        let messages = vec![
+            Message::Have::<LogHeightTopic>(topic.clone(), vec![]),
+            Message::SyncDone,
+        ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -539,7 +562,7 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        let messages: Vec<Message<String>> = vec![
+        let messages = vec![
             Message::Operation(header_bytes_0, Some(body.to_bytes())),
             Message::Operation(header_bytes_1, Some(body.to_bytes())),
             Message::Operation(header_bytes_2, Some(body.to_bytes())),
@@ -557,7 +580,7 @@ mod tests {
     async fn sync_operations_open() {
         let private_key = PrivateKey::new();
         let log_id = 0;
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
         let store = MemoryStore::<u64, DefaultExtensions>::new();
@@ -637,7 +660,7 @@ mod tests {
     async fn e2e_sync() {
         let private_key = PrivateKey::new();
         let log_id = 0;
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
         // Create an empty store for peer a
@@ -744,7 +767,7 @@ mod tests {
     async fn e2e_partial_sync() {
         let private_key = PrivateKey::new();
         let log_id = 0;
-        let topic = "messages".to_string();
+        let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
         let body = Body::new("Hello, Sloth!".as_bytes());

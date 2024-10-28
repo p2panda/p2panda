@@ -6,11 +6,19 @@ pub mod cbor;
 pub mod log_sync;
 
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWrite, Sink};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// Topics are
+pub trait Topic:
+    Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
+{
+}
 
 /// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
 /// the scope for a particular session should be identified. Sync protocol users can provide an
@@ -22,7 +30,11 @@ pub trait TopicMap<T, S> {
 }
 
 #[async_trait]
-pub trait SyncProtocol<T, 'a>: Send + Sync + Debug {
+pub trait SyncProtocol<T, 'a>
+where
+    Self: Send + Sync + Debug,
+    T: Topic,
+{
     fn name(&self) -> &'static str;
 
     async fn initiate(

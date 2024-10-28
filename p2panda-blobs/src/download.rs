@@ -10,11 +10,12 @@ use iroh_blobs::util::local_pool::LocalPoolHandle;
 use iroh_blobs::util::progress::{AsyncChannelProgressSender, ProgressSender};
 use iroh_blobs::{BlobFormat, Hash as IrohHash, HashAndFormat};
 use p2panda_core::Hash;
-use p2panda_net::{Network, Topic};
+use p2panda_net::{Network, TopicId};
+use p2panda_sync::Topic;
 use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
 
-pub async fn download_blob<T: Topic + 'static>(
+pub async fn download_blob<T: Topic + TopicId + 'static>(
     network: Network<T>,
     downloader: Downloader,
     pool_handle: LocalPoolHandle,
@@ -52,7 +53,7 @@ pub async fn download_blob<T: Topic + 'static>(
     })
 }
 
-async fn download_queued<T: Topic + 'static>(
+async fn download_queued<T: Topic + TopicId + 'static>(
     network: Network<T>,
     downloader: &Downloader,
     hash_and_format: HashAndFormat,

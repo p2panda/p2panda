@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
+use p2panda_sync::Topic;
 use rand::seq::IteratorRandom;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::time::interval;
@@ -18,7 +19,7 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncManager};
-use crate::{FromBytes, ToBytes, Topic};
+use crate::{FromBytes, ToBytes};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -141,7 +142,7 @@ pub struct EngineActor<T> {
 
 impl<T> EngineActor<T>
 where
-    T: Topic + 'static,
+    T: Topic + crate::TopicId + 'static,
 {
     pub fn new(
         endpoint: Endpoint,
@@ -629,7 +630,7 @@ struct TopicMapInner<T> {
 
 impl<T> TopicMap<T>
 where
-    T: Topic,
+    T: Topic + crate::TopicId,
 {
     /// Generate an empty topic map.
     pub fn new() -> Self {

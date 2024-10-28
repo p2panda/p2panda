@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::{Context, Error, Result};
 use iroh_gossip::proto::TopicId;
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::SyncProtocol;
+use p2panda_sync::{SyncProtocol, Topic};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -15,7 +15,6 @@ use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
-use crate::Topic;
 
 // A duration in milliseconds.
 //
@@ -84,7 +83,7 @@ pub(crate) struct SyncManager<T> {
 
 impl<T> SyncManager<T>
 where
-    T: Topic + 'static,
+    T: Topic + crate::TopicId + 'static,
 {
     /// Create a new instance of the `SyncManager` and return it along with a channel sender.
     pub(crate) fn new(

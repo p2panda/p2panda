@@ -11,7 +11,8 @@ use iroh_blobs::downloader::Downloader;
 use iroh_blobs::store::{Map, Store};
 use iroh_blobs::util::local_pool::{Config as LocalPoolConfig, LocalPool};
 use p2panda_core::Hash;
-use p2panda_net::{Network, NetworkBuilder, Topic};
+use p2panda_net::{Network, NetworkBuilder, TopicId};
+use p2panda_sync::Topic;
 
 use crate::download::download_blob;
 use crate::export::export_blob;
@@ -32,7 +33,7 @@ where
 
 impl<T, S> Blobs<T, S>
 where
-    T: Topic + 'static,
+    T: Topic + TopicId + 'static,
     S: Store,
 {
     pub async fn from_builder(

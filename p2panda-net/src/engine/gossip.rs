@@ -8,13 +8,13 @@ use futures_util::FutureExt;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
 use iroh_gossip::proto::TopicId;
 use iroh_net::key::PublicKey;
+use p2panda_sync::Topic;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_stream::StreamMap;
 use tracing::{error, warn};
 
 use crate::engine::ToEngineActor;
-use crate::Topic;
 
 #[derive(Debug)]
 pub enum ToGossipActor {

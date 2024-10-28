@@ -10,12 +10,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use iroh_net::key::PublicKey;
-use p2panda_sync::{FromSync, SyncError, SyncProtocol};
+use p2panda_sync::{FromSync, SyncError, SyncProtocol, Topic};
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
-use crate::{engine::ToEngineActor, Topic};
+use crate::{engine::ToEngineActor, TopicId};
 
 /// Initiate a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
@@ -28,7 +28,7 @@ pub async fn initiate_sync<T, S, R>(
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 ) -> Result<()>
 where
-    T: Topic + 'static,
+    T: Topic + TopicId + 'static,
     S: AsyncWrite + Send + Unpin,
     R: AsyncRead + Send + Unpin,
 {
@@ -128,7 +128,7 @@ pub async fn accept_sync<T, S, R>(
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 ) -> Result<()>
 where
-    T: Topic + 'static,
+    T: Topic + TopicId + 'static,
     S: AsyncWrite + Send + Unpin,
     R: AsyncRead + Send + Unpin,
 {
