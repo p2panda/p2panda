@@ -31,6 +31,8 @@ pub enum ToGossipActor {
     Shutdown,
 }
 
+/// The `GossipActor` manages gossip topic membership (joining and leaving of topics) and
+/// facilitates flows of messages into and out of individual gossip overlays.
 pub struct GossipActor {
     engine_actor_tx: mpsc::Sender<ToEngineActor>,
     gossip: Gossip,

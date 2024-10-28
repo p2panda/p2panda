@@ -246,6 +246,7 @@ impl EngineActor {
         }
     }
 
+    /// Processes a message received by the actor; these messages represent gossip and sync events.
     async fn on_actor_message(&mut self, msg: ToEngineActor) -> Result<()> {
         match msg {
             ToEngineActor::AddPeer { node_addr } => {
