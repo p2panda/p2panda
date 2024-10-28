@@ -90,8 +90,6 @@ where
     // Run the sync protocol.
     let result = sync_protocol
         .initiate(
-            // @TODO: When generic topic is implemented in `p2panda-sync` we can pass the topic
-            // directly here.
             topic,
             Box::new(&mut send),
             Box::new(&mut recv),
