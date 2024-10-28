@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Improve doc comment coverage in `p2panda-net` [#576](https://github.com/p2panda/p2panda/pull/576)
 - Introduce a scheduler to the sync manager [#574](https://github.com/p2panda/p2panda/pull/574)
 - Add `log-sync` feature flag to `p2panda-net` and move `JoinErrToStr` [#572](https://github.com/p2panda/p2panda/pull/572)
 - Move discovery from `p2panda-net` into new `p2panda-discovery` crate [#571](https://github.com/p2panda/p2panda/pull/571) 
