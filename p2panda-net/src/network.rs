@@ -46,7 +46,7 @@ pub enum RelayMode {
     Custom(RelayNode),
 }
 
-/// Creates an overlay network for peers grouped under the same network identifier.
+/// Builds an overlay network for peers grouped under the same network identifier.
 ///
 /// All peers can subscribe to multiple topics in this overlay and hook into a data stream per
 /// topic where they'll send and receive data.
