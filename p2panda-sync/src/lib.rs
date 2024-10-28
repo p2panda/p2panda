@@ -14,7 +14,11 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Topics are
+/// A topic is used to identify the particular data-set a peer is interested in syncing. Exactly how
+/// this is expressed is left up to the user to decide. During sync the "initiator" sends their topic to
+/// a remote peer where it is be mapped to their local data-set and access-control checks can be
+/// performed. Once this "handshake" is complete both peers will proceed with the designated sync
+/// protocol.
 pub trait Topic:
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
