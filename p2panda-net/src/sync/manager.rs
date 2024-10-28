@@ -14,6 +14,7 @@ use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
+use crate::TopicId;
 
 // A duration in milliseconds.
 //
@@ -82,7 +83,7 @@ pub(crate) struct SyncManager<T> {
 
 impl<T> SyncManager<T>
 where
-    T: Topic + crate::TopicId + 'static,
+    T: Topic + TopicId + 'static,
 {
     /// Create a new instance of the `SyncManager` and return it along with a channel sender.
     pub(crate) fn new(
@@ -258,8 +259,6 @@ where
         let topic = self
             .topic_map
             .get(&topic)
-            // @TODO: I'm not sure if this case can ever occur, if it can, it would be best to
-            // have a concrete sync error type like: `TopicNotKnown` or similar...
             .expect("all topics have been added to the topic map");
 
         // Run a sync session as the initiator.

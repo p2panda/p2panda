@@ -18,7 +18,7 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncManager};
-use crate::{FromBytes, ToBytes};
+use crate::{FromBytes, ToBytes, TopicId};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -141,7 +141,7 @@ pub struct EngineActor<T> {
 
 impl<T> EngineActor<T>
 where
-    T: Topic + crate::TopicId + 'static,
+    T: Topic + TopicId + 'static,
 {
     pub fn new(
         endpoint: Endpoint,
@@ -617,6 +617,8 @@ struct TopicMap<T> {
     inner: Arc<RwLock<TopicMapInner<T>>>,
 }
 
+/// The topic associated with a particular subscription along with it's broadcast channel and
+/// oneshot ready channel.
 type TopicMeta<T> = (
     T,
     broadcast::Sender<FromNetwork>,
@@ -632,7 +634,7 @@ struct TopicMapInner<T> {
 
 impl<T> TopicMap<T>
 where
-    T: Topic + crate::TopicId,
+    T: Topic + TopicId,
 {
     /// Generate an empty topic map.
     pub fn new() -> Self {
