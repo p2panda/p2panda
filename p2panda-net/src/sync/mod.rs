@@ -15,7 +15,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
-use crate::{engine::ToEngineActor, TopicId};
+use crate::engine::ToEngineActor;
+use crate::TopicId;
 
 /// Initiate a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.

@@ -15,7 +15,6 @@ use crate::{sync, TopicId};
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SyncConnection<T> {
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
@@ -44,19 +43,20 @@ where
         let connection_id = connection.stable_id() as u64;
         let _span = debug_span!("connection", connection_id, %remote_addr);
 
-        // Create a bidirectional stream on the connection.
         let (mut send, mut recv) = connection.accept_bi().await?;
 
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
-        // Run a sync session as the acceptor (aka. responder).
+        // Run a sync session as the "acceptor" (aka. "responder").
         let result =
             sync::accept_sync(&mut send, &mut recv, peer, sync_protocol, engine_actor_tx).await;
 
-        // Clean-up the streams.
         send.finish()?;
         send.stopped().await?;
+
+        // This will error if there's been remaining bytes in the buffer, indicating that the
+        // protocol was not followed as expected.
         recv.read_to_end(0).await?;
 
         if result.is_ok() {

@@ -28,8 +28,8 @@ use crate::sync::manager::SyncManager;
 use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
 
-/// The `Engine` is responsible for instantiating various system actors (including engine,
-/// gossip and sync connection actors) and exposes an API for interacting with the engine actor.
+/// The `Engine` is responsible for instantiating various system actors (including engine, gossip
+/// and sync connection actors) and exposes an API for interacting with the engine actor.
 #[derive(Debug)]
 pub struct Engine<T> {
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
@@ -135,10 +135,10 @@ where
         Ok(())
     }
 
-    // @TODO: This method feels like the odd-one-out in this module.
-    // Could we move it somewhere else?
     /// Returns a sync connection protocol handler for inbound connections.
-    pub fn sync_handler(&self) -> Option<SyncConnection<T>> {
+    // @TODO: This method feels like the odd-one-out in this module. Could we move it somewhere
+    // else?
+    pub(crate) fn sync_handler(&self) -> Option<SyncConnection<T>> {
         self.sync_protocol.as_ref().map(|sync_protocol| {
             SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
         })

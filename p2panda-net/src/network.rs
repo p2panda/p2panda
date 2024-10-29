@@ -112,7 +112,8 @@ where
     }
 
     /// Sets or overwrites the local bind port for IPv4 sockets.
-    /// Note that IPv6 sockets are bound to the specified port + 1.
+    ///
+    /// Note that IPv6 sockets are automatically bound to the specified port + 1.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
         self
