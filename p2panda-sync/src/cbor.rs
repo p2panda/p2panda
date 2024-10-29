@@ -3,9 +3,10 @@
 use std::marker::PhantomData;
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
+use p2panda_core::cbor::{decode_cbor, encode_cbor, DecodeError};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio_util::bytes::Buf;
+use tokio_util::bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
@@ -37,13 +38,10 @@ where
 {
     type Error = SyncError;
 
-    fn encode(
-        &mut self,
-        item: T,
-        dst: &mut tokio_util::bytes::BytesMut,
-    ) -> Result<(), Self::Error> {
-        let mut bytes = Vec::new();
-        ciborium::into_writer(&item, &mut bytes).map_err(|e| SyncError::Codec(e.to_string()))?;
+    fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let bytes = encode_cbor(&item).map_err(|err| {
+            SyncError::Critical(format!("CBOR codec failed encoding message, {err}"))
+        })?;
         dst.extend_from_slice(&bytes);
         Ok(())
     }
@@ -56,19 +54,16 @@ where
     type Item = T;
     type Error = SyncError;
 
-    fn decode(
-        &mut self,
-        src: &mut tokio_util::bytes::BytesMut,
-    ) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let reader = src.reader();
-        let result: Result<Self::Item, _> = ciborium::from_reader(reader);
+        let result: Result<Self::Item, _> = decode_cbor(reader);
         match result {
-            // If we read the item, we also need to advance the underlying buffer.
             Ok(item) => Ok(Some(item)),
             Err(ref error) => match error {
-                // Sometimes the EOF is signalled as IO error
-                ciborium::de::Error::Io(_) => Ok(None),
-                e => Err(SyncError::Codec(e.to_string())),
+                DecodeError::Io(err) => Err(SyncError::Critical(format!(
+                    "CBOR codec failed decoding message due to i/o error, {err}"
+                ))),
+                err => Err(SyncError::InvalidEncoding(err.to_string())),
             },
         }
     }

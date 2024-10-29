@@ -18,6 +18,7 @@ iroh-net = "0.25.0"
 num_cpus = "1.16.0"
 p2panda-core = { path = "../p2panda-core" }
 p2panda-net = { path = "../p2panda-net" }
+p2panda-sync = { path = "../p2panda-sync" }
 serde = { version = "1.0.204", features = ["derive"] }
 tempdir = "0.3.7"
 tokio = { version = "1.38.0", features = ["full"] }

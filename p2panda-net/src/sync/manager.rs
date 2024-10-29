@@ -4,9 +4,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
-use iroh_gossip::proto::TopicId;
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::SyncProtocol;
+use p2panda_sync::{SyncProtocol, Topic};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -15,6 +14,7 @@ use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
+use crate::TopicId;
 
 // A duration in milliseconds.
 //
@@ -26,13 +26,13 @@ const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncManager {
+pub struct ToSyncManager<T> {
     peer: NodeId,
-    topic: TopicId,
+    topic: T,
 }
 
-impl ToSyncManager {
-    pub(crate) fn new(peer: NodeId, topic: TopicId) -> Self {
+impl<T> ToSyncManager<T> {
+    pub(crate) fn new(peer: NodeId, topic: T) -> Self {
         Self { peer, topic }
     }
 }
@@ -40,12 +40,12 @@ impl ToSyncManager {
 #[derive(Debug)]
 struct SyncAttempt {
     peer: NodeId,
-    topic: TopicId,
+    topic: [u8; 32],
     attempts: u8,
 }
 
 impl SyncAttempt {
-    fn new(peer: NodeId, topic: TopicId) -> Self {
+    fn new(peer: NodeId, topic: [u8; 32]) -> Self {
         Self {
             peer,
             topic,
@@ -67,26 +67,30 @@ enum SyncAttemptError {
 
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
-pub(crate) struct SyncManager {
-    pending_sync_sessions: VecDeque<(NodeId, TopicId)>,
-    active_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
-    completed_sync_sessions: HashMap<TopicId, HashSet<NodeId>>,
+pub(crate) struct SyncManager<T> {
+    pending_sync_sessions: VecDeque<(NodeId, [u8; 32])>,
+    active_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
+    completed_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
     endpoint: Endpoint,
-    engine_actor_tx: Sender<ToEngineActor>,
-    inbox: Receiver<ToSyncManager>,
-    known_peer_topics: HashMap<NodeId, HashSet<TopicId>>,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
+    engine_actor_tx: Sender<ToEngineActor<T>>,
+    inbox: Receiver<ToSyncManager<T>>,
+    known_peer_topics: HashMap<NodeId, HashSet<[u8; 32]>>,
+    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
     sync_queue_rx: Receiver<SyncAttempt>,
+    topic_map: HashMap<[u8; 32], T>,
 }
 
-impl SyncManager {
+impl<T> SyncManager<T>
+where
+    T: Topic + TopicId + 'static,
+{
     /// Create a new instance of the `SyncManager` and return it along with a channel sender.
     pub(crate) fn new(
         endpoint: Endpoint,
-        engine_actor_tx: Sender<ToEngineActor>,
-        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a> + 'static>,
-    ) -> (Self, Sender<ToSyncManager>) {
+        engine_actor_tx: Sender<ToEngineActor<T>>,
+        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
+    ) -> (Self, Sender<ToSyncManager<T>>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
@@ -101,6 +105,7 @@ impl SyncManager {
             sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
+            topic_map: HashMap::new(),
         };
 
         (sync_manager, sync_manager_tx)
@@ -175,7 +180,10 @@ impl SyncManager {
                     let peer = msg.peer;
                     let topic = msg.topic;
 
-                    self.update_peer_topics(peer, topic).await;
+                    // Keep track of all concrete topics we will be running sync sessions
+                    // over.
+                    self.topic_map.insert(topic.id(), topic.clone());
+                    self.update_peer_topics(peer, topic.id()).await;
                     self.schedule_next_attempt().await?
                 }
             }
@@ -185,7 +193,7 @@ impl SyncManager {
     }
 
     /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &NodeId, topic: &TopicId) -> bool {
+    fn is_active(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
         if let Some(peers) = self.active_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -194,7 +202,7 @@ impl SyncManager {
     }
 
     /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &NodeId, topic: &TopicId) -> bool {
+    fn is_complete(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
         if let Some(peers) = self.completed_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -203,12 +211,12 @@ impl SyncManager {
     }
 
     /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: NodeId, topic: TopicId) -> bool {
+    fn is_pending(&self, peer: NodeId, topic: [u8; 32]) -> bool {
         self.pending_sync_sessions.contains(&(peer, topic))
     }
 
     /// Store a newly discovered peer and topic combination.
-    async fn update_peer_topics(&mut self, peer: NodeId, topic: TopicId) {
+    async fn update_peer_topics(&mut self, peer: NodeId, topic: [u8; 32]) {
         debug!("updating peer topics in connection manager");
 
         // Insert the peer-topic combination into our set of known peers.
@@ -230,7 +238,7 @@ impl SyncManager {
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: NodeId, topic: TopicId) -> Result<()> {
+    async fn connect_and_sync(&mut self, peer: NodeId, topic: [u8; 32]) -> Result<()> {
         debug!("attempting peer connection for sync");
 
         let connection = self
@@ -248,12 +256,17 @@ impl SyncManager {
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
+        let topic = self
+            .topic_map
+            .get(&topic)
+            .expect("all topics have been added to the topic map");
+
         // Run a sync session as the initiator.
         sync::initiate_sync(
             &mut send,
             &mut recv,
             peer,
-            topic,
+            topic.clone(),
             sync_protocol,
             engine_actor_tx,
         )

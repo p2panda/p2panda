@@ -7,6 +7,7 @@ mod message;
 
 pub use engine::ToEngineActor;
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -14,7 +15,7 @@ use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::{Endpoint, NodeAddr};
-use p2panda_sync::SyncProtocol;
+use p2panda_sync::{SyncProtocol, Topic};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
@@ -30,19 +31,22 @@ use crate::{NetworkId, TopicId};
 /// The `Engine` is responsible for instantiating various system actors (including engine,
 /// gossip and sync connection actors) and exposes an API for interacting with the engine actor.
 #[derive(Debug)]
-pub struct Engine {
-    engine_actor_tx: mpsc::Sender<ToEngineActor>,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+pub struct Engine<T> {
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     #[allow(dead_code)]
     actor_handle: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
 
-impl Engine {
+impl<T> Engine<T>
+where
+    T: Topic + TopicId + 'static,
+{
     pub fn new(
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a> + 'static>>,
+        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     ) -> Self {
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
@@ -64,7 +68,7 @@ impl Engine {
             engine_actor_rx,
             gossip_actor_tx,
             sync_manager_tx,
-            network_id.into(),
+            network_id,
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
@@ -85,7 +89,6 @@ impl Engine {
         }
     }
 
-    /// Adds the given peer address to the engine actor.
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })
@@ -116,14 +119,14 @@ impl Engine {
     /// Subscribes to the given topic and provides a channel for network message passing.
     pub async fn subscribe(
         &self,
-        topic: TopicId,
+        topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::Subscribe {
-                topic: topic.into(),
+                topic,
                 from_network_tx,
                 to_network_rx,
                 gossip_ready_tx,
@@ -135,7 +138,7 @@ impl Engine {
     // @TODO: This method feels like the odd-one-out in this module.
     // Could we move it somewhere else?
     /// Returns a sync connection protocol handler for inbound connections.
-    pub fn sync_handler(&self) -> Option<SyncConnection> {
+    pub fn sync_handler(&self) -> Option<SyncConnection<T>> {
         self.sync_protocol.as_ref().map(|sync_protocol| {
             SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
         })

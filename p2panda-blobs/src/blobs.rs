@@ -11,7 +11,8 @@ use iroh_blobs::downloader::Downloader;
 use iroh_blobs::store::{Map, Store};
 use iroh_blobs::util::local_pool::{Config as LocalPoolConfig, LocalPool};
 use p2panda_core::Hash;
-use p2panda_net::{Network, NetworkBuilder};
+use p2panda_net::{Network, NetworkBuilder, TopicId};
+use p2panda_sync::Topic;
 
 use crate::download::download_blob;
 use crate::export::export_blob;
@@ -20,24 +21,25 @@ use crate::protocol::{BlobsProtocol, BLOBS_ALPN};
 use crate::DownloadBlobEvent;
 
 #[derive(Debug)]
-pub struct Blobs<S>
+pub struct Blobs<T, S>
 where
     S: Store,
 {
     downloader: Downloader,
-    network: Network,
+    network: Network<T>,
     rt: LocalPool,
     store: S,
 }
 
-impl<S> Blobs<S>
+impl<T, S> Blobs<T, S>
 where
+    T: Topic + TopicId + 'static,
     S: Store,
 {
     pub async fn from_builder(
-        network_builder: NetworkBuilder,
+        network_builder: NetworkBuilder<T>,
         store: S,
-    ) -> Result<(Network, Self)> {
+    ) -> Result<(Network<T>, Self)> {
         // Calls `num_cpus::get()` to define thread count.
         let local_pool_config = LocalPoolConfig::default();
         let local_pool = LocalPool::new(local_pool_config);
@@ -80,9 +82,9 @@ where
         import_blob(self.store.clone(), self.rt.handle().clone(), path).await
     }
 
-    pub async fn import_blob_from_stream<T>(&self, data: T) -> impl Stream<Item = ImportBlobEvent>
+    pub async fn import_blob_from_stream<D>(&self, data: D) -> impl Stream<Item = ImportBlobEvent>
     where
-        T: Stream<Item = io::Result<Bytes>> + Send + Unpin + 'static,
+        D: Stream<Item = io::Result<Bytes>> + Send + Unpin + 'static,
     {
         import_blob_from_stream(self.store.clone(), self.rt.handle().clone(), data).await
     }
