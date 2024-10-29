@@ -46,8 +46,7 @@ impl From<RelayUrl> for IrohRelayUrl {
     }
 }
 
-/// A node address including public key, socket address(es) and an optional
-/// realy URL.
+/// A node address including public key, socket address(es) and an optional relay URL.
 pub type NodeAddress = (PublicKey, Vec<SocketAddr>, Option<RelayUrl>);
 
 #[allow(dead_code)]
