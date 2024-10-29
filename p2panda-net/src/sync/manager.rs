@@ -26,12 +26,12 @@ const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncManager<T> {
+pub struct ToSyncActor<T> {
     peer: NodeId,
     topic: T,
 }
 
-impl<T> ToSyncManager<T> {
+impl<T> ToSyncActor<T> {
     pub(crate) fn new(peer: NodeId, topic: T) -> Self {
         Self { peer, topic }
     }
@@ -74,7 +74,7 @@ pub(crate) struct SyncManager<T> {
     completed_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
-    inbox: Receiver<ToSyncManager<T>>,
+    inbox: Receiver<ToSyncActor<T>>,
     known_peer_topics: HashMap<NodeId, HashSet<[u8; 32]>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt>,
@@ -91,7 +91,7 @@ where
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
-    ) -> (Self, Sender<ToSyncManager<T>>) {
+    ) -> (Self, Sender<ToSyncActor<T>>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 

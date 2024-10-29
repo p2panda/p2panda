@@ -17,7 +17,7 @@ use tracing::{debug, error, warn};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
-use crate::sync::manager::{SyncManager, ToSyncManager};
+use crate::sync::manager::{SyncManager, ToSyncActor};
 use crate::{FromBytes, NetworkId, ToBytes, TopicId};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
@@ -128,14 +128,14 @@ impl GossipBuffer {
 pub struct EngineActor<T> {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
+    gossip_buffer: GossipBuffer,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
     network_id: NetworkId,
     network_joined: bool,
     network_joined_pending: bool,
     peers: PeerMap,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
     topics: TopicMap<T>,
-    gossip_buffer: GossipBuffer,
 }
 
 impl<T> EngineActor<T>
@@ -146,13 +146,13 @@ where
         endpoint: Endpoint,
         inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-        sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
+        sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
         network_id: NetworkId,
     ) -> Self {
         Self {
             endpoint,
             gossip_actor_tx,
-            sync_manager_tx,
+            sync_actor_tx,
             inbox,
             network_id,
             network_joined: false,
@@ -168,17 +168,17 @@ where
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor<T>,
-        sync_manager: Option<SyncManager<T>>,
+        sync_actor: Option<SyncManager<T>>,
     ) -> Result<()> {
         // Used to shutdown the sync manager.
         // @TODO: Instead of introducing a token here would be nice to stick to the `shutdown`
         // method flow as implemented in other actors.
         let shutdown_token = CancellationToken::new();
 
-        if let Some(sync_manager) = sync_manager {
+        if let Some(sync_actor) = sync_actor {
             let shutdown_token = shutdown_token.clone();
             tokio::task::spawn(async move {
-                if let Err(err) = sync_manager.run(shutdown_token).await {
+                if let Err(err) = sync_actor.run(shutdown_token).await {
                     error!("sync manager failed to run: {err:?}");
                 }
             });
@@ -296,9 +296,6 @@ where
                 let list = self.peers.known_peers();
                 reply.send(Ok(list)).ok();
             }
-            ToEngineActor::Shutdown { .. } => {
-                unreachable!("handled in run_inner");
-            }
             ToEngineActor::SyncDone { peer, topic_id } => {
                 let counter = self.gossip_buffer.unlock(peer, topic_id);
 
@@ -312,6 +309,9 @@ where
                         self.on_gossip_message(bytes, peer, topic_id).await?;
                     }
                 }
+            }
+            ToEngineActor::Shutdown { .. } => {
+                unreachable!("handled in run_inner");
             }
         }
 
@@ -328,7 +328,7 @@ where
     async fn add_peer(&mut self, node_addr: NodeAddr) -> Result<()> {
         let node_id = node_addr.node_id;
 
-        // Make sure the endpoint also knows about this address
+        // Make sure the endpoint also knows about this address.
         match self.endpoint.add_node_addr(node_addr.clone()) {
             Ok(_) => {
                 if let Some(addr) = self.peers.add_peer(self.network_id, node_addr) {
@@ -339,14 +339,14 @@ where
                 } else {
                     debug!("added new peer to handler {}", node_id);
 
-                    // Attempt joining network when trying for the first time
+                    // Attempt joining network when trying for the first time.
                     if !self.network_joined && !self.network_joined_pending {
                         self.join_topic(self.network_id).await?;
                     }
                 }
             }
             Err(err) => {
-                // This can fail if we're trying to add ourselves
+                // This can fail if we're trying to add ourselves.
                 debug!(
                     "tried to add invalid node {} to known peers list: {err}",
                     node_id
@@ -374,11 +374,6 @@ where
                     peers: peers.clone(),
                 })
                 .await?;
-
-            // Do not attempt peer sync if the topic_id is the network id.
-            if topic_id == self.network_id {
-                return Ok(());
-            }
         }
 
         Ok(())
@@ -582,7 +577,7 @@ where
 
         // Inform the connection manager about any peer-topic combinations which are of interest to
         // us
-        if let Some(sync_manager_tx) = &self.sync_manager_tx {
+        if let Some(sync_actor_tx) = &self.sync_actor_tx {
             let topics_of_interest = self.topics.earmarked().await;
             for topic_id in &topic_ids {
                 if topics_of_interest.contains(topic_id) {
@@ -591,8 +586,8 @@ where
                         .get(topic_id)
                         .await
                         .expect("expected topic to be present in topic map");
-                    let peer_topic = ToSyncManager::new(delivered_from, topic);
-                    sync_manager_tx.send(peer_topic).await?
+                    let peer_topic = ToSyncActor::new(delivered_from, topic);
+                    sync_actor_tx.send(peer_topic).await?
                 }
             }
         }

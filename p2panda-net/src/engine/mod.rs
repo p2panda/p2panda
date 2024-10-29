@@ -51,14 +51,13 @@ where
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        // Create a sync manager with channel sender if a sync protocol has been provided.
-        let (sync_manager, sync_manager_tx) = if let Some(ref sync_protocol) = sync_protocol {
-            let (sync_manager, sync_manager_tx) = SyncManager::new(
+        let (sync_actor, sync_actor_tx) = if let Some(ref sync_protocol) = sync_protocol {
+            let (sync_actor, sync_actor_tx) = SyncManager::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
             );
-            (Some(sync_manager), Some(sync_manager_tx))
+            (Some(sync_actor), Some(sync_actor_tx))
         } else {
             (None, None)
         };
@@ -67,13 +66,13 @@ where
             endpoint,
             engine_actor_rx,
             gossip_actor_tx,
-            sync_manager_tx,
+            sync_actor_tx,
             network_id,
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
-            if let Err(err) = engine_actor.run(gossip_actor, sync_manager).await {
+            if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {
                 error!("engine actor failed: {err:?}");
             }
         });
@@ -112,17 +111,6 @@ where
         reply_rx.await?
     }
 
-    /// Sends a shutdown signal to the engine actor and waits for a confirmation reply.
-    pub async fn shutdown(&self) -> Result<()> {
-        let (reply, reply_rx) = oneshot::channel();
-        self.engine_actor_tx
-            .send(ToEngineActor::Shutdown { reply })
-            .await?;
-        reply_rx.await?;
-        debug!("engine shutdown");
-        Ok(())
-    }
-
     /// Subscribes to the given topic and provides a channel for network message passing.
     pub async fn subscribe(
         &self,
@@ -142,10 +130,21 @@ where
         Ok(())
     }
 
+    /// Sends a shutdown signal to the engine actor and waits for a confirmation reply.
+    pub async fn shutdown(&self) -> Result<()> {
+        let (reply, reply_rx) = oneshot::channel();
+        self.engine_actor_tx
+            .send(ToEngineActor::Shutdown { reply })
+            .await?;
+        reply_rx.await?;
+        debug!("engine shutdown");
+        Ok(())
+    }
+
     /// Returns a sync connection protocol handler for inbound connections.
     // @TODO: This method feels like the odd-one-out in this module. Could we move it somewhere
     // else?
-    pub(crate) fn sync_handler(&self) -> Option<SyncConnection<T>> {
+    pub(super) fn sync_handler(&self) -> Option<SyncConnection<T>> {
         self.sync_protocol.as_ref().map(|sync_protocol| {
             SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
         })
