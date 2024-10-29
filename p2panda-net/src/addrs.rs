@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 /// The STUN port as defined by [RFC 8489](<https://www.rfc-editor.org/rfc/rfc8489#section-18.6>)
 pub const DEFAULT_STUN_PORT: u16 = 3478;
 
+/// A URL identifying a relay server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayUrl(IrohRelayUrl);
 
@@ -45,6 +46,7 @@ impl From<RelayUrl> for IrohRelayUrl {
     }
 }
 
+/// A node address including public key, socket address(es) and an optional relay URL.
 pub type NodeAddress = (PublicKey, Vec<SocketAddr>, Option<RelayUrl>);
 
 #[allow(dead_code)]

@@ -26,14 +26,13 @@ use crate::{FromBytes, ToBytes, TopicId};
 /// establish connections. As soon as we've joined the gossip we will learn about more peers.
 const JOIN_PEERS_SAMPLE_LEN: usize = 7;
 
-/// In what frequency do we attempt joining the network-wide gossip overlay over a newly, randomly
-/// sampled set of peers.
+/// Frequency of attempts to join the network-wide gossip overlay.
 const JOIN_NETWORK_INTERVAL: Duration = Duration::from_millis(900);
 
-/// How often do we announce the list of our subscribed topics.
+/// Frequency of locally-subscribed topic announcements (to network peers).
 const ANNOUNCE_TOPICS_INTERVAL: Duration = Duration::from_millis(2200);
 
-/// How often do we try to join the topics we're interested in.
+/// Frequency of attempts to join gossip overlays for locally-subscribed topics.
 const JOIN_TOPICS_INTERVAL: Duration = Duration::from_millis(1200);
 
 pub enum ToEngineActor<T> {
@@ -80,6 +79,8 @@ pub enum ToEngineActor<T> {
     },
 }
 
+// @TODO: This feels out of place here. Can we move it into a separate module, or maybe into the
+// gossip actor?
 #[derive(Debug, Default)]
 pub struct GossipBuffer {
     buffers: HashMap<(PublicKey, [u8; 32]), Vec<Vec<u8>>>,
@@ -123,14 +124,12 @@ impl GossipBuffer {
     }
 }
 
+/// The core event orchestrator of the networking layer.
 pub struct EngineActor<T> {
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
-    // @TODO: Think about field naming here; perhaps these fields would be more accurately prefixed
-    // by `topic_` or `gossip_`, since they are not referencing the overall network swarm (aka.
-    // network-wide gossip overlay).
     network_id: [u8; 32],
     network_joined: bool,
     network_joined_pending: bool,
@@ -164,6 +163,8 @@ where
         }
     }
 
+    /// Runs the sync manager and gossip actor, sets up shutdown handlers and spawns the engine
+    /// event loop.
     pub async fn run(
         mut self,
         mut gossip_actor: GossipActor<T>,
@@ -207,6 +208,10 @@ where
         }
     }
 
+    /// Runs the event loop of the engine actor.
+    ///
+    /// Interval-based timers are used to trigger attempts to join the network-wide and
+    /// topic-specific gossip overlays, as well as to announce the locally-subscribed topics.
     async fn run_inner(&mut self) -> Result<oneshot::Sender<()>> {
         let mut join_network_interval = interval(JOIN_NETWORK_INTERVAL);
         let mut announce_topics_interval = interval(ANNOUNCE_TOPICS_INTERVAL);
@@ -236,7 +241,7 @@ where
                 _ = join_topics_interval.tick() => {
                     self.join_earmarked_topics().await?;
                 },
-                // Frequently announce the topics we're interested in in the network-wide gossip
+                // Frequently announce the topics we're interested in to the network-wide gossip
                 _ = announce_topics_interval.tick(), if self.network_joined => {
                     self.announce_topics().await?;
                 },
@@ -244,6 +249,7 @@ where
         }
     }
 
+    /// Processes a message received by the actor; these messages represent gossip and sync events.
     async fn on_actor_message(&mut self, msg: ToEngineActor<T>) -> Result<()> {
         match msg {
             ToEngineActor::AddPeer { node_addr } => {
@@ -349,9 +355,10 @@ where
         Ok(())
     }
 
-    // @TODO: Need to be sure that comments correctly differentiate between the network-wide gossip
-    // overlay (swarm) and the individual gossip overlays for each topic.
     /// Attempt to join the gossip overlay for the given topic if it is of interest to our node.
+    ///
+    /// The topic may represent the network-wide topic (used for discovering peers and the topics
+    /// they're interested in) or it may refer directly to a particular topic of interest.
     async fn join_topic(&mut self, topic_id: [u8; 32]) -> Result<()> {
         if topic_id == self.network_id && !self.network_joined_pending && !self.network_joined {
             self.network_joined_pending = true;
@@ -612,6 +619,8 @@ where
     }
 }
 
+// @TODO: TopicMap and PeerMap also feel out of place. Might be nice to have them in a separate
+// module(s). That'll help to keep the engine actor module lean and focused.
 #[derive(Clone, Debug)]
 struct TopicMap<T> {
     inner: Arc<RwLock<TopicMapInner<T>>>,
