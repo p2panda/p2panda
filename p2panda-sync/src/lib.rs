@@ -14,20 +14,23 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// A topic is used to identify the particular data-set a peer is interested in syncing. Exactly how
-/// this is expressed is left up to the user to decide. During sync the "initiator" sends their topic to
-/// a remote peer where it is be mapped to their local data-set and access-control checks can be
-/// performed. Once this "handshake" is complete both peers will proceed with the designated sync
-/// protocol.
+/// Identify the particular data-set a peer is interested in syncing.
+///
+/// Exactly how this is expressed is left up to the user to decide. During sync the "initiator"
+/// sends their topic to a remote peer where it is be mapped to their local data-set and
+/// access-control checks can be performed. Once this "handshake" is complete both peers will
+/// proceed with the designated sync protocol.
 pub trait Topic:
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
 }
 
-/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
-/// the scope for a particular session should be identified. Sync protocol users can provide an
-/// implementation of `TopicMap` so that a scope `S` can be retrieved for a specific topic `T`
-/// when a peer initiates or accepts a sync session.
+/// Maps a topic to the related data being sent over the wire during sync.
+///
+/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how the
+/// scope for a particular session should be identified. Sync protocol users can provide an
+/// implementation of `TopicMap` so that a scope `S` can be retrieved for a specific topic `T` when
+/// a peer initiates or accepts a sync session.
 #[async_trait]
 pub trait TopicMap<T, S>
 where
