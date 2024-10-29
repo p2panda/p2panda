@@ -16,12 +16,12 @@ use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
 use crate::TopicId;
 
-// A duration in milliseconds.
-//
-// This value will be used to determine the send timeout if the sync queue is full at the time
-// an attempt is scheduled or rescheduled.
+/// This value will be used to determine the send timeout if the sync queue is full at the time an
+/// attempt is scheduled or rescheduled.
 const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
+
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
@@ -60,6 +60,7 @@ enum SyncAttemptError {
     /// bidirectional stream.
     #[error("sync attempt failed due to connection or stream error")]
     Connection,
+
     /// Error occurred while initiating a sync session.
     #[error("sync attempt failed due to sync protocol error")]
     Sync,
