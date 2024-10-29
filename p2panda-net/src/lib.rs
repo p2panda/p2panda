@@ -19,4 +19,11 @@ pub use tokio_util::task::AbortOnDropHandle;
 pub use p2panda_sync::log_sync::LogSyncProtocol;
 
 pub type NetworkId = [u8; 32];
-pub type TopicId = [u8; 32];
+
+/// Topic ids are announced on the network and used to identify peers with overlapping interests.
+///
+/// Once identified, peers join a gossip overlay and, if a sync protocol has been provided, attempt
+/// to synchronize past state before entering "live mode".
+pub trait TopicId {
+    fn id(&self) -> [u8; 32];
+}
