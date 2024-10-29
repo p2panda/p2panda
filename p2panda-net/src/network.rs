@@ -34,17 +34,25 @@ use crate::{NetworkId, RelayUrl, TopicId};
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
 
-/// Timeout duration for discovery of at least one peer's direct address.
-const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
-
-// This is used in the construction of the shared `AbortOnDropHandle`.
-pub(crate) type JoinErrToStr =
-    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
+/// Timeout duration for receiving of at least one peer's direct address.
+const DIRECT_ADDRESSES_WAIT: Duration = Duration::from_secs(5);
 
 /// Relay server configuration mode.
 #[derive(Debug, PartialEq)]
 pub enum RelayMode {
+    /// No relay has been specified.
+    ///
+    /// To connect to another peer it's direct address needs to be known, otherwise any connection
+    /// attempt will fail.
     Disabled,
+
+    /// Specify a custom relay.
+    ///
+    /// Relays are used to help establishing a connection in case the direct address is not known
+    /// yet (via STUN). In case this process fails (for example due to a firewall), the relay is
+    /// used as a fallback to tunnel traffic from one peer to another (via DERP).
+    ///
+    /// Important: Peers need to use the _same_ relay address to be able to connect to each other.
     Custom(RelayNode),
 }
 
@@ -60,9 +68,9 @@ pub struct NetworkBuilder<T> {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
 }
 
 impl<T> NetworkBuilder<T>
@@ -322,7 +330,7 @@ where
         // address
         let wait_for_endpoints = {
             async move {
-                tokio::time::timeout(ENDPOINT_WAIT, endpoint.direct_addresses().next())
+                tokio::time::timeout(DIRECT_ADDRESSES_WAIT, endpoint.direct_addresses().next())
                     .await
                     .context("waiting for endpoint")?
                     .context("no endpoints given to establish at least one connection")?;
@@ -646,6 +654,10 @@ async fn handle_connection(
         warn!("handling incoming connection ended with error: {err}");
     }
 }
+
+/// Helper to construct shared `AbortOnDropHandle` coming from tokio crate.
+pub(crate) type JoinErrToStr =
+    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 #[cfg(test)]
 mod sync_protocols {
