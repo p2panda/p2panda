@@ -19,12 +19,10 @@ pub struct DiscoveryMap {
 }
 
 impl DiscoveryMap {
-    #[allow(dead_code)]
     pub fn from_services(services: Vec<Box<dyn Discovery>>) -> Self {
         Self { services }
     }
 
-    #[allow(dead_code)]
     pub fn add(&mut self, service: impl Discovery + 'static) {
         self.services.push(Box::new(service));
     }

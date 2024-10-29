@@ -89,6 +89,13 @@ where
         }
     }
 
+    /// Adds a peer to the address book.
+    ///
+    /// This method can be manually called to register known peers or automatically, for example by
+    /// an background "peer discovery" process.
+    ///
+    /// Learning about a peer gives us information on how to connect to them, for learning about
+    /// the topics it's interested in we need a separate process named "topic discovery".
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })

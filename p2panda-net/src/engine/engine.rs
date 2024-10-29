@@ -18,7 +18,7 @@ use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::message::NetworkMessage;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncManager};
-use crate::{FromBytes, ToBytes, TopicId};
+use crate::{FromBytes, NetworkId, ToBytes, TopicId};
 
 /// Maximum size of random sample set when choosing peers to join gossip overlay.
 ///
@@ -130,7 +130,7 @@ pub struct EngineActor<T> {
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
-    network_id: [u8; 32],
+    network_id: NetworkId,
     network_joined: bool,
     network_joined_pending: bool,
     peers: PeerMap,
@@ -147,7 +147,7 @@ where
         inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_manager_tx: Option<mpsc::Sender<ToSyncManager<T>>>,
-        network_id: [u8; 32],
+        network_id: NetworkId,
     ) -> Self {
         Self {
             endpoint,
@@ -171,12 +171,14 @@ where
         sync_manager: Option<SyncManager<T>>,
     ) -> Result<()> {
         // Used to shutdown the sync manager.
+        // @TODO: Instead of introducing a token here would be nice to stick to the `shutdown`
+        // method flow as implemented in other actors.
         let shutdown_token = CancellationToken::new();
-        let cloned_shutdown_token = shutdown_token.clone();
 
         if let Some(sync_manager) = sync_manager {
+            let shutdown_token = shutdown_token.clone();
             tokio::task::spawn(async move {
-                if let Err(err) = sync_manager.run(cloned_shutdown_token).await {
+                if let Err(err) = sync_manager.run(shutdown_token).await {
                     error!("sync manager failed to run: {err:?}");
                 }
             });
@@ -233,15 +235,15 @@ where
                         }
                     }
                 },
-                // Attempt joining the network-wide gossip if we haven't yet
+                // Attempt joining the network-wide gossip if we haven't yet.
                 _ = join_network_interval.tick(), if !self.network_joined  => {
                     self.join_topic(self.network_id).await?;
                 },
-                // Attempt joining the individual topic gossips if we haven't yet
+                // Attempt joining the individual topic gossips if we haven't yet.
                 _ = join_topics_interval.tick() => {
                     self.join_earmarked_topics().await?;
                 },
-                // Frequently announce the topics we're interested in to the network-wide gossip
+                // Frequently announce the topics we're interested in to the network-wide gossip.
                 _ = announce_topics_interval.tick(), if self.network_joined => {
                     self.announce_topics().await?;
                 },
@@ -598,8 +600,8 @@ where
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Deregister our interest in the given topic and leave the gossip overlay.
+    #[allow(dead_code)]
     async fn leave_topic(&mut self, topic_id: [u8; 32]) -> Result<()> {
         self.topics.remove_earmark(&topic_id).await;
         self.gossip_actor_tx
