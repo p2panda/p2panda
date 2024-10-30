@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use iroh_net::key::PublicKey;
-use iroh_net::{Endpoint, NodeAddr, NodeId};
+use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::Topic;
-use rand::seq::IteratorRandom;
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::gossip::{GossipActor, ToGossipActor};
+use crate::engine::gossip_buffer::GossipBuffer;
 use crate::engine::message::NetworkMessage;
+use crate::engine::peer_map::PeerMap;
+use crate::engine::topic_map::TopicMap;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncActor};
 use crate::{FromBytes, NetworkId, ToBytes, TopicId};
@@ -77,51 +77,6 @@ pub enum ToEngineActor<T> {
     KnownPeers {
         reply: oneshot::Sender<Result<Vec<NodeAddr>>>,
     },
-}
-
-// @TODO: This feels out of place here. Can we move it into a separate module, or maybe into the
-// gossip actor?
-#[derive(Debug, Default)]
-pub struct GossipBuffer {
-    buffers: HashMap<(PublicKey, [u8; 32]), Vec<Vec<u8>>>,
-    counters: HashMap<(PublicKey, [u8; 32]), usize>,
-}
-
-impl GossipBuffer {
-    fn lock(&mut self, peer: PublicKey, topic_id: [u8; 32]) {
-        let counter = self.counters.entry((peer, topic_id)).or_default();
-        *counter += 1;
-
-        self.buffers.entry((peer, topic_id)).or_default();
-
-        // @TODO: bring back assertion for checking we have max 2 concurrent sync sessions per peer+topic_id
-        debug!(
-            "lock gossip buffer with {} on topic {:?}: {}",
-            peer, topic_id, counter
-        );
-    }
-
-    fn unlock(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> usize {
-        match self.counters.get_mut(&(peer, topic_id)) {
-            Some(counter) => {
-                *counter -= 1;
-                debug!(
-                    "unlock gossip buffer with {} on topic {:?}: {}",
-                    peer, topic_id, counter
-                );
-                *counter
-            }
-            None => panic!(),
-        }
-    }
-
-    fn drain(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> Option<Vec<Vec<u8>>> {
-        self.buffers.remove(&(peer, topic_id))
-    }
-
-    fn buffer(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> Option<&mut Vec<Vec<u8>>> {
-        self.buffers.get_mut(&(peer, topic_id))
-    }
 }
 
 /// The core event orchestrator of the networking layer.
@@ -328,29 +283,25 @@ where
     async fn add_peer(&mut self, node_addr: NodeAddr) -> Result<()> {
         let node_id = node_addr.node_id;
 
-        // Make sure the endpoint also knows about this address.
-        match self.endpoint.add_node_addr(node_addr.clone()) {
-            Ok(_) => {
-                if let Some(addr) = self.peers.add_peer(self.network_id, node_addr) {
-                    debug!(
-                        "updated address for {} in known peers list: {:?}",
-                        node_id, addr
-                    );
-                } else {
-                    debug!("added new peer to handler {}", node_id);
+        // Make sure the low-level networking endpoint also knows about this address, otherwise
+        // connection attempts might fail.
+        if self.endpoint.add_node_addr(node_addr.clone()).is_err() {
+            // This can fail if we're trying to add ourselves.
+            debug!("tried to add invalid node {node_id} to known peers list");
+            return Ok(());
+        }
 
-                    // Attempt joining network when trying for the first time.
-                    if !self.network_joined && !self.network_joined_pending {
-                        self.join_topic(self.network_id).await?;
-                    }
-                }
-            }
-            Err(err) => {
-                // This can fail if we're trying to add ourselves.
-                debug!(
-                    "tried to add invalid node {} to known peers list: {err}",
-                    node_id
-                );
+        if let Some(addr) = self.peers.add_peer(self.network_id, node_addr) {
+            debug!(
+                "updated address for {} in known peers list: {:?}",
+                node_id, addr
+            );
+        } else {
+            debug!("added new peer to handler {}", node_id);
+
+            // Attempt joining network when trying for the first time.
+            if !self.network_joined && !self.network_joined_pending {
+                self.join_topic(self.network_id).await?;
             }
         }
 
@@ -611,235 +562,6 @@ where
             .send(ToGossipActor::Shutdown)
             .await
             .ok();
-
         Ok(())
     }
-}
-
-// @TODO: TopicMap and PeerMap also feel out of place. Might be nice to have them in a separate
-// module(s). That'll help to keep the engine actor module lean and focused.
-#[derive(Clone, Debug)]
-struct TopicMap<T> {
-    inner: Arc<RwLock<TopicMapInner<T>>>,
-}
-
-/// The topic associated with a particular subscription along with it's broadcast channel and
-/// oneshot ready channel.
-type TopicMeta<T> = (
-    T,
-    broadcast::Sender<FromNetwork>,
-    Option<oneshot::Sender<()>>,
-);
-
-#[derive(Debug)]
-struct TopicMapInner<T> {
-    earmarked: HashMap<[u8; 32], TopicMeta<T>>,
-    pending_joins: HashSet<[u8; 32]>,
-    joined: HashSet<[u8; 32]>,
-}
-
-impl<T> TopicMap<T>
-where
-    T: Topic + TopicId,
-{
-    /// Generate an empty topic map.
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(TopicMapInner {
-                earmarked: HashMap::new(),
-                pending_joins: HashSet::new(),
-                joined: HashSet::new(),
-            })),
-        }
-    }
-
-    pub async fn get(&self, topic_id: &[u8; 32]) -> Option<T> {
-        let inner = self.inner.read().await;
-        inner
-            .earmarked
-            .get(topic_id)
-            .map(|(topic, _, _)| topic.clone())
-    }
-
-    /// Mark a topic of interest to our node.
-    pub async fn earmark(
-        &mut self,
-        topic: T,
-        from_network_tx: broadcast::Sender<FromNetwork>,
-        gossip_ready_tx: oneshot::Sender<()>,
-    ) {
-        let mut inner = self.inner.write().await;
-        inner.earmarked.insert(
-            topic.id(),
-            (topic.clone(), from_network_tx, Some(gossip_ready_tx)),
-        );
-        inner.pending_joins.insert(topic.id());
-    }
-
-    /// Remove a topic of interest to our node.
-    pub async fn remove_earmark(&mut self, topic_id: &[u8; 32]) {
-        let mut inner = self.inner.write().await;
-        inner.earmarked.remove(topic_id);
-        inner.pending_joins.remove(topic_id);
-    }
-
-    /// Return a list of topics of interest to our node.
-    pub async fn earmarked(&self) -> Vec<[u8; 32]> {
-        let inner = self.inner.read().await;
-        inner.earmarked.keys().cloned().collect()
-    }
-
-    /// Mark that we've successfully joined a gossip overlay for this topic.
-    pub async fn set_joined(&mut self, topic_id: [u8; 32]) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        if inner.pending_joins.remove(&topic_id) {
-            inner.joined.insert(topic_id);
-
-            // Inform local topic subscribers that the gossip overlay has been joined and is ready
-            // for messages.
-            if let Some((_, _, gossip_ready_tx)) = inner.earmarked.get_mut(&topic_id) {
-                // We need the `Sender` to be owned so we take it and replace with `None`.
-                if let Some(oneshot_tx) = gossip_ready_tx.take() {
-                    if oneshot_tx.send(()).is_err() {
-                        warn!("gossip topic oneshot ready receiver dropped")
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Return true if we've successfully joined a gossip overlay for this topic.
-    pub async fn has_successfully_joined(&self, topic_id: &[u8; 32]) -> bool {
-        let inner = self.inner.read().await;
-        inner.joined.contains(topic_id)
-    }
-
-    /// Return true if there's either a pending or successfully joined gossip overlay for this
-    /// topic.
-    pub async fn has_joined(&self, topic_id: &[u8; 32]) -> bool {
-        let inner = self.inner.read().await;
-        inner.joined.contains(topic_id) || inner.pending_joins.contains(topic_id)
-    }
-
-    /// Handle incoming messages from gossip.
-    ///
-    /// This method forwards messages to the subscribers for the given topic.
-    pub async fn on_gossip_message(
-        &self,
-        topic_id: [u8; 32],
-        bytes: Vec<u8>,
-        delivered_from: PublicKey,
-    ) -> Result<()> {
-        let inner = self.inner.read().await;
-        let (_, from_network_tx, _gossip_ready_tx) = inner
-            .earmarked
-            .get(&topic_id)
-            .context("on_gossip_message")?;
-        from_network_tx.send(FromNetwork::GossipMessage {
-            bytes,
-            delivered_from: to_public_key(delivered_from),
-        })?;
-        Ok(())
-    }
-
-    /// Handle incoming messages from sync.
-    ///
-    /// This method forwards messages to the subscribers for the given topic.
-    pub async fn on_sync_message(
-        &self,
-        topic_id: [u8; 32],
-        header: Vec<u8>,
-        payload: Option<Vec<u8>>,
-        delivered_from: PublicKey,
-    ) -> Result<()> {
-        let inner = self.inner.read().await;
-        let (_, from_network_tx, _) = inner.earmarked.get(&topic_id).context("on_sync_message")?;
-        from_network_tx.send(FromNetwork::SyncMessage {
-            header,
-            payload,
-            delivered_from: to_public_key(delivered_from),
-        })?;
-        Ok(())
-    }
-}
-
-struct PeerMap {
-    known_peers: HashMap<NodeId, NodeAddr>,
-    topics: HashMap<[u8; 32], Vec<PublicKey>>,
-}
-
-impl PeerMap {
-    /// Generate an empty peer map.
-    pub fn new() -> Self {
-        Self {
-            known_peers: HashMap::new(),
-            topics: HashMap::new(),
-        }
-    }
-
-    /// Return the public key and addresses for all peers known to our node.
-    pub fn known_peers(&self) -> Vec<NodeAddr> {
-        self.known_peers.values().cloned().collect()
-    }
-
-    /// Update our peer address book.
-    ///
-    /// If the peer is already known, their node addresses and relay URL are updated.
-    /// If not, the peer and their addresses are added to the address book and the local topic
-    /// updater is called.
-    pub fn add_peer(&mut self, topic_id: [u8; 32], node_addr: NodeAddr) -> Option<NodeAddr> {
-        let public_key = node_addr.node_id;
-
-        // If the given peer is already known to us, only update the direct addresses and relay url
-        // if the supplied values are not empty. This avoids overwriting values with blanks.
-        if let Some(addr) = self.known_peers.get_mut(&public_key) {
-            if !node_addr.info.is_empty() {
-                addr.info
-                    .direct_addresses
-                    .clone_from(&node_addr.info.direct_addresses);
-            }
-            if node_addr.relay_url().is_some() {
-                addr.info.relay_url = node_addr.info.relay_url;
-            }
-            Some(addr.clone())
-        } else {
-            self.on_announcement(vec![topic_id], public_key);
-            self.known_peers.insert(public_key, node_addr)
-        }
-    }
-
-    /// Update the topics our node knows about, including the public key of the peer who announced
-    /// the topic.
-    pub fn on_announcement(&mut self, topics: Vec<[u8; 32]>, delivered_from: PublicKey) {
-        for topic_id in topics {
-            match self.topics.get_mut(&topic_id) {
-                Some(list) => {
-                    if !list.contains(&delivered_from) {
-                        list.push(delivered_from)
-                    }
-                }
-                None => {
-                    self.topics.insert(topic_id, vec![delivered_from]);
-                }
-            }
-        }
-    }
-
-    /// Return a random set of known peers with an interest in the given topic.
-    pub fn random_set(&self, topic_id: &[u8; 32], size: usize) -> Vec<NodeId> {
-        self.topics
-            .get(topic_id)
-            .unwrap_or(&vec![])
-            .iter()
-            .choose_multiple(&mut rand::thread_rng(), size)
-            .into_iter()
-            .cloned()
-            .collect()
-    }
-}
-
-fn to_public_key(key: PublicKey) -> p2panda_core::PublicKey {
-    p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
 }

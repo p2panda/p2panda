@@ -3,7 +3,10 @@
 #[allow(clippy::module_inception)]
 mod engine;
 mod gossip;
+mod gossip_buffer;
 mod message;
+mod peer_map;
+mod topic_map;
 
 pub use engine::ToEngineActor;
 

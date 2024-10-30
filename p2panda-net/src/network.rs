@@ -269,24 +269,11 @@ where
             self.sync_protocol,
         );
 
-        for mut direct_addr in self.direct_node_addresses {
-            if direct_addr.relay_url().is_none() {
-                // If given address does not hold any relay information we optimistically add ours
-                // (if we have one). It's not guaranteed that this address will have the same relay
-                // url as we have, but it's better than nothing!
-                if let Some(ref relay_node) = relay {
-                    direct_addr = direct_addr.with_relay_url(relay_node.url.clone());
-                }
-            }
-
-            engine.add_peer(direct_addr.clone()).await?;
-        }
-
         let sync_handler = engine.sync_handler();
 
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
-            relay,
+            relay: relay.clone(),
             discovery: self.discovery,
             endpoint: endpoint.clone(),
             engine,
@@ -337,6 +324,19 @@ where
         if let Err(err) = wait_for_endpoints.await {
             network.shutdown().await.ok();
             return Err(err);
+        }
+
+        for mut direct_addr in self.direct_node_addresses {
+            if direct_addr.relay_url().is_none() {
+                // If given address does not hold any relay information we optimistically add ours
+                // (if we have one). It's not guaranteed that this address will have the same relay
+                // url as we have, but it's better than nothing!
+                if let Some(ref relay_node) = relay {
+                    direct_addr = direct_addr.with_relay_url(relay_node.url.clone());
+                }
+            }
+
+            network.add_peer(direct_addr.clone()).await?;
         }
 
         Ok(network)
