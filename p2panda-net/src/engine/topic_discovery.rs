@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::time::Duration;
-
 use anyhow::Result;
 use iroh_net::NodeId;
 use rand::random;
@@ -66,7 +64,7 @@ impl TopicDiscovery {
         Ok(())
     }
 
-    pub fn on_joined(&mut self) {
+    pub fn on_gossip_joined(&mut self) {
         if self.status == Status::Active {
             return;
         }
@@ -78,22 +76,24 @@ impl TopicDiscovery {
         self.status = Status::Active;
     }
 
-    pub async fn on_message(&mut self, bytes: &[u8], node_id: NodeId) -> Result<Vec<[u8; 32]>> {
+    pub async fn on_gossip_message(
+        &mut self,
+        bytes: &[u8],
+        node_id: NodeId,
+    ) -> Result<Vec<[u8; 32]>> {
         let topic_ids = TopicDiscoveryMessage::from_bytes(&bytes).map(|message| message.1)?;
         for topic_id in &topic_ids {
-            self.address_book.add_topic(node_id, *topic_id).await;
+            self.address_book.add_topic_id(node_id, *topic_id).await;
         }
         Ok(topic_ids)
     }
 
-    pub async fn announce(&self) -> Result<()> {
+    pub async fn announce(&self, topic_ids: Vec<[u8; 32]>) -> Result<()> {
         if self.status != Status::Active {
             return Ok(());
         }
 
-        // @TODO
-        // let topics = self.address_book.earmarked().await;
-        let message = TopicDiscoveryMessage::new(vec![]);
+        let message = TopicDiscoveryMessage::new(topic_ids);
 
         self.gossip_actor_tx
             .send(ToGossipActor::Broadcast {

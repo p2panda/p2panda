@@ -18,10 +18,6 @@ impl GossipBuffer {
 
         self.buffers.entry((peer, topic_id)).or_default();
 
-        assert!(
-            *counter <= 2,
-            "there should only be max 2 concurrent sync sessions peer peer and topic id"
-        );
         debug!(
             "lock gossip buffer with {} on topic {:?}: {}",
             peer, topic_id, counter

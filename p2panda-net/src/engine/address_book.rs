@@ -17,7 +17,7 @@ pub struct AddressBook {
 
 #[derive(Debug)]
 struct AddressBookInner {
-    known_peer_topics: HashMap<NodeId, HashSet<[u8; 32]>>,
+    known_peer_topic_ids: HashMap<NodeId, HashSet<[u8; 32]>>,
 }
 
 impl AddressBook {
@@ -26,25 +26,25 @@ impl AddressBook {
         Self {
             network_id,
             inner: Arc::new(RwLock::new(AddressBookInner {
-                known_peer_topics: HashMap::new(),
+                known_peer_topic_ids: HashMap::new(),
             })),
         }
     }
 
     pub async fn add_peer(&mut self, node_id: NodeId) -> bool {
-        self.add_topic(node_id, self.network_id).await
+        self.add_topic_id(node_id, self.network_id).await
     }
 
-    pub async fn add_topic(&mut self, node_id: NodeId, topic_id: [u8; 32]) -> bool {
+    pub async fn add_topic_id(&mut self, node_id: NodeId, topic_id: [u8; 32]) -> bool {
         let mut inner = self.inner.write().await;
 
-        if let Some(known_topics) = inner.known_peer_topics.get_mut(&node_id) {
+        if let Some(known_topics) = inner.known_peer_topic_ids.get_mut(&node_id) {
             return known_topics.insert(topic_id);
         }
 
         let mut topics = HashSet::new();
         topics.insert(topic_id);
-        inner.known_peer_topics.insert(node_id, topics);
+        inner.known_peer_topic_ids.insert(node_id, topics);
         true
     }
 
@@ -54,7 +54,7 @@ impl AddressBook {
 
         let nodes_interested_in_topic =
             inner
-                .known_peer_topics
+                .known_peer_topic_ids
                 .iter()
                 .fold(Vec::new(), |mut acc, (node_id, topics)| {
                     if topics.contains(&topic_id) {

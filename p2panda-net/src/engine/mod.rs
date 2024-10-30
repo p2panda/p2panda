@@ -7,9 +7,7 @@ mod engine;
 mod gossip;
 mod gossip_buffer;
 mod topic_discovery;
-mod topic_map;
-
-pub use engine::ToEngineActor;
+mod topic_streams;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -25,12 +23,14 @@ use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
 
+pub use crate::engine::address_book::AddressBook;
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
-use crate::sync::manager::SyncManager;
+use crate::sync::manager::SyncActor;
 use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
+pub use engine::ToEngineActor;
 
 /// The `Engine` is responsible for instantiating various system actors (including engine, gossip
 /// and sync connection actors) and exposes an API for interacting with the engine actor.
@@ -52,11 +52,13 @@ where
         gossip: Gossip,
         sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     ) -> Self {
+        let address_book = AddressBook::new(network_id);
+
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
         let (sync_actor, sync_actor_tx) = if let Some(ref sync_protocol) = sync_protocol {
-            let (sync_actor, sync_actor_tx) = SyncManager::new(
+            let (sync_actor, sync_actor_tx) = SyncActor::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
@@ -68,6 +70,7 @@ where
 
         let engine_actor = EngineActor::new(
             endpoint,
+            address_book,
             engine_actor_rx,
             gossip_actor_tx,
             sync_actor_tx,
