@@ -10,10 +10,8 @@ mod sync;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
-use iroh_net::key::PublicKey;
 pub use network::{Network, NetworkBuilder, RelayMode};
 pub use protocols::ProtocolHandler;
-pub use tokio_util::task::AbortOnDropHandle;
 
 #[cfg(feature = "log-sync")]
 pub use p2panda_sync::log_sync::LogSyncProtocol;
@@ -29,6 +27,6 @@ pub trait TopicId {
     fn id(&self) -> [u8; 32];
 }
 
-pub(crate) fn to_public_key(key: PublicKey) -> p2panda_core::PublicKey {
+pub(crate) fn to_public_key(key: iroh_net::key::PublicKey) -> p2panda_core::PublicKey {
     p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
 }
