@@ -361,3 +361,112 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use futures_util::{FutureExt, StreamExt};
+    use iroh_net::NodeAddr;
+    use p2panda_core::PrivateKey;
+    use p2panda_sync::Topic;
+    use serde::{Deserialize, Serialize};
+    use tokio::sync::{broadcast, mpsc, oneshot};
+    use tokio_stream::wrappers::BroadcastStream;
+
+    use crate::engine::AddressBook;
+    use crate::network::FromNetwork;
+    use crate::{to_public_key, TopicId};
+
+    use super::TopicStreams;
+
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    enum TestTopic {
+        Primary,
+        Secondary,
+    }
+
+    impl Topic for TestTopic {}
+
+    impl TopicId for TestTopic {
+        fn id(&self) -> [u8; 32] {
+            [0; 32]
+        }
+    }
+
+    fn generate_node_id() -> NodeAddr {
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+        let bytes = public_key.as_bytes();
+        NodeAddr::new(iroh_net::NodeId::from_bytes(bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn ooo_gossip_buffering() {
+        let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
+        let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
+        let (from_network_tx, from_network_rx) = broadcast::channel(128);
+        let (_to_network_tx, to_network_rx) = mpsc::channel(128);
+        let (gossip_ready_tx, _) = oneshot::channel();
+        let mut from_network_rx_stream = BroadcastStream::new(from_network_rx);
+
+        let topic = TestTopic::Primary;
+        let topic_id = topic.id();
+
+        let mut address_book = AddressBook::new([1; 32]);
+
+        let peer_1 = generate_node_id();
+        address_book.add_peer(peer_1.clone()).await;
+        address_book.add_topic_id(peer_1.node_id, topic.id()).await;
+
+        let mut topic_streams =
+            TopicStreams::<TestTopic>::new(gossip_actor_tx, address_book, Some(sync_actor_tx));
+
+        topic_streams
+            .subscribe(
+                topic.clone(),
+                from_network_tx,
+                to_network_rx,
+                gossip_ready_tx,
+            )
+            .await
+            .unwrap();
+
+        topic_streams.on_gossip_joined(topic_id).await;
+
+        topic_streams.on_sync_start(topic.clone(), peer_1.node_id);
+        topic_streams.on_sync_handshake_success(topic.clone(), peer_1.node_id);
+
+        topic_streams
+            .on_gossip_message(topic_id, b"a new cmos battery".to_vec(), peer_1.node_id)
+            .await
+            .unwrap();
+        topic_streams
+            .on_gossip_message(topic_id, b"and icecream".to_vec(), peer_1.node_id)
+            .await
+            .unwrap();
+
+        assert!(
+            from_network_rx_stream.next().now_or_never().is_none(),
+            "stream does not contain any messages yet from gossip"
+        );
+
+        topic_streams
+            .on_sync_done(topic, peer_1.node_id)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            from_network_rx_stream.next().await.unwrap().unwrap(),
+            FromNetwork::GossipMessage {
+                bytes: b"a new cmos battery".to_vec(),
+                delivered_from: to_public_key(peer_1.node_id),
+            }
+        );
+        assert_eq!(
+            from_network_rx_stream.next().await.unwrap().unwrap(),
+            FromNetwork::GossipMessage {
+                bytes: b"and icecream".to_vec(),
+                delivered_from: to_public_key(peer_1.node_id),
+            }
+        );
+    }
+}
