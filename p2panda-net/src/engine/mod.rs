@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+mod address_book;
+mod constants;
 #[allow(clippy::module_inception)]
 mod engine;
 mod gossip;
 mod gossip_buffer;
-mod message;
-mod peer_map;
+mod topic_discovery;
 mod topic_map;
 
 pub use engine::ToEngineActor;
@@ -103,15 +104,6 @@ where
             .send(ToEngineActor::AddPeer { node_addr })
             .await?;
         Ok(())
-    }
-
-    /// Retrieves the node addresses of all peers the engine actor currently knows about.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
-        let (reply, reply_rx) = oneshot::channel();
-        self.engine_actor_tx
-            .send(ToEngineActor::KnownPeers { reply })
-            .await?;
-        reply_rx.await?
     }
 
     /// Subscribes to the given topic and provides a channel for network message passing.

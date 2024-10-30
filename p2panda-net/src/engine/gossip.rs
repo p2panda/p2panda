@@ -115,7 +115,6 @@ where
                 let gossip = self.gossip.clone();
                 let fut = async move {
                     let stream = gossip.join(topic_id.into(), peers).await?;
-
                     Ok(stream)
                 }
                 .map(move |stream| (topic_id, stream));

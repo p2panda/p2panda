@@ -556,11 +556,6 @@ where
         &self.inner.endpoint
     }
 
-    /// Returns the addresses of all known peers.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
-        self.inner.engine.known_peers().await
-    }
-
     /// Returns the public key of the local network.
     pub fn node_id(&self) -> PublicKey {
         PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())

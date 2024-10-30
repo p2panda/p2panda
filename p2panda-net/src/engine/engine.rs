@@ -4,27 +4,23 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use iroh_net::key::PublicKey;
-use iroh_net::{Endpoint, NodeAddr};
+use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
+use crate::engine::address_book::AddressBook;
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::gossip_buffer::GossipBuffer;
-use crate::engine::message::NetworkMessage;
-use crate::engine::peer_map::PeerMap;
+use crate::engine::topic_discovery::TopicDiscovery;
 use crate::engine::topic_map::TopicMap;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncManager, ToSyncActor};
-use crate::{FromBytes, NetworkId, ToBytes, TopicId};
+use crate::{NetworkId, TopicId};
 
-/// Maximum size of random sample set when choosing peers to join gossip overlay.
-///
-/// The larger the number the less likely joining the gossip will fail as we get more chances to
-/// establish connections. As soon as we've joined the gossip we will learn about more peers.
-const JOIN_PEERS_SAMPLE_LEN: usize = 7;
+use super::constants::JOIN_PEERS_SAMPLE_LEN;
 
 /// Frequency of attempts to join the network-wide gossip overlay.
 const JOIN_NETWORK_INTERVAL: Duration = Duration::from_millis(900);
@@ -74,23 +70,19 @@ pub enum ToEngineActor<T> {
     TopicJoined {
         topic_id: [u8; 32],
     },
-    KnownPeers {
-        reply: oneshot::Sender<Result<Vec<NodeAddr>>>,
-    },
 }
 
 /// The core event orchestrator of the networking layer.
 pub struct EngineActor<T> {
+    address_book: AddressBook,
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     gossip_buffer: GossipBuffer,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
     network_id: NetworkId,
-    network_joined: bool,
-    network_joined_pending: bool,
-    peers: PeerMap,
     sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
     topics: TopicMap<T>,
+    topic_discovery: TopicDiscovery,
 }
 
 impl<T> EngineActor<T>
@@ -104,17 +96,19 @@ where
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
         network_id: NetworkId,
     ) -> Self {
+        let address_book = AddressBook::new(network_id);
+        let topic_discovery =
+            TopicDiscovery::new(network_id, gossip_actor_tx.clone(), address_book.clone());
         Self {
+            address_book,
             endpoint,
             gossip_actor_tx,
-            sync_actor_tx,
+            gossip_buffer: Default::default(),
             inbox,
             network_id,
-            network_joined: false,
-            network_joined_pending: false,
-            peers: PeerMap::new(),
+            sync_actor_tx,
+            topic_discovery,
             topics: TopicMap::new(),
-            gossip_buffer: Default::default(),
         }
     }
 
@@ -169,8 +163,8 @@ where
     /// topic-specific gossip overlays, as well as to announce the locally-subscribed topics.
     async fn run_inner(&mut self) -> Result<oneshot::Sender<()>> {
         let mut join_network_interval = interval(JOIN_NETWORK_INTERVAL);
-        let mut announce_topics_interval = interval(ANNOUNCE_TOPICS_INTERVAL);
         let mut join_topics_interval = interval(JOIN_TOPICS_INTERVAL);
+        let mut announce_topics_interval = interval(ANNOUNCE_TOPICS_INTERVAL);
 
         loop {
             tokio::select! {
@@ -188,17 +182,17 @@ where
                         }
                     }
                 },
-                // Attempt joining the network-wide gossip if we haven't yet.
-                _ = join_network_interval.tick(), if !self.network_joined  => {
-                    self.join_topic(self.network_id).await?;
+                // Attempt to start topic discovery if it didn't happen yet.
+                _ = join_network_interval.tick() => {
+                    self.topic_discovery.start().await?;
+                },
+                // Attempt announcing our currently subscribed topics to other peers.
+                _ = announce_topics_interval.tick() => {
+                    self.topic_discovery.announce().await?;
                 },
                 // Attempt joining the individual topic gossips if we haven't yet.
                 _ = join_topics_interval.tick() => {
                     self.join_earmarked_topics().await?;
-                },
-                // Frequently announce the topics we're interested in to the network-wide gossip.
-                _ = announce_topics_interval.tick(), if self.network_joined => {
-                    self.announce_topics().await?;
                 },
             }
         }
@@ -245,10 +239,6 @@ where
             ToEngineActor::TopicJoined { topic_id } => {
                 self.on_topic_joined(topic_id).await?;
             }
-            ToEngineActor::KnownPeers { reply } => {
-                let list = self.peers.known_peers();
-                reply.send(Ok(list)).ok();
-            }
             ToEngineActor::SyncDone { peer, topic_id } => {
                 let counter = self.gossip_buffer.unlock(peer, topic_id);
 
@@ -271,13 +261,10 @@ where
         Ok(())
     }
 
-    /// Add a peer to our address book.
+    /// Add a peer to our address book or updates it's entry.
     ///
     /// Any provided network addresses are registered with the endpoint so that automatic
     /// connection attempts can be made.
-    ///
-    /// If our node is not currently connected or pending connection to the gossip overlay, attempt
-    /// to join.
     async fn add_peer(&mut self, node_addr: NodeAddr) -> Result<()> {
         let node_id = node_addr.node_id;
 
@@ -289,19 +276,11 @@ where
             return Ok(());
         }
 
-        if let Some(addr) = self.peers.add_peer(self.network_id, node_addr) {
-            debug!(
-                "updated address for {} in known peers list: {:?}",
-                node_id, addr
-            );
-        } else {
-            debug!("added new peer to handler {}", node_id);
+        self.address_book.add_peer(node_id).await;
 
-            // Attempt joining network when trying for the first time.
-            if !self.network_joined && !self.network_joined_pending {
-                self.join_topic(self.network_id).await?;
-            }
-        }
+        // Hot path: Attempt starting topic discovery as soon as we've learned about at least one
+        // peer. If this fails we'll try again soon again in our internal loop.
+        self.topic_discovery.start().await?;
 
         Ok(())
     }
@@ -311,11 +290,10 @@ where
     /// The topic may represent the network-wide topic (used for discovering peers and the topics
     /// they're interested in) or it may refer directly to a particular topic of interest.
     async fn join_topic(&mut self, topic_id: [u8; 32]) -> Result<()> {
-        if topic_id == self.network_id && !self.network_joined_pending && !self.network_joined {
-            self.network_joined_pending = true;
-        }
-
-        let peers = self.peers.random_set(&topic_id, JOIN_PEERS_SAMPLE_LEN);
+        let peers = self
+            .address_book
+            .random_set(topic_id, JOIN_PEERS_SAMPLE_LEN)
+            .await;
         if !peers.is_empty() {
             self.gossip_actor_tx
                 .send(ToGossipActor::Join {
@@ -324,7 +302,6 @@ where
                 })
                 .await?;
         }
-
         Ok(())
     }
 
@@ -332,45 +309,28 @@ where
     /// all topics.
     async fn on_topic_joined(&mut self, topic_id: [u8; 32]) -> Result<()> {
         if topic_id == self.network_id {
-            self.network_joined_pending = false;
-            self.network_joined = true;
+            self.topic_discovery.on_joined();
+        } else {
+            self.topics.set_joined(topic_id).await?;
         }
-
-        self.topics.set_joined(topic_id).await?;
-        if topic_id == self.network_id {
-            self.announce_topics().await?;
-        }
-
         Ok(())
     }
 
-    /// Register the topic and public key of a peer who just joined the network.
-    /// If the topic is of interest to our node, announce all topics.
-    async fn on_peer_joined(&mut self, topic_id: [u8; 32], peer_id: PublicKey) -> Result<()> {
-        // Add the peer to our address book if they are not already known to us
-        if !self.peers.known_peers.contains_key(&peer_id) {
-            self.peers.add_peer(topic_id, NodeAddr::new(peer_id));
-        }
+    /// Register the topic and public key of a peer who just became our direct neighbor in the
+    /// gossip overlay.
+    ///
+    /// Through this we can use gossip algorithms also as an additional "peer discovery" mechanism.
+    async fn on_peer_joined(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
+        // At this point we only have the public key of the peer, which is not enough to establish
+        // direct connections, luckily iroh handled storing networking information for us
+        // internally already.
+        self.address_book.add_topic(node_id, topic_id).await;
+
+        // Hot path: Some other peer joined, so we send them our "topics of interest", this will
+        // hopefully speed up their onboarding process into the network.
         if topic_id == self.network_id {
-            self.announce_topics().await?;
+            self.topic_discovery.announce().await?;
         }
-
-        Ok(())
-    }
-
-    /// Generate a new announcement message for each topic of interest to our node and
-    /// broadcast it to the network.
-    async fn announce_topics(&mut self) -> Result<()> {
-        let topics = self.topics.earmarked().await;
-        let message = NetworkMessage::new_announcement(topics);
-        let bytes = message.to_bytes();
-
-        self.gossip_actor_tx
-            .send(ToGossipActor::Broadcast {
-                topic_id: self.network_id,
-                bytes,
-            })
-            .await?;
 
         Ok(())
     }
@@ -430,9 +390,9 @@ where
             });
         }
 
-        if self.network_joined {
-            self.announce_topics().await?;
-        }
+        // Hot path: Announce our "topics of interest" into the network, hopefully this will speed
+        // up finding other peers.
+        self.topic_discovery.announce().await?;
 
         Ok(())
     }
@@ -467,7 +427,11 @@ where
         Ok(())
     }
 
-    /// Process an inbound message from the network.
+    /// Process an inbound message from one of the gossip overlays.
+    ///
+    /// If the network comes from the "network-wide" gossip overlay (determined by the "network
+    /// id"), then it gets handled by the "topic discovery" mechanism. Otherwise it is a regular,
+    /// custom application-related gossip overlay around a "topic id".
     async fn on_gossip_message(
         &mut self,
         bytes: Vec<u8>,
@@ -475,20 +439,20 @@ where
         topic_id: [u8; 32],
     ) -> Result<()> {
         if topic_id == self.network_id {
-            // Message coming from network-wide gossip overlay.
-            let Ok(message) = NetworkMessage::from_bytes(&bytes) else {
-                warn!(
-                    "could not parse network-wide gossip message from {}",
-                    delivered_from
-                );
-                return Ok(());
-            };
-
-            // So far we're only expecting one message type on the network-wide overlay.
-            match message {
-                NetworkMessage::Announcement(_, topic_ids) => {
-                    self.on_announcement_message(topic_ids, delivered_from)
-                        .await?;
+            match self
+                .topic_discovery
+                .on_message(&bytes, delivered_from)
+                .await
+            {
+                Ok(topic_ids) => {
+                    self.on_discovered_topics(topic_ids, delivered_from).await?;
+                }
+                Err(err) => {
+                    warn!(
+                        "could not parse topic-discovery message from {}: {}",
+                        delivered_from, err
+                    );
+                    return Ok(());
                 }
             }
         } else if self.topics.has_joined(&topic_id).await {
@@ -506,22 +470,18 @@ where
         Ok(())
     }
 
-    /// Process an announcement message from the gossip overlay.
-    async fn on_announcement_message(
+    /// Process "topics of interest" from another peer.
+    async fn on_discovered_topics(
         &mut self,
         topic_ids: Vec<[u8; 32]>,
         delivered_from: PublicKey,
     ) -> Result<()> {
         debug!(
-            "received announcement of peer {} {:?}",
+            "learned about topics of interest for {}: {:?}",
             delivered_from, topic_ids
         );
 
-        // Register earmarked topics from other peers.
-        self.peers
-            .on_announcement(topic_ids.clone(), delivered_from);
-
-        // And optimistically try to join them if there's an overlap with our interests.
+        // Optimistically try to join them if there's an overlap with our interests.
         self.join_earmarked_topics().await?;
 
         // Inform the connection manager about any peer-topic combinations which are of interest to

@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["cbor", "mdns-discovery"]
-cbor = ["dep:ciborium"]
+default = ["mdns-discovery"]
 log-sync = []
 mdns-discovery = ["p2panda-discovery/mdns"]
 
@@ -15,7 +14,7 @@ workspace = true
 [dependencies]
 anyhow = "1.0.86"
 async-trait = "0.1.82"
-ciborium = { version = "0.2.2", optional = true }
+ciborium = "0.2.2"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
 iroh-base = "0.25.0"

@@ -219,7 +219,6 @@ where
     async fn update_peer_topics(&mut self, peer: NodeId, topic: [u8; 32]) {
         debug!("updating peer topics in connection manager");
 
-        // Insert the peer-topic combination into our set of known peers.
         if let Some(known_topics) = self.known_peer_topics.get_mut(&peer) {
             known_topics.insert(topic);
         } else {
