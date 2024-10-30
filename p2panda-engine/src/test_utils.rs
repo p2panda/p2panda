@@ -2,14 +2,29 @@
 
 use async_stream::stream;
 use futures_util::Stream;
-use p2panda_core::{Body, Extension, Header, PrivateKey, RawOperation};
+use p2panda_core::prune::PruneFlag;
+use p2panda_core::{Body, Extension, Header, PrivateKey, PublicKey, RawOperation};
 use serde::{Deserialize, Serialize};
 
-use crate::extensions::{PruneFlag, StreamName};
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StreamName(PublicKey, Option<String>);
+
+impl StreamName {
+    pub fn new(public_key: PublicKey, name: Option<&str>) -> Self {
+        Self(public_key, name.map(|value| value.to_owned()))
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Extensions {
+    #[serde(rename = "s")]
     pub stream_name: StreamName,
+
+    #[serde(
+        rename = "p",
+        skip_serializing_if = "PruneFlag::is_set",
+        default = "PruneFlag::default"
+    )]
     pub prune_flag: PruneFlag,
 }
 

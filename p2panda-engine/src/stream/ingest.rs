@@ -8,6 +8,7 @@ use futures_channel::mpsc::{self};
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
+use p2panda_core::prune::PruneFlag;
 use p2panda_core::{Body, Extension, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
@@ -15,7 +16,6 @@ use pin_utils::pin_mut;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::extensions::PruneFlag;
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
@@ -235,10 +235,9 @@ mod tests {
     use p2panda_core::{Operation, RawOperation};
     use p2panda_store::MemoryStore;
 
-    use crate::extensions::StreamName;
     use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
-    use crate::test_utils::{mock_stream, Extensions};
+    use crate::test_utils::{mock_stream, Extensions, StreamName};
 
     use super::IngestExt;
 
