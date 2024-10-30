@@ -535,6 +535,11 @@ where
         self.inner.engine.add_peer(node_addr).await
     }
 
+    /// Returns the addresses of all known peers.
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+        self.inner.engine.known_peers().await
+    }
+
     /// Returns the direct addresses of the local network.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
         self.inner

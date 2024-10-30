@@ -32,6 +32,9 @@ pub enum ToEngineActor<T> {
     AddPeer {
         node_addr: NodeAddr,
     },
+    KnownPeers {
+        reply: oneshot::Sender<Vec<NodeAddr>>,
+    },
     Subscribe {
         topic: T,
         from_network_tx: broadcast::Sender<FromNetwork>,
@@ -205,6 +208,10 @@ where
             ToEngineActor::AddPeer { node_addr } => {
                 self.add_peer(node_addr).await?;
             }
+            ToEngineActor::KnownPeers { reply } => {
+                let list = self.address_book.known_peers().await;
+                reply.send(list).ok();
+            }
             ToEngineActor::Subscribe {
                 topic,
                 from_network_tx,
@@ -269,7 +276,7 @@ where
             return Ok(());
         }
 
-        self.address_book.add_peer(node_id).await;
+        self.address_book.add_peer(node_addr).await;
 
         // Hot path: Attempt starting topic discovery as soon as we've learned about at least one
         // peer. If this fails we'll try again soon again in our internal loop.
