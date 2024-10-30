@@ -141,9 +141,8 @@ where
         if let Some(peer_topic) = self.pending_sync_sessions.pop_front() {
             let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1);
 
-            // Scheduling the attempt will fail if the sync queue is full.
-            // In that case, we return the peer and topic combination to the buffer of pending
-            // sync sessions.
+            // Scheduling the attempt will fail if the sync queue is full. In that case, we return
+            // the peer and topic combination to the buffer of pending sync sessions.
             if self.schedule_attempt(sync_attempt).await.is_err() {
                 self.pending_sync_sessions.push_back(peer_topic)
             }

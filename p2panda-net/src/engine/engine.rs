@@ -126,8 +126,6 @@ where
         sync_actor: Option<SyncManager<T>>,
     ) -> Result<()> {
         // Used to shutdown the sync manager.
-        // @TODO: Instead of introducing a token here would be nice to stick to the `shutdown`
-        // method flow as implemented in other actors.
         let shutdown_token = CancellationToken::new();
 
         if let Some(sync_actor) = sync_actor {
@@ -146,7 +144,7 @@ where
         });
 
         // Take oneshot sender from outside API awaited by `shutdown` call and fire it as soon as
-        // shutdown completed
+        // shutdown completed.
         let shutdown_completed_signal = self.run_inner().await;
         if let Err(err) = self.shutdown().await {
             error!(?err, "error during shutdown");
@@ -477,7 +475,7 @@ where
         topic_id: [u8; 32],
     ) -> Result<()> {
         if topic_id == self.network_id {
-            // Message coming from network-wide gossip overlay
+            // Message coming from network-wide gossip overlay.
             let Ok(message) = NetworkMessage::from_bytes(&bytes) else {
                 warn!(
                     "could not parse network-wide gossip message from {}",
@@ -486,7 +484,7 @@ where
                 return Ok(());
             };
 
-            // So far we're only expecting one message type on the network-wide overlay
+            // So far we're only expecting one message type on the network-wide overlay.
             match message {
                 NetworkMessage::Announcement(_, topic_ids) => {
                     self.on_announcement_message(topic_ids, delivered_from)
@@ -519,15 +517,15 @@ where
             delivered_from, topic_ids
         );
 
-        // Register earmarked topics from other peers
+        // Register earmarked topics from other peers.
         self.peers
             .on_announcement(topic_ids.clone(), delivered_from);
 
-        // And optimistically try to join them if there's an overlap with our interests
+        // And optimistically try to join them if there's an overlap with our interests.
         self.join_earmarked_topics().await?;
 
         // Inform the connection manager about any peer-topic combinations which are of interest to
-        // us
+        // us.
         if let Some(sync_actor_tx) = &self.sync_actor_tx {
             let topics_of_interest = self.topics.earmarked().await;
             for topic_id in &topic_ids {
