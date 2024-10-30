@@ -19,13 +19,13 @@ use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, TopicId};
 
-/// Frequency of attempts to join the network-wide gossip overlay.
+/// Frequency of attempts to join the gossip overlay which is used for "topic discovery".
 const JOIN_NETWORK_INTERVAL: Duration = Duration::from_millis(900);
 
-/// Frequency of locally-subscribed topic announcements (to network peers).
+/// Frequency of topic id announcements (to network peers).
 const ANNOUNCE_TOPICS_INTERVAL: Duration = Duration::from_millis(2200);
 
-/// Frequency of attempts to join gossip overlays for locally-subscribed topics.
+/// Frequency of attempts to join gossip overlays for application-defined topic ids.
 const JOIN_TOPICS_INTERVAL: Duration = Duration::from_millis(1200);
 
 pub enum ToEngineActor<T> {

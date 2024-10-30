@@ -9,6 +9,11 @@ use tokio::sync::RwLock;
 
 use crate::NetworkId;
 
+/// Address book with peer addresses and their topic ids.
+///
+/// Manages a list of all peer addresses which are known to us (usually populated by a "peer
+/// discovery" process) and a list of all topic id's peers in this network are interested in
+/// (usually populated by a "topic discovery" process).
 #[derive(Debug, Clone)]
 pub struct AddressBook {
     network_id: NetworkId,
@@ -22,7 +27,7 @@ struct AddressBookInner {
 }
 
 impl AddressBook {
-    /// Returns an empty address book for this network.
+    /// Return an empty address book for this network.
     pub fn new(network_id: NetworkId) -> Self {
         Self {
             network_id,
@@ -33,8 +38,12 @@ impl AddressBook {
         }
     }
 
+    /// Add or update peer address to the address book.
     pub async fn add_peer(&mut self, node_addr: NodeAddr) {
         let node_id = node_addr.node_id;
+
+        // Every peer in this network is automatically part of the network-wide gossip overlay
+        // which is used for topic discovery.
         self.add_topic_id(node_id, self.network_id).await;
 
         let mut inner = self.inner.write().await;
@@ -47,6 +56,7 @@ impl AddressBook {
             .or_insert(vec![node_addr]);
     }
 
+    /// Connect peer with a topic id they are interested in.
     pub async fn add_topic_id(&mut self, node_id: NodeId, topic_id: [u8; 32]) {
         let mut inner = self.inner.write().await;
         inner
@@ -62,6 +72,7 @@ impl AddressBook {
             });
     }
 
+    /// Return list of all currently known peer addresses.
     pub async fn known_peers(&self) -> Vec<NodeAddr> {
         let inner = self.inner.read().await;
         inner

@@ -20,6 +20,18 @@ enum Status {
     Active,
 }
 
+/// Manages the "topic discovery" background process.
+///
+/// Within a network peers can be interested in different topics. How topics are defined is up to
+/// the applications. Within a network there can be even multiple applications co-existing.
+///
+/// To find out which peer is interested in what topic we need a process called "topic discovery".
+/// Currently this is (rather naively) implemented as a network-wide gossip overlay where peers
+/// frequently broadcast their interests. Later we might look into other approaches, for example
+/// applying a random-walk algorithm which traverses the network and learning about it over time.
+// @TODO(adz): Would be great to already express this interface as traits so it's easier to swap
+// out the strategies with something else. The API could even look similar to our current
+// `Discovery` trait (for peer discovery), adjusted to work with topics.
 pub struct TopicDiscovery {
     address_book: AddressBook,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -41,6 +53,7 @@ impl TopicDiscovery {
         }
     }
 
+    /// Attempts joining the network-wide gossip overlay.
     pub async fn start(&mut self) -> Result<()> {
         if self.status != Status::Idle {
             return Ok(());

@@ -17,10 +17,24 @@ use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
 use crate::{to_public_key, TopicId};
 
+/// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, broadcast::Sender<FromNetwork>);
 
-pub type TopicStreamId = usize;
+/// Every stream has a unique identifier.
+type TopicStreamId = usize;
 
+/// Manages subscriptions to topics in form of data streams.
+///
+/// A stream has quite a bit of state to deal with, this includes:
+/// 1. Try to enter a gossip overlay for sending messages in "live mode" over a topic id.
+/// 2. Help the sync manager with learning about topics of interest and guide it to connect to
+///    peers for syncing up state with them.
+/// 3. Intercept and temporarily buffer incoming gossip messages of a peer when we're currently in
+///    a sync session with them. As soon as this sync session has finished we can re-play the
+///    messages. This helps reducing the number of out-of-order messages.
+/// 4. Applications can subscribe to topics multiple times, or to different topics but with the
+///    same topic ids. This stream handler multiplexes messages to the right place, even when
+///    there's duplicates.
 #[derive(Debug)]
 pub struct TopicStreams<T> {
     address_book: AddressBook,
@@ -58,6 +72,16 @@ where
         }
     }
 
+    /// Establishes a stream to send to and receive from an application-defined topic in the
+    /// network.
+    ///
+    /// Internally this already attempts joining the gossip overlay for the topic id to allow "live
+    /// mode". At the same time it prepares all data types to be able to manage sync sessions over
+    /// the given topic.
+    ///
+    /// Users can subscribe multiple times to the same topic or to different topics which hold the
+    /// same topic ids. The code internally multiplexes duplicate subscriptions and routes messages
+    /// to all relevant handlers.
     pub async fn subscribe(
         &mut self,
         topic: T,
@@ -65,9 +89,12 @@ where
         mut to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
+        // Every subscription stream receives its own unique identifier.
         let stream_id = self.next_stream_id;
         self.next_stream_id += 1;
 
+        // Prepare all relevant earmarks and data streams to aid other processes dealing with
+        // gossip, buffering or sync.
         self.subscribed
             .insert(stream_id, (topic.clone(), from_network_tx));
         self.gossip_pending.insert(topic.id(), gossip_ready_tx);
@@ -93,8 +120,17 @@ where
                 while let Some(event) = to_network_rx.recv().await {
                     let gossip_joined = gossip_joined.read().await;
                     if !gossip_joined.contains(&topic.id()) {
-                        // @TODO: We're dropping messages silently for now, later we want to buffer
-                        // them somewhere until we've joined the topic gossip
+                        // If we haven't joined the gossip yet messages will be silently dropped
+                        // here.
+                        //
+                        // For now this is fine as the user has two options:
+                        //
+                        // 1. They're combining sync with gossip. If the user stores all messages
+                        //    before sending them (which they probably always should if they care
+                        //    about consistency) sync will make sure that peers will catch up with
+                        //    this data as soon as they connect to somebody.
+                        // 2. They're don't care about consistency, but they are waiting for the
+                        //    "gossip ready" signal before they send any messages.
                         continue;
                     }
 
@@ -110,6 +146,8 @@ where
                     };
 
                     if let Err(err) = result {
+                        // @TODO(adz): This fails silently right now, shouldn't this be propagated
+                        // further to the user?
                         error!("failed broadcasting message to gossip for topic {topic:?}: {err}");
                         break;
                     }
@@ -120,6 +158,7 @@ where
         Ok(())
     }
 
+    /// Returns a list of all gossip topic ids we're interested in.
     pub fn topic_ids(&self) -> Vec<[u8; 32]> {
         self.subscribed
             .values()
@@ -127,6 +166,12 @@ where
             .collect()
     }
 
+    /// Re-attempts joining pending gossip overlays for topic id's we haven't succeeded joining yet
+    /// (for example because we lacked knowledge of other peers also being interested in them).
+    ///
+    /// This should ideally be called frequently by some other process or whenever we want to
+    /// optimistically try to step forward with joining all overlays as fast as possible ("hot
+    /// path").
     pub async fn try_join_pending_gossips(&self) -> Result<()> {
         for topic_id in self.gossip_pending.keys() {
             self.join_gossip(*topic_id).await?;
@@ -150,7 +195,8 @@ where
 
     /// Attempt to join the gossip overlay for the given topic.
     async fn join_gossip(&self, topic_id: [u8; 32]) -> Result<()> {
-        if self.has_joined_gossip(topic_id).await {
+        // Make sure the join request is only called once per topic id.
+        if self.has_joined_or_is_pending(topic_id).await {
             return Ok(());
         }
 
@@ -173,9 +219,14 @@ where
         gossip_joined.contains(&topic_id)
     }
 
+    async fn has_joined_or_is_pending(&self, topic_id: [u8; 32]) -> bool {
+        let gossip_joined = self.gossip_joined.read().await;
+        gossip_joined.contains(&topic_id) || self.gossip_pending.contains_key(&topic_id)
+    }
+
     /// Handle incoming messages from gossip.
     ///
-    /// This method forwards messages to the subscribers for the given topic.
+    /// This method forwards messages to the subscribers for the given topic id.
     pub async fn on_gossip_message(
         &mut self,
         topic_id: [u8; 32],
@@ -187,18 +238,23 @@ where
             return Ok(());
         }
 
+        // If there's currently a sync session running with that peer over that topic id we're
+        // delaying delivery of these gossip messages and re-play them later after the session
+        // finished.
+        //
+        // This reduces greatly the number of out-of-order messages in the stream and therefore the
+        // pressure to re-order somewhere upstream.
         if let Some(buffer) = self.gossip_buffer.buffer(delivered_from, topic_id) {
             buffer.push(bytes);
             return Ok(());
         }
 
+        // Different topics can be subscribed to the same gossip overlay, this is why we need to
+        // multiplex the gossip message to potentially multiple streams.
         let stream_ids = self
             .topic_id_to_stream
             .get(&topic_id)
             .expect("consistent topic id to stream id mapping");
-
-        // Different topics can be subscribed to the same gossip overlay, this is why we need to
-        // multiplex the gossip message to potentially multiple streams.
         for stream_id in stream_ids {
             let (_, from_network_tx) = self.subscribed.get(stream_id).expect("stream should exist");
             from_network_tx.send(FromNetwork::GossipMessage {
@@ -210,7 +266,8 @@ where
         Ok(())
     }
 
-    /// Process "topics of interest" from another peer.
+    /// Peers exchange topic ids in a process named "topic discovery". This method processes the
+    /// learned topic id's from other peers.
     pub async fn on_discovered_topic_ids(
         &mut self,
         their_topic_ids: Vec<[u8; 32]>,
@@ -225,9 +282,11 @@ where
         //
         // This queues up a sync session which will eventually request the data we are interested
         // in from that peer.
+        let mut found_common_topic = false;
         if let Some(sync_actor_tx) = &self.sync_actor_tx {
             for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
+                    found_common_topic = true;
                     let peer_topic = ToSyncActor::new(delivered_from, topic.clone());
                     sync_actor_tx.send(peer_topic).await?
                 }
@@ -235,21 +294,28 @@ where
         }
 
         // Hot path: Optimistically try to join gossip overlays at the same time.
-        self.try_join_pending_gossips().await?;
+        if found_common_topic {
+            self.try_join_pending_gossips().await?;
+        }
 
         Ok(())
     }
 
+    /// Process new sync session starting with a peer over a topic.
     #[allow(unused_variables)]
     pub fn on_sync_start(&self, topic: T, node_id: NodeId) {
         // Do nothing here for now ..
     }
 
+    /// Process handshake phase finishing during a sync session.
+    ///
+    /// In the handshake phase peers usually handle authorization and exchange the topic which will
+    /// be synced.
     pub fn on_sync_handshake_success(&mut self, topic: T, node_id: NodeId) {
         self.gossip_buffer.lock(node_id, topic.id());
     }
 
-    /// Process message forwarded from the sync actor.
+    /// Process application-data message resulting from the sync session.
     pub fn on_sync_message(
         &mut self,
         topic: T,
@@ -274,10 +340,13 @@ where
         Ok(())
     }
 
+    /// Process sync session finishing.
     pub async fn on_sync_done(&mut self, topic: T, node_id: NodeId) -> Result<()> {
         let topic_id = topic.id();
         let counter = self.gossip_buffer.unlock(node_id, topic_id);
 
+        // If no locks are available anymore for that peer over that topic we can finally re-play
+        // the gossip messages we've intercepted and kept around for the time of the sync session.
         if counter == 0 {
             let buffer = self
                 .gossip_buffer
