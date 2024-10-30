@@ -151,7 +151,7 @@ mod tests {
         let bytes = encode_cbor(&extensions).unwrap();
         // A false "prune flag" will not be serialized at all
         assert_eq!(bytes.len(), 1);
-        let decoded: Extensions = decode_cbor(&bytes).unwrap();
+        let decoded: Extensions = decode_cbor(&bytes[..]).unwrap();
         assert_eq!(extensions, decoded);
 
         let extensions = Extensions {
@@ -159,7 +159,7 @@ mod tests {
         };
         let bytes = encode_cbor(&extensions).unwrap();
         assert_eq!(bytes.len(), 4);
-        let decoded: Extensions = decode_cbor(&bytes).unwrap();
+        let decoded: Extensions = decode_cbor(&bytes[..]).unwrap();
         assert_eq!(extensions, decoded);
     }
 }

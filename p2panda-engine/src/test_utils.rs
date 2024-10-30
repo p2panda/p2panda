@@ -22,7 +22,7 @@ pub struct Extensions {
 
     #[serde(
         rename = "p",
-        skip_serializing_if = "PruneFlag::is_set",
+        skip_serializing_if = "PruneFlag::is_not_set",
         default = "PruneFlag::default"
     )]
     pub prune_flag: PruneFlag,
