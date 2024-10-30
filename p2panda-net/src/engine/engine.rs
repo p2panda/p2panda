@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::time::Duration;
-
 use anyhow::{Context, Result};
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
@@ -12,21 +10,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::address_book::AddressBook;
+use crate::engine::constants::{
+    ANNOUNCE_TOPICS_INTERVAL, JOIN_NETWORK_INTERVAL, JOIN_TOPICS_INTERVAL,
+};
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::topic_discovery::TopicDiscovery;
 use crate::engine::topic_streams::TopicStreams;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, TopicId};
-
-/// Frequency of attempts to join the gossip overlay which is used for "topic discovery".
-const JOIN_NETWORK_INTERVAL: Duration = Duration::from_millis(900);
-
-/// Frequency of topic id announcements (to network peers).
-const ANNOUNCE_TOPICS_INTERVAL: Duration = Duration::from_millis(2200);
-
-/// Frequency of attempts to join gossip overlays for application-defined topic ids.
-const JOIN_TOPICS_INTERVAL: Duration = Duration::from_millis(1200);
 
 pub enum ToEngineActor<T> {
     AddPeer {
