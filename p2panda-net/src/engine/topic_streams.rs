@@ -195,8 +195,7 @@ where
 
     /// Attempt to join the gossip overlay for the given topic.
     async fn join_gossip(&self, topic_id: [u8; 32]) -> Result<()> {
-        // Make sure the join request is only called once per topic id.
-        if self.has_joined_or_is_pending(topic_id).await {
+        if self.has_joined_gossip(topic_id).await {
             return Ok(());
         }
 
@@ -217,11 +216,6 @@ where
     async fn has_joined_gossip(&self, topic_id: [u8; 32]) -> bool {
         let gossip_joined = self.gossip_joined.read().await;
         gossip_joined.contains(&topic_id)
-    }
-
-    async fn has_joined_or_is_pending(&self, topic_id: [u8; 32]) -> bool {
-        let gossip_joined = self.gossip_joined.read().await;
-        gossip_joined.contains(&topic_id) || self.gossip_pending.contains_key(&topic_id)
     }
 
     /// Handle incoming messages from gossip.
