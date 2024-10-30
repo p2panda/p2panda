@@ -58,7 +58,7 @@ impl AddressBook {
                 .iter()
                 .fold(Vec::new(), |mut acc, (node_id, topics)| {
                     if topics.contains(&topic_id) {
-                        acc.push(node_id.clone());
+                        acc.push(*node_id);
                     }
                     acc
                 });

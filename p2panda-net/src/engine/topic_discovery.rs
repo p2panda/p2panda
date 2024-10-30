@@ -81,7 +81,7 @@ impl TopicDiscovery {
         bytes: &[u8],
         node_id: NodeId,
     ) -> Result<Vec<[u8; 32]>> {
-        let topic_ids = TopicDiscoveryMessage::from_bytes(&bytes).map(|message| message.1)?;
+        let topic_ids = TopicDiscoveryMessage::from_bytes(bytes).map(|message| message.1)?;
         for topic_id in &topic_ids {
             self.address_book.add_topic_id(node_id, *topic_id).await;
         }

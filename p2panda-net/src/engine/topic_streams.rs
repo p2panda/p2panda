@@ -226,7 +226,7 @@ where
         // This queues up a sync session which will eventually request the data we are interested
         // in from that peer.
         if let Some(sync_actor_tx) = &self.sync_actor_tx {
-            for (_, (topic, _)) in &self.subscribed {
+            for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
                     let peer_topic = ToSyncActor::new(delivered_from, topic.clone());
                     sync_actor_tx.send(peer_topic).await?

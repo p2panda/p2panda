@@ -903,7 +903,7 @@ mod tests {
             previous: vec![],
             extensions,
         };
-        header.sign(&private_key);
+        header.sign(private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
     }
@@ -921,7 +921,7 @@ mod tests {
 
     impl TopicId for TestTopic {
         fn id(&self) -> [u8; 32] {
-            self.1.clone()
+            self.1
         }
     }
 
@@ -938,8 +938,7 @@ mod tests {
                 direct_node_public_key,
                 vec!["0.0.0.0:2026".parse().unwrap()],
                 None,
-            )
-                .into()],
+            )],
             relay: Some(relay_address.clone()),
         };
 
@@ -1083,7 +1082,7 @@ mod tests {
 
         let topic = TestTopic::new("event_logs");
         let log_id = 0;
-        let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
+        let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id])]);
 
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(topic.clone(), logs);

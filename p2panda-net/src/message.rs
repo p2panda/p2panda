@@ -24,7 +24,7 @@ impl<T: Serialize> ToBytes for T {
 
 impl<T: DeserializeOwned> FromBytes<T> for T {
     fn from_bytes(bytes: &[u8]) -> Result<T> {
-        let value = decode_cbor(&bytes[..])?;
+        let value = decode_cbor(bytes)?;
         Ok(value)
     }
 }

@@ -31,7 +31,7 @@ impl Topic for ChatTopic {}
 
 impl TopicId for ChatTopic {
     fn id(&self) -> [u8; 32] {
-        self.1.clone()
+        self.1
     }
 }
 
