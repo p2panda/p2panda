@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 mod addrs;
+mod bytes;
 pub mod config;
 mod engine;
-mod message;
 pub mod network;
 mod protocols;
 mod sync;
@@ -11,7 +11,6 @@ mod sync;
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
 use iroh_net::key::PublicKey;
-pub use message::{FromBytes, ToBytes};
 pub use network::{Network, NetworkBuilder, RelayMode};
 pub use protocols::ProtocolHandler;
 pub use tokio_util::task::AbortOnDropHandle;

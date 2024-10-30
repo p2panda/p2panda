@@ -6,10 +6,10 @@ use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
+use crate::bytes::{FromBytes, ToBytes};
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::gossip::ToGossipActor;
-use crate::message::{FromBytes, ToBytes};
 use crate::NetworkId;
 
 #[derive(Default, PartialEq, Eq)]

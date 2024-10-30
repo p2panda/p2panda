@@ -874,9 +874,10 @@ mod tests {
     use tracing_subscriber::EnvFilter;
 
     use crate::addrs::DEFAULT_STUN_PORT;
+    use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, ToNetwork};
 
