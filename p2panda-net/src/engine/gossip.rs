@@ -25,6 +25,7 @@ pub enum ToGossipActor {
         topic_id: [u8; 32],
         peers: Vec<PublicKey>,
     },
+    #[allow(dead_code)]
     Leave {
         topic_id: [u8; 32],
     },
@@ -115,7 +116,6 @@ where
                 let gossip = self.gossip.clone();
                 let fut = async move {
                     let stream = gossip.join(topic_id.into(), peers).await?;
-
                     Ok(stream)
                 }
                 .map(move |stream| (topic_id, stream));
@@ -123,7 +123,7 @@ where
                 self.pending_joins.spawn(fut);
             }
             ToGossipActor::Leave { topic_id } => {
-                // Quit the topic by dropping all handles to `GossipTopic` for the given topic_id
+                // Quit the topic by dropping all handles to `GossipTopic` for the given topic id.
                 let _handle = self.gossip_events.remove(&topic_id);
                 self.joined.remove(&topic_id);
                 self.want_join.remove(&topic_id);
@@ -180,7 +180,7 @@ where
         match event {
             GossipEvent::Received(msg) => {
                 self.engine_actor_tx
-                    .send(ToEngineActor::Received {
+                    .send(ToEngineActor::GossipMessage {
                         bytes: msg.content.into(),
                         delivered_from: msg.delivered_from,
                         topic_id,
@@ -189,7 +189,7 @@ where
             }
             GossipEvent::NeighborUp(peer) => {
                 self.engine_actor_tx
-                    .send(ToEngineActor::NeighborUp { topic_id, peer })
+                    .send(ToEngineActor::GossipNeighborUp { topic_id, peer })
                     .await?;
             }
             // @TODO: Unmatched variants are `Joined(Vec<NodeId>)` and `Received(Message)`
@@ -207,7 +207,7 @@ where
         self.gossip_senders.insert(topic_id, stream_tx);
 
         self.engine_actor_tx
-            .send(ToEngineActor::TopicJoined { topic_id })
+            .send(ToEngineActor::GossipJoined { topic_id })
             .await?;
 
         Ok(())

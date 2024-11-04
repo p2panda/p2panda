@@ -34,17 +34,25 @@ use crate::{NetworkId, RelayUrl, TopicId};
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
 
-/// Timeout duration for discovery of at least one peer's direct address.
-const ENDPOINT_WAIT: Duration = Duration::from_secs(5);
-
-// This is used in the construction of the shared `AbortOnDropHandle`.
-pub(crate) type JoinErrToStr =
-    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
+/// Timeout duration for receiving of at least one peer's direct address.
+const DIRECT_ADDRESSES_WAIT: Duration = Duration::from_secs(5);
 
 /// Relay server configuration mode.
 #[derive(Debug, PartialEq)]
 pub enum RelayMode {
+    /// No relay has been specified.
+    ///
+    /// To connect to another peer it's direct address needs to be known, otherwise any connection
+    /// attempt will fail.
     Disabled,
+
+    /// Specify a custom relay.
+    ///
+    /// Relays are used to help establishing a connection in case the direct address is not known
+    /// yet (via STUN). In case this process fails (for example due to a firewall), the relay is
+    /// used as a fallback to tunnel traffic from one peer to another (via DERP).
+    ///
+    /// Important: Peers need to use the _same_ relay address to be able to connect to each other.
     Custom(RelayNode),
 }
 
@@ -60,9 +68,9 @@ pub struct NetworkBuilder<T> {
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
+    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
 }
 
 impl<T> NetworkBuilder<T>
@@ -104,7 +112,8 @@ where
     }
 
     /// Sets or overwrites the local bind port for IPv4 sockets.
-    /// Note that IPv6 sockets are bound to the specified port + 1.
+    ///
+    /// Note that IPv6 sockets are automatically bound to the specified port + 1.
     pub fn bind_port(mut self, port: u16) -> Self {
         self.bind_port.replace(port);
         self
@@ -166,8 +175,8 @@ where
 
     /// Sets the sync protocol for this network.
     ///
-    /// If a sync protocol is provided, a sync session will be completed before entering gossip
-    /// mode with any known peers with whom we share topics of interest.
+    /// If a sync protocol is provided, a sync session will be completed with any known peers with
+    /// whom we share topics of interest.
     pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a, T> + 'static) -> Self {
         self.sync_protocol = Some(Arc::new(protocol));
         self
@@ -182,7 +191,7 @@ where
         self
     }
 
-    /// Adds protocols for network communication, such as gossip and sync.
+    /// Adds additional, custom protocols for communication between two peers.
     pub fn protocol(
         mut self,
         protocol_name: &'static [u8],
@@ -214,7 +223,7 @@ where
             RelayMode::Custom(ref node) => Some(node.clone()),
         };
 
-        // Build p2p endpoint and bind the QUIC socket
+        // Build p2p endpoint and bind the QUIC socket.
         let endpoint = {
             let mut transport_config = TransportConfig::default();
             transport_config
@@ -247,7 +256,6 @@ where
 
         let node_addr = endpoint.node_addr().await?;
 
-        // Set up gossip overlay handler
         let gossip = Gossip::from_endpoint(
             endpoint.clone(),
             self.gossip_config.unwrap_or_default(),
@@ -261,25 +269,11 @@ where
             self.sync_protocol,
         );
 
-        // Add direct addresses to address book
-        for mut direct_addr in self.direct_node_addresses {
-            if direct_addr.relay_url().is_none() {
-                // If given address does not hold any relay information we optimistically add ours
-                // (if we have one). It's not guaranteed that this address will have the same relay
-                // url as we have, but it's better than nothing!
-                if let Some(ref relay_node) = relay {
-                    direct_addr = direct_addr.with_relay_url(relay_node.url.clone());
-                }
-            }
-
-            engine.add_peer(direct_addr.clone()).await?;
-        }
-
         let sync_handler = engine.sync_handler();
 
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
-            relay,
+            relay: relay.clone(),
             discovery: self.discovery,
             endpoint: endpoint.clone(),
             engine,
@@ -288,9 +282,7 @@ where
             secret_key,
         });
 
-        // Register core protocols all nodes accept
         self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
-        // If a sync protocol has not been configured then sync handler is None
         if let Some(sync_handler) = sync_handler {
             self.protocols
                 .insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler));
@@ -302,14 +294,13 @@ where
             return Err(err);
         }
 
-        // Create and spawn network task in runtime
         let fut = inner
             .clone()
             .spawn(protocols.clone())
             .instrument(error_span!("node", me=%node_addr.node_id.fmt_short()));
         let task = tokio::task::spawn(fut);
         let task_handle = AbortOnDropHandle::new(task)
-            .map_err(Box::new(|e: JoinError| e.to_string()) as JoinErrToStr)
+            .map_err(Box::new(|err: JoinError| err.to_string()) as JoinErrToStr)
             .shared();
 
         let network = Network {
@@ -319,10 +310,10 @@ where
         };
 
         // Wait for a single direct address update, to make sure we found at least one direct
-        // address
+        // address.
         let wait_for_endpoints = {
             async move {
-                tokio::time::timeout(ENDPOINT_WAIT, endpoint.direct_addresses().next())
+                tokio::time::timeout(DIRECT_ADDRESSES_WAIT, endpoint.direct_addresses().next())
                     .await
                     .context("waiting for endpoint")?
                     .context("no endpoints given to establish at least one connection")?;
@@ -335,11 +326,23 @@ where
             return Err(err);
         }
 
+        for mut direct_addr in self.direct_node_addresses {
+            if direct_addr.relay_url().is_none() {
+                // If given address does not hold any relay information we optimistically add ours
+                // (if we have one). It's not guaranteed that this address will have the same relay
+                // url as we have, but it's better than nothing!
+                if let Some(ref relay_node) = relay {
+                    direct_addr = direct_addr.with_relay_url(relay_node.url.clone());
+                }
+            }
+
+            network.add_peer(direct_addr.clone()).await?;
+        }
+
         Ok(network)
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 struct NetworkInner<T> {
     cancel_token: CancellationToken,
@@ -347,8 +350,10 @@ struct NetworkInner<T> {
     discovery: DiscoveryMap,
     endpoint: Endpoint,
     engine: Engine<T>,
+    #[allow(dead_code)]
     gossip: Gossip,
     network_id: NetworkId,
+    #[allow(dead_code)]
     secret_key: SecretKey,
 }
 
@@ -375,7 +380,7 @@ where
 
         let mut join_set = JoinSet::<Result<()>>::new();
 
-        // Spawn a task that updates the gossip endpoints and discovery services
+        // Spawn a task that updates the gossip endpoints and discovery services.
         {
             let inner = self.clone();
             join_set.spawn(async move {
@@ -387,12 +392,12 @@ where
 
                 loop {
                     tokio::select! {
-                        // Learn about our direct addresses and changes to them
+                        // Learn about our direct addresses and changes to them.
                         Some(endpoints) = addrs_stream.next() => {
                             let direct_addresses = endpoints.iter().map(|endpoint| endpoint.addr).collect();
                             my_node_addr.info.direct_addresses = direct_addresses;
                             if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
-                                warn!("Failed to update direct addresses for discovery: {err:?}");
+                                warn!("failed to update direct addresses for discovery: {err:?}");
                             }
                         },
                         else => break,
@@ -403,7 +408,7 @@ where
             });
         }
 
-        // Subscribe to all discovery channels where we might find new peers
+        // Subscribe to all discovery channels where we might find new peers.
         let mut discovery_stream = self
             .discovery
             .subscribe(self.network_id)
@@ -411,13 +416,13 @@ where
 
         loop {
             tokio::select! {
-                // Do not let tokio select futures randomly but with top-to-bottom priority
+                // Do not let tokio select futures randomly but with top-to-bottom priority.
                 biased;
-                // Exit loop when shutdown was signalled somewhere else
+                // Exit loop when shutdown was signalled somewhere else.
                 _ = self.cancel_token.cancelled() => {
                     break;
                 },
-                // Handle incoming p2p connections
+                // Handle incoming p2p connections.
                 Some(incoming) = self.endpoint.accept() => {
                     // @TODO: This is the point at which we can reject the connection if
                     // limits have been reached.
@@ -435,37 +440,37 @@ where
                         Ok(())
                     });
                 },
-                // Handle discovered peers
+                // Handle discovered peers.
                 Some(event) = discovery_stream.next() => {
                     match event {
                         Ok(event) => {
                             if let Err(err) = self.engine.add_peer(event.node_addr).await {
-                                error!("Engine failed on add_peer: {err:?}");
+                                error!("engine failed on add_peer: {err:?}");
                                 break;
                             }
                         }
                         Err(err) => {
-                            error!("Discovery service failed: {err:?}");
+                            error!("discovery service failed: {err:?}");
                             break;
                         },
                     }
                 },
-                // Handle task terminations and quit on panics
+                // Handle task terminations and quit on panics.
                 res = join_set.join_next(), if !join_set.is_empty() => {
                     match res {
                         Some(Err(outer)) => {
                             if outer.is_panic() {
-                                error!("Task panicked: {outer:?}");
+                                error!("task panicked: {outer:?}");
                                 break;
                             } else if outer.is_cancelled() {
-                                debug!("Task cancelled: {outer:?}");
+                                debug!("task cancelled: {outer:?}");
                             } else {
-                                error!("Task failed: {outer:?}");
+                                error!("task failed: {outer:?}");
                                 break;
                             }
                         }
                         Some(Ok(Err(inner))) => {
-                            debug!("Task errored: {inner:?}");
+                            debug!("task errored: {inner:?}");
                         }
                         _ => {}
                     }
@@ -476,24 +481,22 @@ where
 
         self.shutdown(protocols).await;
 
-        // Abort remaining tasks
+        // Abort remaining tasks.
         join_set.shutdown().await;
     }
 
     /// Closes all connections and shuts down the network engine.
     async fn shutdown(&self, protocols: Arc<ProtocolMap>) {
-        // We ignore all errors during shutdown
+        // We ignore all errors during shutdown.
         debug!("close all connections and shutdown the node");
         let _ = tokio::join!(
-            // Close the endpoint. Closing the Endpoint is the equivalent of calling
-            // Connection::close on all connections: Operations will immediately fail with
-            // ConnectionError::LocallyClosed. All streams are interrupted, this is not graceful
+            // Closing the Endpoint is the equivalent of calling `Connection::close` on all
+            // connections: Operations will immediately fail with `ConnectionError::LocallyClosed`.
+            // All streams are interrupted, this is not graceful.
             self.endpoint
                 .clone()
                 .close(1u32.into(), b"provider terminating"),
-            // Shutdown engine
             self.engine.shutdown(),
-            // Shutdown protocol handlers
             protocols.shutdown(),
         );
     }
@@ -510,10 +513,10 @@ where
 /// In addition to topic subscription, `Network` offers a way to access information about the local
 /// network such as the node ID and direct addresses. It also provides a convenient means to add the
 /// address of a remote peer and to query the addresses of all known peers.
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Network<T> {
     inner: Arc<NetworkInner<T>>,
+    #[allow(dead_code)]
     protocols: Arc<ProtocolMap>,
     // `Network` needs to be `Clone + Send` and we need to `task.await` in its `shutdown()` impl.
     // - `Shared` allows us to `task.await` from all `Network` clones
@@ -532,6 +535,11 @@ where
         self.inner.engine.add_peer(node_addr).await
     }
 
+    /// Returns the addresses of all known peers.
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+        self.inner.engine.known_peers().await
+    }
+
     /// Returns the direct addresses of the local network.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
         self.inner
@@ -545,16 +553,12 @@ where
     /// Returns a handle to the network endpoint.
     ///
     /// The `Endpoint` exposes low-level networking functionality such as the ability to connect to
-    /// specific peers, accept connections, query local socket addresses and more. This level of
-    /// control is unlikely to be required in most cases but has been exposed for the convenience
-    /// of advanced users.
+    /// specific peers, accept connections, query local socket addresses and more.
+    ///
+    /// This level of control is unlikely to be required in most cases but has been exposed for the
+    /// convenience of advanced users.
     pub fn endpoint(&self) -> &Endpoint {
         &self.inner.endpoint
-    }
-
-    /// Returns the addresses of all known peers.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
-        self.inner.engine.known_peers().await
     }
 
     /// Returns the public key of the local network.
@@ -565,18 +569,17 @@ where
 
     /// Terminates the main network task and shuts down the network.
     pub async fn shutdown(self) -> Result<()> {
-        // Trigger shutdown of the main run task by activating the cancel token
+        // Trigger shutdown of the main run task by activating the cancel token.
         self.inner.cancel_token.cancel();
 
-        // Wait for the main task to terminate
+        // Wait for the main task to terminate.
         self.task.await.map_err(|err| anyhow!(err))?;
 
         Ok(())
     }
 
-    /// Subscribes to a topic and returns a bi-directional stream that can be read from and
-    /// written to, along with a oneshot receiver to be informed when the gossip overlay has been
-    /// joined.
+    /// Subscribes to a topic and returns a bi-directional stream that can be read from and written
+    /// to, along with a oneshot receiver to be informed when the gossip overlay has been joined.
     ///
     /// Peers subscribed to a topic can be discovered by others via the gossip overlay ("neighbor
     /// up event"). They'll sync data initially, if a sync protocol has been provided, and then
@@ -602,15 +605,15 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
 /// An event to be broadcast to the network.
+#[derive(Clone, Debug)]
 pub enum ToNetwork {
     Message { bytes: Vec<u8> },
 }
 
+/// An event received from the network.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// An event received from the network.
 pub enum FromNetwork {
     GossipMessage {
         bytes: Vec<u8>,
@@ -646,6 +649,10 @@ async fn handle_connection(
         warn!("handling incoming connection ended with error: {err}");
     }
 }
+
+/// Helper to construct shared `AbortOnDropHandle` coming from tokio crate.
+pub(crate) type JoinErrToStr =
+    Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 #[cfg(test)]
 mod sync_protocols {
@@ -867,9 +874,10 @@ mod tests {
     use tracing_subscriber::EnvFilter;
 
     use crate::addrs::DEFAULT_STUN_PORT;
+    use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, ToBytes, TopicId};
+    use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, ToNetwork};
 
@@ -901,7 +909,7 @@ mod tests {
             previous: vec![],
             extensions,
         };
-        header.sign(&private_key);
+        header.sign(private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
     }
@@ -919,7 +927,7 @@ mod tests {
 
     impl TopicId for TestTopic {
         fn id(&self) -> [u8; 32] {
-            self.1.clone()
+            self.1
         }
     }
 
@@ -936,8 +944,7 @@ mod tests {
                 direct_node_public_key,
                 vec!["0.0.0.0:2026".parse().unwrap()],
                 None,
-            )
-                .into()],
+            )],
             relay: Some(relay_address.clone()),
         };
 
@@ -1081,7 +1088,7 @@ mod tests {
 
         let topic = TestTopic::new("event_logs");
         let log_id = 0;
-        let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id.clone()])]);
+        let logs = HashMap::from([(peer_a_private_key.public_key(), vec![log_id])]);
 
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(topic.clone(), logs);

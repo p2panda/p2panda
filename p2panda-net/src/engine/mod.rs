@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+mod address_book;
+mod constants;
 #[allow(clippy::module_inception)]
 mod engine;
 mod gossip;
-mod message;
-
-pub use engine::ToEngineActor;
+mod gossip_buffer;
+mod topic_discovery;
+mod topic_streams;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -21,15 +23,17 @@ use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
 
+pub use crate::engine::address_book::AddressBook;
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
-use crate::sync::manager::SyncManager;
+use crate::sync::manager::SyncActor;
 use crate::sync::SyncConnection;
 use crate::{NetworkId, TopicId};
+pub use engine::ToEngineActor;
 
-/// The `Engine` is responsible for instantiating various system actors (including engine,
-/// gossip and sync connection actors) and exposes an API for interacting with the engine actor.
+/// The `Engine` is responsible for instantiating various system actors (including engine, gossip
+/// and sync connection actors) and exposes an API for interacting with the engine actor.
 #[derive(Debug)]
 pub struct Engine<T> {
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
@@ -48,32 +52,34 @@ where
         gossip: Gossip,
         sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
     ) -> Self {
+        let address_book = AddressBook::new(network_id);
+
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        // Create a sync manager with channel sender if a sync protocol has been provided.
-        let (sync_manager, sync_manager_tx) = if let Some(ref sync_protocol) = sync_protocol {
-            let (sync_manager, sync_manager_tx) = SyncManager::new(
+        let (sync_actor, sync_actor_tx) = if let Some(ref sync_protocol) = sync_protocol {
+            let (sync_actor, sync_actor_tx) = SyncActor::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
                 sync_protocol.clone(),
             );
-            (Some(sync_manager), Some(sync_manager_tx))
+            (Some(sync_actor), Some(sync_actor_tx))
         } else {
             (None, None)
         };
 
         let engine_actor = EngineActor::new(
             endpoint,
+            address_book,
             engine_actor_rx,
             gossip_actor_tx,
-            sync_manager_tx,
+            sync_actor_tx,
             network_id,
         );
         let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
-            if let Err(err) = engine_actor.run(gossip_actor, sync_manager).await {
+            if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {
                 error!("engine actor failed: {err:?}");
             }
         });
@@ -89,6 +95,13 @@ where
         }
     }
 
+    /// Adds a peer to the address book.
+    ///
+    /// This method can be manually called to register known peers or automatically, for example by
+    /// a background "peer discovery" process.
+    ///
+    /// Learning about a peer gives us information on how to connect to them, for learning about
+    /// the topics it's interested in we need a separate process named "topic discovery".
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })
@@ -96,24 +109,13 @@ where
         Ok(())
     }
 
-    /// Retrieves the node addresses of all peers the engine actor currently knows about.
+    /// Retrieves the node addresses of all peers the engine currently knows about.
     pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
         let (reply, reply_rx) = oneshot::channel();
         self.engine_actor_tx
             .send(ToEngineActor::KnownPeers { reply })
             .await?;
-        reply_rx.await?
-    }
-
-    /// Sends a shutdown signal to the engine actor and waits for a confirmation reply.
-    pub async fn shutdown(&self) -> Result<()> {
-        let (reply, reply_rx) = oneshot::channel();
-        self.engine_actor_tx
-            .send(ToEngineActor::Shutdown { reply })
-            .await?;
-        reply_rx.await?;
-        debug!("engine shutdown");
-        Ok(())
+        Ok(reply_rx.await?)
     }
 
     /// Subscribes to the given topic and provides a channel for network message passing.
@@ -135,10 +137,21 @@ where
         Ok(())
     }
 
-    // @TODO: This method feels like the odd-one-out in this module.
-    // Could we move it somewhere else?
+    /// Sends a shutdown signal to the engine actor and waits for a confirmation reply.
+    pub async fn shutdown(&self) -> Result<()> {
+        let (reply, reply_rx) = oneshot::channel();
+        self.engine_actor_tx
+            .send(ToEngineActor::Shutdown { reply })
+            .await?;
+        reply_rx.await?;
+        debug!("engine shutdown");
+        Ok(())
+    }
+
     /// Returns a sync connection protocol handler for inbound connections.
-    pub fn sync_handler(&self) -> Option<SyncConnection<T>> {
+    // @TODO: This method feels like the odd-one-out in this module. Could we move it somewhere
+    // else?
+    pub(super) fn sync_handler(&self) -> Option<SyncConnection<T>> {
         self.sync_protocol.as_ref().map(|sync_protocol| {
             SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
         })

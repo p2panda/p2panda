@@ -16,36 +16,36 @@ use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
 use crate::TopicId;
 
-// A duration in milliseconds.
-//
-// This value will be used to determine the send timeout if the sync queue is full at the time
-// an attempt is scheduled or rescheduled.
+/// This value will be used to determine the send timeout if the sync queue is full at the time an
+/// attempt is scheduled or rescheduled.
 const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
+
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncManager<T> {
+pub struct ToSyncActor<T> {
     peer: NodeId,
     topic: T,
 }
 
-impl<T> ToSyncManager<T> {
+impl<T> ToSyncActor<T> {
     pub(crate) fn new(peer: NodeId, topic: T) -> Self {
         Self { peer, topic }
     }
 }
 
 #[derive(Debug)]
-struct SyncAttempt {
+struct SyncAttempt<T> {
     peer: NodeId,
-    topic: [u8; 32],
+    topic: T,
     attempts: u8,
 }
 
-impl SyncAttempt {
-    fn new(peer: NodeId, topic: [u8; 32]) -> Self {
+impl<T> SyncAttempt<T> {
+    fn new(peer: NodeId, topic: T) -> Self {
         Self {
             peer,
             topic,
@@ -60,6 +60,7 @@ enum SyncAttemptError {
     /// bidirectional stream.
     #[error("sync attempt failed due to connection or stream error")]
     Connection,
+
     /// Error occurred while initiating a sync session.
     #[error("sync attempt failed due to sync protocol error")]
     Sync,
@@ -67,30 +68,28 @@ enum SyncAttemptError {
 
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
-pub(crate) struct SyncManager<T> {
-    pending_sync_sessions: VecDeque<(NodeId, [u8; 32])>,
-    active_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
-    completed_sync_sessions: HashMap<[u8; 32], HashSet<NodeId>>,
+pub(crate) struct SyncActor<T> {
+    pending_sync_sessions: VecDeque<(NodeId, T)>,
+    active_sync_sessions: HashMap<T, HashSet<NodeId>>,
+    completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
-    inbox: Receiver<ToSyncManager<T>>,
-    known_peer_topics: HashMap<NodeId, HashSet<[u8; 32]>>,
+    inbox: Receiver<ToSyncActor<T>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
-    sync_queue_tx: Sender<SyncAttempt>,
-    sync_queue_rx: Receiver<SyncAttempt>,
-    topic_map: HashMap<[u8; 32], T>,
+    sync_queue_tx: Sender<SyncAttempt<T>>,
+    sync_queue_rx: Receiver<SyncAttempt<T>>,
 }
 
-impl<T> SyncManager<T>
+impl<T> SyncActor<T>
 where
     T: Topic + TopicId + 'static,
 {
-    /// Create a new instance of the `SyncManager` and return it along with a channel sender.
+    /// Create a new instance of the `SyncActor` and return it along with a channel sender.
     pub(crate) fn new(
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
-    ) -> (Self, Sender<ToSyncManager<T>>) {
+    ) -> (Self, Sender<ToSyncActor<T>>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
@@ -101,18 +100,16 @@ where
             endpoint,
             engine_actor_tx,
             inbox: sync_manager_rx,
-            known_peer_topics: HashMap::new(),
             sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
-            topic_map: HashMap::new(),
         };
 
         (sync_manager, sync_manager_tx)
     }
 
     /// Add a peer and topic combination to the sync connection queue.
-    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt) -> Result<()> {
+    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
         // Only send if the queue is not full; this prevents the possibility of blocking on send.
         if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
             self.sync_queue_tx.send(sync_attempt).await?;
@@ -127,7 +124,7 @@ where
 
     /// Add a peer and topic combination to the sync connection queue, incrementing the number of
     /// previous attempts.
-    async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt) -> Result<()> {
+    async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         sync_attempt.attempts += 1;
         self.schedule_attempt(sync_attempt).await?;
 
@@ -138,11 +135,10 @@ where
     /// sync connection attempt.
     async fn schedule_next_attempt(&mut self) -> Result<()> {
         if let Some(peer_topic) = self.pending_sync_sessions.pop_front() {
-            let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1);
+            let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1.clone());
 
-            // Scheduling the attempt will fail if the sync queue is full.
-            // In that case, we return the peer and topic combination to the buffer of pending
-            // sync sessions.
+            // Scheduling the attempt will fail if the sync queue is full. In that case, we return
+            // the peer and topic combination to the buffer of pending sync sessions.
             if self.schedule_attempt(sync_attempt).await.is_err() {
                 self.pending_sync_sessions.push_back(peer_topic)
             }
@@ -168,7 +164,7 @@ where
                 }
                 Some(sync_attempt) = self.sync_queue_rx.recv() => {
                     match self
-                       .connect_and_sync(sync_attempt.peer, sync_attempt.topic)
+                       .connect_and_sync(sync_attempt.peer, sync_attempt.topic.clone())
                        .await
                    {
                        Ok(()) => self.complete_successful_sync(sync_attempt).await?,
@@ -180,10 +176,8 @@ where
                     let peer = msg.peer;
                     let topic = msg.topic;
 
-                    // Keep track of all concrete topics we will be running sync sessions
-                    // over.
-                    self.topic_map.insert(topic.id(), topic.clone());
-                    self.update_peer_topics(peer, topic.id()).await;
+                    // Keep track of all concrete topics we will be running sync sessions over.
+                    self.queue_sync_session(peer, topic).await;
                     self.schedule_next_attempt().await?
                 }
             }
@@ -193,7 +187,7 @@ where
     }
 
     /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
+    fn is_active(&self, peer: &NodeId, topic: &T) -> bool {
         if let Some(peers) = self.active_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -202,7 +196,7 @@ where
     }
 
     /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &NodeId, topic: &[u8; 32]) -> bool {
+    fn is_complete(&self, peer: &NodeId, topic: &T) -> bool {
         if let Some(peers) = self.completed_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -211,34 +205,22 @@ where
     }
 
     /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: NodeId, topic: [u8; 32]) -> bool {
+    fn is_pending(&self, peer: NodeId, topic: T) -> bool {
         self.pending_sync_sessions.contains(&(peer, topic))
     }
 
-    /// Store a newly discovered peer and topic combination.
-    async fn update_peer_topics(&mut self, peer: NodeId, topic: [u8; 32]) {
-        debug!("updating peer topics in connection manager");
-
-        // Insert the peer-topic combination into our set of known peers.
-        if let Some(known_topics) = self.known_peer_topics.get_mut(&peer) {
-            known_topics.insert(topic);
-        } else {
-            let mut topics = HashSet::new();
-            topics.insert(topic);
-            self.known_peer_topics.insert(peer, topics);
-        }
-
-        // Conditionally insert the peer-topic combination into the set of pending sync sessions.
+    /// Conditionally insert the peer-topic combination into the set of pending sync sessions.
+    async fn queue_sync_session(&mut self, peer: NodeId, topic: T) {
         if !self.is_active(&peer, &topic)
             && !self.is_complete(&peer, &topic)
-            && !self.is_pending(peer, topic)
+            && !self.is_pending(peer, topic.clone())
         {
             self.pending_sync_sessions.push_back((peer, topic))
         }
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: NodeId, topic: [u8; 32]) -> Result<()> {
+    async fn connect_and_sync(&mut self, peer: NodeId, topic: T) -> Result<()> {
         debug!("attempting peer connection for sync");
 
         let connection = self
@@ -247,7 +229,6 @@ where
             .await
             .map_err(|_| SyncAttemptError::Connection)?;
 
-        // Create a bidirectional stream on the connection.
         let (mut send, mut recv) = connection
             .open_bi()
             .await
@@ -255,11 +236,6 @@ where
 
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
-
-        let topic = self
-            .topic_map
-            .get(&topic)
-            .expect("all topics have been added to the topic map");
 
         // Run a sync session as the initiator.
         sync::initiate_sync(
@@ -284,7 +260,11 @@ where
     /// Remove the given topic from the set of active sync sessions for the given peer. Reschedule
     /// a sync attempt if the failure was caused by a connection error. Otherwise, drop the attempt
     /// and schedule the next pending attempt.
-    async fn complete_failed_sync(&mut self, sync_attempt: SyncAttempt, err: Error) -> Result<()> {
+    async fn complete_failed_sync(
+        &mut self,
+        sync_attempt: SyncAttempt<T>,
+        err: Error,
+    ) -> Result<()> {
         self.active_sync_sessions
             .get_mut(&sync_attempt.topic)
             .expect("active outbound sync session exists")
@@ -305,7 +285,7 @@ where
 
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
     /// to the set of completed sync sessions. Then schedule the next pending attempt.
-    async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt) -> Result<()> {
+    async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
         self.active_sync_sessions
             .get_mut(&sync_attempt.topic)
             .expect("active outbound sync session exists")
