@@ -129,8 +129,8 @@ where
                         //    before sending them (which they probably always should if they care
                         //    about consistency) sync will make sure that peers will catch up with
                         //    this data as soon as they connect to somebody.
-                        // 2. They're don't care about consistency, but they are waiting for the
-                        //    "gossip ready" signal before they send any messages.
+                        // 2. They don't care about consistency, but are waiting for the
+                        //    "gossip ready" signal before sending any messages.
                         continue;
                     }
 

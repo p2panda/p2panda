@@ -271,7 +271,7 @@ where
         self.address_book.add_peer(node_addr).await;
 
         // Hot path: Attempt starting topic discovery as soon as we've learned about at least one
-        // peer. If this fails we'll try again soon again in our internal loop.
+        // peer. If this fails we'll try again soon in our internal loop.
         self.topic_discovery.start().await?;
 
         Ok(())
@@ -338,8 +338,8 @@ where
 
     /// Process an inbound message from one of the gossip overlays.
     ///
-    /// If the network comes from the "network-wide" gossip overlay (determined by the "network
-    /// id"), then it gets handled by the "topic discovery" mechanism. Otherwise it is a regular,
+    /// If the message comes from the "network-wide" gossip overlay (determined by the "network
+    /// id"), then it gets handled by the "topic discovery" mechanism. Otherwise it is from a regular,
     /// custom application-related gossip overlay around a "topic id".
     async fn on_gossip_message(
         &mut self,

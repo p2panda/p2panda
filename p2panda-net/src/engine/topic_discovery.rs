@@ -22,13 +22,13 @@ enum Status {
 
 /// Manages the "topic discovery" background process.
 ///
-/// Within a network peers can be interested in different topics. How topics are defined is up to
-/// the applications. Within a network there can be even multiple applications co-existing.
+/// Peers can be interested in different topics within a single network. How topics are defined is up to
+/// the applications. Multiple applications can even co-exist within the same network.
 ///
 /// To find out which peer is interested in what topic we need a process called "topic discovery".
 /// Currently this is (rather naively) implemented as a network-wide gossip overlay where peers
 /// frequently broadcast their interests. Later we might look into other approaches, for example
-/// applying a random-walk algorithm which traverses the network and learning about it over time.
+/// applying a random-walk algorithm which traverses the network and learns about it over time.
 // @TODO(adz): Would be great to already express this interface as traits so it's easier to swap
 // out the strategies with something else. The API could even look similar to our current
 // `Discovery` trait (for peer discovery), adjusted to work with topics.

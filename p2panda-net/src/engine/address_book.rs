@@ -56,7 +56,7 @@ impl AddressBook {
             .or_insert(vec![node_addr]);
     }
 
-    /// Connect peer with a topic id they are interested in.
+    /// Associate peer with a topic id they are interested in.
     pub async fn add_topic_id(&mut self, node_id: NodeId, topic_id: [u8; 32]) {
         let mut inner = self.inner.write().await;
         inner
