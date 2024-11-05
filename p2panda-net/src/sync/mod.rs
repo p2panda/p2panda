@@ -27,7 +27,7 @@ pub async fn initiate_sync<T, S, R>(
     topic: T,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-) -> Result<()>
+) -> Result<(), SyncError>
 where
     T: Topic + TopicId + 'static,
     S: AsyncWrite + Send + Unpin,
@@ -105,18 +105,14 @@ where
     }
 
     // Run the sync protocol.
-    let result = sync_protocol
+    sync_protocol
         .initiate(
             topic.clone(),
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await;
-
-    if let Err(err) = result {
-        error!("sync protocol initiation failed: {err}");
-    }
+        .await?;
 
     Ok(())
 }
@@ -129,7 +125,7 @@ pub async fn accept_sync<T, S, R>(
     peer: PublicKey,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-) -> Result<()>
+) -> Result<(), SyncError>
 where
     T: Topic + TopicId + 'static,
     S: AsyncWrite + Send + Unpin,
@@ -205,17 +201,13 @@ where
     });
 
     // Run the sync protocol.
-    let result = sync_protocol
+    sync_protocol
         .accept(
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await;
-
-    if let Err(err) = result {
-        error!("sync protocol accept failed: {err}");
-    }
+        .await?;
 
     Ok(())
 }
