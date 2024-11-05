@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::{SyncProtocol, Topic};
+use p2panda_sync::{SyncError, SyncProtocol, Topic};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -61,9 +61,9 @@ enum SyncAttemptError {
     #[error("sync attempt failed due to connection or stream error")]
     Connection,
 
-    /// Error occurred while initiating a sync session.
-    #[error("sync attempt failed due to sync protocol error")]
-    Sync,
+    /// Error occurred while initiating or accepting a sync session.
+    #[error(transparent)]
+    Sync(#[from] SyncError),
 }
 
 /// An API for scheduling outbound connections and sync attempts.
@@ -246,8 +246,7 @@ where
             sync_protocol,
             engine_actor_tx,
         )
-        .await
-        .map_err(|_| SyncAttemptError::Sync)?;
+        .await?;
 
         // Clean-up the streams.
         send.finish()?;
@@ -257,9 +256,10 @@ where
         Ok(())
     }
 
-    /// Remove the given topic from the set of active sync sessions for the given peer. Reschedule
-    /// a sync attempt if the failure was caused by a connection error. Otherwise, drop the attempt
-    /// and schedule the next pending attempt.
+    /// Remove the given topic from the set of active sync sessions for the given peer and notify
+    /// the engine actor of the failed sync attempt. Reschedule a sync attempt if the failure was
+    /// caused by a connection error. Otherwise, drop the attempt and schedule the next pending
+    /// attempt.
     async fn complete_failed_sync(
         &mut self,
         sync_attempt: SyncAttempt<T>,
@@ -270,11 +270,36 @@ where
             .expect("active outbound sync session exists")
             .remove(&sync_attempt.peer);
 
-        if let Some(SyncAttemptError::Connection) = err.downcast_ref() {
-            warn!("sync attempt failed due to connection error");
-            if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
-                self.reschedule_attempt(sync_attempt).await?;
-                return Ok(());
+        if let Some(err) = err.downcast_ref() {
+            match err {
+                SyncAttemptError::Connection => {
+                    warn!("sync attempt failed due to connection error");
+                    if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
+                        self.reschedule_attempt(sync_attempt).await?;
+                        return Ok(());
+                    } else {
+                        self.engine_actor_tx
+                            .send(ToEngineActor::SyncFailed {
+                                topic: sync_attempt.topic,
+                                peer: sync_attempt.peer,
+                            })
+                            .await?;
+                    }
+                }
+                // @NOTE(glyph): Technically it's not nesessary to inform the actor in this case
+                // because we are the initiator and are thus not buffering gossip messages during
+                // this session. But maybe it's good practice anyway? This same event is sent to
+                // the engine actor from the sync connection handler if an error occurs while
+                // accepting a sync session.
+                SyncAttemptError::Sync(err) => {
+                    warn!("sync attempt failed: {}", err);
+                    self.engine_actor_tx
+                        .send(ToEngineActor::SyncFailed {
+                            topic: sync_attempt.topic,
+                            peer: sync_attempt.peer,
+                        })
+                        .await?;
+                }
             }
         }
 
