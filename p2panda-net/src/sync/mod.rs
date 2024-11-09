@@ -219,7 +219,7 @@ where
                         return;
                     };
 
-                    if let Err(err) = engine_actor_tx
+                    engine_actor_tx
                         .send(ToEngineActor::SyncMessage {
                             header,
                             payload,
@@ -227,9 +227,7 @@ where
                             topic: topic.clone(),
                         })
                         .await
-                    {
-                        error!("error in sync actor: {}", err)
-                    };
+                        .expect("engine channel closed");
                 },
                 else => {
                     break;
@@ -259,7 +257,9 @@ where
         .await;
 
     if let Err(sync_err) = result {
-        sync_error_tx.send(sync_err)?;
+        sync_error_tx
+            .send(sync_err)
+            .expect("error oneshot sender failed");
     }
 
     Ok(())
