@@ -53,12 +53,18 @@ where
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
     {
+        let engine_actor_tx = engine_actor_tx.clone();
         let mut sync_handshake_success = false;
         let topic = topic.clone();
 
         tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
-                // We expect the first message to be a topic.
+                // 1. Handshake Phase.
+                // ~~~~~~~~~~~~~~~~~~~
+                //
+                // At the beginning of every sync session the "initiating" peer needs to send over
+                // the topic to the "accepting" peer during the handshake phase. This is the first
+                // message we're expecting:
                 if let FromSync::HandshakeSuccess(_) = &message {
                     if sync_handshake_success {
                         error!("received handshake success message twice");
@@ -79,6 +85,8 @@ where
                     continue;
                 }
 
+                // 2. Data Sync Phase.
+                // ~~~~~~~~~~~~~~~~~~~
                 let FromSync::Data(header, payload) = message else {
                     error!("expected bytes from app message channel");
                     return;
@@ -105,14 +113,24 @@ where
     }
 
     // Run the sync protocol.
-    sync_protocol
+    let result = sync_protocol
         .initiate(
             topic.clone(),
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await?;
+        .await;
+
+    if let Err(_) = result {
+        engine_actor_tx
+            .send(ToEngineActor::SyncFailed {
+                peer,
+                topic: Some(topic),
+            })
+            .await
+            .expect("engine channel closed");
+    }
 
     Ok(())
 }
