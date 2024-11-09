@@ -64,7 +64,7 @@ pub enum ToEngineActor<T> {
         peer: PublicKey,
     },
     SyncFailed {
-        topic: T,
+        topic: Option<T>,
         peer: PublicKey,
     },
     Shutdown {

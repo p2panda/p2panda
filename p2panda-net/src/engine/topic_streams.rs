@@ -356,16 +356,21 @@ where
     }
 
     /// Process sync session failure by draining the associated gossip buffer.
-    pub async fn on_sync_failed(&mut self, topic: T, node_id: NodeId) -> Result<()> {
-        let topic_id = topic.id();
-        let counter = self.gossip_buffer.unlock(node_id, topic_id);
+    pub async fn on_sync_failed(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
+        // If we already learned about a topic during the sync handshake phase when this error took
+        // place we likely have opened up a gossip message buffer already, so we should make sure
+        // to close it here.
+        if let Some(topic) = topic {
+            let topic_id = topic.id();
+            let counter = self.gossip_buffer.unlock(node_id, topic_id);
 
-        // If no locks are available anymore for that peer over that topic we can drain the gossip
-        // messages from the buffer and drop them.
-        if counter == 0 {
-            self.gossip_buffer
-                .drain(node_id, topic_id)
-                .expect("missing expected gossip buffer");
+            // If no locks are available anymore for that peer over that topic we can drain the gossip
+            // messages from the buffer and drop them.
+            if counter == 0 {
+                self.gossip_buffer
+                    .drain(node_id, topic_id)
+                    .expect("missing expected gossip buffer");
+            }
         }
 
         Ok(())

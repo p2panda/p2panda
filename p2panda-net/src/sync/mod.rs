@@ -11,7 +11,7 @@ use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use iroh_net::key::PublicKey;
 use p2panda_sync::{FromSync, SyncError, SyncProtocol, Topic};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
@@ -137,55 +137,86 @@ where
     let (tx, mut rx) = mpsc::channel::<FromSync<T>>(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
 
+    // Set up a channel for sending over errors to the task which happened during sync.
+    let (sync_error_tx, mut sync_error_rx) = oneshot::channel::<SyncError>();
+
     // Spawn a task which picks up any new application messages and sends them on to the engine
     // for handling.
     tokio::spawn(async move {
         let mut topic = None;
-        while let Some(message) = rx.recv().await {
-            // We expect the first message to be a topic.
-            if let FromSync::HandshakeSuccess(handshake_topic) = &message {
-                // It should only be sent once so topic should be `None` now.
-                if topic.is_some() {
-                    error!("topic message already received");
+
+        loop {
+            tokio::select! {
+                biased;
+                Ok(_) = &mut sync_error_rx => {
+                    engine_actor_tx
+                        .send(ToEngineActor::SyncFailed {
+                            peer,
+                            topic: topic.clone(),
+                        })
+                        .await
+                        .expect("engine channel closed");
+                },
+                Some(message) = rx.recv() => {
+                    // 1. Handshake Phase.
+                    // ~~~~~~~~~~~~~~~~~~~
+                    //
+                    // At the beginning of every sync session the "accepting" peer needs to learn the
+                    // topic of the "initiating" peer during the handshake phase. This is the first
+                    // message we're expecting:
+                    if let FromSync::HandshakeSuccess(handshake_topic) = &message {
+                        // It should only be sent once so topic should be `None` now.
+                        if topic.is_some() {
+                            error!("topic message already received");
+                            break;
+                        }
+
+                        topic = Some(handshake_topic.clone());
+
+                        // Inform the engine that we are expecting sync messages from the peer on
+                        // this topic.
+                        engine_actor_tx
+                            .send(ToEngineActor::SyncHandshakeSuccess {
+                                peer,
+                                topic: handshake_topic.clone(),
+                            })
+                            .await
+                            .expect("engine channel closed");
+
+                        continue;
+                    }
+
+                    // 2. Data Sync Phase.
+                    // ~~~~~~~~~~~~~~~~~~~
+                    //
+                    // If topic wasn't set yet error here as it must be known to process further
+                    // messages.
+                    let Some(topic) = &topic else {
+                        error!("topic not received");
+                        return;
+                    };
+
+                    let FromSync::Data(header, payload) = message else {
+                        error!("expected message bytes");
+                        return;
+                    };
+
+                    if let Err(err) = engine_actor_tx
+                        .send(ToEngineActor::SyncMessage {
+                            header,
+                            payload,
+                            delivered_from: peer,
+                            topic: topic.clone(),
+                        })
+                        .await
+                    {
+                        error!("error in sync actor: {}", err)
+                    };
+                },
+                else => {
                     break;
                 }
-
-                topic = Some(handshake_topic.clone());
-
-                // Inform the engine that we are expecting sync messages from the peer on this topic.
-                engine_actor_tx
-                    .send(ToEngineActor::SyncHandshakeSuccess {
-                        peer,
-                        topic: handshake_topic.clone(),
-                    })
-                    .await
-                    .expect("engine channel closed");
-
-                continue;
             }
-
-            // If topic wasn't set yet error here as it must be known to process further messages.
-            let Some(topic) = &topic else {
-                error!("topic not received");
-                return;
-            };
-
-            let FromSync::Data(header, payload) = message else {
-                error!("expected message bytes");
-                return;
-            };
-
-            if let Err(err) = engine_actor_tx
-                .send(ToEngineActor::SyncMessage {
-                    header,
-                    payload,
-                    delivered_from: peer,
-                    topic: topic.clone(),
-                })
-                .await
-            {
-                error!("error in sync actor: {}", err)
-            };
         }
 
         // If topic was never set we didn't receive any messages and so the engine was not informed
@@ -201,13 +232,17 @@ where
     });
 
     // Run the sync protocol.
-    sync_protocol
+    let result = sync_protocol
         .accept(
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await?;
+        .await;
+
+    if let Err(sync_err) = result {
+        sync_error_tx.send(sync_err)?;
+    }
 
     Ok(())
 }

@@ -280,7 +280,7 @@ where
                     } else {
                         self.engine_actor_tx
                             .send(ToEngineActor::SyncFailed {
-                                topic: sync_attempt.topic,
+                                topic: Some(sync_attempt.topic),
                                 peer: sync_attempt.peer,
                             })
                             .await?;
@@ -295,7 +295,7 @@ where
                     warn!("sync attempt failed: {}", err);
                     self.engine_actor_tx
                         .send(ToEngineActor::SyncFailed {
-                            topic: sync_attempt.topic,
+                            topic: Some(sync_attempt.topic),
                             peer: sync_attempt.peer,
                         })
                         .await?;
