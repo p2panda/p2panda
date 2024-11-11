@@ -207,8 +207,7 @@ where
                     // 2. Data Sync Phase.
                     // ~~~~~~~~~~~~~~~~~~~
                     //
-                    // If topic wasn't set yet error here as it must be known to process further
-                    // messages.
+                    // The topic must be known at this point in order to process further messages.
                     let Some(topic) = &topic else {
                         error!("topic not received");
                         return;
@@ -235,8 +234,8 @@ where
             }
         }
 
-        // If topic was never set we didn't receive any messages and so the engine was not informed
-        // it should buffer messages and we can return here.
+        // If topic was never set then we didn't receive any messages. In that case, the engine
+        // wasn't informed it should buffer messages and so we can return here.
         let Some(topic) = topic else {
             return;
         };
