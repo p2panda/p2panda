@@ -113,24 +113,14 @@ where
     }
 
     // Run the sync protocol.
-    let result = sync_protocol
+    sync_protocol
         .initiate(
             topic.clone(),
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await;
-
-    if result.is_err() {
-        engine_actor_tx
-            .send(ToEngineActor::SyncFailed {
-                peer,
-                topic: Some(topic),
-            })
-            .await
-            .expect("engine channel closed");
-    }
+        .await?;
 
     Ok(())
 }
