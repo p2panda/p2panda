@@ -256,10 +256,15 @@ where
         Ok(())
     }
 
-    /// Remove the given topic from the set of active sync sessions for the given peer and notify
-    /// the engine actor of the failed sync attempt. Reschedule a sync attempt if the failure was
-    /// caused by a connection error. Otherwise, drop the attempt and schedule the next pending
-    /// attempt.
+    /// Clean up after a failed sync attempt.
+    ///
+    /// First remove the given topic from the set of active sync sessions for the given peer. Then
+    /// reschedule a sync attempt if the failure was caused by a connection error and the maximum
+    /// number of retry attempts has not already been exceeded. Otherwise, notify the engine actor,
+    /// drop the attempt and schedule the next pending attempt.
+    ///
+    /// If the failure was caused by a sync error, notify the engine actor and schedule the next
+    /// pending attempt.
     async fn complete_failed_sync(
         &mut self,
         sync_attempt: SyncAttempt<T>,
@@ -286,11 +291,6 @@ where
                             .await?;
                     }
                 }
-                // @NOTE(glyph): Technically it's not nesessary to inform the actor in this case
-                // because we are the initiator and are thus not buffering gossip messages during
-                // this session. But maybe it's good practice anyway? This same event is sent to
-                // the engine actor from the sync connection handler if an error occurs while
-                // accepting a sync session.
                 SyncAttemptError::Sync(err) => {
                     warn!("sync attempt failed: {}", err);
                     self.engine_actor_tx
