@@ -122,7 +122,7 @@ where
         )
         .await;
 
-    if let Err(_) = result {
+    if result.is_err() {
         engine_actor_tx
             .send(ToEngineActor::SyncFailed {
                 peer,
