@@ -267,10 +267,9 @@ where
         sync_attempt: SyncAttempt<T>,
         err: Error,
     ) -> Result<()> {
-        self.active_sync_sessions
-            .get_mut(&sync_attempt.topic)
-            .expect("active outbound sync session exists")
-            .remove(&sync_attempt.peer);
+        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
+            session.remove(&sync_attempt.peer);
+        }
 
         if let Some(err) = err.downcast_ref() {
             match err {
@@ -308,10 +307,9 @@ where
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
     /// to the set of completed sync sessions. Then schedule the next pending attempt.
     async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        self.active_sync_sessions
-            .get_mut(&sync_attempt.topic)
-            .expect("active outbound sync session exists")
-            .remove(&sync_attempt.peer);
+        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
+            session.remove(&sync_attempt.peer);
+        }
 
         self.completed_sync_sessions
             .entry(sync_attempt.topic)
