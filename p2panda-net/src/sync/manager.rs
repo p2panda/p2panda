@@ -257,14 +257,6 @@ where
     }
 
     /// Clean up after a failed sync attempt.
-    ///
-    /// First remove the given topic from the set of active sync sessions for the given peer. Then
-    /// reschedule a sync attempt if the failure was caused by a connection error and the maximum
-    /// number of retry attempts has not already been exceeded. Otherwise, notify the engine actor,
-    /// drop the attempt and schedule the next pending attempt.
-    ///
-    /// If the failure was caused by a sync error, notify the engine actor and schedule the next
-    /// pending attempt.
     async fn complete_failed_sync(
         &mut self,
         sync_attempt: SyncAttempt<T>,

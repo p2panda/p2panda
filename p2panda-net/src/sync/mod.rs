@@ -114,12 +114,6 @@ where
 
     // Run the sync protocol.
     //
-    // Any errors occuring during the sync protocol session are returned to the caller, which in
-    // this case is the `connect_and_sync()` method in the sync manager. Returning the error allows
-    // the sync manager to handle the response and take different paths based on the type of error
-    // which occurred (either a connection or sync error). This allows, for example, retry attempts
-    // to be made for the same topic and peer.
-    //
     // When an error happens while _accepting_ a sync session (as in `accept_sync()` below) we
     // simply notify the engine actor directly, since the acceptor does not need to track
     // reattempts.
