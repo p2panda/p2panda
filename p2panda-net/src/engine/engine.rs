@@ -63,6 +63,10 @@ pub enum ToEngineActor<T> {
         topic: T,
         peer: PublicKey,
     },
+    SyncFailed {
+        topic: Option<T>,
+        peer: PublicKey,
+    },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
@@ -244,6 +248,9 @@ where
             }
             ToEngineActor::SyncDone { topic, peer } => {
                 self.topic_streams.on_sync_done(topic, peer).await?;
+            }
+            ToEngineActor::SyncFailed { topic, peer } => {
+                self.topic_streams.on_sync_failed(topic, peer).await?;
             }
             ToEngineActor::Shutdown { .. } => {
                 unreachable!("handled in run_inner");

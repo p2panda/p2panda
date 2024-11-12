@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Propagate sync errors and inform the engine actor [#581](https://github.com/p2panda/p2panda/pull/581) 
 - Improve doc comment coverage in `p2panda-net` [#576](https://github.com/p2panda/p2panda/pull/576)
 - Introduce a scheduler to the sync manager [#574](https://github.com/p2panda/p2panda/pull/574)
 - Add `log-sync` feature flag to `p2panda-net` and move `JoinErrToStr` [#572](https://github.com/p2panda/p2panda/pull/572)

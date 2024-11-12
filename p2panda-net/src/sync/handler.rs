@@ -7,7 +7,7 @@ use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use p2panda_sync::{SyncProtocol, Topic};
 use tokio::sync::mpsc;
-use tracing::{debug, debug_span};
+use tracing::{debug, debug_span, error};
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
@@ -49,6 +49,9 @@ where
         let engine_actor_tx = self.engine_actor_tx.clone();
 
         // Run a sync session as the "acceptor" (aka. "responder").
+        //
+        // Sync failure or successful completion is reported to the engine actor internally, so
+        // there's no need for us to do that in the context of handling the connection.
         let result =
             sync::accept_sync(&mut send, &mut recv, peer, sync_protocol, engine_actor_tx).await;
 
@@ -59,10 +62,10 @@ where
         // protocol was not followed as expected.
         recv.read_to_end(0).await?;
 
-        if result.is_ok() {
-            debug!("sync success: accept")
+        if let Err(err) = result {
+            error!("sync failure as acceptor: {}", err)
         } else {
-            debug!("sync failure: accept")
+            debug!("sync success as acceptor")
         }
 
         Ok(())
