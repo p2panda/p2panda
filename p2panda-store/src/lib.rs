@@ -56,22 +56,30 @@ pub trait LocalOperationStore<LogId, Extensions> {
 pub trait LocalLogStore<LogId, Extensions> {
     type Error: Display + Debug;
 
-    /// Get all operations from an authors' log ordered by sequence number.
+    /// Get operations from an authors' log ordered by sequence number.
+    ///
+    /// The `from` value will be used as the starting index for log retrieval, if supplied,
+    /// otherwise all operations will be returned.
     ///
     /// Returns an empty Vec when the author or a log with the requested id was not found.
     async fn get_log(
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
+        from: Option<u64>,
     ) -> Result<Option<Vec<(Header<Extensions>, Option<Body>)>>, Self::Error>;
 
-    /// Get all "raw" header and body bytes from an authors' log ordered by sequence number.
+    /// Get "raw" header and body bytes from an authors' log ordered by sequence number.
+    ///
+    /// The `from` value will be used as the starting index for log retrieval, if supplied,
+    /// otherwise all operations will be returned.
     ///
     /// Returns `None` when the author or a log with the requested id was not found.
     async fn get_raw_log(
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
+        from: Option<u64>,
     ) -> Result<Option<Vec<RawOperation>>, Self::Error>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
