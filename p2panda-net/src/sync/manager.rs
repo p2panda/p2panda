@@ -237,6 +237,11 @@ where
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
+        self.active_sync_sessions
+            .entry(topic.clone())
+            .or_default()
+            .insert(peer);
+
         // Run a sync session as the initiator.
         sync::initiate_sync(
             &mut send,
