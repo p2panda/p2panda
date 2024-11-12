@@ -66,8 +66,17 @@ where
                 // the topic to the "accepting" peer during the handshake phase. This is the first
                 // message we're expecting:
                 if let FromSync::HandshakeSuccess(_) = &message {
+                    // Receiving the handshake success message twice is a protocol violation.
                     if sync_handshake_success {
-                        error!("received handshake success message twice");
+                        error!("received sync handshake success message twice from {peer}");
+                        engine_actor_tx
+                            .send(ToEngineActor::SyncFailed {
+                                peer,
+                                topic: Some(topic.clone()),
+                            })
+                            .await
+                            .expect("engine channel closed");
+
                         break;
                     }
                     sync_handshake_success = true;
