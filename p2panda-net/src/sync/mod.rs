@@ -66,17 +66,11 @@ where
                 // the topic to the "accepting" peer during the handshake phase. This is the first
                 // message we're expecting:
                 if let FromSync::HandshakeSuccess(_) = &message {
-                    // Receiving the handshake success message twice is a protocol violation.
+                    // Receiving the handshake message twice is a protocol violation.
                     if sync_handshake_success {
-                        error!("received sync handshake success message twice from {peer}");
-                        engine_actor_tx
-                            .send(ToEngineActor::SyncFailed {
-                                peer,
-                                topic: Some(topic.clone()),
-                            })
-                            .await
-                            .expect("engine channel closed");
-
+                        // @TODO(glyph): We are failing silently here. Consider propagating the error
+                        // or informing the engine actor directly.
+                        error!("received handshake twice from peer {}", peer);
                         break;
                     }
                     sync_handshake_success = true;
@@ -97,7 +91,9 @@ where
                 // 2. Data Sync Phase.
                 // ~~~~~~~~~~~~~~~~~~~
                 let FromSync::Data(header, payload) = message else {
-                    error!("expected bytes from app message channel");
+                    // @TODO(glyph): We are failing silently here. Consider propagating the error
+                    // or informing the engine actor directly.
+                    error!("expected message bytes after handshake from peer {}", peer);
                     return;
                 };
 
@@ -188,7 +184,9 @@ where
                     if let FromSync::HandshakeSuccess(handshake_topic) = &message {
                         // It should only be sent once so topic should be `None` now.
                         if topic.is_some() {
-                            error!("topic message already received");
+                            // @TODO(glyph): In the future we should either notify the engine actor
+                            // of this failure directly or return the error to the upstream caller.
+                            error!("sync protocol violation: received handshake message twice from peer {}", peer);
                             break;
                         }
 
@@ -212,12 +210,14 @@ where
                     //
                     // The topic must be known at this point in order to process further messages.
                     let Some(topic) = &topic else {
-                        error!("topic not received");
+                        error!("sync protocol violation: topic not received from peer {}", peer);
                         return;
                     };
 
                     let FromSync::Data(header, payload) = message else {
-                        error!("expected message bytes");
+                        // @TODO(glyph): In the future we should either notify the engine actor
+                        // of this failure directly or return the error to the upstream caller.
+                        error!("sync protocol violation: expected message bytes from peer {}", peer);
                         return;
                     };
 
