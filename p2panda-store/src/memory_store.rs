@@ -165,15 +165,26 @@ where
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
+        from: Option<u64>,
     ) -> Result<Option<Vec<(Header<Extensions>, Option<Body>)>>, Self::Error> {
         let store = self.read_store();
         match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => {
                 let mut result = Vec::new();
-                for (_, _, hash) in log {
-                    let (_, header, body, _) =
-                        store.operations.get(hash).expect("exists in hash map");
-                    result.push((header.to_owned(), body.to_owned()));
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, header, body, _) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            result.push((header.to_owned(), body.to_owned()));
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, header, body, _) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        result.push((header.to_owned(), body.to_owned()));
+                    });
                 }
                 Ok(Some(result))
             }
@@ -185,18 +196,32 @@ where
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
+        from: Option<u64>,
     ) -> Result<Option<Vec<RawOperation>>, Self::Error> {
         let store = self.read_store();
         match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => {
                 let mut result = Vec::new();
-                for (_, _, hash) in log {
-                    let (_, _, body, header_bytes) =
-                        store.operations.get(hash).expect("exists in hash map");
-                    result.push((
-                        header_bytes.clone(),
-                        body.as_ref().map(|body| body.to_bytes()),
-                    ));
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, _, body, header_bytes) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            result.push((
+                                header_bytes.clone(),
+                                body.as_ref().map(|body| body.to_bytes()),
+                            ));
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, _, body, header_bytes) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        result.push((
+                            header_bytes.clone(),
+                            body.as_ref().map(|body| body.to_bytes()),
+                        ));
+                    });
                 }
                 Ok(Some(result))
             }
@@ -492,11 +517,14 @@ mod tests {
 
         let body_0 = Body::new("hello!".as_bytes());
         let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello for a third time!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
             create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
             create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 0, Some(hash_1));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
@@ -506,30 +534,66 @@ mod tests {
             .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
             .await
             .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &0)
+            .await
+            .expect("no errors");
 
+        // Get all log operations.
         let log = store
-            .get_log(&private_key.public_key(), &log_id)
+            .get_log(&private_key.public_key(), &log_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
 
-        assert_eq!(log.len(), 2);
+        assert_eq!(log.len(), 3);
         assert_eq!(log[0].0.hash(), hash_0);
         assert_eq!(log[1].0.hash(), hash_1);
+        assert_eq!(log[2].0.hash(), hash_2);
         assert_eq!(log[0].1, Some(body_0.clone()));
         assert_eq!(log[1].1, Some(body_1.clone()));
+        assert_eq!(log[2].1, Some(body_2.clone()));
 
+        // Get all log operations starting from sequence number 1.
         let log = store
-            .get_raw_log(&private_key.public_key(), &log_id)
+            .get_log(&private_key.public_key(), &log_id, Some(1))
             .await
             .expect("no errors")
             .expect("log should exist");
 
         assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0.hash(), hash_1);
+        assert_eq!(log[1].0.hash(), hash_2);
+        assert_eq!(log[0].1, Some(body_1.clone()));
+        assert_eq!(log[1].1, Some(body_2.clone()));
+
+        // Get all raw log operations.
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 3);
         assert_eq!(log[0].0, header_bytes_0);
         assert_eq!(log[1].0, header_bytes_1);
+        assert_eq!(log[2].0, header_bytes_2);
         assert_eq!(log[0].1, Some(body_0.to_bytes()));
         assert_eq!(log[1].1, Some(body_1.to_bytes()));
+        assert_eq!(log[2].1, Some(body_2.to_bytes()));
+
+        // Get all raw log operations starting from sequence number 1.
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0, header_bytes_1);
+        assert_eq!(log[1].0, header_bytes_2);
+        assert_eq!(log[0].1, Some(body_1.to_bytes()));
+        assert_eq!(log[1].1, Some(body_2.to_bytes()));
     }
 
     #[tokio::test]
@@ -600,7 +664,7 @@ mod tests {
             .expect("no errors");
 
         let log_a = store
-            .get_log(&private_key.public_key(), &log_a_id)
+            .get_log(&private_key.public_key(), &log_a_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
@@ -610,7 +674,7 @@ mod tests {
         assert_eq!(log_a[1].0.hash(), header_a1.hash());
 
         let log_b = store
-            .get_log(&private_key.public_key(), &log_b_id)
+            .get_log(&private_key.public_key(), &log_b_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
@@ -645,7 +709,7 @@ mod tests {
         assert!(inserted);
 
         let author_a_log = store
-            .get_log(&private_key_a.public_key(), &log_id)
+            .get_log(&private_key_a.public_key(), &log_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
@@ -654,7 +718,7 @@ mod tests {
         assert_eq!(author_a_log[0].0.hash(), header_a.hash());
 
         let author_b_log = store
-            .get_log(&private_key_b.public_key(), &log_id)
+            .get_log(&private_key_b.public_key(), &log_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
@@ -743,7 +807,7 @@ mod tests {
 
         // The remaining operation in the log should be the latest (seq_num == 2)
         let log = store
-            .get_log(&private_key.public_key(), &log_id)
+            .get_log(&private_key.public_key(), &log_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");
@@ -799,7 +863,7 @@ mod tests {
         assert!(deleted);
 
         let log = store
-            .get_log(&private_key.public_key(), &log_id)
+            .get_log(&private_key.public_key(), &log_id, None)
             .await
             .expect("no errors")
             .expect("log should exist");

@@ -280,13 +280,12 @@ where
     E: Clone + Serialize,
 {
     let log = store
-        .get_raw_log(public_key, log_id)
+        .get_raw_log(public_key, log_id, Some(from))
         .await
         .map_err(|err| SyncError::Critical(format!("could not retrieve log from store, {err}")))?;
 
     let messages = log
         .unwrap_or_default()
-        .split_off(from as usize)
         .into_iter()
         .map(|(header, payload)| Message::Operation(header, payload))
         .collect();
