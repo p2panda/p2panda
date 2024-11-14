@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::extensions::DefaultExtensions;
-use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
+use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::{LogId, LogStore, OperationStore};
 
@@ -64,8 +64,7 @@ impl<T, E> MemoryStore<T, E> {
 impl<L, E> OperationStore<L, E> for MemoryStore<L, E>
 where
     L: LogId,
-    // @TODO(glyph): Introduce `Extensions` supertrait.
-    E: Clone + Send + Sync,
+    E: Extensions,
 {
     type Error = Infallible;
 
@@ -158,8 +157,7 @@ where
 impl<L, E> LogStore<L, E> for MemoryStore<L, E>
 where
     L: LogId,
-    // @TODO(glyph): Introduce `Extensions` supertrait.
-    E: Clone + Send + Sync,
+    E: Extensions,
 {
     type Error = Infallible;
 
@@ -375,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn generic_extensions_mem_store() {
         // Define our own custom extension type
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         struct MyExtension {}
 
         // Construct a new store

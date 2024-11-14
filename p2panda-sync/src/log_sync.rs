@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
-use p2panda_core::PublicKey;
+use p2panda_core::{Extensions, PublicKey};
 use p2panda_store::{LogId, LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -52,7 +52,7 @@ where
     // @TODO(glyph): Can we add the Debug, Send and Sync bounds to the TopicMap trait?
     TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
-    E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
+    E: Extensions + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
         LOG_SYNC_PROTOCOL_NAME
@@ -268,7 +268,7 @@ async fn remote_needs<T, L, E>(
     from: SeqNum,
 ) -> Result<Vec<Message<T, L>>, SyncError>
 where
-    E: Clone + Serialize,
+    E: Extensions + Serialize,
 {
     let log = store
         .get_raw_log(public_key, log_id, Some(from))
