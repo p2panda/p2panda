@@ -8,27 +8,27 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
-use crate::{LogStore, OperationStore};
+use crate::{LogId, LogStore, OperationStore};
 
 type SeqNum = u64;
 type Timestamp = u64;
 type RawHeader = Vec<u8>;
 
 type LogMeta = (SeqNum, Timestamp, Hash);
-type StoredOperation<T, E> = (T, Header<E>, Option<Body>, RawHeader);
+type StoredOperation<L, E> = (L, Header<E>, Option<Body>, RawHeader);
 
 #[derive(Clone, Debug)]
-pub struct InnerMemoryStore<T, E> {
-    operations: HashMap<Hash, StoredOperation<T, E>>,
-    logs: HashMap<(PublicKey, T), BTreeSet<LogMeta>>,
+pub struct InnerMemoryStore<L, E> {
+    operations: HashMap<Hash, StoredOperation<L, E>>,
+    logs: HashMap<(PublicKey, L), BTreeSet<LogMeta>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MemoryStore<T, E> {
-    inner: Arc<RwLock<InnerMemoryStore<T, E>>>,
+pub struct MemoryStore<L, E> {
+    inner: Arc<RwLock<InnerMemoryStore<L, E>>>,
 }
 
-impl<T, E> MemoryStore<T, E> {
+impl<L, E> MemoryStore<L, E> {
     pub fn new() -> Self {
         let inner = InnerMemoryStore {
             operations: HashMap::new(),
@@ -61,20 +61,21 @@ impl<T, E> MemoryStore<T, E> {
     }
 }
 
-impl<LogId, Extensions> OperationStore<LogId, Extensions> for MemoryStore<LogId, Extensions>
+impl<L, E> OperationStore<L, E> for MemoryStore<L, E>
 where
-    LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
-    Extensions: Clone + Send + Sync,
+    L: LogId,
+    // @TODO(glyph): Introduce `Extensions` supertrait.
+    E: Clone + Send + Sync,
 {
     type Error = Infallible;
 
     async fn insert_operation(
         &mut self,
         hash: Hash,
-        header: &Header<Extensions>,
+        header: &Header<E>,
         body: Option<&Body>,
         header_bytes: &[u8],
-        log_id: &LogId,
+        log_id: &L,
     ) -> Result<bool, Self::Error> {
         let mut store = self.write_store();
 
@@ -101,7 +102,7 @@ where
     async fn get_operation(
         &self,
         hash: Hash,
-    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error> {
+    ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
         match self.read_store().operations.get(&hash) {
             Some((_, header, body, _)) => Ok(Some((header.clone(), body.clone()))),
             None => Ok(None),
@@ -154,19 +155,20 @@ where
     }
 }
 
-impl<LogId, Extensions> LogStore<LogId, Extensions> for MemoryStore<LogId, Extensions>
+impl<L, E> LogStore<L, E> for MemoryStore<L, E>
 where
-    LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash,
-    Extensions: Clone + Send + Sync,
+    L: LogId,
+    // @TODO(glyph): Introduce `Extensions` supertrait.
+    E: Clone + Send + Sync,
 {
     type Error = Infallible;
 
     async fn get_log(
         &self,
         public_key: &PublicKey,
-        log_id: &LogId,
+        log_id: &L,
         from: Option<u64>,
-    ) -> Result<Option<Vec<(Header<Extensions>, Option<Body>)>>, Self::Error> {
+    ) -> Result<Option<Vec<(Header<E>, Option<Body>)>>, Self::Error> {
         let store = self.read_store();
         match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => {
@@ -195,7 +197,7 @@ where
     async fn get_raw_log(
         &self,
         public_key: &PublicKey,
-        log_id: &LogId,
+        log_id: &L,
         from: Option<u64>,
     ) -> Result<Option<Vec<RawOperation>>, Self::Error> {
         let store = self.read_store();
@@ -232,8 +234,8 @@ where
     async fn latest_operation(
         &self,
         public_key: &PublicKey,
-        log_id: &LogId,
-    ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error> {
+        log_id: &L,
+    ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
         let store = self.read_store();
 
         let Some(log) = store.logs.get(&(*public_key, log_id.to_owned())) else {
@@ -254,7 +256,7 @@ where
     async fn delete_operations(
         &mut self,
         public_key: &PublicKey,
-        log_id: &LogId,
+        log_id: &L,
         before: u64,
     ) -> Result<bool, Self::Error> {
         let mut deleted = vec![];
@@ -275,7 +277,7 @@ where
     async fn delete_payloads(
         &mut self,
         public_key: &PublicKey,
-        log_id: &LogId,
+        log_id: &L,
         from: u64,
         to: u64,
     ) -> Result<bool, Self::Error> {
@@ -301,10 +303,7 @@ where
         Ok(!deleted.is_empty())
     }
 
-    async fn get_log_heights(
-        &self,
-        log_id: &LogId,
-    ) -> Result<Vec<(PublicKey, SeqNum)>, Self::Error> {
+    async fn get_log_heights(&self, log_id: &L) -> Result<Vec<(PublicKey, SeqNum)>, Self::Error> {
         let log_heights = self
             .read_store()
             .logs
