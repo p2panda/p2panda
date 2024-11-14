@@ -49,8 +49,7 @@ pub struct LogSyncProtocol<TM, L, E> {
 impl<'a, T, TM, L, E> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E>
 where
     T: Topic,
-    // @TODO(glyph): Can we add the Debug, Send and Sync bounds to the TopicMap trait?
-    TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
+    TM: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Extensions + for<'de> Deserialize<'de> + Serialize + 'a,
 {

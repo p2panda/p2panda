@@ -32,7 +32,7 @@ pub trait Topic:
 /// implementation of `TopicMap` so that a scope `S` can be retrieved for a specific topic `T` when
 /// a peer initiates or accepts a sync session.
 #[async_trait]
-pub trait TopicMap<T, S>
+pub trait TopicMap<T, S>: Debug + Send + Sync
 where
     T: Topic,
 {
