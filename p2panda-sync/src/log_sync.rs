@@ -2,13 +2,12 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, MemoryStore};
+use p2panda_store::{LogId, LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -50,17 +49,9 @@ pub struct LogSyncProtocol<TM, L, E> {
 impl<'a, T, TM, L, E> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E>
 where
     T: Topic,
+    // @TODO(glyph): Can we add the Debug, Send and Sync bounds to the TopicMap trait?
     TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
-    L: Clone
-        + Debug
-        + Default
-        + Eq
-        + StdHash
-        + Send
-        + Sync
-        + for<'de> Deserialize<'de>
-        + Serialize
-        + 'a,
+    L: LogId + 'a,
     E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
