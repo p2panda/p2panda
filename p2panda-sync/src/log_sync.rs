@@ -51,7 +51,7 @@ where
     T: Topic,
     // @TODO(glyph): Can we add the Debug, Send and Sync bounds to the TopicMap trait?
     TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
-    L: LogId + 'a,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
 {
     fn name(&self) -> &'static str {
