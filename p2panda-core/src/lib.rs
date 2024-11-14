@@ -9,7 +9,7 @@ pub mod operation;
 pub mod prune;
 mod serde;
 
-pub use extensions::Extension;
+pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
 pub use operation::{
