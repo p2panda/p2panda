@@ -267,7 +267,7 @@ async fn remote_needs<T, L, E>(
     from: SeqNum,
 ) -> Result<Vec<Message<T, L>>, SyncError>
 where
-    E: Extensions + Serialize,
+    E: Extensions,
 {
     let log = store
         .get_raw_log(public_key, log_id, Some(from))
