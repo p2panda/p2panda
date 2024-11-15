@@ -51,7 +51,7 @@ where
     T: Topic,
     TM: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
-    E: Extensions + for<'de> Deserialize<'de> + Serialize + 'a,
+    E: Extensions + 'a,
 {
     fn name(&self) -> &'static str {
         LOG_SYNC_PROTOCOL_NAME

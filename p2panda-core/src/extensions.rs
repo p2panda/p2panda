@@ -6,9 +6,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::Header;
 
-pub trait Extensions: Clone + Debug + Default + Send + Sync {}
+pub trait Extensions:
+    Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize + Send + Sync
+{
+}
 
-impl<T> Extensions for T where T: Clone + Debug + Default + Send + Sync {}
+impl<T> Extensions for T where
+    T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize + Send + Sync
+{
+}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DefaultExtensions {}
