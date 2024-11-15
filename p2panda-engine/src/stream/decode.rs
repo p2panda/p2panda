@@ -7,16 +7,15 @@ use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::cbor::{decode_cbor, DecodeError};
-use p2panda_core::{Body, Header, RawOperation};
+use p2panda_core::{Body, Extensions, Header, RawOperation};
 use pin_project::pin_project;
-use serde::de::DeserializeOwned;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
 
 pub trait DecodeExt<E>: Stream<Item = RawOperation> {
     fn decode(self) -> Decode<Self, E>
     where
-        E: DeserializeOwned,
+        E: Extensions,
         Self: Sized,
     {
         Decode::new(self)
@@ -31,7 +30,7 @@ impl<T: ?Sized, E> DecodeExt<E> for T where T: Stream<Item = RawOperation> {}
 pub struct Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
-    E: DeserializeOwned,
+    E: Extensions,
 {
     #[pin]
     stream: Fuse<St>,
@@ -41,7 +40,7 @@ where
 impl<St, E> Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
-    E: DeserializeOwned,
+    E: Extensions,
 {
     pub(super) fn new(stream: St) -> Decode<St, E> {
         Decode {
@@ -56,7 +55,7 @@ where
 impl<St, E> Stream for Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
-    E: DeserializeOwned,
+    E: Extensions,
 {
     type Item = Result<(Header<E>, Option<Body>, Vec<u8>), DecodeError>;
 
@@ -79,7 +78,7 @@ where
 impl<St: FusedStream, E> FusedStream for Decode<St, E>
 where
     St: Stream<Item = RawOperation>,
-    E: DeserializeOwned,
+    E: Extensions,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated()
@@ -89,7 +88,7 @@ where
 impl<S, E> Sink<RawOperation> for Decode<S, E>
 where
     S: Stream<Item = RawOperation> + Sink<RawOperation>,
-    E: DeserializeOwned,
+    E: Extensions,
 {
     type Error = S::Error;
 
