@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Header;
 
+/// Extensions can be used to define custom fields in the operation header.
 pub trait Extensions:
     Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize + Send + Sync
 {
