@@ -16,7 +16,7 @@ pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 impl<T> LogId for T where T: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 
 #[trait_variant::make(OperationStore: Send)]
-pub trait LocalOperationStore<LogId, Extensions> {
+pub trait LocalOperationStore<LogId, Extensions>: Clone {
     type Error: Display + Debug;
 
     /// Insert an operation.
