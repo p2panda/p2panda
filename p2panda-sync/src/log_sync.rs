@@ -2,13 +2,12 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
-use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, MemoryStore};
+use p2panda_core::{Extensions, PublicKey};
+use p2panda_store::{LogId, LogStore, MemoryStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -50,18 +49,9 @@ pub struct LogSyncProtocol<TM, L, E> {
 impl<'a, T, TM, L, E> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E>
 where
     T: Topic,
-    TM: Debug + TopicMap<T, Logs<L>> + Send + Sync,
-    L: Clone
-        + Debug
-        + Default
-        + Eq
-        + StdHash
-        + Send
-        + Sync
-        + for<'de> Deserialize<'de>
-        + Serialize
-        + 'a,
-    E: Clone + Debug + Default + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
+    TM: TopicMap<T, Logs<L>>,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
+    E: Extensions + 'a,
 {
     fn name(&self) -> &'static str {
         LOG_SYNC_PROTOCOL_NAME
@@ -277,7 +267,7 @@ async fn remote_needs<T, L, E>(
     from: SeqNum,
 ) -> Result<Vec<Message<T, L>>, SyncError>
 where
-    E: Clone + Serialize,
+    E: Extensions,
 {
     let log = store
         .get_raw_log(public_key, log_id, Some(from))

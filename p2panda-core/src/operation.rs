@@ -506,13 +506,13 @@ mod tests {
 
     #[test]
     fn extensions() {
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         struct LogId(u64);
 
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         struct Expiry(u64);
 
-        #[derive(Clone, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         struct CustomExtensions {
             log_id: LogId,
             expires: Expiry,

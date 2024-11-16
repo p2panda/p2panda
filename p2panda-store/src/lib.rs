@@ -10,8 +10,13 @@ pub use memory_store::MemoryStore;
 
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
+/// The unique identifier of a single-author log.
+pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
+
+impl<T> LogId for T where T: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
+
 #[trait_variant::make(OperationStore: Send)]
-pub trait LocalOperationStore<LogId, Extensions> {
+pub trait LocalOperationStore<LogId, Extensions>: Clone {
     type Error: Display + Debug;
 
     /// Insert an operation.

@@ -9,12 +9,10 @@ use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
 use futures_util::{ready, Sink, Stream, StreamExt};
 use p2panda_core::prune::PruneFlag;
-use p2panda_core::{Body, Extension, Header, Operation};
+use p2panda_core::{Body, Extension, Extensions, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
 use pin_utils::pin_mut;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
@@ -34,7 +32,7 @@ pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)> 
     fn ingest(self, store: S, ooo_buffer_size: usize) -> Ingest<Self, S, L, E>
     where
         S: OperationStore<L, E> + LogStore<L, E>,
-        E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+        E: Extension<L> + Extension<PruneFlag> + Extensions,
         Self: Sized,
     {
         Ingest::new(self, store, ooo_buffer_size)
@@ -52,7 +50,7 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 pub struct Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    E: Extension<L> + Extension<PruneFlag> + Extensions,
     S: OperationStore<L, E> + LogStore<L, E>,
 {
     #[pin]
@@ -69,7 +67,7 @@ impl<St, S, L, E> Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    E: Extension<L> + Extension<PruneFlag> + Extensions,
 {
     pub(super) fn new(stream: St, store: S, ooo_buffer_size: usize) -> Ingest<St, S, L, E> {
         // @TODO(adz): We can optimize for the internal out-of-order buffer even more as it's FIFO
@@ -97,8 +95,8 @@ where
 impl<St, S, L, E> Stream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
-    S: Clone + OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Extension<L> + Extension<PruneFlag> + Extensions,
 {
     type Item = Result<Operation<E>, IngestError>;
 
@@ -205,8 +203,8 @@ where
 impl<St: FusedStream, S, L, E> FusedStream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
-    S: Clone + OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    S: OperationStore<L, E> + LogStore<L, E>,
+    E: Extension<L> + Extension<PruneFlag> + Extensions,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated() && self.ooo_buffer_rx.is_terminated()
@@ -218,7 +216,7 @@ where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>
         + Sink<(Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned + Extension<L> + Extension<PruneFlag>,
+    E: Extension<L> + Extension<PruneFlag> + Extensions,
 {
     type Error = St::Error;
 

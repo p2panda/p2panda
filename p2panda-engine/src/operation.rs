@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use p2panda_core::{
-    validate_backlink, validate_operation, Body, Header, Operation, OperationError,
+    validate_backlink, validate_operation, Body, Extensions, Header, Operation, OperationError,
 };
 use p2panda_store::{LogStore, OperationStore};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use thiserror::Error;
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
@@ -24,7 +22,7 @@ pub async fn ingest_operation<S, L, E>(
 ) -> Result<IngestResult<E>, IngestError>
 where
     S: OperationStore<L, E> + LogStore<L, E>,
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     let operation = Operation {
         hash: header.hash(),
