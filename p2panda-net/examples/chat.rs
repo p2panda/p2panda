@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use p2panda_core::{PrivateKey, PublicKey, Signature};
+use p2panda_core::{Hash, PrivateKey, PublicKey, Signature};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::network::{FromNetwork, ToNetwork};
 use p2panda_net::{NetworkBuilder, TopicId};
@@ -23,7 +23,7 @@ pub struct ChatTopic(String, [u8; 32]);
 
 impl ChatTopic {
     pub fn new(name: &str) -> Self {
-        Self(name.to_owned(), [0; 32])
+        Self(name.to_owned(), *Hash::new(name).as_bytes())
     }
 }
 
