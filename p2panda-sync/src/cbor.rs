@@ -60,9 +60,16 @@ where
         match result {
             Ok(item) => Ok(Some(item)),
             Err(ref error) => match error {
-                DecodeError::Io(err) => Err(SyncError::Critical(format!(
-                    "CBOR codec failed decoding message due to i/o error, {err}"
-                ))),
+                DecodeError::Io(err) => {
+                    // Sometimes the EOF is signalled as IO error.
+                    if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                        Ok(None)
+                    } else {
+                        Err(SyncError::Critical(format!(
+                            "CBOR codec failed decoding message due to i/o error, {err}"
+                        )))
+                    }
+                }
                 err => Err(SyncError::InvalidEncoding(err.to_string())),
             },
         }
