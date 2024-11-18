@@ -173,6 +173,7 @@ where
                         })
                         .await
                         .expect("engine channel closed");
+                    return;
                 },
                 Some(message) = rx.recv() => {
                     // 1. Handshake Phase.
