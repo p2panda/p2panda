@@ -165,16 +165,6 @@ where
         loop {
             tokio::select! {
                 biased;
-                Ok(_) = &mut sync_error_rx => {
-                    engine_actor_tx
-                        .send(ToEngineActor::SyncFailed {
-                            peer,
-                            topic: topic.clone(),
-                        })
-                        .await
-                        .expect("engine channel closed");
-                    return;
-                },
                 Some(message) = rx.recv() => {
                     // 1. Handshake Phase.
                     // ~~~~~~~~~~~~~~~~~~~
@@ -231,6 +221,16 @@ where
                         })
                         .await
                         .expect("engine channel closed");
+                },
+                Ok(_) = &mut sync_error_rx => {
+                    engine_actor_tx
+                        .send(ToEngineActor::SyncFailed {
+                            peer,
+                            topic: topic.clone(),
+                        })
+                        .await
+                        .expect("engine channel closed");
+                    return;
                 },
                 else => {
                     break;
