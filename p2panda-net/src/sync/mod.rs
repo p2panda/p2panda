@@ -300,6 +300,8 @@ mod sync_protocols {
         AcceptUnexpectedBehaviour,
         // An unexpected error is triggered inside `initiate()` by sending a topic from `accept()`.
         InitiateUnexpectedBehaviour,
+        // No errors are explicitly triggered; used for "happy path" test.
+        NoError,
     }
 
     #[async_trait]
@@ -775,6 +777,120 @@ mod tests {
 
         // Ensure no further messages are being sent to the engine actor by the initiator.
         let msg = peer_a_app_rx.recv().await;
+        assert!(msg.is_none());
+    }
+
+    #[tokio::test]
+    async fn run_sync_without_error() {
+        let peer_a = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let peer_b = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let topic = TestTopic::new("successful sync test");
+        let sync_protocol = Arc::new(Protocol::NoError);
+
+        // Duplex streams which simulate both ends of a bi-directional network connection.
+        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
+        let (peer_a_read, peer_a_write) = tokio::io::split(peer_a_stream);
+        let (peer_b_read, peer_b_write) = tokio::io::split(peer_b_stream);
+
+        // Channel for sending messages out of a running sync session.
+        let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
+        let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
+
+        // Accept a sync session.
+        {
+            let sync_protocol = sync_protocol.clone();
+
+            let _accept_handle = tokio::spawn(async move {
+                sync::accept_sync(
+                    &mut peer_b_write.compat_write(),
+                    &mut peer_b_read.compat(),
+                    peer_a,
+                    sync_protocol,
+                    peer_b_app_tx,
+                )
+                .await
+            });
+        }
+
+        // Initiate a sync session.
+        let result = sync::initiate_sync(
+            &mut peer_a_write.compat_write(),
+            &mut peer_a_read.compat(),
+            peer_b,
+            topic.clone(),
+            sync_protocol,
+            peer_a_app_tx,
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        // Ensure `SyncStart` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncStart {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncStart: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure `SyncHandshakeSuccess` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncHandshakeSuccess {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncHandshakeSuccess: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure `SyncDone` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncDone {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncDone: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure no further messages are being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await;
+        assert!(msg.is_none());
+
+        // Ensure `SyncHandshakeSuccess` is being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncHandshakeSuccess {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncHandshakeSuccess: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_a);
+
+        // Ensure `SyncDone` is being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncDone {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncDone: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_a);
+
+        // Ensure no further messages are being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await;
         assert!(msg.is_none());
     }
 }
