@@ -20,6 +20,7 @@ use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, TopicId};
 
+#[derive(Debug)]
 pub enum ToEngineActor<T> {
     AddPeer {
         node_addr: NodeAddr,
