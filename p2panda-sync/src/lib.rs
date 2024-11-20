@@ -63,7 +63,7 @@ where
     ) -> Result<(), SyncError>;
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error, PartialEq)]
 pub enum SyncError {
     /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
     ///
