@@ -291,8 +291,15 @@ mod sync_protocols {
     /// A sync implementation which returns an error.
     #[derive(Debug)]
     pub enum Protocol {
+        // A critical error is triggered inside `accept()` after sync messages have been exchanged.
         AcceptCritical,
+        // A critical error is triggered inside `initiate()` after the handshake is complete.
         InitiateCritical,
+        // An unexpected error is triggered inside `accept()` by sending the topic twice from
+        // `initiate()`.
+        AcceptUnexpectedBehaviour,
+        // An unexpected error is triggered inside `initiate()` by sending a topic from `accept()`.
+        InitiateUnexpectedBehaviour,
     }
 
     #[async_trait]
@@ -317,6 +324,11 @@ mod sync_protocols {
             let mut stream = into_cbor_stream(rx);
 
             sink.send(ProtocolMessage::Topic(topic.clone())).await?;
+            // Simulate unexpected behaviour by sending the topic a second time.
+            if let Protocol::AcceptUnexpectedBehaviour = *self {
+                sink.send(ProtocolMessage::Topic(topic.clone())).await?;
+            }
+
             sink.send(ProtocolMessage::Done).await?;
             app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
@@ -329,7 +341,9 @@ mod sync_protocols {
                 debug!("message received: {:?}", message);
 
                 match &message {
-                    ProtocolMessage::Topic(_) => panic!(),
+                    ProtocolMessage::Topic(_) => {
+                        return Err(SyncError::UnexpectedBehaviour("initiator".to_string()));
+                    }
                     ProtocolMessage::Done => break,
                 }
             }
@@ -353,15 +367,28 @@ mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
+            // Simulate unexpected behaviour by sending the topic from the acceptor.
+            if let Protocol::InitiateUnexpectedBehaviour = *self {
+                let topic = TestTopic::new("unexpected behaviour test");
+                sink.send(ProtocolMessage::Topic(topic)).await?;
+            }
+
+            let mut received_topic = false;
+
             while let Some(result) = stream.next().await {
                 let message: ProtocolMessage = result?;
                 debug!("message received: {:?}", message);
 
                 match &message {
                     ProtocolMessage::Topic(topic) => {
-                        app_tx
-                            .send(FromSync::HandshakeSuccess(topic.clone()))
-                            .await?;
+                        if !received_topic {
+                            app_tx
+                                .send(FromSync::HandshakeSuccess(topic.clone()))
+                                .await?;
+                            received_topic = true;
+                        } else {
+                            return Err(SyncError::UnexpectedBehaviour("acceptor".to_string()));
+                        }
                     }
                     ProtocolMessage::Done => break,
                 }
@@ -494,6 +521,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn accept_sync_with_unexpected_behaviour_error() {
+        let peer_a = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let peer_b = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let topic = TestTopic::new("critical error test");
+        let sync_protocol = Arc::new(Protocol::AcceptUnexpectedBehaviour);
+
+        // Duplex streams which simulate both ends of a bi-directional network connection.
+        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
+        let (peer_a_read, peer_a_write) = tokio::io::split(peer_a_stream);
+        let (peer_b_read, peer_b_write) = tokio::io::split(peer_b_stream);
+
+        // Channel for sending messages out of a running sync session.
+        let (peer_a_app_tx, mut _peer_a_app_rx) = mpsc::channel(128);
+        let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
+
+        let sync_protocol_clone = sync_protocol.clone();
+
+        // Initiate a sync session.
+        {
+            let topic = topic.clone();
+
+            let _initiate_handle = tokio::spawn(async move {
+                sync::initiate_sync(
+                    &mut peer_a_write.compat_write(),
+                    &mut peer_a_read.compat(),
+                    peer_b,
+                    topic.clone(),
+                    sync_protocol,
+                    peer_a_app_tx,
+                )
+                .await
+            });
+        }
+
+        // Accept a sync session.
+        //
+        // An unexpected behaviour error will be triggered inside this method.
+        let result = sync::accept_sync(
+            &mut peer_b_write.compat_write(),
+            &mut peer_b_read.compat(),
+            peer_a,
+            sync_protocol_clone,
+            peer_b_app_tx,
+        )
+        .await;
+
+        // The error is caught inside `accept_sync()` and reported directly to the engine.
+        assert!(result.is_ok());
+
+        // Ensure `SyncHandshakeSuccess` is being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncHandshakeSuccess {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncHandshakeSuccess: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_a);
+
+        // Ensure `SyncFailed` is being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncFailed {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncFailed: {:?}", msg)
+        };
+        assert_eq!(received_topic, Some(topic));
+        assert_eq!(peer, peer_a);
+
+        // Ensure no further messages are being sent to the engine actor by the acceptor.
+        let msg = peer_b_app_rx.recv().await;
+        assert!(msg.is_none());
+    }
+
+    #[tokio::test]
     async fn initiate_sync_with_critical_error() {
         let peer_a = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
         let peer_b = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
@@ -539,6 +645,97 @@ mod tests {
         .await;
 
         assert_eq!(result, Err(SyncError::Critical("initiator".to_string())));
+
+        // Ensure `SyncStart` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncStart {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncStart: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure `SyncHandshakeSuccess` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncHandshakeSuccess {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncHandshakeSuccess: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure `SyncDone` is being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await.unwrap();
+        let ToEngineActor::SyncDone {
+            topic: received_topic,
+            peer,
+        } = msg
+        else {
+            panic!("expected SyncDone: {:?}", msg)
+        };
+        assert_eq!(received_topic, topic);
+        assert_eq!(peer, peer_b);
+
+        // Ensure no further messages are being sent to the engine actor by the initiator.
+        let msg = peer_a_app_rx.recv().await;
+        assert!(msg.is_none());
+    }
+
+    #[tokio::test]
+    async fn initiate_sync_with_unexpected_behaviour_error() {
+        let peer_a = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let peer_b = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let topic = TestTopic::new("critical error test");
+        let sync_protocol = Arc::new(Protocol::InitiateUnexpectedBehaviour);
+
+        // Duplex streams which simulate both ends of a bi-directional network connection.
+        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
+        let (peer_a_read, peer_a_write) = tokio::io::split(peer_a_stream);
+        let (peer_b_read, peer_b_write) = tokio::io::split(peer_b_stream);
+
+        // Channel for sending messages out of a running sync session.
+        let (peer_a_app_tx, mut peer_a_app_rx) = mpsc::channel(128);
+        let (peer_b_app_tx, mut _peer_b_app_rx) = mpsc::channel(128);
+
+        // Accept a sync session.
+        {
+            let sync_protocol = sync_protocol.clone();
+
+            let _accept_handle = tokio::spawn(async move {
+                sync::accept_sync(
+                    &mut peer_b_write.compat_write(),
+                    &mut peer_b_read.compat(),
+                    peer_a,
+                    sync_protocol,
+                    peer_b_app_tx,
+                )
+                .await
+            });
+        }
+
+        // Initiate a sync session.
+        //
+        // An unexpected behaviour error will be triggered inside this method.
+        let result = sync::initiate_sync(
+            &mut peer_a_write.compat_write(),
+            &mut peer_a_read.compat(),
+            peer_b,
+            topic.clone(),
+            sync_protocol,
+            peer_a_app_tx,
+        )
+        .await;
+
+        assert_eq!(
+            result,
+            Err(SyncError::UnexpectedBehaviour("initiator".to_string()))
+        );
 
         // Ensure `SyncStart` is being sent to the engine actor by the initiator.
         let msg = peer_a_app_rx.recv().await.unwrap();
