@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
@@ -69,7 +69,7 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
-    pending_sync_sessions: VecDeque<(NodeId, T)>,
+    pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
     active_sync_sessions: HashMap<T, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
     endpoint: Endpoint,
@@ -94,7 +94,7 @@ where
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
         let sync_manager = Self {
-            pending_sync_sessions: VecDeque::new(),
+            pending_sync_sessions: HashMap::new(),
             active_sync_sessions: HashMap::new(),
             completed_sync_sessions: HashMap::new(),
             endpoint,
@@ -110,13 +110,23 @@ where
 
     /// Add a peer and topic combination to the sync connection queue.
     async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        // Only send if the queue is not full; this prevents the possibility of blocking on send.
-        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-            self.sync_queue_tx.send(sync_attempt).await?;
-        } else {
-            self.sync_queue_tx
-                .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
-                .await?;
+        if !self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
+            && !self.is_active(&sync_attempt.peer, &sync_attempt.topic)
+            && !self.is_complete(&sync_attempt.peer, &sync_attempt.topic)
+        {
+            self.pending_sync_sessions
+                .entry(sync_attempt.topic.clone())
+                .or_default()
+                .insert(sync_attempt.peer);
+
+            // Only send if the queue is not full; this prevents the possibility of blocking on send.
+            if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
+                self.sync_queue_tx.send(sync_attempt).await?;
+            } else {
+                self.sync_queue_tx
+                    .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
+                    .await?;
+            }
         }
 
         Ok(())
@@ -127,22 +137,6 @@ where
     async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         sync_attempt.attempts += 1;
         self.schedule_attempt(sync_attempt).await?;
-
-        Ok(())
-    }
-
-    /// Pull the next peer and topic combination from the set of pending sessions and schedule a
-    /// sync connection attempt.
-    async fn schedule_next_attempt(&mut self) -> Result<()> {
-        if let Some(peer_topic) = self.pending_sync_sessions.pop_front() {
-            let sync_attempt = SyncAttempt::new(peer_topic.0, peer_topic.1.clone());
-
-            // Scheduling the attempt will fail if the sync queue is full. In that case, we return
-            // the peer and topic combination to the buffer of pending sync sessions.
-            if self.schedule_attempt(sync_attempt).await.is_err() {
-                self.pending_sync_sessions.push_back(peer_topic)
-            }
-        }
 
         Ok(())
     }
@@ -176,10 +170,22 @@ where
                     let peer = msg.peer;
                     let topic = msg.topic;
 
-                    // Keep track of all concrete topics we will be running sync sessions over.
-                    self.queue_sync_session(peer, topic).await;
-                    self.schedule_next_attempt().await?
+                    let sync_attempt = SyncAttempt::new(peer, topic);
+
+                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
+                        // The attempt will fail if the sync queue is full, indicating that a high
+                        // volume of sync sessions are underway. In that case, we drop the attempt
+                        // completely. Another attempt will be scheduled when the next announcement of
+                        // this peer-topic combination is received from the network-wide gossip
+                        // overlay.
+                        error!("failed to schedule sync attempt: {}", err)
+                    }
                 }
+                // TODO: We could add a tick interval here which checks some kind of reattempt
+                // queue every x seconds and schedules an attempt for that peer-topic combination
+                // if more than y seconds have passed since the last attempt.
+                //
+                // The queue could even be a simple vector or a vecdequeue.
             }
         }
 
@@ -205,23 +211,26 @@ where
     }
 
     /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: NodeId, topic: T) -> bool {
-        self.pending_sync_sessions.contains(&(peer, topic))
-    }
-
-    /// Conditionally insert the peer-topic combination into the set of pending sync sessions.
-    async fn queue_sync_session(&mut self, peer: NodeId, topic: T) {
-        if !self.is_active(&peer, &topic)
-            && !self.is_complete(&peer, &topic)
-            && !self.is_pending(peer, topic.clone())
-        {
-            self.pending_sync_sessions.push_back((peer, topic))
+    fn is_pending(&self, peer: &NodeId, topic: &T) -> bool {
+        if let Some(peers) = self.pending_sync_sessions.get(topic) {
+            peers.contains(peer)
+        } else {
+            false
         }
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
     async fn connect_and_sync(&mut self, peer: NodeId, topic: T) -> Result<()> {
         debug!("attempting peer connection for sync");
+
+        self.active_sync_sessions
+            .entry(topic.clone())
+            .or_default()
+            .insert(peer);
+
+        if let Some(session) = self.pending_sync_sessions.get_mut(&topic) {
+            session.remove(&peer);
+        }
 
         let connection = self
             .endpoint
@@ -236,11 +245,6 @@ where
 
         let sync_protocol = self.sync_protocol.clone();
         let engine_actor_tx = self.engine_actor_tx.clone();
-
-        self.active_sync_sessions
-            .entry(topic.clone())
-            .or_default()
-            .insert(peer);
 
         // Run a sync session as the initiator.
         sync::initiate_sync(
@@ -299,7 +303,12 @@ where
             }
         }
 
-        self.schedule_next_attempt().await?;
+        // TODO: We probably want to (re)schedule the attempt here.
+        // How about adding a timestamp so we can add a delay between attempts?
+        //self.schedule_next_attempt().await?;
+        //
+        // Or we could _not_ reschedule an attempt, and rather wait for the next announcement of
+        // the peer-topic combination.
 
         Ok(())
     }
@@ -307,16 +316,26 @@ where
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
     /// to the set of completed sync sessions. Then schedule the next pending attempt.
     async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
+        self.completed_sync_sessions
+            .entry(sync_attempt.topic.clone())
+            .or_default()
+            .insert(sync_attempt.peer);
+
         if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
             session.remove(&sync_attempt.peer);
         }
 
-        self.completed_sync_sessions
-            .entry(sync_attempt.topic)
-            .or_default()
-            .insert(sync_attempt.peer);
+        // TODO: This is where we want to check the "resync" flag and schedule another sync session
+        // if it has been set to "true".
+        //
+        // Or: We only add to the completed sync sessions if the "resync" flag has not been set. If
+        // it _has_ been set, we can forget this peer-topic combination and wait for it to be
+        // learned again via a peer announcement.
+        //
+        // Or: We include a timestamp in `completed_sync_sessions` and use that to schedule the
+        // next attempt if the "resync" flag has been set.
 
-        self.schedule_next_attempt().await?;
+        //self.schedule_next_attempt().await?;
 
         Ok(())
     }
