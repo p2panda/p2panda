@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
@@ -8,7 +8,7 @@ use iroh_net::{Endpoint, NodeId};
 use p2panda_sync::{SyncError, SyncProtocol, Topic};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::Duration;
+use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -23,6 +23,12 @@ const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
 
 const MAX_RETRY_ATTEMPTS: u8 = 5;
+
+/// The minimum interval between resync attempts for a single peer-topic combination.
+const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
+
+/// The minimun interval between attempts to pop the next resync attempt from the queue.
+const RESYNC_QUEUE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
@@ -42,6 +48,7 @@ struct SyncAttempt<T> {
     peer: NodeId,
     topic: T,
     attempts: u8,
+    completed: Option<Instant>,
 }
 
 impl<T> SyncAttempt<T> {
@@ -50,6 +57,7 @@ impl<T> SyncAttempt<T> {
             peer,
             topic,
             attempts: 0,
+            completed: None,
         }
     }
 }
@@ -69,12 +77,17 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
+    // @TODO(glyph): It would be nice to move these state trackers into `SyncAttempt`;
+    // use a field named `state` which is an enum with `Pending`, `Active` and `Complete` variants.
     pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
     active_sync_sessions: HashMap<T, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
+    resync: bool,
+    //resync_queue: Vec<SyncAttempt<T>>,
+    resync_queue: VecDeque<SyncAttempt<T>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt<T>>,
     sync_queue_rx: Receiver<SyncAttempt<T>>,
@@ -88,6 +101,7 @@ where
     pub(crate) fn new(
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
+        resync: bool,
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     ) -> (Self, Sender<ToSyncActor<T>>) {
         let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
@@ -100,6 +114,9 @@ where
             endpoint,
             engine_actor_tx,
             inbox: sync_manager_rx,
+            resync,
+            //resync_queue: Vec::new(),
+            resync_queue: VecDeque::new(),
             sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
@@ -148,6 +165,8 @@ where
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A new peer and topic combination received from the engine
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
+        let mut attempt_resync_interval = interval(RESYNC_QUEUE_INTERVAL);
+
         loop {
             tokio::select! {
                 biased;
@@ -181,11 +200,24 @@ where
                         error!("failed to schedule sync attempt: {}", err)
                     }
                 }
-                // TODO: We could add a tick interval here which checks some kind of reattempt
-                // queue every x seconds and schedules an attempt for that peer-topic combination
-                // if more than y seconds have passed since the last attempt.
-                //
-                // The queue could even be a simple vector or a vecdequeue.
+                _ = attempt_resync_interval.tick() => {
+                    // TODO: We could add a tick interval here which checks some kind of reattempt
+                    // queue every x seconds and schedules an attempt for that peer-topic combination
+                    // if more than y seconds have passed since the last attempt.
+                    //
+                    // The queue could even be a simple vector or a vecdequeue.
+                    if let Some(attempt) = self.resync_queue.pop_front() {
+                        if let Some(completion) = attempt.completed {
+                            if completion.elapsed() >= RESYNC_INTERVAL {
+                                if let Err(err) = self.schedule_attempt(attempt).await {
+                                    error!("failed to schedule resync attempt: {}", err)
+                                }
+                            } else {
+                                self.resync_queue.push_back(attempt)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -315,7 +347,7 @@ where
 
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
     /// to the set of completed sync sessions. Then schedule the next pending attempt.
-    async fn complete_successful_sync(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
+    async fn complete_successful_sync(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         self.completed_sync_sessions
             .entry(sync_attempt.topic.clone())
             .or_default()
@@ -323,6 +355,11 @@ where
 
         if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
             session.remove(&sync_attempt.peer);
+        }
+
+        if self.resync {
+            sync_attempt.completed = Some(Instant::now());
+            self.resync_queue.push_back(sync_attempt);
         }
 
         // TODO: This is where we want to check the "resync" flag and schedule another sync session

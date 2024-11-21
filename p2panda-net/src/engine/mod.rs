@@ -61,6 +61,10 @@ where
             let (sync_actor, sync_actor_tx) = SyncActor::new(
                 endpoint.clone(),
                 engine_actor_tx.clone(),
+                // @TODO(glyph): We need to replace this hardcoded value with a config variable.
+                // This would ideally be provided by the user via the forthcoming `StreamBuilder`
+                // API.
+                true,
                 sync_protocol.clone(),
             );
             (Some(sync_actor), Some(sync_actor_tx))
