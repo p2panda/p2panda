@@ -69,6 +69,7 @@ pub struct NetworkBuilder<T> {
     network_id: NetworkId,
     protocols: ProtocolMap,
     relay_mode: RelayMode,
+    resync: bool,
     secret_key: Option<SecretKey>,
     sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
 }
@@ -89,9 +90,10 @@ where
             gossip_config: None,
             network_id,
             protocols: Default::default(),
-            sync_protocol: None,
             relay_mode: RelayMode::Disabled,
+            resync: false,
             secret_key: None,
+            sync_protocol: None,
         }
     }
 
@@ -176,9 +178,15 @@ where
     /// Sets the sync protocol for this network.
     ///
     /// If a sync protocol is provided, a sync session will be completed with any known peers with
-    /// whom we share topics of interest.
-    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a, T> + 'static) -> Self {
+    /// whom we share topics of interest. The resync flag determines whether sync should only be
+    /// completed once or repeated at regular intervals.
+    pub fn sync(
+        mut self,
+        protocol: impl for<'a> SyncProtocol<'a, T> + 'static,
+        resync: bool,
+    ) -> Self {
         self.sync_protocol = Some(Arc::new(protocol));
+        self.resync = resync;
         self
     }
 
@@ -1017,12 +1025,12 @@ mod tests {
         let ping_pong = PingPongProtocol {};
 
         let node_1 = NetworkBuilder::new(network_id)
-            .sync(ping_pong.clone())
+            .sync(ping_pong.clone(), false)
             .build()
             .await
             .unwrap();
         let node_2 = NetworkBuilder::new(network_id)
-            .sync(ping_pong)
+            .sync(ping_pong, false)
             .build()
             .await
             .unwrap();
@@ -1132,7 +1140,7 @@ mod tests {
 
         // Build peer a's node
         let node_a = NetworkBuilder::new(NETWORK_ID)
-            .sync(protocol_a)
+            .sync(protocol_a, false)
             .private_key(peer_a_private_key)
             .build()
             .await
@@ -1140,7 +1148,7 @@ mod tests {
 
         // Build peer b's node
         let node_b = NetworkBuilder::new(NETWORK_ID)
-            .sync(protocol_b)
+            .sync(protocol_b, false)
             .private_key(peer_b_private_key.clone())
             .build()
             .await
