@@ -14,6 +14,7 @@ use p2panda_core::Hash;
 use p2panda_net::{Network, NetworkBuilder, TopicId};
 use p2panda_sync::Topic;
 
+use crate::config::Config;
 use crate::download::download_blob;
 use crate::export::export_blob;
 use crate::import::{import_blob, import_blob_from_stream, ImportBlobEvent};
@@ -40,7 +41,15 @@ where
         network_builder: NetworkBuilder<T>,
         store: S,
     ) -> Result<(Network<T>, Self)> {
-        // Calls `num_cpus::get()` to define thread count.
+        Blobs::from_builder_with_config(network_builder, store, Config::default()).await
+    }
+
+    pub async fn from_builder_with_config(
+        network_builder: NetworkBuilder<T>,
+        store: S,
+        config: Config,
+    ) -> Result<(Network<T>, Self)> {
+        // Calls `num_cpus::get()` tc o define thread count.
         let local_pool_config = LocalPoolConfig::default();
         let local_pool = LocalPool::new(local_pool_config);
 
@@ -52,10 +61,12 @@ where
             .build()
             .await?;
 
-        let downloader = Downloader::new(
+        let downloader = Downloader::with_config(
             store.clone(),
             network.endpoint().clone(),
             local_pool.handle().clone(),
+            config.clone().into(),
+            config.into(),
         );
 
         let blobs = Self {
