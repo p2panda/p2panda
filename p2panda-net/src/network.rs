@@ -274,6 +274,7 @@ where
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
+            self.resync,
             self.sync_protocol,
         );
 
