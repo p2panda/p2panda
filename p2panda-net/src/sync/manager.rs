@@ -77,8 +77,6 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
-    // @TODO(glyph): It would be nice to move these state trackers into `SyncAttempt`;
-    // use a field named `state` which is an enum with `Pending`, `Active` and `Complete` variants.
     pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
     active_sync_sessions: HashMap<T, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
@@ -86,7 +84,6 @@ pub(crate) struct SyncActor<T> {
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
     resync: bool,
-    //resync_queue: Vec<SyncAttempt<T>>,
     resync_queue: VecDeque<SyncAttempt<T>>,
     sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt<T>>,
@@ -115,7 +112,6 @@ where
             engine_actor_tx,
             inbox: sync_manager_rx,
             resync,
-            //resync_queue: Vec::new(),
             resync_queue: VecDeque::new(),
             sync_protocol,
             sync_queue_tx,
@@ -201,11 +197,6 @@ where
                     }
                 }
                 _ = attempt_resync_interval.tick() => {
-                    // TODO: We could add a tick interval here which checks some kind of reattempt
-                    // queue every x seconds and schedules an attempt for that peer-topic combination
-                    // if more than y seconds have passed since the last attempt.
-                    //
-                    // The queue could even be a simple vector or a vecdequeue.
                     if let Some(attempt) = self.resync_queue.pop_front() {
                         if let Some(completion) = attempt.completed {
                             if completion.elapsed() >= RESYNC_INTERVAL {
@@ -335,18 +326,19 @@ where
             }
         }
 
-        // TODO: We probably want to (re)schedule the attempt here.
-        // How about adding a timestamp so we can add a delay between attempts?
-        //self.schedule_next_attempt().await?;
-        //
-        // Or we could _not_ reschedule an attempt, and rather wait for the next announcement of
-        // the peer-topic combination.
+        // @TODO(glyph): We may want to maintain a map of failed peer-topic combinations that can
+        // be checked against each announcement received by the sync manager. Otherwise we may run
+        // into the case where we are repeatedly initiating a sync session with a faulty peer (this
+        // would happen every time we receive an announcement, approximately every 2.2 seconds).
 
         Ok(())
     }
 
     /// Remove the given topic from the set of active sync sessions for the given peer and add them
-    /// to the set of completed sync sessions. Then schedule the next pending attempt.
+    /// to the set of completed sync sessions.
+    ///
+    /// If resync is active, a timestamp is created to mark the time of sync completion and the
+    /// attempt is then pushed to the back of the resync queue.
     async fn complete_successful_sync(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         self.completed_sync_sessions
             .entry(sync_attempt.topic.clone())
@@ -361,18 +353,6 @@ where
             sync_attempt.completed = Some(Instant::now());
             self.resync_queue.push_back(sync_attempt);
         }
-
-        // TODO: This is where we want to check the "resync" flag and schedule another sync session
-        // if it has been set to "true".
-        //
-        // Or: We only add to the completed sync sessions if the "resync" flag has not been set. If
-        // it _has_ been set, we can forget this peer-topic combination and wait for it to be
-        // learned again via a peer announcement.
-        //
-        // Or: We include a timestamp in `completed_sync_sessions` and use that to schedule the
-        // next attempt if the "resync" flag has been set.
-
-        //self.schedule_next_attempt().await?;
 
         Ok(())
     }
