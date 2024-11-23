@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
@@ -28,7 +28,7 @@ const MAX_RETRY_ATTEMPTS: u8 = 5;
 const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
 
 /// The minimun interval between attempts to pop the next resync attempt from the queue.
-const RESYNC_QUEUE_INTERVAL: Duration = Duration::from_secs(5);
+const RESYNC_QUEUE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
@@ -122,24 +122,33 @@ where
     }
 
     /// Add a peer and topic combination to the sync connection queue.
-    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        if !self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            && !self.is_active(&sync_attempt.peer, &sync_attempt.topic)
-            && !self.is_complete(&sync_attempt.peer, &sync_attempt.topic)
+    async fn schedule_attempt(
+        &mut self,
+        sync_attempt: SyncAttempt<T>,
+        is_resync: bool,
+    ) -> Result<()> {
+        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
+            && self.is_active(&sync_attempt.peer, &sync_attempt.topic)
         {
-            self.pending_sync_sessions
-                .entry(sync_attempt.topic.clone())
-                .or_default()
-                .insert(sync_attempt.peer);
+            return Ok(());
+        }
 
-            // Only send if the queue is not full; this prevents the possibility of blocking on send.
-            if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-                self.sync_queue_tx.send(sync_attempt).await?;
-            } else {
-                self.sync_queue_tx
-                    .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
-                    .await?;
-            }
+        if self.is_complete(&sync_attempt.peer, &sync_attempt.topic) && !is_resync {
+            return Ok(());
+        }
+
+        self.pending_sync_sessions
+            .entry(sync_attempt.topic.clone())
+            .or_default()
+            .insert(sync_attempt.peer);
+
+        // Only send if the queue is not full; this prevents the possibility of blocking on send.
+        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
+            self.sync_queue_tx.send(sync_attempt).await?;
+        } else {
+            self.sync_queue_tx
+                .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
+                .await?;
         }
 
         Ok(())
@@ -149,7 +158,7 @@ where
     /// previous attempts.
     async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         sync_attempt.attempts += 1;
-        self.schedule_attempt(sync_attempt).await?;
+        self.schedule_attempt(sync_attempt, false).await?;
 
         Ok(())
     }
@@ -187,7 +196,7 @@ where
 
                     let sync_attempt = SyncAttempt::new(peer, topic);
 
-                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
+                    if let Err(err) = self.schedule_attempt(sync_attempt, false).await {
                         // The attempt will fail if the sync queue is full, indicating that a high
                         // volume of sync sessions are underway. In that case, we drop the attempt
                         // completely. Another attempt will be scheduled when the next announcement of
@@ -200,7 +209,8 @@ where
                     if let Some(attempt) = self.resync_queue.pop_front() {
                         if let Some(completion) = attempt.completed {
                             if completion.elapsed() >= RESYNC_INTERVAL {
-                                if let Err(err) = self.schedule_attempt(attempt).await {
+                                trace!("schedule resync attempt {attempt:?}");
+                                if let Err(err) = self.schedule_attempt(attempt, true).await {
                                     error!("failed to schedule resync attempt: {}", err)
                                 }
                             } else {
@@ -340,6 +350,7 @@ where
     /// If resync is active, a timestamp is created to mark the time of sync completion and the
     /// attempt is then pushed to the back of the resync queue.
     async fn complete_successful_sync(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
+        trace!("complete_successful_sync");
         self.completed_sync_sessions
             .entry(sync_attempt.topic.clone())
             .or_default()
@@ -350,6 +361,7 @@ where
         }
 
         if self.resync {
+            trace!("schedule re-sync attempt");
             sync_attempt.completed = Some(Instant::now());
             self.resync_queue.push_back(sync_attempt);
         }
