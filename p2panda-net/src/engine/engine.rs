@@ -365,12 +365,12 @@ where
         if topic_id == self.network_id {
             match self
                 .topic_discovery
-                .on_gossip_message(&bytes, delivered_from)
+                .on_gossip_message(&bytes)
                 .await
             {
-                Ok(topic_ids) => {
+                Ok((topic_ids, node_id)) => {
                     self.topic_streams
-                        .on_discovered_topic_ids(topic_ids, delivered_from)
+                        .on_discovered_topic_ids(topic_ids, node_id)
                         .await?;
                 }
                 Err(err) => {

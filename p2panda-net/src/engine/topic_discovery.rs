@@ -93,18 +93,18 @@ impl TopicDiscovery {
     pub async fn on_gossip_message(
         &mut self,
         bytes: &[u8],
-        node_id: NodeId,
-    ) -> Result<Vec<[u8; 32]>> {
+    ) -> Result<(Vec<[u8; 32]>, NodeId)> {
         let topic_discovery_message = TopicDiscoveryMessage::from_bytes(bytes)?;
 
         // Verify that the signature of this message matches the claimed author public key.
         topic_discovery_message.verify()?;
+        let node_id = topic_discovery_message.author();
 
         let topic_ids = TopicDiscoveryMessage::from_bytes(bytes).map(|message| message.1)?;
         for topic_id in &topic_ids {
             self.address_book.add_topic_id(node_id, *topic_id).await;
         }
-        Ok(topic_ids)
+        Ok((topic_ids, node_id))
     }
 
     pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Result<()> {
@@ -148,6 +148,10 @@ impl TopicDiscoveryMessage {
         let public_key = self.2;
         public_key.verify(&(self.0, &self.1, self.2).to_bytes(), &self.3)?;
         Ok(())
+    }
+
+    pub fn author(&self) -> PublicKey {
+        self.2
     }
 }
 
