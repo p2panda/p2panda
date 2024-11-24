@@ -15,6 +15,7 @@ use anyhow::Result;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
+use iroh_net::key::SecretKey;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -46,6 +47,7 @@ where
     T: Topic + TopicId + 'static,
 {
     pub fn new(
+        secret_key: SecretKey,
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
@@ -68,6 +70,7 @@ where
         };
 
         let engine_actor = EngineActor::new(
+            secret_key,
             endpoint,
             address_book,
             engine_actor_rx,

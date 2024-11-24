@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use anyhow::{Context, Result};
-use iroh_net::key::PublicKey;
+use iroh_net::key::{PublicKey, SecretKey};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -75,6 +75,7 @@ pub enum ToEngineActor<T> {
 
 /// The core event orchestrator of the networking layer.
 pub struct EngineActor<T> {
+    secret_key: SecretKey,
     address_book: AddressBook,
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -89,6 +90,7 @@ where
     T: Topic + TopicId + 'static,
 {
     pub fn new(
+        secret_key: SecretKey,
         endpoint: Endpoint,
         address_book: AddressBook,
         inbox: mpsc::Receiver<ToEngineActor<T>>,
@@ -102,6 +104,7 @@ where
             TopicStreams::new(gossip_actor_tx.clone(), address_book.clone(), sync_actor_tx);
 
         Self {
+            secret_key,
             address_book,
             endpoint,
             gossip_actor_tx,
@@ -189,7 +192,7 @@ where
                 // Attempt announcing our currently subscribed topics to other peers.
                 _ = announce_topics_interval.tick() => {
                     let my_topic_ids = self.topic_streams.topic_ids();
-                    self.topic_discovery.announce(my_topic_ids).await?;
+                    self.topic_discovery.announce(my_topic_ids, &self.secret_key).await?;
                 },
                 // Attempt joining the application's topic gossips if we haven't yet.
                 _ = join_topics_interval.tick() => {
@@ -308,7 +311,9 @@ where
         // hopefully speed up their onboarding process into the network.
         if topic_id == self.network_id {
             let my_topic_ids = self.topic_streams.topic_ids();
-            self.topic_discovery.announce(my_topic_ids).await?;
+            self.topic_discovery
+                .announce(my_topic_ids, &self.secret_key)
+                .await?;
         }
 
         Ok(())
@@ -339,7 +344,9 @@ where
         // Hot path: Announce our "topics of interest" into the network, hopefully this will speed
         // up finding other peers.
         let my_topic_ids = self.topic_streams.topic_ids();
-        self.topic_discovery.announce(my_topic_ids).await?;
+        self.topic_discovery
+            .announce(my_topic_ids, &self.secret_key)
+            .await?;
 
         Ok(())
     }

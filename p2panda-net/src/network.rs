@@ -262,6 +262,7 @@ where
         );
 
         let engine = Engine::new(
+            secret_key.clone(),
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
