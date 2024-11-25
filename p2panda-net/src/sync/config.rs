@@ -16,8 +16,12 @@ const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
 /// Configuration parameters for resync behaviour.
 pub struct ResyncConfiguration {
     /// Minimum interval between resync attempts for a single peer-topic combination.
+    ///
+    /// Default: 60 seconds.
     pub(crate) interval: Duration,
     /// Minimum interval between each poll of the resync queue.
+    ///
+    /// Default: 1 second.
     pub(crate) poll_interval: Duration,
 }
 
@@ -57,10 +61,16 @@ pub struct SyncConfiguration<T> {
     /// Resync configuration (`None` represents no resync).
     pub(crate) resync: Option<ResyncConfiguration>,
     /// Maximum number of concurrent sync sessions.
+    ///
+    /// Default: 128.
     pub(crate) max_concurrent_sync_sessions: usize,
     /// Maximum number of attempts at successfully completing a sync session with a specific peer.
+    ///
+    /// Default: 5.
     pub(crate) max_retry_attempts: u8,
     /// Maximum time to wait for sync attempt queue to have an open slot before failing.
+    ///
+    /// Default: 100 milliseconds.
     pub(crate) sync_queue_send_timeout: Duration,
 }
 
