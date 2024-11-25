@@ -265,11 +265,11 @@ where
     pub async fn on_discovered_topic_ids(
         &mut self,
         their_topic_ids: Vec<[u8; 32]>,
-        delivered_from: NodeId,
+        peer: NodeId,
     ) -> Result<()> {
         debug!(
-            "learned about topic ids from {}: {:?}",
-            delivered_from, their_topic_ids
+            "learned about topic ids of {}: {:?}",
+            peer, their_topic_ids
         );
 
         // Inform the sync manager about any peer-topic combinations which are of interest to us.
@@ -281,7 +281,7 @@ where
             for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
                     found_common_topic = true;
-                    let peer_topic = ToSyncActor::new(delivered_from, topic.clone());
+                    let peer_topic = ToSyncActor::new(peer, topic.clone());
                     sync_actor_tx.send(peer_topic).await?
                 }
             }

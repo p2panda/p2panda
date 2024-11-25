@@ -58,7 +58,7 @@ pub enum ToEngineActor<T> {
         topic: T,
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
-        delivered_from: PublicKey,
+        peer: PublicKey,
     },
     SyncDone {
         topic: T,
@@ -245,10 +245,10 @@ where
                 topic,
                 header,
                 payload,
-                delivered_from,
+                peer,
             } => {
                 self.topic_streams
-                    .on_sync_message(topic, header, payload, delivered_from)?;
+                    .on_sync_message(topic, header, payload, peer)?;
             }
             ToEngineActor::SyncDone { topic, peer } => {
                 self.topic_streams.on_sync_done(topic, peer).await?;
