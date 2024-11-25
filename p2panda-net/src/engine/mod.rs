@@ -10,14 +10,13 @@ mod topic_discovery;
 mod topic_streams;
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use anyhow::Result;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::{Endpoint, NodeAddr};
-use p2panda_sync::{SyncProtocol, Topic};
+use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
@@ -28,7 +27,7 @@ use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::manager::SyncActor;
-use crate::sync::SyncConnection;
+use crate::sync::{SyncConfiguration, SyncConnection};
 use crate::{NetworkId, TopicId};
 pub use engine::ToEngineActor;
 
@@ -37,7 +36,7 @@ pub use engine::ToEngineActor;
 #[derive(Debug)]
 pub struct Engine<T> {
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
+    sync_config: Option<SyncConfiguration<T>>,
     #[allow(dead_code)]
     actor_handle: Shared<MapErr<AbortOnDropHandle<()>, JoinErrToStr>>,
 }
@@ -50,20 +49,18 @@ where
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
-        resync: bool,
-        sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
+        sync_config: Option<SyncConfiguration<T>>,
     ) -> Self {
         let address_book = AddressBook::new(network_id);
 
         let (engine_actor_tx, engine_actor_rx) = mpsc::channel(64);
         let (gossip_actor_tx, gossip_actor_rx) = mpsc::channel(256);
 
-        let (sync_actor, sync_actor_tx) = if let Some(ref sync_protocol) = sync_protocol {
+        let (sync_actor, sync_actor_tx) = if let Some(ref sync_config) = sync_config {
             let (sync_actor, sync_actor_tx) = SyncActor::new(
+                sync_config.clone(),
                 endpoint.clone(),
                 engine_actor_tx.clone(),
-                resync,
-                sync_protocol.clone(),
             );
             (Some(sync_actor), Some(sync_actor_tx))
         } else {
@@ -93,7 +90,7 @@ where
         Self {
             engine_actor_tx,
             actor_handle: actor_drop_handle,
-            sync_protocol,
+            sync_config,
         }
     }
 
@@ -154,8 +151,8 @@ where
     // @TODO: This method feels like the odd-one-out in this module. Could we move it somewhere
     // else?
     pub(super) fn sync_handler(&self) -> Option<SyncConnection<T>> {
-        self.sync_protocol.as_ref().map(|sync_protocol| {
-            SyncConnection::new(sync_protocol.clone(), self.engine_actor_tx.clone())
+        self.sync_config.as_ref().map(|sync_config| {
+            SyncConnection::new(sync_config.protocol(), self.engine_actor_tx.clone())
         })
     }
 }

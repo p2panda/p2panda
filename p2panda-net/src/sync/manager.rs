@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
 
 use anyhow::{Context, Error, Result};
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::{SyncError, SyncProtocol, Topic};
+use p2panda_sync::{SyncError, Topic};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::{interval, Duration, Instant};
@@ -16,19 +15,7 @@ use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
 use crate::TopicId;
 
-/// This value will be used to determine the send timeout if the sync queue is full at the time an
-/// attempt is scheduled or rescheduled.
-const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
-
-const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
-
-const MAX_RETRY_ATTEMPTS: u8 = 5;
-
-/// The minimum interval between resync attempts for a single peer-topic combination.
-const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
-
-/// The minimun interval between attempts to pop the next resync attempt from the queue.
-const RESYNC_QUEUE_INTERVAL: Duration = Duration::from_secs(1);
+use super::SyncConfiguration;
 
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
@@ -77,15 +64,14 @@ enum SyncAttemptError {
 /// An API for scheduling outbound connections and sync attempts.
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
+    config: SyncConfiguration<T>,
     pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
     active_sync_sessions: HashMap<T, HashSet<NodeId>>,
     completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
-    resync: bool,
     resync_queue: VecDeque<SyncAttempt<T>>,
-    sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     sync_queue_tx: Sender<SyncAttempt<T>>,
     sync_queue_rx: Receiver<SyncAttempt<T>>,
 }
@@ -96,24 +82,22 @@ where
 {
     /// Create a new instance of the `SyncActor` and return it along with a channel sender.
     pub(crate) fn new(
+        config: SyncConfiguration<T>,
         endpoint: Endpoint,
         engine_actor_tx: Sender<ToEngineActor<T>>,
-        resync: bool,
-        sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
     ) -> (Self, Sender<ToSyncActor<T>>) {
-        let (sync_queue_tx, sync_queue_rx) = mpsc::channel(MAX_CONCURRENT_SYNC_SESSIONS);
+        let (sync_queue_tx, sync_queue_rx) = mpsc::channel(config.max_concurrent_sync_sessions);
         let (sync_manager_tx, sync_manager_rx) = mpsc::channel(256);
 
         let sync_manager = Self {
+            config,
             pending_sync_sessions: HashMap::new(),
             active_sync_sessions: HashMap::new(),
             completed_sync_sessions: HashMap::new(),
             endpoint,
             engine_actor_tx,
             inbox: sync_manager_rx,
-            resync,
             resync_queue: VecDeque::new(),
-            sync_protocol,
             sync_queue_tx,
             sync_queue_rx,
         };
@@ -147,7 +131,7 @@ where
             self.sync_queue_tx.send(sync_attempt).await?;
         } else {
             self.sync_queue_tx
-                .send_timeout(sync_attempt, SYNC_QUEUE_SEND_TIMEOUT)
+                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
                 .await?;
         }
 
@@ -170,7 +154,16 @@ where
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A new peer and topic combination received from the engine
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
-        let mut attempt_resync_interval = interval(RESYNC_QUEUE_INTERVAL);
+        // Define the intervals based on supplied configuration parameters.
+        // We create long-duration fallback values for the case in which resync has not been
+        // enabled.
+        let (mut resync_poll_interval, resync_interval) =
+            if let Some(ref resync) = self.config.resync {
+                (interval(resync.poll_interval), resync.interval)
+            } else {
+                let one_hour = Duration::from_secs(3600);
+                (interval(one_hour), one_hour)
+            };
 
         loop {
             tokio::select! {
@@ -205,10 +198,10 @@ where
                         error!("failed to schedule sync attempt: {}", err)
                     }
                 }
-                _ = attempt_resync_interval.tick() => {
+                _ = resync_poll_interval.tick() => {
                     if let Some(attempt) = self.resync_queue.pop_front() {
                         if let Some(completion) = attempt.completed {
-                            if completion.elapsed() >= RESYNC_INTERVAL {
+                            if completion.elapsed() >= resync_interval {
                                 trace!("schedule resync attempt {attempt:?}");
                                 if let Err(err) = self.schedule_attempt(attempt, true).await {
                                     error!("failed to schedule resync attempt: {}", err)
@@ -276,7 +269,7 @@ where
             .await
             .map_err(|_| SyncAttemptError::Connection)?;
 
-        let sync_protocol = self.sync_protocol.clone();
+        let sync_protocol = self.config.protocol();
         let engine_actor_tx = self.engine_actor_tx.clone();
 
         // Run a sync session as the initiator.
@@ -312,7 +305,7 @@ where
             match err {
                 SyncAttemptError::Connection => {
                     warn!("sync attempt failed due to connection error");
-                    if sync_attempt.attempts <= MAX_RETRY_ATTEMPTS {
+                    if sync_attempt.attempts <= self.config.max_retry_attempts {
                         self.reschedule_attempt(sync_attempt).await?;
                         return Ok(());
                     } else {
@@ -360,7 +353,7 @@ where
             session.remove(&sync_attempt.peer);
         }
 
-        if self.resync {
+        if self.config.is_resync() {
             trace!("schedule re-sync attempt");
             sync_attempt.completed = Some(Instant::now());
             self.resync_queue.push_back(sync_attempt);
