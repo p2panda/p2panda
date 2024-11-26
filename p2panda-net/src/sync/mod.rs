@@ -4,7 +4,7 @@ mod config;
 mod handler;
 pub(crate) mod manager;
 
-pub use config::SyncConfiguration;
+pub use config::{ResyncConfiguration, SyncConfiguration};
 pub use handler::{SyncConnection, SYNC_CONNECTION_ALPN};
 
 use std::sync::Arc;
