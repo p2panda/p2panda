@@ -112,7 +112,7 @@ where
         is_resync: bool,
     ) -> Result<()> {
         if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            && self.is_active(&sync_attempt.peer, &sync_attempt.topic)
+            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
         {
             return Ok(());
         }
@@ -142,27 +142,30 @@ where
     /// previous attempts.
     async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         sync_attempt.attempts += 1;
-        self.schedule_attempt(sync_attempt, false).await?;
+        let is_resync = self.config.is_resync();
+        self.schedule_attempt(sync_attempt, is_resync).await?;
 
         Ok(())
     }
 
     /// The sync connection event loop.
     ///
-    /// Listens and responds to three kinds of events
+    /// Listens and responds to three kinds of events:
+    ///
     /// - A shutdown signal from the engine
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A new peer and topic combination received from the engine
+    /// - A tick of the resync poll interval, resulting in a resync attempt if one is in the queue
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
-        // Define the intervals based on supplied configuration parameters.
-        // We create long-duration fallback values for the case in which resync has not been
-        // enabled.
-        let (mut resync_poll_interval, resync_interval) =
+        // Define the resync intervals based on supplied configuration parameters if resync has
+        // been enabled. Otherwise create long-duration fallback values; this is mostly just
+        // necessary for the resync poll interval tick.
+        let (mut resync_poll_interval, resync_interval, is_resync) =
             if let Some(ref resync) = self.config.resync {
-                (interval(resync.poll_interval), resync.interval)
+                (interval(resync.poll_interval), resync.interval, true)
             } else {
                 let one_hour = Duration::from_secs(3600);
-                (interval(one_hour), one_hour)
+                (interval(one_hour), one_hour, false)
             };
 
         loop {
@@ -189,7 +192,7 @@ where
 
                     let sync_attempt = SyncAttempt::new(peer, topic);
 
-                    if let Err(err) = self.schedule_attempt(sync_attempt, false).await {
+                    if let Err(err) = self.schedule_attempt(sync_attempt, is_resync).await {
                         // The attempt will fail if the sync queue is full, indicating that a high
                         // volume of sync sessions are underway. In that case, we drop the attempt
                         // completely. Another attempt will be scheduled when the next announcement of
@@ -203,7 +206,7 @@ where
                         if let Some(completion) = attempt.completed {
                             if completion.elapsed() >= resync_interval {
                                 trace!("schedule resync attempt {attempt:?}");
-                                if let Err(err) = self.schedule_attempt(attempt, true).await {
+                                if let Err(err) = self.schedule_attempt(attempt, is_resync).await {
                                     error!("failed to schedule resync attempt: {}", err)
                                 }
                             } else {
