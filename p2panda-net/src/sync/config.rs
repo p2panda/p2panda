@@ -12,13 +12,14 @@ const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
 const RESYNC_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
 
-#[derive(Clone, Debug)]
 /// Configuration parameters for resync behaviour.
+#[derive(Clone, Debug)]
 pub struct ResyncConfiguration {
     /// Minimum interval between resync attempts for a single peer-topic combination.
     ///
     /// Default: 60 seconds.
     pub(crate) interval: Duration,
+
     /// Minimum interval between each poll of the resync queue.
     ///
     /// Default: 1 second.
@@ -54,20 +55,24 @@ impl Default for ResyncConfiguration {
     }
 }
 
-#[derive(Clone, Debug)]
 /// Configuration parameters for data synchronisation between peers.
+#[derive(Clone, Debug)]
 pub struct SyncConfiguration<T> {
     protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
+
     /// Resync configuration (`None` represents no resync).
     pub(crate) resync: Option<ResyncConfiguration>,
+
     /// Maximum number of concurrent sync sessions.
     ///
     /// Default: 128.
     pub(crate) max_concurrent_sync_sessions: usize,
+
     /// Maximum number of attempts at successfully completing a sync session with a specific peer.
     ///
     /// Default: 5.
     pub(crate) max_retry_attempts: u8,
+
     /// Maximum time to wait for sync attempt queue to have an open slot before failing.
     ///
     /// Default: 100 milliseconds.
