@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use iroh_net::key::{PublicKey, SecretKey, Signature};
-use iroh_net::NodeId;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -90,21 +89,18 @@ impl TopicDiscovery {
         self.status = Status::Active;
     }
 
-    pub async fn on_gossip_message(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(Vec<[u8; 32]>, NodeId)> {
-        let topic_discovery_message = TopicDiscoveryMessage::from_bytes(bytes)?;
-
-        // Verify that the signature of this message matches the claimed author public key.
-        topic_discovery_message.verify()?;
-        let node_id = topic_discovery_message.author();
-
-        let topic_ids = TopicDiscoveryMessage::from_bytes(bytes).map(|message| message.1)?;
-        for topic_id in &topic_ids {
-            self.address_book.add_topic_id(node_id, *topic_id).await;
+    pub async fn on_gossip_message(&mut self, bytes: &[u8]) -> Result<(Vec<[u8; 32]>, PublicKey)> {
+        let topic_discovery_message =
+            TopicDiscoveryMessage::from_bytes(bytes).context("decode topic discovery message")?;
+        if !topic_discovery_message.verify() {
+            bail!("invalid signature detected in topic discovery message");
         }
-        Ok((topic_ids, node_id))
+
+        let public_key = topic_discovery_message.public_key();
+        for topic_id in &topic_discovery_message.topic_ids {
+            self.address_book.add_topic_id(public_key, *topic_id).await;
+        }
+        Ok((topic_discovery_message.topic_ids, public_key))
     }
 
     pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Result<()> {
@@ -128,30 +124,42 @@ impl TopicDiscovery {
 type MessageId = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TopicDiscoveryMessage(MessageId, pub Vec<[u8; 32]>, PublicKey, Signature);
+pub struct TopicDiscoveryMessage {
+    pub id: MessageId,
+    pub topic_ids: Vec<[u8; 32]>,
+    pub public_key: PublicKey,
+    pub signature: Signature,
+}
 
 impl TopicDiscoveryMessage {
-    pub fn new(topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Self {
+    pub fn new(topic_ids: Vec<[u8; 32]>, private_key: &SecretKey) -> Self {
         // Message id is used to make every message unique, as duplicates get otherwise dropped
         // during gossip broadcast.
-        let message_id = random();
+        let id = random();
 
-        // The unsigned message values which will be signed.
-        let raw_message = (message_id, topic_ids, secret_key.public());
+        let public_key = private_key.public();
+        let raw_message = (id, topic_ids.clone(), public_key);
+        let signature = private_key.sign(&raw_message.to_bytes());
 
-        let signature = secret_key.sign(&raw_message.to_bytes());
-        Self(raw_message.0, raw_message.1, raw_message.2, signature)
+        Self {
+            id,
+            topic_ids,
+            public_key,
+            signature,
+        }
     }
 
-    /// Verify the signature against the public key of the message author.
-    pub fn verify(&self) -> Result<()> {
-        let public_key = self.2;
-        public_key.verify(&(self.0, &self.1, self.2).to_bytes(), &self.3)?;
-        Ok(())
+    pub fn verify(&self) -> bool {
+        self.public_key
+            .verify(
+                &(self.id, &self.topic_ids, self.public_key).to_bytes(),
+                &self.signature,
+            )
+            .is_ok()
     }
 
-    pub fn author(&self) -> PublicKey {
-        self.2
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key
     }
 }
 
@@ -168,12 +176,12 @@ mod tests {
         let secret_key = SecretKey::generate();
         let topic_ids = vec![[0; 32]];
         let message = TopicDiscoveryMessage::new(topic_ids.clone(), &secret_key);
-        assert!(message.verify().is_ok());
+        assert!(message.verify());
 
         let wrong_secret_key = SecretKey::generate();
         let wrong_signature = wrong_secret_key.sign(&topic_ids.to_bytes());
         let mut message = message;
-        message.3 = wrong_signature;
-        assert!(message.verify().is_err())
+        message.signature = wrong_signature;
+        assert!(!message.verify())
     }
 }

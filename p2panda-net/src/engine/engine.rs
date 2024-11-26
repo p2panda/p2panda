@@ -58,7 +58,7 @@ pub enum ToEngineActor<T> {
         topic: T,
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
-        peer: PublicKey,
+        delivered_from: PublicKey,
     },
     SyncDone {
         topic: T,
@@ -245,10 +245,10 @@ where
                 topic,
                 header,
                 payload,
-                peer,
+                delivered_from,
             } => {
                 self.topic_streams
-                    .on_sync_message(topic, header, payload, peer)?;
+                    .on_sync_message(topic, header, payload, delivered_from)?;
             }
             ToEngineActor::SyncDone { topic, peer } => {
                 self.topic_streams.on_sync_done(topic, peer).await?;
@@ -363,11 +363,7 @@ where
         topic_id: [u8; 32],
     ) -> Result<()> {
         if topic_id == self.network_id {
-            match self
-                .topic_discovery
-                .on_gossip_message(&bytes)
-                .await
-            {
+            match self.topic_discovery.on_gossip_message(&bytes).await {
                 Ok((topic_ids, node_id)) => {
                     self.topic_streams
                         .on_discovered_topic_ids(topic_ids, node_id)
