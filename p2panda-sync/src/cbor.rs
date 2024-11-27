@@ -115,16 +115,15 @@ where
     }
 }
 
-/// Returns a reader for your data type, receiving CBOR encoded byte-streams of it and handling the
-/// framing of them automatically.
+/// Returns a reader for your data type, automatically decoding CBOR byte-streams and handling the
+/// message framing.
 ///
 /// This can be used in various sync protocol implementations where we need to receive data via a
 /// wire protocol between two peers.
 ///
 /// This is a convenience method if you want to use CBOR encoding and serde to handle your wire
 /// protocol message encoding and framing without implementing it yourself. If you're interested in
-/// your own approach you can either implement your own `FramedRead` or `Sink` (if you're not
-/// interested in the tokio codec traits).
+/// your own approach you can either implement your own `FramedRead` or `Sink`.
 pub fn into_cbor_stream<'a, M>(
     rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
 ) -> impl Stream<Item = Result<M, SyncError>> + Send + Unpin + 'a
@@ -134,15 +133,15 @@ where
     FramedRead::new(rx.compat(), CborCodec::<M>::new())
 }
 
-/// Returns a writer for your data type, sending CBOR encoded byte-streams of it.
+/// Returns a writer for your data type, automatically encoding it as CBOR for a framed
+/// byte-stream.
 ///
 /// This can be used in various sync protocol implementations where we need to send data via a wire
 /// protocol between two peers.
 ///
 /// This is a convenience method if you want to use CBOR encoding and serde to handle your wire
 /// protocol message encoding and framing without implementing it yourself. If you're interested in
-/// your own approach you can either implement your own `FramedWrite` or `Stream` (if you're not
-/// interested in the tokio codec traits).
+/// your own approach you can either implement your own `FramedWrite` or `Stream`.
 pub fn into_cbor_sink<'a, M>(
     tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
 ) -> impl Sink<M, Error = SyncError> + Send + Unpin + 'a
@@ -150,4 +149,78 @@ where
     M: for<'de> Deserialize<'de> + Serialize + Send + 'a,
 {
     FramedWrite::new(tx.compat_write(), CborCodec::<M>::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::FutureExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio_stream::StreamExt;
+    use tokio_util::codec::FramedRead;
+
+    use super::CborCodec;
+
+    #[tokio::test]
+    async fn decoding_exactly_one_frame() {
+        let (mut tx, rx) = tokio::io::duplex(64);
+        let mut stream = FramedRead::new(rx, CborCodec::<String>::new());
+
+        // CBOR header indicating that a string (6) is followed with the length of 5 bytes.
+        // Hexadecimal representation = 65
+        // Decimal representation = 101
+        tx.write_all(&[101]).await.unwrap();
+
+        // CBOR body, the actual string.
+        tx.write_all("hello".as_bytes()).await.unwrap();
+
+        let message = stream.next().await;
+        assert_eq!(message, Some(Ok("hello".into())));
+    }
+
+    #[tokio::test]
+    async fn decoding_more_than_one_frame() {
+        let (mut tx, rx) = tokio::io::duplex(64);
+        let mut stream = FramedRead::new(rx, CborCodec::<String>::new());
+
+        // CBOR header indicating that a string (6) is followed with the length of 5 bytes.
+        // Hexadecimal representation = 65
+        // Decimal representation = 101
+        tx.write_all(&[101]).await.unwrap();
+
+        // CBOR body, the actual string.
+        tx.write_all("hello".as_bytes()).await.unwrap();
+
+        // Another CBOR header (frame) for another message (length of 9).
+        // Hexadecimal representation = 69
+        // Decimal representation = 105
+        tx.write_all(&[105]).await.unwrap();
+        tx.write_all("aquariums".as_bytes()).await.unwrap();
+
+        let message = stream.next().await;
+        assert_eq!(message, Some(Ok("hello".into())));
+
+        let message = stream.next().await;
+        assert_eq!(message, Some(Ok("aquariums".into())));
+    }
+
+    #[tokio::test]
+    async fn decoding_incomplete_frame() {
+        let (mut tx, rx) = tokio::io::duplex(64);
+        let mut stream = FramedRead::new(rx, CborCodec::<String>::new());
+
+        // CBOR header indicating that a string (6) is followed with the length of 5 bytes.
+        // Hexadecimal representation = 65
+        // Decimal representation = 101
+        tx.write_all(&[101]).await.unwrap();
+
+        // Attempt to decode an incomplete CBOR frame, the decoder should not yield anything.
+        let message = stream.next().now_or_never();
+        assert_eq!(message, None);
+
+        // Complete the CBOR data item in the buffer.
+        tx.write_all("hello".as_bytes()).await.unwrap();
+
+        let message = stream.next().await;
+        assert_eq!(message, Some(Ok("hello".into())));
+    }
 }
