@@ -36,7 +36,7 @@ where
 
     engine_actor_tx
         .send(ToEngineActor::SyncStart {
-            topic: topic.clone(),
+            topic: Some(topic.clone()),
             peer,
         })
         .await

@@ -47,7 +47,7 @@ pub enum ToEngineActor<T> {
         topic_id: [u8; 32],
     },
     SyncStart {
-        topic: T,
+        topic: Option<T>,
         peer: PublicKey,
     },
     SyncHandshakeSuccess {

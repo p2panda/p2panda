@@ -295,9 +295,12 @@ where
         Ok(())
     }
 
-    /// Process new sync session starting with a peer over a topic.
+    /// Process new sync session starting with a peer.
+    ///
+    /// If a topic is known we've initiated the sync session. If it is `None` we accepted a sync
+    /// session and still need to learn about the topic (see `on_sync_handshake_success`).
     #[allow(unused_variables)]
-    pub fn on_sync_start(&self, topic: T, node_id: NodeId) {
+    pub fn on_sync_start(&self, topic: Option<T>, node_id: NodeId) {
         // Do nothing here for now ..
     }
 
@@ -447,7 +450,7 @@ mod tests {
 
         topic_streams.on_gossip_joined(topic_id).await;
 
-        topic_streams.on_sync_start(topic.clone(), peer_1.node_id);
+        topic_streams.on_sync_start(Some(topic.clone()), peer_1.node_id);
         topic_streams.on_sync_handshake_success(topic.clone(), peer_1.node_id);
 
         topic_streams

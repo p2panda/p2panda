@@ -257,6 +257,11 @@ async fn initiator_fails_critical() {
     // Expected acceptor messages.
     assert!(matches!(
         rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
         Some(ToEngineActor::SyncHandshakeSuccess { .. })
     ));
 
@@ -375,11 +380,10 @@ async fn run_sync_without_error() {
     ));
 
     // Expected acceptor messages.
-    // @TODO: Is there a `SyncStart` message for the acceptor?
-    // assert!(matches!(
-    //     rx_acceptor.recv().await,
-    //     Some(ToEngineActor::SyncStart { .. })
-    // ));
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
 
     assert!(matches!(
         rx_acceptor.recv().await,

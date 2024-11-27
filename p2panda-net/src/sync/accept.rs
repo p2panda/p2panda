@@ -30,6 +30,13 @@ where
 {
     debug!("accept sync session with peer {}", peer);
 
+    engine_actor_tx
+        .send(ToEngineActor::SyncStart { topic: None, peer })
+        .await
+        .map_err(|err| {
+            SyncError::Critical(format!("engine_actor_tx failed sending sync start: {err}"))
+        })?;
+
     // Set up a channel for receiving messages from the sync session.
     let (tx, mut rx) = mpsc::channel::<FromSync<T>>(128);
     let mut sink = PollSender::new(tx).sink_map_err(|e| SyncError::Critical(e.to_string()));
