@@ -4,10 +4,6 @@ mod config;
 mod handler;
 pub(crate) mod manager;
 
-pub use config::{ResyncConfiguration, SyncConfiguration};
-pub use handler::{SyncConnection, SYNC_CONNECTION_ALPN};
-use tokio::task::JoinHandle;
-
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -15,11 +11,15 @@ use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use iroh_net::key::PublicKey;
 use p2panda_sync::{FromSync, SyncError, SyncProtocol, Topic};
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio_util::sync::PollSender;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::TopicId;
+
+pub use config::{ResyncConfiguration, SyncConfiguration};
+pub use handler::{SyncConnection, SYNC_CONNECTION_ALPN};
 
 /// Initiate a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
@@ -47,7 +47,9 @@ where
             peer,
         })
         .await
-        .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+        .map_err(|err| {
+            SyncError::Critical(format!("engine_actor_tx failed sending sync start: {err}"))
+        })?;
 
     // Set up a channel for receiving messages from the sync session.
     let (tx, mut rx) = mpsc::channel::<FromSync<T>>(128);
@@ -94,7 +96,9 @@ where
                         })
                         .await
                         .map_err(|err| {
-                            SyncError::Critical(format!("engine_actor_tx failed: {err}"))
+                            SyncError::Critical(format!(
+                                "engine_actor_tx failed sending sync handshake success: {err}"
+                            ))
                         })?;
 
                     continue;
@@ -114,27 +118,36 @@ where
                         topic: topic.clone(),
                     })
                     .await
-                    .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+                    .map_err(|err| {
+                        SyncError::Critical(format!(
+                            "engine_actor_tx failed sending sync message: {err}"
+                        ))
+                    })?;
             }
 
             engine_actor_tx
                 .send(ToEngineActor::SyncDone { peer, topic })
                 .await
-                .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+                .map_err(|err| {
+                    SyncError::Critical(format!("engine_actor_tx failed sending sync done: {err}"))
+                })?;
 
             Ok(())
         })
     };
 
     // Run the "initiating peer" side of the sync protocol.
-    sync_protocol
+    let result = sync_protocol
         .initiate(
             topic,
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
         )
-        .await?;
+        .await;
+
+    // Drop the tx, so the rx in the glue task receives the closing event.
+    drop(sink);
 
     // We're expecting the task to exit with a result soon, we're awaiting it here ..
     let glue_task_result = glue_task_handle
@@ -146,8 +159,23 @@ where
         error!("critical error in sync protocol: {err}");
     }
 
-    // .. and forward it further!
-    glue_task_result
+    // .. and forward it further.
+    glue_task_result?;
+
+    // The same we're doing with errors coming from the sync protocol implementation itself.
+    if let Err(err) = result {
+        match &err {
+            SyncError::Critical(err) => {
+                error!("critical error in sync protocol: {err}");
+            }
+            _ => {
+                warn!("error in sync protocol: {err}");
+            }
+        }
+        return Err(err);
+    }
+
+    Ok(())
 }
 
 /// Accept a sync protocol session over the provided bi-directional stream for the given peer and
@@ -191,7 +219,29 @@ where
             tokio::select! {
                 biased;
 
-                Some(message) = rx.recv() => {
+                Ok(err) = &mut sync_error_rx => {
+                    engine_actor_tx
+                        .send(ToEngineActor::SyncFailed {
+                            peer,
+                            topic: topic.clone(),
+                        })
+                        .await
+                        .map_err(|err| {
+                            SyncError::Critical(
+                                format!("engine_actor_tx failed sending sync failed: {err}")
+                            )
+                        })?;
+
+                    // If we're observing an error we terminate the task here and propagate that
+                    // error further up.
+                    return Err(err);
+                },
+                message = rx.recv() => {
+                    let Some(message) = message else {
+                        // Sink (tx) got dropped, so we're leaving the task.
+                        break;
+                    };
+
                     // I. Handshake Phase.
                     //
                     // At the beginning of every sync session the "accepting" peer needs to learn
@@ -200,7 +250,12 @@ where
                     if let FromSync::HandshakeSuccess(handshake_topic) = message {
                         // It should only be sent once so topic should be `None` now.
                         if topic.is_some() {
-                            return Err(SyncError::Critical("received handshake message twice from sync session in handshake phase".into()));
+                            return Err(
+                                SyncError::Critical(
+                                    "received topic twice from sync session in handshake phase"
+                                    .into()
+                                )
+                            );
                         }
 
                         topic = Some(handshake_topic.clone());
@@ -213,7 +268,11 @@ where
                                 topic: handshake_topic,
                             })
                             .await
-                            .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+                            .map_err(|err| {
+                                SyncError::Critical(
+                                    format!("engine_actor_tx failed sending handshake success: {err}")
+                                )
+                            })?;
 
                         continue;
                     }
@@ -232,13 +291,23 @@ where
                     // "unexpected behaviour" error if the topic wasn't learned. If this didn't
                     // happen (due to an incorrect implementation) we will critically fail now.
                     let Some(topic) = &topic else {
-                        return Err(SyncError::Critical("never received handshake message from sync session in handshake phase".into()));
+                        return Err(
+                            SyncError::Critical(
+                                "never received topic from sync session in handshake phase"
+                                .into()
+                            )
+                        );
                     };
 
                     // From this point on we are only expecting "data" messages from the sync
                     // session.
                     let FromSync::Data(header, payload) = message else {
-                        return Err(SyncError::Critical("expected to receive only data messages from sync session in data sync phase".into()));
+                        return Err(
+                            SyncError::Critical(
+                                "expected only data messages from sync session in data sync phase"
+                                .into()
+                            )
+                        );
                     };
 
                     engine_actor_tx
@@ -249,32 +318,12 @@ where
                             topic: topic.clone(),
                         })
                         .await
-                        .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+                        .map_err(|err| {
+                            SyncError::Critical(
+                                format!("engine_actor_tx failed sending sync message: {err}")
+                            )
+                        })?;
                 },
-                Ok(err) = &mut sync_error_rx => {
-                    engine_actor_tx
-                        .send(ToEngineActor::SyncFailed {
-                            peer,
-                            topic: topic.clone(),
-                        })
-                        .await
-                        .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
-
-                    // If we're observing a critical error we terminate the task here and propagate
-                    // that error further up.
-                    //
-                    // For any other error we're trusting the sync protocol implementation to
-                    // properly wind down.
-                    if let SyncError::Critical(err) = err {
-                        return Err(SyncError::Critical(err));
-                    } else {
-                        return Ok(());
-                    }
-                },
-                else => {
-                    // Stream from sync session got terminated.
-                    break;
-                }
             }
         }
 
@@ -287,7 +336,9 @@ where
         engine_actor_tx
             .send(ToEngineActor::SyncDone { peer, topic })
             .await
-            .map_err(|err| SyncError::Critical(format!("engine_actor_tx failed: {err}")))?;
+            .map_err(|err| {
+                SyncError::Critical(format!("engine_actor_tx failed sending sync done: {err}"))
+            })?;
 
         Ok(())
     });
@@ -300,6 +351,9 @@ where
             Box::new(&mut sink),
         )
         .await;
+
+    // Drop the tx, so the rx in the glue task receives the closing event.
+    drop(sink);
 
     // The sync protocol failed and we're informing the "glue" task about it, so it can accordingly
     // wind down and inform the engine about it.
@@ -333,7 +387,6 @@ mod sync_protocols {
     use p2panda_sync::cbor::{into_cbor_sink, into_cbor_stream};
     use p2panda_sync::{FromSync, SyncError, SyncProtocol};
     use serde::{Deserialize, Serialize};
-    use tracing::debug;
 
     use super::tests::TestTopic;
 
@@ -353,11 +406,12 @@ mod sync_protocols {
         /// A critical error is triggered inside `initiate()` after the handshake is complete.
         InitiatorFailsCritical,
 
-        /// An critical error is triggered inside `accept()` by sending the topic twice from
-        /// `initiate()`.
+        /// An unexpected behaviour error is triggered inside `accept()` by sending the topic twice
+        /// from `initiate()`.
         InitiatorSendsTopicTwice,
 
-        /// An critical error is triggered inside `initiate()` by sending a topic from `accept()`.
+        /// An unexpected behaviour error is triggered inside `initiate()` by sending a topic from
+        /// `accept()`.
         AcceptorSendsTopic,
 
         /// No errors are explicitly triggered; used for "happy path" test.
@@ -390,6 +444,7 @@ mod sync_protocols {
             }
 
             sink.send(ProtocolMessage::Done).await?;
+
             app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
             // Simulate some critical error which occurred inside the sync session.
@@ -403,7 +458,9 @@ mod sync_protocols {
                 let message: ProtocolMessage = result?;
                 match &message {
                     ProtocolMessage::Topic(_) => {
-                        return Err(SyncError::UnexpectedBehaviour("initiator".to_string()));
+                        return Err(SyncError::UnexpectedBehaviour(
+                            "unexpected message received from acceptor".to_string(),
+                        ));
                     }
                     ProtocolMessage::Done => break,
                 }
@@ -434,8 +491,6 @@ mod sync_protocols {
 
             while let Some(result) = stream.next().await {
                 let message: ProtocolMessage = result?;
-                debug!("message received: {:?}", message);
-
                 match &message {
                     ProtocolMessage::Topic(topic) => {
                         if !received_topic {
@@ -444,7 +499,9 @@ mod sync_protocols {
                                 .await?;
                             received_topic = true;
                         } else {
-                            return Err(SyncError::UnexpectedBehaviour("acceptor".to_string()));
+                            return Err(SyncError::UnexpectedBehaviour(
+                                "received topic too often".to_string(),
+                            ));
                         }
                     }
                     ProtocolMessage::Done => break,
@@ -458,9 +515,6 @@ mod sync_protocols {
             }
 
             sink.send(ProtocolMessage::Done).await?;
-
-            sink.flush().await?;
-            app_tx.flush().await?;
 
             Ok(())
         }
@@ -476,6 +530,7 @@ mod tests {
     use p2panda_sync::{SyncError, Topic};
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
+    use tokio::task::JoinHandle;
     use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
     use crate::engine::ToEngineActor;
@@ -500,110 +555,228 @@ mod tests {
         }
     }
 
-    async fn assert_sync_impl(protocol: FailingProtocol) {
-        let peer_a = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
-        let peer_b = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
-        let topic = TestTopic::new("critical error test");
+    async fn run_sync_impl(
+        protocol: FailingProtocol,
+    ) -> (
+        mpsc::Receiver<ToEngineActor<TestTopic>>,
+        mpsc::Receiver<ToEngineActor<TestTopic>>,
+        JoinHandle<Result<(), SyncError>>,
+        JoinHandle<Result<(), SyncError>>,
+    ) {
+        let topic = TestTopic::new("run test protocol impl");
 
-        let expect_error = match protocol {
-            FailingProtocol::NoError => false,
-            _ => true,
-        };
+        let initiator_node_id =
+            NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+        let acceptor_node_id =
+            NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
 
         let sync_protocol = Arc::new(protocol);
 
         // Duplex streams which simulate both ends of a bi-directional network connection.
-        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
-        let (peer_a_read, peer_a_write) = tokio::io::split(peer_a_stream);
-        let (peer_b_read, peer_b_write) = tokio::io::split(peer_b_stream);
+        let (initiator_stream, acceptor_stream) = tokio::io::duplex(64 * 1024);
+        let (initiator_read, initiator_write) = tokio::io::split(initiator_stream);
+        let (acceptor_read, acceptor_write) = tokio::io::split(acceptor_stream);
 
         // Channel for sending messages out of a running sync session.
-        let (peer_a_app_tx, mut _peer_a_app_rx) = mpsc::channel(128);
-        let (peer_b_app_tx, mut peer_b_app_rx) = mpsc::channel(128);
+        let (initiator_tx, initiator_rx) = mpsc::channel(128);
+        let (acceptor_tx, acceptor_rx) = mpsc::channel(128);
 
         let sync_protocol_clone = sync_protocol.clone();
 
-        // Initiate a sync session.
         let initiator_handle = {
             let topic = topic.clone();
 
             tokio::spawn(async move {
                 sync::initiate_sync(
-                    &mut peer_a_write.compat_write(),
-                    &mut peer_a_read.compat(),
-                    peer_b,
+                    &mut initiator_write.compat_write(),
+                    &mut initiator_read.compat(),
+                    acceptor_node_id,
                     topic.clone(),
                     sync_protocol,
-                    peer_a_app_tx,
+                    initiator_tx,
                 )
                 .await
             })
         };
 
-        // Accept a sync session.
-        //
-        // A critical error will be triggered inside this method.
-        let acceptor_result = sync::accept_sync(
-            &mut peer_b_write.compat_write(),
-            &mut peer_b_read.compat(),
-            peer_a,
-            sync_protocol_clone,
-            peer_b_app_tx,
-        )
-        .await;
-
-        let initiator_result = initiator_handle.await.unwrap();
-        match expect_error {
-            false => {
-                assert!(acceptor_result.is_ok());
-                assert!(initiator_result.is_ok());
-            }
-            true => {
-                // We expect both "initiator" and "acceptor" methods to return the error.
-                assert!(matches!(acceptor_result, Err(SyncError::Critical(_))));
-                assert!(matches!(initiator_result, Err(SyncError::Critical(_))));
-            }
-        }
-
-        // Ensure `SyncHandshakeSuccess` is being sent to the engine actor by the acceptor.
-        let msg = peer_b_app_rx.recv().await.unwrap();
-        let ToEngineActor::SyncHandshakeSuccess {
-            topic: received_topic,
-            peer,
-        } = msg
-        else {
-            panic!("expected SyncHandshakeSuccess: {:?}", msg)
+        let acceptor_handle = {
+            tokio::spawn(async move {
+                sync::accept_sync(
+                    &mut acceptor_write.compat_write(),
+                    &mut acceptor_read.compat(),
+                    initiator_node_id,
+                    sync_protocol_clone,
+                    acceptor_tx,
+                )
+                .await
+            })
         };
-        assert_eq!(received_topic, topic);
-        assert_eq!(peer, peer_a);
 
-        // Ensure `SyncFailed` is being sent to the engine actor by the acceptor.
-        let msg = peer_b_app_rx.recv().await.unwrap();
-        let ToEngineActor::SyncFailed {
-            topic: received_topic,
-            peer,
-        } = msg
-        else {
-            panic!("expected SyncFailed: {:?}", msg)
-        };
-        assert_eq!(received_topic, Some(topic));
-        assert_eq!(peer, peer_a);
-
-        // Ensure no further messages are being sent to the engine actor by the acceptor.
-        let msg = peer_b_app_rx.recv().await;
-        assert!(msg.is_none());
+        (initiator_rx, acceptor_rx, initiator_handle, acceptor_handle)
     }
 
     #[tokio::test]
-    async fn invalid_sync_protocol_impls() {
-        assert_sync_impl(FailingProtocol::InitiatorFailsCritical).await;
-        // assert_sync_impl(FailingProtocol::InitiatorSendsTopicTwice).await;
-        // assert_sync_impl(FailingProtocol::AcceptorFailsCritical).await;
-        // assert_sync_impl(FailingProtocol::AcceptorSendsTopic).await;
+    async fn initiator_fails_critical() {
+        let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
+            run_sync_impl(FailingProtocol::InitiatorFailsCritical).await;
+
+        // Expected initiator messages.
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncStart { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // @TODO: Where is the SyncFail message?
+
+        // Expected acceptor messages.
+        assert!(matches!(
+            rx_acceptor.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_acceptor.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // Expected handler results.
+        assert_eq!(
+            initiator_handle.await.unwrap(),
+            Err(SyncError::Critical(
+                "something really bad happened in the initiator".into(),
+            ))
+        );
+        assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
     }
 
-    // #[tokio::test]
-    // async fn run_sync_without_error() {
-    //     assert_sync_impl(FailingProtocol::NoError).await;
-    // }
+    #[tokio::test]
+    async fn initiator_sends_topic_twice() {
+        let (mut _rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+            run_sync_impl(FailingProtocol::InitiatorSendsTopicTwice).await;
+
+        assert_eq!(initiator_handle.await.unwrap(), Ok(()));
+        assert_eq!(
+            acceptor_handle.await.unwrap(),
+            // This is _not_ a critical error as the acceptor protocol implementation handled the
+            // protocol violation (sending topic twice) by itself.
+            Err(SyncError::UnexpectedBehaviour(
+                "received topic too often".into(),
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn acceptor_fails_critical() {
+        let (mut rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+            run_sync_impl(FailingProtocol::AcceptorFailsCritical).await;
+
+        // Expected initiator messages.
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncStart { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // Expected handler results.
+        assert_eq!(initiator_handle.await.unwrap(), Ok(()));
+        assert_eq!(
+            acceptor_handle.await.unwrap(),
+            Err(SyncError::Critical(
+                "something really bad happened in the acceptor".into(),
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn acceptor_sends_topic() {
+        let (mut rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+            run_sync_impl(FailingProtocol::AcceptorSendsTopic).await;
+
+        // Expected initiator messages.
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncStart { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // Expected handler results.
+        assert_eq!(
+            initiator_handle.await.unwrap(),
+            Err(SyncError::UnexpectedBehaviour(
+                "unexpected message received from acceptor".into(),
+            ))
+        );
+        assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
+    }
+
+    #[tokio::test]
+    async fn run_sync_without_error() {
+        let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
+            run_sync_impl(FailingProtocol::NoError).await;
+
+        // Expected initiator messages.
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncStart { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_initiator.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // Expected acceptor messages.
+        // @TODO: Is there a `SyncStart` message for the acceptor?
+        // assert!(matches!(
+        //     rx_acceptor.recv().await,
+        //     Some(ToEngineActor::SyncStart { .. })
+        // ));
+
+        assert!(matches!(
+            rx_acceptor.recv().await,
+            Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        ));
+
+        assert!(matches!(
+            rx_acceptor.recv().await,
+            Some(ToEngineActor::SyncDone { .. })
+        ));
+
+        // Expected handler results.
+        assert_eq!(initiator_handle.await.unwrap(), Ok(()));
+        assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
+    }
 }
