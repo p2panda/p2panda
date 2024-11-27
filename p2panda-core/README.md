@@ -22,14 +22,14 @@
   </h3>
 </div>
 
-p2panda core types based on the new [namakemono](https://p2panda.org/specifications/namakemono/) specification. 🦥 
+This crate provides core types used throughout p2panda.
 
 ## Features
 
 * BLAKE3 `Hash`
 * Ed25519 `PrivateKey`, `PublicKey` and `Signature`
-* p2panda `Operation`, `Header`, `Body` and some validation methods
 * CBOR based encoding with `serde` and `ciborium`
+* p2panda `Operation`, `Header`, `Body`, `Extension`, `PruneFlag` and validation methods
 
 ## Examples
 
@@ -70,7 +70,7 @@ let operation = Operation {
 validate_operation(&operation).is_ok();
 ```
 
-### Add extensions to operation
+### Add extensions to an operation
 
 ```rust
 // Define custom extension types required for your application
@@ -109,3 +109,7 @@ let extensions = CustomExtensions {
 let log_id = Extension::<LogId>::extract(&extensions).unwrap();
 let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
 ```
+
+## License
+
+...
