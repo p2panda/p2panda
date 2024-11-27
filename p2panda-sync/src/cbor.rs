@@ -78,6 +78,8 @@ where
         let starting = bytes.len();
 
         // Attempt decoding the buffer and remember how many bytes we've advanced it doing that.
+        //
+        // This will succeed in case 2. and 3.
         let result: Result<Self::Item, _> = decode_cbor(&mut bytes);
         let ending = bytes.len();
 
@@ -96,6 +98,8 @@ where
                         // EOF errors indicate that our buffer doesn't contain enough data to
                         // decode a whole CBOR frame. We're yielding no data item and re-try
                         // decoding in the next iteration.
+                        //
+                        // This is handling case 1.
                         Ok(None)
                     } else {
                         // An I/O error during decoding usually indicates something wrong with our
