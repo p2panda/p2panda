@@ -65,16 +65,16 @@ mod sync_protocols {
                 sink.send(ProtocolMessage::Topic(topic.clone())).await?;
             }
 
-            sink.send(ProtocolMessage::Done).await?;
-
-            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
-
             // Simulate some critical error which occurred inside the sync session.
             if let FailingProtocol::InitiatorFailsCritical = *self {
                 return Err(SyncError::Critical(
                     "something really bad happened in the initiator".to_string(),
                 ));
             }
+
+            sink.send(ProtocolMessage::Done).await?;
+
+            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: ProtocolMessage = result?;
@@ -246,11 +246,6 @@ async fn initiator_fails_critical() {
 
     assert!(matches!(
         rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
         Some(ToEngineActor::SyncDone { .. })
     ));
 
@@ -267,10 +262,8 @@ async fn initiator_fails_critical() {
 
     assert!(matches!(
         rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
+        Some(ToEngineActor::SyncFailed { .. })
     ));
-
-    // @TODO: Shouldn't the acceptor also be informed that something went wrong on the remote end?
 
     // Expected handler results.
     assert_eq!(
@@ -279,7 +272,17 @@ async fn initiator_fails_critical() {
             "something really bad happened in the initiator".into(),
         ))
     );
-    assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
+    assert_eq!(
+        acceptor_handle.await.unwrap(),
+        // @TODO: This error happens because the CBOR codec failed with the broken pipe to the
+        // initiator end.
+        //
+        // This is a little bit confusing and should rather fail as an "connection error". On top
+        // it's not a system critical one.
+        Err(SyncError::Critical(
+            "internal i/o stream error broken pipe".into()
+        ))
+    );
 }
 
 #[tokio::test]
@@ -341,6 +344,10 @@ async fn acceptor_fails_critical() {
         Some(ToEngineActor::SyncHandshakeSuccess { .. })
     ));
 
+    // @TODO: Should we send this `SyncDone` even when the initiator experienced a failed sync
+    // session?
+    //
+    // The manager handles sending `SyncFailed` here.
     assert!(matches!(
         rx_initiator.recv().await,
         Some(ToEngineActor::SyncDone { .. })
