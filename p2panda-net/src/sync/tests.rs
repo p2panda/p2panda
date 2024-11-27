@@ -254,8 +254,6 @@ async fn initiator_fails_critical() {
         Some(ToEngineActor::SyncDone { .. })
     ));
 
-    // @TODO: Where is the SyncFail message?
-
     // Expected acceptor messages.
     assert!(matches!(
         rx_acceptor.recv().await,
