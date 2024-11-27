@@ -99,6 +99,13 @@ mod sync_protocols {
                 &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
             >,
         ) -> Result<(), SyncError> {
+            // Simulate some critical error which occurred inside the sync session.
+            if let FailingProtocol::AcceptorFailsCritical = *self {
+                return Err(SyncError::Critical(
+                    "something really bad happened in the acceptor".to_string(),
+                ));
+            }
+
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
@@ -128,12 +135,6 @@ mod sync_protocols {
                     }
                     ProtocolMessage::Done => break,
                 }
-            }
-
-            if let FailingProtocol::AcceptorFailsCritical = *self {
-                return Err(SyncError::Critical(
-                    "something really bad happened in the acceptor".to_string(),
-                ));
             }
 
             sink.send(ProtocolMessage::Done).await?;
@@ -176,6 +177,7 @@ impl TopicId for TestTopic {
     }
 }
 
+/// Helper method to establish a sync session between the initiator and acceptor.
 async fn run_sync_impl(
     protocol: FailingProtocol,
 ) -> (
@@ -345,8 +347,8 @@ async fn acceptor_fails_critical() {
 
     assert!(matches!(
         rx_initiator.recv().await,
-        // Initiator can end the session without any problems as the acceptor failed at the end of
-        // the protocol _after_ sending all important messages already to the initiator.
+        // Initiator can end the session without any issues even when the acceptor fails.
+        // @TODO: Do we want to detect the closed connection from the remote peer?
         Some(ToEngineActor::SyncDone { .. })
     ));
 
