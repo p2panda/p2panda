@@ -270,6 +270,8 @@ async fn initiator_fails_critical() {
         Some(ToEngineActor::SyncDone { .. })
     ));
 
+    // @TODO: Shouldn't the acceptor also be informed that something went wrong on the remote end?
+
     // Expected handler results.
     assert_eq!(
         initiator_handle.await.unwrap(),
@@ -282,8 +284,35 @@ async fn initiator_fails_critical() {
 
 #[tokio::test]
 async fn initiator_sends_topic_twice() {
-    let (mut _rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
         run_sync_impl(FailingProtocol::InitiatorSendsTopicTwice).await;
+
+    // Expected initiator messages.
+    assert!(matches!(
+        rx_initiator.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_initiator.recv().await,
+        Some(ToEngineActor::SyncHandshakeSuccess { .. })
+    ));
+
+    assert!(matches!(
+        rx_initiator.recv().await,
+        Some(ToEngineActor::SyncDone { .. })
+    ));
+
+    // Expected acceptor messages.
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncFailed { .. })
+    ));
 
     assert_eq!(initiator_handle.await.unwrap(), Ok(()));
     assert_eq!(
@@ -298,7 +327,7 @@ async fn initiator_sends_topic_twice() {
 
 #[tokio::test]
 async fn acceptor_fails_critical() {
-    let (mut rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
         run_sync_impl(FailingProtocol::AcceptorFailsCritical).await;
 
     // Expected initiator messages.
@@ -317,6 +346,17 @@ async fn acceptor_fails_critical() {
         Some(ToEngineActor::SyncDone { .. })
     ));
 
+    // Expected acceptor messages.
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncFailed { .. })
+    ));
+
     // Expected handler results.
     assert_eq!(initiator_handle.await.unwrap(), Ok(()));
     assert_eq!(
@@ -329,7 +369,7 @@ async fn acceptor_fails_critical() {
 
 #[tokio::test]
 async fn acceptor_sends_topic() {
-    let (mut rx_initiator, mut _rx_acceptor, initiator_handle, acceptor_handle) =
+    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
         run_sync_impl(FailingProtocol::AcceptorSendsTopic).await;
 
     // Expected initiator messages.
@@ -343,8 +383,27 @@ async fn acceptor_sends_topic() {
         Some(ToEngineActor::SyncHandshakeSuccess { .. })
     ));
 
+    // @TODO: Should we send this `SyncDone` even when the initiator experienced a failed sync
+    // session?
+    //
+    // The manager handles sending `SyncFailed` here.
     assert!(matches!(
         rx_initiator.recv().await,
+        Some(ToEngineActor::SyncDone { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncHandshakeSuccess { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
         Some(ToEngineActor::SyncDone { .. })
     ));
 
