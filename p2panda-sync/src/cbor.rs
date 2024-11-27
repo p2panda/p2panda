@@ -46,7 +46,7 @@ where
 {
     type Error = SyncError;
 
-    /// Encodes an serializable item into CBOR bytes and adds them to the buffer.
+    /// Encodes a serializable item into CBOR bytes and adds them to the buffer.
     fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let bytes = encode_cbor(&item).map_err(|err| {
             // When we've failed encoding our _own_ messages something seriously went wrong.
@@ -66,8 +66,8 @@ where
     type Item = T;
     type Error = SyncError;
 
-    /// CBOR decoder method taking as an argument the bytes that has been read so far, and when it
-    /// is called, it will be in one of the following situations:
+    /// CBOR decoder method taking as an argument the bytes that have been read so far; when called,
+    /// it will be in one of the following situations:
     ///
     /// 1. The buffer contains less than a full frame.
     /// 2. The buffer contains exactly a full frame.
@@ -85,7 +85,7 @@ where
 
         match result {
             Ok(item) => {
-                // We've successfully could read one full frame from the buffer. We're finally
+                // We've successfully read one full frame from the buffer. We're finally
                 // advancing it for the next decode iteration and yield the resulting data item to
                 // the stream.
                 src.advance(starting - ending);
