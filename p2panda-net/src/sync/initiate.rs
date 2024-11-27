@@ -60,6 +60,7 @@ where
     //
     // Additionally, the task forwards any synced application data straight to the engine.
     let glue_task_handle: JoinHandle<Result<(), SyncError>> = {
+        let engine_actor_tx = engine_actor_tx.clone();
         let mut sync_handshake_success = false;
         let topic = topic.clone();
 
@@ -118,13 +119,6 @@ where
                     })?;
             }
 
-            engine_actor_tx
-                .send(ToEngineActor::SyncDone { peer, topic })
-                .await
-                .map_err(|err| {
-                    SyncError::Critical(format!("engine_actor_tx failed sending sync done: {err}"))
-                })?;
-
             Ok(())
         })
     };
@@ -132,7 +126,7 @@ where
     // Run the "initiating peer" side of the sync protocol.
     let result = sync_protocol
         .initiate(
-            topic,
+            topic.clone(),
             Box::new(&mut send),
             Box::new(&mut recv),
             Box::new(&mut sink),
@@ -167,6 +161,13 @@ where
         }
         return Err(err);
     }
+
+    engine_actor_tx
+        .send(ToEngineActor::SyncDone { peer, topic })
+        .await
+        .map_err(|err| {
+            SyncError::Critical(format!("engine_actor_tx failed sending sync done: {err}"))
+        })?;
 
     Ok(())
 }

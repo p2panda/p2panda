@@ -145,6 +145,7 @@ mod sync_protocols {
 
 use std::sync::Arc;
 
+use futures_util::FutureExt;
 use iroh_net::NodeId;
 use p2panda_core::{Hash, PrivateKey};
 use p2panda_sync::{SyncError, Topic};
@@ -244,10 +245,8 @@ async fn initiator_fails_critical() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
+    // Note: "SyncFailed" message is handled by manager for initiators.
+    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
 
     // Expected acceptor messages.
     assert!(matches!(
@@ -344,12 +343,10 @@ async fn acceptor_fails_critical() {
         Some(ToEngineActor::SyncHandshakeSuccess { .. })
     ));
 
-    // @TODO: Should we send this `SyncDone` even when the initiator experienced a failed sync
-    // session?
-    //
-    // The manager handles sending `SyncFailed` here.
     assert!(matches!(
         rx_initiator.recv().await,
+        // Initiator can end the session without any problems as the acceptor failed at the end of
+        // the protocol _after_ sending all important messages already to the initiator.
         Some(ToEngineActor::SyncDone { .. })
     ));
 
@@ -390,15 +387,10 @@ async fn acceptor_sends_topic() {
         Some(ToEngineActor::SyncHandshakeSuccess { .. })
     ));
 
-    // @TODO: Should we send this `SyncDone` even when the initiator experienced a failed sync
-    // session?
-    //
-    // The manager handles sending `SyncFailed` here.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
+    // Note: "SyncFailed" message is handled by manager for initiators.
+    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
 
+    // Expected acceptor messages.
     assert!(matches!(
         rx_acceptor.recv().await,
         Some(ToEngineActor::SyncStart { .. })
