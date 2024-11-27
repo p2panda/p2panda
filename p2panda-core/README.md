@@ -2,20 +2,12 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>All the things a panda needs</strong>
+  <strong>Your toolbox to build offline-first applications!</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda/releases">
-      Releases
-    </a>
-    <span> | </span>
-    <a href="https://p2panda.org/about/contribute">
-      Contribute
-    </a>
-    <span> | </span>
     <a href="https://p2panda.org">
       Website
     </a>
