@@ -275,14 +275,9 @@ async fn initiator_fails_critical() {
     );
     assert_eq!(
         acceptor_handle.await.unwrap(),
-        // @TODO: This error happens because the CBOR codec failed with the broken pipe to the
-        // initiator end.
-        //
-        // This is a little bit confusing and should rather fail as an "connection error". On top
-        // it's not a system critical one.
-        Err(SyncError::Critical(
-            "internal i/o stream error broken pipe".into()
-        ))
+        // The acceptor failed as well, but only with an "unexpected behaviour" error over the
+        // unexpectedly closed pipe.
+        Err(SyncError::UnexpectedBehaviour("broken pipe".into()))
     );
 }
 

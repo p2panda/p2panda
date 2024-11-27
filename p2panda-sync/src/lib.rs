@@ -91,13 +91,22 @@ pub enum SyncError {
     Critical(String),
 }
 
-/// Converts critical I/O error which occurs during stream handling into [`SyncError`].
+/// Converts critical I/O error (which occurs during codec stream handling) into [`SyncError`].
 ///
 /// This is usually a critical system failure indicating an implementation bug or lacking resources
 /// on the user's machine.
+///
+/// See `Encoder` or `Decoder` `Error` trait type in tokio's codec for more information:
+/// https://docs.rs/tokio-util/latest/tokio_util/codec/trait.Decoder.html#associatedtype.Error
 impl From<std::io::Error> for SyncError {
     fn from(err: std::io::Error) -> Self {
-        Self::Critical(format!("internal i/o stream error {err}"))
+        match err.kind() {
+            // Broken pipes usually indicate that the remote peer closed the connection
+            // unexpectedly, this is why we're not treating it as an critical error buy as
+            // "unexpected behaviour" instead.
+            std::io::ErrorKind::BrokenPipe => Self::UnexpectedBehaviour(format!("broken pipe")),
+            _ => Self::Critical(format!("internal i/o stream error {err}")),
+        }
     }
 }
 
