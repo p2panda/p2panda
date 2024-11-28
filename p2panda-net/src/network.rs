@@ -886,7 +886,7 @@ mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::bytes::ToBytes;
     use crate::config::Config;
-    use crate::network::sync_protocols::{DummyProtocol, PingPongProtocol};
+    use crate::network::sync_protocols::PingPongProtocol;
     use crate::sync::SyncConfiguration;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
 
