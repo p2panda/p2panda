@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+mod config;
 mod handler;
 pub(crate) mod manager;
 
+pub use config::{ResyncConfiguration, SyncConfiguration};
 pub use handler::{SyncConnection, SYNC_CONNECTION_ALPN};
 
 use std::sync::Arc;

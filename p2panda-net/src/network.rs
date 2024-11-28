@@ -17,7 +17,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
-use p2panda_sync::{SyncProtocol, Topic};
+use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -28,7 +28,7 @@ use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync::SYNC_CONNECTION_ALPN;
+use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
 use crate::{NetworkId, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
@@ -70,7 +70,7 @@ pub struct NetworkBuilder<T> {
     protocols: ProtocolMap,
     relay_mode: RelayMode,
     secret_key: Option<SecretKey>,
-    sync_protocol: Option<Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>>,
+    sync_config: Option<SyncConfiguration<T>>,
 }
 
 impl<T> NetworkBuilder<T>
@@ -89,9 +89,9 @@ where
             gossip_config: None,
             network_id,
             protocols: Default::default(),
-            sync_protocol: None,
             relay_mode: RelayMode::Disabled,
             secret_key: None,
+            sync_config: None,
         }
     }
 
@@ -173,12 +173,11 @@ where
         self
     }
 
-    /// Sets the sync protocol for this network.
+    /// Sets the sync protocol and configuration.
     ///
-    /// If a sync protocol is provided, a sync session will be completed with any known peers with
-    /// whom we share topics of interest.
-    pub fn sync(mut self, protocol: impl for<'a> SyncProtocol<'a, T> + 'static) -> Self {
-        self.sync_protocol = Some(Arc::new(protocol));
+    /// Sync sessions will be completed with any known peers with whom we share topics of interest.
+    pub fn sync(mut self, config: SyncConfiguration<T>) -> Self {
+        self.sync_config = Some(config);
         self
     }
 
@@ -266,7 +265,7 @@ where
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
-            self.sync_protocol,
+            self.sync_config,
         );
 
         let sync_handler = engine.sync_handler();
@@ -877,6 +876,7 @@ mod tests {
     use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::network::sync_protocols::PingPongProtocol;
+    use crate::sync::SyncConfiguration;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, ToNetwork};
@@ -1013,16 +1013,16 @@ mod tests {
 
         let network_id = [1; 32];
         let topic = TestTopic::new("ping_pong");
-
         let ping_pong = PingPongProtocol {};
+        let sync_config = SyncConfiguration::new(ping_pong);
 
         let node_1 = NetworkBuilder::new(network_id)
-            .sync(ping_pong.clone())
+            .sync(sync_config.clone())
             .build()
             .await
             .unwrap();
         let node_2 = NetworkBuilder::new(network_id)
-            .sync(ping_pong)
+            .sync(sync_config)
             .build()
             .await
             .unwrap();
@@ -1099,6 +1099,7 @@ mod tests {
             topic_map: topic_map.clone(),
             store: store_a,
         };
+        let sync_config_a = SyncConfiguration::new(protocol_a);
 
         // Create some operations
         let body = Body::new("Hello, Sloth!".as_bytes());
@@ -1129,10 +1130,11 @@ mod tests {
             topic_map,
             store: store_b,
         };
+        let sync_config_b = SyncConfiguration::new(protocol_b);
 
         // Build peer a's node
         let node_a = NetworkBuilder::new(NETWORK_ID)
-            .sync(protocol_a)
+            .sync(sync_config_a)
             .private_key(peer_a_private_key)
             .build()
             .await
@@ -1140,7 +1142,7 @@ mod tests {
 
         // Build peer b's node
         let node_b = NetworkBuilder::new(NETWORK_ID)
-            .sync(protocol_b)
+            .sync(sync_config_b)
             .private_key(peer_b_private_key.clone())
             .build()
             .await

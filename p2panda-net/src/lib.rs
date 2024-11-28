@@ -12,6 +12,7 @@ pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
 pub use network::{Network, NetworkBuilder, RelayMode};
 pub use protocols::ProtocolHandler;
+pub use sync::{ResyncConfiguration, SyncConfiguration};
 
 #[cfg(feature = "log-sync")]
 pub use p2panda_sync::log_sync::LogSyncProtocol;
