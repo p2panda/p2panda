@@ -7,7 +7,7 @@ use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
 use p2panda_sync::{SyncProtocol, Topic};
 use tokio::sync::mpsc;
-use tracing::{debug, debug_span, error};
+use tracing::{debug, debug_span};
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
@@ -37,11 +37,12 @@ where
 
     /// Handle an inbound connection using the `SYNC_CONNECTION_ALPN` and accept a sync session.
     async fn handle_connection(&self, connection: Connection) -> Result<()> {
-        debug!("handling inbound sync connection...");
         let peer = endpoint::get_remote_node_id(&connection)?;
         let remote_addr = connection.remote_address();
         let connection_id = connection.stable_id() as u64;
+
         let _span = debug_span!("connection", connection_id, %remote_addr);
+        debug!(parent: &_span, "handling inbound sync connection...");
 
         let (mut send, mut recv) = connection.accept_bi().await?;
 
@@ -62,10 +63,8 @@ where
         // protocol was not followed as expected.
         recv.read_to_end(0).await?;
 
-        if let Err(err) = result {
-            error!("sync failure as acceptor: {}", err)
-        } else {
-            debug!("sync success as acceptor")
+        if result.is_ok() {
+            debug!(parent: &_span, "sync success as acceptor")
         }
 
         Ok(())

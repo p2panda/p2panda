@@ -1002,7 +1002,6 @@ mod tests {
             }
         );
 
-        println!("shutdown nodes");
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
     }
