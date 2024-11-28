@@ -14,10 +14,9 @@
   </h3>
 </div>
 
-This crate is used to share address information about peers on a network. It provides a generic
-interface for the definition of a discovery service, as well as an interface for organising a
-collection of such services. An mDNS discovery implementation is provided for peer discovery over
-local networks.
+This crate is used to share address information about peers on a network.
+It provides a generic interface for the definition of a discovery service, as well as an interface for organising a collection of such services.
+An mDNS discovery implementation is provided for peer discovery over local networks.
 
 ## Features
 
