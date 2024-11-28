@@ -16,6 +16,28 @@ use crate::TopicId;
 
 /// Accept a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
+///
+/// While this method "drives" the sync protocol implementation it also follows the "2-Phase
+/// Protocol Flow" required for the engine to work efficiently. We're expecting the following
+/// messages from this "acceptor" flow:
+///
+/// 1. `SyncStart`: The sync session just began, we don't know the topic yet.
+/// 2. `SyncHandshakeSuccess`: We've successfully completed the I. "Handshake" phase, as we've
+///    received the topic from the initiator.
+/// 3. `SyncMessage` (optional): The actual data we've exchanged with the other peer, this message
+///    can occur never or multiple times, depending on how much data was sent.
+/// 4. `SyncDone` We've successfully finished this session.
+///
+/// In case of a detected failure (either through an critical error on our end or an unexpected
+/// behaviour from the remote peer), the acceptor will send an `SyncFailed` message instead of the
+/// `SyncDone`.
+///
+/// Errors can be roughly categorized by:
+///
+/// 1. Critical system failures (bug in p2panda code or sync implementation, sync implementation
+///    did not follow "2. Phase Flow" requirements, lack of system resources, etc.)
+/// 2. Unexpected Behaviour (remote peer abruptly disconnected, error which got correctly handled
+///    in sync implementation, etc.)
 pub async fn accept_sync<T, S, R>(
     mut send: &mut S,
     mut recv: &mut R,
