@@ -34,7 +34,7 @@ impl GossipBuffer {
                 );
                 *counter
             }
-            None => panic!(),
+            None => panic!("attempted to unlock non-existing gossip buffer"),
         }
     }
 
