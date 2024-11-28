@@ -50,11 +50,11 @@ where
 
     // Spawn a "glue" task which represents the layer between the sync session and the engine.
     //
-    // It picks up any messages from the sync session makes sure that the "Two-Phase Sync Flow" is
-    // followed (I. "Handshake" Phase & II. "Data Sync" Phase) and the engine accordingly informed
-    // about it.
+    // It picks up any messages from the sync session, making sure that the "Two-Phase Sync Flow"
+    // is followed (I. "Handshake" Phase & II. "Data Sync" Phase), and informs the engine
+    // accordingly.
     //
-    // If the task detects any invalid behaviour of the sync flow, it fails critically, indicating
+    // If the task detects any invalid behaviour from the sync flow it fails critically, indicating
     // that the sync protocol implementation does not behave correctly and is not compatible with
     // the engine.
     //
@@ -149,7 +149,7 @@ where
     // .. and forward it further.
     glue_task_result?;
 
-    // The same we're doing with errors coming from the sync protocol implementation itself.
+    // We also return any error originating from the sync protocol implementation itself.
     if let Err(err) = result {
         match &err {
             SyncError::Critical(err) => {

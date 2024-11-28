@@ -102,7 +102,7 @@ impl From<std::io::Error> for SyncError {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
             // Broken pipes usually indicate that the remote peer closed the connection
-            // unexpectedly, this is why we're not treating it as an critical error buy as
+            // unexpectedly, this is why we're not treating it as a critical error but as
             // "unexpected behaviour" instead.
             std::io::ErrorKind::BrokenPipe => Self::UnexpectedBehaviour("broken pipe".into()),
             _ => Self::Critical(format!("internal i/o stream error {err}")),

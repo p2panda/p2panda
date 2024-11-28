@@ -46,11 +46,11 @@ where
 
     // Spawn a "glue" task which represents the layer between the sync session and the engine.
     //
-    // It picks up any messages from the sync session makes sure that the "Two-Phase Sync Flow" is
-    // followed (I. "Handshake" Phase & II. "Data Sync" Phase) and the engine accordingly informed
-    // about it.
+    // It picks up any messages from the sync session, making sure that the "Two-Phase Sync Flow"
+    // is followed (I. "Handshake" Phase & II. "Data Sync" Phase), and informs the engine
+    // accordingly.
     //
-    // If the task detects any invalid behaviour of the sync flow, it fails critically, indicating
+    // If the task detects any invalid behaviour from the sync flow it fails critically, indicating
     // that the sync protocol implementation does not behave correctly and is not compatible with
     // the engine.
     //
@@ -125,9 +125,9 @@ where
                     // At this stage we're beginning the actual "sync" protocol and expect messages
                     // containing the data which was received from the "initiating" peer.
                     //
-                    // Please note that in not all sync implementations the "accepting" peers
-                    // receives data.
-
+                    // Please note that the "accepting" peer does not necessarily receive data in
+                    // all sync protocol implementations.
+                    //
                     // The topic must be known at this point in order to process further messages.
                     //
                     // Any sync protocol implementation should have already failed with an
@@ -199,7 +199,7 @@ where
     drop(sink);
 
     // The sync protocol failed and we're informing the "glue" task about it, so it can accordingly
-    // wind down and inform the engine about it.
+    // wind down and inform the engine.
     if let Err(sync_session_err) = result {
         sync_error_tx
             .send(sync_session_err)
