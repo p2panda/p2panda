@@ -1243,17 +1243,17 @@ mod tests {
         node_2.add_peer(node_1_addr).await.unwrap();
         node_3.add_peer(node_2_addr).await.unwrap();
 
-        // Subscribe to the same topic from both nodes
+        // Subscribe to the same topic from all nodes
         let (tx_1, _rx_1, ready_1) = node_1.subscribe(chat_topic.clone()).await.unwrap();
         let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(chat_topic.clone()).await.unwrap();
         let (_tx_3, mut rx_3, ready_3) = node_3.subscribe(chat_topic).await.unwrap();
 
-        // Ensure the gossip-overlay has been joined by both nodes for the given topic
+        // Ensure the gossip-overlay has been joined by all three nodes for the given topic
         assert!(ready_3.await.is_ok());
         assert!(ready_2.await.is_ok());
         assert!(ready_1.await.is_ok());
 
-        // Broadcast a message and make sure it's received by the other node
+        // Broadcast a message and make sure it's received by the other nodes
         tx_1.send(ToNetwork::Message {
             bytes: "Hello, Node".to_bytes(),
         })
