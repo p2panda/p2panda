@@ -132,14 +132,14 @@ pub struct TopicDiscoveryMessage {
 }
 
 impl TopicDiscoveryMessage {
-    pub fn new(topic_ids: Vec<[u8; 32]>, private_key: &SecretKey) -> Self {
+    pub fn new(topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Self {
         // Message id is used to make every message unique, as duplicates get otherwise dropped
         // during gossip broadcast.
         let id = random();
 
-        let public_key = private_key.public();
+        let public_key = secret_key.public();
         let raw_message = (id, topic_ids.clone(), public_key);
-        let signature = private_key.sign(&raw_message.to_bytes());
+        let signature = secret_key.sign(&raw_message.to_bytes());
 
         Self {
             id,
