@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use anyhow::Result;
-use iroh_net::NodeId;
+use anyhow::{bail, Context, Result};
+use iroh_net::key::{PublicKey, SecretKey, Signature};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -89,24 +89,26 @@ impl TopicDiscovery {
         self.status = Status::Active;
     }
 
-    pub async fn on_gossip_message(
-        &mut self,
-        bytes: &[u8],
-        node_id: NodeId,
-    ) -> Result<Vec<[u8; 32]>> {
-        let topic_ids = TopicDiscoveryMessage::from_bytes(bytes).map(|message| message.1)?;
-        for topic_id in &topic_ids {
-            self.address_book.add_topic_id(node_id, *topic_id).await;
+    pub async fn on_gossip_message(&mut self, bytes: &[u8]) -> Result<(Vec<[u8; 32]>, PublicKey)> {
+        let topic_discovery_message =
+            TopicDiscoveryMessage::from_bytes(bytes).context("decode topic discovery message")?;
+        if !topic_discovery_message.verify() {
+            bail!("invalid signature detected in topic discovery message");
         }
-        Ok(topic_ids)
+
+        let public_key = topic_discovery_message.public_key();
+        for topic_id in &topic_discovery_message.topic_ids {
+            self.address_book.add_topic_id(public_key, *topic_id).await;
+        }
+        Ok((topic_discovery_message.topic_ids, public_key))
     }
 
-    pub async fn announce(&self, topic_ids: Vec<[u8; 32]>) -> Result<()> {
+    pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Result<()> {
         if self.status != Status::Active {
             return Ok(());
         }
 
-        let message = TopicDiscoveryMessage::new(topic_ids);
+        let message = TopicDiscoveryMessage::new(topic_ids, secret_key);
 
         self.gossip_actor_tx
             .send(ToGossipActor::Broadcast {
@@ -122,12 +124,64 @@ impl TopicDiscovery {
 type MessageId = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TopicDiscoveryMessage(MessageId, pub Vec<[u8; 32]>);
+pub struct TopicDiscoveryMessage {
+    pub id: MessageId,
+    pub topic_ids: Vec<[u8; 32]>,
+    pub public_key: PublicKey,
+    pub signature: Signature,
+}
 
 impl TopicDiscoveryMessage {
-    pub fn new(topic_ids: Vec<[u8; 32]>) -> Self {
+    pub fn new(topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Self {
         // Message id is used to make every message unique, as duplicates get otherwise dropped
         // during gossip broadcast.
-        Self(random(), topic_ids)
+        let id = random();
+
+        let public_key = secret_key.public();
+        let raw_message = (id, topic_ids.clone(), public_key);
+        let signature = secret_key.sign(&raw_message.to_bytes());
+
+        Self {
+            id,
+            topic_ids,
+            public_key,
+            signature,
+        }
+    }
+
+    pub fn verify(&self) -> bool {
+        self.public_key
+            .verify(
+                &(self.id, &self.topic_ids, self.public_key).to_bytes(),
+                &self.signature,
+            )
+            .is_ok()
+    }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use iroh_net::key::SecretKey;
+
+    use crate::bytes::ToBytes;
+
+    use super::TopicDiscoveryMessage;
+
+    #[test]
+    fn verify_message() {
+        let secret_key = SecretKey::generate();
+        let topic_ids = vec![[0; 32]];
+        let message = TopicDiscoveryMessage::new(topic_ids.clone(), &secret_key);
+        assert!(message.verify());
+
+        let wrong_secret_key = SecretKey::generate();
+        let wrong_signature = wrong_secret_key.sign(&topic_ids.to_bytes());
+        let mut message = message;
+        message.signature = wrong_signature;
+        assert!(!message.verify())
     }
 }

@@ -262,6 +262,7 @@ where
         );
 
         let engine = Engine::new(
+            secret_key.clone(),
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
@@ -804,6 +805,10 @@ mod sync_protocols {
                     }
                     Message::Pong => {
                         debug!("pong message received");
+                        app_tx
+                            .send(FromSync::Data("PONG".as_bytes().to_owned(), None))
+                            .await
+                            .unwrap();
                         break;
                     }
                 }
@@ -835,6 +840,11 @@ mod sync_protocols {
                     Message::Topic(topic) => app_tx.send(FromSync::HandshakeSuccess(topic)).await?,
                     Message::Ping => {
                         debug!("ping message received");
+                        app_tx
+                            .send(FromSync::Data("PING".as_bytes().to_owned(), None))
+                            .await
+                            .unwrap();
+
                         sink.send(Message::Pong).await?;
                         debug!("pong message sent");
                         break;
@@ -868,6 +878,7 @@ mod tests {
     use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
     use p2panda_sync::{Topic, TopicMap};
     use serde::{Deserialize, Serialize};
+    use tokio::task::JoinHandle;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
@@ -879,7 +890,7 @@ mod tests {
     use crate::sync::SyncConfiguration;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
 
-    use super::{FromNetwork, ToNetwork};
+    use super::{FromNetwork, Network, ToNetwork};
 
     fn setup_logging() {
         tracing_subscriber::registry()
@@ -1212,5 +1223,143 @@ mod tests {
 
         assert!(result1.is_ok());
         assert!(result2.is_ok())
+    }
+
+    #[tokio::test]
+    async fn multi_hop_join_gossip_overlay() {
+        setup_logging();
+
+        let network_id = [1; 32];
+        let chat_topic = TestTopic::new("chat");
+
+        let node_1 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_2 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_3 = NetworkBuilder::new(network_id).build().await.unwrap();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1.add_peer(node_2_addr.clone()).await.unwrap();
+        node_2.add_peer(node_1_addr).await.unwrap();
+        node_3.add_peer(node_2_addr).await.unwrap();
+
+        // Subscribe to the same topic from all nodes
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe(chat_topic.clone()).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(chat_topic.clone()).await.unwrap();
+        let (_tx_3, mut rx_3, ready_3) = node_3.subscribe(chat_topic).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by all three nodes for the given topic
+        assert!(ready_3.await.is_ok());
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
+
+        // Broadcast a message and make sure it's received by the other nodes
+        tx_1.send(ToNetwork::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            FromNetwork::GossipMessage {
+                bytes: "Hello, Node".to_bytes(),
+                // Node 2 receives the message and it is delivered by node 1
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        let rx_3_msg = rx_3.recv().await.unwrap();
+        assert_eq!(
+            rx_3_msg,
+            FromNetwork::GossipMessage {
+                bytes: "Hello, Node".to_bytes(),
+                // Node 3 receives the message and it is also delivered by node 1
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+        node_3.shutdown().await.unwrap();
+    }
+
+    fn run_node<T: TopicId + Topic + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
+
+            // Await the ready signal so we know the gossip overlay has been joined.
+            assert!(ready.await.is_ok());
+
+            // Await at least one message received via sync.
+            loop {
+                let msg = rx.recv().await.unwrap();
+                println!("{msg:?}");
+                match msg {
+                    FromNetwork::SyncMessage { .. } => break,
+                    _ => (),
+                }
+            }
+
+            // Give other nodes enough time to complete sync sessions.
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            node.shutdown().await.unwrap();
+        })
+    }
+    #[tokio::test]
+    async fn multi_hop_topic_discovery_and_sync() {
+        setup_logging();
+
+        let network_id = [1; 32];
+        let topic = TestTopic::new("chat");
+        let sync_config = SyncConfiguration::new(PingPongProtocol {});
+
+        // Create 4 nodes.
+        let node_1 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_3 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_4 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+        let node_3_addr = node_3.endpoint().node_addr().await.unwrap();
+
+        // All peers know about only one other peer.
+        node_1.add_peer(node_2_addr.clone()).await.unwrap();
+        node_2.add_peer(node_1_addr).await.unwrap();
+        node_3.add_peer(node_2_addr.clone()).await.unwrap();
+        node_4.add_peer(node_3_addr.clone()).await.unwrap();
+
+        // Run all nodes. We are testing that peers gracefully handle starting a sync session
+        // whine not knowing the other peer's address yet. Eventually all peers complete at least
+        // one sync session.
+        let handle1 = run_node(node_1, topic.clone());
+        let handle2 = run_node(node_2, topic.clone());
+        let handle3 = run_node(node_3, topic.clone());
+        let handle4 = run_node(node_4, topic.clone());
+
+        let (result1, result2, result3, result4) = tokio::join!(handle1, handle2, handle3, handle4);
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert!(result3.is_ok());
+        assert!(result4.is_ok());
     }
 }

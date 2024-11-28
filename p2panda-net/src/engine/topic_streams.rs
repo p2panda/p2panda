@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
+use iroh_net::key::PublicKey;
 use iroh_net::NodeId;
 use p2panda_sync::Topic;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
@@ -265,12 +266,9 @@ where
     pub async fn on_discovered_topic_ids(
         &mut self,
         their_topic_ids: Vec<[u8; 32]>,
-        delivered_from: NodeId,
+        peer: NodeId,
     ) -> Result<()> {
-        debug!(
-            "learned about topic ids from {}: {:?}",
-            delivered_from, their_topic_ids
-        );
+        debug!("learned about topic ids of {}: {:?}", peer, their_topic_ids);
 
         // Inform the sync manager about any peer-topic combinations which are of interest to us.
         //
@@ -281,7 +279,7 @@ where
             for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
                     found_common_topic = true;
-                    let peer_topic = ToSyncActor::new(delivered_from, topic.clone());
+                    let peer_topic = ToSyncActor::new(peer, topic.clone());
                     sync_actor_tx.send(peer_topic).await?
                 }
             }
@@ -318,7 +316,7 @@ where
         topic: T,
         header: Vec<u8>,
         payload: Option<Vec<u8>>,
-        delivered_from: NodeId,
+        delivered_from: PublicKey,
     ) -> Result<()> {
         let stream_ids = self
             .topic_to_stream
