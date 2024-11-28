@@ -322,8 +322,7 @@ where
                             .await?;
                     }
                 }
-                SyncAttemptError::Sync(err) => {
-                    warn!("sync attempt failed: {}", err);
+                SyncAttemptError::Sync(_) => {
                     self.engine_actor_tx
                         .send(ToEngineActor::SyncFailed {
                             topic: Some(sync_attempt.topic),
