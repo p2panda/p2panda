@@ -17,6 +17,8 @@ use crate::TopicId;
 
 use super::SyncConfiguration;
 
+const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
+
 /// A newly discovered peer and topic combination to be sent to the sync manager.
 #[derive(Debug)]
 pub struct ToSyncActor<T> {
@@ -164,7 +166,7 @@ where
             if let Some(ref resync) = self.config.resync {
                 (interval(resync.poll_interval), resync.interval, true)
             } else {
-                let one_hour = Duration::from_secs(3600);
+                let one_hour = Duration::from_secs(FALLBACK_RESYNC_INTERVAL_SEC);
                 (interval(one_hour), one_hour, false)
             };
 
