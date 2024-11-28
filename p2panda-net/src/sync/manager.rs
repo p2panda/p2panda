@@ -308,18 +308,14 @@ where
 
         if let Some(err) = err.downcast_ref() {
             match err {
+                // If the sync attempt failed because of a connection error we want to retry up to
+                // `max_retry_attempts`. If error occurs after this we simply stop trying without
+                // informing the engine as it never knew the attempts were occurring.
                 SyncAttemptError::Connection => {
                     warn!("sync attempt failed due to connection error");
                     if sync_attempt.attempts <= self.config.max_retry_attempts {
                         self.reschedule_attempt(sync_attempt).await?;
                         return Ok(());
-                    } else {
-                        self.engine_actor_tx
-                            .send(ToEngineActor::SyncFailed {
-                                topic: Some(sync_attempt.topic),
-                                peer: sync_attempt.peer,
-                            })
-                            .await?;
                     }
                 }
                 SyncAttemptError::Sync(_) => {
