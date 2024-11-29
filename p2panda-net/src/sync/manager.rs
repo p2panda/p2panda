@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use anyhow::{Context, Error, Result};
 use iroh_net::{Endpoint, NodeId};
@@ -32,21 +32,43 @@ impl<T> ToSyncActor<T> {
     }
 }
 
-#[derive(Debug)]
-struct SyncAttempt<T> {
-    peer: NodeId,
-    topic: T,
-    attempts: u8,
-    completed: Option<Instant>,
+/// Sync session status.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Status {
+    Pending,
+    Active,
+    Complete(Instant),
+    Failed(Instant),
 }
 
-impl<T> SyncAttempt<T> {
+// @TODO(glyph): I just noticed that `Scope` is the same as `ToSyncActor`...
+/// Sync session scope; defined as a peer-topic combination.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Scope<T> {
+    peer: NodeId,
+    topic: T,
+}
+
+impl<T> Scope<T> {
     fn new(peer: NodeId, topic: T) -> Self {
+        Self { peer, topic }
+    }
+}
+
+/// Sync session attempt with associated scope and state.
+#[derive(Clone, Debug)]
+struct Attempt<T> {
+    scope: Scope<T>,
+    status: Status,
+    attempts: u8,
+}
+
+impl<T> Attempt<T> {
+    fn new(scope: Scope<T>) -> Self {
         Self {
-            peer,
-            topic,
+            scope,
+            status: Status::Pending,
             attempts: 0,
-            completed: None,
         }
     }
 }
@@ -67,15 +89,13 @@ enum SyncAttemptError {
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
     config: SyncConfiguration<T>,
-    pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
-    active_sync_sessions: HashMap<T, HashSet<NodeId>>,
-    completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
+    sessions: HashMap<Scope<T>, Attempt<T>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
-    resync_queue: VecDeque<SyncAttempt<T>>,
-    sync_queue_tx: Sender<SyncAttempt<T>>,
-    sync_queue_rx: Receiver<SyncAttempt<T>>,
+    resync_queue: VecDeque<Attempt<T>>,
+    sync_queue_tx: Sender<Attempt<T>>,
+    sync_queue_rx: Receiver<Attempt<T>>,
 }
 
 impl<T> SyncActor<T>
@@ -93,9 +113,7 @@ where
 
         let sync_manager = Self {
             config,
-            pending_sync_sessions: HashMap::new(),
-            active_sync_sessions: HashMap::new(),
-            completed_sync_sessions: HashMap::new(),
+            sessions: HashMap::new(),
             endpoint,
             engine_actor_tx,
             inbox: sync_manager_rx,
@@ -108,49 +126,13 @@ where
     }
 
     /// Add a peer and topic combination to the sync connection queue for initial sync.
-    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_complete(&sync_attempt.peer, &sync_attempt.topic)
-        {
-            return Ok(());
-        }
-
-        self.pending_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
-
+    async fn schedule_attempt(&mut self, attempt: Attempt<T>) -> Result<()> {
         // Only send if the queue is not full; this prevents the possibility of blocking on send.
         if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-            self.sync_queue_tx.send(sync_attempt).await?;
+            self.sync_queue_tx.send(attempt).await?;
         } else {
             self.sync_queue_tx
-                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Add a peer and topic combination to the sync connection queue for resync.
-    async fn schedule_resync_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
-        {
-            return Ok(());
-        }
-
-        self.pending_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
-
-        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-            self.sync_queue_tx.send(sync_attempt).await?;
-        } else {
-            self.sync_queue_tx
-                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
+                .send_timeout(attempt, self.config.sync_queue_send_timeout)
                 .await?;
         }
 
@@ -159,9 +141,13 @@ where
 
     /// Add a peer and topic combination to the sync connection queue, incrementing the number of
     /// previous attempts.
-    async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
-        sync_attempt.attempts += 1;
-        self.schedule_attempt(sync_attempt).await?;
+    async fn reschedule_attempt(&mut self, mut attempt: Attempt<T>) -> Result<()> {
+        attempt.attempts += 1;
+        let _previous_attempt = self
+            .sessions
+            .insert(attempt.scope.to_owned(), attempt.to_owned());
+
+        self.schedule_attempt(attempt).await?;
 
         Ok(())
     }
@@ -194,37 +180,46 @@ where
                     debug!("sync manager received shutdown signal from engine");
                     break;
                 }
-                Some(sync_attempt) = self.sync_queue_rx.recv() => {
+                Some(attempt) = self.sync_queue_rx.recv() => {
                     match self
-                       .connect_and_sync(sync_attempt.peer, sync_attempt.topic.clone())
+                       .connect_and_sync(attempt.scope.clone())
                        .await
                    {
-                       Ok(()) => self.complete_successful_sync(sync_attempt).await?,
-                       Err(err) => self.complete_failed_sync(sync_attempt, err).await?,
+                       Ok(()) => self.complete_successful_sync(attempt).await?,
+                       Err(err) => self.complete_failed_sync(attempt, err).await?,
                    }
                 },
+                // We received a peer-topic announcement from the discovery layer.
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
                     let peer = msg.peer;
                     let topic = msg.topic;
 
-                    let sync_attempt = SyncAttempt::new(peer, topic);
+                    let scope = Scope::new(peer, topic);
 
-                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
-                        // The attempt will fail if the sync queue is full, indicating that a high
-                        // volume of sync sessions are underway. In that case, we drop the attempt
-                        // completely. Another attempt will be scheduled when the next announcement of
-                        // this peer-topic combination is received from the network-wide gossip
-                        // overlay.
-                        error!("failed to schedule sync attempt: {}", err)
+                    // Only schedule an attempt if we're not already tracking sessions for this
+                    // scope.
+                    if !self.sessions.contains_key(&scope) {
+                        let attempt = Attempt::new(scope);
+
+                        if let Err(err) = self.schedule_attempt(attempt).await {
+                            // The attempt will fail if the sync queue is full, indicating that a high
+                            // volume of sync sessions are underway. In that case, we drop the attempt
+                            // completely. Another attempt will be scheduled when the next announcement of
+                            // this peer-topic combination is received from the network-wide gossip
+                            // overlay.
+                            error!("failed to schedule sync attempt: {}", err)
+                        }
                     }
                 }
                 _ = resync_poll_interval.tick() => {
                     if let Some(attempt) = self.resync_queue.pop_front() {
-                        if let Some(completion) = attempt.completed {
+                        if let Status::Complete(completion) = attempt.status {
+                            // Only schedule another attempt if sufficient time has elapsed since
+                            // the last successful sync session for this scope.
                             if completion.elapsed() >= resync_interval {
                                 trace!("schedule resync attempt {attempt:?}");
-                                if let Err(err) = self.schedule_resync_attempt(attempt).await {
+                                if let Err(err) = self.schedule_attempt(attempt).await {
                                     error!("failed to schedule resync attempt: {}", err)
                                 }
                             } else {
@@ -239,45 +234,16 @@ where
         Ok(())
     }
 
-    /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &NodeId, topic: &T) -> bool {
-        if let Some(peers) = self.active_sync_sessions.get(topic) {
-            peers.contains(peer)
-        } else {
-            false
-        }
-    }
-
-    /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &NodeId, topic: &T) -> bool {
-        if let Some(peers) = self.completed_sync_sessions.get(topic) {
-            peers.contains(peer)
-        } else {
-            false
-        }
-    }
-
-    /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: &NodeId, topic: &T) -> bool {
-        if let Some(peers) = self.pending_sync_sessions.get(topic) {
-            peers.contains(peer)
-        } else {
-            false
-        }
-    }
-
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: NodeId, topic: T) -> Result<()> {
+    async fn connect_and_sync(&mut self, scope: Scope<T>) -> Result<()> {
         debug!("attempting peer connection for sync");
 
-        self.active_sync_sessions
-            .entry(topic.clone())
-            .or_default()
-            .insert(peer);
-
-        if let Some(session) = self.pending_sync_sessions.get_mut(&topic) {
-            session.remove(&peer);
+        if let Some(attempt) = self.sessions.get_mut(&scope) {
+            attempt.status = Status::Active
         }
+
+        let peer = scope.peer;
+        let topic = scope.topic;
 
         let connection = self
             .endpoint
@@ -313,13 +279,9 @@ where
     }
 
     /// Clean up after a failed sync attempt.
-    async fn complete_failed_sync(
-        &mut self,
-        sync_attempt: SyncAttempt<T>,
-        err: Error,
-    ) -> Result<()> {
-        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
-            session.remove(&sync_attempt.peer);
+    async fn complete_failed_sync(&mut self, attempt: Attempt<T>, err: Error) -> Result<()> {
+        if let Some(failed_attempt) = self.sessions.get_mut(&attempt.scope) {
+            failed_attempt.status = Status::Failed(Instant::now())
         }
 
         if let Some(err) = err.downcast_ref() {
@@ -329,26 +291,21 @@ where
                 // informing the engine as it never knew the attempts were occurring.
                 SyncAttemptError::Connection => {
                     warn!("sync attempt failed due to connection error");
-                    if sync_attempt.attempts <= self.config.max_retry_attempts {
-                        self.reschedule_attempt(sync_attempt).await?;
+                    if attempt.attempts <= self.config.max_retry_attempts {
+                        self.reschedule_attempt(attempt).await?;
                         return Ok(());
                     }
                 }
                 SyncAttemptError::Sync(_) => {
                     self.engine_actor_tx
                         .send(ToEngineActor::SyncFailed {
-                            topic: Some(sync_attempt.topic),
-                            peer: sync_attempt.peer,
+                            topic: Some(attempt.scope.topic),
+                            peer: attempt.scope.peer,
                         })
                         .await?;
                 }
             }
         }
-
-        // @TODO(glyph): We may want to maintain a map of failed peer-topic combinations that can
-        // be checked against each announcement received by the sync manager. Otherwise we may run
-        // into the case where we are repeatedly initiating a sync session with a faulty peer (this
-        // would happen every time we receive an announcement, approximately every 2.2 seconds).
 
         Ok(())
     }
@@ -358,21 +315,16 @@ where
     ///
     /// If resync is active, a timestamp is created to mark the time of sync completion and the
     /// attempt is then pushed to the back of the resync queue.
-    async fn complete_successful_sync(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
-        trace!("complete_successful_sync");
-        self.completed_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
-
-        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
-            session.remove(&sync_attempt.peer);
-        }
+    async fn complete_successful_sync(&mut self, mut attempt: Attempt<T>) -> Result<()> {
+        trace!("complete successful sync");
+        attempt.status = Status::Complete(Instant::now());
+        let _previous_attempt = self
+            .sessions
+            .insert(attempt.scope.to_owned(), attempt.to_owned());
 
         if self.config.is_resync() {
             trace!("schedule re-sync attempt");
-            sync_attempt.completed = Some(Instant::now());
-            self.resync_queue.push_back(sync_attempt);
+            self.resync_queue.push_back(attempt);
         }
 
         Ok(())
