@@ -3,27 +3,37 @@
 //! `p2panda-net` is a data-type-agnostic p2p networking layer which offers robust, direct
 //! communication to any device, no matter where they are.
 //!
-//! It offers gossip overlays for message broadcast, peer identities and stream-based interfaces
-//! for your higher application layers. Additionally it comes with modular extensions, for peer and
-//! topic discovery, access control or sync protocols with eventual-consistency guarantees.
+//! It offers a stream-based API for your higher application layers: Subscribe to any "topic" your
+//! application is interested in and `p2panda-net` will automatically discover peers who are
+//! interested in the same data.
+//!
+//! Additionally `p2panda-net` can be extended with custom peer discovery techniques or sync
+//! protocols, allowing your applications to "catch up on past data", so they can eventually
+//! converge on the same state.
 //!
 //! ## Features
 //!
 //! Most of the lower-level networking of `p2panda-net` is made possible by the work of
-//! [Iroh](https://github.com/n0-computer/iroh/) utilising well-established and known standards,
+//! [iroh](https://github.com/n0-computer/iroh/) utilising well-established and known standards,
 //! like QUIC for transport, STUN for holepunching, Tailscale's DERP (Designated Encrypted Relay
 //! for Packets) for relay fallbacks, PlumTree and HyParView for gossipping.
 //!
-//! `p2panda-net` adds all functionality on top of Iroh we believe is crucial for p2p application
-//! development, without tying ourselves too close to any data types or strategies:
+//! p2panda adds all functionality on top of iroh we believe is crucial for peer-to-peer
+//! application development, without tying ourselves too close to any pre-defined data types and
+//! allowing plenty space for customisation:
 //!
-//! * Subscription API to topics, independent of if they arrived via gossip ("fast message
-//! delivery") or a sync session ("catching up on past state")
+//! * Data of any kind can be exchanged efficiently via gossip broadcast ("live mode") or via a
+//! sync protocol between two peers
+//! * Custom queries to express interest in certain data of your application
 //! * Ambient peer discovery, learning about new peers you might not know about
-//! * Ambient topic discovery, learning what they are interested in
-//! * Sync interfaces, providing the eventual-consistency guarantee that
-//! your peers will converge on the same state over time
-//! * Queries to ask about specific data in the network
+//! * Ambient topic discovery, learning what peers are interested in
+//! * Sync protocol API, providing the eventual-consistency guarantee that your peers will converge
+//! on the same state over time
+//! * Manages connections, automatically syncs with discovered peers and re-tries on faults
+//! * Extension to handle [sync of large files](https://docs.rs/p2panda-blobs)
+//!
+//! `p2panda-net` is designed to run on top of bi-directional connections on the IP layer (aka "The
+//! Internet"). For use-
 //!
 //! ## Example
 //!
