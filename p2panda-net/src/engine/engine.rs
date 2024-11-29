@@ -302,10 +302,14 @@ where
     ///
     /// Through this we can use gossip algorithms also as an additional "peer discovery" mechanism.
     async fn on_peer_joined(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
-        // At this point we only have the public key of the peer, which is not enough to establish
-        // direct connections, luckily iroh handled storing networking information for us
-        // internally already.
         self.address_book.add_topic_id(node_id, topic_id).await;
+
+        // At this point we only have the public key of the peer, which is not enough to establish
+        // direct connections, luckily iroh has handled storing networking information for us
+        // internally already.
+        if let Some(info) = self.endpoint.remote_info(node_id) {
+            self.address_book.add_peer(info.into()).await;
+        }
 
         // Hot path: Some other peer joined, so we send them our "topics of interest", this will
         // hopefully speed up their onboarding process into the network.

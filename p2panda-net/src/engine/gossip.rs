@@ -192,8 +192,12 @@ where
                     .send(ToEngineActor::GossipNeighborUp { topic_id, peer })
                     .await?;
             }
-            // @TODO: Unmatched variants are `Joined(Vec<NodeId>)` and `Received(Message)`
-            _ => (),
+            GossipEvent::Joined(_) => {
+                // Not used currently
+            }
+            GossipEvent::NeighborDown(_) => {
+                // Not used currently
+            }
         }
         Ok(())
     }
