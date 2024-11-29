@@ -337,10 +337,12 @@ mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
     use std::sync::Arc;
 
+    use futures_util::FutureExt;
     use iroh_net::endpoint::TransportConfig;
     use iroh_net::relay::RelayMode;
     use iroh_net::Endpoint;
     use tokio::sync::mpsc;
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
     use tracing_subscriber::layer::SubscriberExt;
@@ -534,13 +536,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resync() {
+    async fn second_sync_without_resync() {
         setup_logging();
 
         let test_topic = TestTopic::new("ping_pong");
         let ping_pong = PingPongProtocol {};
-        let resync_config = ResyncConfiguration::new().interval(1).poll_interval(1);
-        let config_a = SyncConfiguration::new(ping_pong.clone()).resync(resync_config);
+        let config_a = SyncConfiguration::new(ping_pong.clone());
         let config_b = config_a.clone();
 
         let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
@@ -608,6 +609,163 @@ mod tests {
         });
 
         // Trigger sync session initiation by peer a.
+        //
+        // This would occur when the next peer-topic announcement arrived via the network-wide
+        // gossip overlay.
+        sync_actor_tx_a
+            .send(ToSyncActor {
+                peer: peer_b,
+                topic: test_topic.clone(),
+            })
+            .await
+            .unwrap();
+
+        /* --- PEER A SYNC EVENTS --- */
+        /* --- role: initiator    --- */
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, Some(test_topic.to_owned()));
+        assert_eq!(peer, peer_b);
+
+        // Receive `SyncHandshakeSuccess`.
+        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
+            engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncMessage`.
+        let Some(ToEngineActor::SyncMessage {
+            topic: _,
+            header: _,
+            payload: _,
+            delivered_from: _,
+        }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncMessage on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncDone`.
+        let Some(ToEngineActor::SyncDone { topic: _, peer: _ }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncDone on engine actor receiver for peer a")
+        };
+
+        /* --- PEER B SYNC EVENTS --- */
+        /* --- role: acceptor     --- */
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, None);
+        assert_eq!(peer, peer_a);
+
+        // @TODO(glyph): Match on the remaining events.
+
+        // Now we trigger sync session initiation by peer a for a second time.
+        //
+        // This emulates the scope being sent to the sync manager via the peer discovery
+        // announcement mechanism.
+        sync_actor_tx_a
+            .send(ToSyncActor {
+                peer: peer_b,
+                topic: test_topic.clone(),
+            })
+            .await
+            .unwrap();
+
+        // Sleep briefly to ensure time for a potential second session to be initiated.
+        sleep(Duration::from_secs(3)).await;
+
+        /* --- PEER A SYNC EVENTS --- */
+        /* --- role: initiator    --- */
+
+        assert!(engine_actor_rx_a.recv().now_or_never().is_none());
+    }
+
+    #[tokio::test]
+    async fn resync() {
+        setup_logging();
+
+        let test_topic = TestTopic::new("ping_pong");
+        let ping_pong = PingPongProtocol {};
+        let resync_config = ResyncConfiguration::new().interval(3).poll_interval(1);
+        let config_a = SyncConfiguration::new(ping_pong.clone()).resync(resync_config);
+        let config_b = config_a.clone();
+
+        let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
+        let (engine_actor_tx_b, mut engine_actor_rx_b) = mpsc::channel(64);
+
+        let endpoint_a = build_endpoint(2022).await;
+        let endpoint_b = build_endpoint(2024).await;
+
+        let mut protocols_a = ProtocolMap::default();
+        let sync_handler_a =
+            SyncConnection::new(Arc::new(ping_pong.clone()), engine_actor_tx_a.clone());
+        protocols_a.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_a));
+        let protocols_a = Arc::new(protocols_a.clone());
+        let alpns_a = protocols_a.alpns();
+        endpoint_a.set_alpns(alpns_a).unwrap();
+
+        let mut protocols_b = ProtocolMap::default();
+        let sync_handler_b = SyncConnection::new(Arc::new(ping_pong), engine_actor_tx_b.clone());
+        protocols_b.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_b));
+        let protocols_b = Arc::new(protocols_b.clone());
+        let alpns_b = protocols_b.alpns();
+        endpoint_b.set_alpns(alpns_b).unwrap();
+
+        let peer_a = endpoint_a.node_id();
+        let peer_b = endpoint_b.node_id();
+
+        let peer_addr_a = endpoint_a.node_addr().await.unwrap();
+        let peer_addr_b = endpoint_b.node_addr().await.unwrap();
+
+        endpoint_a.add_node_addr(peer_addr_b).unwrap();
+        endpoint_b.add_node_addr(peer_addr_a).unwrap();
+
+        let (sync_actor_a, sync_actor_tx_a) =
+            SyncActor::new(config_a, endpoint_a.clone(), engine_actor_tx_a);
+        let (sync_actor_b, _sync_actor_tx_b) =
+            SyncActor::new(config_b, endpoint_b.clone(), engine_actor_tx_b);
+
+        let shutdown_token_a = CancellationToken::new();
+        let shutdown_token_b = CancellationToken::new();
+
+        // Spawn the sync actor for peer a.
+        tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
+
+        // Spawn the inbound connection handler for peer a.
+        tokio::task::spawn(async move {
+            while let Some(incoming) = endpoint_a.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    let protocols_a = protocols_a.clone();
+                    tokio::task::spawn(
+                        async move { handle_connection(connecting, protocols_a).await },
+                    );
+                }
+            }
+        });
+
+        // Spawn the sync actor for peer b.
+        tokio::task::spawn(async move { sync_actor_b.run(shutdown_token_b).await.unwrap() });
+
+        // Spawn the inbound connection handler for peer b.
+        tokio::task::spawn(async move {
+            while let Some(incoming) = endpoint_b.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    let protocols_b = protocols_b.clone();
+                    tokio::task::spawn(
+                        async move { handle_connection(connecting, protocols_b).await },
+                    );
+                }
+            }
+        });
+
+        // Trigger sync session initiation by peer a.
         sync_actor_tx_a
             .send(ToSyncActor {
                 peer: peer_b,
@@ -662,19 +820,16 @@ mod tests {
         /* --- role: initiator    --- */
         /* --- resync session     --- */
 
+        // We expect the full sync cycle to be repeated, even though we only sent one initial
+        // `ToSyncActor` event into the peer a sync manager. This proves that our resync logic is
+        // successfully initiating a second sync session.
+
         // Receive `SyncStart`.
         let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
             panic!("expected to receive SyncStart on engine actor receiver for peer a")
         };
         assert_eq!(topic, Some(test_topic.to_owned()));
         assert_eq!(peer, peer_b);
-
-        // Receive `SyncStart`.
-        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
-            panic!("expected to receive SyncStart on engine actor receiver for peer a")
-        };
-        assert_eq!(topic, None);
-        assert_eq!(peer, peer_a);
 
         // Receive `SyncHandshakeSuccess`.
         let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
