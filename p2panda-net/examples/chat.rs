@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
     let (tx, mut rx, ready) = network.subscribe(topic).await?;
 
     tokio::task::spawn(async move {
-        while let Ok(event) = rx.recv().await {
+        while let Some(event) = rx.recv().await {
             match event {
                 FromNetwork::GossipMessage { bytes, .. } => {
                     match Message::decode_and_verify(&bytes) {

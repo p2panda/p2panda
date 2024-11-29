@@ -18,7 +18,7 @@ use iroh_gossip::net::Gossip;
 use iroh_net::key::SecretKey;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::Topic;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
@@ -124,7 +124,7 @@ where
     pub async fn subscribe(
         &self,
         topic: T,
-        from_network_tx: broadcast::Sender<FromNetwork>,
+        from_network_tx: mpsc::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
