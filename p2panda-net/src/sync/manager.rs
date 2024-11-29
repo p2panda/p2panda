@@ -200,7 +200,8 @@ where
                     // Only schedule an attempt if we're not already tracking sessions for this
                     // scope.
                     if !self.sessions.contains_key(&scope) {
-                        let attempt = Attempt::new(scope);
+                        let attempt = Attempt::new(scope.clone());
+                        self.sessions.insert(scope, attempt.clone());
 
                         if let Err(err) = self.schedule_attempt(attempt).await {
                             // The attempt will fail if the sync queue is full, indicating that a high
@@ -249,8 +250,7 @@ where
             .endpoint
             .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
             .await
-            .unwrap();
-        //.map_err(|_| SyncAttemptError::Connection)?;
+            .map_err(|_| SyncAttemptError::Connection)?;
 
         let (mut send, mut recv) = connection
             .open_bi()
@@ -335,13 +335,14 @@ where
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+    use std::sync::Arc;
 
     use iroh_net::endpoint::TransportConfig;
     use iroh_net::relay::RelayMode;
     use iroh_net::Endpoint;
-    use p2panda_sync::Topic;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
+    use tracing::warn;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
@@ -349,8 +350,9 @@ mod tests {
     use crate::engine::ToEngineActor;
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::network::tests::TestTopic;
-    use crate::sync::SYNC_CONNECTION_ALPN;
-    use crate::{SyncConfiguration, TopicId};
+    use crate::protocols::ProtocolMap;
+    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
+    use crate::SyncConfiguration;
 
     use super::{SyncActor, ToSyncActor};
 
@@ -372,7 +374,7 @@ mod tests {
         let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port + 1, 0, 0);
 
         Endpoint::builder()
-            .alpns(vec![SYNC_CONNECTION_ALPN.to_vec()])
+            //.alpns(vec![SYNC_CONNECTION_ALPN.to_vec()])
             .transport_config(transport_config)
             .relay_mode(RelayMode::Disabled)
             .bind_addr_v4(socket_address_v4)
@@ -382,13 +384,33 @@ mod tests {
             .unwrap()
     }
 
+    async fn handle_connection(
+        mut connecting: iroh_net::endpoint::Connecting,
+        protocols: Arc<ProtocolMap>,
+    ) {
+        let alpn = match connecting.alpn().await {
+            Ok(alpn) => alpn,
+            Err(err) => {
+                warn!("ignoring connection: invalid handshake: {:?}", err);
+                return;
+            }
+        };
+        let Some(handler) = protocols.get(&alpn) else {
+            warn!("ignoring connection: unsupported alpn protocol");
+            return;
+        };
+        if let Err(err) = handler.accept(connecting).await {
+            warn!("handling incoming connection ended with error: {err}");
+        }
+    }
+
     #[tokio::test]
     async fn single_sync() {
         setup_logging();
 
         let test_topic = TestTopic::new("ping_pong");
         let ping_pong = PingPongProtocol {};
-        let config_a = SyncConfiguration::new(ping_pong);
+        let config_a = SyncConfiguration::new(ping_pong.clone());
         let config_b = config_a.clone();
 
         let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
@@ -396,6 +418,19 @@ mod tests {
 
         let endpoint_a = build_endpoint(2022).await;
         let endpoint_b = build_endpoint(2024).await;
+
+        let mut protocols_a = ProtocolMap::default();
+        let sync_handler_a =
+            SyncConnection::new(Arc::new(ping_pong.clone()), engine_actor_tx_a.clone());
+        protocols_a.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_a));
+        let alpns_a = protocols_a.alpns();
+        endpoint_a.set_alpns(alpns_a).unwrap();
+
+        let mut protocols_b = ProtocolMap::default();
+        let sync_handler_b = SyncConnection::new(Arc::new(ping_pong), engine_actor_tx_b.clone());
+        protocols_b.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_b));
+        let alpns_b = protocols_b.alpns();
+        endpoint_b.set_alpns(alpns_b).unwrap();
 
         let peer_a = endpoint_a.node_id();
         let peer_b = endpoint_b.node_id();
@@ -407,17 +442,42 @@ mod tests {
         endpoint_b.add_node_addr(peer_addr_a).unwrap();
 
         let (sync_actor_a, sync_actor_tx_a) =
-            SyncActor::new(config_a, endpoint_a, engine_actor_tx_a);
-        let (sync_actor_b, sync_actor_tx_b) =
-            SyncActor::new(config_b, endpoint_b, engine_actor_tx_b);
+            SyncActor::new(config_a, endpoint_a.clone(), engine_actor_tx_a);
+        let (sync_actor_b, _sync_actor_tx_b) =
+            SyncActor::new(config_b, endpoint_b.clone(), engine_actor_tx_b);
 
         let shutdown_token_a = CancellationToken::new();
-        let shutdown_token_b = shutdown_token_a.clone();
+        let shutdown_token_b = CancellationToken::new();
 
+        // Spawn the sync actor for peer a.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
 
+        // Spawn the inbound connection handler for peer a.
+        tokio::task::spawn(async move {
+            if let Some(incoming) = endpoint_a.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, Arc::new(protocols_a)).await
+                    });
+                }
+            }
+        });
+
+        // Spawn the sync actor for peer b.
         tokio::task::spawn(async move { sync_actor_b.run(shutdown_token_b).await.unwrap() });
 
+        // Spawn the inbound connection handler for peer b.
+        tokio::task::spawn(async move {
+            if let Some(incoming) = endpoint_b.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, Arc::new(protocols_b)).await
+                    });
+                }
+            }
+        });
+
+        // Trigger sync session initiation by peer a.
         sync_actor_tx_a
             .send(ToSyncActor {
                 peer: peer_b,
@@ -426,10 +486,48 @@ mod tests {
             .await
             .unwrap();
 
+        /* --- PEER A SYNC EVENTS --- */
+        /* --- role: initiator    --- */
+
+        // Receive `SyncStart`.
         let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
-            panic!("expected SyncStart event")
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
         };
-        assert_eq!(topic, Some(test_topic));
+        assert_eq!(topic, Some(test_topic.to_owned()));
         assert_eq!(peer, peer_b);
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, None);
+        assert_eq!(peer, peer_a);
+
+        // Receive `SyncHandshakeSuccess`.
+        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
+            engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncMessage`.
+        let Some(ToEngineActor::SyncMessage {
+            topic: _,
+            header: _,
+            payload: _,
+            delivered_from: _,
+        }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncMessage on engine actor receiver for peer a")
+        };
+
+        /* --- PEER B SYNC EVENTS --- */
+        /* --- role: acceptor     --- */
+
+        // Receive `SyncDone`.
+        let Some(ToEngineActor::SyncDone { topic: _, peer: _ }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncDone on engine actor receiver for peer a")
+        };
     }
 }
