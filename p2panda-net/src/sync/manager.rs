@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::hash_map::Entry as HashMapEntry;
 use std::collections::{HashMap, VecDeque};
 
 use anyhow::{Context, Error, Result};
@@ -199,9 +200,9 @@ where
 
                     // Only schedule an attempt if we're not already tracking sessions for this
                     // scope.
-                    if !self.sessions.contains_key(&scope) {
-                        let attempt = Attempt::new(scope.clone());
-                        self.sessions.insert(scope, attempt.clone());
+                    if let HashMapEntry::Vacant(entry) = self.sessions.entry(scope.clone()) {
+                        let attempt = Attempt::new(scope);
+                        entry.insert(attempt.clone());
 
                         if let Err(err) = self.schedule_attempt(attempt).await {
                             // The attempt will fail if the sync queue is full, indicating that a high
