@@ -249,7 +249,8 @@ where
             .endpoint
             .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
             .await
-            .map_err(|_| SyncAttemptError::Connection)?;
+            .unwrap();
+        //.map_err(|_| SyncAttemptError::Connection)?;
 
         let (mut send, mut recv) = connection
             .open_bi()
@@ -328,5 +329,107 @@ where
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+
+    use iroh_net::endpoint::TransportConfig;
+    use iroh_net::relay::RelayMode;
+    use iroh_net::Endpoint;
+    use p2panda_sync::Topic;
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
+
+    use crate::engine::ToEngineActor;
+    use crate::network::sync_protocols::PingPongProtocol;
+    use crate::network::tests::TestTopic;
+    use crate::sync::SYNC_CONNECTION_ALPN;
+    use crate::{SyncConfiguration, TopicId};
+
+    use super::{SyncActor, ToSyncActor};
+
+    fn setup_logging() {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+    }
+
+    async fn build_endpoint(port: u16) -> Endpoint {
+        let mut transport_config = TransportConfig::default();
+        transport_config
+            .max_concurrent_bidi_streams(1024u32.into())
+            .max_concurrent_uni_streams(0u32.into());
+
+        let socket_address_v4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
+        let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port + 1, 0, 0);
+
+        Endpoint::builder()
+            .alpns(vec![SYNC_CONNECTION_ALPN.to_vec()])
+            .transport_config(transport_config)
+            .relay_mode(RelayMode::Disabled)
+            .bind_addr_v4(socket_address_v4)
+            .bind_addr_v6(socket_address_v6)
+            .bind()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn single_sync() {
+        setup_logging();
+
+        let test_topic = TestTopic::new("ping_pong");
+        let ping_pong = PingPongProtocol {};
+        let config_a = SyncConfiguration::new(ping_pong);
+        let config_b = config_a.clone();
+
+        let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
+        let (engine_actor_tx_b, mut engine_actor_rx_b) = mpsc::channel(64);
+
+        let endpoint_a = build_endpoint(2022).await;
+        let endpoint_b = build_endpoint(2024).await;
+
+        let peer_a = endpoint_a.node_id();
+        let peer_b = endpoint_b.node_id();
+
+        let peer_addr_a = endpoint_a.node_addr().await.unwrap();
+        let peer_addr_b = endpoint_b.node_addr().await.unwrap();
+
+        endpoint_a.add_node_addr(peer_addr_b).unwrap();
+        endpoint_b.add_node_addr(peer_addr_a).unwrap();
+
+        let (sync_actor_a, sync_actor_tx_a) =
+            SyncActor::new(config_a, endpoint_a, engine_actor_tx_a);
+        let (sync_actor_b, sync_actor_tx_b) =
+            SyncActor::new(config_b, endpoint_b, engine_actor_tx_b);
+
+        let shutdown_token_a = CancellationToken::new();
+        let shutdown_token_b = shutdown_token_a.clone();
+
+        tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
+
+        tokio::task::spawn(async move { sync_actor_b.run(shutdown_token_b).await.unwrap() });
+
+        sync_actor_tx_a
+            .send(ToSyncActor {
+                peer: peer_b,
+                topic: test_topic.clone(),
+            })
+            .await
+            .unwrap();
+
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
+            panic!("expected SyncStart event")
+        };
+        assert_eq!(topic, Some(test_topic));
+        assert_eq!(peer, peer_b);
     }
 }

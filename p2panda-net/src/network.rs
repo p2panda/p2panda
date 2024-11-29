@@ -655,7 +655,7 @@ pub(crate) type JoinErrToStr =
     Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 #[cfg(test)]
-mod sync_protocols {
+pub(crate) mod sync_protocols {
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -866,7 +866,7 @@ mod sync_protocols {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::time::Duration;
