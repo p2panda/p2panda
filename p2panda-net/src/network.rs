@@ -18,7 +18,7 @@ use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::Topic;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -588,11 +588,11 @@ where
         topic: T,
     ) -> Result<(
         mpsc::Sender<ToNetwork>,
-        broadcast::Receiver<FromNetwork>,
+        mpsc::Receiver<FromNetwork>,
         oneshot::Receiver<()>,
     )> {
         let (to_network_tx, to_network_rx) = mpsc::channel::<ToNetwork>(128);
-        let (from_network_tx, from_network_rx) = broadcast::channel::<FromNetwork>(128);
+        let (from_network_tx, from_network_rx) = mpsc::channel::<FromNetwork>(128);
         let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
 
         self.inner
@@ -1162,7 +1162,7 @@ mod tests {
             assert!(ready.await.is_ok());
 
             let mut from_sync_messages = Vec::new();
-            while let Ok(message) = from_sync_rx.recv().await {
+            while let Some(message) = from_sync_rx.recv().await {
                 from_sync_messages.push(message);
                 if from_sync_messages.len() == 3 {
                     break;

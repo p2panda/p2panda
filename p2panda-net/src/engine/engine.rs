@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use iroh_net::key::PublicKey;
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_sync::Topic;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
@@ -30,7 +30,7 @@ pub enum ToEngineActor<T> {
     },
     Subscribe {
         topic: T,
-        from_network_tx: broadcast::Sender<FromNetwork>,
+        from_network_tx: mpsc::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     },
@@ -245,7 +245,8 @@ where
                 delivered_from,
             } => {
                 self.topic_streams
-                    .on_sync_message(topic, header, payload, delivered_from)?;
+                    .on_sync_message(topic, header, payload, delivered_from)
+                    .await?;
             }
             ToEngineActor::SyncDone { topic, peer } => {
                 self.topic_streams.on_sync_done(topic, peer).await?;
@@ -323,7 +324,7 @@ where
     async fn on_subscribe(
         &mut self,
         topic: T,
-        from_network_tx: broadcast::Sender<FromNetwork>,
+        from_network_tx: mpsc::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {

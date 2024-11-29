@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use iroh_net::NodeId;
 use p2panda_sync::Topic;
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
 use crate::engine::address_book::AddressBook;
@@ -18,7 +18,7 @@ use crate::sync::manager::ToSyncActor;
 use crate::{to_public_key, TopicId};
 
 /// Managed data stream over an application-defined topic.
-type TopicStream<T> = (T, broadcast::Sender<FromNetwork>);
+type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
 
 /// Every stream has a unique identifier.
 type TopicStreamId = usize;
@@ -85,7 +85,7 @@ where
     pub async fn subscribe(
         &mut self,
         topic: T,
-        from_network_tx: broadcast::Sender<FromNetwork>,
+        from_network_tx: mpsc::Sender<FromNetwork>,
         mut to_network_rx: mpsc::Receiver<ToNetwork>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
@@ -251,10 +251,12 @@ where
             .expect("consistent topic id to stream id mapping");
         for stream_id in stream_ids {
             let (_, from_network_tx) = self.subscribed.get(stream_id).expect("stream should exist");
-            from_network_tx.send(FromNetwork::GossipMessage {
-                bytes: bytes.clone(),
-                delivered_from: to_public_key(delivered_from),
-            })?;
+            from_network_tx
+                .send(FromNetwork::GossipMessage {
+                    bytes: bytes.clone(),
+                    delivered_from: to_public_key(delivered_from),
+                })
+                .await?;
         }
 
         Ok(())
@@ -313,7 +315,7 @@ where
     }
 
     /// Process application-data message resulting from the sync session.
-    pub fn on_sync_message(
+    pub async fn on_sync_message(
         &mut self,
         topic: T,
         header: Vec<u8>,
@@ -327,11 +329,13 @@ where
 
         for stream_id in stream_ids {
             let (_, from_network_tx) = self.subscribed.get(stream_id).expect("stream should exist");
-            from_network_tx.send(FromNetwork::SyncMessage {
-                header: header.clone(),
-                payload: payload.clone(),
-                delivered_from: to_public_key(delivered_from),
-            })?;
+            from_network_tx
+                .send(FromNetwork::SyncMessage {
+                    header: header.clone(),
+                    payload: payload.clone(),
+                    delivered_from: to_public_key(delivered_from),
+                })
+                .await?;
         }
 
         Ok(())
@@ -387,8 +391,8 @@ mod tests {
     use p2panda_core::PrivateKey;
     use p2panda_sync::Topic;
     use serde::{Deserialize, Serialize};
-    use tokio::sync::{broadcast, mpsc, oneshot};
-    use tokio_stream::wrappers::BroadcastStream;
+    use tokio::sync::{mpsc, oneshot};
+    use tokio_stream::wrappers::ReceiverStream;
 
     use crate::engine::AddressBook;
     use crate::network::FromNetwork;
@@ -421,10 +425,10 @@ mod tests {
     async fn ooo_gossip_buffering() {
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
         let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
-        let (from_network_tx, from_network_rx) = broadcast::channel(128);
+        let (from_network_tx, from_network_rx) = mpsc::channel(128);
         let (_to_network_tx, to_network_rx) = mpsc::channel(128);
         let (gossip_ready_tx, _) = oneshot::channel();
-        let mut from_network_rx_stream = BroadcastStream::new(from_network_rx);
+        let mut from_network_rx_stream = ReceiverStream::new(from_network_rx);
 
         let topic = TestTopic::Primary;
         let topic_id = topic.id();
@@ -473,14 +477,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            from_network_rx_stream.next().await.unwrap().unwrap(),
+            from_network_rx_stream.next().await.unwrap(),
             FromNetwork::GossipMessage {
                 bytes: b"a new cmos battery".to_vec(),
                 delivered_from: to_public_key(peer_1.node_id),
             }
         );
         assert_eq!(
-            from_network_rx_stream.next().await.unwrap().unwrap(),
+            from_network_rx_stream.next().await.unwrap(),
             FromNetwork::GossipMessage {
                 bytes: b"and icecream".to_vec(),
                 delivered_from: to_public_key(peer_1.node_id),
