@@ -1,0 +1,1233 @@
+#![feature(prelude_import)]
+#[prelude_import]
+use std::prelude::rust_2021::*;
+#[macro_use]
+extern crate std;
+use p2panda_derive::{Topic, TopicId};
+use p2panda_net::TopicId as TopicIdTrait;
+use serde::{Deserialize, Serialize};
+extern crate test;
+#[cfg(test)]
+#[rustc_test_marker = "topic_derive"]
+pub const topic_derive: test::TestDescAndFn = test::TestDescAndFn {
+    desc: test::TestDesc {
+        name: test::StaticTestName("topic_derive"),
+        ignore: false,
+        ignore_message: ::core::option::Option::None,
+        source_file: "p2panda-derive/tests/derive.rs",
+        start_line: 6usize,
+        start_col: 4usize,
+        end_line: 6usize,
+        end_col: 16usize,
+        compile_fail: false,
+        no_run: false,
+        should_panic: test::ShouldPanic::No,
+        test_type: test::TestType::IntegrationTest,
+    },
+    testfn: test::StaticTestFn(
+        #[coverage(off)]
+        || test::assert_test_result(topic_derive()),
+    ),
+};
+fn topic_derive() {
+    struct Test;
+    #[automatically_derived]
+    impl ::core::clone::Clone for Test {
+        #[inline]
+        fn clone(&self) -> Test {
+            Test
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for Test {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::write_str(f, "Test")
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for Test {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for Test {
+        #[inline]
+        fn eq(&self, other: &Test) -> bool {
+            true
+        }
+    }
+    #[automatically_derived]
+    impl ::core::cmp::Eq for Test {
+        #[inline]
+        #[doc(hidden)]
+        #[coverage(off)]
+        fn assert_receiver_is_total_eq(&self) -> () {}
+    }
+    #[automatically_derived]
+    impl ::core::hash::Hash for Test {
+        #[inline]
+        fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) -> () {}
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl _serde::Serialize for Test {
+            fn serialize<__S>(
+                &self,
+                __serializer: __S,
+            ) -> _serde::__private::Result<__S::Ok, __S::Error>
+            where
+                __S: _serde::Serializer,
+            {
+                _serde::Serializer::serialize_unit_struct(__serializer, "Test")
+            }
+        }
+    };
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for Test {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<Test>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = Test;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "unit struct Test",
+                        )
+                    }
+                    #[inline]
+                    fn visit_unit<__E>(
+                        self,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        _serde::__private::Ok(Test)
+                    }
+                }
+                _serde::Deserializer::deserialize_unit_struct(
+                    __deserializer,
+                    "Test",
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<Test>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    impl p2panda_sync::Topic for Test {}
+    struct MultipleFields {
+        a: String,
+        b: u64,
+        c: bool,
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for MultipleFields {
+        #[inline]
+        fn clone(&self) -> MultipleFields {
+            MultipleFields {
+                a: ::core::clone::Clone::clone(&self.a),
+                b: ::core::clone::Clone::clone(&self.b),
+                c: ::core::clone::Clone::clone(&self.c),
+            }
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for MultipleFields {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_struct_field3_finish(
+                f,
+                "MultipleFields",
+                "a",
+                &self.a,
+                "b",
+                &self.b,
+                "c",
+                &&self.c,
+            )
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for MultipleFields {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for MultipleFields {
+        #[inline]
+        fn eq(&self, other: &MultipleFields) -> bool {
+            self.a == other.a && self.b == other.b && self.c == other.c
+        }
+    }
+    #[automatically_derived]
+    impl ::core::cmp::Eq for MultipleFields {
+        #[inline]
+        #[doc(hidden)]
+        #[coverage(off)]
+        fn assert_receiver_is_total_eq(&self) -> () {
+            let _: ::core::cmp::AssertParamIsEq<String>;
+            let _: ::core::cmp::AssertParamIsEq<u64>;
+            let _: ::core::cmp::AssertParamIsEq<bool>;
+        }
+    }
+    #[automatically_derived]
+    impl ::core::hash::Hash for MultipleFields {
+        #[inline]
+        fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) -> () {
+            ::core::hash::Hash::hash(&self.a, state);
+            ::core::hash::Hash::hash(&self.b, state);
+            ::core::hash::Hash::hash(&self.c, state)
+        }
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl _serde::Serialize for MultipleFields {
+            fn serialize<__S>(
+                &self,
+                __serializer: __S,
+            ) -> _serde::__private::Result<__S::Ok, __S::Error>
+            where
+                __S: _serde::Serializer,
+            {
+                let mut __serde_state = _serde::Serializer::serialize_struct(
+                    __serializer,
+                    "MultipleFields",
+                    false as usize + 1 + 1 + 1,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "a",
+                    &self.a,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "b",
+                    &self.b,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "c",
+                    &self.c,
+                )?;
+                _serde::ser::SerializeStruct::end(__serde_state)
+            }
+        }
+    };
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for MultipleFields {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[allow(non_camel_case_types)]
+                #[doc(hidden)]
+                enum __Field {
+                    __field0,
+                    __field1,
+                    __field2,
+                    __ignore,
+                }
+                #[doc(hidden)]
+                struct __FieldVisitor;
+                impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                    type Value = __Field;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "field identifier",
+                        )
+                    }
+                    fn visit_u64<__E>(
+                        self,
+                        __value: u64,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            0u64 => _serde::__private::Ok(__Field::__field0),
+                            1u64 => _serde::__private::Ok(__Field::__field1),
+                            2u64 => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_str<__E>(
+                        self,
+                        __value: &str,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            "a" => _serde::__private::Ok(__Field::__field0),
+                            "b" => _serde::__private::Ok(__Field::__field1),
+                            "c" => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_bytes<__E>(
+                        self,
+                        __value: &[u8],
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            b"a" => _serde::__private::Ok(__Field::__field0),
+                            b"b" => _serde::__private::Ok(__Field::__field1),
+                            b"c" => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                }
+                impl<'de> _serde::Deserialize<'de> for __Field {
+                    #[inline]
+                    fn deserialize<__D>(
+                        __deserializer: __D,
+                    ) -> _serde::__private::Result<Self, __D::Error>
+                    where
+                        __D: _serde::Deserializer<'de>,
+                    {
+                        _serde::Deserializer::deserialize_identifier(
+                            __deserializer,
+                            __FieldVisitor,
+                        )
+                    }
+                }
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<MultipleFields>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = MultipleFields;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "struct MultipleFields",
+                        )
+                    }
+                    #[inline]
+                    fn visit_seq<__A>(
+                        self,
+                        mut __seq: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::SeqAccess<'de>,
+                    {
+                        let __field0 = match _serde::de::SeqAccess::next_element::<
+                            String,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"struct MultipleFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field1 = match _serde::de::SeqAccess::next_element::<
+                            u64,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        1usize,
+                                        &"struct MultipleFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field2 = match _serde::de::SeqAccess::next_element::<
+                            bool,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        2usize,
+                                        &"struct MultipleFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        _serde::__private::Ok(MultipleFields {
+                            a: __field0,
+                            b: __field1,
+                            c: __field2,
+                        })
+                    }
+                    #[inline]
+                    fn visit_map<__A>(
+                        self,
+                        mut __map: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::MapAccess<'de>,
+                    {
+                        let mut __field0: _serde::__private::Option<String> = _serde::__private::None;
+                        let mut __field1: _serde::__private::Option<u64> = _serde::__private::None;
+                        let mut __field2: _serde::__private::Option<bool> = _serde::__private::None;
+                        while let _serde::__private::Some(__key) = _serde::de::MapAccess::next_key::<
+                            __Field,
+                        >(&mut __map)? {
+                            match __key {
+                                __Field::__field0 => {
+                                    if _serde::__private::Option::is_some(&__field0) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("a"),
+                                        );
+                                    }
+                                    __field0 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<String>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field1 => {
+                                    if _serde::__private::Option::is_some(&__field1) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("b"),
+                                        );
+                                    }
+                                    __field1 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<u64>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field2 => {
+                                    if _serde::__private::Option::is_some(&__field2) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("c"),
+                                        );
+                                    }
+                                    __field2 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<bool>(&mut __map)?,
+                                    );
+                                }
+                                _ => {
+                                    let _ = _serde::de::MapAccess::next_value::<
+                                        _serde::de::IgnoredAny,
+                                    >(&mut __map)?;
+                                }
+                            }
+                        }
+                        let __field0 = match __field0 {
+                            _serde::__private::Some(__field0) => __field0,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("a")?
+                            }
+                        };
+                        let __field1 = match __field1 {
+                            _serde::__private::Some(__field1) => __field1,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("b")?
+                            }
+                        };
+                        let __field2 = match __field2 {
+                            _serde::__private::Some(__field2) => __field2,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("c")?
+                            }
+                        };
+                        _serde::__private::Ok(MultipleFields {
+                            a: __field0,
+                            b: __field1,
+                            c: __field2,
+                        })
+                    }
+                }
+                #[doc(hidden)]
+                const FIELDS: &'static [&'static str] = &["a", "b", "c"];
+                _serde::Deserializer::deserialize_struct(
+                    __deserializer,
+                    "MultipleFields",
+                    FIELDS,
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<MultipleFields>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    impl p2panda_sync::Topic for MultipleFields {}
+}
+extern crate test;
+#[cfg(test)]
+#[rustc_test_marker = "topic_id_derive"]
+pub const topic_id_derive: test::TestDescAndFn = test::TestDescAndFn {
+    desc: test::TestDesc {
+        name: test::StaticTestName("topic_id_derive"),
+        ignore: false,
+        ignore_message: ::core::option::Option::None,
+        source_file: "p2panda-derive/tests/derive.rs",
+        start_line: 19usize,
+        start_col: 4usize,
+        end_line: 19usize,
+        end_col: 19usize,
+        compile_fail: false,
+        no_run: false,
+        should_panic: test::ShouldPanic::No,
+        test_type: test::TestType::IntegrationTest,
+    },
+    testfn: test::StaticTestFn(
+        #[coverage(off)]
+        || test::assert_test_result(topic_id_derive()),
+    ),
+};
+fn topic_id_derive() {
+    struct SingleUnnamedField(String);
+    #[automatically_derived]
+    impl ::core::clone::Clone for SingleUnnamedField {
+        #[inline]
+        fn clone(&self) -> SingleUnnamedField {
+            SingleUnnamedField(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for SingleUnnamedField {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "SingleUnnamedField",
+                &&self.0,
+            )
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for SingleUnnamedField {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for SingleUnnamedField {
+        #[inline]
+        fn eq(&self, other: &SingleUnnamedField) -> bool {
+            self.0 == other.0
+        }
+    }
+    #[automatically_derived]
+    impl ::core::cmp::Eq for SingleUnnamedField {
+        #[inline]
+        #[doc(hidden)]
+        #[coverage(off)]
+        fn assert_receiver_is_total_eq(&self) -> () {
+            let _: ::core::cmp::AssertParamIsEq<String>;
+        }
+    }
+    #[automatically_derived]
+    impl ::core::hash::Hash for SingleUnnamedField {
+        #[inline]
+        fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) -> () {
+            ::core::hash::Hash::hash(&self.0, state)
+        }
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl _serde::Serialize for SingleUnnamedField {
+            fn serialize<__S>(
+                &self,
+                __serializer: __S,
+            ) -> _serde::__private::Result<__S::Ok, __S::Error>
+            where
+                __S: _serde::Serializer,
+            {
+                _serde::Serializer::serialize_newtype_struct(
+                    __serializer,
+                    "SingleUnnamedField",
+                    &self.0,
+                )
+            }
+        }
+    };
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for SingleUnnamedField {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<SingleUnnamedField>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = SingleUnnamedField;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "tuple struct SingleUnnamedField",
+                        )
+                    }
+                    #[inline]
+                    fn visit_newtype_struct<__E>(
+                        self,
+                        __e: __E,
+                    ) -> _serde::__private::Result<Self::Value, __E::Error>
+                    where
+                        __E: _serde::Deserializer<'de>,
+                    {
+                        let __field0: String = <String as _serde::Deserialize>::deserialize(
+                            __e,
+                        )?;
+                        _serde::__private::Ok(SingleUnnamedField(__field0))
+                    }
+                    #[inline]
+                    fn visit_seq<__A>(
+                        self,
+                        mut __seq: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::SeqAccess<'de>,
+                    {
+                        let __field0 = match _serde::de::SeqAccess::next_element::<
+                            String,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"tuple struct SingleUnnamedField with 1 element",
+                                    ),
+                                );
+                            }
+                        };
+                        _serde::__private::Ok(SingleUnnamedField(__field0))
+                    }
+                }
+                _serde::Deserializer::deserialize_newtype_struct(
+                    __deserializer,
+                    "SingleUnnamedField",
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<SingleUnnamedField>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    match (&SingleUnnamedField("hello".into()).id().len(), &32) {
+        (left_val, right_val) => {
+            if !(*left_val == *right_val) {
+                let kind = ::core::panicking::AssertKind::Eq;
+                ::core::panicking::assert_failed(
+                    kind,
+                    &*left_val,
+                    &*right_val,
+                    ::core::option::Option::None,
+                );
+            }
+        }
+    };
+    struct MultipleUnnamedFields(String, u64);
+    #[automatically_derived]
+    impl ::core::clone::Clone for MultipleUnnamedFields {
+        #[inline]
+        fn clone(&self) -> MultipleUnnamedFields {
+            MultipleUnnamedFields(
+                ::core::clone::Clone::clone(&self.0),
+                ::core::clone::Clone::clone(&self.1),
+            )
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for MultipleUnnamedFields {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field2_finish(
+                f,
+                "MultipleUnnamedFields",
+                &self.0,
+                &&self.1,
+            )
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for MultipleUnnamedFields {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for MultipleUnnamedFields {
+        #[inline]
+        fn eq(&self, other: &MultipleUnnamedFields) -> bool {
+            self.0 == other.0 && self.1 == other.1
+        }
+    }
+    #[automatically_derived]
+    impl ::core::cmp::Eq for MultipleUnnamedFields {
+        #[inline]
+        #[doc(hidden)]
+        #[coverage(off)]
+        fn assert_receiver_is_total_eq(&self) -> () {
+            let _: ::core::cmp::AssertParamIsEq<String>;
+            let _: ::core::cmp::AssertParamIsEq<u64>;
+        }
+    }
+    #[automatically_derived]
+    impl ::core::hash::Hash for MultipleUnnamedFields {
+        #[inline]
+        fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) -> () {
+            ::core::hash::Hash::hash(&self.0, state);
+            ::core::hash::Hash::hash(&self.1, state)
+        }
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl _serde::Serialize for MultipleUnnamedFields {
+            fn serialize<__S>(
+                &self,
+                __serializer: __S,
+            ) -> _serde::__private::Result<__S::Ok, __S::Error>
+            where
+                __S: _serde::Serializer,
+            {
+                let mut __serde_state = _serde::Serializer::serialize_tuple_struct(
+                    __serializer,
+                    "MultipleUnnamedFields",
+                    0 + 1 + 1,
+                )?;
+                _serde::ser::SerializeTupleStruct::serialize_field(
+                    &mut __serde_state,
+                    &self.0,
+                )?;
+                _serde::ser::SerializeTupleStruct::serialize_field(
+                    &mut __serde_state,
+                    &self.1,
+                )?;
+                _serde::ser::SerializeTupleStruct::end(__serde_state)
+            }
+        }
+    };
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for MultipleUnnamedFields {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<MultipleUnnamedFields>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = MultipleUnnamedFields;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "tuple struct MultipleUnnamedFields",
+                        )
+                    }
+                    #[inline]
+                    fn visit_seq<__A>(
+                        self,
+                        mut __seq: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::SeqAccess<'de>,
+                    {
+                        let __field0 = match _serde::de::SeqAccess::next_element::<
+                            String,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"tuple struct MultipleUnnamedFields with 2 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field1 = match _serde::de::SeqAccess::next_element::<
+                            u64,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        1usize,
+                                        &"tuple struct MultipleUnnamedFields with 2 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        _serde::__private::Ok(MultipleUnnamedFields(__field0, __field1))
+                    }
+                }
+                _serde::Deserializer::deserialize_tuple_struct(
+                    __deserializer,
+                    "MultipleUnnamedFields",
+                    2usize,
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<MultipleUnnamedFields>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    match (&MultipleUnnamedFields("hello".into(), 12).id().len(), &32) {
+        (left_val, right_val) => {
+            if !(*left_val == *right_val) {
+                let kind = ::core::panicking::AssertKind::Eq;
+                ::core::panicking::assert_failed(
+                    kind,
+                    &*left_val,
+                    &*right_val,
+                    ::core::option::Option::None,
+                );
+            }
+        }
+    };
+    struct NamedFields {
+        name: String,
+        size: usize,
+        id: [u8; 2],
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for NamedFields {
+        #[inline]
+        fn clone(&self) -> NamedFields {
+            NamedFields {
+                name: ::core::clone::Clone::clone(&self.name),
+                size: ::core::clone::Clone::clone(&self.size),
+                id: ::core::clone::Clone::clone(&self.id),
+            }
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for NamedFields {
+        #[inline]
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_struct_field3_finish(
+                f,
+                "NamedFields",
+                "name",
+                &self.name,
+                "size",
+                &self.size,
+                "id",
+                &&self.id,
+            )
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for NamedFields {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for NamedFields {
+        #[inline]
+        fn eq(&self, other: &NamedFields) -> bool {
+            self.name == other.name && self.size == other.size && self.id == other.id
+        }
+    }
+    #[automatically_derived]
+    impl ::core::cmp::Eq for NamedFields {
+        #[inline]
+        #[doc(hidden)]
+        #[coverage(off)]
+        fn assert_receiver_is_total_eq(&self) -> () {
+            let _: ::core::cmp::AssertParamIsEq<String>;
+            let _: ::core::cmp::AssertParamIsEq<usize>;
+            let _: ::core::cmp::AssertParamIsEq<[u8; 2]>;
+        }
+    }
+    #[automatically_derived]
+    impl ::core::hash::Hash for NamedFields {
+        #[inline]
+        fn hash<__H: ::core::hash::Hasher>(&self, state: &mut __H) -> () {
+            ::core::hash::Hash::hash(&self.name, state);
+            ::core::hash::Hash::hash(&self.size, state);
+            ::core::hash::Hash::hash(&self.id, state)
+        }
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl _serde::Serialize for NamedFields {
+            fn serialize<__S>(
+                &self,
+                __serializer: __S,
+            ) -> _serde::__private::Result<__S::Ok, __S::Error>
+            where
+                __S: _serde::Serializer,
+            {
+                let mut __serde_state = _serde::Serializer::serialize_struct(
+                    __serializer,
+                    "NamedFields",
+                    false as usize + 1 + 1 + 1,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "name",
+                    &self.name,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "size",
+                    &self.size,
+                )?;
+                _serde::ser::SerializeStruct::serialize_field(
+                    &mut __serde_state,
+                    "id",
+                    &self.id,
+                )?;
+                _serde::ser::SerializeStruct::end(__serde_state)
+            }
+        }
+    };
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for NamedFields {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[allow(non_camel_case_types)]
+                #[doc(hidden)]
+                enum __Field {
+                    __field0,
+                    __field1,
+                    __field2,
+                    __ignore,
+                }
+                #[doc(hidden)]
+                struct __FieldVisitor;
+                impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                    type Value = __Field;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "field identifier",
+                        )
+                    }
+                    fn visit_u64<__E>(
+                        self,
+                        __value: u64,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            0u64 => _serde::__private::Ok(__Field::__field0),
+                            1u64 => _serde::__private::Ok(__Field::__field1),
+                            2u64 => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_str<__E>(
+                        self,
+                        __value: &str,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            "name" => _serde::__private::Ok(__Field::__field0),
+                            "size" => _serde::__private::Ok(__Field::__field1),
+                            "id" => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_bytes<__E>(
+                        self,
+                        __value: &[u8],
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            b"name" => _serde::__private::Ok(__Field::__field0),
+                            b"size" => _serde::__private::Ok(__Field::__field1),
+                            b"id" => _serde::__private::Ok(__Field::__field2),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                }
+                impl<'de> _serde::Deserialize<'de> for __Field {
+                    #[inline]
+                    fn deserialize<__D>(
+                        __deserializer: __D,
+                    ) -> _serde::__private::Result<Self, __D::Error>
+                    where
+                        __D: _serde::Deserializer<'de>,
+                    {
+                        _serde::Deserializer::deserialize_identifier(
+                            __deserializer,
+                            __FieldVisitor,
+                        )
+                    }
+                }
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<NamedFields>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = NamedFields;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "struct NamedFields",
+                        )
+                    }
+                    #[inline]
+                    fn visit_seq<__A>(
+                        self,
+                        mut __seq: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::SeqAccess<'de>,
+                    {
+                        let __field0 = match _serde::de::SeqAccess::next_element::<
+                            String,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"struct NamedFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field1 = match _serde::de::SeqAccess::next_element::<
+                            usize,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        1usize,
+                                        &"struct NamedFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field2 = match _serde::de::SeqAccess::next_element::<
+                            [u8; 2],
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        2usize,
+                                        &"struct NamedFields with 3 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        _serde::__private::Ok(NamedFields {
+                            name: __field0,
+                            size: __field1,
+                            id: __field2,
+                        })
+                    }
+                    #[inline]
+                    fn visit_map<__A>(
+                        self,
+                        mut __map: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::MapAccess<'de>,
+                    {
+                        let mut __field0: _serde::__private::Option<String> = _serde::__private::None;
+                        let mut __field1: _serde::__private::Option<usize> = _serde::__private::None;
+                        let mut __field2: _serde::__private::Option<[u8; 2]> = _serde::__private::None;
+                        while let _serde::__private::Some(__key) = _serde::de::MapAccess::next_key::<
+                            __Field,
+                        >(&mut __map)? {
+                            match __key {
+                                __Field::__field0 => {
+                                    if _serde::__private::Option::is_some(&__field0) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("name"),
+                                        );
+                                    }
+                                    __field0 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<String>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field1 => {
+                                    if _serde::__private::Option::is_some(&__field1) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("size"),
+                                        );
+                                    }
+                                    __field1 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<usize>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field2 => {
+                                    if _serde::__private::Option::is_some(&__field2) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field("id"),
+                                        );
+                                    }
+                                    __field2 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<[u8; 2]>(&mut __map)?,
+                                    );
+                                }
+                                _ => {
+                                    let _ = _serde::de::MapAccess::next_value::<
+                                        _serde::de::IgnoredAny,
+                                    >(&mut __map)?;
+                                }
+                            }
+                        }
+                        let __field0 = match __field0 {
+                            _serde::__private::Some(__field0) => __field0,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("name")?
+                            }
+                        };
+                        let __field1 = match __field1 {
+                            _serde::__private::Some(__field1) => __field1,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("size")?
+                            }
+                        };
+                        let __field2 = match __field2 {
+                            _serde::__private::Some(__field2) => __field2,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("id")?
+                            }
+                        };
+                        _serde::__private::Ok(NamedFields {
+                            name: __field0,
+                            size: __field1,
+                            id: __field2,
+                        })
+                    }
+                }
+                #[doc(hidden)]
+                const FIELDS: &'static [&'static str] = &["name", "size", "id"];
+                _serde::Deserializer::deserialize_struct(
+                    __deserializer,
+                    "NamedFields",
+                    FIELDS,
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<NamedFields>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    impl p2panda_net::TopicId for NamedFields {
+        fn id(&self) -> [u8; 32] {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(self.name.as_bytes());
+            bytes.extend_from_slice(&[0]);
+            bytes.extend_from_slice(self.size.as_bytes());
+            bytes.extend_from_slice(&[0]);
+            bytes.extend_from_slice(self.id.as_bytes());
+            bytes.extend_from_slice(&[0]);
+            let hash = p2panda_core::Hash::new(&bytes);
+            *hash.as_bytes()
+        }
+    }
+    match (
+        &NamedFields {
+            name: "panda".into(),
+            size: 12,
+            id: [2, 3],
+        }
+            .id()
+            .len(),
+        &32,
+    ) {
+        (left_val, right_val) => {
+            if !(*left_val == *right_val) {
+                let kind = ::core::panicking::AssertKind::Eq;
+                ::core::panicking::assert_failed(
+                    kind,
+                    &*left_val,
+                    &*right_val,
+                    ::core::option::Option::None,
+                );
+            }
+        }
+    };
+}
+#[rustc_main]
+#[coverage(off)]
+pub fn main() -> () {
+    extern crate test;
+    test::test_main_static(&[&topic_derive, &topic_id_derive])
+}
