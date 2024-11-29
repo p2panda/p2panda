@@ -107,19 +107,12 @@ where
         (sync_manager, sync_manager_tx)
     }
 
-    /// Add a peer and topic combination to the sync connection queue.
-    async fn schedule_attempt(
-        &mut self,
-        sync_attempt: SyncAttempt<T>,
-        is_resync: bool,
-    ) -> Result<()> {
+    /// Add a peer and topic combination to the sync connection queue for initial sync.
+    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
         if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
             || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
+            || self.is_complete(&sync_attempt.peer, &sync_attempt.topic)
         {
-            return Ok(());
-        }
-
-        if self.is_complete(&sync_attempt.peer, &sync_attempt.topic) && !is_resync {
             return Ok(());
         }
 
@@ -140,12 +133,35 @@ where
         Ok(())
     }
 
+    /// Add a peer and topic combination to the sync connection queue for resync.
+    async fn schedule_resync_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
+        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
+            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
+        {
+            return Ok(());
+        }
+
+        self.pending_sync_sessions
+            .entry(sync_attempt.topic.clone())
+            .or_default()
+            .insert(sync_attempt.peer);
+
+        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
+            self.sync_queue_tx.send(sync_attempt).await?;
+        } else {
+            self.sync_queue_tx
+                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Add a peer and topic combination to the sync connection queue, incrementing the number of
     /// previous attempts.
     async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
         sync_attempt.attempts += 1;
-        let is_resync = self.config.is_resync();
-        self.schedule_attempt(sync_attempt, is_resync).await?;
+        self.schedule_attempt(sync_attempt).await?;
 
         Ok(())
     }
@@ -162,12 +178,12 @@ where
         // Define the resync intervals based on supplied configuration parameters if resync has
         // been enabled. Otherwise create long-duration fallback values; this is mostly just
         // necessary for the resync poll interval tick.
-        let (mut resync_poll_interval, resync_interval, is_resync) =
+        let (mut resync_poll_interval, resync_interval) =
             if let Some(ref resync) = self.config.resync {
-                (interval(resync.poll_interval), resync.interval, true)
+                (interval(resync.poll_interval), resync.interval)
             } else {
                 let one_hour = Duration::from_secs(FALLBACK_RESYNC_INTERVAL_SEC);
-                (interval(one_hour), one_hour, false)
+                (interval(one_hour), one_hour)
             };
 
         loop {
@@ -194,7 +210,7 @@ where
 
                     let sync_attempt = SyncAttempt::new(peer, topic);
 
-                    if let Err(err) = self.schedule_attempt(sync_attempt, is_resync).await {
+                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
                         // The attempt will fail if the sync queue is full, indicating that a high
                         // volume of sync sessions are underway. In that case, we drop the attempt
                         // completely. Another attempt will be scheduled when the next announcement of
@@ -208,7 +224,7 @@ where
                         if let Some(completion) = attempt.completed {
                             if completion.elapsed() >= resync_interval {
                                 trace!("schedule resync attempt {attempt:?}");
-                                if let Err(err) = self.schedule_attempt(attempt, is_resync).await {
+                                if let Err(err) = self.schedule_resync_attempt(attempt).await {
                                     error!("failed to schedule resync attempt: {}", err)
                                 }
                             } else {
