@@ -43,24 +43,41 @@
 //!
 //! While this IP-based networking implementation should provide for many "modern" use-cases,
 //! p2panda data-types are designed for more extreme scenarios where connectivity can _never_ be
-//! assumed and data transmission is highly "delay tolerant": For example "broadcast-only"
+//! assumed and data transmission needs to be highly "delay tolerant": For example "broadcast-only"
 //! topologies on top of BLE (Bluetooth Low Energy), LoRa or even Digital Radio Communication
 //! infrastructure.
 //!
 //! ## Extensions
 //!
 //! `p2panda-net` is agnostic to any data type (sending and receiving raw byte streams) and can
-//! seamlessly be extended with external or official p2panda implementations. We provide p2panda's
-//! fork-tolerant and prunable append-only logs in `p2panda-core`, offering single-writer and
-//! multi-writer streams, authentication, deletion, ordering and much more. It can be further
-//! extended with an efficient sync implementation in `p2panda-sync` and validation and fast
-//! stream-based ingest solutions in `p2panda-streams`. Lastly we maintain persistance layer APIs
-//! in `p2panda-store` for in-memory storage or embeddable, SQL-based databases. In the future we
-//! will provide additional implementations for managing access control and group encryption.
+//! seamlessly be extended with external or official p2panda implementations for different parts of
+//! the application:
 //!
-//! For discovery of peers on the local network, we currently provide an mDNS-based implementation
-//! in `p2panda-discovery`, later additional techniques like "rendesvouz" nodes and random walk
-//! algorithms.
+//! * Custom Data types exchanged over the network
+//! * Optional relay nodes to aid connection establishment when peers are behind firewalls etc.
+//! * Fine-tune gossipping behaviour
+//! * Custom sync protocol for any data types, with managed re-attempts on connection failures and
+//! optional re-sync schedules
+//! * Custom peer discovery strategies (multiple approaches can be used at the same time)
+//! * Sync and storage of (very) large blobs
+//! * Additional custom protocol handlers
+//!
+//! ## Integration with other p2panda solutions
+//!
+//! We provide p2panda's fork-tolerant and prunable append-only logs in `p2panda-core`, offering
+//! single-writer and multi-writer streams, authentication, deletion, ordering and more. This can
+//! be further extended with an efficient sync implementation in `p2panda-sync` and validation and
+//! fast stream-based ingest solutions in `p2panda-streams`.
+//!
+//! For discovery of peers on the local network, we provide a mDNS-based implementation in
+//! `p2panda-discovery`, planned next are additional techniques like "rendesvouz" nodes and random
+//! walk algorithms.
+//!
+//! Lastly we maintain persistance layer APIs in `p2panda-store` for in-memory storage or
+//! embeddable, SQL-based databases.
+//! 
+//! In the future we will provide additional implementations for managing access control and group
+//! encryption.
 //!
 //! ## Example
 //!
@@ -71,7 +88,6 @@
 //! use p2panda_net::{NetworkBuilder, TopicId};
 //! use p2panda_sync::Topic;
 //! use serde::{Serialize, Deserialize};
-//!
 //! # #[tokio::main]
 //! # async fn main() -> Result<()> {
 //!
@@ -117,7 +133,6 @@
 //! // From now on we can send and receive bytes to any peer interested in the same chat.
 //! let my_friends_group = ChatGroup::new("me-and-my-friends");
 //! let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
-//!
 //! # Ok(())
 //! # }
 //! ```
