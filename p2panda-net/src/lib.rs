@@ -65,39 +65,43 @@
 //! ## Example
 //!
 //! ```
+//! # use anyhow::Result;
 //! use p2panda_core::{PrivateKey, Hash};
-//! use p2panda_net::{NetworkBuilder, Topic, TopicId};
-//! use p2panda_discovery::LocalDiscovery;
+//! use p2panda_discovery::mdns::LocalDiscovery;
+//! use p2panda_net::{NetworkBuilder, TopicId};
+//! use p2panda_sync::Topic;
 //! use serde::{Serialize, Deserialize};
 //!
-//! // All peers knowing the same "network id" will eventually find each other. Use this as the most
-//! // global identifier to group peers into multiple networks when necessary. This can be useful if
-//! // you're planning to run different applications on top of the same infrastructure.
-//! let network_id = b"my-chat-network";
+//! # #[tokio::main]
+//! # async fn main() -> Result<()> {
 //!
-//! // We can use the network now to automatically find and ask other peers about any data we are
-//! // interested in. For this we're defining our own "queries" with topics.
+//! // Peers knowing the same "network id" will eventually find each other. This is the most global
+//! // identifier to group peers into multiple networks when necessary.
+//! let network_id = [1; 32];
+//!
+//! // The network can be used to automatically find and ask other peers about any data we the
+//! // application is interested in. This is expressed through "network-wide queries" over topics.
 //! //
-//! // In this example we would like to be able to query messages from each chat, identified by
-//! // a BLAKE3 hash.
+//! // In this example we would like to be able to query messages from each chat group, identified
+//! // by a BLAKE3 hash.
 //! #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
-//! struct ChatChannel(Hash);
+//! struct ChatGroup(Hash);
 //!
-//! impl ChatChannel {
+//! impl ChatGroup {
 //!     pub fn new(name: &str) -> Self {
-//!         Self(Hash::new(name.to_bytes()))
+//!         Self(Hash::new(name.as_bytes()))
 //!     }
 //! }
 //!
-//! impl Topic for ChatChannel {}
+//! impl Topic for ChatGroup {}
 //!
-//! impl TopicId for ChatChannel {
+//! impl TopicId for ChatGroup {
 //!     fn id(&self) -> [u8; 32] {
-//!         *self.1.as_bytes()
+//!         self.0.into()
 //!     }
 //! }
 //!
-//! // Generate an Ed25519 private key which will be used to identifiy your peer towards others.
+//! // Generate an Ed25519 private key which will be used to authenticate your peer towards others.
 //! let private_key = PrivateKey::new();
 //!
 //! // Use mDNS to discover other peers on the local network.
@@ -110,9 +114,12 @@
 //!     .build()
 //!     .await?;
 //!
-//! // From now on we can send and receive bytes to any peer interested in the same chat channel.
-//! let friends_channel = ChatChannel::new("me-and-my-friends");
-//! let (tx, mut rx, ready) = network.subscribe(friends_channel).await?;
+//! // From now on we can send and receive bytes to any peer interested in the same chat.
+//! let my_friends_group = ChatGroup::new("me-and-my-friends");
+//! let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
+//!
+//! # Ok(())
+//! # }
 //! ```
 mod addrs;
 mod bytes;
