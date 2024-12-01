@@ -86,6 +86,12 @@ impl TryFrom<&[u8]> for Hash {
     }
 }
 
+impl From<&Hash> for [u8; 32] {
+    fn from(value: &Hash) -> Self {
+        *value.as_bytes()
+    }
+}
+
 impl FromStr for Hash {
     type Err = HashError;
 
