@@ -75,7 +75,7 @@
 //!
 //! Lastly we maintain persistance layer APIs in `p2panda-store` for in-memory storage or
 //! embeddable, SQL-based databases.
-//! 
+//!
 //! In the future we will provide additional implementations for managing access control and group
 //! encryption.
 //!
@@ -153,17 +153,58 @@ pub use sync::{ResyncConfiguration, SyncConfiguration};
 #[cfg(feature = "log-sync")]
 pub use p2panda_sync::log_sync::LogSyncProtocol;
 
-/// A unique 32 byte identifier for a network.
+/// Unique 32 byte identifier for a network.
+///
+/// Peers knowing the same network identifier will eventually discover each other. This is the most
+/// global identifier to group peers into networks and becomes necessary if different applications
+/// share the same underlying network infrastructure.
+///
+/// Please note that the network identifier should _never_ be the same as any other topic
+/// identifier.
 pub type NetworkId = [u8; 32];
 
 /// Topic ids are announced on the network and used to identify peers with overlapping interests.
 ///
-/// Once identified, peers join a gossip overlay and, if a sync protocol has been provided, attempt
-/// to synchronize past state before entering "live mode".
+/// Once other peers are discovered who are interested in the same topic id, the application will
+/// join the gossip overlay under that identifier.
+///
+/// If an optional sync protocol has been provided, the application will attempt to synchronize
+/// past state before entering the gossip overlay.
+///
+/// ## Designing topic identifiers for applications
+///
+/// Networked applications, like p2p systems, usually want to converge to the same state over time,
+/// so that all users will see the same data at some point.
+///
+/// If we're considering that the totality of "all data" the application can create as the "global
+/// state", we might want to categorise it into logical "sub-sections", especially when the
+/// application gets complex. In an example chat application we might not want to sync _all_ chat
+/// group data which has ever been created by all peers, but only a subset of the ones our peer is
+/// actually a member of.
+///
+/// In this case we could separate the application state into distinct topic identifiers, one for
+/// each chat group. Now peers can announce their interest in a specific chat group and only sync
+/// that particular data.
+///
+/// ## `Topic` vs. `TopicId`
+///
+/// Next to topic identifiers p2panda offers a `Topic` trait which allows for even more
+/// sophisticated "network queries".
+///
+/// `TopicId` is a tool for general topic discovery and establishing gossip network overlays and
+/// `Topic` a query for sync protocols to ask for a specific piece of information. 
+///
+/// Consult the `Topic` documentation in `p2panda-sync` for further information.
 pub trait TopicId {
     fn id(&self) -> [u8; 32];
 }
 
-pub(crate) fn to_public_key(key: iroh_net::key::PublicKey) -> p2panda_core::PublicKey {
+/// Converts an "iroh" public key type to the `p2panda-core` implementation.
+pub(crate) fn to_public_key(key: iroh_base::key::PublicKey) -> p2panda_core::PublicKey {
     p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
+}
+
+/// Converts an `p2panda-core` public key to the "iroh" type.
+pub(crate) fn from_public_key(key: p2panda_core::PublicKey) -> iroh_base::key::PublicKey {
+    iroh_base::key::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
 }

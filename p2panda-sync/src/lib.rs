@@ -20,6 +20,15 @@ use thiserror::Error;
 /// sends their topic to a remote peer where it is be mapped to their local data-set and
 /// access-control checks can be performed. Once this "handshake" is complete both peers will
 /// proceed with the designated sync protocol.
+///
+/// ## Designing topics for applications
+///
+/// While `TopicId` is merely a 32-byte identifier which can't hold much information other than
+/// being a distinct identifier of a single data item or subset of them, we can use `Topic` to
+/// implement custom data types which can "query" very specific data items. Peers can for example
+/// announce that they'd like "all events from the 27th of September 23 until today" with `Topic`.
+///
+/// Consult the `TopicId` documentation in `p2panda-net` for more information.
 pub trait Topic:
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
