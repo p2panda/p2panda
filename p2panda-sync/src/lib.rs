@@ -10,9 +10,9 @@
 //! can negotiate scope and access in a sync protocol for any type of data the remote peer
 //! currently knows about.
 //!
-//! While `p2panda-sync` is merely a generic definition of the `Sync` trait interface, compatible
-//! with all sorts of data types, it also comes with optional implementations, optimized for
-//! efficient sync over append-only log-based data types and helpers to encode wire messages in
+//! While `p2panda-sync` is merely a generic definition of the `SyncProtocol` trait interface,
+//! compatible with all sorts of data types, it also comes with optional implementations, optimized
+//! for efficient sync over append-only log-based data types and helpers to encode wire messages in
 //! CBOR.
 #[cfg(feature = "cbor")]
 pub mod cbor;
