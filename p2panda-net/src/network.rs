@@ -806,7 +806,10 @@ mod sync_protocols {
                     Message::Pong => {
                         debug!("pong message received");
                         app_tx
-                            .send(FromSync::Data("PONG".as_bytes().to_owned(), None))
+                            .send(FromSync::Data {
+                                header: "PONG".as_bytes().to_owned(),
+                                payload: None,
+                            })
                             .await
                             .unwrap();
                         break;
@@ -841,7 +844,10 @@ mod sync_protocols {
                     Message::Ping => {
                         debug!("ping message received");
                         app_tx
-                            .send(FromSync::Data("PING".as_bytes().to_owned(), None))
+                            .send(FromSync::Data {
+                                header: "PING".as_bytes().to_owned(),
+                                payload: None,
+                            })
                             .await
                             .unwrap();
 

@@ -166,7 +166,7 @@ where
 
                     // From this point on we are only expecting "data" messages from the sync
                     // session.
-                    let FromSync::Data(header, payload) = message else {
+                    let FromSync::Data { header, payload } = message else {
                         return Err(
                             SyncError::Critical(
                                 "expected only data messages from sync session in data sync phase"

@@ -120,7 +120,7 @@ where
                 }
                 Message::Operation(header, payload) => {
                     // Forward data received from the remote to the app layer.
-                    app_tx.send(FromSync::Data(header, payload)).await?;
+                    app_tx.send(FromSync::Data { header, payload }).await?;
                 }
                 Message::SyncDone => {
                     sync_done_received = true;
@@ -631,9 +631,18 @@ mod tests {
             messages,
             [
                 FromSync::HandshakeSuccess(topic),
-                FromSync::Data(header_bytes_0, Some(body.to_bytes())),
-                FromSync::Data(header_bytes_1, Some(body.to_bytes())),
-                FromSync::Data(header_bytes_2, Some(body.to_bytes())),
+                FromSync::Data {
+                    header: header_bytes_0,
+                    payload: Some(body.to_bytes())
+                },
+                FromSync::Data {
+                    header: header_bytes_1,
+                    payload: Some(body.to_bytes())
+                },
+                FromSync::Data {
+                    header: header_bytes_2,
+                    payload: Some(body.to_bytes())
+                },
             ]
         );
     }
@@ -730,9 +739,18 @@ mod tests {
 
         let peer_a_expected_messages = vec![
             FromSync::HandshakeSuccess(topic.clone()),
-            FromSync::Data(header_bytes_0, Some(body.to_bytes())),
-            FromSync::Data(header_bytes_1, Some(body.to_bytes())),
-            FromSync::Data(header_bytes_2, Some(body.to_bytes())),
+            FromSync::Data {
+                header: header_bytes_0,
+                payload: Some(body.to_bytes()),
+            },
+            FromSync::Data {
+                header: header_bytes_1,
+                payload: Some(body.to_bytes()),
+            },
+            FromSync::Data {
+                header: header_bytes_2,
+                payload: Some(body.to_bytes()),
+            },
         ];
 
         let mut peer_a_messages = Vec::new();
@@ -843,8 +861,14 @@ mod tests {
 
         let peer_a_expected_messages = vec![
             FromSync::HandshakeSuccess(topic.clone()),
-            FromSync::Data(header_bytes_1, Some(body.to_bytes())),
-            FromSync::Data(header_bytes_2, Some(body.to_bytes())),
+            FromSync::Data {
+                header: header_bytes_1,
+                payload: Some(body.to_bytes()),
+            },
+            FromSync::Data {
+                header: header_bytes_2,
+                payload: Some(body.to_bytes()),
+            },
         ];
 
         let mut peer_a_messages = Vec::new();

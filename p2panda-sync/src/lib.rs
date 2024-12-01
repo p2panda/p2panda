@@ -174,13 +174,21 @@ where
     /// These "frontends" might further process, decrypt payloads, sort messages or apply more
     /// validation before they get finally persisted or rendered to the user. At this point the
     /// sync protocol is merely "forwarding" it without any more knowledge how the data is used.
-    ///
-    /// Some data-types might be designed with "off-chain" use in mind, where a "header" is crucial
-    /// for integrity and authenticity but the actual payload is optional or requested lazily in a
-    /// later process. This is why the main data can be expressed as bytes but the second field is
-    /// optional. Implementations without this distinction will leave the second field always
-    /// `None`.
-    Data(Vec<u8>, Option<Vec<u8>>),
+    Data {
+        /// Exchanged data from sync session.
+        ///
+        /// Some data-types might be designed with "off-chain" use in mind, where a "header" is
+        /// crucial for integrity and authenticity but the actual "payload" is optional or
+        /// requested lazily in a later process.
+        header: Vec<u8>,
+
+        /// Optional "body" which can represent the application data.
+        ///
+        /// This is useful for realizing "off-chain" compatible data types. Implementations without
+        /// this distinction will leave this field always to `None` and only encode their data
+        /// types in the `header` field.
+        payload: Option<Vec<u8>>,
+    },
 }
 
 /// Errors which can occur during sync sessions.

@@ -205,6 +205,7 @@ pub(crate) fn to_public_key(key: iroh_base::key::PublicKey) -> p2panda_core::Pub
 }
 
 /// Converts an `p2panda-core` public key to the "iroh" type.
+#[allow(dead_code)]
 pub(crate) fn from_public_key(key: p2panda_core::PublicKey) -> iroh_base::key::PublicKey {
     iroh_base::key::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
 }
