@@ -260,6 +260,9 @@ impl From<std::io::Error> for SyncError {
 ///
 /// Consult the `TopicId` documentation in `p2panda-net` for more information.
 pub trait Topic:
+    // Data types implementing `Topic` need to also implement `Eq` and `Hash` to allow backends to
+    // organise sync sessions per topic and peer and `Serialize` and `Deserialize` to allow sending
+    // topics over the wire.
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
 }
