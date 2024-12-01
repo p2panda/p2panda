@@ -15,9 +15,9 @@
 //!
 //! Most of the lower-level networking of `p2panda-net` is made possible by the work of
 //! [iroh](https://github.com/n0-computer/iroh/) utilising well-established and known standards,
-//! like QUIC for transport, STUN for establishing direct connections between devices, Tailscale's
-//! DERP (Designated Encrypted Relay for Packets) for relay fallbacks, PlumTree and HyParView for
-//! broadcast-based gossip overlays.
+//! like QUIC for transport, (self-certified) TLS for transport encryption, STUN for establishing
+//! direct connections between devices, Tailscale's DERP (Designated Encrypted Relay for Packets)
+//! for relay fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
 //!
 //! p2panda adds crucial functionality on top of iroh for peer-to-peer application development,
 //! without tying developers too close to any pre-defined data types and allowing plenty space for
@@ -192,7 +192,7 @@ pub type NetworkId = [u8; 32];
 /// sophisticated "network queries".
 ///
 /// `TopicId` is a tool for general topic discovery and establishing gossip network overlays and
-/// `Topic` a query for sync protocols to ask for a specific piece of information. 
+/// `Topic` a query for sync protocols to ask for a specific piece of information.
 ///
 /// Consult the `Topic` documentation in `p2panda-sync` for further information.
 pub trait TopicId {
