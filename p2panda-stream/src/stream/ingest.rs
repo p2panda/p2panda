@@ -17,6 +17,8 @@ use pin_utils::pin_mut;
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
+/// An extension trait for `Stream`s that provides a convenient [`ingest`](IngestExt::ingest)
+/// method.
 pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)> {
     /// Checks incoming operations against their log integrity and persists them automatically in a
     /// given store.
@@ -44,6 +46,7 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 {
 }
 
+/// Stream for the [`ingest`](IngestExt::ingest) method.
 #[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]

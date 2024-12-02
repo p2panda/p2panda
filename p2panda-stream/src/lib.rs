@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Stream-based methods to process p2panda operations.
-//!
-//! After a messages has been received via gossip "live mode" or a sync session in `p2panda-net` we
-//! usually need to apply additional tasks to process the received operation.
+//! Stream-based methods to conveniently handle p2panda operations.
 //!
 //! `p2panda-stream` is a collection of various methods which help to decode, validate, order,
 //! prune or store p2panda operations. More methods are planned in the future.
