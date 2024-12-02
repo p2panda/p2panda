@@ -14,18 +14,18 @@ use tracing::debug;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::{FromSync, SyncError, SyncProtocol, Topic, TopicMap};
 
-static LOG_SYNC_PROTOCOL_NAME: &str = "p2panda/log_sync";
-
 type SeqNum = u64;
 pub type LogHeights<T> = Vec<(T, SeqNum)>;
 pub type Logs<T> = HashMap<PublicKey, Vec<T>>;
 
+/// Messages to be sent over the wire between the two peers.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", content = "value")]
 pub enum Message<T, L = String> {
     Have(T, Vec<(PublicKey, LogHeights<L>)>),
-    Operation(Vec<u8>, Option<Vec<u8>>),
-    SyncDone,
+    Data(Vec<u8>, Option<Vec<u8>>),
+    Done,
 }
 
 #[cfg(test)]
@@ -54,7 +54,7 @@ where
     E: Extensions + 'a,
 {
     fn name(&self) -> &'static str {
-        LOG_SYNC_PROTOCOL_NAME
+        "p2panda-log-sync-v1"
     }
 
     async fn initiate(
@@ -102,7 +102,7 @@ where
         .await?;
 
         // As we initiated this sync session we are done after sending the `Have` message.
-        sink.send(Message::SyncDone).await?;
+        sink.send(Message::Done).await?;
 
         // Announce the topic of the sync session to the app layer.
         app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
@@ -118,11 +118,11 @@ where
                         "unexpected \"have\" message received".to_string(),
                     ))
                 }
-                Message::Operation(header, payload) => {
+                Message::Data(header, payload) => {
                     // Forward data received from the remote to the app layer.
                     app_tx.send(FromSync::Data { header, payload }).await?;
                 }
-                Message::SyncDone => {
+                Message::Done => {
                     sync_done_received = true;
                 }
             };
@@ -230,15 +230,15 @@ where
 
                     // As we have processed the remotes `Have` message then we are "done" from
                     // this end.
-                    sink.send(Message::SyncDone).await?;
+                    sink.send(Message::Done).await?;
                     sync_done_sent = true;
                 }
-                Message::Operation(_, _) => {
+                Message::Data(_, _) => {
                     return Err(SyncError::UnexpectedBehaviour(
-                        "unexpected \"operation\" message received".to_string(),
+                        "unexpected \"data\" message received".to_string(),
                     ));
                 }
-                Message::SyncDone => {
+                Message::Done => {
                     sync_done_received = true;
                 }
             };
@@ -277,7 +277,7 @@ where
     let messages = log
         .unwrap_or_default()
         .into_iter()
-        .map(|(header, payload)| Message::Operation(header, payload))
+        .map(|(header, payload)| Message::Data(header, payload))
         .collect();
 
     Ok(messages)
@@ -402,10 +402,7 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let message_bytes = to_bytes(vec![
-            Message::Have(topic.clone(), vec![]),
-            Message::SyncDone,
-        ]);
+        let message_bytes = to_bytes(vec![Message::Have(topic.clone(), vec![]), Message::Done]);
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
         // Accept a sync session on peer a (which consumes the above messages)
@@ -424,7 +421,7 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        assert_message_bytes(peer_b_read, vec![Message::SyncDone]).await;
+        assert_message_bytes(peer_b_read, vec![Message::Done]).await;
 
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
@@ -447,7 +444,7 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let message_bytes = vec![Message::<String>::SyncDone.to_bytes()].concat();
+        let message_bytes = vec![Message::<String>::Done.to_bytes()].concat();
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
         // Open a sync session on peer a (which consumes the above messages)
@@ -469,7 +466,7 @@ mod tests {
         // Assert that peer a sent peer b the expected messages
         assert_message_bytes(
             peer_b_read,
-            vec![Message::Have(topic.clone(), vec![]), Message::SyncDone],
+            vec![Message::Have(topic.clone(), vec![]), Message::Done],
         )
         .await;
 
@@ -520,7 +517,7 @@ mod tests {
         // Write some message into peer_b's send buffer
         let messages = vec![
             Message::Have::<LogHeightTopic>(topic.clone(), vec![]),
-            Message::SyncDone,
+            Message::Done,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
@@ -545,10 +542,10 @@ mod tests {
 
         // Assert that peer a sent peer b the expected messages
         let messages = vec![
-            Message::Operation(header_bytes_0, Some(body.to_bytes())),
-            Message::Operation(header_bytes_1, Some(body.to_bytes())),
-            Message::Operation(header_bytes_2, Some(body.to_bytes())),
-            Message::SyncDone,
+            Message::Data(header_bytes_0, Some(body.to_bytes())),
+            Message::Data(header_bytes_1, Some(body.to_bytes())),
+            Message::Data(header_bytes_2, Some(body.to_bytes())),
+            Message::Done,
         ];
         assert_message_bytes(peer_b_read, messages).await;
 
@@ -587,10 +584,10 @@ mod tests {
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String>> = vec![
-            Message::Operation(header_bytes_0.clone(), Some(body.to_bytes())),
-            Message::Operation(header_bytes_1.clone(), Some(body.to_bytes())),
-            Message::Operation(header_bytes_2.clone(), Some(body.to_bytes())),
-            Message::SyncDone,
+            Message::Data(header_bytes_0.clone(), Some(body.to_bytes())),
+            Message::Data(header_bytes_1.clone(), Some(body.to_bytes())),
+            Message::Data(header_bytes_2.clone(), Some(body.to_bytes())),
+            Message::Done,
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
@@ -619,7 +616,7 @@ mod tests {
             peer_b_read,
             vec![
                 Message::Have(topic.clone(), vec![(private_key.public_key(), vec![])]),
-                Message::SyncDone,
+                Message::Done,
             ],
         )
         .await;
@@ -779,7 +776,6 @@ mod tests {
         let (hash_2, header_2, header_bytes_2) =
             create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
 
-        // Create a store for peer a and populate it with one operation
         let mut store_1 = MemoryStore::default();
         store_1
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
