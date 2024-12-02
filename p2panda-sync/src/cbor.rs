@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Utility methods to encode or decode wire protocol messages in [CBOR] format.
+//!
+//! [CBOR]: https://cbor.io/
 use std::marker::PhantomData;
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
