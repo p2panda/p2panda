@@ -69,7 +69,7 @@
 //! be further extended with an efficient sync implementation in `p2panda-sync` and validation and
 //! fast stream-based ingest solutions in `p2panda-streams`.
 //!
-//! For discovery of peers on the local network, we provide a mDNS-based implementation in
+//! For discovery of peers on the local network, we provide an mDNS-based implementation in
 //! `p2panda-discovery`, planned next are additional techniques like "rendesvouz" nodes and random
 //! walk algorithms.
 //!
@@ -95,7 +95,7 @@
 //! // identifier to group peers into multiple networks when necessary.
 //! let network_id = [1; 32];
 //!
-//! // The network can be used to automatically find and ask other peers about any data we the
+//! // The network can be used to automatically find and ask other peers about any data the
 //! // application is interested in. This is expressed through "network-wide queries" over topics.
 //! //
 //! // In this example we would like to be able to query messages from each chat group, identified
@@ -176,7 +176,7 @@ pub type NetworkId = [u8; 32];
 /// Networked applications, like p2p systems, usually want to converge to the same state over time,
 /// so that all users will see the same data at some point.
 ///
-/// If we're considering that the totality of "all data" the application can create as the "global
+/// If we're considering the totality of "all data" the application can create as the "global
 /// state", we might want to categorise it into logical "sub-sections", especially when the
 /// application gets complex. In an example chat application we might not want to sync _all_ chat
 /// group data which has ever been created by all peers, but only a subset of the ones our peer is
@@ -204,7 +204,7 @@ pub(crate) fn to_public_key(key: iroh_base::key::PublicKey) -> p2panda_core::Pub
     p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
 }
 
-/// Converts an `p2panda-core` public key to the "iroh" type.
+/// Converts a `p2panda-core` public key to the "iroh" type.
 #[allow(dead_code)]
 pub(crate) fn from_public_key(key: p2panda_core::PublicKey) -> iroh_base::key::PublicKey {
     iroh_base::key::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")

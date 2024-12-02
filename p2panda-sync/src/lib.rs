@@ -37,13 +37,10 @@ use thiserror::Error;
 ///
 /// ## Design
 ///
-/// Sync sessions are designed as a two-party protocol, where an "initiator" starts the session
-/// over a "topic" and an "acceptor" learning about the topic to finally exchange the actual data
-/// of interest with each other.
-///
-/// Each protocol is usually following two phases: A "Handshake" phase, used to exchange the
-/// "topic" and access control and a "Sync" phase where the requested application data is exchanged
-/// and validated.
+/// Sync sessions are designed as a two-party protocol featuring an "initiator" and an "acceptor".
+/// Each protocol usually follows two phases: 1) The "Handshake" phase, during which the "initiator" 
+/// sends the sync "topic" and any access control data to the "acceptor", and 2) The "Sync" phase, 
+/// where the requested application data is exchanged and validated.
 ///
 /// ## Privacy and Security
 ///
@@ -64,7 +61,7 @@ use thiserror::Error;
 ///
 /// ## Topics
 ///
-/// Topics are generic data types which can be used to express the interest in a particular subset
+/// Topics are generic data types which can be used to express interest in a particular subset
 /// of the data we want to sync over, for example chat group identifiers or very specific "search
 /// queries" for example "give me all documents containing the word 'billy'."
 ///
@@ -115,7 +112,7 @@ where
     /// regarding implementation. Synced data is forwarded to the application layers via the
     /// `SyncFrom::Data` message (via `app_tx`).
     ///
-    /// In case of a detected failure (either through an critical error on our end or an unexpected
+    /// In case of a detected failure (either through a critical error on our end or an unexpected
     /// behaviour from the remote peer) a `SyncError` is returned.
     async fn initiate(
         self: Arc<Self>,
@@ -128,18 +125,18 @@ where
     /// Accept a sync protocol session over the provided bi-directional stream.
     ///
     /// During the "Handshake" phase the "acceptor" usually responds to the access request and
-    /// informs the learns about the "topic" from the remote peer they are interested in
-    /// exchanging. Implementations for `p2panda-net` are required to send a
+    /// learns about the "topic" from the remote peer.
+    /// Implementations for `p2panda-net` are required to send a
     /// `SyncFrom::HandshakeSuccess` message to the application layer (via `app_tx`) during this
-    /// phase to inform the backend that we've successfully learned the topic with the remote peer
-    /// and are about to begin sync.
+/// phase to inform the backend that the topic has been successfully received from the remote peer
+/// and that data exchange is about to begin.
     ///
     /// Afterwards it enters the "Sync" phase where the actual application data is exchanged with
     /// the remote peer. If the protocol exchanges data in both directions or not is up to the
     /// regarding implementation. Synced data is forwarded to the application layers via the
     /// `SyncFrom::Data` message (via `app_tx`).
     ///
-    /// In case of a detected failure (either through an critical error on our end or an unexpected
+    /// In case of a detected failure (either through a critical error on our end or an unexpected
     /// behaviour from the remote peer) a `SyncError` is returned.
     async fn accept(
         self: Arc<Self>,
@@ -157,7 +154,7 @@ where
     T: Topic,
 {
     /// During the "Handshake" phase both peers usually manage access control and negotiate the
-    /// "topic" they want to exchange over. This messages indicates that this phase has ended.
+    /// "topic" they want to exchange over. This message indicates that this phase has ended.
     ///
     /// Implementations for `p2panda-net` are required to send this message to the underlying
     /// transport layer to inform the "backend" that we've successfully requested access, exchanged
@@ -168,7 +165,7 @@ where
     /// backend might exchange similar data over at the same time).
     HandshakeSuccess(T),
 
-    /// Application data we've received during the sync session from the remote peer and we want to
+    /// Application data we've received during the sync session from the remote peer and want to
     /// forward to higher application layers.
     ///
     /// These "frontends" might further process, decrypt payloads, sort messages or apply more
@@ -247,7 +244,7 @@ impl From<std::io::Error> for SyncError {
 /// Identify the particular data-set a peer is interested in syncing.
 ///
 /// Exactly how this is expressed is left up to the user to decide. During sync the "initiator"
-/// sends their topic to a remote peer where it is be mapped to their local data-set. Additionally
+/// sends their topic to a remote peer where it is be mapped to their local data-set. Additional
 /// access-control checks can be performed. Once this "handshake" is complete both peers will
 /// proceed with the designated sync protocol.
 ///
