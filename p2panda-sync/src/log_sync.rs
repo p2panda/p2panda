@@ -1,6 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Efficient sync protocol for append-only log data types.
+//!
+//! This implementation is generic over the actual data type implementation, as long as it follows
+//! the form of a numbered, linked list it will be compatible for sync. p2panda provides an own log
+//! implementation in `p2panda-core` which can be easily combined with this sync protocol.
+//!
+//! The protocol checks the current local "log heights", that is the index of the latest known
+//! entry in each log, of the "initiating" peer and sends them in form of a "Have" message to the
+//! remote one. The "accepting", remote peer matches the given log heights with the locally present
+//! ones, calculates the delta of missing entries and sends them to the initiating peer as part of
+//! "Data" messages.
+//!
+//! In this implementation the "accepting" peer will never receive any new data from the
+//! "initiating" counter-part. Usually this would be handled in a "reverse" sync session which
+//! might run concurrently.
+//!
+//! To find out which logs to send matching the given "topic" a `TopicMap` is provided. This
+//! interface aids the sync protocol in deciding which logs to transfer for each given topic. Due
+//! to the generic nature of `TopicMap` it's possible to realize very different applications on top
+//! of the same sync implementation.
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -17,9 +36,9 @@ use crate::{FromSync, SyncError, SyncProtocol, Topic, TopicMap};
 
 type SeqNum = u64;
 
-pub type LogHeights<T> = Vec<(T, SeqNum)>;
+type LogHeights<T> = Vec<(T, SeqNum)>;
 
-pub type Logs<T> = HashMap<PublicKey, Vec<T>>;
+type Logs<T> = HashMap<PublicKey, Vec<T>>;
 
 /// Messages to be sent over the wire between the two peers.
 #[allow(clippy::large_enum_variant)]
@@ -31,26 +50,6 @@ pub enum Message<T, L = String> {
     Done,
 }
 
-/// Efficient sync protocol for append-only log data types.
-///
-/// This implementation is generic over the actual data type implementation, as long as it follows
-/// the form of a numbered, linked list it will be compatible for sync. p2panda provides an own log
-/// implementation in `p2panda-core` which can be easily combined with this sync protocol.
-///
-/// The protocol checks the current local "log heights", that is the index of the latest known
-/// entry in each log, of the "initiating" peer and sends them in form of a "Have" message to the
-/// remote one. The "accepting", remote peer matches the given log heights with the locally present
-/// ones, calculates the delta of missing entries and sends them to the initiating peer as part of
-/// "Data" messages.
-///
-/// In this implementation the "accepting" peer will never receive any new data from the
-/// "initiating" counter-part. Usually this would be handled in a "reverse" sync session which
-/// might run concurrently.
-///
-/// To find out which logs to send matching the given "topic" a `TopicMap` is provided. This
-/// interface aids the sync protocol in deciding which logs to transfer for each given topic. Due
-/// to the generic nature of `TopicMap` it's possible to realize very different applications on top
-/// of the same sync implementation.
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<TM, L, E, S: LogStore<L, E>> {
     topic_map: TM,

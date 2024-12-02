@@ -148,7 +148,7 @@ where
 
 /// Messages which can be sent to the higher application layers (for further validation or
 /// persistance) and the underlying transport layer (for managing the sync session).
-#[derive(PartialEq, Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FromSync<T>
 where
     T: Topic,
@@ -194,7 +194,7 @@ where
 ///    implementation did not follow "2. Phase Flow" requirements, lack of system resources, etc.)
 /// 2. Unexpected Behaviour (ie. remote peer abruptly disconnected, error which got correctly
 ///    caught in sync implementation, etc.)
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum SyncError {
     /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
     ///

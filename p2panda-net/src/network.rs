@@ -879,9 +879,9 @@ mod tests {
 
     use async_trait::async_trait;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::{Body, Hash, Header, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
+    use p2panda_sync::log_sync::LogSyncProtocol;
     use p2panda_sync::{Topic, TopicMap};
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
@@ -1066,6 +1066,8 @@ mod tests {
         assert!(result1.is_ok());
         assert!(result2.is_ok());
     }
+
+    type Logs<T> = HashMap<PublicKey, Vec<T>>;
 
     #[derive(Clone, Debug)]
     struct LogIdTopicMap<T>(HashMap<T, Logs<u64>>);
