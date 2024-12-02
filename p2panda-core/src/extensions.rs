@@ -1,5 +1,50 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! # Examples
+//! ```
+//! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+//! use serde::{Serialize, Deserialize};
+//!
+//! // Authors Ed25519 private signing key.
+//! let private_key = PrivateKey::new();
+//!
+//! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+//! struct CustomExtensions {
+//!     prune_flag: PruneFlag,
+//! }
+//!
+//!
+//! impl Extension<PruneFlag> for CustomExtensions {
+//!     fn extract(&self) -> Option<PruneFlag> {
+//!         Some(self.prune_flag.to_owned())
+//!     }
+//! }
+//!
+//! let extensions = CustomExtensions {
+//!     prune_flag: PruneFlag::new(true),
+//! };
+//!
+//! // Construct the body and header.
+//! let body = Body::new("Prune from here please!".as_bytes());
+//! let mut header = Header {
+//!     version: 1,
+//!     public_key: private_key.public_key(),
+//!     signature: None,
+//!     payload_size: body.size(),
+//!     payload_hash: Some(body.hash()),
+//!     timestamp: 1733170247,
+//!     seq_num: 0,
+//!     backlink: None,
+//!     previous: vec![],
+//!     extensions: Some(extensions),
+//! };
+//!
+//! // Sign the header with the authors private key.
+//! header.sign(&private_key);
+//!
+//! let prune_flag: PruneFlag = header.extract().unwrap();
+//! assert!(prune_flag.is_set())
+//! ```
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
