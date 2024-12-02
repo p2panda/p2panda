@@ -249,6 +249,7 @@ impl<'a> Arbitrary<'a> for PublicKey {
     }
 }
 
+/// Ed25519 signature.
 #[derive(Copy, Eq, PartialEq, Clone)]
 pub struct Signature(ed25519_dalek::Signature);
 
