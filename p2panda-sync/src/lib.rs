@@ -228,7 +228,7 @@ pub enum SyncError {
 /// on the user's machine.
 ///
 /// See `Encoder` or `Decoder` `Error` trait type in tokio's codec for more information:
-/// https://docs.rs/tokio-util/latest/tokio_util/codec/trait.Decoder.html#associatedtype.Error
+/// <https://docs.rs/tokio-util/latest/tokio_util/codec/trait.Decoder.html#associatedtype.Error>
 impl From<std::io::Error> for SyncError {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
