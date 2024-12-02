@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Private and public parts of an Ed25519 key pair.
+//! Ed25519 private and public keys.
 //!
 //! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for  
 //! verifying that a signature was indeed created by it's private counterpart. The private part of
