@@ -28,17 +28,6 @@ pub enum Message<T, L = String> {
     Done,
 }
 
-#[cfg(test)]
-impl<T, L> Message<T, L>
-where
-    T: Serialize,
-    L: Serialize,
-{
-    pub fn to_bytes(&self) -> Vec<u8> {
-        p2panda_core::cbor::encode_cbor(&self).expect("type can be serialized")
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<TM, L, E> {
     pub topic_map: TM,
@@ -302,6 +291,16 @@ mod tests {
     use crate::{FromSync, SyncError, SyncProtocol, Topic};
 
     use super::{LogSyncProtocol, Logs, Message, TopicMap};
+
+    impl<T, L> Message<T, L>
+    where
+        T: Serialize,
+        L: Serialize,
+    {
+        pub fn to_bytes(&self) -> Vec<u8> {
+            p2panda_core::cbor::encode_cbor(&self).expect("type can be serialized")
+        }
+    }
 
     fn create_operation<E: Clone + Serialize>(
         private_key: &PrivateKey,
