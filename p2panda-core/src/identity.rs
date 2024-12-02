@@ -29,10 +29,13 @@ use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
 use thiserror::Error;
 
+/// The length of a ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
+/// The length of a ed25519 `PrivateKey`, in bytes.
 pub const PRIVATE_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 
+/// The length of a ed25519 `PublicKey`, in bytes.
 pub const PUBLIC_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
 /// Private Ed25519 key used for digital signatures.
