@@ -39,6 +39,7 @@ impl<E> Ord for Operation<E> {
     }
 }
 
+/// Header of 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E = DefaultExtensions> {

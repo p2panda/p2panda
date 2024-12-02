@@ -6,6 +6,20 @@
 //! verifying that a signature was indeed created by it's private counterpart. The private part of
 //! a key pair is typically kept on one device and never transported, whereas the public part acts
 //! as a peers unique identifier and can be shared freely.  
+//! 
+//! # Examples
+//!
+//! ```
+//! use p2panda_core::identity::PrivateKey;
+//!
+//! let private_key = PrivateKey::new();
+//! let public_key = private_key.public_key(); 
+//! 
+//! let bytes: &[u8] = b"A very important message.";
+//! let signature = private_key.sign(bytes);
+//!
+//! assert!(public_key.verify(bytes, &signature))
+//! ```
 use std::fmt;
 use std::str::FromStr;
 
