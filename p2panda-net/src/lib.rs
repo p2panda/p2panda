@@ -3,13 +3,12 @@
 //! `p2panda-net` is a data-type-agnostic p2p networking layer offering robust, direct
 //! communication to any device, no matter where they are.
 //!
-//! It provides a stream-based API for higher application layers: Applications subscribe to any
-//! "topic" they are interested in and `p2panda-net` will automatically discover similar peers and
-//! transport raw bytes between them.
+//! It provides a stream-based API for higher layers: Applications subscribe to any "topic" they
+//! are interested in and `p2panda-net` will automatically discover similar peers and transport raw
+//! bytes between them.
 //!
-//! Additionally `p2panda-net` can be extended with custom sync protocol implementations for all
-//! data types, allowing applications to "catch up on past data", eventually converging to the same
-//! state.
+//! Additionally `p2panda-net` can be extended with custom sync protocols for all data types,
+//! allowing applications to "catch up on past data", eventually converging to the same state.
 //!
 //! ## Features
 //!
@@ -25,7 +24,7 @@
 //!
 //! 1. Data of any kind can be exchanged efficiently via gossip broadcast ("live mode") or via sync
 //!    protocols between two peers ("catching up on past state")
-//! 2. Custom queries to express interest in certain data of applications
+//! 2. Custom network-wide queries to express interest in certain data of applications
 //! 3. Ambient peer discovery: Learning about new, previously unknown peers in the network
 //! 4. Ambient topic discovery: Learning what peers are interested in, automatically forming
 //!    overlay networks per topic
@@ -55,11 +54,11 @@
 //!
 //! * Custom Data types exchanged over the network
 //! * Optional relay nodes to aid connection establishment when peers are behind firewalls etc.
-//! * Fine-tune gossipping behaviour
 //! * Custom sync protocol for any data types, with managed re-attempts on connection failures and
 //! optional re-sync schedules
 //! * Custom peer discovery strategies (multiple approaches can be used at the same time)
 //! * Sync and storage of (very) large blobs
+//! * Fine-tune gossipping behaviour
 //! * Additional custom protocol handlers
 //!
 //! ## Integration with other p2panda solutions
