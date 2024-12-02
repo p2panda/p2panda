@@ -10,10 +10,9 @@
 //! can negotiate scope and access in a sync protocol for any type of data the remote peer
 //! currently knows about.
 //!
-//! While `p2panda-sync` is merely a generic definition of the `SyncProtocol` trait interface,
-//! compatible with all sorts of data types, it also comes with optional implementations, optimized
-//! for efficient sync over append-only log-based data types and helpers to encode wire messages in
-//! CBOR.
+//! Next to `p2panda-sync` containing the generic definition of the `SyncProtocol` trait interface,
+//! it also comes with optional implementations behind feature flags, optimized for efficient sync
+//! of append-only log-based data types plus helpers to encode wire messages in CBOR.
 #[cfg(feature = "cbor")]
 pub mod cbor;
 #[cfg(feature = "log-sync")]
@@ -28,47 +27,49 @@ use futures::{AsyncRead, AsyncWrite, Sink};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Data- and transport-agnostic interface to implement a custom sync protocol, compatible with
-/// `p2panda-net` or other peer-to-peer networking solutions.
+/// Traits to implement a custom sync protocol.
 ///
-/// Implementing a `SyncProtocol` trait needs extra care but is only required when designing custom
+/// Implementing a `SyncProtocol` trait needs extra care and is only required when designing custom
 /// low-level peer-to-peer protocols and data types. p2panda comes already with solutions which can
 /// be used "out of the box", providing implementations for most applications and usecases.
 ///
 /// ## Design
 ///
-/// Sync sessions are designed as a two-party protocol featuring an "initiator" and an "acceptor".
-/// Each protocol usually follows two phases: 1) The "Handshake" phase, during which the "initiator" 
-/// sends the sync "topic" and any access control data to the "acceptor", and 2) The "Sync" phase, 
-/// where the requested application data is exchanged and validated.
+/// Sync sessions take place when two peers connect to each other and follow the sync protocol.
+/// They are designed as a two-party protocol featuring an "initiator" and an "acceptor" role.
+///
+/// Each protocol usually follows two phases: 1) The "Handshake" phase, during which the
+/// "initiator" sends the "topic" and any access control data to the "acceptor", and 2) The "Sync"
+/// phase, where the requested application data is finally exchanged and validated.
 ///
 /// ## Privacy and Security
 ///
 /// The `SyncProtocol` trait has been designed to allow privacy-respecting implementations where
-/// data (via access control) and the topic itself (for example via Diffie Hellmann) is securely
-/// exchanged without revealing any information unnecessarily. This usually takes place inside the
-/// "Handshake" phase of the regarding protocol.
+/// application data (via access control) and the topic itself (for example via Diffie Hellmann) is
+/// securely exchanged without revealing any information to unknown peers unnecessarily. This
+/// usually takes place during the "Handshake" phase of the regarding protocol.
 ///
 /// The underlying transport layer should provide automatic authentication of the remote peer, a
-/// reliable connection and transport encryption, as in `p2panda-net`.
+/// reliable connection and transport encryption, for example self-certified TLS 1.3 over QUIC as
+/// in `p2panda-net`.
 ///
 /// ## Streams
 ///
 /// Three distinct data channels are provided by the underlying transport layer to each
 /// `SyncProtocol` implementation: `tx` for sending data to the remote peer, `rx` to receive data
-/// from the remote peer and `app_tx` to send received data to the higher-level application,
-/// validation and persistance layers.
+/// from the remote peer and `app_tx` to send received data to the higher-level application-,
+/// validation- and persistance-layers.
 ///
 /// ## Topics
 ///
-/// Topics are generic data types which can be used to express interest in a particular subset
-/// of the data we want to sync over, for example chat group identifiers or very specific "search
-/// queries" for example "give me all documents containing the word 'billy'."
+/// Topics are generic data types which can be used to express interest in a particular subset of
+/// the data we want to sync over, like chat group identifiers or very specific "search queries",
+/// for example "give me all documents containing the word 'billy'."
 ///
 /// With the help of the `TopicMap` trait we can keep sync implementations agnostic to specific
 /// topic implementations. The sync protocol only needs to feed the "topic" into the "map" which
 /// will answer with the actual to-be-synced data entities (for example coming from a store). This
-/// allows application developers to use your `SyncProtocol` implementation for their custom
+/// allows application developers to re-use your `SyncProtocol` implementation for their custom
 /// `Topic` requirements.
 ///
 /// ## Validation
@@ -125,11 +126,10 @@ where
     /// Accept a sync protocol session over the provided bi-directional stream.
     ///
     /// During the "Handshake" phase the "acceptor" usually responds to the access request and
-    /// learns about the "topic" from the remote peer.
-    /// Implementations for `p2panda-net` are required to send a
-    /// `SyncFrom::HandshakeSuccess` message to the application layer (via `app_tx`) during this
-/// phase to inform the backend that the topic has been successfully received from the remote peer
-/// and that data exchange is about to begin.
+    /// learns about the "topic" from the remote peer. Implementations for `p2panda-net` are
+    /// required to send a `SyncFrom::HandshakeSuccess` message to the application layer (via
+    /// `app_tx`) during this phase to inform the backend that the topic has been successfully
+    /// received from the remote peer and that data exchange is about to begin.
     ///
     /// Afterwards it enters the "Sync" phase where the actual application data is exchanged with
     /// the remote peer. If the protocol exchanges data in both directions or not is up to the
@@ -146,8 +146,8 @@ where
     ) -> Result<(), SyncError>;
 }
 
-/// Messages which can be sent to the higher application layers for further validation or
-/// persistance and the underlying transport layer for managing the sync session.
+/// Messages which can be sent to the higher application layers (for further validation or
+/// persistance) and the underlying transport layer (for managing the sync session).
 #[derive(PartialEq, Debug)]
 pub enum FromSync<T>
 where
@@ -161,8 +161,8 @@ where
     /// the topic with the remote peer and are about to begin sync.
     ///
     /// With this information backends can optionally apply optimizations, which might for example
-    /// be required to keep application messages in-order (as there might be other channels the
-    /// backend might exchange similar data over at the same time).
+    /// be required to keep application messages in-order (as there might exist other channels the
+    /// backend exchanges similar data over at the same time).
     HandshakeSuccess(T),
 
     /// Application data we've received during the sync session from the remote peer and want to
@@ -179,7 +179,7 @@ where
         /// requested lazily in a later process.
         header: Vec<u8>,
 
-        /// Optional "body" which can represent the application data.
+        /// Optional "body" which can represent "off-chain" application data.
         ///
         /// This is useful for realizing "off-chain" compatible data types. Implementations without
         /// this distinction will leave this field always to `None` and only encode their data
@@ -190,10 +190,10 @@ where
 
 /// Errors which can occur during sync sessions.
 ///
-/// 1. Critical system failures (bug in p2panda code or sync implementation, sync implementation
-///    did not follow "2. Phase Flow" requirements, lack of system resources, etc.)
-/// 2. Unexpected Behaviour (remote peer abruptly disconnected, error which got correctly handled
-///    in sync implementation, etc.)
+/// 1. Critical system failures (ie. bug in p2panda code or sync implementation, sync
+///    implementation did not follow "2. Phase Flow" requirements, lack of system resources, etc.)
+/// 2. Unexpected Behaviour (ie. remote peer abruptly disconnected, error which got correctly
+///    caught in sync implementation, etc.)
 #[derive(Debug, Error, PartialEq)]
 pub enum SyncError {
     /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
@@ -201,8 +201,8 @@ pub enum SyncError {
     /// Indicates that the sync protocol was not correctly followed, for example due to unexpected
     /// or missing messages, etc.
     ///
-    /// Can be used to re-attempt syncing with this peer or down-grading it in priority,
-    /// potentially deny-listing if communication failed too often.
+    /// Can be used by a backend to re-attempt syncing with this peer or down-grading it in
+    /// priority, potentially deny-listing if communication failed too often.
     #[error("sync session failed due to unexpected protocol behaviour of remote peer: {0}")]
     UnexpectedBehaviour(String),
 
@@ -241,19 +241,20 @@ impl From<std::io::Error> for SyncError {
     }
 }
 
-/// Identify the particular data-set a peer is interested in syncing.
+/// Identify the particular dataset a peer is interested in syncing.
 ///
 /// Exactly how this is expressed is left up to the user to decide. During sync the "initiator"
-/// sends their topic to a remote peer where it is be mapped to their local data-set. Additional
+/// sends their topic to a remote peer where it is be mapped to their local dataset. Additional
 /// access-control checks can be performed. Once this "handshake" is complete both peers will
 /// proceed with the designated sync protocol.
 ///
 /// ## `TopicId` vs `Topic`
 ///
 /// While `TopicId` is merely a 32-byte identifier which can't hold much information other than
-/// being a distinct identifier of a single data item or subset of them, we can use `Topic` to
-/// implement custom data types which can "query" very specific data items. Peers can for example
-/// announce that they'd like "all events from the 27th of September 23 until today" with `Topic`.
+/// being a distinct identifier of a single data item or collection of them, we can use `Topic` to
+/// implement custom data types representing "queries" for very specific data items. Peers can for
+/// example announce that they'd like "all events from the 27th of September 23 until today" with
+/// `Topic`.
 ///
 /// Consult the `TopicId` documentation in `p2panda-net` for more information.
 pub trait Topic:
