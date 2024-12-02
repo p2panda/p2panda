@@ -340,15 +340,13 @@ mod tests {
 
     use futures_util::FutureExt;
     use iroh_net::endpoint::TransportConfig;
+    use iroh_net::key::PublicKey;
     use iroh_net::relay::RelayMode;
     use iroh_net::Endpoint;
     use tokio::sync::mpsc;
     use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::EnvFilter;
 
     use crate::engine::ToEngineActor;
     use crate::network::sync_protocols::PingPongProtocol;
@@ -358,14 +356,6 @@ mod tests {
     use crate::{ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
-
-    fn setup_logging() {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-            .with(EnvFilter::from_default_env())
-            .try_init()
-            .ok();
-    }
 
     async fn build_endpoint(port: u16) -> Endpoint {
         let mut transport_config = TransportConfig::default();
@@ -377,7 +367,6 @@ mod tests {
         let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, port + 1, 0, 0);
 
         Endpoint::builder()
-            //.alpns(vec![SYNC_CONNECTION_ALPN.to_vec()])
             .transport_config(transport_config)
             .relay_mode(RelayMode::Disabled)
             .bind_addr_v4(socket_address_v4)
@@ -387,37 +376,36 @@ mod tests {
             .unwrap()
     }
 
-    async fn handle_connection(
-        mut connecting: iroh_net::endpoint::Connecting,
-        protocols: Arc<ProtocolMap>,
+    async fn prepare_for_sync(
+        resync: bool,
+    ) -> (
+        TestTopic,
+        PublicKey,
+        SyncActor<TestTopic>,
+        mpsc::Sender<ToSyncActor<TestTopic>>,
+        Endpoint,
+        mpsc::Receiver<ToEngineActor<TestTopic>>,
+        ProtocolMap,
+        CancellationToken,
+        PublicKey,
+        SyncActor<TestTopic>,
+        Endpoint,
+        mpsc::Receiver<ToEngineActor<TestTopic>>,
+        ProtocolMap,
+        CancellationToken,
     ) {
-        let alpn = match connecting.alpn().await {
-            Ok(alpn) => alpn,
-            Err(err) => {
-                warn!("ignoring connection: invalid handshake: {:?}", err);
-                return;
-            }
-        };
-        let Some(handler) = protocols.get(&alpn) else {
-            warn!("ignoring connection: unsupported alpn protocol");
-            return;
-        };
-        if let Err(err) = handler.accept(connecting).await {
-            warn!("handling incoming connection ended with error: {err}");
-        }
-    }
-
-    #[tokio::test]
-    async fn single_sync() {
-        setup_logging();
-
         let test_topic = TestTopic::new("ping_pong");
         let ping_pong = PingPongProtocol {};
-        let config_a = SyncConfiguration::new(ping_pong.clone());
+        let config_a = if resync {
+            let resync_config = ResyncConfiguration::new().interval(3).poll_interval(1);
+            SyncConfiguration::new(ping_pong.clone()).resync(resync_config)
+        } else {
+            SyncConfiguration::new(ping_pong.clone())
+        };
         let config_b = config_a.clone();
 
-        let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
-        let (engine_actor_tx_b, mut engine_actor_rx_b) = mpsc::channel(64);
+        let (engine_actor_tx_a, engine_actor_rx_a) = mpsc::channel(64);
+        let (engine_actor_tx_b, engine_actor_rx_b) = mpsc::channel(64);
 
         let endpoint_a = build_endpoint(2022).await;
         let endpoint_b = build_endpoint(2024).await;
@@ -451,6 +439,63 @@ mod tests {
 
         let shutdown_token_a = CancellationToken::new();
         let shutdown_token_b = CancellationToken::new();
+
+        (
+            test_topic,
+            peer_a,
+            sync_actor_a,
+            sync_actor_tx_a,
+            endpoint_a,
+            engine_actor_rx_a,
+            protocols_a,
+            shutdown_token_a,
+            peer_b,
+            sync_actor_b,
+            endpoint_b,
+            engine_actor_rx_b,
+            protocols_b,
+            shutdown_token_b,
+        )
+    }
+
+    async fn handle_connection(
+        mut connecting: iroh_net::endpoint::Connecting,
+        protocols: Arc<ProtocolMap>,
+    ) {
+        let alpn = match connecting.alpn().await {
+            Ok(alpn) => alpn,
+            Err(err) => {
+                warn!("ignoring connection: invalid handshake: {:?}", err);
+                return;
+            }
+        };
+        let Some(handler) = protocols.get(&alpn) else {
+            warn!("ignoring connection: unsupported alpn protocol");
+            return;
+        };
+        if let Err(err) = handler.accept(connecting).await {
+            warn!("handling incoming connection ended with error: {err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn single_sync() {
+        let (
+            test_topic,
+            peer_a,
+            sync_actor_a,
+            sync_actor_tx_a,
+            endpoint_a,
+            mut engine_actor_rx_a,
+            protocols_a,
+            shutdown_token_a,
+            peer_b,
+            sync_actor_b,
+            endpoint_b,
+            mut engine_actor_rx_b,
+            protocols_b,
+            shutdown_token_b,
+        ) = prepare_for_sync(false).await;
 
         // Spawn the sync actor for peer a.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -538,48 +583,22 @@ mod tests {
 
     #[tokio::test]
     async fn second_sync_without_resync() {
-        setup_logging();
-
-        let test_topic = TestTopic::new("ping_pong");
-        let ping_pong = PingPongProtocol {};
-        let config_a = SyncConfiguration::new(ping_pong.clone());
-        let config_b = config_a.clone();
-
-        let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
-        let (engine_actor_tx_b, mut engine_actor_rx_b) = mpsc::channel(64);
-
-        let endpoint_a = build_endpoint(2022).await;
-        let endpoint_b = build_endpoint(2024).await;
-
-        let mut protocols_a = ProtocolMap::default();
-        let sync_handler_a =
-            SyncConnection::new(Arc::new(ping_pong.clone()), engine_actor_tx_a.clone());
-        protocols_a.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_a));
-        let alpns_a = protocols_a.alpns();
-        endpoint_a.set_alpns(alpns_a).unwrap();
-
-        let mut protocols_b = ProtocolMap::default();
-        let sync_handler_b = SyncConnection::new(Arc::new(ping_pong), engine_actor_tx_b.clone());
-        protocols_b.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_b));
-        let alpns_b = protocols_b.alpns();
-        endpoint_b.set_alpns(alpns_b).unwrap();
-
-        let peer_a = endpoint_a.node_id();
-        let peer_b = endpoint_b.node_id();
-
-        let peer_addr_a = endpoint_a.node_addr().await.unwrap();
-        let peer_addr_b = endpoint_b.node_addr().await.unwrap();
-
-        endpoint_a.add_node_addr(peer_addr_b).unwrap();
-        endpoint_b.add_node_addr(peer_addr_a).unwrap();
-
-        let (sync_actor_a, sync_actor_tx_a) =
-            SyncActor::new(config_a, endpoint_a.clone(), engine_actor_tx_a);
-        let (sync_actor_b, _sync_actor_tx_b) =
-            SyncActor::new(config_b, endpoint_b.clone(), engine_actor_tx_b);
-
-        let shutdown_token_a = CancellationToken::new();
-        let shutdown_token_b = CancellationToken::new();
+        let (
+            test_topic,
+            peer_a,
+            sync_actor_a,
+            sync_actor_tx_a,
+            endpoint_a,
+            mut engine_actor_rx_a,
+            protocols_a,
+            shutdown_token_a,
+            peer_b,
+            sync_actor_b,
+            endpoint_b,
+            mut engine_actor_rx_b,
+            protocols_b,
+            shutdown_token_b,
+        ) = prepare_for_sync(false).await;
 
         // Spawn the sync actor for peer a.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -690,51 +709,22 @@ mod tests {
 
     #[tokio::test]
     async fn resync() {
-        setup_logging();
-
-        let test_topic = TestTopic::new("ping_pong");
-        let ping_pong = PingPongProtocol {};
-        let resync_config = ResyncConfiguration::new().interval(3).poll_interval(1);
-        let config_a = SyncConfiguration::new(ping_pong.clone()).resync(resync_config);
-        let config_b = config_a.clone();
-
-        let (engine_actor_tx_a, mut engine_actor_rx_a) = mpsc::channel(64);
-        let (engine_actor_tx_b, mut engine_actor_rx_b) = mpsc::channel(64);
-
-        let endpoint_a = build_endpoint(2022).await;
-        let endpoint_b = build_endpoint(2024).await;
-
-        let mut protocols_a = ProtocolMap::default();
-        let sync_handler_a =
-            SyncConnection::new(Arc::new(ping_pong.clone()), engine_actor_tx_a.clone());
-        protocols_a.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_a));
-        let protocols_a = Arc::new(protocols_a.clone());
-        let alpns_a = protocols_a.alpns();
-        endpoint_a.set_alpns(alpns_a).unwrap();
-
-        let mut protocols_b = ProtocolMap::default();
-        let sync_handler_b = SyncConnection::new(Arc::new(ping_pong), engine_actor_tx_b.clone());
-        protocols_b.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_b));
-        let protocols_b = Arc::new(protocols_b.clone());
-        let alpns_b = protocols_b.alpns();
-        endpoint_b.set_alpns(alpns_b).unwrap();
-
-        let peer_a = endpoint_a.node_id();
-        let peer_b = endpoint_b.node_id();
-
-        let peer_addr_a = endpoint_a.node_addr().await.unwrap();
-        let peer_addr_b = endpoint_b.node_addr().await.unwrap();
-
-        endpoint_a.add_node_addr(peer_addr_b).unwrap();
-        endpoint_b.add_node_addr(peer_addr_a).unwrap();
-
-        let (sync_actor_a, sync_actor_tx_a) =
-            SyncActor::new(config_a, endpoint_a.clone(), engine_actor_tx_a);
-        let (sync_actor_b, _sync_actor_tx_b) =
-            SyncActor::new(config_b, endpoint_b.clone(), engine_actor_tx_b);
-
-        let shutdown_token_a = CancellationToken::new();
-        let shutdown_token_b = CancellationToken::new();
+        let (
+            test_topic,
+            peer_a,
+            sync_actor_a,
+            sync_actor_tx_a,
+            endpoint_a,
+            mut engine_actor_rx_a,
+            protocols_a,
+            shutdown_token_a,
+            peer_b,
+            sync_actor_b,
+            endpoint_b,
+            mut engine_actor_rx_b,
+            protocols_b,
+            shutdown_token_b,
+        ) = prepare_for_sync(true).await;
 
         // Spawn the sync actor for peer a.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -744,9 +734,9 @@ mod tests {
             while let Some(incoming) = endpoint_a.accept().await {
                 if let Ok(connecting) = incoming.accept() {
                     let protocols_a = protocols_a.clone();
-                    tokio::task::spawn(
-                        async move { handle_connection(connecting, protocols_a).await },
-                    );
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, protocols_a.into()).await
+                    });
                 }
             }
         });
@@ -759,9 +749,9 @@ mod tests {
             while let Some(incoming) = endpoint_b.accept().await {
                 if let Ok(connecting) = incoming.accept() {
                     let protocols_b = protocols_b.clone();
-                    tokio::task::spawn(
-                        async move { handle_connection(connecting, protocols_b).await },
-                    );
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, protocols_b.into()).await
+                    });
                 }
             }
         });
