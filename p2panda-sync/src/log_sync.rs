@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Efficient sync protocol for append-only log data types.
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
 use p2panda_core::{Extensions, PublicKey};
-use p2panda_store::{LogId, LogStore, MemoryStore};
+use p2panda_store::{LogId, LogStore};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -15,7 +17,9 @@ use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::{FromSync, SyncError, SyncProtocol, Topic, TopicMap};
 
 type SeqNum = u64;
+
 pub type LogHeights<T> = Vec<(T, SeqNum)>;
+
 pub type Logs<T> = HashMap<PublicKey, Vec<T>>;
 
 /// Messages to be sent over the wire between the two peers.
@@ -29,18 +33,33 @@ pub enum Message<T, L = String> {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogSyncProtocol<TM, L, E> {
-    pub topic_map: TM,
-    pub store: MemoryStore<L, E>,
+pub struct LogSyncProtocol<TM, L, E, S: LogStore<L, E>> {
+    topic_map: TM,
+    store: S,
+    _marker: PhantomData<(L, E)>,
+}
+
+impl<TM, L, E, S> LogSyncProtocol<TM, L, E, S>
+where
+    S: LogStore<L, E>,
+{
+    pub fn new(topic_map: TM, store: S) -> Self {
+        Self {
+            topic_map,
+            store,
+            _marker: PhantomData {},
+        }
+    }
 }
 
 #[async_trait]
-impl<'a, T, TM, L, E> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E>
+impl<'a, T, TM, L, E, S> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E, S>
 where
     T: Topic,
     TM: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Extensions + 'a,
+    S: Debug + Sync + LogStore<L, E>,
 {
     fn name(&self) -> &'static str {
         "p2panda-log-sync-v1"
@@ -407,7 +426,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
@@ -449,7 +468,7 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| crate::SyncError::Critical(err.to_string()));
         let _ = protocol
@@ -527,7 +546,7 @@ mod tests {
         // Accept a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
@@ -597,7 +616,7 @@ mod tests {
         // Open a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let protocol = Arc::new(LogSyncProtocol { topic_map, store });
+        let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
         let _ = protocol
@@ -656,10 +675,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let peer_a_protocol = Arc::new(LogSyncProtocol {
-            topic_map: topic_map.clone(),
-            store: store_1,
-        });
+        let peer_a_protocol = Arc::new(LogSyncProtocol::new(topic_map.clone(), store_1));
 
         // Create a store for peer b and populate it with 3 operations
         let mut store_2 = MemoryStore::default();
@@ -686,10 +702,7 @@ mod tests {
             .unwrap();
 
         // Construct b log height protocol and engine for peer a
-        let peer_b_protocol = Arc::new(LogSyncProtocol {
-            topic_map,
-            store: store_2,
-        });
+        let peer_b_protocol = Arc::new(LogSyncProtocol::new(topic_map, store_2));
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -784,10 +797,7 @@ mod tests {
         // Construct a log height protocol and engine for peer a
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic, logs);
-        let peer_a_protocol = Arc::new(LogSyncProtocol {
-            topic_map: topic_map.clone(),
-            store: store_1,
-        });
+        let peer_a_protocol = Arc::new(LogSyncProtocol::new(topic_map.clone(), store_1));
 
         // Create a store for peer b and populate it with 3 operations
         let mut store_2 = MemoryStore::default();
@@ -807,10 +817,7 @@ mod tests {
             .unwrap();
 
         // Construct a log height protocol and engine for peer a
-        let peer_b_protocol = Arc::new(LogSyncProtocol {
-            topic_map,
-            store: store_2,
-        });
+        let peer_b_protocol = Arc::new(LogSyncProtocol::new(topic_map, store_2));
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);

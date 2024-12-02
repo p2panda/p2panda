@@ -1111,10 +1111,7 @@ mod tests {
 
         // Construct a store and log height protocol for peer a
         let store_a = MemoryStore::default();
-        let protocol_a = LogSyncProtocol {
-            topic_map: topic_map.clone(),
-            store: store_a,
-        };
+        let protocol_a = LogSyncProtocol::new(topic_map.clone(), store_a);
         let sync_config_a = SyncConfiguration::new(protocol_a);
 
         // Create some operations
@@ -1142,10 +1139,7 @@ mod tests {
             .unwrap();
 
         // Construct log height protocol for peer b
-        let protocol_b = LogSyncProtocol {
-            topic_map,
-            store: store_b,
-        };
+        let protocol_b = LogSyncProtocol::new(topic_map, store_b);
         let sync_config_b = SyncConfiguration::new(protocol_b);
 
         // Build peer a's node
