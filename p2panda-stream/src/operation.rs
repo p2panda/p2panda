@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to handle p2panda operations.
 use p2panda_core::{
     validate_backlink, validate_operation, Body, Extensions, Header, Operation, OperationError,
 };
@@ -106,6 +107,7 @@ where
     Ok(IngestResult::Complete(operation))
 }
 
+/// Operations can be ingested directly or need to be re-tried if they arrived out-of-order.
 #[derive(Debug)]
 pub enum IngestResult<E> {
     /// Operation has been successfully validated and persisted.
@@ -119,6 +121,7 @@ pub enum IngestResult<E> {
     Retry(Header<E>, Option<Body>, Vec<u8>, u64),
 }
 
+/// Errors which can occur due to invalid operations or critical storage failures.
 #[derive(Debug, Error)]
 pub enum IngestError {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
