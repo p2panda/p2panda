@@ -44,12 +44,13 @@ type Logs<T> = HashMap<PublicKey, Vec<T>>;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
-pub enum Message<T, L = String> {
+enum Message<T, L = String> {
     Have(T, Vec<(PublicKey, LogHeights<L>)>),
     Data(Vec<u8>, Option<Vec<u8>>),
     Done,
 }
 
+/// Efficient sync protocol for append-only log data types.
 #[derive(Clone, Debug)]
 pub struct LogSyncProtocol<TM, L, E, S: LogStore<L, E>> {
     topic_map: TM,
@@ -61,6 +62,8 @@ impl<TM, L, E, S> LogSyncProtocol<TM, L, E, S>
 where
     S: LogStore<L, E>,
 {
+    /// Returns a new sync protocol instance, configured with a store and `TopicMap` implementation
+    /// which associates the to-be-synced logs with a given topic.
     pub fn new(topic_map: TM, store: S) -> Self {
         Self {
             topic_map,

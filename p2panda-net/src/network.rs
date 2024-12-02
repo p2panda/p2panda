@@ -1111,12 +1111,12 @@ mod tests {
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(topic.clone(), logs);
 
-        // Construct a store and log height protocol for peer a
+        // Construct a store and log height protocol for peer a.
         let store_a = MemoryStore::default();
         let protocol_a = LogSyncProtocol::new(topic_map.clone(), store_a);
         let sync_config_a = SyncConfiguration::new(protocol_a);
 
-        // Create some operations
+        // Create some operations.
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (hash_0, header_0, header_bytes_0) =
             create_operation(&peer_a_private_key, &body, 0, 0, None, None);
@@ -1125,7 +1125,7 @@ mod tests {
         let (hash_2, header_2, header_bytes_2) =
             create_operation(&peer_a_private_key, &body, 2, 200, Some(hash_1), None);
 
-        // Create store for peer b and populate with operations
+        // Create store for peer b and populate with operations.
         let mut store_b = MemoryStore::default();
         store_b
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -1140,7 +1140,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Construct log height protocol for peer b
+        // Construct log height protocol for peer b.
         let protocol_b = LogSyncProtocol::new(topic_map, store_b);
         let sync_config_b = SyncConfiguration::new(protocol_b);
 
@@ -1166,12 +1166,12 @@ mod tests {
         node_a.add_peer(node_b_addr).await.unwrap();
         node_b.add_peer(node_a_addr).await.unwrap();
 
-        // Subscribe to the same topic from both nodes which should kick off sync
+        // Subscribe to the same topic from both nodes which should kick off sync.
         let topic_clone = topic.clone();
         let handle1 = tokio::spawn(async move {
             let (_tx, mut from_sync_rx, ready) = node_a.subscribe(topic_clone).await.unwrap();
 
-            // Wait until the gossip overlay has been joined for TOPIC_ID
+            // Wait until the gossip overlay has been joined for TOPIC_ID.
             assert!(ready.await.is_ok());
 
             let mut from_sync_messages = Vec::new();
