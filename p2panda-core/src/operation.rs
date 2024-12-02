@@ -1,5 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! An [`Operation`](Operation) is the main data type of p2panda. `Operation`s are used to carry
+//! any data from one peer to another (distributed), while assuming no reliable network connection
+//! (offline-first) and untrusted machines (cryptographically secure). The author of an operation
+//! uses it's [`PrivateKey`](crate::identity::PrivateKey) to cryptographically sign every
+//! `Operation`. This can be verified and used for authentication by any other peer.
+//!
+//! Every `Operation` consists of a [`Header`](Header) and an optional [`Body`](Body). The `Body`
+//! holds arbitrary bytes (up to the application to decide what should be inside). The `Header` is
+//! used to cryptographically secure & authenticate the `Body` and for providing ordered
+//! collections of operations when required.
+//!
+//! `Operation`s have a `backlink` and `seq_num` field in the `Header`. It is used to form a
+//! linked list of `Operation`s, where every subsequent `Operation` links to the previous one by
+//! pointing at it - cryptographically secured using the Hash / Operation Id of that Operation.
+//! The `previous` field can be used to point at operations by _other_ authors when multi-writer
+//! causal partial-ordering is required. The `timestamp` field can be used when verifiable causal
+//! ordering is not required.
+//!
+//! `Header` [`extensions`](crate::extensions) can be used to add additional information, like
+//! `pruning` points for removing old/unwanted data, tombstones for explicit deletion,
+//! capabilities or group encryption schemes or custom application-related features etc.
+//!
+//! # Examples
+//!
+//! ```
+//! use p2panda_core::{Body, Header, Operation, PrivateKey};
+//!
+//! // Authors Ed25519 private signing key.
+//! let private_key = PrivateKey::new();
+//!
+//! // Construct the body and header.
+//! let body = Body::new("Hello, Sloth!".as_bytes());
+//! let mut header = Header {
+//!     version: 1,
+//!     public_key: private_key.public_key(),
+//!     signature: None,
+//!     payload_size: body.size(),
+//!     payload_hash: Some(body.hash()),
+//!     timestamp: 1733170247,
+//!     seq_num: 0,
+//!     backlink: None,
+//!     previous: vec![],
+//!     extensions: None::<()>,
+//! };
+//!
+//! // Sign the header with the authors private key.
+//! header.sign(&private_key);
+//! ```
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
@@ -12,6 +60,7 @@ use crate::identity::{PrivateKey, PublicKey, Signature};
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
 
+/// Combined `Header`, `Body` and operation `Hash` (Operation Id).
 #[derive(Clone, Debug)]
 pub struct Operation<E = DefaultExtensions> {
     pub hash: Hash,
@@ -39,7 +88,7 @@ impl<E> Ord for Operation<E> {
     }
 }
 
-/// Header of 
+/// Header of a p2panda operation.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E = DefaultExtensions> {
