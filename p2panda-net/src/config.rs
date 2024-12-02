@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Alternative configuration API which can be passed into `Network::from_config` constructor
+//! instead of using `NetworkBuilder`.
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
