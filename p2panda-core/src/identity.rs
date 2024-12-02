@@ -113,6 +113,7 @@ impl<'a> Arbitrary<'a> for PrivateKey {
     }
 }
 
+/// Public ed25519 key used for identifying peers and verifying signed data.
 #[derive(Default, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct PublicKey(ed25519_dalek::VerifyingKey);
 
@@ -144,6 +145,7 @@ impl PublicKey {
         hex::encode(self.0.as_bytes())
     }
 
+    /// Verify a signature over a byte slice with this public key.
     pub fn verify(&self, bytes: &[u8], signature: &Signature) -> bool {
         self.0.verify_strict(bytes, &signature.0).is_ok()
     }
