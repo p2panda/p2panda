@@ -52,14 +52,14 @@
 //! seamlessly be extended with external or official p2panda implementations for different parts of
 //! the application:
 //!
-//! * Custom Data types exchanged over the network
-//! * Optional relay nodes to aid connection establishment when peers are behind firewalls etc.
-//! * Custom sync protocol for any data types, with managed re-attempts on connection failures and
-//! optional re-sync schedules
-//! * Custom peer discovery strategies (multiple approaches can be used at the same time)
-//! * Sync and storage of (very) large blobs
-//! * Fine-tune gossipping behaviour
-//! * Additional custom protocol handlers
+//! 1. Custom Data types exchanged over the network
+//! 2. Optional relay nodes to aid connection establishment when peers are behind firewalls etc.
+//! 3. Custom sync protocol for any data types, with managed re-attempts on connection failures and
+//!    optional re-sync schedules
+//! 4. Custom peer discovery strategies (multiple approaches can be used at the same time)
+//! 5. Sync and storage of (very) large blobs
+//! 6. Fine-tune gossipping behaviour
+//! 7. Additional custom protocol handlers
 //!
 //! ## Integration with other p2panda solutions
 //!
