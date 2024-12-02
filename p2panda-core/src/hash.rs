@@ -1,5 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! `Hash` struct for generating BLAKE3 hashes over arbitrary bytes.
+//!
+//! # Examples
+//!
+//! ```
+//! use p2panda_core::Hash;
+//!
+//! let bytes: &[u8] = b"A very important message.";
+//! let hash = Hash::new(bytes);
+//!
+//! assert_eq!(
+//!     "8d3ca6d66651182cd6a9c1fc5dad0260a0ee29fe9ed494734e60d259430ae8a4", 
+//!     hash.to_hex()
+//! )
+//! ```
 use std::fmt;
 use std::str::FromStr;
 
@@ -7,7 +22,7 @@ use std::str::FromStr;
 use arbitrary::Arbitrary;
 use thiserror::Error;
 
-/// Size of BLAKE3 hashes.
+/// The length of a BLAKE3 hash in bytes.
 pub const HASH_LEN: usize = blake3::KEY_LEN;
 
 /// 32-byte BLAKE3 hash.
