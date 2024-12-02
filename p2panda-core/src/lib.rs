@@ -16,3 +16,5 @@ pub use operation::{
     validate_backlink, validate_header, validate_operation, Body, Header, Operation,
     OperationError, RawOperation,
 };
+#[cfg(feature = "prune")]
+pub use prune::PruneFlag;
