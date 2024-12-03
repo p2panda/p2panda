@@ -1,9 +1,8 @@
-//! A minimal example using the extensions field of an operation header to add and extract custom data.
+//! A minimal example using the extensions field of an operation header to add and extract custom
+//! data.
 //!
 //! We define a custom struct to store a log ID and an expiry timestamp and then implement the
 //! `Extension` trait to define the means of extracting each value from a p2panda header.
-
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use p2panda_core::{Body, Extension, Header, PrivateKey};
@@ -32,7 +31,7 @@ impl Extension<Expiry> for CustomExtensions {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
     let extensions = CustomExtensions {
         log_id: LogId(0),
         expires: Expiry(0123456),
@@ -69,6 +68,4 @@ fn main() -> Result<()> {
 
     assert_eq!(extensions.log_id.0, log_id.0);
     assert_eq!(extensions.expires.0, expiry.0);
-
-    Ok(())
 }

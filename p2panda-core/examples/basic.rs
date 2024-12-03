@@ -3,12 +3,9 @@
 //! We create a new body containing a data payload, as well as a header, and then sign the header
 //! with an Ed25519 private key. The signed header and body are then used to create an operation.
 //! Finally, we validate the operation.
-
-use anyhow::Result;
-
 use p2panda_core::{validate_operation, Body, Header, Operation, PrivateKey};
 
-fn main() -> Result<()> {
+fn main() {
     // Create a new Ed25519 signing key.
     let private_key = PrivateKey::new();
 
@@ -41,6 +38,4 @@ fn main() -> Result<()> {
 
     // Validate the header and, when included, that the body matches the `payload_hash`.
     assert!(validate_operation(&operation).is_ok());
-
-    Ok(())
 }
