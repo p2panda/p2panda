@@ -13,12 +13,10 @@ use futures_util::future::join_all;
 use iroh_net::endpoint::Connecting;
 use tracing::debug;
 
-/// Handler for incoming connections.
+/// Interface to accept incoming connections for custom protocol implementations.
 ///
-/// An iroh node can accept connections for arbitrary ALPN protocols. By default, the iroh node
-/// only accepts connections for the ALPNs of the core iroh protocols (blobs, gossip, docs).
-///
-/// With this trait, you can handle incoming connections for custom protocols.
+/// A node can accept connections for custom protocols. By default, the node only accepts
+/// connections for the core protocols (gossip and optionally sync or blobs).
 pub trait ProtocolHandler: Send + Sync + IntoArcAny + fmt::Debug + 'static {
     /// Handle an incoming connection.
     ///
@@ -31,7 +29,7 @@ pub trait ProtocolHandler: Send + Sync + IntoArcAny + fmt::Debug + 'static {
     }
 }
 
-/// Helper trait to facilite casting from `Arc<dyn T>` to `Arc<dyn Any>`.
+/// Helper trait to facilitate casting from `Arc<dyn T>` to `Arc<dyn Any>`.
 ///
 /// This trait has a blanket implementation so there is no need to implement this yourself.
 pub trait IntoArcAny {

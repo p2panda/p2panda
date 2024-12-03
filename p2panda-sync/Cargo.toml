@@ -11,7 +11,7 @@ log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 async-trait = "0.1.82"
 futures = "0.3.30"
 p2panda-core = { path = "../p2panda-core", optional = true }
-p2panda-store = { path = "../p2panda-store", optional = true }
+p2panda-store = { path = "../p2panda-store", optional = true, default-features = false }
 serde = { version = "1.0.208" }
 tokio-stream = { version = "0.1.15", optional = true }
 tokio-util = { version = "0.7.11", features = [

@@ -1,5 +1,121 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Node implementation for p2p networking and data streaming, extensible with discovery
+//! strategies, sync protocols, blob sync and more.
+//!
+//! As soon as the local node is launched it roughly attempts the following goal:
+//!
+//! 1. Find as many peers as possible who are interested in the same topic
+//! 2. Connect with as many peers as possible to exchange data with, eventually converging to the
+//!    same state
+//!
+//! To achieve this goal, multiple systems are in play:
+//!
+//! ## Bootstrap
+//!
+//! Establishing a peer-to-peer network suffers from the "chicken and egg" problem where we need to
+//! start _somewhere_ before we can begin to discover more and become "discoverable" for other,
+//! possibly previously unknown peers.
+//!
+//! This process of the "first step" into a network is called "bootstrap" and can be realised with
+//! different strategies:
+//!
+//! 1. Supply your node with a hard-coded list of well-known node addresses which are directly
+//!    reachable. The node will attempt connecting them on start.
+//! 2. Use techniques like mDNS or rendesvouz servers to learn about other nodes to connect to.
+//!
+//! The latter approach is very similar to "peer discovery" with one important difference: While
+//! peer discovery helps us to learn about _more peers_ we use these discovery techniques during
+//! bootstrap to find _the first_ peer to connect to.
+//!
+//! ## Peer Discovery
+//!
+//! Like "Bootstrap" we can apply similar algorithms to find more peers in the network. In
+//! `p2panda-net` this is an "ambient" process, meaning that it constantly takes place in the
+//! background, as soon as the node is running.
+//!
+//! To find more peers which potentially might be interested in the same data as the local node,
+//! one or more discovery techniques can be added when creating the network, for example mDNS for
+//! finding peers in the local network or a "Rendesvouz" server for finding peers on the internet.
+//!
+//! Additionally `p2panda-net` might find new peers through joining any gossip overlay. If another
+//! peer becomes a direct neighbor in the gossip tree, we register it in our address book.
+//!
+//! ## Topic Discovery
+//!
+//! Next to "Peer Discovery" we additionally find out what peers are interested in and announce our
+//! own topics of interest in the network. With this design it is possible to have peers in the
+//! network being interested in different data, potentially using other applications, at the same
+//! time.
+//!
+//! By default `p2panda-net` always enters at least one network-wide gossip overlay where peers
+//! exchange information over this information. In the future we might use a random-walk traversal
+//! algorithm instead to "explore" the network.
+//!
+//! As soon as we've identified a common interest in the same topic, we're joining the gossip
+//! overlay for this topic with them and earmark this peer for a future sync session.
+//!
+//! ## Connectivity
+//!
+//! With the help of iroh, we can connect to any device whereever they are. There is a multi-step
+//! process requiring additional strategies depending on the situation to connect to a peer:
+//!
+//! 1. If we know a peer's directly reachable address, we can just connect to them
+//! 2. If this peer's direct address is not known (because they are behind a NAT or we only know
+//!    their public key) we use a STUN server to find out the address
+//! 3. If this peer is still not reachable (for example because they are behind a Firewall), we use
+//!    a Relay (TURN-like) server to handle the connection through it
+//!
+//! In the last case we can't establish a direct connection and rely on additional infrastructure.
+//!
+//! Read the `iroh-relay` documentation to learn about how to run your own STUN and Relay server:
+//! <https://github.com/n0-computer/iroh/tree/main/iroh-relay>.
+//!
+//! This implementation aims at being robust in situations where bad or no connectivity is
+//! (temporarily) given. `p2panda-net` will automatically re-connect to peers as soon as they are
+//! reachable again which, from the application perspective, shouldn't make any difference.
+//!
+//! ## "Live Mode"
+//!
+//! To send newly created messages fastly to other peers, `p2panda-net` uses broadcast gossip
+//! overlays for each topic. With this "live mode" messages arrive almost instantly.
+//!
+//! ## Sync
+//!
+//! By learning about other peers who are interested in the same topic we keep track of them in an
+//! internal "address book". A sync session mananger process will eventually kick in a sync session
+//! with one of these peers and try to exchange _all_ data we're so far missing on that topic with
+//! them.
+//!
+//! Sync is disabled by default and can be enabled by adding a `SyncProtocol` implementation to the
+//! node.
+//!
+//! Sync sessions are only running once per peer per topic but can optionally be re-attempted after
+//! a certain duration if a `ResyncConfiguration` was given.
+//!
+//! ## Gossip Buffer
+//!
+//! Since a node receives potentially older data from another node during a sync session,
+//! `p2panda-net` uses a "gossip buffer" to make sure that we're buffering new messages which were
+//! received at the same time during the gossip overlay.
+//!
+//! The buffer is released after the sync session has ended. Through this trick we can make sure
+//! that messages are arriving "in order" (based on their timestamp or partial ordering for
+//! example) to higher application layers.
+//!
+//! Please note that this implementation can never fully be sure that messages will arrive "out of
+//! order" to the application. It is recommended to apply additional buffering if this is required.
+//! In `p2panda-streams` we offer a solution which will take care of that.
+//!
+//! ## Blobs
+//!
+//! With the help of the `p2panda-blobs` crate it is possible to extend the node to support
+//! efficient sync of large binary data (images, files etc.) with various storage backends.
+//!
+//! ## Custom Protocols
+//!
+//! Next to blob sync, data sync or discovery protocols it is also possible to register any other
+//! low-level bi-directional communication protocol to the node when necessary.
 use std::fmt::Debug;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
@@ -50,7 +166,8 @@ pub enum RelayMode {
     ///
     /// Relays are used to help establishing a connection in case the direct address is not known
     /// yet (via STUN). In case this process fails (for example due to a firewall), the relay is
-    /// used as a fallback to tunnel traffic from one peer to another (via DERP).
+    /// used as a fallback to tunnel traffic from one peer to another (via DERP, which is similar
+    /// to TURN).
     ///
     /// Important: Peers need to use the _same_ relay address to be able to connect to each other.
     Custom(RelayNode),
@@ -79,8 +196,8 @@ where
 {
     /// Returns a new instance of `NetworkBuilder` using the given network identifier.
     ///
-    /// The identifier is used during handshake and discovery protocols. Networks must use the
-    /// same identifier if they wish to successfully connect and share gossip.
+    /// Networks must use the same identifier if they wish to successfully connect and share
+    /// data.
     pub fn new(network_id: NetworkId) -> Self {
         Self {
             bind_port: None,
@@ -131,9 +248,10 @@ where
     /// Sets the relay used by the local network to facilitate the establishment of direct
     /// connections.
     ///
-    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if one
-    /// or both of the peers are behind a NAT. The relay node might offer proxy functionality if
-    /// the connection attempt fails, which will serve to relay the data in that case.
+    /// Relay nodes are STUN servers which help in establishing a peer-to-peer connection if one or
+    /// both of the peers are behind a NAT. The relay node might offer proxy functionality on top
+    /// (via the Tailscale DERP protocol which is very similar to TURN) if the connection attempt
+    /// fails, which will serve to relay the data in that case.
     pub fn relay(mut self, url: RelayUrl, stun_only: bool, stun_port: u16) -> Self {
         self.relay_mode = RelayMode::Custom(RelayNode {
             url: url.into(),
@@ -145,9 +263,10 @@ where
 
     /// Sets the direct address of a peer, identified by their public key (node id).
     ///
-    /// The direct address should be reachable without the aid of a STUN / relay node. However, if
-    /// the direct connection attempt might fail (for example, because of a NAT or Firewall), the
-    /// relay node of that peer can be supplied to allow a connection re-attempt.
+    /// The direct address should be reachable without the aid of a STUN or TURN-based relay node.
+    /// However, if the direct connection attempt might fail (for example, because of a NAT or
+    /// Firewall), the relay node of that peer can be supplied to allow connecting to it via a
+    /// fallback connection.
     ///
     /// If no relay address is given but turns out to be required, we optimistically try to use our
     /// own relay node instead (if specified). This might still fail, as we can't know if the peer
@@ -175,7 +294,8 @@ where
 
     /// Sets the sync protocol and configuration.
     ///
-    /// Sync sessions will be completed with any known peers with whom we share topics of interest.
+    /// Sync sessions will be automatically initiated with any known peers with whom we share
+    /// topics of interest.
     pub fn sync(mut self, config: SyncConfiguration<T>) -> Self {
         self.sync_config = Some(config);
         self
@@ -203,14 +323,14 @@ where
     /// Returns a handle to a newly-spawned instance of `Network`.
     ///
     /// A peer-to-peer endpoint is created and bound to a QUIC socket, after which the gossip,
-    /// engine and handshake handlers are instantiated. A sync handler is also instantiated if a
-    /// sync protolc is provided. Direct addresses for network peers are added to the engine from
+    /// engine and connection handlers are instantiated. A sync handler is also instantiated if a
+    /// sync protocol is provided. Direct addresses for network peers are added to the engine from
     /// the address book and core protocols are registered.
     ///
     /// After configuration and registration processes are complete, the network is spawned and an
-    /// attempt is made to retrieve a direct address for a network peer so that a connection
-    /// attempt may be made. If no address is retrieved within the timeout limit, the network is
-    /// shut down and an error is returned.
+    /// attempt is made to retrieve a direct address for a network peer so that a connection may be
+    /// made. If no address is retrieved within the timeout limit, the network is shut down and an
+    /// error is returned.
     pub async fn build(mut self) -> Result<Network<T>>
     where
         T: Topic + TopicId + 'static,
@@ -424,8 +544,8 @@ where
                 },
                 // Handle incoming p2p connections.
                 Some(incoming) = self.endpoint.accept() => {
-                    // @TODO: This is the point at which we can reject the connection if
-                    // limits have been reached.
+                    // @TODO: This is the point at which we can reject the connection if limits
+                    // have been reached.
                     let connecting = match incoming.accept() {
                         Ok(connecting) => connecting,
                         Err(err) => {
@@ -502,7 +622,7 @@ where
     }
 }
 
-/// An API for interacting with the p2panda networking stack.
+/// Running peer-to-peer node.
 ///
 /// The primary feature of the `Network` is the ability to subscribe to one or more topics and
 /// exchange messages over those topics with remote peers. Replication can be conducted exclusively
@@ -530,7 +650,7 @@ impl<T> Network<T>
 where
     T: Topic + TopicId + 'static,
 {
-    /// Adds a peer to the local network address book.
+    /// Adds a peer to the address book.
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
         self.inner.engine.add_peer(node_addr).await
     }
@@ -540,7 +660,7 @@ where
         self.inner.engine.known_peers().await
     }
 
-    /// Returns the direct addresses of the local network.
+    /// Returns the direct addresses of this node.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
         self.inner
             .endpoint
@@ -561,13 +681,13 @@ where
         &self.inner.endpoint
     }
 
-    /// Returns the public key of the local network.
+    /// Returns the public key of the node.
     pub fn node_id(&self) -> PublicKey {
         PublicKey::from_bytes(self.inner.endpoint.node_id().as_bytes())
             .expect("public key already checked")
     }
 
-    /// Terminates the main network task and shuts down the network.
+    /// Terminates all internal tasks and shuts down the node.
     pub async fn shutdown(self) -> Result<()> {
         // Trigger shutdown of the main run task by activating the cancel token.
         self.inner.cancel_token.cancel();
@@ -580,10 +700,6 @@ where
 
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and written
     /// to, along with a oneshot receiver to be informed when the gossip overlay has been joined.
-    ///
-    /// Peers subscribed to a topic can be discovered by others via the gossip overlay ("neighbor
-    /// up event"). They'll sync data initially, if a sync protocol has been provided, and then
-    /// start "live-mode" via gossip broadcast.
     pub async fn subscribe(
         &self,
         topic: T,
@@ -806,7 +922,10 @@ pub(crate) mod sync_protocols {
                     Message::Pong => {
                         debug!("pong message received");
                         app_tx
-                            .send(FromSync::Data("PONG".as_bytes().to_owned(), None))
+                            .send(FromSync::Data {
+                                header: "PONG".as_bytes().to_owned(),
+                                payload: None,
+                            })
                             .await
                             .unwrap();
                         break;
@@ -841,7 +960,10 @@ pub(crate) mod sync_protocols {
                     Message::Ping => {
                         debug!("ping message received");
                         app_tx
-                            .send(FromSync::Data("PING".as_bytes().to_owned(), None))
+                            .send(FromSync::Data {
+                                header: "PING".as_bytes().to_owned(),
+                                payload: None,
+                            })
                             .await
                             .unwrap();
 
@@ -873,9 +995,9 @@ pub(crate) mod tests {
 
     use async_trait::async_trait;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::{Body, Hash, Header, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::log_sync::{LogSyncProtocol, Logs};
+    use p2panda_sync::log_sync::LogSyncProtocol;
     use p2panda_sync::{Topic, TopicMap};
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
@@ -1061,6 +1183,8 @@ pub(crate) mod tests {
         assert!(result2.is_ok());
     }
 
+    type Logs<T> = HashMap<PublicKey, Vec<T>>;
+
     #[derive(Clone, Debug)]
     struct LogIdTopicMap<T>(HashMap<T, Logs<u64>>);
 
@@ -1103,15 +1227,12 @@ pub(crate) mod tests {
         let mut topic_map = LogIdTopicMap::new();
         topic_map.insert(topic.clone(), logs);
 
-        // Construct a store and log height protocol for peer a
+        // Construct a store and log height protocol for peer a.
         let store_a = MemoryStore::default();
-        let protocol_a = LogSyncProtocol {
-            topic_map: topic_map.clone(),
-            store: store_a,
-        };
+        let protocol_a = LogSyncProtocol::new(topic_map.clone(), store_a);
         let sync_config_a = SyncConfiguration::new(protocol_a);
 
-        // Create some operations
+        // Create some operations.
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (hash_0, header_0, header_bytes_0) =
             create_operation(&peer_a_private_key, &body, 0, 0, None, None);
@@ -1120,7 +1241,7 @@ pub(crate) mod tests {
         let (hash_2, header_2, header_bytes_2) =
             create_operation(&peer_a_private_key, &body, 2, 200, Some(hash_1), None);
 
-        // Create store for peer b and populate with operations
+        // Create store for peer b and populate with operations.
         let mut store_b = MemoryStore::default();
         store_b
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -1135,11 +1256,8 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        // Construct log height protocol for peer b
-        let protocol_b = LogSyncProtocol {
-            topic_map,
-            store: store_b,
-        };
+        // Construct log height protocol for peer b.
+        let protocol_b = LogSyncProtocol::new(topic_map, store_b);
         let sync_config_b = SyncConfiguration::new(protocol_b);
 
         // Build peer a's node
@@ -1164,12 +1282,12 @@ pub(crate) mod tests {
         node_a.add_peer(node_b_addr).await.unwrap();
         node_b.add_peer(node_a_addr).await.unwrap();
 
-        // Subscribe to the same topic from both nodes which should kick off sync
+        // Subscribe to the same topic from both nodes which should kick off sync.
         let topic_clone = topic.clone();
         let handle1 = tokio::spawn(async move {
             let (_tx, mut from_sync_rx, ready) = node_a.subscribe(topic_clone).await.unwrap();
 
-            // Wait until the gossip overlay has been joined for TOPIC_ID
+            // Wait until the gossip overlay has been joined for TOPIC_ID.
             assert!(ready.await.is_ok());
 
             let mut from_sync_messages = Vec::new();
@@ -1347,9 +1465,9 @@ pub(crate) mod tests {
         node_3.add_peer(node_2_addr.clone()).await.unwrap();
         node_4.add_peer(node_3_addr.clone()).await.unwrap();
 
-        // Run all nodes. We are testing that peers gracefully handle starting a sync session
-        // whine not knowing the other peer's address yet. Eventually all peers complete at least
-        // one sync session.
+        // Run all nodes. We are testing that peers gracefully handle starting a sync session while
+        // not knowing the other peer's address yet. Eventually all peers complete at least one
+        // sync session.
         let handle1 = run_node(node_1, topic.clone());
         let handle2 = run_node(node_2, topic.clone());
         let handle3 = run_node(node_3, topic.clone());

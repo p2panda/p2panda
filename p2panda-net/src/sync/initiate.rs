@@ -123,7 +123,7 @@ where
 
                 // 2. Data Sync Phase.
                 // ~~~~~~~~~~~~~~~~~~~
-                let FromSync::Data(header, payload) = message else {
+                let FromSync::Data { header, payload } = message else {
                     return Err(SyncError::Critical("expected to receive only data messages from sync session in data sync phase".into()));
                 };
 

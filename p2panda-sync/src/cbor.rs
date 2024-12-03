@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Utility methods to encode or decode wire protocol messages in [CBOR] format.
+//!
+//! [CBOR]: https://cbor.io/
 use std::marker::PhantomData;
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
@@ -20,7 +23,7 @@ use crate::SyncError;
 /// parsing these headers and then reason about if it has enough information to proceed.
 ///
 /// Read more on CBOR in streaming applications here:
-/// https://www.rfc-editor.org/rfc/rfc8949.html#section-5.1
+/// <https://www.rfc-editor.org/rfc/rfc8949.html#section-5.1>
 #[derive(Clone, Debug)]
 pub struct CborCodec<T> {
     _phantom: PhantomData<T>,
