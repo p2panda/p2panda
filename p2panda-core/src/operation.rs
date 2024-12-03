@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! An [`Operation`]() is the main data type of p2panda. `Operation`s are used to carry any data
-//! from one peer to another (distributed), while assuming no reliable network connection
+//! An `Operation` is the main data type of p2panda. `Operation`s are used to carry any data from
+//! one peer to another (distributed), while assuming no reliable network connection
 //! (offline-first) and untrusted machines (cryptographically secure). The author of an operation
-//! uses it's [`PrivateKey`]() to cryptographically sign every `Operation`. This can be verified
-//! and used for authentication by any other peer.
+//! uses it's [`PrivateKey`] to cryptographically sign every `Operation`. This can be verified and
+//! used for authentication by any other peer.
 //!
-//! Every `Operation` consists of a [`Header`]() and an optional [`Body`](). The `Body` holds
+//! Every `Operation` consists of a [`Header`] and an optional [`Body`]. The `Body` holds
 //! arbitrary bytes (up to the application to decide what should be inside). The `Header` is used
 //! to cryptographically secure & authenticate the `Body` and for providing ordered collections of
 //! operations when required.
@@ -18,9 +18,9 @@
 //! causal partial-ordering is required. The `timestamp` field can be used when verifiable causal
 //! ordering is not required.
 //!
-//! `Header` [`extensions`]() can be used to add additional information, like `pruning` points for
-//! removing old/unwanted data, tombstones for explicit deletion, capabilities or group encryption
-//! schemes or custom application-related features etc.
+//! `Header` [`extensions`](crate::extensions) can be used to add additional information, like
+//! `pruning` points for removing old/unwanted data, tombstones for explicit deletion,
+//! capabilities or group encryption schemes or custom application-related features etc.
 //!
 //! # Examples
 //!

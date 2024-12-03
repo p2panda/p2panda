@@ -4,7 +4,7 @@
 //!
 //! Any user defined extensions can be added to an operation's `Header` in order to extend the
 //! basic functionality of the core p2panda data types or to encode application specific fields
-//! which should not be contained in the [`Body`]().
+//! which should not be contained in the [`Body`](crate::Body).
 //!
 //! At a lower level this might be information relating to capabilities or group encryption
 //! schemes which is required to enforce access-control restrictions already during sync, or
@@ -15,7 +15,7 @@
 //!
 //! Interfaces which use p2panda core data types can require certain extensions to be present on
 //! any headers that their APIs accept using trait bounds. As `p2panda-engine` does in the case of
-//! [`PruneFlag`]() in order to implement automatic network wide garbage collection.
+//! [`PruneFlag`](crate::PruneFlag) in order to implement automatic network wide garbage collection.
 //!
 //! Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
 //! requirements that `Header` requires, including `Serialize` and `Deserialize`.
@@ -71,7 +71,7 @@ pub trait Extensions: Clone + Debug + Default + for<'de> Deserialize<'de> + Seri
 /// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
 impl<T> Extensions for T where T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
-/// Generic implementation of `Extension<T>` for Header<E> allowing access to the extension values.
+/// Generic implementation of `Extension<T>` for `Header<E>` allowing access to the extension values.
 impl<T, E> Extension<T> for Header<E>
 where
     E: Extension<T>,
