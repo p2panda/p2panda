@@ -11,7 +11,7 @@
 //! let hash = Hash::new(bytes);
 //!
 //! assert_eq!(
-//!     "8d3ca6d66651182cd6a9c1fc5dad0260a0ee29fe9ed494734e60d259430ae8a4", 
+//!     "8d3ca6d66651182cd6a9c1fc5dad0260a0ee29fe9ed494734e60d259430ae8a4",
 //!     hash.to_hex()
 //! )
 //! ```

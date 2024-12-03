@@ -103,6 +103,7 @@ where
 mod tests {
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Body, Header};
+    use serde::{Deserialize, Serialize};
 
     use crate::test_utils::mock_stream;
 
@@ -110,8 +111,19 @@ mod tests {
 
     #[tokio::test]
     async fn decode() {
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct MyExtensions {}
+
         let stream = mock_stream().decode();
-        let result: Vec<(Header, Option<Body>, Vec<u8>)> =
+        let result: Vec<(Header<MyExtensions>, Option<Body>, Vec<u8>)> =
+            stream.take(5).try_collect().await.expect("not fail");
+        assert_eq!(result.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn decode_non_map_extensions() {
+        let stream = mock_stream().decode();
+        let result: Vec<(Header<()>, Option<Body>, Vec<u8>)> =
             stream.take(5).try_collect().await.expect("not fail");
         assert_eq!(result.len(), 5);
     }

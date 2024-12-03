@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Core p2panda data type offering distributed, secure and efficient data transfer between peers. 
-//! 
+//! Core p2panda data type offering distributed, secure and efficient data transfer between peers.
+//!
 //! `Operation`s are used to carry any data from one peer to another (distributed), while assuming
 //! no reliable network connection (offline-first) and untrusted machines (cryptographically
 //! secure). The author of an operation uses it's [`PrivateKey`] to cryptographically sign every
