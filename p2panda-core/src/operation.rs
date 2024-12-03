@@ -106,7 +106,7 @@ use crate::Extensions;
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
 
-/// Combined [`Header`], [`Body`] and operation [`Hash`] (Operation Id).
+/// Combined [`Header`], [`Body`] and operation [`struct@Hash`] (Operation Id).
 #[derive(Clone, Debug)]
 pub struct Operation<E = ()> {
     pub hash: Hash,
