@@ -12,7 +12,10 @@ use pin_project::pin_project;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
 
+/// An extension trait for `Stream`s that provides a convenient [`decode`](DecodeExt::decode)
+/// method.
 pub trait DecodeExt<E>: Stream<Item = RawOperation> {
+    /// Decode byte streams into p2panda operations.
     fn decode(self) -> Decode<Self, E>
     where
         E: Extensions,
@@ -24,6 +27,7 @@ pub trait DecodeExt<E>: Stream<Item = RawOperation> {
 
 impl<T: ?Sized, E> DecodeExt<E> for T where T: Stream<Item = RawOperation> {}
 
+/// Stream for the [`decode`](DecodeExt::decode) method.
 #[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]

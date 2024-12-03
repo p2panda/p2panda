@@ -17,6 +17,8 @@ use pin_utils::pin_mut;
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
 
+/// An extension trait for `Stream`s that provides a convenient [`ingest`](IngestExt::ingest)
+/// method.
 pub trait IngestExt<S, L, E>: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)> {
     /// Checks incoming operations against their log integrity and persists them automatically in a
     /// given store.
@@ -44,6 +46,7 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 {
 }
 
+/// Stream for the [`ingest`](IngestExt::ingest) method.
 #[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
@@ -108,12 +111,12 @@ where
             // 1. Pull in the next item from the external stream or out-of-order buffer.
             let res = {
                 // If the buffer ran full we prioritize pulling from it first, re-attempting
-                // ingest. This avoids clogging up the pipeline
+                // ingest. This avoids clogging up the pipeline.
                 if this.ooo_buffer_rx.size_hint().0 == *this.ooo_buffer_size {
                     ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
                 } else {
                     // Otherwise prefer pulling from the external stream first as freshly incoming
-                    // data should be prioritized
+                    // data should be prioritized.
                     match this.stream.as_mut().poll_next(cx) {
                         Poll::Ready(Some((header, body, header_bytes))) => {
                             Some(IngestAttempt(header, body, header_bytes, 1))
@@ -122,7 +125,7 @@ where
                         Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
                             Poll::Ready(Some(attempt)) => Some(attempt),
                             // If there's no value coming from the buffer _and_ the external stream is
-                            // terminated, we can be sure nothing will come anymore
+                            // terminated, we can be sure nothing will come anymore.
                             Poll::Pending => None,
                             Poll::Ready(None) => None,
                         },
@@ -130,7 +133,7 @@ where
                 }
             };
             let Some(IngestAttempt(header, body, header_bytes, counter)) = res else {
-                // Both external stream and buffer stream has ended, so we stop here as well
+                // Both external stream and buffer stream has ended, so we stop here as well.
                 return Poll::Ready(None);
             };
 
@@ -164,7 +167,7 @@ where
                     // The number of max. reattempts is equal the size of the buffer. As long as
                     // the buffer is just a FIFO queue it doesn't make sense to optimize over
                     // different parameters as in a worst-case distribution of items (exact
-                    // reverse) this will be the max. and min. required bound
+                    // reverse) this will be the max. and min. required bound.
                     if counter > *this.ooo_buffer_size {
                         return Poll::Ready(Some(Err(IngestError::MaxAttemptsReached(
                             num_missing,
@@ -172,7 +175,7 @@ where
                     }
 
                     // Push operation back into the internal queue, if something goes wrong here
-                    // this must be an critical failure
+                    // this must be an critical failure.
                     let Ok(_) = ready!(this.ooo_buffer_tx.poll_ready(cx)) else {
                         break Poll::Ready(None);
                     };
@@ -192,7 +195,7 @@ where
                     return Poll::Ready(Some(Ok(operation)));
                 }
                 Err(err) => {
-                    // Ingest failed and we want the stream consumers to be aware of that
+                    // Ingest failed and we want the stream consumers to be aware of that.
                     return Poll::Ready(Some(Err(err)));
                 }
             }
@@ -264,7 +267,7 @@ mod tests {
         let store = MemoryStore::<StreamName, Extensions>::new();
 
         let mut items: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
-        // Reverse all items, to ingest with a worst-case out-of-order sample set
+        // Reverse all items, to ingest with a worst-case out-of-order sample set.
         items.reverse();
 
         let stream = iter(items)
@@ -277,7 +280,7 @@ mod tests {
             })
             // Since the sample set ordering is worst-case (fully reversed), it makes sense to keep
             // the buffer size at least as big as the sample size. Like this we can guarantee that
-            // ingest (and this test) will be successful
+            // ingest (and this test) will be successful.
             .ingest(store, items_num);
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");

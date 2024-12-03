@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to handle p2panda operations.
 use p2panda_core::{
     validate_backlink, validate_operation, Body, Extensions, Header, Operation, OperationError,
 };
@@ -40,7 +41,7 @@ where
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
     if !already_exists {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
-        // operation
+        // operation.
         if !prune_flag && operation.header.seq_num > 0 {
             let latest_operation = store
                 .latest_operation(&operation.header.public_key, log_id)
@@ -52,15 +53,15 @@ where
                     if let Err(err) = validate_backlink(&latest_operation.0, &operation.header) {
                         match err {
                             // These errors signify that the sequence number is monotonic
-                            // incrementing and correct, however the backlink does not match
+                            // incrementing and correct, however the backlink does not match.
                             OperationError::BacklinkMismatch
                             | OperationError::BacklinkMissing
-                            // Log can only contain operations from one author
+                            // Log can only contain operations from one author.
                             | OperationError::TooManyAuthors => {
                                 return Err(IngestError::InvalidOperation(err))
                             }
                             // We observe a gap in the log and therefore can't validate the
-                            // backlink yet
+                            // backlink yet.
                             OperationError::SeqNumNonIncremental(expected, given) => {
                                 return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, given - expected))
                             }
@@ -68,7 +69,7 @@ where
                         }
                     }
                 }
-                // We're missing the whole log so far
+                // We're missing the whole log so far.
                 None => {
                     return Ok(IngestResult::Retry(
                         operation.header.clone(),
@@ -106,6 +107,7 @@ where
     Ok(IngestResult::Complete(operation))
 }
 
+/// Operations can be ingested directly or need to be re-tried if they arrived out-of-order.
 #[derive(Debug)]
 pub enum IngestResult<E> {
     /// Operation has been successfully validated and persisted.
@@ -119,6 +121,7 @@ pub enum IngestResult<E> {
     Retry(Header<E>, Option<Body>, Vec<u8>, u64),
 }
 
+/// Errors which can occur due to invalid operations or critical storage failures.
 #[derive(Debug, Error)]
 pub enum IngestError {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
@@ -154,7 +157,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let log_id = 1;
 
-        // 1. Create a regular first operation in a log
+        // 1. Create a regular first operation in a log.
         let mut header = Header {
             public_key: private_key.public_key(),
             version: 1,
@@ -174,7 +177,7 @@ mod tests {
         assert!(matches!(result, Ok(IngestResult::Complete(_))));
 
         // 2. Create an operation which has already advanced in the log (it has a backlink and
-        //    higher sequence number)
+        //    higher sequence number).
         let mut header = Header {
             public_key: private_key.public_key(),
             version: 1,
