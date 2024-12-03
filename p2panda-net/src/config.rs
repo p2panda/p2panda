@@ -34,7 +34,7 @@ pub struct Config {
     /// in memory.
     pub private_key: Option<PathBuf>,
 
-    /// URL to relay server to help in establishing a peer-to-peer connection if one or both peers
+    /// URL of a relay server to help in establishing a peer-to-peer connection if one or both peers
     /// are behind a NAT or firewall.
     pub relay: Option<RelayUrl>,
 }

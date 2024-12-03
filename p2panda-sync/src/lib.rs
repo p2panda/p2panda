@@ -10,9 +10,10 @@
 //! can negotiate scope and access in a sync protocol for any type of data the remote peer
 //! currently knows about.
 //!
-//! Next to `p2panda-sync` containing the generic definition of the `SyncProtocol` trait interface,
-//! it also comes with optional implementations behind feature flags, optimized for efficient sync
-//! of append-only log-based data types plus helpers to encode wire messages in CBOR.
+//! In addition to the generic definition of the `SyncProtocol` trait, `p2panda-sync` includes 
+//! optional implementations for efficient sync of append-only log-based data types. These optional 
+//! implementations may be activated via feature flags. Finally, `p2panda-sync` provides helpers 
+//! to encode wire messages in CBOR.
 #[cfg(feature = "cbor")]
 pub mod cbor;
 #[cfg(feature = "log-sync")]
@@ -30,7 +31,7 @@ use thiserror::Error;
 /// Traits to implement a custom sync protocol.
 ///
 /// Implementing a `SyncProtocol` trait needs extra care and is only required when designing custom
-/// low-level peer-to-peer protocols and data types. p2panda comes already with solutions which can
+/// low-level peer-to-peer protocols and data types. p2panda already comes with solutions which can
 /// be used "out of the box", providing implementations for most applications and usecases.
 ///
 /// ## Design
@@ -47,11 +48,11 @@ use thiserror::Error;
 /// The `SyncProtocol` trait has been designed to allow privacy-respecting implementations where
 /// application data (via access control) and the topic itself (for example via Diffie Hellmann) is
 /// securely exchanged without revealing any information to unknown peers unnecessarily. This
-/// usually takes place during the "Handshake" phase of the regarding protocol.
+/// usually takes place during the "Handshake" phase of the protocol.
 ///
 /// The underlying transport layer should provide automatic authentication of the remote peer, a
-/// reliable connection and transport encryption, for example self-certified TLS 1.3 over QUIC as
-/// in `p2panda-net`.
+/// reliable connection and transport encryption. `p2panda-net`, for example, uses self-certified 
+/// TLS 1.3 over QUIC.
 ///
 /// ## Streams
 ///
@@ -108,10 +109,11 @@ where
     /// `app_tx`) during this phase to inform the backend that we've successfully requested access,
     /// exchanged the topic with the remote peer and are about to begin sync.
     ///
-    /// Afterwards it enters the "Sync" phase where the actual application data is exchanged with
-    /// the remote peer. If the protocol exchanges data in both directions or not is up to the
-    /// regarding implementation. Synced data is forwarded to the application layers via the
-    /// `SyncFrom::Data` message (via `app_tx`).
+    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which 
+    /// the actual application data is exchanged with the remote peer. It's left up to each 
+    /// protocol implementation to decide whether data is exchanged in one or both directions. 
+    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message 
+    /// (via `app_tx`).
     ///
     /// In case of a detected failure (either through a critical error on our end or an unexpected
     /// behaviour from the remote peer) a `SyncError` is returned.
@@ -131,10 +133,11 @@ where
     /// `app_tx`) during this phase to inform the backend that the topic has been successfully
     /// received from the remote peer and that data exchange is about to begin.
     ///
-    /// Afterwards it enters the "Sync" phase where the actual application data is exchanged with
-    /// the remote peer. If the protocol exchanges data in both directions or not is up to the
-    /// regarding implementation. Synced data is forwarded to the application layers via the
-    /// `SyncFrom::Data` message (via `app_tx`).
+    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which 
+    /// the actual application data is exchanged with the remote peer. It's left up to each 
+    /// protocol implementation to decide whether data is exchanged in one or both directions. 
+    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message 
+    /// (via `app_tx`).
     ///
     /// In case of a detected failure (either through a critical error on our end or an unexpected
     /// behaviour from the remote peer) a `SyncError` is returned.
@@ -160,7 +163,7 @@ where
     /// transport layer to inform the "backend" that we've successfully requested access, exchanged
     /// the topic with the remote peer and are about to begin sync.
     ///
-    /// With this information backends can optionally apply optimizations, which might for example
+    /// With this information backends can optionally apply optimisations, which might for example
     /// be required to keep application messages in-order (as there might exist other channels the
     /// backend exchanges similar data over at the same time).
     HandshakeSuccess(T),
@@ -170,7 +173,7 @@ where
     ///
     /// These "frontends" might further process, decrypt payloads, sort messages or apply more
     /// validation before they get finally persisted or rendered to the user. At this point the
-    /// sync protocol is merely "forwarding" it without any more knowledge how the data is used.
+    /// sync protocol is merely "forwarding" it without any knowledge of how the data is used.
     Data {
         /// Exchanged data from sync session.
         ///
@@ -181,8 +184,8 @@ where
 
         /// Optional "body" which can represent "off-chain" application data.
         ///
-        /// This is useful for realizing "off-chain" compatible data types. Implementations without
-        /// this distinction will leave this field always to `None` and only encode their data
+        /// This is useful for realising "off-chain" compatible data types. Implementations without
+        /// this distinction will always leave this field as `None` and only encode their data
         /// types in the `header` field.
         payload: Option<Vec<u8>>,
     },
@@ -258,9 +261,9 @@ impl From<std::io::Error> for SyncError {
 ///
 /// Consult the `TopicId` documentation in `p2panda-net` for more information.
 pub trait Topic:
-    // Data types implementing `Topic` need to also implement `Eq` and `Hash` to allow backends to
-    // organise sync sessions per topic and peer and `Serialize` and `Deserialize` to allow sending
-    // topics over the wire.
+    // Data types implementing `Topic` also need to implement `Eq` and `Hash` in order to allow 
+    // backends to organise sync sessions per topic and peer, along with `Serialize` and 
+    // `Deserialize` to allow sending topics over the wire.
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
 }

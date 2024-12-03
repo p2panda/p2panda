@@ -19,7 +19,7 @@
 //! for relay fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
 //!
 //! p2panda adds crucial functionality on top of iroh for peer-to-peer application development,
-//! without tying developers too close to any pre-defined data types and allowing plenty space for
+//! without tying developers too closely to any pre-defined data types and allowing plenty of space for
 //! customisation:
 //!
 //! 1. Data of any kind can be exchanged efficiently via gossip broadcast ("live mode") or via sync
@@ -37,7 +37,7 @@
 //! ## Offline-First
 //!
 //! This networking crate is designed to run on top of bi-directional, ordered connections on the
-//! IP layer (aka "The Internet"), with robustness to work in environments with instable
+//! IP layer (aka "The Internet"), with robustness to work in environments with unstable
 //! connectivity or offline time-periods.
 //!
 //! While this IP-based networking implementation should provide for many "modern" use-cases,
@@ -90,7 +90,7 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<()> {
 //!
-//! // Peers knowing the same "network id" will eventually find each other. This is the most global
+//! // Peers using the same "network id" will eventually find each other. This is the most global
 //! // identifier to group peers into multiple networks when necessary.
 //! let network_id = [1; 32];
 //!
@@ -122,7 +122,7 @@
 //! // Use mDNS to discover other peers on the local network.
 //! let mdns_discovery = LocalDiscovery::new()?;
 //!
-//! // Establish the p2p network which will automatically connect you to any peers.
+//! // Establish the p2p network which will automatically connect you to any discovered peers.
 //! let network = NetworkBuilder::new(network_id)
 //!     .private_key(private_key)
 //!     .discovery(mdns_discovery)
@@ -154,9 +154,9 @@ pub use p2panda_sync::log_sync::LogSyncProtocol;
 
 /// Unique 32 byte identifier for a network.
 ///
-/// Peers knowing the same network identifier will eventually discover each other. This is the most
-/// global identifier to group peers into networks and becomes necessary if different applications
-/// share the same underlying network infrastructure.
+/// Peers using the same network identifier will eventually discover each other. This is the most
+/// global identifier to group peers into networks. Different applications may choose to share the 
+/// same underlying network infrastructure by using the same network identifier.
 ///
 /// Please note that the network identifier should _never_ be the same as any other topic
 /// identifier.
@@ -167,13 +167,13 @@ pub type NetworkId = [u8; 32];
 /// Once other peers are discovered who are interested in the same topic id, the application will
 /// join the gossip overlay under that identifier.
 ///
-/// If an optional sync protocol has been provided, the application will attempt to synchronize
+/// If an optional sync protocol has been provided, the application will attempt to synchronise
 /// past state before entering the gossip overlay.
 ///
 /// ## Designing topic identifiers for applications
 ///
-/// Networked applications, like p2p systems, usually want to converge to the same state over time,
-/// so that all users will see the same data at some point.
+/// Networked applications, such as p2p systems, usually want to converge to the same state over 
+/// time so that all users eventually see the same data.
 ///
 /// If we're considering the totality of "all data" the application can create as the "global
 /// state", we might want to categorise it into logical "sub-sections", especially when the
@@ -190,8 +190,8 @@ pub type NetworkId = [u8; 32];
 /// Next to topic identifiers p2panda offers a `Topic` trait which allows for even more
 /// sophisticated "network queries".
 ///
-/// `TopicId` is a tool for general topic discovery and establishing gossip network overlays and
-/// `Topic` a query for sync protocols to ask for a specific piece of information.
+/// `TopicId` is a tool for general topic discovery and establishing gossip network overlays.
+/// `Topic` is a query for sync protocols to ask for a specific piece of information.
 ///
 /// Consult the `Topic` documentation in `p2panda-sync` for further information.
 pub trait TopicId {

@@ -15,7 +15,7 @@ use tracing::debug;
 
 /// Interface to accept incoming connections for custom protocol implementations.
 ///
-/// An node can accept connections for custom protocols. By default, the node only accepts
+/// A node can accept connections for custom protocols. By default, the node only accepts
 /// connections for the core protocols (gossip and optionally sync or blobs).
 pub trait ProtocolHandler: Send + Sync + IntoArcAny + fmt::Debug + 'static {
     /// Handle an incoming connection.
