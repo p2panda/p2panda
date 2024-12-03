@@ -220,6 +220,7 @@ impl TryFrom<&[u8]> for Header {
     }
 }
 
+/// Body of a p2panda operation containing arbitrary bytes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Body(pub(super) Vec<u8>);
 
@@ -289,6 +290,16 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
+/// Validate the header and body (when provided) of a single operation. All basic header
+/// validation is performed (identical to [`validate_header`](validate_header)) and additionally
+/// the body bytes hash and size are checked to be correct.
+///
+/// This method validates that the following conditions are true:
+/// * the signature can be verified against the author public key and unsigned header bytes
+/// * the header version is supported (currently only version 1 is supported)
+/// * if `payload_hash` is set the `payload_size` is > `0` otherwise it is zero
+/// * if `backlink` is set then `seq_num` is > `0` otherwise it is zero
+/// * if provided the body bytes hash and size match those claimed in the header
 pub fn validate_operation<E>(operation: &Operation<E>) -> Result<(), OperationError>
 where
     E: Clone + Serialize + DeserializeOwned,
@@ -316,6 +327,13 @@ where
     Ok(())
 }
 
+/// Validate an operation header.
+///
+/// This method validates that the following conditions are true:
+/// * the signature can be verified against the author public key and unsigned header bytes
+/// * the header version is supported (currently only version 1 is supported)
+/// * if `payload_hash` is set the `payload_size` is > `0` otherwise it is zero
+/// * if `backlink` is set then `seq_num` is > `0` otherwise it is zero
 pub fn validate_header<E>(header: &Header<E>) -> Result<(), OperationError>
 where
     E: Clone + Serialize + DeserializeOwned,
@@ -345,6 +363,13 @@ where
     Ok(())
 }
 
+/// Validate a backlink contained in a header against a past header which is assumed to have been
+/// retrieved from a local store.
+///
+/// This method validates that the following conditions are true:
+/// * the current and past headers contain the same public key
+/// * the current headers seq number increments from the past one by exactly `1`
+/// * the backlink hash contained in the current header matches the hash of the past header
 pub fn validate_backlink<E>(
     past_header: &Header<E>,
     header: &Header<E>,
