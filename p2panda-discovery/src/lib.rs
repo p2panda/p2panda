@@ -6,7 +6,6 @@
 //! by default and can be selected by enabling the `mdns` feature flag.
 //!
 //! Generic traits are provided to facitilate the creation of other peer discovery implementations.
-
 #[cfg(feature = "mdns")]
 pub mod mdns;
 
@@ -69,6 +68,7 @@ impl Discovery for DiscoveryMap {
 pub struct DiscoveryEvent {
     /// Identifier of the discovery service from which this event originated from.
     pub provenance: &'static str,
+
     /// Addressing information of a discovered peer.
     pub node_addr: NodeAddr,
 }
