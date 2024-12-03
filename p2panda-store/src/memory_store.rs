@@ -23,7 +23,7 @@ pub struct InnerMemoryStore<L, E> {
 }
 
 #[derive(Clone, Debug)]
-pub struct MemoryStore<L, E=()> {
+pub struct MemoryStore<L, E = ()> {
     inner: Arc<RwLock<InnerMemoryStore<L, E>>>,
 }
 
