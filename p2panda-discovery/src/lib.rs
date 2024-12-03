@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Peer discovery traits and services.
+//!
+//! This crate currently provides a single discovery service implementation: mDNS. It is disabled
+//! by default and can be selected by enabling the `mdns` feature flag.
+//!
+//! Generic traits are provided to facitilate the creation of other peer discovery implementations.
+
 #[cfg(feature = "mdns")]
 pub mod mdns;
 
@@ -66,6 +73,8 @@ pub struct DiscoveryEvent {
     pub node_addr: NodeAddr,
 }
 
+/// An interface for announcing and discovering network peers.
+///
 /// The `Discovery` trait provides a generic interface for discovering the identities and
 /// addressing information of peers on a network, as well as sharing that same information for the
 /// local node.
