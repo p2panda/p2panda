@@ -1465,9 +1465,9 @@ mod tests {
         node_3.add_peer(node_2_addr.clone()).await.unwrap();
         node_4.add_peer(node_3_addr.clone()).await.unwrap();
 
-        // Run all nodes. We are testing that peers gracefully handle starting a sync session
-        // whine not knowing the other peer's address yet. Eventually all peers complete at least
-        // one sync session.
+        // Run all nodes. We are testing that peers gracefully handle starting a sync session while
+        // not knowing the other peer's address yet. Eventually all peers complete at least one
+        // sync session.
         let handle1 = run_node(node_1, topic.clone());
         let handle2 = run_node(node_2, topic.clone());
         let handle3 = run_node(node_3, topic.clone());

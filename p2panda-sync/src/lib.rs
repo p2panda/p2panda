@@ -10,10 +10,10 @@
 //! can negotiate scope and access in a sync protocol for any type of data the remote peer
 //! currently knows about.
 //!
-//! In addition to the generic definition of the `SyncProtocol` trait, `p2panda-sync` includes 
-//! optional implementations for efficient sync of append-only log-based data types. These optional 
-//! implementations may be activated via feature flags. Finally, `p2panda-sync` provides helpers 
-//! to encode wire messages in CBOR.
+//! In addition to the generic definition of the `SyncProtocol` trait, `p2panda-sync` includes
+//! optional implementations for efficient sync of append-only log-based data types. These optional
+//! implementations may be activated via feature flags. Finally, `p2panda-sync` provides helpers to
+//! encode wire messages in CBOR.
 #[cfg(feature = "cbor")]
 pub mod cbor;
 #[cfg(feature = "log-sync")]
@@ -51,7 +51,7 @@ use thiserror::Error;
 /// usually takes place during the "Handshake" phase of the protocol.
 ///
 /// The underlying transport layer should provide automatic authentication of the remote peer, a
-/// reliable connection and transport encryption. `p2panda-net`, for example, uses self-certified 
+/// reliable connection and transport encryption. `p2panda-net`, for example, uses self-certified
 /// TLS 1.3 over QUIC.
 ///
 /// ## Streams
@@ -63,9 +63,9 @@ use thiserror::Error;
 ///
 /// ## Topics
 ///
-/// Topics are generic data types which can be used to express interest in a particular subset of
-/// the data we want to sync over, like chat group identifiers or very specific "search queries",
-/// for example "give me all documents containing the word 'billy'."
+/// Topics are generic data types which can be used to subjectively express interest in a
+/// particular subset of the data we want to sync over, like chat group identifiers or very
+/// specific "search queries", for example "give me all documents containing the word 'billy'."
 ///
 /// With the help of the `TopicMap` trait we can keep sync implementations agnostic to specific
 /// topic implementations. The sync protocol only needs to feed the "topic" into the "map" which

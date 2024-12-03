@@ -19,8 +19,8 @@
 //! for relay fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
 //!
 //! p2panda adds crucial functionality on top of iroh for peer-to-peer application development,
-//! without tying developers too closely to any pre-defined data types and allowing plenty of space for
-//! customisation:
+//! without tying developers too closely to any pre-defined data types and allowing plenty of space
+//! for customisation:
 //!
 //! 1. Data of any kind can be exchanged efficiently via gossip broadcast ("live mode") or via sync
 //!    protocols between two peers ("catching up on past state")
@@ -154,9 +154,9 @@ pub use p2panda_sync::log_sync::LogSyncProtocol;
 
 /// Unique 32 byte identifier for a network.
 ///
-/// Peers using the same network identifier will eventually discover each other. This is the most
-/// global identifier to group peers into networks. Different applications may choose to share the 
-/// same underlying network infrastructure by using the same network identifier.
+/// Peers operating on the same network identifier will eventually discover each other. This is the
+/// most global identifier to group peers into networks. Different applications may choose to share
+/// the same underlying network infrastructure by using the same network identifier.
 ///
 /// Please note that the network identifier should _never_ be the same as any other topic
 /// identifier.
