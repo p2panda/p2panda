@@ -79,7 +79,7 @@ where
     T: Topic,
     TM: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
-    E: Extensions + 'a,
+    E: Extensions + Send + Sync + 'a,
     S: Debug + Sync + LogStore<L, E>,
 {
     fn name(&self) -> &'static str {
@@ -291,7 +291,7 @@ async fn remote_needs<T, L, E>(
     from: SeqNum,
 ) -> Result<Vec<Message<T, L>>, SyncError>
 where
-    E: Extensions,
+    E: Extensions + Send + Sync,
 {
     let log = store
         .get_raw_log(public_key, log_id, Some(from))

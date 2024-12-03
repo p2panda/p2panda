@@ -67,15 +67,9 @@ pub trait Extension<T>: Extensions {
 }
 
 /// Super-trait defining trait bounds required by custom extensions types.
-pub trait Extensions:
-    Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize + Send + Sync
-{
-}
+pub trait Extensions: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
-impl<T> Extensions for T where
-    T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize + Send + Sync
-{
-}
+impl<T> Extensions for T where T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DefaultExtensions {}
