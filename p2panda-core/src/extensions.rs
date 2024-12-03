@@ -67,8 +67,11 @@ pub trait Extension<T>: Extensions {
 /// Super-trait defining trait bounds required by custom extensions types.
 pub trait Extensions: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
+/// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
 impl<T> Extensions for T where T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
+/// Convenience implementation of `Extension<T>` for `Header<E>`` allowing access to the extension
+/// values directly on header.
 impl<T, E> Extension<T> for Header<E>
 where
     E: Extension<T>,
