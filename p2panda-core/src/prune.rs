@@ -84,7 +84,6 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::cbor::{decode_cbor, encode_cbor};
-    use crate::extensions::DefaultExtensions;
     use crate::{Hash, Header, PrivateKey};
 
     use super::{validate_prunable_backlink, PruneFlag};
@@ -92,7 +91,7 @@ mod tests {
     #[test]
     fn validate_pruned_log() {
         let private_key = PrivateKey::new();
-        let mut header = Header::<DefaultExtensions> {
+        let mut header = Header::<()> {
             public_key: private_key.public_key(),
             seq_num: 7,
             backlink: Some(Hash::new(&[1, 2, 3])),
@@ -109,7 +108,7 @@ mod tests {
     #[test]
     fn seq_num_zero() {
         let private_key = PrivateKey::new();
-        let mut header = Header::<DefaultExtensions> {
+        let mut header = Header::<()> {
             public_key: private_key.public_key(),
             ..Default::default()
         };

@@ -95,7 +95,6 @@ impl From<DeserializeError<std::io::Error>> for DecodeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::extensions::DefaultExtensions;
     use crate::{Body, Header, PrivateKey};
 
     use super::{decode_cbor, encode_cbor};
@@ -104,7 +103,7 @@ mod tests {
     fn encode_decode() {
         let private_key = PrivateKey::new();
         let body = Body::new(&[1, 2, 3]);
-        let mut header = Header::<DefaultExtensions> {
+        let mut header = Header::<()> {
             public_key: private_key.public_key(),
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
@@ -113,7 +112,7 @@ mod tests {
         header.sign(&private_key);
 
         let bytes = encode_cbor(&header).unwrap();
-        let header_again: Header<DefaultExtensions> = decode_cbor(&bytes[..]).unwrap();
+        let header_again: Header<()> = decode_cbor(&bytes[..]).unwrap();
 
         assert_eq!(header.hash(), header_again.hash());
     }

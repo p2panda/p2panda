@@ -69,15 +69,6 @@ pub trait Extensions: Clone + Debug + Default + for<'de> Deserialize<'de> + Seri
 
 impl<T> Extensions for T where T: Clone + Debug + Default + for<'de> Deserialize<'de> + Serialize {}
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct DefaultExtensions {}
-
-impl<T> Extension<T> for DefaultExtensions {
-    fn extract(&self) -> Option<T> {
-        None
-    }
-}
-
 impl<T, E> Extension<T> for Header<E>
 where
     E: Extension<T>,

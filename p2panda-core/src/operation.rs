@@ -101,7 +101,6 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
-use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 
@@ -110,7 +109,7 @@ pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
 
 /// Combined `Header`, `Body` and operation `Hash` (Operation Id).
 #[derive(Clone, Debug)]
-pub struct Operation<E = DefaultExtensions> {
+pub struct Operation<E = ()> {
     pub hash: Hash,
     pub header: Header<E>,
     pub body: Option<Body>,
@@ -139,7 +138,7 @@ impl<E> Ord for Operation<E> {
 /// Header of a p2panda operation.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E = DefaultExtensions> {
+pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
