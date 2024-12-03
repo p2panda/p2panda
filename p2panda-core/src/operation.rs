@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! An `Operation` is the main data type of p2panda. `Operation`s are used to carry any data from
-//! one peer to another (distributed), while assuming no reliable network connection
-//! (offline-first) and untrusted machines (cryptographically secure). The author of an operation
-//! uses it's [`PrivateKey`] to cryptographically sign every `Operation`. This can be verified and
-//! used for authentication by any other peer.
+//! Core p2panda data type offering distributed, secure and efficient data transfer between peers. 
+//! 
+//! `Operation`s are used to carry any data from one peer to another (distributed), while assuming
+//! no reliable network connection (offline-first) and untrusted machines (cryptographically
+//! secure). The author of an operation uses it's [`PrivateKey`] to cryptographically sign every
+//! `Operation`. This can be verified and used for authentication by any other peer.
 //!
 //! Every `Operation` consists of a [`Header`] and an optional [`Body`]. The `Body` holds
 //! arbitrary bytes (up to the application to decide what should be inside). The `Header` is used
