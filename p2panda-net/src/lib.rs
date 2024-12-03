@@ -172,7 +172,7 @@ pub type NetworkId = [u8; 32];
 ///
 /// ## Designing topic identifiers for applications
 ///
-/// Networked applications, such as p2p systems, usually want to converge to the same state over 
+/// Networked applications, such as p2p systems, usually want to converge to the same state over
 /// time so that all users eventually see the same data.
 ///
 /// If we're considering the totality of "all data" the application can create as the "global

@@ -109,10 +109,10 @@ where
     /// `app_tx`) during this phase to inform the backend that we've successfully requested access,
     /// exchanged the topic with the remote peer and are about to begin sync.
     ///
-    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which 
-    /// the actual application data is exchanged with the remote peer. It's left up to each 
-    /// protocol implementation to decide whether data is exchanged in one or both directions. 
-    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message 
+    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which
+    /// the actual application data is exchanged with the remote peer. It's left up to each
+    /// protocol implementation to decide whether data is exchanged in one or both directions.
+    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message
     /// (via `app_tx`).
     ///
     /// In case of a detected failure (either through a critical error on our end or an unexpected
@@ -133,10 +133,10 @@ where
     /// `app_tx`) during this phase to inform the backend that the topic has been successfully
     /// received from the remote peer and that data exchange is about to begin.
     ///
-    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which 
-    /// the actual application data is exchanged with the remote peer. It's left up to each 
-    /// protocol implementation to decide whether data is exchanged in one or both directions. 
-    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message 
+    /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which
+    /// the actual application data is exchanged with the remote peer. It's left up to each
+    /// protocol implementation to decide whether data is exchanged in one or both directions.
+    /// Synced data is forwarded to the application layers via the `SyncFrom::Data` message
     /// (via `app_tx`).
     ///
     /// In case of a detected failure (either through a critical error on our end or an unexpected
