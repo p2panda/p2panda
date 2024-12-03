@@ -2,34 +2,26 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>All the things a panda needs</strong>
+  <strong>Your toolbox to build offline-first applications!</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda/releases">
-      Releases
-    </a>
-    <span> | </span>
-    <a href="https://p2panda.org/about/contribute">
-      Contribute
-    </a>
-    <span> | </span>
     <a href="https://p2panda.org">
       Website
     </a>
   </h3>
 </div>
 
-p2panda core types based on the new [namakemono](https://p2panda.org/specifications/namakemono/) specification. 🦥 
+This crate provides core types used throughout p2panda.
 
 ## Features
 
 * BLAKE3 `Hash`
 * Ed25519 `PrivateKey`, `PublicKey` and `Signature`
-* p2panda `Operation`, `Header`, `Body` and some validation methods
 * CBOR based encoding with `serde` and `ciborium`
+* p2panda `Operation`, `Header`, `Body`, `Extension`, `PruneFlag` and validation methods
 
 ## Examples
 
@@ -70,7 +62,7 @@ let operation = Operation {
 validate_operation(&operation).is_ok();
 ```
 
-### Add extensions to operation
+### Add extensions to an operation
 
 ```rust
 // Define custom extension types required for your application
@@ -109,3 +101,7 @@ let extensions = CustomExtensions {
 let log_id = Extension::<LogId>::extract(&extensions).unwrap();
 let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
 ```
+
+## License
+
+...
