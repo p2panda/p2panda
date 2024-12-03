@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{validate_backlink, Header, OperationError};
+use crate::{validate_backlink, Extensions, Header, OperationError};
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -65,7 +65,7 @@ pub fn validate_prunable_backlink<E>(
     prune_flag: bool,
 ) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + for<'a> Deserialize<'a>,
+    E: Extensions,
 {
     // If no pruning flag is set, we expect the log to have integrity with the previously given
     // operation

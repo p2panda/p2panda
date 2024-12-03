@@ -58,7 +58,7 @@ use serde::{Deserialize, Serialize};
 use crate::Header;
 
 /// Trait definition of a single header extension type.
-pub trait Extension<T>: Extensions {
+pub trait Extension<T>: Clone + Debug + for<'de> Deserialize<'de> + Serialize {
     /// Extract the value of an extension based on it's type.
     fn extract(&self) -> Option<T> {
         None

@@ -25,7 +25,7 @@
 //! # Examples
 //!
 //! ## Construct and sign a Header
-//! 
+//!
 //! ```
 //! use p2panda_core::{Body, Header, Operation, PrivateKey};
 //!
@@ -50,9 +50,9 @@
 //! // Sign the header with the authors private key.
 //! header.sign(&private_key);
 //! ```
-//! 
+//!
 //! ## Add custom extensions
-//! 
+//!
 //! ```
 //! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
@@ -96,13 +96,12 @@
 //! let prune_flag: PruneFlag = header.extract().unwrap();
 //! assert!(prune_flag.is_set())
 //! ```
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use thiserror::Error;
 
 use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::Extensions;
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -197,7 +196,7 @@ impl<E> Default for Header<E> {
 
 impl<E> Header<E>
 where
-    E: Clone + Serialize,
+    E: Extensions,
 {
     pub fn to_bytes(&self) -> Vec<u8> {
         encode_cbor(self)
@@ -349,7 +348,7 @@ pub enum OperationError {
 /// * if provided the body bytes hash and size match those claimed in the header
 pub fn validate_operation<E>(operation: &Operation<E>) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     validate_header(&operation.header)?;
 
@@ -383,7 +382,7 @@ where
 /// * if `backlink` is set then `seq_num` is > `0` otherwise it is zero
 pub fn validate_header<E>(header: &Header<E>) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     if !header.verify() {
         return Err(OperationError::SignatureMismatch);
@@ -422,7 +421,7 @@ pub fn validate_backlink<E>(
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
