@@ -7,12 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::Header;
 
-/// Trait defining the interface required for adding extensions to an operation
-/// [`Header`](crate::Header).
+/// Trait defining the interface required for adding extensions to an operation [`Header`]().
 ///
 /// Any user defined extensions can be added to an operation's `Header` in order to extend the
 /// basic functionality of the core p2panda data types or to encode application specific fields
-/// which should not be contained in the [`Body`](crate::Body).
+/// which should not be contained in the [`Body`]().
 ///
 /// At a lower level this might be information relating to capabilities or group encryption
 /// schemes which is required to enforce access-control restrictions already during sync, or
@@ -23,8 +22,7 @@ use crate::Header;
 ///
 /// Interfaces which use p2panda core data types can require certain extensions to be present on
 /// any headers that their APIs accept using trait bounds. As `p2panda-engine` does in the case of
-/// [`PruneFlag`](crate::PruneFlag) in order to implement automatic network wide garbage
-/// collection.
+/// [`PruneFlag`]() in order to implement automatic network wide garbage collection.
 ///
 /// Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
 /// requirements that `Header` requires, including `Serialize` and `Deserialize`.

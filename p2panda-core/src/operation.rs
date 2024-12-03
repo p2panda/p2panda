@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! An [`Operation`](Operation) is the main data type of p2panda. `Operation`s are used to carry
-//! any data from one peer to another (distributed), while assuming no reliable network connection
+//! An [`Operation`]() is the main data type of p2panda. `Operation`s are used to carry any data
+//! from one peer to another (distributed), while assuming no reliable network connection
 //! (offline-first) and untrusted machines (cryptographically secure). The author of an operation
-//! uses it's [`PrivateKey`](crate::identity::PrivateKey) to cryptographically sign every
-//! `Operation`. This can be verified and used for authentication by any other peer.
+//! uses it's [`PrivateKey`]() to cryptographically sign every `Operation`. This can be verified
+//! and used for authentication by any other peer.
 //!
-//! Every `Operation` consists of a [`Header`](Header) and an optional [`Body`](Body). The `Body`
-//! holds arbitrary bytes (up to the application to decide what should be inside). The `Header` is
-//! used to cryptographically secure & authenticate the `Body` and for providing ordered
-//! collections of operations when required.
+//! Every `Operation` consists of a [`Header`]() and an optional [`Body`](). The `Body` holds
+//! arbitrary bytes (up to the application to decide what should be inside). The `Header` is used
+//! to cryptographically secure & authenticate the `Body` and for providing ordered collections of
+//! operations when required.
 //!
 //! `Operation`s have a `backlink` and `seq_num` field in the `Header`. It is used to form a
 //! linked list of `Operation`s, where every subsequent `Operation` links to the previous one by
@@ -18,9 +18,9 @@
 //! causal partial-ordering is required. The `timestamp` field can be used when verifiable causal
 //! ordering is not required.
 //!
-//! `Header` [`extensions`](crate::extensions) can be used to add additional information, like
-//! `pruning` points for removing old/unwanted data, tombstones for explicit deletion,
-//! capabilities or group encryption schemes or custom application-related features etc.
+//! `Header` [`extensions`]() can be used to add additional information, like `pruning` points for
+//! removing old/unwanted data, tombstones for explicit deletion, capabilities or group encryption
+//! schemes or custom application-related features etc.
 //!
 //! # Examples
 //!
@@ -171,8 +171,8 @@ pub struct Header<E = DefaultExtensions> {
     pub backlink: Option<Hash>,
 
     /// List of hashes of the operations we refer to as the "previous" ones. These are operations
-    /// from other authors. Can be left empty if no partial ordering is required or no other author
-    /// has been observed yet.
+    /// from other authors. Can be left empty if no partial ordering is required or no other
+    /// author has been observed yet.
     pub previous: Vec<Hash>,
 
     /// Custom meta data.
@@ -339,8 +339,8 @@ pub enum OperationError {
 }
 
 /// Validate the header and body (when provided) of a single operation. All basic header
-/// validation is performed (identical to [`validate_header`](validate_header)) and additionally
-/// the body bytes hash and size are checked to be correct.
+/// validation is performed (identical to [`validate_header`]()) and additionally the body bytes
+/// hash and size are checked to be correct.
 ///
 /// This method validates that the following conditions are true:
 /// * the signature can be verified against the author public key and unsigned header bytes
@@ -682,8 +682,8 @@ mod tests {
 
         header.sign(&private_key);
 
-        // Thanks to blanket implementation of Extension<T> on Header we can extract the
-        // extension value from the header itself.
+        // Thanks to blanket implementation of Extension<T> on Header we can extract the extension
+        // value from the header itself.
         let log_id = Extension::<LogId>::extract(&header).unwrap();
         let expiry = Extension::<Expiry>::extract(&header).unwrap();
 
