@@ -11,6 +11,7 @@ use iroh_blobs::util::progress::{AsyncChannelProgressSender, IdGenerator, Progre
 use p2panda_core::Hash;
 use tracing::trace;
 
+/// Export a blob from the store to the given filesystem path.
 pub async fn export_blob<S: Store>(store: &S, hash: Hash, outpath: &PathBuf) -> anyhow::Result<()> {
     let (sender, _receiver) = async_channel::bounded(1024);
     let progress = AsyncChannelProgressSender::new(sender);
@@ -54,7 +55,7 @@ pub async fn export_blob<S: Store>(store: &S, hash: Hash, outpath: &PathBuf) -> 
         )
         .await?;
 
-    // When exporting is complete copy the blob file into place.
+    // Copy the blob file into place once exporting is complete.
     tokio::fs::copy(tmp_file.clone(), outpath).await?;
 
     // Drop the temporary file.
