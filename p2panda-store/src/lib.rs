@@ -2,12 +2,12 @@
 
 //! Interfaces and implementations of persistence layers for core p2panda data types.
 //!
-//! The provided APIs allow for efficient implementations of `Operation` and `Log` stores. These
-//! persistence and query APIs are utilised by higher-level components of the `p2panda` stack, such
+//! The provided APIs allow for efficient implementations of `Operation` and log stores. These
+//! persistence and query APIs are utilised by higher-level components of the p2panda stack, such
 //! as `p2panda-sync` and `p2panda-stream`. For detailed information concerning the `Operation` and
-//! `Log` types, please consult the documentation for the `p2panda-core` crate.
+//! log types, please consult the documentation for the `p2panda-core` crate.
 //!
-//! The traits provided here are not intended to offer generic storage solutions for non-`p2panda`
+//! The traits provided here are not intended to offer generic storage solutions for non-p2panda
 //! data types, nor are they intended to solve application-layer storage concerns.
 //!
 //! An in-memory storage solution is provided in the form of a `MemoryStore` which implements both
@@ -31,7 +31,7 @@ pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 
 impl<T> LogId for T where T: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 
-/// Interface for storing, deleting and querying `Operations`.
+/// Interface for storing, deleting and querying operations.
 ///
 /// Two variants of the trait are provided: one which is thread-safe (implementing `Sync`) and one
 /// which is purely intended for single-threaded execution contexts.
@@ -79,7 +79,7 @@ pub trait LocalOperationStore<LogId, Extensions>: Clone {
     async fn delete_payload(&mut self, hash: Hash) -> Result<bool, Self::Error>;
 }
 
-/// Interface for storing, deleting and querying `Log` entries.
+/// Interface for storing, deleting and querying logs.
 ///
 /// Two variants of the trait are provided: one which is thread-safe (implementing `Sync`) and one
 /// which is purely intended for single-threaded execution contexts.

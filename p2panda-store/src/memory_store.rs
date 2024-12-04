@@ -26,10 +26,10 @@ pub struct InnerMemoryStore<L, E> {
     logs: HashMap<(PublicKey, L), BTreeSet<LogMeta>>,
 }
 
-/// An in-memory store for core p2panda data types: `Operation` and `Log`.
+/// An in-memory store for core p2panda data types: `Operation` and log.
 ///
 /// `MemoryStore` supports usage in asynchronous and multi-threaded contexts by wrapping an
-/// `InnerMemoryStore` with ai `RwLock` and `Arc`. Convenience methods are provided to obtain a
+/// `InnerMemoryStore` with an `RwLock` and `Arc`. Convenience methods are provided to obtain a
 /// read- or write-lock on the underlying store.
 #[derive(Clone, Debug)]
 pub struct MemoryStore<L, E> {
