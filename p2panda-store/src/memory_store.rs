@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! In-memory persistence for p2panda operations and logs.
-
 use std::collections::{BTreeSet, HashMap};
 use std::convert::Infallible;
 use std::fmt::Debug;

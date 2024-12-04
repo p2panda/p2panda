@@ -13,7 +13,6 @@
 //! An in-memory storage solution is provided in the form of a `MemoryStore` which implements both
 //! `OperationStore` and `LogStore`. The store is gated by the `memory` feature flag and is enabled
 //! by default.
-
 #[cfg(feature = "memory")]
 pub mod memory_store;
 
