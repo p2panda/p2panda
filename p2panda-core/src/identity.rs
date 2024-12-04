@@ -345,7 +345,7 @@ pub enum IdentityError {
     #[error("invalid hex encoding in string")]
     InvalidHexEncoding(#[from] hex::FromHexError),
 
-    /// Errors which may occur while processing signatures and keypairs.
+    /// Errors which may occur while processing signatures and key pairs.
     ///
     /// This error may arise due to:
     ///
