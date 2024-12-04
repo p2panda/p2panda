@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! In-memory persistence for `OperationStore` and `LogStore`.
+
 use std::collections::{BTreeSet, HashMap};
 use std::convert::Infallible;
 use std::fmt::Debug;
