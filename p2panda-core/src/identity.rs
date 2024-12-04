@@ -2,12 +2,12 @@
 
 //! Ed25519 private and public keys.
 //!
-//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for  
+//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for
 //! verifying that a signature was indeed created by it's private counterpart. The private part of
 //! a key pair is typically kept on one device and never transported, whereas the public part acts
 //! as a peer's unique identifier and can be shared freely.  
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::identity::PrivateKey;

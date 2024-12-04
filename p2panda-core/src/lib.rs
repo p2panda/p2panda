@@ -8,12 +8,12 @@
 //! distributed data types commonly required when building peer-to-peer and local-first
 //! applications.
 //!
-//! # Features:
+//! ## Features
 //!
-//! - cryptographic signatures for authorship verification and tamper-proof messages
-//! - various ordering algorithms can be applied over collections of messages
-//! - provides mechanisms for efficient sync of past state
-//! - is compatible with any networking scenario (even broadcast-only)
+//! - Cryptographic signatures for authorship verification and tamper-proof messages
+//! - Various ordering algorithms can be applied over collections of messages
+//! - Provides mechanisms for efficient sync of past state
+//! - Compatible with any networking scenario (even broadcast-only)
 //!
 //! p2panda logs are made up of [`Operation`]s. Authors sign operations using their cryptographic
 //! keypair and append them to a log. An author may have one or many logs. The precise means of
@@ -33,13 +33,13 @@
 //! functionality depending on their particular use cases. p2panda provides our own extensions
 //! which are required when using our other crates offering more advanced functionality needed for
 //! application building (CRDTs, access control, encryption, ephemeral data, garbage collection,
-//! etc...), but it's entirely possible for users to define their own extensions as well.
+//! etc.), but it's entirely possible for users to define their own extensions as well.
 //!
 //! An operation is constructed from a [`Header`] and a [`Body`], the `Header` contains all
 //! metadata associated with the particular operation, and the `Body` contains the actual
 //! application message bytes.
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::{Body, Header, Operation, PrivateKey};

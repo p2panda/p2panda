@@ -2,7 +2,7 @@
 
 //! `Hash` struct for generating BLAKE3 hashes over arbitrary bytes.
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::Hash;

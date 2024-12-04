@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! [`Extension`](crate::Extension) representing points in a log where all preceding operations
-//! can be deleted.
+//! [`Extension`](crate::Extension) representing points in a log where all preceding operations can
+//! be deleted.
 //!
 //! `PruneFlag` is a built-in p2panda header extension which is required when using
 //! `p2panda-engine`. It allows users to define points in a log where all previous operations can
