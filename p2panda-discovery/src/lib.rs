@@ -22,7 +22,7 @@ pub type BoxedStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 /// A collection of discovery services.
 ///
 /// `DiscoveryMap` implements the `Discovery` trait to provide a convenient means of subscribing to
-/// a single stream comprising all discovery events. This also allows updating the address
+/// a single stream comprising all events from multiple discovery strategies. This also allows updating the address
 /// information of the local node for all discovery services with a single call to
 /// `update_local_address`.
 #[derive(Debug, Default)]
@@ -31,7 +31,7 @@ pub struct DiscoveryMap {
 }
 
 impl DiscoveryMap {
-    /// Instantiate a `DiscoveryMap` from a vector of services.
+    /// Instantiate a `DiscoveryMap` from a list of services.
     pub fn from_services(services: Vec<Box<dyn Discovery>>) -> Self {
         Self { services }
     }
