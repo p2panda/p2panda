@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! In-memory persistence for `OperationStore` and `LogStore`.
+//! In-memory persistence for p2panda operations and logs.
 
 use std::collections::{BTreeSet, HashMap};
 use std::convert::Infallible;
@@ -19,18 +19,25 @@ type RawHeader = Vec<u8>;
 type LogMeta = (SeqNum, Timestamp, Hash);
 type StoredOperation<L, E> = (L, Header<E>, Option<Body>, RawHeader);
 
+/// An in-memory store for core p2panda data types: `Operation` and `Log`.
 #[derive(Clone, Debug)]
 pub struct InnerMemoryStore<L, E> {
     operations: HashMap<Hash, StoredOperation<L, E>>,
     logs: HashMap<(PublicKey, L), BTreeSet<LogMeta>>,
 }
 
+/// An in-memory store for core p2panda data types: `Operation` and `Log`.
+///
+/// `MemoryStore` supports usage in asynchronous and multi-threaded contexts by wrapping an
+/// `InnerMemoryStore` with ai `RwLock` and `Arc`. Convenience methods are provided to obtain a
+/// read- or write-lock on the underlying store.
 #[derive(Clone, Debug)]
 pub struct MemoryStore<L, E> {
     inner: Arc<RwLock<InnerMemoryStore<L, E>>>,
 }
 
 impl<L, E> MemoryStore<L, E> {
+    /// Create a new in-memory store.
     pub fn new() -> Self {
         let inner = InnerMemoryStore {
             operations: HashMap::new(),
@@ -50,12 +57,14 @@ impl<T> Default for MemoryStore<T, DefaultExtensions> {
 }
 
 impl<T, E> MemoryStore<T, E> {
+    /// Obtain a read-lock on the store.
     pub fn read_store(&self) -> RwLockReadGuard<InnerMemoryStore<T, E>> {
         self.inner
             .read()
             .expect("acquire shared read access on store")
     }
 
+    /// Obtain a write-lock on the store.
     pub fn write_store(&self) -> RwLockWriteGuard<InnerMemoryStore<T, E>> {
         self.inner
             .write()
