@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Ed25519 private and public keys.
+//! Ed25519 key pairs and signatures.
 //!
-//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for  
+//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for
 //! verifying that a signature was indeed created by it's private counterpart. The private part of
-//! a key pair is typically kept on one device and never transported, whereas the public part acts
-//! as a peer's unique identifier and can be shared freely.  
+//! a key pair is typically kept securely on one device and never transported, whereas the public
+//! part acts as a peer's unique identifier and can be shared freely.
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::identity::PrivateKey;
@@ -345,7 +345,7 @@ pub enum IdentityError {
     #[error("invalid hex encoding in string")]
     InvalidHexEncoding(#[from] hex::FromHexError),
 
-    /// Errors which may occur while processing signatures and keypairs.
+    /// Errors which may occur while processing signatures and key pairs.
     ///
     /// This error may arise due to:
     ///

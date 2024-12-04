@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! `Hash` struct for generating BLAKE3 hashes over arbitrary bytes.
+//! BLAKE3 hashes over arbitrary bytes.
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::Hash;

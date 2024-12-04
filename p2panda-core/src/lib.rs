@@ -8,23 +8,30 @@
 //! distributed data types commonly required when building peer-to-peer and local-first
 //! applications.
 //!
-//! # Features:
+//! ## Features
 //!
-//! - cryptographic signatures for authorship verification and tamper-proof messages
-//! - various ordering algorithms can be applied over collections of messages
-//! - provides mechanisms for efficient sync of past state
-//! - is compatible with any networking scenario (even broadcast-only)
+//! - Cryptographic signatures for authorship verification and tamper-proof messages
+//! - Authors can maintain one or many logs
+//! - Single-writer logs which can be combined to support multi-writer collaboration
+//! - Compatible with any application data and CRDT
+//! - Various ordering algorithms
+//! - Supports efficient, partial sync
+//! - Compatible with any networking scenario (even broadcast-only, for example for packet radio)
+//! - Fork-tolerant
+//! - Pruning of outdated messages
+//! - Highly extensible with custom features, for example prefix-deletion, ephemeral
+//!   "self-destructing" messages, etc.
 //!
 //! p2panda logs are made up of [`Operation`]s. Authors sign operations using their cryptographic
-//! keypair and append them to a log. An author may have one or many logs. The precise means of
+//! key pair and append them to a log. An author may have one or many logs. The precise means of
 //! identifying logs is not defined by this crate (see extensions).
 //!
 //! A common challenge in distributed systems is how to order operations written concurrently by
 //! different authors and/or processes. Operations contain information which can be used for
 //! establishing order depending on one's use case:
-//! - `timestamp`: The UNIX timestamp describing when the operation was created.
-//! - `previous`: An (optional) list of hashes referring to the previously observed operations can
-//!   be used to establish cryptographically secure partial-ordering.
+//! - `timestamp`: UNIX timestamp describing when the operation was created.
+//! - `previous`: List of hashes referring to the previously observed operations to establish
+//!   cryptographically secure partial-ordering.
 //!
 //! It is worth noting that ordering algorithms are _not_ further specified or provided as part of
 //! `p2panda-core`.
@@ -33,21 +40,27 @@
 //! functionality depending on their particular use cases. p2panda provides our own extensions
 //! which are required when using our other crates offering more advanced functionality needed for
 //! application building (CRDTs, access control, encryption, ephemeral data, garbage collection,
-//! etc...), but it's entirely possible for users to define their own extensions as well.
+//! etc.), but it's entirely possible for users to define their own extensions as well.
 //!
 //! An operation is constructed from a [`Header`] and a [`Body`], the `Header` contains all
 //! metadata associated with the particular operation, and the `Body` contains the actual
-//! application message bytes.
+//! application message bytes. This allows "off-chain" handling, where the important bits in the
+//! headers are transmitted via an prioritised channel and secondary information can be loaded
+//! "lazily". Additionally it allows deletion of payloads without breaking the integrity of the
+//! append-only log.
 //!
-//! # Examples
+//! ## Example
 //!
 //! ```
 //! use p2panda_core::{Body, Header, Operation, PrivateKey};
 //!
-//! // Authors Ed25519 private signing key.
+//! // Every operation is cryptographically authenticated by an author by signing it with an
+//! // Ed25519 key pair. This method generates a new private key for us which needs to be securely
+//! // stored for re-use.
 //! let private_key = PrivateKey::new();
 //!
-//! // Construct the body and header.
+//! // Operations consist of an body (with the actual application data) and a header,
+//! // enhancing the data to be used in distributed networks.
 //! let body = Body::new("Hello, Sloth!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
@@ -62,7 +75,7 @@
 //!     extensions: None::<()>,
 //! };
 //!
-//! // Sign the header with the author's private key.
+//! // Sign the header with the author's private key. From now on it's ready to be sent!
 //! header.sign(&private_key);
 //! ```
 pub mod cbor;
