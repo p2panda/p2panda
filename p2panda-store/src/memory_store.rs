@@ -374,14 +374,14 @@ mod tests {
 
     #[tokio::test]
     async fn generic_extensions_mem_store() {
-        // Define our own custom extension type
+        // Define our own custom extension type.
         #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         struct MyExtension {}
 
-        // Construct a new store
+        // Construct a new store.
         let mut store = MemoryStore::new();
 
-        // Construct an operation using the custom extension
+        // Construct an operation using the custom extension.
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
         let mut header = Header {
@@ -398,7 +398,7 @@ mod tests {
         };
         header.sign(&private_key);
 
-        // Insert the operation into the store, the extension type is inferred
+        // Insert the operation into the store, the extension type is inferred.
         let inserted = store
             .insert_operation(header.hash(), &header, Some(&body), &header.to_bytes(), &0)
             .await
@@ -449,21 +449,21 @@ mod tests {
 
         let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
-        // Insert one operation
+        // Insert one operation.
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
 
-        // We expect one log and one operation
+        // We expect one log and one operation.
         assert_eq!(store.read_store().logs.len(), 1);
         assert_eq!(store.read_store().operations.len(), 1);
 
-        // Delete the operation
+        // Delete the operation.
         assert!(store.delete_operation(hash).await.expect("no error"));
 
-        // We expect no logs and no operations
+        // We expect no logs and no operations.
         assert_eq!(store.read_store().logs.len(), 0);
         assert_eq!(store.read_store().operations.len(), 0);
 
@@ -789,22 +789,22 @@ mod tests {
             .await
             .expect("no errors");
 
-        // We expect one log and 3 operations
+        // We expect one log and 3 operations.
         assert_eq!(store.read_store().logs.len(), 1);
         assert_eq!(store.read_store().operations.len(), 3);
 
-        // Delete all operations _before_ seq_num 2
+        // Delete all operations _before_ seq_num 2.
         let deleted = store
             .delete_operations(&private_key.public_key(), &log_id, 2)
             .await
             .expect("no errors");
         assert!(deleted);
 
-        // There is now only one operation in the log
+        // There is now only one operation in the log.
         assert_eq!(store.read_store().logs.len(), 1);
         assert_eq!(store.read_store().operations.len(), 1);
 
-        // The remaining operation in the log should be the latest (seq_num == 2)
+        // The remaining operation in the log should be the latest (seq_num == 2).
         let log = store
             .get_log(&private_key.public_key(), &log_id, None)
             .await
@@ -812,7 +812,7 @@ mod tests {
             .expect("log should exist");
         assert_eq!(log[0].0.hash(), header_2.hash());
 
-        // Deleting the same range again should return `false`, meaning no deletion occurred
+        // Deleting the same range again should return `false`, meaning no deletion occurred.
         let deleted = store
             .delete_operations(&private_key.public_key(), &log_id, 2)
             .await
@@ -850,11 +850,11 @@ mod tests {
             .await
             .expect("no errors");
 
-        // There is one log and 3 operations
+        // There is one log and 3 operations.
         assert_eq!(store.read_store().logs.len(), 1);
         assert_eq!(store.read_store().operations.len(), 3);
 
-        // Delete all operation payloads from sequence number 0 up to but not including 2
+        // Delete all operation payloads from sequence number 0 up to but not including 2.
         let deleted = store
             .delete_payloads(&private_key.public_key(), &log_id, 0, 2)
             .await
