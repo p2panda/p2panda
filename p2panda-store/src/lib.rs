@@ -4,11 +4,18 @@
 //!
 //! The provided APIs allow for efficient implementations of `Operation` and log stores. These
 //! persistence and query APIs are utilised by higher-level components of the p2panda stack, such
-//! as `p2panda-sync` and `p2panda-stream`. For detailed information concerning the `Operation` and
-//! log types, please consult the documentation for the `p2panda-core` crate.
+//! as `p2panda-sync` and `p2panda-stream`. For detailed information concerning the `Operation`
+//! type, please consult the documentation for the `p2panda-core` crate.
 //!
-//! The traits provided here are not intended to offer generic storage solutions for non-p2panda
-//! data types, nor are they intended to solve application-layer storage concerns.
+//! Logs in the context of `p2panda-store` are simply a collection of operations grouped under a
+//! common identifier. The precise type for which `LogId` is implemented is left up to the
+//! developer to decide according to their needs. With this in mind, the traits and implementations
+//! provided by `p2panda-store` do not perform any validation of log integrity. Developers using
+//! this crate must take steps to ensure their log design is fit for purpose and that all operations
+//! have been thoroughly validated before being persisted.
+//!
+//! Also note that the traits provided here are not intended to offer generic storage solutions for
+//! non-p2panda data types, nor are they intended to solve application-layer storage concerns.
 //!
 //! An in-memory storage solution is provided in the form of a `MemoryStore` which implements both
 //! `OperationStore` and `LogStore`. The store is gated by the `memory` feature flag and is enabled
@@ -24,6 +31,8 @@ pub use memory_store::MemoryStore;
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
 /// Uniquely identify a single-author log.
+///
+/// The `LogId` exists purely to group a set of operations.
 ///
 /// A blanket implementation is provided for any type meeting the required trait bounds.
 pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
