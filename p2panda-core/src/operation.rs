@@ -19,8 +19,11 @@
 //! `timestamp` field can be used when verifiable causal ordering is not required.
 //!
 //! `Header` [`extensions`](crate::extensions) can be used to add additional information, like
-//! `pruning` points for removing old/unwanted data, tombstones for explicit deletion,
+//! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
 //! capabilities or group encryption schemes or custom application-related features etc.
+//!
+//! Operations are encoded in CBOR format and use Ed25519 key pairs for digital signatures and
+//! BLAKE3 for hashing.
 //!
 //! ## Examples
 //!
@@ -29,10 +32,8 @@
 //! ```
 //! use p2panda_core::{Body, Header, Operation, PrivateKey};
 //!
-//! // Author's Ed25519 private signing key.
 //! let private_key = PrivateKey::new();
 //!
-//! // Construct the body and header.
 //! let body = Body::new("Hello, Sloth!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
@@ -47,7 +48,6 @@
 //!     extensions: None::<()>,
 //! };
 //!
-//! // Sign the header with the author's private key.
 //! header.sign(&private_key);
 //! ```
 //!
@@ -57,7 +57,6 @@
 //! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
 //!
-//! // Author's Ed25519 private signing key.
 //! let private_key = PrivateKey::new();
 //!
 //! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -75,7 +74,6 @@
 //!     prune_flag: PruneFlag::new(true),
 //! };
 //!
-//! // Construct the body and header.
 //! let body = Body::new("Prune from here please!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
@@ -90,7 +88,6 @@
 //!     extensions: Some(extensions),
 //! };
 //!
-//! // Sign the header with the author's private key.
 //! header.sign(&private_key);
 //!
 //! let prune_flag: PruneFlag = header.extract().unwrap();
@@ -145,10 +142,8 @@ impl<E> Ord for Operation<E> {
 /// ```
 /// use p2panda_core::{Body, Header, Operation, PrivateKey};
 ///
-/// // Author's Ed25519 private signing key.
 /// let private_key = PrivateKey::new();
 ///
-/// // Construct the body and header.
 /// let body = Body::new("Hello, Sloth!".as_bytes());
 /// let mut header = Header {
 ///     version: 1,
