@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Traits required for defining custom extension types.
+//! Traits required for defining custom extensions.
 //!
 //! User-defined extensions can be added to an operation's `Header` in order to extend the basic
 //! functionality of the core p2panda data types or to encode application-specific fields which
@@ -27,12 +27,12 @@
 //! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
 //!
-//! // Define concrete custom extension type.
+//! // Extend our operations with an "expiry" field we can use to implement "ephemeral messages" in
+//! // our application, which get automatically deleted after the expiration timestamp is due.
 //! #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
-//! #[serde(transparent)]
 //! pub struct Expiry(u64);
 //!
-//! // Define custom type containing all extensions we require.
+//! // Multiple extensions can be combined in a custom type.
 //! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 //! struct CustomExtensions {
 //!     expiry: Expiry,
@@ -45,13 +45,13 @@
 //!     }
 //! }
 //!
-//! // A single extensions instance.
+//! // Create a custom extension instance, this can be added to an operation's header.
 //! let extensions = CustomExtensions {
-//!     expiry: Expiry(1733170246)
+//!     expiry: Expiry(1733170246),
 //! };
 //!
 //! // Extract the extension we are interested in.
-//! let expiry: Expiry = extensions.extract().unwrap();
+//! let expiry: Expiry = extensions.extract().expect("expiry field should be set");
 //! ```
 use std::fmt::Debug;
 
@@ -73,7 +73,8 @@ pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 /// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
 impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 
-/// Generic implementation of `Extension<T>` for `Header<E>` allowing access to the extension values.
+/// Generic implementation of `Extension<T>` for `Header<E>` allowing access to the extension
+/// values.
 impl<T, E> Extension<T> for Header<E>
 where
     E: Extension<T>,
