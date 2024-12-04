@@ -4,7 +4,7 @@
 //!
 //! The provided APIs allow for efficient implementations of `Operation` and `Log` stores. These
 //! persistence and query APIs are utilised by higher-level components of the `p2panda` stack, such
-//! as `p2panda-sync` and `p2panda-engine`. For detailed information concerning the `Operation` and
+//! as `p2panda-sync` and `p2panda-stream`. For detailed information concerning the `Operation` and
 //! `Log` types, please consult the documentation for the `p2panda-core` crate.
 //!
 //! The traits provided here are not intended to offer generic storage solutions for non-`p2panda`
