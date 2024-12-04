@@ -4,8 +4,8 @@
 //! be deleted.
 //!
 //! `PruneFlag` is a built-in p2panda header extension which is required when using
-//! `p2panda-engine`. It allows users to define points in a log where all previous operations can
-//! be deleted. When operations arrive on a peer using `p2panda-engine` for ingesting messages,
+//! `p2panda-stream`. It allows users to define points in a log where all previous operations can
+//! be deleted. When operations arrive on a peer using `p2panda-stream` for ingesting messages,
 //! garbage collection will automatically occur and eventually data will be removed network-wide.
 //!
 //! The process by which eligible prune points are established is an application layer concern. It

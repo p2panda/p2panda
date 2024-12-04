@@ -14,7 +14,7 @@
 //! the most suitable being dependent on specific use-case requirements.
 //!
 //! Interfaces which use p2panda core data types can require certain extensions to be present on
-//! any headers that their APIs accept using trait bounds. `p2panda-engine`, for example, uses the
+//! any headers that their APIs accept using trait bounds. `p2panda-stream`, for example, uses the
 //! [`PruneFlag`](crate::PruneFlag) in order to implement automatic network-wide garbage
 //! collection.
 //!
