@@ -33,9 +33,6 @@
 //! - `previous`: List of hashes referring to the previously observed operations to establish
 //!   cryptographically secure partial-ordering.
 //!
-//! It is worth noting that ordering algorithms are _not_ further specified or provided as part of
-//! `p2panda-core`.
-//!
 //! Custom extension fields can be defined by users of this library to introduce additional
 //! functionality depending on their particular use cases. p2panda provides our own extensions
 //! which are required when using our other crates offering more advanced functionality needed for
