@@ -1,5 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Interfaces and implementations of persistence layers for core p2panda data types.
+//!
+//! The provided APIs allow for efficient implementations of `Operation` and `Log` stores. These
+//! persistence and query APIs are utilised by higher-level components of the `p2panda` stack, such
+//! as `p2panda-sync` and `p2panda-engine`. For detailed information concerning the `Operation` and
+//! `Log` types, please consult the documentation for the `p2panda-core` crate.
+//!
+//! The traits provided here are not intended to offer generic storage solutions for non-`p2panda`
+//! data types, nor are they intended to solve application-layer storage concerns.
+//!
+//! An in-memory storage solution is provided in the form of a `MemoryStore` which implements both
+//! `OperationStore` and `LogStore`. The store is gated by the `memory` feature flag and is enabled
+//! by default.
+
 #[cfg(feature = "memory")]
 pub mod memory_store;
 
@@ -10,11 +24,17 @@ pub use memory_store::MemoryStore;
 
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
-/// The unique identifier of a single-author log.
+/// Uniquely identify a single-author log.
+///
+/// A blanket implementation is provided for any type meeting the required trait bounds.
 pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 
 impl<T> LogId for T where T: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
 
+/// Interface for storing, deleting and querying `Operations`.
+///
+/// Two variants of the trait are provided: one which is thread-safe (implementing `Sync`) and one
+/// which is purely intended for single-threaded execution contexts.
 #[trait_variant::make(OperationStore: Send)]
 pub trait LocalOperationStore<LogId, Extensions>: Clone {
     type Error: Display + Debug;
@@ -38,10 +58,12 @@ pub trait LocalOperationStore<LogId, Extensions>: Clone {
         hash: Hash,
     ) -> Result<Option<(Header<Extensions>, Option<Body>)>, Self::Error>;
 
-    /// Get "raw" header and body bytes of operation from store.
+    /// Get the "raw" header and body bytes of an operation.
     async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error>;
 
-    /// Returns `true` if operation exists in store.
+    /// Query the existence of an operation.
+    ///
+    /// Returns `true` if the operation was found in the store and `false` if not.
     async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error>;
 
     /// Delete an operation.
@@ -57,6 +79,10 @@ pub trait LocalOperationStore<LogId, Extensions>: Clone {
     async fn delete_payload(&mut self, hash: Hash) -> Result<bool, Self::Error>;
 }
 
+/// Interface for storing, deleting and querying `Log` entries.
+///
+/// Two variants of the trait are provided: one which is thread-safe (implementing `Sync`) and one
+/// which is purely intended for single-threaded execution contexts.
 #[trait_variant::make(LogStore: Send)]
 pub trait LocalLogStore<LogId, Extensions> {
     type Error: Display + Debug;
@@ -66,7 +92,7 @@ pub trait LocalLogStore<LogId, Extensions> {
     /// The `from` value will be used as the starting index for log retrieval, if supplied,
     /// otherwise all operations will be returned.
     ///
-    /// Returns an empty Vec when the author or a log with the requested id was not found.
+    /// Returns `None` when either the author or a log with the requested id was not found.
     async fn get_log(
         &self,
         public_key: &PublicKey,
@@ -79,7 +105,7 @@ pub trait LocalLogStore<LogId, Extensions> {
     /// The `from` value will be used as the starting index for log retrieval, if supplied,
     /// otherwise all operations will be returned.
     ///
-    /// Returns `None` when the author or a log with the requested id was not found.
+    /// Returns `None` when either the author or a log with the requested id was not found.
     async fn get_raw_log(
         &self,
         public_key: &PublicKey,
