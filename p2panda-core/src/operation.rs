@@ -2,23 +2,23 @@
 
 //! Core p2panda data type offering distributed, secure and efficient data transfer between peers.
 //!
-//! `Operation`s are used to carry any data from one peer to another (distributed), while assuming
-//! no reliable network connection (offline-first) and untrusted machines (cryptographically
-//! secure). The author of an operation uses it's [`PrivateKey`] to cryptographically sign every
-//! `Operation`. This can be verified and used for authentication by any other peer.
+//! Operations are used to carry any data from one peer to another (distributed), while assuming no
+//! reliable network connection (offline-first) and untrusted machines (cryptographically secure).
+//! The author of an operation uses it's [`PrivateKey`] to cryptographically sign every operation.
+//! This can be verified and used for authentication by any other peer.
 //!
-//! Every `Operation` consists of a [`Header`] and an optional [`Body`]. The `Body` holds arbitrary
-//! bytes (up to the application to decide what should be inside). The `Header` is used to
-//! cryptographically secure & authenticate the `Body` and for providing ordered collections of
+//! Every operation consists of a [`Header`] and an optional [`Body`]. The body holds arbitrary
+//! bytes (up to the application to decide what should be inside). The header is used to
+//! cryptographically secure & authenticate the body and for providing ordered collections of
 //! operations when required.
 //!
-//! `Operation`s have a `backlink` and `seq_num` field in the `Header`. These are used to form a
-//! linked list of `Operation`s, where every subsequent `Operation` points to the previous one by
-//! referencing its cryptographically secured hash. The `previous` field can be used to point at
-//! operations by _other_ authors when multi-writer causal partial-ordering is required. The
-//! `timestamp` field can be used when verifiable causal ordering is not required.
+//! Operations have a `backlink` and `seq_num` field in the header. These are used to form a linked
+//! list of operations, where every subsequent operation points to the previous one by referencing
+//! its cryptographically secured hash. The `previous` field can be used to point at operations by
+//! _other_ authors when multi-writer causal partial-ordering is required. The `timestamp` field
+//! can be used when verifiable causal ordering is not required.
 //!
-//! `Header` [`extensions`](crate::extensions) can be used to add additional information, like
+//! [Header extensions](crate::extensions) can be used to add additional information, like
 //! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
 //! capabilities or group encryption schemes or custom application-related features etc.
 //!
