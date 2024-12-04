@@ -3,13 +3,13 @@
 //! [`Extension`](crate::Extension) representing points in a log where all preceding operations
 //! can be deleted.
 //!
-//! `PruneFlag` is built-in p2panda header extension which is required when using
+//! `PruneFlag` is a built-in p2panda header extension which is required when using
 //! `p2panda-engine`. It allows users to define points in a log where all previous operations can
 //! be deleted. When operations arrive on a peer using `p2panda-engine` for ingesting messages,
-//! garbage collection will automatically occur and eventually data will be removed network wide.
+//! garbage collection will automatically occur and eventually data will be removed network-wide.
 //!
 //! The process by which eligible prune points are established is an application layer concern. It
-//! could be that messages of a certain age are no longer retained, or that changes to a CRDT like
+//! could be that messages of a certain age are no longer retained, or that changes to a CRDT-like
 //! data type have been flagged for garbage collection.
 use std::ops::Deref;
 
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{validate_backlink, Extensions, Header, OperationError};
 
-/// Flag indicating that all proceeding operations in a log can be deleted.
+/// Flag indicating that all preceding operations in a log can be deleted.
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PruneFlag(bool);
