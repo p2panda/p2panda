@@ -23,12 +23,8 @@ An in-memory storage solution is provided in the form of a `MemoryStore` which i
 
 ## License
 
-Licensed under either of
-
-* Apache License, Version 2.0 ([Apache-2.0.txt](https://github.com/p2panda/p2panda/blob/main/LICENSES/Apache-2.0.txt) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([MIT.txt](https://github.com/p2panda/p2panda/blob/main/LICENSES/MIT.txt) or https://mit-license.org/)
-
-## Contribution
+Licensed under either of [Apache License, Version 2.0](https://github.com/p2panda/p2panda/blob/main/LICENSES/Apache-2.0.txt)
+or [MIT license](https://github.com/p2panda/p2panda/blob/main/LICENSES/MIT.txt) at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
 p2panda by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
