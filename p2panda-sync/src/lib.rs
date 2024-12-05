@@ -46,9 +46,9 @@ use thiserror::Error;
 /// ## Privacy and Security
 ///
 /// The `SyncProtocol` trait has been designed to allow privacy-respecting implementations where
-/// application data (via access control) and the topic itself (for example via Diffie Hellmann) is
-/// securely exchanged without revealing any information to unknown peers unnecessarily. This
-/// usually takes place during the "Handshake" phase of the protocol.
+/// application data (via access control) and the topic query itself (for example via Diffie
+/// Hellmann) is securely exchanged without revealing any information to unknown peers
+/// unnecessarily. This usually takes place during the "Handshake" phase of the protocol.
 ///
 /// The underlying transport layer should provide automatic authentication of the remote peer, a
 /// reliable connection and transport encryption. `p2panda-net`, for example, uses self-certified
@@ -61,15 +61,15 @@ use thiserror::Error;
 /// from the remote peer and `app_tx` to send received data to the higher-level application-,
 /// validation- and persistance-layers.
 ///
-/// ## Topics
+/// ## Topic queries
 ///
-/// Topics are generic data types which can be used to subjectively express interest in a
+/// Topics queries are generic data types which can be used to subjectively express interest in a
 /// particular subset of the data we want to sync over, like chat group identifiers or very
 /// specific "search queries", for example "give me all documents containing the word 'billy'."
 ///
 /// With the help of the `TopicMap` trait we can keep sync implementations agnostic to specific
-/// topic implementations. The sync protocol only needs to feed the "topic query" into the "map"
-/// which will answer with the actual to-be-synced data entities (for example coming from a
+/// topic query implementations. The sync protocol only needs to feed the "topic query" into the
+/// "map" which will answer with the actual to-be-synced data entities (for example coming from a
 /// store). This allows application developers to re-use your `SyncProtocol` implementation for
 /// their custom `TopicQuery` requirements.
 ///
@@ -101,13 +101,13 @@ where
     fn name(&self) -> &'static str;
 
     /// Initiate a sync protocol session over the provided bi-directional stream for the given
-    /// topic.
+    /// topic query.
     ///
     /// During the "Handshake" phase the "initiator" usually requests access and informs the remote
     /// peer about the "topic query" they are interested in. Implementations for `p2panda-net`
     /// are required to send a `SyncFrom::HandshakeSuccess` message to the application layer (via
     /// `app_tx`) during this phase to inform the backend that we've successfully requested access,
-    /// exchanged the topic with the remote peer and are about to begin sync.
+    /// exchanged the topic query with the remote peer and are about to begin sync.
     ///
     /// After the "Handshake" is complete the protocol enters the "Sync" phase, during which
     /// the actual application data is exchanged with the remote peer. It's left up to each
@@ -161,7 +161,7 @@ where
     ///
     /// Implementations for `p2panda-net` are required to send this message to the underlying
     /// transport layer to inform the "backend" that we've successfully requested access, exchanged
-    /// the topic with the remote peer and are about to begin sync.
+    /// the topic query with the remote peer and are about to begin sync.
     ///
     /// With this information backends can optionally apply optimisations, which might for example
     /// be required to keep application messages in-order (as there might exist other channels the
@@ -247,9 +247,9 @@ impl From<std::io::Error> for SyncError {
 /// Identify the particular dataset a peer is interested in syncing.
 ///
 /// Exactly how this is expressed is left up to the user to decide. During sync the "initiator"
-/// sends their topic to a remote peer where it is be mapped to their local dataset. Additional
-/// access-control checks can be performed. Once this "handshake" is complete both peers will
-/// proceed with the designated sync protocol.
+/// sends their topic query to a remote peer where it is be mapped to their local dataset.
+/// Additional access-control checks can be performed. Once this "handshake" is complete both
+/// peers will proceed with the designated sync protocol.
 ///
 /// ## `TopicId` vs `TopicQuery`
 ///
@@ -262,7 +262,7 @@ impl From<std::io::Error> for SyncError {
 /// Consult the `TopicId` documentation in `p2panda-net` for more information.
 pub trait TopicQuery:
     // Data types implementing `TopicQuery` also need to implement `Eq` and `Hash` in order to allow 
-    // backends to organise sync sessions per topic and peer, along with `Serialize` and 
+    // backends to organise sync sessions per topic query and peer, along with `Serialize` and 
     // `Deserialize` to allow sending topics over the wire.
     Clone + Debug + Eq + Hash + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
@@ -270,10 +270,10 @@ pub trait TopicQuery:
 
 /// Maps a `TopicQuery` to the related data being sent over the wire during sync.
 ///
-/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how the
-/// scope for a particular session should be identified. Sync protocol users can provide an
+/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
+/// the scope for a particular session should be identified. Sync protocol users can provide an
 /// implementation of `TopicMap` so that scope `S` for data can be retrieved for a specific topic
-/// `T` when a peer initiates or accepts a sync session.
+/// query `T` when a peer initiates or accepts a sync session.
 ///
 /// Since `TopicMap` is generic we can use the same mapping across different sync implementations
 /// for the same data type when necessary.
@@ -299,9 +299,9 @@ pub trait TopicQuery:
 /// - Log C2
 /// ```
 ///
-/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat group,
-/// for example "Chat Group 2" we would implement `TopicMap` to give us all append-only logs of all
-/// members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
+/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
+/// group, for example "Chat Group 2" we would implement `TopicMap` to give us all append-only
+/// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
 #[async_trait]
 pub trait TopicMap<T, S>: Debug + Send + Sync
 where
