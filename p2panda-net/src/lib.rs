@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! `p2panda-net` is a data-type-agnostic p2p networking layer offering robust, direct
 //! communication to any device, no matter where they are.
