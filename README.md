@@ -31,6 +31,15 @@ replication, p2p networking and privacy-respecting deletion.
 > [`aquadoggo`](https://github.com/p2panda/aquadoggo/) for a less modular, more
 > opiniated, but fully functional implementation of p2panda.
 
+## License
+
+Licensed under either of [Apache License, Version 2.0](https://github.com/p2panda/p2panda/blob/main/LICENSES/Apache-2.0.txt)
+or [MIT license](https://github.com/p2panda/p2panda/blob/main/LICENSES/MIT.txt) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
+p2panda by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
+additional terms or conditions.
+
 ## Supported by
 
 *This project has received funding from the European Union’s Horizon 2020
