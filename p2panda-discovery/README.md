@@ -19,11 +19,6 @@ interface for the definition of a discovery service, as well as an interface for
 collection of such services. An mDNS discovery implementation is provided for peer discovery over
 local networks.
 
-## Features
-
-* `Discovey`, `DiscoveryMap` and `DiscoveryEvent`
-* `LocalDiscovery` (mDNS implementation)
-
 ## License
 
 Licensed under either of
