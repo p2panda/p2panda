@@ -2,6 +2,16 @@
 name = "p2panda-sync"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>"
+]
+description = "Data- and transport-agnostic interface to implement custom sync protocol"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["sync", "synchronisation", "replication"]
 
 [features]
 cbor = ["dep:tokio", "dep:tokio-stream", "dep:tokio-util"]
