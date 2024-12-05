@@ -995,7 +995,7 @@ pub(crate) mod tests {
 
     use async_trait::async_trait;
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
-    use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
+    use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::LogSyncProtocol;
     use p2panda_sync::{Topic, TopicMap};
@@ -1022,7 +1022,7 @@ pub(crate) mod tests {
             .ok();
     }
 
-    fn create_operation<E: Clone + Serialize>(
+    fn create_operation<E: Extensions>(
         private_key: &PrivateKey,
         body: &Body,
         seq_num: u64,

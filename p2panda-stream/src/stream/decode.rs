@@ -104,14 +104,14 @@ mod tests {
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Body, Header};
 
-    use crate::test_utils::mock_stream;
+    use crate::test_utils::{mock_stream, Extensions};
 
     use super::DecodeExt;
 
     #[tokio::test]
     async fn decode() {
         let stream = mock_stream().decode();
-        let result: Vec<(Header, Option<Body>, Vec<u8>)> =
+        let result: Vec<(Header<Extensions>, Option<Body>, Vec<u8>)> =
             stream.take(5).try_collect().await.expect("not fail");
         assert_eq!(result.len(), 5);
     }

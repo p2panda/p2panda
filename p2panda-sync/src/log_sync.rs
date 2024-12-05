@@ -79,7 +79,7 @@ where
     T: Topic,
     TM: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
-    E: Extensions + 'a,
+    E: Extensions + Send + Sync + 'a,
     S: Debug + Sync + LogStore<L, E>,
 {
     fn name(&self) -> &'static str {
@@ -291,7 +291,7 @@ async fn remote_needs<T, L, E>(
     from: SeqNum,
 ) -> Result<Vec<Message<T, L>>, SyncError>
 where
-    E: Extensions,
+    E: Extensions + Send + Sync,
 {
     let log = store
         .get_raw_log(public_key, log_id, Some(from))
@@ -314,7 +314,6 @@ mod tests {
 
     use async_trait::async_trait;
     use futures::SinkExt;
-    use p2panda_core::extensions::DefaultExtensions;
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use serde::{Deserialize, Serialize};
@@ -337,14 +336,13 @@ mod tests {
         }
     }
 
-    fn create_operation<E: Clone + Serialize>(
+    fn create_operation(
         private_key: &PrivateKey,
         body: &Body,
         seq_num: u64,
         timestamp: u64,
         backlink: Option<Hash>,
-        extensions: Option<E>,
-    ) -> (Hash, Header<E>, Vec<u8>) {
+    ) -> (Hash, Header, Vec<u8>) {
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
@@ -355,7 +353,7 @@ mod tests {
             seq_num,
             backlink,
             previous: vec![],
-            extensions,
+            extensions: None,
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
@@ -425,7 +423,7 @@ mod tests {
     async fn sync_no_operations_accept() {
         let topic = LogHeightTopic::new("messages");
         let logs = HashMap::new();
-        let store = MemoryStore::<u64, DefaultExtensions>::new();
+        let store = MemoryStore::<u64>::new();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -467,7 +465,7 @@ mod tests {
     async fn sync_no_operations_open() {
         let topic = LogHeightTopic::new("messages");
         let logs = HashMap::new();
-        let store = MemoryStore::<u64, DefaultExtensions>::new();
+        let store = MemoryStore::<u64>::new();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -517,15 +515,14 @@ mod tests {
         let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
-        let mut store = MemoryStore::<u64, DefaultExtensions>::new();
+        let mut store = MemoryStore::<u64>::new();
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (hash_0, header_0, header_bytes_0) =
-            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_0, header_0, header_bytes_0) = create_operation(&private_key, &body, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0));
         let (hash_2, header_2, header_bytes_2) =
-            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1));
 
         store
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -596,7 +593,7 @@ mod tests {
         let topic = LogHeightTopic::new("messages");
         let logs = HashMap::from([(private_key.public_key(), vec![log_id])]);
 
-        let store = MemoryStore::<u64, DefaultExtensions>::new();
+        let store = MemoryStore::<u64>::new();
 
         // Duplex streams which simulate both ends of a bi-directional network connection
         let (peer_a, peer_b) = tokio::io::duplex(64 * 1024);
@@ -609,12 +606,10 @@ mod tests {
         // Create operations which will be sent to peer a
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let (hash_0, _, header_bytes_0) =
-            create_operation::<DefaultExtensions>(&private_key, &body, 0, 0, None, None);
+        let (hash_0, _, header_bytes_0) = create_operation(&private_key, &body, 0, 0, None);
         let (hash_1, _, header_bytes_1) =
-            create_operation::<DefaultExtensions>(&private_key, &body, 1, 100, Some(hash_0), None);
-        let (_, _, header_bytes_2) =
-            create_operation::<DefaultExtensions>(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0));
+        let (_, _, header_bytes_2) = create_operation(&private_key, &body, 2, 200, Some(hash_1));
 
         // Write some message into peer_b's send buffer
         let messages: Vec<Message<String>> = vec![
@@ -697,12 +692,11 @@ mod tests {
         let mut store_2 = MemoryStore::default();
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let (hash_0, header_0, header_bytes_0) =
-            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_0, header_0, header_bytes_0) = create_operation(&private_key, &body, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0));
         let (hash_2, header_2, header_bytes_2) =
-            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1));
 
         store_2
             .insert_operation(hash_0, &header_0, Some(&body), &header_bytes_0, &log_id)
@@ -797,12 +791,11 @@ mod tests {
 
         let body = Body::new("Hello, Sloth!".as_bytes());
 
-        let (hash_0, header_0, header_bytes_0) =
-            create_operation(&private_key, &body, 0, 0, None, None);
+        let (hash_0, header_0, header_bytes_0) = create_operation(&private_key, &body, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
-            create_operation(&private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&private_key, &body, 1, 100, Some(hash_0));
         let (hash_2, header_2, header_bytes_2) =
-            create_operation(&private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&private_key, &body, 2, 200, Some(hash_1));
 
         let mut store_1 = MemoryStore::default();
         store_1

@@ -6,7 +6,6 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use p2panda_core::extensions::DefaultExtensions;
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::{LogId, LogStore, OperationStore};
@@ -31,7 +30,7 @@ pub struct InnerMemoryStore<L, E> {
 /// `InnerMemoryStore` with an `RwLock` and `Arc`. Convenience methods are provided to obtain a
 /// read- or write-lock on the underlying store.
 #[derive(Clone, Debug)]
-pub struct MemoryStore<L, E> {
+pub struct MemoryStore<L, E = ()> {
     inner: Arc<RwLock<InnerMemoryStore<L, E>>>,
 }
 
@@ -49,7 +48,7 @@ impl<L, E> MemoryStore<L, E> {
     }
 }
 
-impl<T> Default for MemoryStore<T, DefaultExtensions> {
+impl<T> Default for MemoryStore<T, ()> {
     fn default() -> Self {
         Self::new()
     }
@@ -74,7 +73,7 @@ impl<T, E> MemoryStore<T, E> {
 impl<L, E> OperationStore<L, E> for MemoryStore<L, E>
 where
     L: LogId,
-    E: Extensions,
+    E: Extensions + Send + Sync,
 {
     type Error = Infallible;
 
@@ -167,7 +166,7 @@ where
 impl<L, E> LogStore<L, E> for MemoryStore<L, E>
 where
     L: LogId,
-    E: Extensions,
+    E: Extensions + Send + Sync,
 {
     type Error = Infallible;
 
@@ -334,7 +333,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::extensions::DefaultExtensions;
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
@@ -348,7 +346,7 @@ mod tests {
         seq_num: u64,
         timestamp: u64,
         backlink: Option<Hash>,
-    ) -> (Hash, Header<DefaultExtensions>, Vec<u8>) {
+    ) -> (Hash, Header<()>, Vec<u8>) {
         let mut header = Header {
             version: 1,
             public_key: private_key.public_key(),
@@ -450,8 +448,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_operation() {
-        let mut store: MemoryStore<i32, p2panda_core::extensions::DefaultExtensions> =
-            MemoryStore::default();
+        let mut store: MemoryStore<i32> = MemoryStore::default();
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 
@@ -485,8 +482,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_payload() {
-        let mut store: MemoryStore<i32, p2panda_core::extensions::DefaultExtensions> =
-            MemoryStore::default();
+        let mut store = MemoryStore::default();
         let private_key = PrivateKey::new();
         let body = Body::new("hello!".as_bytes());
 

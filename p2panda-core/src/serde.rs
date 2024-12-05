@@ -741,4 +741,26 @@ mod tests {
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
         assert_eq!(header_1_with_previous, header_again);
     }
+
+    #[test]
+    fn decode_non_map_extensions() {
+        let private_key = PrivateKey::new();
+
+        let mut header = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: None,
+        };
+        header.sign(&private_key);
+
+        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
+        assert!(result.is_ok());
+    }
 }

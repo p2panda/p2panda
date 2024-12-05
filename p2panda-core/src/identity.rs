@@ -1,5 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Ed25519 key pairs and signatures.
+//!
+//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for
+//! verifying that a signature was indeed created by it's private counterpart. The private part of
+//! a key pair is typically kept securely on one device and never transported, whereas the public
+//! part acts as a peer's unique identifier and can be shared freely.
+//!
+//! ## Example
+//!
+//! ```
+//! use p2panda_core::identity::PrivateKey;
+//!
+//! let private_key = PrivateKey::new();
+//! let public_key = private_key.public_key();
+//!
+//! let bytes: &[u8] = b"A very important message.";
+//! let signature = private_key.sign(bytes);
+//!
+//! assert!(public_key.verify(bytes, &signature))
+//! ```
 use std::fmt;
 use std::str::FromStr;
 
@@ -9,10 +29,13 @@ use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
 use thiserror::Error;
 
+/// The length of an Ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
+/// The length of an Ed25519 `PrivateKey`, in bytes.
 pub const PRIVATE_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 
+/// The length of an Ed25519 `PublicKey`, in bytes.
 pub const PUBLIC_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
 /// Private Ed25519 key used for digital signatures.
@@ -113,6 +136,7 @@ impl<'a> Arbitrary<'a> for PrivateKey {
     }
 }
 
+/// Public Ed25519 key used for identifying peers and verifying signed data.
 #[derive(Default, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct PublicKey(ed25519_dalek::VerifyingKey);
 
@@ -144,6 +168,7 @@ impl PublicKey {
         hex::encode(self.0.as_bytes())
     }
 
+    /// Verify a signature over a byte slice with this public key.
     pub fn verify(&self, bytes: &[u8], signature: &Signature) -> bool {
         self.0.verify_strict(bytes, &signature.0).is_ok()
     }
@@ -227,6 +252,7 @@ impl<'a> Arbitrary<'a> for PublicKey {
     }
 }
 
+/// Ed25519 signature.
 #[derive(Copy, Eq, PartialEq, Clone)]
 pub struct Signature(ed25519_dalek::Signature);
 
@@ -319,7 +345,7 @@ pub enum IdentityError {
     #[error("invalid hex encoding in string")]
     InvalidHexEncoding(#[from] hex::FromHexError),
 
-    /// Errors which may occur while processing signatures and keypairs.
+    /// Errors which may occur while processing signatures and key pairs.
     ///
     /// This error may arise due to:
     ///

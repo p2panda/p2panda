@@ -1,19 +1,111 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+//! Core p2panda data type offering distributed, secure and efficient data transfer between peers.
+//!
+//! Operations are used to carry any data from one peer to another (distributed), while assuming no
+//! reliable network connection (offline-first) and untrusted machines (cryptographically secure).
+//! The author of an operation uses it's [`PrivateKey`] to cryptographically sign every operation.
+//! This can be verified and used for authentication by any other peer.
+//!
+//! Every operation consists of a [`Header`] and an optional [`Body`]. The body holds arbitrary
+//! bytes (up to the application to decide what should be inside). The header is used to
+//! cryptographically secure & authenticate the body and for providing ordered collections of
+//! operations when required.
+//!
+//! Operations have a `backlink` and `seq_num` field in the header. These are used to form a linked
+//! list of operations, where every subsequent operation points to the previous one by referencing
+//! its cryptographically secured hash. The `previous` field can be used to point at operations by
+//! _other_ authors when multi-writer causal partial-ordering is required. The `timestamp` field
+//! can be used when verifiable causal ordering is not required.
+//!
+//! [Header extensions](crate::extensions) can be used to add additional information, like
+//! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
+//! capabilities or group encryption schemes or custom application-related features etc.
+//!
+//! Operations are encoded in CBOR format and use Ed25519 key pairs for digital signatures and
+//! BLAKE3 for hashing.
+//!
+//! ## Examples
+//!
+//! ### Construct and sign a header
+//!
+//! ```
+//! use p2panda_core::{Body, Header, Operation, PrivateKey};
+//!
+//! let private_key = PrivateKey::new();
+//!
+//! let body = Body::new("Hello, Sloth!".as_bytes());
+//! let mut header = Header {
+//!     version: 1,
+//!     public_key: private_key.public_key(),
+//!     signature: None,
+//!     payload_size: body.size(),
+//!     payload_hash: Some(body.hash()),
+//!     timestamp: 1733170247,
+//!     seq_num: 0,
+//!     backlink: None,
+//!     previous: vec![],
+//!     extensions: None::<()>,
+//! };
+//!
+//! header.sign(&private_key);
+//! ```
+//!
+//! ### Custom extensions
+//!
+//! ```
+//! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+//! use serde::{Serialize, Deserialize};
+//!
+//! let private_key = PrivateKey::new();
+//!
+//! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+//! struct CustomExtensions {
+//!     prune_flag: PruneFlag,
+//! }
+//!
+//! impl Extension<PruneFlag> for CustomExtensions {
+//!     fn extract(&self) -> Option<PruneFlag> {
+//!         Some(self.prune_flag.to_owned())
+//!     }
+//! }
+//!
+//! let extensions = CustomExtensions {
+//!     prune_flag: PruneFlag::new(true),
+//! };
+//!
+//! let body = Body::new("Prune from here please!".as_bytes());
+//! let mut header = Header {
+//!     version: 1,
+//!     public_key: private_key.public_key(),
+//!     signature: None,
+//!     payload_size: body.size(),
+//!     payload_hash: Some(body.hash()),
+//!     timestamp: 1733170247,
+//!     seq_num: 0,
+//!     backlink: None,
+//!     previous: vec![],
+//!     extensions: Some(extensions),
+//! };
+//!
+//! header.sign(&private_key);
+//!
+//! let prune_flag: PruneFlag = header.extract().unwrap();
+//! assert!(prune_flag.is_set())
+//! ```
 use thiserror::Error;
 
 use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
-use crate::extensions::DefaultExtensions;
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::Extensions;
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
 
+/// Combined [`Header`], [`Body`] and operation [`struct@Hash`] (Operation Id).
 #[derive(Clone, Debug)]
-pub struct Operation<E = DefaultExtensions> {
+pub struct Operation<E = ()> {
     pub hash: Hash,
     pub header: Header<E>,
     pub body: Option<Body>,
@@ -39,9 +131,39 @@ impl<E> Ord for Operation<E> {
     }
 }
 
+/// Header of a p2panda operation.
+///
+/// The header holds all metadata required to cryptographically secure and authenticate a message
+/// [`Body`] and, if required, apply ordering to collections of messages from the same or many
+/// authors.
+///
+/// ## Example
+///
+/// ```
+/// use p2panda_core::{Body, Header, Operation, PrivateKey};
+///
+/// let private_key = PrivateKey::new();
+///
+/// let body = Body::new("Hello, Sloth!".as_bytes());
+/// let mut header = Header {
+///     version: 1,
+///     public_key: private_key.public_key(),
+///     signature: None,
+///     payload_size: body.size(),
+///     payload_hash: Some(body.hash()),
+///     timestamp: 1733170247,
+///     seq_num: 0,
+///     backlink: None,
+///     previous: vec![],
+///     extensions: None::<()>,
+/// };
+///
+/// // Sign the header with the author's private key.
+/// header.sign(&private_key);
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct Header<E = DefaultExtensions> {
+pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: u64,
 
@@ -73,8 +195,8 @@ pub struct Header<E = DefaultExtensions> {
     pub backlink: Option<Hash>,
 
     /// List of hashes of the operations we refer to as the "previous" ones. These are operations
-    /// from other authors. Can be left empty if no partial ordering is required or no other author
-    /// has been observed yet.
+    /// from other authors. Can be left empty if no partial ordering is required or no other
+    /// author has been observed yet.
     pub previous: Vec<Hash>,
 
     /// Custom meta data.
@@ -100,8 +222,9 @@ impl<E> Default for Header<E> {
 
 impl<E> Header<E>
 where
-    E: Clone + Serialize,
+    E: Extensions,
 {
+    /// Header encoded to bytes in CBOR format.
     pub fn to_bytes(&self) -> Vec<u8> {
         encode_cbor(self)
             // We can be sure that all values in this module are serializable and _if_ ciborium
@@ -109,6 +232,10 @@ where
             .expect("CBOR encoder failed due to an critical IO error")
     }
 
+    /// Add a signature to the header using the provided `PrivateKey`.
+    ///
+    /// This method signs the byte representation of a header with any existing signature removed
+    /// before adding back the newly generated signature.
     pub fn sign(&mut self, private_key: &PrivateKey) {
         // Make sure the signature is not already set before we encode
         self.signature = None;
@@ -117,6 +244,8 @@ where
         self.signature = Some(private_key.sign(&bytes));
     }
 
+    /// Verify that the signature contained in this `Header` was generated by the claimed
+    /// public key.
     pub fn verify(&self) -> bool {
         match self.signature {
             Some(claimed_signature) => {
@@ -129,6 +258,9 @@ where
         }
     }
 
+    /// BLAKE3 hash of the header bytes.
+    ///
+    /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
     }
@@ -170,22 +302,27 @@ impl TryFrom<&[u8]> for Header {
     }
 }
 
+/// Body of a p2panda operation containing arbitrary bytes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Body(pub(super) Vec<u8>);
 
 impl Body {
+    /// Construct a body from a byte slice.
     pub fn new(bytes: &[u8]) -> Self {
         Self(bytes.to_vec())
     }
 
+    /// Access the underlying body bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
 
+    /// BLAKE3 hash of the body bytes.
     pub fn hash(&self) -> Hash {
         Hash::new(&self.0)
     }
 
+    /// Size of body bytes.
     pub fn size(&self) -> u64 {
         self.0.len() as u64
     }
@@ -239,9 +376,19 @@ pub enum OperationError {
     BacklinkMismatch,
 }
 
+/// Validate the header and body (when provided) of a single operation. All basic header
+/// validation is performed (identical to [`validate_header`]()) and additionally the body bytes
+/// hash and size are checked to be correct.
+///
+/// This method validates that the following conditions are true:
+/// * Signature can be verified against the author public key and unsigned header bytes
+/// * Header version is supported (currently only version 1 is supported)
+/// * If `payload_hash` is set the `payload_size` is > `0` otherwise it is zero
+/// * If `backlink` is set then `seq_num` is > `0` otherwise it is zero
+/// * If provided the body bytes hash and size match those claimed in the header
 pub fn validate_operation<E>(operation: &Operation<E>) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     validate_header(&operation.header)?;
 
@@ -266,9 +413,16 @@ where
     Ok(())
 }
 
+/// Validate an operation header.
+///
+/// This method validates that the following conditions are true:
+/// * Signature can be verified against the author public key and unsigned header bytes
+/// * Header version is supported (currently only version 1 is supported)
+/// * If `payload_hash` is set the `payload_size` is > `0` otherwise it is zero
+/// * If `backlink` is set then `seq_num` is > `0` otherwise it is zero
 pub fn validate_header<E>(header: &Header<E>) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     if !header.verify() {
         return Err(OperationError::SignatureMismatch);
@@ -295,12 +449,19 @@ where
     Ok(())
 }
 
+/// Validate a backlink contained in a header against a past header which is assumed to have been
+/// retrieved from a local store.
+///
+/// This method validates that the following conditions are true:
+/// * Current and past headers contain the same public key
+/// * Current headers seq number increments from the past one by exactly `1`
+/// * Backlink hash contained in the current header matches the hash of the past header
 pub fn validate_backlink<E>(
     past_header: &Header<E>,
     header: &Header<E>,
 ) -> Result<(), OperationError>
 where
-    E: Clone + Serialize + DeserializeOwned,
+    E: Extensions,
 {
     if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
@@ -559,8 +720,8 @@ mod tests {
 
         header.sign(&private_key);
 
-        // Thanks to blanket implementation of Extension<T> on Header we can extract the
-        // extension value from the header itself.
+        // Thanks to blanket implementation of Extension<T> on Header we can extract the extension
+        // value from the header itself.
         let log_id = Extension::<LogId>::extract(&header).unwrap();
         let expiry = Extension::<Expiry>::extract(&header).unwrap();
 
