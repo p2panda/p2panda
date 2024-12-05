@@ -40,7 +40,7 @@ use thiserror::Error;
 /// They are designed as a two-party protocol featuring an "initiator" and an "acceptor" role.
 ///
 /// Each protocol usually follows two phases: 1) The "Handshake" phase, during which the
-/// "initiator" sends the "topic query" and any access control data to the "acceptor", and 2) The 
+/// "initiator" sends the "topic query" and any access control data to the "acceptor", and 2) The
 /// "Sync" phase, where the requested application data is finally exchanged and validated.
 ///
 /// ## Privacy and Security
