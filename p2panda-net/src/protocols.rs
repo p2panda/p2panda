@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// Code taken from iroh/src/node/protocol.rs
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::any::Any;
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Node implementation for p2p networking and data streaming, extensible with discovery
 //! strategies, sync protocols, blob sync and more.

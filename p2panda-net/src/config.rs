@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Alternative configuration API which can be passed into `Network::from_config` constructor
 //! instead of using `NetworkBuilder`.
