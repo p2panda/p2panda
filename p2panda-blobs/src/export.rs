@@ -12,7 +12,11 @@ use p2panda_core::Hash;
 use tracing::trace;
 
 /// Export a blob from the store to the given filesystem path.
-pub async fn export_blob<S: Store>(store: &S, hash: Hash, outpath: &PathBuf) -> anyhow::Result<()> {
+pub(crate) async fn export_blob<S: Store>(
+    store: &S,
+    hash: Hash,
+    outpath: &PathBuf,
+) -> anyhow::Result<()> {
     let (sender, _receiver) = async_channel::bounded(1024);
     let progress = AsyncChannelProgressSender::new(sender);
 

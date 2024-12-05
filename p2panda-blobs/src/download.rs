@@ -15,7 +15,14 @@ use p2panda_sync::Topic;
 use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
 
-pub async fn download_blob<T: Topic + TopicId + 'static>(
+/// Status of a blob download attempt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DownloadBlobEvent {
+    Done,
+    Abort(RpcError),
+}
+
+pub(crate) async fn download_blob<T: Topic + TopicId + 'static>(
     network: Network<T>,
     downloader: Downloader,
     pool_handle: LocalPoolHandle,
@@ -67,10 +74,4 @@ async fn download_queued<T: Topic + TopicId + 'static>(
 
     let stats = handle.await?;
     Ok(stats)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DownloadBlobEvent {
-    Done,
-    Abort(RpcError),
 }

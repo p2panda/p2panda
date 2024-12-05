@@ -21,7 +21,7 @@ use crate::import::{import_blob, import_blob_from_stream, ImportBlobEvent};
 use crate::protocol::{BlobsProtocol, BLOBS_ALPN};
 use crate::DownloadBlobEvent;
 
-/// Blob manager offering storage, retrieval and synchronisation of content-addressed data.
+/// Blobs service offering storage, retrieval and synchronisation of content-addressed data.
 #[derive(Debug)]
 pub struct Blobs<T, S>
 where

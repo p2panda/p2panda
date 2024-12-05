@@ -18,7 +18,14 @@ use iroh_blobs::{BlobFormat, HashAndFormat};
 use p2panda_core::Hash;
 use serde::{Deserialize, Serialize};
 
-pub async fn import_blob<S: Store>(
+/// Status of a blob import attempt.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ImportBlobEvent {
+    Done(Hash),
+    Abort(RpcError),
+}
+
+pub(crate) async fn import_blob<S: Store>(
     store: S,
     pool_handle: LocalPoolHandle,
     path: PathBuf,
@@ -47,7 +54,7 @@ pub async fn import_blob<S: Store>(
     })
 }
 
-pub async fn import_blob_from_stream<S, T>(
+pub(crate) async fn import_blob_from_stream<S, T>(
     store: S,
     pool_handle: LocalPoolHandle,
     data: T,
@@ -159,10 +166,4 @@ where
         .await?;
 
     Ok(())
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum ImportBlobEvent {
-    Done(Hash),
-    Abort(RpcError),
 }
