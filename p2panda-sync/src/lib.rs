@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Data- and transport-agnostic interface to implement custom sync protocols, compatible with
 //! `p2panda-net` or other peer-to-peer networking solutions.
