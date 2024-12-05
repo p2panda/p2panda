@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
