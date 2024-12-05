@@ -27,7 +27,7 @@ exchange of data, supporting networks from the internet to packet radio, LoRa or
 
 The primary data structure is an append-only implementation which supports history deletion,
 multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
-extensible depending on your application requirements.
+extensible depending on your application requirements. 
 
 Inside this crate you will find:
 * BLAKE3 `Hash`
@@ -37,7 +37,7 @@ Inside this crate you will find:
 
 ## Examples
 
-### Create and sign an operation
+### Create and sign an operation `Body` and `Header`
 
 ```rust
 use p2panda_core::{Body, Header, PrivateKey};
@@ -61,7 +61,10 @@ let mut header = Header {
 header.sign(&private_key);
 ```
 
-### Add extensions to an operation
+### Create a custom `Extension`
+
+Custom functionality can be added to using extensions, this could include, access-control tokens,
+self-destructing messages, or encryption schemas. 
 
 ```rust
 use p2panda_core::{Extension, Header, PrivateKey};
