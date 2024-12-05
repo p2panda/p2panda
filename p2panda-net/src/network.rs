@@ -802,7 +802,7 @@ pub(crate) mod sync_protocols {
         }
         async fn initiate(
             self: Arc<Self>,
-            topic: TestTopic,
+            topic_query: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<
@@ -814,10 +814,10 @@ pub(crate) mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(DummyProtocolMessage::TopicQuery(topic.clone()))
+            sink.send(DummyProtocolMessage::TopicQuery(topic_query.clone()))
                 .await?;
             sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
@@ -853,9 +853,9 @@ pub(crate) mod sync_protocols {
                 debug!("message received: {:?}", message);
 
                 match &message {
-                    DummyProtocolMessage::TopicQuery(topic) => {
+                    DummyProtocolMessage::TopicQuery(topic_query) => {
                         app_tx
-                            .send(FromSync::HandshakeSuccess(topic.clone()))
+                            .send(FromSync::HandshakeSuccess(topic_query.clone()))
                             .await?
                     }
                     DummyProtocolMessage::Done => break,
@@ -892,7 +892,7 @@ pub(crate) mod sync_protocols {
 
         async fn initiate(
             self: Arc<Self>,
-            topic: TestTopic,
+            topic_query: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<
@@ -903,11 +903,11 @@ pub(crate) mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(Message::TopicQuery(topic.clone())).await?;
+            sink.send(Message::TopicQuery(topic_query.clone())).await?;
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
-            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
@@ -956,7 +956,9 @@ pub(crate) mod sync_protocols {
                 let message = result?;
 
                 match message {
-                    Message::TopicQuery(topic) => app_tx.send(FromSync::HandshakeSuccess(topic)).await?,
+                    Message::TopicQuery(topic_query) => {
+                        app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?
+                    }
                     Message::Ping => {
                         debug!("ping message received");
                         app_tx
@@ -998,7 +1000,7 @@ pub(crate) mod tests {
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::LogSyncProtocol;
-    use p2panda_sync::{TopicQuery, TopicMap};
+    use p2panda_sync::{TopicMap, TopicQuery};
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
     use tracing_subscriber::layer::SubscriberExt;
