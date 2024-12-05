@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use anyhow::{ensure, Result};
-use futures_lite::StreamExt;
+use futures_lite::{Stream, StreamExt};
 use iroh_base::rpc::RpcError;
 use iroh_blobs::downloader::{DownloadRequest, Downloader};
 use iroh_blobs::get::db::DownloadProgress;
@@ -13,7 +13,6 @@ use p2panda_core::Hash;
 use p2panda_net::{Network, TopicId};
 use p2panda_sync::Topic;
 use serde::{Deserialize, Serialize};
-use tokio_stream::Stream;
 
 pub async fn download_blob<T: Topic + TopicId + 'static>(
     network: Network<T>,

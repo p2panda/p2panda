@@ -35,11 +35,11 @@ p2panda-core = { path = "../p2panda-core" }
 p2panda-discovery = { path = "../p2panda-discovery" }
 p2panda-sync = { path = "../p2panda-sync", features = ["log-sync"] }
 rand = "0.8.5"
-serde = { version = "1.0.203", features = ["derive"] }
+serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "1.0.63"
-tokio = { version = "1.38.0", features = ["full"] }
+tokio = { version = "1.42.0", features = ["rt"] }
 tokio-stream = { version = "0.1.15", features = ["sync"] }
-tokio-util = { version = "0.7", features = ["compat", "codec", "io-util", "io"] }
+tokio-util = { version = "0.7.11", features = ["compat", "codec", "io-util", "io"] }
 tracing = "0.1.40"
 
 [dev-dependencies]
