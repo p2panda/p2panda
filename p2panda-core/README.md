@@ -61,9 +61,9 @@ let mut header = Header {
 header.sign(&private_key);
 ```
 
-### Create a custom `Extension`
+### Create custom extensions
 
-Custom functionality can be added to using extensions, this could include, access-control tokens,
+Custom functionality can be added using extensions, for example, access-control tokens,
 self-destructing messages, or encryption schemas. 
 
 ```rust
