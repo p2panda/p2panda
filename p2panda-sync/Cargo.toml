@@ -14,7 +14,7 @@ readme = "README.md"
 keywords = ["sync", "synchronisation", "replication"]
 
 [features]
-cbor = ["dep:tokio", "dep:tokio-stream", "dep:tokio-util"]
+cbor = ["dep:tokio", "dep:tokio-util"]
 log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 
 [dependencies]
@@ -22,15 +22,14 @@ async-trait = "0.1.82"
 futures = "0.3.30"
 p2panda-core = { path = "../p2panda-core", optional = true }
 p2panda-store = { path = "../p2panda-store", optional = true, default-features = false }
-serde = { version = "1.0.208" }
-tokio-stream = { version = "0.1.15", optional = true }
+serde = { version = "1.0.215" }
 tokio-util = { version = "0.7.11", features = [
     "codec",
     "compat",
 ], optional = true }
-tokio = { version = "1.39.3", features = ["rt", "macros"], optional = true }
+tokio = { version = "1.42.0", features = ["sync", "time", "rt"], optional = true }
 thiserror = "1.0.63"
-tracing = "0.1.40"
 
 [dev-dependencies]
-tokio = { version = "1.39.3", features = ["rt", "macros", "net", "io-util"] }
+tokio = { version = "1.42.0", features = ["rt", "macros", "net", "io-util"] }
+tokio-stream = { version = "0.1.15" }

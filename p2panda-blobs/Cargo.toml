@@ -17,7 +17,6 @@ keywords = ["storage", "streaming", "blobs", "blake3"]
 anyhow = "1.0.86"
 async-channel = "2.3.1"
 bytes = "1.7.1"
-flume = "0.11.0"
 futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
@@ -25,13 +24,9 @@ iroh-base = "0.25.0"
 iroh-blobs = { version = "0.25.0", features = ["downloader", "fs-store"], default-features = false }
 iroh-io = "0.6.1"
 iroh-net = "0.25.0"
-num_cpus = "1.16.0"
 p2panda-core = { path = "../p2panda-core" }
 p2panda-net = { path = "../p2panda-net" }
 p2panda-sync = { path = "../p2panda-sync" }
-serde = { version = "1.0.204", features = ["derive"] }
-tempdir = "0.3.7"
-tokio = { version = "1.38.0", features = ["full"] }
-tokio-stream = { version = "0.1.15", features = ["sync"] }
-tokio-util = { version = "0.7", features = ["codec", "io-util", "io", "rt"] }
+serde = { version = "1.0.215", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["fs"] }
 tracing = "0.1.40"
