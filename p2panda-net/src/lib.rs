@@ -85,7 +85,7 @@
 //! use p2panda_core::{PrivateKey, Hash};
 //! use p2panda_discovery::mdns::LocalDiscovery;
 //! use p2panda_net::{NetworkBuilder, TopicId};
-//! use p2panda_sync::Topic;
+//! use p2panda_sync::TopicQuery;
 //! use serde::{Serialize, Deserialize};
 //! # #[tokio::main]
 //! # async fn main() -> Result<()> {
@@ -108,7 +108,7 @@
 //!     }
 //! }
 //!
-//! impl Topic for ChatGroup {}
+//! impl TopicQuery for ChatGroup {}
 //!
 //! impl TopicId for ChatGroup {
 //!     fn id(&self) -> [u8; 32] {
@@ -185,15 +185,15 @@ pub type NetworkId = [u8; 32];
 /// each chat group. Now peers can announce their interest in a specific chat group and only sync
 /// that particular data.
 ///
-/// ## `Topic` vs. `TopicId`
+/// ## `TopicQuery` vs. `TopicId`
 ///
-/// Next to topic identifiers p2panda offers a `Topic` trait which allows for even more
+/// Next to topic identifiers p2panda offers a `TopicQuery` trait which allows for even more
 /// sophisticated "network queries".
 ///
 /// `TopicId` is a tool for general topic discovery and establishing gossip network overlays.
-/// `Topic` is a query for sync protocols to ask for a specific piece of information.
+/// `TopicQuery` is a query for sync protocols to ask for a specific piece of information.
 ///
-/// Consult the `Topic` documentation in `p2panda-sync` for further information.
+/// Consult the `TopicQuery` documentation in `p2panda-sync` for further information.
 pub trait TopicId {
     fn id(&self) -> [u8; 32];
 }

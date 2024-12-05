@@ -14,7 +14,7 @@ mod sync_protocols {
 
     #[derive(Debug, Serialize, Deserialize)]
     enum ProtocolMessage {
-        Topic(TestTopic),
+        TopicQuery(TestTopic),
         Done,
     }
 
@@ -58,11 +58,13 @@ mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(ProtocolMessage::Topic(topic.clone())).await?;
+            sink.send(ProtocolMessage::TopicQuery(topic.clone()))
+                .await?;
 
             // Simulate critical sync implementation bug by sending the topic a second time.
             if let FailingProtocol::InitiatorSendsTopicTwice = *self {
-                sink.send(ProtocolMessage::Topic(topic.clone())).await?;
+                sink.send(ProtocolMessage::TopicQuery(topic.clone()))
+                    .await?;
             }
 
             // Simulate some critical error which occurred inside the sync session.
@@ -79,7 +81,7 @@ mod sync_protocols {
             while let Some(result) = stream.next().await {
                 let message: ProtocolMessage = result?;
                 match &message {
-                    ProtocolMessage::Topic(_) => {
+                    ProtocolMessage::TopicQuery(_) => {
                         return Err(SyncError::UnexpectedBehaviour(
                             "unexpected message received from acceptor".to_string(),
                         ));
@@ -113,7 +115,7 @@ mod sync_protocols {
             // _never_ sends any topics).
             if let FailingProtocol::AcceptorSendsTopic = *self {
                 let topic = TestTopic::new("unexpected behaviour test");
-                sink.send(ProtocolMessage::Topic(topic)).await?;
+                sink.send(ProtocolMessage::TopicQuery(topic)).await?;
             }
 
             let mut received_topic = false;
@@ -121,7 +123,7 @@ mod sync_protocols {
             while let Some(result) = stream.next().await {
                 let message: ProtocolMessage = result?;
                 match &message {
-                    ProtocolMessage::Topic(topic) => {
+                    ProtocolMessage::TopicQuery(topic) => {
                         if !received_topic {
                             app_tx
                                 .send(FromSync::HandshakeSuccess(topic.clone()))
@@ -149,14 +151,14 @@ use std::sync::Arc;
 use futures_util::FutureExt;
 use iroh_net::NodeId;
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_sync::{SyncError, Topic};
+use p2panda_sync::{SyncError, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::engine::ToEngineActor;
-use crate::{sync, TopicId};
+use crate::sync;
 
 use sync_protocols::FailingProtocol;
 
@@ -169,13 +171,7 @@ impl TestTopic {
     }
 }
 
-impl Topic for TestTopic {}
-
-impl TopicId for TestTopic {
-    fn id(&self) -> [u8; 32] {
-        self.1
-    }
-}
+impl TopicQuery for TestTopic {}
 
 /// Helper method to establish a sync session between the initiator and acceptor.
 async fn run_sync_impl(

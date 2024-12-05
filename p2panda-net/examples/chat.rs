@@ -3,7 +3,7 @@ use p2panda_core::{Hash, PrivateKey, PublicKey, Signature};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::network::{FromNetwork, ToNetwork};
 use p2panda_net::{NetworkBuilder, TopicId};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -27,7 +27,7 @@ impl ChatTopic {
     }
 }
 
-impl Topic for ChatTopic {}
+impl TopicQuery for ChatTopic {}
 
 impl TopicId for ChatTopic {
     fn id(&self) -> [u8; 32] {

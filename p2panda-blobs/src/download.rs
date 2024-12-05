@@ -11,7 +11,7 @@ use iroh_blobs::util::progress::{AsyncChannelProgressSender, ProgressSender};
 use iroh_blobs::{BlobFormat, Hash as IrohHash, HashAndFormat};
 use p2panda_core::Hash;
 use p2panda_net::{Network, TopicId};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 
 /// Status of a blob download attempt.
@@ -21,7 +21,7 @@ pub enum DownloadBlobEvent {
     Abort(RpcError),
 }
 
-pub(crate) async fn download_blob<T: Topic + TopicId + 'static>(
+pub(crate) async fn download_blob<T: TopicQuery + TopicId + 'static>(
     network: Network<T>,
     downloader: Downloader,
     pool_handle: LocalPoolHandle,
@@ -59,7 +59,7 @@ pub(crate) async fn download_blob<T: Topic + TopicId + 'static>(
     })
 }
 
-async fn download_queued<T: Topic + TopicId + 'static>(
+async fn download_queued<T: TopicQuery + TopicId + 'static>(
     network: Network<T>,
     downloader: &Downloader,
     hash_and_format: HashAndFormat,

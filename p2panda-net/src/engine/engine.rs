@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use iroh_net::key::{PublicKey, SecretKey};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -87,7 +87,7 @@ pub struct EngineActor<T> {
 
 impl<T> EngineActor<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
         secret_key: SecretKey,
