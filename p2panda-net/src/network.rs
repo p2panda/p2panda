@@ -133,7 +133,7 @@ use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -192,7 +192,7 @@ pub struct NetworkBuilder<T> {
 
 impl<T> NetworkBuilder<T>
 where
-    T: Topic,
+    T: TopicQuery,
 {
     /// Returns a new instance of `NetworkBuilder` using the given network identifier.
     ///
@@ -333,7 +333,7 @@ where
     /// error is returned.
     pub async fn build(mut self) -> Result<Network<T>>
     where
-        T: Topic + TopicId + 'static,
+        T: TopicQuery + TopicId + 'static,
     {
         let secret_key = self.secret_key.unwrap_or(SecretKey::generate());
 
@@ -479,7 +479,7 @@ struct NetworkInner<T> {
 
 impl<T> NetworkInner<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
 {
     /// Spawns a network.
     ///
@@ -648,7 +648,7 @@ pub struct Network<T> {
 
 impl<T> Network<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
 {
     /// Adds a peer to the address book.
     pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
@@ -786,7 +786,7 @@ pub(crate) mod sync_protocols {
 
     #[derive(Debug, Serialize, Deserialize)]
     enum DummyProtocolMessage {
-        Topic(TestTopic),
+        TopicQuery(TestTopic),
         Done,
     }
 
@@ -802,7 +802,7 @@ pub(crate) mod sync_protocols {
         }
         async fn initiate(
             self: Arc<Self>,
-            topic: TestTopic,
+            topic_query: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<
@@ -814,17 +814,17 @@ pub(crate) mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(DummyProtocolMessage::Topic(topic.clone()))
+            sink.send(DummyProtocolMessage::TopicQuery(topic_query.clone()))
                 .await?;
             sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
             while let Some(result) = stream.next().await {
                 let message: DummyProtocolMessage = result?;
                 debug!("message received: {:?}", message);
 
                 match &message {
-                    DummyProtocolMessage::Topic(_) => panic!(),
+                    DummyProtocolMessage::TopicQuery(_) => panic!(),
                     DummyProtocolMessage::Done => break,
                 }
             }
@@ -853,9 +853,9 @@ pub(crate) mod sync_protocols {
                 debug!("message received: {:?}", message);
 
                 match &message {
-                    DummyProtocolMessage::Topic(topic) => {
+                    DummyProtocolMessage::TopicQuery(topic_query) => {
                         app_tx
-                            .send(FromSync::HandshakeSuccess(topic.clone()))
+                            .send(FromSync::HandshakeSuccess(topic_query.clone()))
                             .await?
                     }
                     DummyProtocolMessage::Done => break,
@@ -874,7 +874,7 @@ pub(crate) mod sync_protocols {
     // The protocol message types.
     #[derive(Serialize, Deserialize)]
     enum Message {
-        Topic(TestTopic),
+        TopicQuery(TestTopic),
         Ping,
         Pong,
     }
@@ -892,7 +892,7 @@ pub(crate) mod sync_protocols {
 
         async fn initiate(
             self: Arc<Self>,
-            topic: TestTopic,
+            topic_query: TestTopic,
             tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
             rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
             mut app_tx: Box<
@@ -903,17 +903,17 @@ pub(crate) mod sync_protocols {
             let mut sink = into_cbor_sink(tx);
             let mut stream = into_cbor_stream(rx);
 
-            sink.send(Message::Topic(topic.clone())).await?;
+            sink.send(Message::TopicQuery(topic_query.clone())).await?;
             sink.send(Message::Ping).await?;
             debug!("ping message sent");
 
-            app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
+            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
             while let Some(result) = stream.next().await {
                 let message = result?;
 
                 match message {
-                    Message::Topic(_) => panic!(),
+                    Message::TopicQuery(_) => panic!(),
                     Message::Ping => {
                         return Err(SyncError::UnexpectedBehaviour(
                             "unexpected Ping message received".to_string(),
@@ -956,7 +956,9 @@ pub(crate) mod sync_protocols {
                 let message = result?;
 
                 match message {
-                    Message::Topic(topic) => app_tx.send(FromSync::HandshakeSuccess(topic)).await?,
+                    Message::TopicQuery(topic_query) => {
+                        app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?
+                    }
                     Message::Ping => {
                         debug!("ping message received");
                         app_tx
@@ -998,7 +1000,7 @@ pub(crate) mod tests {
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::LogSyncProtocol;
-    use p2panda_sync::{Topic, TopicMap};
+    use p2panda_sync::{TopicMap, TopicQuery};
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
     use tracing_subscriber::layer::SubscriberExt;
@@ -1056,7 +1058,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl Topic for TestTopic {}
+    impl TopicQuery for TestTopic {}
 
     impl TopicId for TestTopic {
         fn id(&self) -> [u8; 32] {
@@ -1190,7 +1192,7 @@ pub(crate) mod tests {
 
     impl<T> LogIdTopicMap<T>
     where
-        T: Topic,
+        T: TopicQuery,
     {
         pub fn new() -> Self {
             LogIdTopicMap(HashMap::new())
@@ -1204,7 +1206,7 @@ pub(crate) mod tests {
     #[async_trait]
     impl<T> TopicMap<T, Logs<u64>> for LogIdTopicMap<T>
     where
-        T: Topic,
+        T: TopicQuery,
     {
         async fn get(&self, topic: &T) -> Option<Logs<u64>> {
             self.0.get(topic).cloned()
@@ -1403,7 +1405,7 @@ pub(crate) mod tests {
         node_3.shutdown().await.unwrap();
     }
 
-    fn run_node<T: TopicId + Topic + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
+    fn run_node<T: TopicId + TopicQuery + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
         tokio::spawn(async move {
             let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
 

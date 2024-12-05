@@ -12,7 +12,7 @@ use iroh_blobs::store::{Map, Store};
 use iroh_blobs::util::local_pool::{Config as LocalPoolConfig, LocalPool};
 use p2panda_core::Hash;
 use p2panda_net::{Network, NetworkBuilder, TopicId};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 
 use crate::config::Config;
 use crate::download::download_blob;
@@ -35,7 +35,7 @@ where
 
 impl<T, S> Blobs<T, S>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
     S: Store,
 {
     /// Returns a new instance of `Blobs` using the given `NetworkBuilder` and store

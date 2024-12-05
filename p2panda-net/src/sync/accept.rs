@@ -5,14 +5,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use iroh_net::key::PublicKey;
-use p2panda_sync::{FromSync, SyncError, SyncProtocol, Topic};
+use p2panda_sync::{FromSync, SyncError, SyncProtocol, TopicQuery};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error};
 
 use crate::engine::ToEngineActor;
-use crate::TopicId;
 
 /// Accept a sync protocol session over the provided bi-directional stream for the given peer and
 /// topic.
@@ -46,7 +45,7 @@ pub async fn accept_sync<T, S, R>(
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 ) -> Result<(), SyncError>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + 'static,
     S: AsyncWrite + Send + Unpin,
     R: AsyncRead + Send + Unpin,
 {

@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::{Context, Error, Result};
 use iroh_net::{Endpoint, NodeId};
-use p2panda_sync::{SyncError, Topic};
+use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::{interval, Duration, Instant};
@@ -13,7 +13,6 @@ use tracing::{debug, error, trace, warn};
 
 use crate::engine::ToEngineActor;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
-use crate::TopicId;
 
 use super::SyncConfiguration;
 
@@ -80,7 +79,7 @@ pub(crate) struct SyncActor<T> {
 
 impl<T> SyncActor<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + 'static,
 {
     /// Create a new instance of the `SyncActor` and return it along with a channel sender.
     pub(crate) fn new(

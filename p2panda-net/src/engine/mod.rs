@@ -17,7 +17,7 @@ use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::Gossip;
 use iroh_net::key::SecretKey;
 use iroh_net::{Endpoint, NodeAddr};
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
@@ -44,7 +44,7 @@ pub struct Engine<T> {
 
 impl<T> Engine<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
         secret_key: SecretKey,

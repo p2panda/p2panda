@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use iroh_net::key::PublicKey;
 use iroh_net::NodeId;
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
@@ -52,7 +52,7 @@ pub struct TopicStreams<T> {
 
 impl<T> TopicStreams<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -387,7 +387,7 @@ mod tests {
     use futures_util::{FutureExt, StreamExt};
     use iroh_net::NodeAddr;
     use p2panda_core::PrivateKey;
-    use p2panda_sync::Topic;
+    use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::sync::{mpsc, oneshot};
     use tokio_stream::wrappers::ReceiverStream;
@@ -404,7 +404,7 @@ mod tests {
         Secondary,
     }
 
-    impl Topic for TestTopic {}
+    impl TopicQuery for TestTopic {}
 
     impl TopicId for TestTopic {
         fn id(&self) -> [u8; 32] {

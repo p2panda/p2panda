@@ -7,7 +7,7 @@ use futures_lite::StreamExt;
 use futures_util::FutureExt;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
 use iroh_net::key::PublicKey;
-use p2panda_sync::Topic;
+use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_stream::StreamMap;
@@ -47,7 +47,7 @@ pub struct GossipActor<T> {
 
 impl<T> GossipActor<T>
 where
-    T: Topic + 'static,
+    T: TopicQuery + 'static,
 {
     pub fn new(
         inbox: mpsc::Receiver<ToGossipActor>,

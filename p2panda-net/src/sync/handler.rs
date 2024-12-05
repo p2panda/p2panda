@@ -5,13 +5,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use iroh_net::endpoint::{self, Connecting, Connection};
-use p2panda_sync::{SyncProtocol, Topic};
+use p2panda_sync::{SyncProtocol, TopicQuery};
 use tokio::sync::mpsc;
 use tracing::{debug, debug_span};
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
-use crate::{sync, TopicId};
+use crate::sync;
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
@@ -23,7 +23,7 @@ pub struct SyncConnection<T> {
 
 impl<T> SyncConnection<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + 'static,
 {
     pub fn new(
         sync_protocol: Arc<dyn for<'a> SyncProtocol<'a, T> + 'static>,
@@ -73,7 +73,7 @@ where
 
 impl<T> ProtocolHandler for SyncConnection<T>
 where
-    T: Topic + TopicId + 'static,
+    T: TopicQuery + 'static,
 {
     fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
         Box::pin(async move { self.handle_connection(connecting.await?).await })

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::time::Duration;
 
-use p2panda_sync::{SyncProtocol, Topic};
+use p2panda_sync::{SyncProtocol, TopicQuery};
 
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
 const MAX_RETRY_ATTEMPTS: u8 = 5;
@@ -81,7 +81,7 @@ pub struct SyncConfiguration<T> {
 
 impl<T> SyncConfiguration<T>
 where
-    T: Topic,
+    T: TopicQuery,
 {
     /// Return a default instance of `SyncConfiguration`.
     pub fn new(protocol: impl for<'a> SyncProtocol<'a, T> + 'static) -> Self {
