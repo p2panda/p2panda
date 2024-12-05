@@ -18,11 +18,6 @@ This crate provides a networked blob store for streaming content-addressed blobs
 It can be used to import, export and download blobs.
 Both in-memory and filesystem-based persistence options are provided.
 
-## Features
-
-* `Blobs` and `Config`
-* `DownloadBlobEvent` and `ImportBlobEvent` notifications
-
 ## License
 
 ...
