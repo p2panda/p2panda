@@ -2,6 +2,16 @@
 name = "p2panda-store"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>"
+]
+description = "Persistence interfaces and implementations for p2panda"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+categories = ["storage"]
 
 [lints]
 workspace = true
