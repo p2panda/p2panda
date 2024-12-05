@@ -35,11 +35,11 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://p2panda.org/about/contribute">
+    <a href="https://aquadoggo.p2panda.org/about/contribute/">
       Contribute
     </a>
     <span> | </span>
-    <a href="https://p2panda.org">
+    <a href="https://aquadoggo.p2panda.org/">
       Website
     </a>
   </h3>
@@ -57,10 +57,10 @@ browser.
 > so please be prepared for breaking API changes until we reach `v1.0`.
 > Currently no p2panda implementation has recieved a security audit.
 
-[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
-[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda`]: https://p2panda.org
-[`specification`]: https://p2panda.org/specification
+[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/v1/p2panda-js
+[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/v1/p2panda-rs
+[`p2panda`]: https://aquadoggo.p2panda.org/
+[`specification`]: https://aquadoggo.p2panda.org/specifications/
 
 ## Installation
 
