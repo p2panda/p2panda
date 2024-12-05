@@ -2,6 +2,16 @@
 name = "p2panda-stream"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>"
+]
+description = "Stream-based methods to conveniently handle p2panda operations"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["stream", "async"]
 
 [dependencies]
 ciborium = "0.2.2"
