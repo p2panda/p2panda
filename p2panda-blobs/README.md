@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Your toolbox to build offline-first applications!</strong>
+  <strong>Blob storage, retrieval and synchronisation</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -15,8 +15,8 @@
 </div>
 
 This crate provides a networked blob store for streaming content-addressed blobs between peers.
-It can be used to import, export and download blobs.
-Both in-memory and filesystem-based persistence options are provided.
+It can be used to import, export and download blobs. Both in-memory and filesystem-based
+persistence options are provided.
 
 ## License
 
