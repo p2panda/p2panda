@@ -2,6 +2,16 @@
 name = "p2panda-blobs"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>"
+]
+description = "Blob storage, retrieval and synchronisation"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+categories = ["storage", "streaming", "blobs", "blake3"]
 
 [dependencies]
 anyhow = "1.0.86"
