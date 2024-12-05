@@ -145,7 +145,7 @@ mod sync;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
-pub use network::{Network, NetworkBuilder, RelayMode};
+pub use network::{FromNetwork, Network, NetworkBuilder, RelayMode, ToNetwork};
 pub use protocols::ProtocolHandler;
 pub use sync::{ResyncConfiguration, SyncConfiguration};
 
