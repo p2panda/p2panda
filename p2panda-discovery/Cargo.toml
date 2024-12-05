@@ -2,6 +2,16 @@
 name = "p2panda-discovery"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>"
+]
+description = "Peer discovery traits and services"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["discovery", "mdns", "p2p"]
 
 [features]
 default = []
@@ -19,5 +29,3 @@ socket2 = { version = "0.5.7", optional = true }
 tokio = { version = "1.38.0", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io-util", "io"] }
 tracing = "0.1.40"
-
-[dev-dependencies]
