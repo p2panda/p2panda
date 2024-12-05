@@ -27,7 +27,7 @@ tokio-util = { version = "0.7.11", features = [
     "codec",
     "compat",
 ], optional = true }
-tokio = { version = "1.42.0", features = ["rt", "macros"], optional = true }
+tokio = { version = "1.42.0", features = ["sync", "time", "rt"], optional = true }
 thiserror = "1.0.63"
 
 [dev-dependencies]

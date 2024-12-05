@@ -28,5 +28,5 @@ p2panda-core = { path = "../p2panda-core" }
 p2panda-net = { path = "../p2panda-net" }
 p2panda-sync = { path = "../p2panda-sync" }
 serde = { version = "1.0.215", features = ["derive"] }
-tokio = { version = "1.42.0", features = ["rt"] }
+tokio = { version = "1.42.0", features = ["fs"] }
 tracing = "0.1.40"
