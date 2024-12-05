@@ -30,7 +30,7 @@
 //! ### Construct and sign a header
 //!
 //! ```
-//! use p2panda_core::{Body, Header, Operation, PrivateKey};
+//! use p2panda_core::{Body, Header, PrivateKey};
 //!
 //! let private_key = PrivateKey::new();
 //!
@@ -54,7 +54,7 @@
 //! ### Custom extensions
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+//! use p2panda_core::{Body, Extension, Header, PrivateKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
 //!
 //! let private_key = PrivateKey::new();
