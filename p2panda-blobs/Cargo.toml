@@ -11,7 +11,7 @@ description = "Blob storage, retrieval and synchronisation"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-categories = ["storage", "streaming", "blobs", "blake3"]
+keywords = ["storage", "streaming", "blobs", "blake3"]
 
 [dependencies]
 anyhow = "1.0.86"
