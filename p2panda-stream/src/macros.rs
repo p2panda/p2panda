@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 /// Forward `Sink` to underlying `Stream`.
 macro_rules! delegate_sink {
