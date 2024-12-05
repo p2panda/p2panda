@@ -32,6 +32,12 @@ between them.
 Additionally `p2panda-net` can be extended with custom sync protocols for all data types, allowing
 applications to "catch up on past data", eventually converging to the same state.
 
+Most of the lower-level networking of `p2panda-net` is made possible by the work of
+[iroh](https://github.com/n0-computer/iroh/) utilising well-established and known standards, like
+QUIC for transport, (self-certified) TLS for transport encryption, STUN for establishing direct
+connections between devices, Tailscale's DERP (Designated Encrypted Relay for Packets) for relay
+fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0] or [MIT license] at your option.
