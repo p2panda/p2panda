@@ -21,6 +21,7 @@ use crate::import::{import_blob, import_blob_from_stream, ImportBlobEvent};
 use crate::protocol::{BlobsProtocol, BLOBS_ALPN};
 use crate::DownloadBlobEvent;
 
+/// Blobs service offering storage, retrieval and synchronisation of content-addressed data.
 #[derive(Debug)]
 pub struct Blobs<T, S>
 where
@@ -37,6 +38,8 @@ where
     T: Topic + TopicId + 'static,
     S: Store,
 {
+    /// Returns a new instance of `Blobs` using the given `NetworkBuilder` and store
+    /// implementation.
     pub async fn from_builder(
         network_builder: NetworkBuilder<T>,
         store: S,
@@ -44,12 +47,14 @@ where
         Blobs::from_builder_with_config(network_builder, store, Config::default()).await
     }
 
+    /// Returns a new instance of `Blobs` using the given `NetworkBuilder`, store
+    /// implementation and configuration.
     pub async fn from_builder_with_config(
         network_builder: NetworkBuilder<T>,
         store: S,
         config: Config,
     ) -> Result<(Network<T>, Self)> {
-        // Calls `num_cpus::get()` tc o define thread count.
+        // Calls `num_cpus::get()` to define thread count.
         let local_pool_config = LocalPoolConfig::default();
         let local_pool = LocalPool::new(local_pool_config);
 
@@ -81,18 +86,19 @@ where
 
     /// Get an entry for a hash.
     ///
-    /// The entry gives us access to a blobs metadata and methods for accessing the actual
-    /// blob data. Getting only the entry is a cheap operation though.
+    /// The entry provides access to metadata and methods for retrieving the actual blob data.
     pub async fn get(&self, hash: Hash) -> anyhow::Result<Option<<S as Map>::Entry>> {
         let hash = IrohHash::from_bytes(*hash.as_bytes());
         let entry = self.store.get(&hash).await?;
         Ok(entry)
     }
 
+    /// Import a blob from the given path.
     pub async fn import_blob(&self, path: PathBuf) -> impl Stream<Item = ImportBlobEvent> {
         import_blob(self.store.clone(), self.rt.handle().clone(), path).await
     }
 
+    /// Import a blob from the given stream.
     pub async fn import_blob_from_stream<D>(&self, data: D) -> impl Stream<Item = ImportBlobEvent>
     where
         D: Stream<Item = io::Result<Bytes>> + Send + Unpin + 'static,
@@ -100,6 +106,7 @@ where
         import_blob_from_stream(self.store.clone(), self.rt.handle().clone(), data).await
     }
 
+    /// Download a blob from a network peer.
     pub async fn download_blob(&self, hash: Hash) -> impl Stream<Item = DownloadBlobEvent> {
         download_blob(
             self.network.clone(),
@@ -110,6 +117,7 @@ where
         .await
     }
 
+    /// Export a blob to the given filesystem path.
     pub async fn export_blob(&self, hash: Hash, path: &PathBuf) -> Result<()> {
         export_blob(&self.store, hash, path).await?;
         Ok(())

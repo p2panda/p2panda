@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Alternative configuration API which can be passed into `Blobs::from_builder_with_config` constructor.
 use std::time::Duration;
 
 use iroh_blobs::downloader::{ConcurrencyLimits, RetryConfig};
 
+/// Configuration parameters for the blobs service.
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Maximum number of requests the service performs concurrently.
