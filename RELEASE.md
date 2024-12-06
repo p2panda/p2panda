@@ -25,7 +25,7 @@ _This example assumes we are publising version `1.2.0`._
 
 ## Release using [`cargo-release`](https://github.com/crate-ci/cargo-release)
 
-8. If a new crate was introduced make sure to add the following to it's `Cargo.toml`
+8. If a new crate was introduced make sure to add the following to it's `Cargo.toml`.
 
 ```toml
 [package.metadata.release]
@@ -33,8 +33,9 @@ release = true
 publish = true
 ```
 
-9. Run the `cargo-release` in dry-run mode. This command performs tagged git releases for all
+9. Commit any changes made so far during release, eg. `git add .` & `gc -m "Prepare for release"`.
+10. Run the `cargo-release` in dry-run mode. This command performs tagged git releases for all
    crates and publish them to crates.io: `cargo-release 1.2.0`. Check the output, make sure
    everything looks correct and no errors.
-10. Run the `cargo-release` for real:
-    `cargo-release 1.2.0`.
+11. Run the `cargo-release` for real:
+    `cargo-release 1.2.0 --execute`.
