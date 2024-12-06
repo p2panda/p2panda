@@ -29,7 +29,7 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda#installation">
+    <a href="https://github.com/p2panda/p2panda/tree/v1#installation">
       Installation
     </a>
     <span> | </span>
@@ -37,11 +37,11 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://p2panda.org/about/contribute">
+    <a href="https://aquadoggo.p2panda.org/about/contribute/">
       Contribute
     </a>
     <span> | </span>
-    <a href="https://p2panda.org">
+    <a href="https://aquadoggo.p2panda.org/">
       Website
     </a>
   </h3>
@@ -59,7 +59,7 @@ browser.
 > so please be prepared for breaking API changes until we reach `v1.0`.
 > Currently no p2panda implementation has recieved a security audit.
 
-[`specification`]: https://p2panda.org/specifications
+[`specification`]: https://aquadoggo.p2panda.org/specifications/
 
 ## Features
 
@@ -89,7 +89,7 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-See [the demo application](https://p2panda.org) and its [source
+See [the demo application](https://aquadoggo.p2panda.org/) and its [source
 code](https://github.com/p2panda/zoo-adventures). More examples can be found in the
 [`p2panda-rs`] and [`p2panda-js`] directories.
 
@@ -144,6 +144,6 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 research and innovation programme within the framework of the NGI-POINTER
 Project funded under grant agreement No 871528 and NGI-ASSURE No 957073*
 
-[`p2panda`]: https://p2panda.org
-[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
+[`p2panda`]: https://aquadoggo.p2panda.org/
+[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/v1/p2panda-rs
+[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/v1/p2panda-js
