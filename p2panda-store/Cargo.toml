@@ -21,7 +21,7 @@ default = ["memory"]
 memory = []
 
 [dependencies]
-p2panda-core = { path = "../p2panda-core" }
+p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
 trait-variant = "0.1.2"
 
 [dev-dependencies]

@@ -24,9 +24,9 @@ iroh-base = "0.25.0"
 iroh-blobs = { version = "0.25.0", features = ["downloader", "fs-store"], default-features = false }
 iroh-io = "0.6.1"
 iroh-net = "0.25.0"
-p2panda-core = { path = "../p2panda-core" }
-p2panda-net = { path = "../p2panda-net" }
-p2panda-sync = { path = "../p2panda-sync" }
+p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
+p2panda-net = { path = "../p2panda-net", version = "0.1.0" }
+p2panda-sync = { path = "../p2panda-sync", version = "0.1.0" }
 serde = { version = "1.0.215", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["fs"] }
 tracing = "0.1.40"
