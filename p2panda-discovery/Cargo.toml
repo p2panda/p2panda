@@ -29,3 +29,7 @@ socket2 = { version = "0.5.7", optional = true }
 tokio = { version = "1.42.0", features = ["net", "sync"] }
 tokio-util = { version = "0.7.11", features = ["codec", "io-util", "io"] }
 tracing = "0.1.40"
+
+[package.metadata.release]
+release = true
+publish = true
