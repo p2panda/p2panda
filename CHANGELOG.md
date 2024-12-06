@@ -21,4 +21,4 @@ Highlights are marked with a pancake 🥞
 
 Version `0.1.0` represents the first release of the new p2panda stack!
 You can find out more details by reading our
-[blog](https://p2panda.org/blog).
+[blog](https://p2panda.org/2024/12/06/p2panda-release.html).
