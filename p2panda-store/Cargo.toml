@@ -28,5 +28,4 @@ serde = "1.0.215"
 tokio = { version = "1.42.0", features = ["rt", "macros"] }
 
 [package.metadata.release]
-release = true
 publish = true
