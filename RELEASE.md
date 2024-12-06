@@ -29,14 +29,21 @@ _Requires `cargo-release` to be installed (`cargo install cargo-release`)_
 
 ```toml
 [package.metadata.release]
-release = true
 publish = true
 ```
 
-9. Commit any changes made so far during release, eg. `git add .` and
-   `git commit -m "Prepare for release"`.
+9. Commit any changes made so far during release with `git add .` and
+   `git commit -m "Prepare for release v1.2.0"`.
 10. Run the `cargo-release` in dry-run mode. This command performs tagged git
     releases for all crates and publish them to crates.io: `cargo-release
     release 1.2.0`. Check the output, make sure everything looks correct and no
     errors.
 11. Run the `cargo-release` for real: `cargo-release release 1.2.0 --execute`.
+
+## Tagging and release
+
+12. Run `git tag v1.2.0` and push including your tags using `git push origin
+    main --tags`.
+13. Manually create a release on github, copying the changelog entry you authored 
+    into Github's [new release page](https://github.com/p2panda/p2panda/releases/new)'s 
+    description field. Title it with your version `v1.2.0`.
