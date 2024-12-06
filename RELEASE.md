@@ -1,8 +1,8 @@
 # Releasing p2panda
 
-_This example assumes we are publising version `1.2.0`._
+_This example assumes we are publishing version `1.2.0`._
 
-\_Requires `cargo-release` to be installed (`cargo install cargo-release`)
+_Requires `cargo-release` to be installed (`cargo install cargo-release`)_
 
 ## Checks and preparations
 
@@ -33,9 +33,9 @@ release = true
 publish = true
 ```
 
-9. Commit any changes made so far during release, eg. `git add .` & `gc -m "Prepare for release"`.
+9. Commit any changes made so far during release, eg. `git add .` & `git commit -m "Prepare for release"`.
 10. Run the `cargo-release` in dry-run mode. This command performs tagged git releases for all
-   crates and publish them to crates.io: `cargo-release 1.2.0`. Check the output, make sure
+   crates and publish them to crates.io: `cargo-release release 1.2.0`. Check the output, make sure
    everything looks correct and no errors.
 11. Run the `cargo-release` for real:
-    `cargo-release 1.2.0 --execute`.
+    `cargo-release release 1.2.0 --execute`.
