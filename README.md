@@ -32,16 +32,25 @@ p2panda is "broadcast-only" at it’s heart, making any data not only offline-fi
 
 ## Libraries
 
-* [`📦 p2panda-net`](https://crates.io/crates/p2panda-net) Find peers in a peer-to-peer network, connect to them directly - wherever they are - and exchange any data of your interest in form of byte streams.
-* [`📦 p2panda-discovery`](https://crates.io/crates/p2panda-discovery) Solutions to find other peers in your local network or on the internet and interfaces to start building your own.
-* [`📦 p2panda-sync`](https://crates.io/crates/p2panda-sync) Protocol implementations to efficiently "catch up on past state" with other peers and interfaces to start building your own.
-* [`📦 p2panda-blobs`](https://crates.io/crates/p2panda-blobs) Efficiently send, receive and store (very large) files.
-* [`📦 p2panda-core`](https://crates.io/crates/p2panda-core) Highly extensible data-types of the p2panda protocol for secure, distributed and efficient exchange of data, supporting networks from the internet to packet radio, LoRa or BLE.
-* [`📦 p2panda-store`](https://crates.io/crates/p2panda-store) Interfaces and implementations to store p2panda data types in databases, memory or file-systems.
-* [`📦 p2panda-stream`](https://crates.io/crates/p2panda-stream) Collection of various methods to process your p2panda data streams before they reach your application.
-* `🚧 p2panda-node` All-in-one p2panda node which can be used in federated or fully decentralised networks or both at the same time. Supports "lightweight" clients running in the browser.
-* `🚧 p2panda-access-control` Manage access to data with capabilities.
-* `🚧 p2panda-groups` Local-first roles and group-encryption with Post-Compromise-Security and optional Forward-Secrecy.
+📦 [`p2panda-net`](https://crates.io/crates/p2panda-net) - Find peers in a peer-to-peer network, connect to them directly - wherever they are - and exchange any data of your interest in form of byte streams.
+
+📦 [`p2panda-discovery`](https://crates.io/crates/p2panda-discovery) - Solutions to find other peers in your local network or on the internet and interfaces to start building your own.
+
+📦  [`p2panda-sync`](https://crates.io/crates/p2panda-sync) - Protocol implementations to efficiently "catch up on past state" with other peers and interfaces to start building your own.
+
+📦 [`p2panda-blobs`](https://crates.io/crates/p2panda-blobs) - Efficiently send, receive and store (very large) files.
+
+📦 [`p2panda-core`](https://crates.io/crates/p2panda-core) - Highly extensible data-types of the p2panda protocol for secure, distributed and efficient exchange of data, supporting networks from the internet to packet radio, LoRa or BLE.
+
+📦 [`p2panda-store`](https://crates.io/crates/p2panda-store) - Interfaces and implementations to store p2panda data types in databases, memory or file-systems.
+
+📦 [`p2panda-stream`](https://crates.io/crates/p2panda-stream) - Collection of various methods to process your p2panda data streams before they reach your application.
+
+🚧  `p2panda-node` - All-in-one p2panda node which can be used in federated or fully decentralised networks or both at the same time. Supports "lightweight" clients running in the browser.
+
+🚧 `p2panda-access-control` - Manage access to data with capabilities.
+
+🚧 `p2panda-groups` - Local-first roles and group-encryption with Post-Compromise-Security and optional Forward-Secrecy.
 
 ## License
 
