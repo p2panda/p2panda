@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Data- and transport-agnostic interface to implement custom sync protocol</strong>
+  <strong>Data- and transport-agnostic sync protocols</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -29,6 +29,13 @@ In addition to the generic definition of the `SyncProtocol` trait, `p2panda-sync
 optional implementations for efficient sync of append-only log-based data types. These optional
 implementations may be activated via feature flags. Finally, `p2panda-sync` provides helpers to
 encode wire messages in CBOR.
+
+## Features
+
+- Transport- and data-type agnostic trait definitions compatible with `p2panda-net`
+- Efficient and ready-to-use implementation for log-height based sync of p2panda core data-types
+- Privacy-first design allowing implementations to reveal as little information as possible during handshake phase
+- Generic design to re-use the same sync protocol for very different applications
 
 ## License
 

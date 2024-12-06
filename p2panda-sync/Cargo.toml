@@ -7,7 +7,7 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>"
 ]
-description = "Data- and transport-agnostic interface to implement custom sync protocol"
+description = "Data- and transport-agnostic sync protocols"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
