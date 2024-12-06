@@ -27,17 +27,25 @@ exchange of data, supporting networks from the internet to packet radio, LoRa or
 
 The primary data structure is an append-only implementation which supports history deletion,
 multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
-extensible depending on your application requirements. 
+extensible depending on your application requirements.
 
-Inside this crate you will find:
-* BLAKE3 `Hash`
-* Ed25519 `PrivateKey`, `PublicKey` and `Signature`
-* CBOR based encoding with `serde` and `ciborium`
-* p2panda `Operation`, `Header`, `Body`, `Extension`, `PruneFlag` and validation methods
+## Features
+
+- Cryptographic signatures for authorship verification and tamper-proof messages
+- Authors can maintain one or many logs
+- Single-writer logs which can be combined to support multi-writer collaboration
+- Compatible with any application data and CRDT
+- Various ordering algorithms
+- Supports efficient, partial sync
+- Compatible with any networking scenario (even broadcast-only, for example for packet radio)
+- Fork-tolerant
+- Pruning of outdated messages
+- Highly extensible with custom features, for example prefix-deletion, ephemeral
+  "self-destructing" messages, etc.
 
 ## Examples
 
-### Create and sign an operation `Body` and `Header`
+### Create and sign operation
 
 ```rust
 use p2panda_core::{Body, Header, PrivateKey};
@@ -61,17 +69,18 @@ let mut header = Header {
 header.sign(&private_key);
 ```
 
-### Create custom extensions
+### Custom extensions
 
-Custom functionality can be added using extensions, for example, access-control tokens,
-self-destructing messages, or encryption schemas. 
+Custom functionality can be added using extensions, for example, access-control
+tokens, self-destructing messages, or encryption schemas.
 
 ```rust
 use p2panda_core::{Extension, Header, PrivateKey};
 use serde::{Serialize, Deserialize};
 
-// Extend our operations with an "expiry" field we can use to implement "ephemeral messages" in
-// our application, which get automatically deleted after the expiration timestamp is due.
+// Extend our operations with an "expiry" field we can use to implement
+// "ephemeral messages" in our application, which get automatically deleted
+// after the expiration timestamp is due.
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Expiry(u64);
 
@@ -81,14 +90,16 @@ struct CustomExtensions {
     expiry: Expiry,
 }
 
-// Implement `Extension<T>` for each extension we want to add to our `CustomExtensions`.
+// Implement `Extension<T>` for each extension we want to add to our
+// custom extensions.
 impl Extension<Expiry> for CustomExtensions {
     fn extract(&self) -> Option<Expiry> {
         Some(self.expiry.to_owned())
     }
 }
 
-// Create a custom extension instance, this can be added to an operation's header.
+// Create a custom extension instance, this can be added to an operation's
+// header.
 let extensions = CustomExtensions {
     expiry: Expiry(1733170246),
 };
