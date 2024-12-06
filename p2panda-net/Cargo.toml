@@ -7,19 +7,19 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>"
 ]
-description = "Data-type-agnostic p2p networking"
+description = "Data-type-agnostic peer-to-peer networking"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["p2p", "networking", "gossip", "delay-tolerant"]
+keywords = ["p2p", "networking", "gossip", "sync"]
+
+[lints]
+workspace = true
 
 [features]
 default = ["mdns-discovery"]
 log-sync = []
 mdns-discovery = ["p2panda-discovery/mdns"]
-
-[lints]
-workspace = true
 
 [dependencies]
 anyhow = "1.0.86"
