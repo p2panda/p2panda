@@ -31,9 +31,9 @@ iroh-base = "0.25.0"
 iroh-gossip = "0.25.0"
 iroh-net = "0.25.0"
 iroh-quinn = { version = "0.11.3", features = ["futures-io"] }
-p2panda-core = { path = "../p2panda-core" }
-p2panda-discovery = { path = "../p2panda-discovery" }
-p2panda-sync = { path = "../p2panda-sync", features = ["log-sync"] }
+p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
+p2panda-discovery = { path = "../p2panda-discovery", version = "0.1.0" }
+p2panda-sync = { path = "../p2panda-sync", version = "0.1.0", features = ["log-sync"] }
 rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "1.0.63"
@@ -44,4 +44,8 @@ tracing = "0.1.40"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-p2panda-store = { path = "../p2panda-store" }
+p2panda-store = { path = "../p2panda-store", version = "0.1.0" }
+
+[package.metadata.release]
+release = true
+publish = true

@@ -12,3 +12,14 @@ members = [
 ]
 
 [workspace.lints.rust]
+
+[workspace.metadata.release]
+allow-branch = ["main"]
+enable-all-features = true
+# Disable release on publish of crates in this workplace, should be enabled in each crates
+# `Cargo.toml` to overwrite this default.
+release = false
+publish = false
+
+[workspace.metadata.release.rate-limit]
+new-packages = 10
