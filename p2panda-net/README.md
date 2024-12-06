@@ -38,6 +38,72 @@ QUIC for transport, (self-certified) TLS for transport encryption, STUN for esta
 connections between devices, Tailscale's DERP (Designated Encrypted Relay for Packets) for relay
 fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
 
+## Features
+
+- Data of any kind can be exchanged efficiently via gossip broadcast ("live mode") or via sync
+  protocols between two peers ("catching up on past state")
+- Custom network-wide queries to express interest in certain data of applications
+- Ambient peer discovery: Learning about new, previously unknown peers in the network
+- Ambient topic discovery: Learning what peers are interested in, automatically forming
+  overlay networks per topic
+- Sync protocol API, providing an eventual-consistency guarantee that peers will converge on
+  the same state over time
+- Manages connections, automatically syncs with discovered peers and re-tries on faults
+- Extension to handle efficient sync of large files
+
+## Example
+
+```rust
+use p2panda_core::{PrivateKey, Hash};
+use p2panda_discovery::mdns::LocalDiscovery;
+use p2panda_net::{NetworkBuilder, TopicId};
+use p2panda_sync::TopicQuery;
+use serde::{Serialize, Deserialize};
+
+// Peers using the same "network id" will eventually find each other. This is the most global
+// identifier to group peers into multiple networks when necessary.
+let network_id = [1; 32];
+
+// The network can be used to automatically find and ask other peers about any data the
+// application is interested in. This is expressed through "network-wide queries" over topics.
+//
+// In this example we would like to be able to query messages from each chat group, identified
+// by a BLAKE3 hash.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+struct ChatGroup(Hash);
+
+impl ChatGroup {
+    pub fn new(name: &str) -> Self {
+        Self(Hash::new(name.as_bytes()))
+    }
+}
+
+impl TopicQuery for ChatGroup {}
+
+impl TopicId for ChatGroup {
+    fn id(&self) -> [u8; 32] {
+        self.0.into()
+    }
+}
+
+// Generate an Ed25519 private key which will be used to authenticate your peer towards others.
+let private_key = PrivateKey::new();
+
+// Use mDNS to discover other peers on the local network.
+let mdns_discovery = LocalDiscovery::new()?;
+
+// Establish the p2p network which will automatically connect you to any discovered peers.
+let network = NetworkBuilder::new(network_id)
+    .private_key(private_key)
+    .discovery(mdns_discovery)
+    .build()
+    .await?;
+
+// From now on we can send and receive bytes to any peer interested in the same chat.
+let my_friends_group = ChatGroup::new("me-and-my-friends");
+let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
+```
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0] or [MIT license] at your option.
