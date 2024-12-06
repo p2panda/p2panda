@@ -16,6 +16,8 @@ members = [
 [workspace.metadata.release]
 allow-branch = ["main"]
 enable-all-features = true
+# Do not create a git tag (we do this manually afterwards)
+tag = false
 # Disable release on publish of crates in this workplace, should be enabled in each crates
 # `Cargo.toml` to overwrite this default.
 release = false

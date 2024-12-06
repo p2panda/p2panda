@@ -39,3 +39,8 @@ publish = true
    everything looks correct and no errors.
 11. Run the `cargo-release` for real:
     `cargo-release 1.2.0 --execute`.
+
+## Tagging
+
+12. Run `git tag v1.2.0` and push (including your tags) using `git push origin
+    main --tags`.
