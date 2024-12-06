@@ -7,7 +7,7 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>"
 ]
-description = "Persistence interfaces and implementations for p2panda"
+description = "Store traits and implementations"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"

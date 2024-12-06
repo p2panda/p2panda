@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Persistence layer interfaces and implementations for core p2panda data types</strong>
+  <strong>Store traits and implementations</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -22,9 +22,8 @@
   </h3>
 </div>
 
-This crate provides APIs to allow for efficient implementations of operation and log stores. These
-persistence and query APIs are utilised by higher-level components of the p2panda stack, such
-as `p2panda-sync` and `p2panda-stream`. 
+This crate provides APIs to allow for efficient implementations of p2panda operations- and log stores. These persistence and query APIs are utilised by higher-level components of the p2panda stack, such
+as `p2panda-sync` and `p2panda-stream`.
 
 An in-memory storage solution is provided in the form of a `MemoryStore` which implements both the
 `OperationStore` and `LogStore` traits.
