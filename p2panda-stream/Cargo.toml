@@ -32,4 +32,5 @@ tokio = { version = "1.42.0", features = ["rt", "macros"] }
 workspace = true
 
 [package.metadata.release]
+release = true
 publish = true

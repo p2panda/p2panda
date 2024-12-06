@@ -23,7 +23,7 @@ _This example assumes we are publising version `1.2.0`._
 7. Remember to update the links to your release and the unreleased git log at
    the bottom of `CHANGELOG.md`.
 
-## Release using [`cargo-release`](https://github.com/crate-ci/cargo-release)
+## Publish using [`cargo-release`](https://github.com/crate-ci/cargo-release)
 
 8. If a new crate was introduced make sure to add the following to it's `Cargo.toml`.
 
@@ -39,8 +39,3 @@ publish = true
    everything looks correct and no errors.
 11. Run the `cargo-release` for real:
     `cargo-release 1.2.0 --execute`.
-
-## Tagging
-
-12. Run `git tag v1.2.0` and push (including your tags) using `git push origin
-    main --tags`.
