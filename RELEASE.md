@@ -34,11 +34,10 @@ publish = true
 
 9. Commit any changes made so far during release with `git add .` and
    `git commit -m "Prepare for release v1.2.0"`.
-10. Run the `cargo-release` in dry-run mode. This command performs tagged git
-    releases for all crates and publish them to crates.io: `cargo-release
-    release 1.2.0`. Check the output, make sure everything looks correct and no
-    errors.
-11. Run the `cargo-release` for real: `cargo-release release 1.2.0 --execute`.
+10. Run the `cargo-release` in dry-run mode `cargo-release release 1.2.0`. Check the output, make
+    sure everything looks correct and no errors.
+11. Run the `cargo-release` for real `cargo-release release 1.2.0 --execute`. This command
+    publishes all crates to crates.io.
 
 ## Tagging and release
 
