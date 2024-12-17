@@ -55,9 +55,9 @@ use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 /// Finally, please note that implementers of `LogId` must take steps to ensure their log design is
 /// fit for purpose and that all operations have been thoroughly validated before being persisted.
 /// No such validation checks are provided by `p2panda-store`.
-pub trait LogId: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
+pub trait LogId: Clone + Debug + Eq + std::hash::Hash {}
 
-impl<T> LogId for T where T: Clone + Default + Debug + Eq + Send + Sync + std::hash::Hash {}
+impl<T> LogId for T where T: Clone + Debug + Eq + std::hash::Hash {}
 
 /// Interface for storing, deleting and querying operations.
 ///
