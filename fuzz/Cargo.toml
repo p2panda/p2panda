@@ -8,12 +8,8 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-ciborium = "0.2.2"
 libfuzzer-sys = "0.4"
-
-[dependencies.p2panda-core]
-path = "../p2panda-core"
-features = ["arbitrary"]
+p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
 
 [[bin]]
 name = "header_e2e"
