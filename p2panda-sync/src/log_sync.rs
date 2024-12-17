@@ -32,13 +32,22 @@ use p2panda_store::{LogId, LogStore};
 use serde::{Deserialize, Serialize};
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::{FromSync, SyncError, SyncProtocol, TopicMap, TopicQuery};
+use crate::{FromSync, SyncError, SyncProtocol, TopicQuery};
 
 type SeqNum = u64;
 
 type LogHeights<T> = Vec<(T, SeqNum)>;
 
 type Logs<T> = HashMap<PublicKey, Vec<T>>;
+
+/// Maps a `TopicQuery` to a collection of logs which are the subject of a sync session.
+#[async_trait]
+pub trait TopicMap<T, L>: Debug + Send + Sync
+where
+    T: TopicQuery,
+{
+    async fn get(&self, topic: &T) -> Option<Logs<L>>;
+}
 
 /// Messages to be sent over the wire between the two peers.
 #[allow(clippy::large_enum_variant)]
@@ -77,7 +86,7 @@ where
 impl<'a, T, TM, L, E, S> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E, S>
 where
     T: TopicQuery,
-    TM: TopicMap<T, Logs<L>>,
+    TM: TopicMap<T, L>,
     L: LogId + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Extensions + Send + Sync + 'a,
     S: Debug + Sync + LogStore<L, E>,
@@ -390,7 +399,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl<T> TopicMap<T, Logs<u64>> for LogHeightTopicMap<T>
+    impl<T> TopicMap<T, u64> for LogHeightTopicMap<T>
     where
         T: TopicQuery,
     {
