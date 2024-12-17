@@ -9,9 +9,9 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-### [Changed]
+### Changed
 
-- Remove `Default` from `LogId` supertrait definition [#633](https://github.com/p2panda/p2panda/pull/633)
+- Remove `Default`, `Sync` and `Send` from `LogId` supertrait definition [#633](https://github.com/p2panda/p2panda/pull/633)
 
 ## [0.1.0]
 
