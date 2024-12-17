@@ -72,7 +72,7 @@ impl<T, E> MemoryStore<T, E> {
 
 impl<L, E> OperationStore<L, E> for MemoryStore<L, E>
 where
-    L: LogId,
+    L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
     type Error = Infallible;
@@ -165,7 +165,7 @@ where
 
 impl<L, E> LogStore<L, E> for MemoryStore<L, E>
 where
-    L: LogId,
+    L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
     type Error = Infallible;

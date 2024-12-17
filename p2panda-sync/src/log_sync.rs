@@ -78,7 +78,7 @@ impl<'a, T, TM, L, E, S> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E, S>
 where
     T: TopicQuery,
     TM: TopicMap<T, Logs<L>>,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + 'a,
+    L: LogId + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Extensions + Send + Sync + 'a,
     S: Debug + Sync + LogStore<L, E>,
 {

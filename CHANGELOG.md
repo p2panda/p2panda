@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### [Changed]
+
+- Remove `Default` from `LogId` supertrait definition [#633](https://github.com/p2panda/p2panda/pull/633)
+
 ## [0.1.0]
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
