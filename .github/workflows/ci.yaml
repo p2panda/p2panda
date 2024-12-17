@@ -4,7 +4,7 @@ on: push
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TOOLCHAIN: 1.79.0
+  RUST_TOOLCHAIN: 1.83.0
 
 jobs:
   test:
