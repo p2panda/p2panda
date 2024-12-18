@@ -209,15 +209,16 @@ where
                 // Inform the topic discovery process and sync actor about a major network
                 // interface change.
                 Some(is_major) = interface_change_rx.recv() => {
-                    // In the event of a disconnection, we will drop out of the network-wide gossip
-                    // overlay and may fall out of sync with peers with whom we had previously
-                    // synced. Here we inform the sync actor (if one exists) of the interface
-                    // change and reset the state of the topic discovery process. This should result
-                    // in us reentering the network-wide gossip overlay and resyncing with our peers
-                    // before entering "live mode" again.
+                    // In the event of a disconnection, we will drop out of the topic and
+                    // network-wide gossip overlays and may fall out of sync with peers with whom we
+                    // had previously synced. Here we inform the sync actor (if one exists) of the
+                    // interface change and reset the state of the topic discovery process. This
+                    // should result in us reentering the network-wide gossip overlay and resyncing
+                    // with our peers before entering "live mode" again.
                     if is_major {
                         debug!("detected major network interface change");
                         self.topic_discovery.reset_status().await;
+                        self.topic_streams.move_joined_to_pending().await;
                         if let Some(sync_actor_tx) = &self.sync_actor_tx {
                             sync_actor_tx.send(ToSyncActor::Reset).await?;
                         }
