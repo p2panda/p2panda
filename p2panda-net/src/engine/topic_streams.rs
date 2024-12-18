@@ -281,7 +281,7 @@ where
             for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
                     found_common_topic = true;
-                    let peer_topic = ToSyncActor::new(peer, topic.clone());
+                    let peer_topic = ToSyncActor::new_discovery(peer, topic.clone());
                     sync_actor_tx.send(peer_topic).await?
                 }
             }
