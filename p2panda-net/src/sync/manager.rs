@@ -3,9 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::{Context, Error, Result};
-use futures_lite::FutureExt;
 use iroh_net::{Endpoint, NodeId};
-use netwatch::netmon::Monitor;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -20,16 +18,18 @@ use super::SyncConfiguration;
 
 const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
 
-/// A newly discovered peer and topic combination to be sent to the sync manager.
+/// Events sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncActor<T> {
-    peer: NodeId,
-    topic: T,
+pub enum ToSyncActor<T> {
+    /// A new peer and topic combination was discovered.
+    Discovery { peer: NodeId, topic: T },
+    /// A major network interface change was detected.
+    Reset,
 }
 
 impl<T> ToSyncActor<T> {
-    pub(crate) fn new(peer: NodeId, topic: T) -> Self {
-        Self { peer, topic }
+    pub(crate) fn new_discovery(peer: NodeId, topic: T) -> Self {
+        Self::Discovery { peer, topic }
     }
 }
 
@@ -187,19 +187,6 @@ where
                 (interval(one_hour), one_hour)
             };
 
-        // Setup network monitoring. This allows us to detect major interface changes and reset sync state.
-        let network_monitor = Monitor::new().await?;
-        let (interface_change_tx, mut interface_change_rx) = mpsc::channel(8);
-        let _token = network_monitor
-            .subscribe(move |is_major| {
-                let interface_change_tx = interface_change_tx.clone();
-                async move {
-                    interface_change_tx.send(is_major).await.ok();
-                }
-                .boxed()
-            })
-            .await?;
-
         loop {
             tokio::select! {
                 biased;
@@ -219,29 +206,25 @@ where
                 },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
-                    let peer = msg.peer;
-                    let topic = msg.topic;
+                    match msg {
+                        ToSyncActor::Discovery { peer, topic } => {
+                            let sync_attempt = SyncAttempt::new(peer, topic);
 
-                    let sync_attempt = SyncAttempt::new(peer, topic);
-
-                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
-                        // The attempt will fail if the sync queue is full, indicating that a high
-                        // volume of sync sessions are underway. In that case, we drop the attempt
-                        // completely. Another attempt will be scheduled when the next announcement of
-                        // this peer-topic combination is received from the network-wide gossip
-                        // overlay.
-                        error!("failed to schedule sync attempt: {}", err)
-                    }
-                }
-                Some(is_major) = interface_change_rx.recv() => {
-                    // In the event of a disconnection, two peers who had previously synced may
-                    // fall back out of sync. In order to invoke resync upon reconnection, we
-                    // clear the map of completed sync sessions when we detect a major network
-                    // interface change. This allows the peers to resync before entering "live
-                    // mode" (gossip) again.
-                    if is_major {
-                        debug!("detected major network interface change; resetting completed sync sessions");
-                        self.completed_sync_sessions.clear()
+                            if let Err(err) = self.schedule_attempt(sync_attempt).await {
+                                // The attempt will fail if the sync queue is full, indicating that a high
+                                // volume of sync sessions are underway. In that case, we drop the attempt
+                                // completely. Another attempt will be scheduled when the next announcement of
+                                // this peer-topic combination is received from the network-wide gossip
+                                // overlay.
+                                error!("failed to schedule sync attempt: {}", err)
+                            }
+                        },
+                        // In the event of a disconnection, two peers who had previously synced may
+                        // fall back out of sync. In order to invoke resync upon reconnection, we
+                        // clear the map of completed sync sessions when we detect a major network
+                        // interface change. This allows the peers to resync before entering "live
+                        // mode" (gossip) again.
+                        ToSyncActor::Reset => self.completed_sync_sessions.clear()
                     }
                 }
                 _ = resync_poll_interval.tick() => {
@@ -600,10 +583,7 @@ mod tests {
 
         // Trigger sync session initiation by peer A.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -728,10 +708,7 @@ mod tests {
         // This would occur when the next peer-topic announcement arrived via the network-wide
         // gossip overlay.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -808,10 +785,7 @@ mod tests {
         // This emulates the scope being sent to the sync manager via the peer discovery
         // announcement mechanism.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -877,10 +851,7 @@ mod tests {
 
         // Trigger sync session initiation by peer A.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
