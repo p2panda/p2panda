@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - `TopicMap` replaced by `TopicLogMap` [#650](https://github.com/p2panda/p2panda/pull/650)
+- Reset sync and gossip state on major network interface change [#648](https://github.com/p2panda/p2panda/pull/648)
 - Remove `Default`, `Sync` and `Send` from `LogId` supertrait definition [#633](https://github.com/p2panda/p2panda/pull/633)
 
 ## [0.1.0]
