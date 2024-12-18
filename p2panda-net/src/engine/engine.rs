@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use anyhow::{Context, Result};
+use futures_lite::FutureExt;
 use iroh_net::key::{PublicKey, SecretKey};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
+use netwatch::netmon::Monitor;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::interval;
@@ -81,6 +83,7 @@ pub struct EngineActor<T> {
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     inbox: mpsc::Receiver<ToEngineActor<T>>,
     network_id: NetworkId,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
     topic_discovery: TopicDiscovery,
     topic_streams: TopicStreams<T>,
 }
@@ -100,8 +103,11 @@ where
     ) -> Self {
         let topic_discovery =
             TopicDiscovery::new(network_id, gossip_actor_tx.clone(), address_book.clone());
-        let topic_streams =
-            TopicStreams::new(gossip_actor_tx.clone(), address_book.clone(), sync_actor_tx);
+        let topic_streams = TopicStreams::new(
+            gossip_actor_tx.clone(),
+            address_book.clone(),
+            sync_actor_tx.clone(),
+        );
 
         Self {
             secret_key,
@@ -110,6 +116,7 @@ where
             gossip_actor_tx,
             inbox,
             network_id,
+            sync_actor_tx,
             topic_discovery,
             topic_streams,
         }
@@ -169,6 +176,20 @@ where
         let mut join_topics_interval = interval(JOIN_TOPICS_INTERVAL);
         let mut announce_topics_interval = interval(ANNOUNCE_TOPICS_INTERVAL);
 
+        // Setup network monitoring. This allows us to detect major interface changes and reset
+        // topic discovery and sync state.
+        let network_monitor = Monitor::new().await?;
+        let (interface_change_tx, mut interface_change_rx) = mpsc::channel(8);
+        let _token = network_monitor
+            .subscribe(move |is_major| {
+                let interface_change_tx = interface_change_tx.clone();
+                async move {
+                    interface_change_tx.send(is_major).await.ok();
+                }
+                .boxed()
+            })
+            .await?;
+
         loop {
             tokio::select! {
                 biased;
@@ -185,6 +206,23 @@ where
                         }
                     }
                 },
+                // Inform the topic discovery process and sync actor about a major network
+                // interface change.
+                Some(is_major) = interface_change_rx.recv() => {
+                    // In the event of a disconnection, we will drop out of the network-wide gossip
+                    // overlay and may fall out of sync with peers with whom we had previously
+                    // synced. Here we inform the sync actor (if one exists) of the interface
+                    // change and reset the state of the topic discovery process. This should result
+                    // in us reentering the network-wide gossip overlay and resyncing with our peers
+                    // before entering "live mode" again.
+                    if is_major {
+                        debug!("detected major network interface change");
+                        self.topic_discovery.reset_status().await;
+                        if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                            sync_actor_tx.send(ToSyncActor::Reset).await?;
+                        }
+                    }
+                }
                 // Attempt to start topic discovery if it didn't happen yet.
                 _ = join_network_interval.tick() => {
                     self.topic_discovery.start().await?;
