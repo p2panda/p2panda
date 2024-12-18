@@ -77,6 +77,14 @@ impl TopicDiscovery {
         Ok(())
     }
 
+    /// Reset the topic discovery status to idle.
+    ///
+    /// Resetting the status allows the network-wide gossip overlay to be rejoined after a loss of
+    /// network connectivity.
+    pub async fn reset_status(&mut self) {
+        self.status = Status::Idle;
+    }
+
     pub fn on_gossip_joined(&mut self) {
         if self.status == Status::Active {
             return;
