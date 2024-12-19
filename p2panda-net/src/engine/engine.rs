@@ -39,6 +39,9 @@ pub enum ToEngineActor<T> {
     GossipJoined {
         topic_id: [u8; 32],
     },
+    GossipNeighborDown {
+        peer: PublicKey,
+    },
     GossipNeighborUp {
         topic_id: [u8; 32],
         peer: PublicKey,
@@ -262,6 +265,11 @@ where
             }
             ToEngineActor::GossipJoined { topic_id } => {
                 self.on_gossip_joined(topic_id).await;
+            }
+            ToEngineActor::GossipNeighborDown { peer } => {
+                if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                    sync_actor_tx.send(ToSyncActor::ResetPeer { peer }).await?;
+                }
             }
             ToEngineActor::GossipNeighborUp { topic_id, peer } => {
                 self.on_peer_joined(topic_id, peer).await?;
