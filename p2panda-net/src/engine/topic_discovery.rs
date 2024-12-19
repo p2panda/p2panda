@@ -12,7 +12,7 @@ use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::gossip::ToGossipActor;
 use crate::NetworkId;
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 enum Status {
     #[default]
     Idle,
@@ -173,11 +173,34 @@ impl TopicDiscoveryMessage {
 
 #[cfg(test)]
 mod tests {
-    use iroh_net::key::SecretKey;
+    use iroh_net::{key::SecretKey, NodeAddr};
+    use tokio::sync::mpsc;
 
-    use crate::bytes::ToBytes;
+    use crate::{bytes::ToBytes, engine::AddressBook};
 
-    use super::TopicDiscoveryMessage;
+    use super::{Status, TopicDiscovery, TopicDiscoveryMessage};
+
+    #[tokio::test]
+    async fn ensure_status_reset() {
+        let network_id = [7; 32];
+
+        let mut address_book = AddressBook::new(network_id);
+        let secret_key = SecretKey::generate();
+        let node_addr = NodeAddr::new(secret_key.public());
+        address_book.add_peer(node_addr).await;
+
+        let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(64);
+        let mut topic_discovery = TopicDiscovery::new(network_id, gossip_actor_tx, address_book);
+
+        // We expect the status to transition from `Idle` to `Pending` when topic discovery is
+        // started, since we already added a peer to the address book.
+        topic_discovery.start().await.unwrap();
+        assert_eq!(topic_discovery.status, Status::Pending);
+
+        // Status should revert to `Idle` after the reset.
+        topic_discovery.reset_status().await;
+        assert_eq!(topic_discovery.status, Status::Idle);
+    }
 
     #[test]
     fn verify_message() {
