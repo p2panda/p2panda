@@ -24,7 +24,11 @@ pub enum ToSyncActor<T> {
     /// A new peer and topic combination was discovered.
     Discovery { peer: NodeId, topic: T },
     /// A major network interface change was detected.
+    /// Reset all completed sync sessions.
     Reset,
+    /// A direct peer disconnected from the gossip cluster.
+    /// Reset all completed sync sessions for this peer.
+    ResetPeer { peer: NodeId },
 }
 
 impl<T> ToSyncActor<T> {
@@ -224,7 +228,16 @@ where
                         // clear the map of completed sync sessions when we detect a major network
                         // interface change. This allows the peers to resync before entering "live
                         // mode" (gossip) again.
-                        ToSyncActor::Reset => self.completed_sync_sessions.clear()
+                        ToSyncActor::Reset => self.completed_sync_sessions.clear(),
+                        // We reset all the completed sync sessions for a specific peer when we lose
+                        // connection to a direct neighor in the gossip cluster. This ensures that
+                        // we will attempt to resync again in the future before entering "live
+                        // mode".
+                        ToSyncActor::ResetPeer { peer } => {
+                            for (_, peers) in self.completed_sync_sessions.iter_mut() {
+                                peers.remove(&peer);
+                            }
+                        }
                     }
                 }
                 _ = resync_poll_interval.tick() => {
