@@ -16,10 +16,8 @@
 //! "initiating" counter-part. Usually this would be handled in a "reverse" sync session which
 //! might run concurrently.
 //!
-//! To find out which logs to send matching the given "topic query" a `TopicMap` is provided. This
-//! interface aids the sync protocol in deciding which logs to transfer for each given topic. Due
-//! to the generic nature of `TopicMap` it's possible to realize very different applications on top
-//! of the same sync implementation.
+//! To find out which logs to send matching the given "topic query" a `TopicLogMap` is provided. This
+//! interface aids the sync protocol in deciding which logs to transfer for each given topic.
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -40,9 +38,42 @@ type LogHeights<T> = Vec<(T, SeqNum)>;
 
 type Logs<T> = HashMap<PublicKey, Vec<T>>;
 
-/// Maps a `TopicQuery` to a collection of logs which are the subject of a sync session.
+/// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
+///
+/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
+/// the scope for a particular session should be identified. `LogSyncProtocol` maps a generic
+/// `TopicQuery` to a set of logs, users provide an implementation of the `TopicLogMap` trait in
+/// order to define how this mapping occurs.
+///
+/// Since `TopicLogMap` is generic we can use the same mapping across different sync implementations
+/// for the same data type when necessary.
+///
+/// ## Designing `TopicLogMap` for applications
+///
+/// Considering an example chat application which is based on append-only log data types, we
+/// probably want to organise messages from an author for a certain chat group into one log each.
+/// Like this, a chat group can be expressed as a collection of one to potentially many logs (one
+/// per member of the group):
+///
+/// ```text
+/// All authors: A, B and C
+/// All chat groups: 1 and 2
+///
+/// "Chat group 1 with members A and B"
+/// - Log A1
+/// - Log B1
+///
+/// "Chat group 2 with members A, B and C"
+/// - Log A2
+/// - Log B2
+/// - Log C2
+/// ```
+///
+/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
+/// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
+/// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
 #[async_trait]
-pub trait TopicMap<T, L>: Debug + Send + Sync
+pub trait TopicLogMap<T, L>: Debug + Send + Sync
 where
     T: TopicQuery,
 {
@@ -71,7 +102,7 @@ impl<TM, L, E, S> LogSyncProtocol<TM, L, E, S>
 where
     S: LogStore<L, E>,
 {
-    /// Returns a new sync protocol instance, configured with a store and `TopicMap` implementation
+    /// Returns a new sync protocol instance, configured with a store and `TopicLogMap` implementation
     /// which associates the to-be-synced logs with a given topic.
     pub fn new(topic_map: TM, store: S) -> Self {
         Self {
@@ -86,7 +117,7 @@ where
 impl<'a, T, TM, L, E, S> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E, S>
 where
     T: TopicQuery,
-    TM: TopicMap<T, L>,
+    TM: TopicLogMap<T, L>,
     L: LogId + Send + Sync + for<'de> Deserialize<'de> + Serialize + 'a,
     E: Extensions + Send + Sync + 'a,
     S: Debug + Sync + LogStore<L, E>,
@@ -335,7 +366,7 @@ mod tests {
 
     use crate::{FromSync, SyncError, SyncProtocol, TopicQuery};
 
-    use super::{LogSyncProtocol, Logs, Message, TopicMap};
+    use super::{LogSyncProtocol, Logs, Message, TopicLogMap};
 
     impl<T, L> Message<T, L>
     where
@@ -399,7 +430,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl<T> TopicMap<T, u64> for LogHeightTopicMap<T>
+    impl<T> TopicLogMap<T, u64> for LogHeightTopicMap<T>
     where
         T: TopicQuery,
     {

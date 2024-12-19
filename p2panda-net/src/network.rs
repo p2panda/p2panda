@@ -999,7 +999,7 @@ pub(crate) mod tests {
     use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::log_sync::{LogSyncProtocol, TopicMap};
+    use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
@@ -1204,7 +1204,7 @@ pub(crate) mod tests {
     }
 
     #[async_trait]
-    impl<T> TopicMap<T, u64> for LogIdTopicMap<T>
+    impl<T> TopicLogMap<T, u64> for LogIdTopicMap<T>
     where
         T: TopicQuery,
     {
