@@ -195,8 +195,10 @@ where
             GossipEvent::Joined(_) => {
                 // Not used currently
             }
-            GossipEvent::NeighborDown(_) => {
-                // Not used currently
+            GossipEvent::NeighborDown(peer) => {
+                self.engine_actor_tx
+                    .send(ToEngineActor::GossipNeighborDown { peer })
+                    .await?;
             }
         }
         Ok(())
