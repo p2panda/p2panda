@@ -18,16 +18,18 @@ use super::SyncConfiguration;
 
 const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
 
-/// A newly discovered peer and topic combination to be sent to the sync manager.
+/// Events sent to the sync manager.
 #[derive(Debug)]
-pub struct ToSyncActor<T> {
-    peer: NodeId,
-    topic: T,
+pub enum ToSyncActor<T> {
+    /// A new peer and topic combination was discovered.
+    Discovery { peer: NodeId, topic: T },
+    /// A major network interface change was detected.
+    Reset,
 }
 
 impl<T> ToSyncActor<T> {
-    pub(crate) fn new(peer: NodeId, topic: T) -> Self {
-        Self { peer, topic }
+    pub(crate) fn new_discovery(peer: NodeId, topic: T) -> Self {
+        Self::Discovery { peer, topic }
     }
 }
 
@@ -204,18 +206,25 @@ where
                 },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
-                    let peer = msg.peer;
-                    let topic = msg.topic;
+                    match msg {
+                        ToSyncActor::Discovery { peer, topic } => {
+                            let sync_attempt = SyncAttempt::new(peer, topic);
 
-                    let sync_attempt = SyncAttempt::new(peer, topic);
-
-                    if let Err(err) = self.schedule_attempt(sync_attempt).await {
-                        // The attempt will fail if the sync queue is full, indicating that a high
-                        // volume of sync sessions are underway. In that case, we drop the attempt
-                        // completely. Another attempt will be scheduled when the next announcement of
-                        // this peer-topic combination is received from the network-wide gossip
-                        // overlay.
-                        error!("failed to schedule sync attempt: {}", err)
+                            if let Err(err) = self.schedule_attempt(sync_attempt).await {
+                                // The attempt will fail if the sync queue is full, indicating that a high
+                                // volume of sync sessions are underway. In that case, we drop the attempt
+                                // completely. Another attempt will be scheduled when the next announcement of
+                                // this peer-topic combination is received from the network-wide gossip
+                                // overlay.
+                                error!("failed to schedule sync attempt: {}", err)
+                            }
+                        },
+                        // In the event of a disconnection, two peers who had previously synced may
+                        // fall back out of sync. In order to invoke resync upon reconnection, we
+                        // clear the map of completed sync sessions when we detect a major network
+                        // interface change. This allows the peers to resync before entering "live
+                        // mode" (gossip) again.
+                        ToSyncActor::Reset => self.completed_sync_sessions.clear()
                     }
                 }
                 _ = resync_poll_interval.tick() => {
@@ -574,10 +583,7 @@ mod tests {
 
         // Trigger sync session initiation by peer A.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -702,10 +708,7 @@ mod tests {
         // This would occur when the next peer-topic announcement arrived via the network-wide
         // gossip overlay.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -782,10 +785,7 @@ mod tests {
         // This emulates the scope being sent to the sync manager via the peer discovery
         // announcement mechanism.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 
@@ -798,6 +798,154 @@ mod tests {
         // No further messages should be received, since the first session completed successfully
         // and resync was not configured.
         assert!(engine_actor_rx_a.recv().now_or_never().is_none());
+    }
+
+    #[tokio::test]
+    async fn second_sync_after_reset() {
+        let (
+            test_topic,
+            peer_a,
+            sync_actor_a,
+            sync_actor_tx_a,
+            endpoint_a,
+            mut engine_actor_rx_a,
+            protocols_a,
+            shutdown_token_a,
+            peer_b,
+            sync_actor_b,
+            endpoint_b,
+            mut engine_actor_rx_b,
+            protocols_b,
+            shutdown_token_b,
+        ) = prepare_for_sync(false).await;
+
+        // Spawn the sync actor for peer A.
+        tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
+
+        // Spawn the inbound connection handler for peer A.
+        tokio::task::spawn(async move {
+            while let Some(incoming) = endpoint_a.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    let protocols_a = protocols_a.clone();
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, protocols_a.into()).await
+                    });
+                }
+            }
+        });
+
+        // Spawn the sync actor for peer B.
+        tokio::task::spawn(async move { sync_actor_b.run(shutdown_token_b).await.unwrap() });
+
+        // Spawn the inbound connection handler for peer B.
+        tokio::task::spawn(async move {
+            while let Some(incoming) = endpoint_b.accept().await {
+                if let Ok(connecting) = incoming.accept() {
+                    let protocols_b = protocols_b.clone();
+                    tokio::task::spawn(async move {
+                        handle_connection(connecting, protocols_b.into()).await
+                    });
+                }
+            }
+        });
+
+        // Trigger sync session initiation by peer A.
+        sync_actor_tx_a
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
+            .await
+            .unwrap();
+
+        /* --- PEER A SYNC EVENTS --- */
+        /* --- role: initiator    --- */
+        /* --- initial session    --- */
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, Some(test_topic.to_owned()));
+        assert_eq!(peer, peer_b);
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, None);
+        assert_eq!(peer, peer_a);
+
+        // Receive `SyncHandshakeSuccess`.
+        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
+            engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncMessage`.
+        let Some(ToEngineActor::SyncMessage {
+            topic: _,
+            header: _,
+            payload: _,
+            delivered_from: _,
+        }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncMessage on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncDone`.
+        let Some(ToEngineActor::SyncDone { topic: _, peer: _ }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncDone on engine actor receiver for peer a")
+        };
+
+        // Trigger reset of sync session completed state for peer A.
+        //
+        // This would occur when a major network interface change is detected.
+        sync_actor_tx_a.send(ToSyncActor::Reset).await.unwrap();
+
+        // Trigger sync session initiation by peer A.
+        sync_actor_tx_a
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
+            .await
+            .unwrap();
+
+        /* --- PEER A SYNC EVENTS --- */
+        /* --- role: initiator    --- */
+        /* --- resync session     --- */
+
+        // We expect the full sync cycle to be repeated when the second discovery announcement
+        // event is received. This proves that our reset logic is successfully clearing the
+        // `completed_sync_sessions` map and allowing a second sync session.
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_a.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, Some(test_topic.to_owned()));
+        assert_eq!(peer, peer_b);
+
+        // Receive `SyncHandshakeSuccess`.
+        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
+            engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncMessage`.
+        let Some(ToEngineActor::SyncMessage {
+            topic: _,
+            header: _,
+            payload: _,
+            delivered_from: _,
+        }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncMessage on engine actor receiver for peer a")
+        };
+
+        // Receive `SyncDone`.
+        let Some(ToEngineActor::SyncDone { topic: _, peer: _ }) = engine_actor_rx_a.recv().await
+        else {
+            panic!("expected to receive SyncDone on engine actor receiver for peer a")
+        };
     }
 
     #[tokio::test]
@@ -851,10 +999,7 @@ mod tests {
 
         // Trigger sync session initiation by peer A.
         sync_actor_tx_a
-            .send(ToSyncActor {
-                peer: peer_b,
-                topic: test_topic.clone(),
-            })
+            .send(ToSyncActor::new_discovery(peer_b, test_topic.clone()))
             .await
             .unwrap();
 

@@ -167,6 +167,20 @@ where
             .collect()
     }
 
+    /// Moves all gossip topics which were previously joined into the set of pending joins.
+    ///
+    /// This is useful for rejoining gossip topic overlays after an extended loss of network
+    /// connectivity. One important consideration is that the ready receiver is immediately
+    /// dropped, meaning that the application layer is never made aware when the topic has been
+    /// rejoined.
+    pub async fn move_joined_to_pending(&mut self) {
+        let mut gossip_joined = self.gossip_joined.write().await;
+        for topic in gossip_joined.drain() {
+            let (ready_tx, _ready_rx) = oneshot::channel();
+            self.gossip_pending.insert(topic, ready_tx);
+        }
+    }
+
     /// Re-attempts joining pending gossip overlays for topic id's we haven't succeeded joining yet
     /// (for example because we lacked knowledge of other peers also being interested in them).
     ///
@@ -281,7 +295,7 @@ where
             for (topic, _) in self.subscribed.values() {
                 if their_topic_ids.contains(&topic.id()) {
                     found_common_topic = true;
-                    let peer_topic = ToSyncActor::new(peer, topic.clone());
+                    let peer_topic = ToSyncActor::new_discovery(peer, topic.clone());
                     sync_actor_tx.send(peer_topic).await?
                 }
             }
