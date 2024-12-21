@@ -113,6 +113,19 @@ where
     }
 }
 
+// Bidirectional log sync protocol.
+//
+// Both peers send and receive data during the same session.
+//
+// [ Initiator ]        [ Acceptor ]
+// -------------        ------------
+//       have ->        -> have
+//       data <-        <- data
+//       done <-        <- done
+//       have <-        <- have
+//       data ->        -> data
+//       done ->        -> done
+//
 #[async_trait]
 impl<'a, T, TM, L, E, S> SyncProtocol<T, 'a> for LogSyncProtocol<TM, L, E, S>
 where
@@ -134,36 +147,14 @@ where
         mut app_tx: Box<&'a mut (dyn Sink<FromSync<T>, Error = SyncError> + Send + Unpin)>,
     ) -> Result<(), SyncError> {
         let mut sync_done_received = false;
+        let mut sync_done_sent = false;
 
         let mut sink = into_cbor_sink(tx);
         let mut stream = into_cbor_stream(rx);
 
-        // Get the log ids which are associated with this topic query.
-        let Some(logs) = self.topic_map.get(&topic_query).await else {
-            return Err(SyncError::Critical(format!(
-                "unknown {topic_query:?} topic query"
-            )));
-        };
-
-        // Get local log heights for all authors who have published under the requested log ids.
-        let mut local_log_heights = Vec::new();
-        for (public_key, log_ids) in logs {
-            let mut log_heights = Vec::new();
-            for log_id in log_ids {
-                let latest = self
-                    .store
-                    .latest_operation(&public_key, &log_id)
-                    .await
-                    .map_err(|err| {
-                        SyncError::Critical(format!("can't retrieve log heights from store, {err}"))
-                    })?;
-
-                if let Some((header, _)) = latest {
-                    log_heights.push((log_id.clone(), header.seq_num));
-                };
-            }
-            local_log_heights.push((public_key, log_heights));
-        }
+        // Retrieve the local log heights for all logs matching the topic query.
+        let local_log_heights =
+            local_log_heights(&self.store, &self.topic_map, &topic_query).await?;
 
         // Send our `Have` message to the remote peer.
         sink.send(Message::<T, L>::Have(
@@ -172,22 +163,16 @@ where
         ))
         .await?;
 
-        // As we initiated this sync session we are done after sending the `Have` message.
-        sink.send(Message::Done).await?;
-
         // Announce the topic query of the sync session to the app layer.
-        app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
+        app_tx
+            .send(FromSync::HandshakeSuccess(topic_query.clone()))
+            .await?;
 
         // Consume messages arriving on the receive stream.
         while let Some(result) = stream.next().await {
-            let message: Message<L> = result?;
+            let message: Message<T, L> = result?;
 
             match message {
-                Message::Have(_, _) => {
-                    return Err(SyncError::UnexpectedBehaviour(
-                        "unexpected \"have\" message received".to_string(),
-                    ))
-                }
                 Message::Data(header, payload) => {
                     // Forward data received from the remote to the app layer.
                     app_tx.send(FromSync::Data { header, payload }).await?;
@@ -195,9 +180,44 @@ where
                 Message::Done => {
                     sync_done_received = true;
                 }
+                Message::Have(remote_topic_query, remote_log_heights) => {
+                    if !sync_done_received {
+                        return Err(SyncError::UnexpectedBehaviour(
+                            "unexpected \"have\" message received".to_string(),
+                        ));
+                    }
+
+                    // Topic queries must match.
+                    if remote_topic_query != topic_query {
+                        return Err(SyncError::UnexpectedBehaviour(format!(
+                            "incompatible topic query {topic_query:?} requested from remote peer"
+                        )));
+                    }
+
+                    // Get the log ids which are associated with this topic query.
+                    let Some(logs) = self.topic_map.get(&topic_query).await else {
+                        return Err(SyncError::UnexpectedBehaviour(format!(
+                            "unsupported topic query {topic_query:?} requested from remote peer"
+                        )));
+                    };
+
+                    let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
+                        remote_log_heights.clone().into_iter().collect();
+
+                    // Retrieve and send all messages needed by the remote peer.
+                    let messages: Vec<Message<T, L>> =
+                        messages_needed_by_remote(&self.store, &logs, remote_log_heights_map)
+                            .await?;
+                    sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
+                        .await?;
+
+                    // We are done once we're sent all needed messages.
+                    sink.send(Message::Done).await?;
+                    sync_done_sent = true;
+                }
             };
 
-            if sync_done_received {
+            if sync_done_received && sync_done_sent {
                 break;
             }
         }
@@ -223,7 +243,7 @@ where
 
         while let Some(result) = stream.next().await {
             let message: Message<T, L> = result?;
-            match &message {
+            match message {
                 Message::Have(topic_query, remote_log_heights) => {
                     // Signal that the "handshake" phase of this protocol is complete as we
                     // received the topic query.
@@ -232,7 +252,7 @@ where
                         .await?;
 
                     // Get the log ids which are associated with this topic query.
-                    let Some(logs) = self.topic_map.get(topic_query).await else {
+                    let Some(logs) = self.topic_map.get(&topic_query).await else {
                         return Err(SyncError::UnexpectedBehaviour(format!(
                             "unsupported topic query {topic_query:?} requested from remote peer"
                         )));
@@ -241,70 +261,32 @@ where
                     let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
                         remote_log_heights.clone().into_iter().collect();
 
-                    // Now that the topic query has been translated into a collection of logs we want to
-                    // compare our own local log heights with what the remote sent for this topic query.
-                    //
-                    // If our logs are more advanced for any log we should send the missing
-                    // entries.
-                    for (public_key, log_ids) in logs {
-                        for log_id in log_ids {
-                            // For all logs in this topic query scope get the local height.
-                            let latest_operation = self
-                                .store
-                                .latest_operation(&public_key, &log_id)
-                                .await
-                                .map_err(|err| {
-                                    SyncError::Critical(format!(
-                                        "can't retreive log heights from store, {err}"
-                                    ))
-                                })?;
-
-                            let log_height = match latest_operation {
-                                Some((header, _)) => header.seq_num,
-                                // If we don't have this log then continue onto the next without
-                                // sending any messages.
-                                None => continue,
-                            };
-
-                            // Calculate from which seq num in the log the remote needs operations.
-                            let remote_needs_from = match remote_log_heights_map.get(&public_key) {
-                                Some(log_heights) => {
-                                    match log_heights.iter().find(|(id, _)| *id == log_id) {
-                                        // The log is known by the remote, take their log height
-                                        // and plus one.
-                                        Some((_, log_height)) => log_height + 1,
-                                        // The log is not known, they need from seq num 0
-                                        None => 0,
-                                    }
-                                }
-                                // The author is not known, they need from seq num 0.
-                                None => 0,
-                            };
-
-                            // If we have operations the remote needs then send them now.
-                            if remote_needs_from <= log_height {
-                                let messages: Vec<Message<T, L>> = remote_needs(
-                                    &self.store,
-                                    &log_id,
-                                    &public_key,
-                                    remote_needs_from,
-                                )
-                                .await?;
-                                sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
-                                    .await?;
-                            };
-                        }
-                    }
+                    // Retrieve and send all messages needed by the remote peer.
+                    let messages: Vec<Message<T, L>> =
+                        messages_needed_by_remote(&self.store, &logs, remote_log_heights_map)
+                            .await?;
+                    sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
+                        .await?;
 
                     // As we have processed the remotes `Have` message then we are "done" from
                     // this end.
                     sink.send(Message::Done).await?;
                     sync_done_sent = true;
+
+                    // Retrieve the local log heights for all logs matching the topic query.
+                    let local_log_heights =
+                        local_log_heights(&self.store, &self.topic_map, &topic_query).await?;
+
+                    // Send our `Have` message to the remote peer.
+                    sink.send(Message::<T, L>::Have(
+                        topic_query.clone(),
+                        local_log_heights.clone(),
+                    ))
+                    .await?;
                 }
-                Message::Data(_, _) => {
-                    return Err(SyncError::UnexpectedBehaviour(
-                        "unexpected \"data\" message received".to_string(),
-                    ));
+                Message::Data(header, payload) => {
+                    // Forward data received from the remote to the app layer.
+                    app_tx.send(FromSync::Data { header, payload }).await?;
                 }
                 Message::Done => {
                     sync_done_received = true;
@@ -324,8 +306,48 @@ where
     }
 }
 
-/// Helper method for getting only the operations a peer needs from a log and composing them into
-/// the expected message format.
+/// Return the log heights and public keys for all authors who have published under log ids
+/// which match the given topic query.
+async fn local_log_heights<T, L, E>(
+    store: &impl LogStore<L, E>,
+    topic_map: &impl TopicMap<T, Logs<L>>,
+    topic_query: &T,
+) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, SyncError>
+where
+    T: TopicQuery,
+    L: LogId,
+{
+    // Get the log ids which are associated with this topic query.
+    let Some(logs) = topic_map.get(&topic_query).await else {
+        return Err(SyncError::Critical(format!(
+            "unknown {topic_query:?} topic query"
+        )));
+    };
+
+    // Get local log heights for all authors who have published under the requested log ids.
+    let mut local_log_heights = Vec::new();
+    for (public_key, log_ids) in logs {
+        let mut log_heights = Vec::new();
+        for log_id in log_ids {
+            let latest = store
+                .latest_operation(&public_key, &log_id)
+                .await
+                .map_err(|err| {
+                    SyncError::Critical(format!("can't retrieve log heights from store, {err}"))
+                })?;
+
+            if let Some((header, _)) = latest {
+                log_heights.push((log_id.clone(), header.seq_num));
+            };
+        }
+        local_log_heights.push((public_key, log_heights));
+    }
+
+    Ok(local_log_heights)
+}
+
+/// Return all messages needed by a remote peer for the given log id and format them as data
+/// messages for transport over the wire.
 async fn remote_needs<T, L, E>(
     store: &impl LogStore<L, E>,
     log_id: &L,
@@ -347,6 +369,69 @@ where
         .collect();
 
     Ok(messages)
+}
+
+/// Return all messages needed by a remote peer and format them as data messages for transport over
+/// the wire.
+async fn messages_needed_by_remote<T, L, E>(
+    store: &impl LogStore<L, E>,
+    logs: &Logs<L>,
+    remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
+) -> Result<Vec<Message<T, L>>, SyncError>
+where
+    L: LogId,
+    E: Extensions + Send + Sync,
+{
+    // Now that the topic query has been translated into a collection of logs we want to
+    // compare our own local log heights with what the remote sent for this topic query.
+    //
+    // If our logs are more advanced for any log we should collect the entries for sending.
+    let mut messages_for_remote = Vec::new();
+
+    for (public_key, log_ids) in logs {
+        for log_id in log_ids {
+            // For all logs in this topic query scope get the local height.
+            let latest_operation =
+                store
+                    .latest_operation(&public_key, &log_id)
+                    .await
+                    .map_err(|err| {
+                        SyncError::Critical(format!("can't retreive log heights from store, {err}"))
+                    })?;
+
+            let log_height = match latest_operation {
+                Some((header, _)) => header.seq_num,
+                // If we don't have this log then continue onto the next without
+                // sending any messages.
+                None => continue,
+            };
+
+            // Calculate from which seq num in the log the remote needs operations.
+            let remote_needs_from = match remote_log_heights_map.get(&public_key) {
+                Some(log_heights) => {
+                    match log_heights.iter().find(|(id, _)| *id == *log_id) {
+                        // The log is known by the remote, take their log height
+                        // and plus one.
+                        Some((_, log_height)) => log_height + 1,
+                        // The log is not known, they need from seq num 0
+                        None => 0,
+                    }
+                }
+                // The author is not known, they need from seq num 0.
+                None => 0,
+            };
+
+            if remote_needs_from <= log_height {
+                let messages: Vec<Message<T, L>> =
+                    remote_needs(store, &log_id, &public_key, remote_needs_from).await?;
+                for message in messages {
+                    messages_for_remote.push(message);
+                }
+            };
+        }
+    }
+
+    Ok(messages_for_remote)
 }
 
 #[cfg(test)]
@@ -498,7 +583,11 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        assert_message_bytes(peer_b_read, vec![Message::Done]).await;
+        assert_message_bytes(
+            peer_b_read,
+            vec![Message::Done, Message::Have(topic_query.clone(), vec![])],
+        )
+        .await;
 
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
@@ -507,7 +596,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_no_operations_open() {
+    async fn sync_no_operations_initiate() {
         let topic_query = LogHeightTopic::new("messages");
         let logs = HashMap::new();
         let store = MemoryStore::<u64>::new();
@@ -521,10 +610,17 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let message_bytes = vec![Message::<String>::Done.to_bytes()].concat();
+        let messages = vec![
+            Message::Done,
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
+        ];
+        let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
+            acc.extend(message.to_bytes());
+            acc
+        });
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
-        // Open a sync session on peer a (which consumes the above messages)
+        // Initiate a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic_query, logs);
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
@@ -622,6 +718,13 @@ mod tests {
             Message::Data(header_bytes_1, Some(body.to_bytes())),
             Message::Data(header_bytes_2, Some(body.to_bytes())),
             Message::Done,
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
+            /*
+            Message::Have(
+                topic_query.clone(),
+                vec![(private_key.public_key(), vec![(log_id.to_string(), 2)])],
+            ),
+            */
         ];
         assert_message_bytes(peer_b_read, messages).await;
 
@@ -632,7 +735,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_operations_open() {
+    async fn sync_operations_initiate() {
         let private_key = PrivateKey::new();
         let log_id = 0;
         let topic_query = LogHeightTopic::new("messages");
@@ -657,11 +760,12 @@ mod tests {
         let (_, _, header_bytes_2) = create_operation(&private_key, &body, 2, 200, Some(hash_1));
 
         // Write some message into peer_b's send buffer
-        let messages: Vec<Message<String>> = vec![
+        let messages = vec![
             Message::Data(header_bytes_0.clone(), Some(body.to_bytes())),
             Message::Data(header_bytes_1.clone(), Some(body.to_bytes())),
             Message::Data(header_bytes_2.clone(), Some(body.to_bytes())),
             Message::Done,
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
         ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
@@ -669,7 +773,7 @@ mod tests {
         });
         peer_b_write.write_all(&message_bytes[..]).await.unwrap();
 
-        // Open a sync session on peer a (which consumes the above messages)
+        // Initiate a sync session on peer a (which consumes the above messages)
         let mut topic_map = LogHeightTopicMap::new();
         topic_map.insert(&topic_query, logs);
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
