@@ -1,0 +1,10 @@
+[package]
+name = "p2panda-groups"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "2.0.9"
+
+[lints]
+workspace = true
