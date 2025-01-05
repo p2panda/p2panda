@@ -875,4 +875,46 @@ mod tests {
         assert_eq!(log[1].1, None);
         assert_eq!(log[2].1, Some(body_2));
     }
+
+    #[tokio::test]
+    async fn tolerate_forks() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+
+        // We create a "forked" log by appending the operations b and c to the same predecessor a.
+        //
+        //     a
+        //     |\
+        //     b c
+
+        let log_id = 0;
+
+        let body_a = Body::new(b"a");
+        let body_b = Body::new(b"b");
+        let body_c = Body::new(b"c");
+
+        let (hash_a, header_a, header_bytes_a) =
+            create_operation(&private_key, &body_a, 0, 0, None);
+        let (hash_b, header_b, header_bytes_b) =
+            create_operation(&private_key, &body_b, 1, 100, Some(hash_a));
+        let (hash_c, header_c, header_bytes_c) =
+            create_operation(&private_key, &body_c, 2, 200, Some(hash_a));
+
+        store
+            .insert_operation(hash_a, &header_a, Some(&body_a), &header_bytes_a, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_b, &header_b, Some(&body_b), &header_bytes_b, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_c, &header_c, Some(&body_c), &header_bytes_c, &log_id)
+            .await
+            .expect("no errors");
+
+        // There is one log and 3 operations.
+        assert_eq!(store.read_store().logs.len(), 1);
+        assert_eq!(store.read_store().operations.len(), 3);
+    }
 }
