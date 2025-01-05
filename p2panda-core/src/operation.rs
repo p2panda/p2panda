@@ -745,4 +745,82 @@ mod tests {
         assert_eq!(header.hash(), log_id.0);
         assert_eq!(extensions.expires.0, expiry.0);
     }
+
+    #[test]
+    fn tolerate_forks() {
+        let private_key = PrivateKey::new();
+
+        // We create a "forked" log by appending the operations b and c to the same predecessor a.
+        //
+        //     a
+        //     |\
+        //     b c
+
+        let body_a = Body::new(b"a");
+        let mut header_a = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body_a.size(),
+            payload_hash: Some(body_a.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: None,
+        };
+        header_a.sign(&private_key);
+        let operation_a = Operation {
+            hash: header_a.hash(),
+            header: header_a,
+            body: Some(body_a),
+        };
+
+        let body_b = Body::new(b"b");
+        let mut header_b = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body_b.size(),
+            payload_hash: Some(body_b.hash()),
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(operation_a.hash),
+            previous: vec![],
+            extensions: None,
+        };
+        header_b.sign(&private_key);
+        let operation_b = Operation {
+            hash: header_b.hash(),
+            header: header_b,
+            body: Some(body_b),
+        };
+
+        let body_c = Body::new(b"c");
+        let mut header_c = Header::<()> {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body_c.size(),
+            payload_hash: Some(body_c.hash()),
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(operation_a.hash),
+            previous: vec![],
+            extensions: None,
+        };
+        header_c.sign(&private_key);
+        let operation_c = Operation {
+            hash: header_c.hash(),
+            header: header_c,
+            body: Some(body_c),
+        };
+
+        // All branches of the forked log are considered valid.
+        assert!(validate_operation(&operation_a).is_ok());
+        assert!(validate_operation(&operation_b).is_ok());
+        assert!(validate_operation(&operation_c).is_ok());
+        assert!(validate_backlink(&operation_a.header, &operation_b.header).is_ok());
+        assert!(validate_backlink(&operation_a.header, &operation_c.header).is_ok());
+    }
 }
