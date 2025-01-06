@@ -41,7 +41,7 @@ type Logs<T> = HashMap<PublicKey, Vec<T>>;
 ///
 /// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
 /// the scope for a particular session should be identified. `LogSyncProtocol` maps a generic
-/// `TopicQuery` to a set of logs, users provide an implementation of the `TopicLogMap` trait in
+/// `TopicQuery` to a set of logs; users provide an implementation of the `TopicLogMap` trait in
 /// order to define how this mapping occurs.
 ///
 /// Since `TopicLogMap` is generic we can use the same mapping across different sync implementations
@@ -308,7 +308,7 @@ where
 /// which match the given topic query.
 async fn local_log_heights<T, L, E>(
     store: &impl LogStore<L, E>,
-    topic_map: &impl TopicMap<T, Logs<L>>,
+    topic_map: &impl TopicLogMap<T, L>,
     topic_query: &T,
 ) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, SyncError>
 where
