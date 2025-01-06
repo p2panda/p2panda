@@ -211,7 +211,7 @@ where
                     sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
                         .await?;
 
-                    // We are done once we're sent all needed messages.
+                    // Signal to the remote peer that we have finished sending data.
                     sink.send(Message::Done).await?;
                     sync_done_sent = true;
                 }
@@ -268,8 +268,7 @@ where
                     sink.send_all(&mut stream::iter(messages.into_iter().map(Ok)))
                         .await?;
 
-                    // As we have processed the remotes `Have` message then we are "done" from
-                    // this end.
+                    // Signal to the remote peer that we have finished sending data.
                     sink.send(Message::Done).await?;
                     sync_done_sent = true;
 
@@ -318,7 +317,7 @@ where
     L: LogId,
 {
     // Get the log ids which are associated with this topic query.
-    let Some(logs) = topic_map.get(&topic_query).await else {
+    let Some(logs) = topic_map.get(topic_query).await else {
         return Err(SyncError::Critical(format!(
             "unknown {topic_query:?} topic query"
         )));
@@ -393,7 +392,7 @@ where
             // For all logs in this topic query scope get the local height.
             let latest_operation =
                 store
-                    .latest_operation(&public_key, &log_id)
+                    .latest_operation(public_key, log_id)
                     .await
                     .map_err(|err| {
                         SyncError::Critical(format!("can't retreive log heights from store, {err}"))
@@ -407,7 +406,7 @@ where
             };
 
             // Calculate from which seq num in the log the remote needs operations.
-            let remote_needs_from = match remote_log_heights_map.get(&public_key) {
+            let remote_needs_from = match remote_log_heights_map.get(public_key) {
                 Some(log_heights) => {
                     match log_heights.iter().find(|(id, _)| *id == *log_id) {
                         // The log is known by the remote, take their log height
@@ -423,7 +422,7 @@ where
 
             if remote_needs_from <= log_height {
                 let messages: Vec<Message<T, L>> =
-                    remote_needs(store, &log_id, &public_key, remote_needs_from).await?;
+                    remote_needs(store, log_id, public_key, remote_needs_from).await?;
                 for message in messages {
                     messages_for_remote.push(message);
                 }
@@ -718,13 +717,10 @@ mod tests {
             Message::Data(header_bytes_1, Some(body.to_bytes())),
             Message::Data(header_bytes_2, Some(body.to_bytes())),
             Message::Done,
-            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
-            /*
             Message::Have(
                 topic_query.clone(),
-                vec![(private_key.public_key(), vec![(log_id.to_string(), 2)])],
+                vec![(private_key.public_key(), vec![("0".to_string(), 2)])],
             ),
-            */
         ];
         assert_message_bytes(peer_b_read, messages).await;
 
