@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Efficient sync protocol for append-only log data types.
+//! Efficient bidirectional sync protocol for append-only log data types.
 //!
 //! This implementation is generic over the actual data type implementation, as long as it follows
 //! the form of a numbered, linked list it will be compatible for sync. p2panda provides an own log
@@ -8,13 +8,12 @@
 //!
 //! The protocol checks the current local "log heights", that is the index of the latest known
 //! entry in each log, of the "initiating" peer and sends them in form of a "Have" message to the
-//! remote one. The "accepting", remote peer matches the given log heights with the locally present
+//! remote peer. The "accepting" remote peer matches the given log heights with the locally present
 //! ones, calculates the delta of missing entries and sends them to the initiating peer as part of
-//! "Data" messages.
-//!
-//! In this implementation the "accepting" peer will never receive any new data from the
-//! "initiating" counter-part. Usually this would be handled in a "reverse" sync session which
-//! might run concurrently.
+//! "Data" messages. The accepting peer then sends a "Done" message to signal that data
+//! transmission is complete. The protocol exchange is then repeated with the roles reversed: the
+//! accepting peer sends their "Have" message and the initiating peer responds with the required
+//! "Data" messages, followed by a final "Done" message.
 //!
 //! To find out which logs to send matching the given "topic query" a `TopicLogMap` is provided. This
 //! interface aids the sync protocol in deciding which logs to transfer for each given topic.
