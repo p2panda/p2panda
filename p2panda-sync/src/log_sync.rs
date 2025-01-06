@@ -370,8 +370,8 @@ where
     Ok(messages)
 }
 
-/// Return all messages needed by a remote peer and format them as data messages for transport over
-/// the wire.
+/// Compare the local log heights with the remote log heights for all given logs and return all
+/// messages needed by the remote peer.
 async fn messages_needed_by_remote<T, L, E>(
     store: &impl LogStore<L, E>,
     logs: &Logs<L>,
