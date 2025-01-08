@@ -340,7 +340,7 @@ impl From<Vec<u8>> for Body {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum OperationError {
     #[error("operation version {0} is not supported, needs to be <= {1}")]
     UnsupportedVersion(u64, u64),

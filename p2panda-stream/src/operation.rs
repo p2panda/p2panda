@@ -122,7 +122,7 @@ pub enum IngestResult<E> {
 }
 
 /// Errors which can occur due to invalid operations or critical storage failures.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum IngestError {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
     /// the p2panda specification.
