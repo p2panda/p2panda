@@ -524,7 +524,7 @@ mod tests {
 
     async fn assert_message_bytes(
         mut rx: ReadHalf<DuplexStream>,
-        messages: Vec<Message<LogHeightTopic>>,
+        messages: Vec<Message<LogHeightTopic, u8>>,
     ) {
         let mut buf = Vec::new();
         rx.read_to_end(&mut buf).await.unwrap();
@@ -718,7 +718,7 @@ mod tests {
             Message::Done,
             Message::Have(
                 topic_query.clone(),
-                vec![(private_key.public_key(), vec![("0".to_string(), 2)])],
+                vec![(private_key.public_key(), vec![(0, 2)])],
             ),
         ];
         assert_message_bytes(peer_b_read, messages).await;
