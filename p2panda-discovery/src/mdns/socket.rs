@@ -9,7 +9,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 use tokio::net::UdpSocket;
 use tracing::error;
 
-const MDNS_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
+pub const MDNS_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
 
 pub fn socket_v4_unbound() -> Result<UdpSocket> {
