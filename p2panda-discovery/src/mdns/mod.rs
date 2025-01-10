@@ -5,19 +5,23 @@ mod dns;
 mod socket;
 
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Result;
 use flume::Sender;
-use futures_lite::StreamExt;
+use futures_lite::{FutureExt, StreamExt};
 use hickory_proto::rr::Name;
 use iroh_base::base32;
 use iroh_net::NodeAddr;
+use netwatch::netmon::{CallbackToken, Monitor};
+use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::task::AbortOnDropHandle;
+use tracing::debug;
 
 use crate::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
-use crate::mdns::socket::{send, socket_v4};
+use crate::mdns::socket::{send, socket_v4, MDNS_IPV4};
 use crate::{BoxedStream, Discovery, DiscoveryEvent};
 
 const MDNS_PROVENANCE: &str = "mdns";
@@ -39,6 +43,24 @@ pub struct LocalDiscovery {
     tx: Sender<Message>,
 }
 
+/// Create a new network monitor and subscribe to major interface changes.
+async fn network_monitor() -> Result<(Monitor, CallbackToken, Receiver<bool>)> {
+    let network_monitor = Monitor::new().await?;
+    let (interface_change_tx, interface_change_rx) = mpsc::channel(8);
+    let token = network_monitor
+        .subscribe(move |is_major| {
+            debug!("detected major network interface change");
+            let interface_change_tx = interface_change_tx.clone();
+            async move {
+                interface_change_tx.send(is_major).await.ok();
+            }
+            .boxed()
+        })
+        .await?;
+
+    Ok((network_monitor, token, interface_change_rx))
+}
+
 impl LocalDiscovery {
     pub fn new() -> Result<Self> {
         let (tx, rx) = flume::bounded(64);
@@ -49,6 +71,29 @@ impl LocalDiscovery {
         let mut my_node_addr: Option<NodeAddr> = None;
 
         let handle = tokio::task::spawn(async move {
+            // Instantiate a network monitor.
+            let (network_monitor, token, mut interface_change_rx) =
+                network_monitor().await.expect("start network monitor");
+
+            // Attempt to join multicast on the socket. If this fails, we wait for a major network
+            // interface change and try again.
+            while socket
+                .join_multicast_v4(MDNS_IPV4, Ipv4Addr::UNSPECIFIED)
+                .is_err()
+            {
+                debug!("failed to join ipv4 multicast for mdns discovery; waiting for major network interface change");
+                if let Some(true) = interface_change_rx.recv().await {
+                    debug!("detected major network interface change");
+                }
+            }
+
+            // Clean-up the network monitor.
+            network_monitor
+                .unsubscribe(token)
+                .await
+                .expect("unsubscribe from network interface changes");
+            drop(interface_change_rx);
+
             let mut interval = tokio::time::interval(MDNS_QUERY_INTERVAL);
             let mut buf = [0; 1472];
 
