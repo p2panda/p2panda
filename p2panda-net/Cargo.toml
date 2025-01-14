@@ -27,10 +27,10 @@ async-trait = "0.1.82"
 ciborium = "0.2.2"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
-iroh-base = "0.26.0"
-iroh-gossip = "0.26.0"
-iroh-net = "0.26.0"
-iroh-quinn = { version = "0.11.3", features = ["futures-io"] }
+iroh-base = "0.28.0"
+iroh-gossip = "0.28.1"
+iroh-net = "0.28.1"
+iroh-quinn = { version = "0.12.0", features = ["futures-io"] }
 netwatch = "0.2.0"
 p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
 p2panda-discovery = { path = "../p2panda-discovery", version = "0.1.0" }
