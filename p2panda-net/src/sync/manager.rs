@@ -289,7 +289,7 @@ where
 
         let connection = self
             .endpoint
-            .connect_by_node_id(peer, SYNC_CONNECTION_ALPN)
+            .connect(peer, SYNC_CONNECTION_ALPN)
             .await
             .map_err(|_| SyncAttemptError::Connection)?;
 

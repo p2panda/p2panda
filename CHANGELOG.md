@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
+- Update to iroh `v0.28.1` [#661](https://github.com/p2panda/p2panda/pull/661)
 - Make log sync protocol bidirectional [#657](https://github.com/p2panda/p2panda/pull/657)
 - `TopicMap` replaced by `TopicLogMap` [#650](https://github.com/p2panda/p2panda/pull/650)
 - Reset sync and gossip state on major network interface change [#648](https://github.com/p2panda/p2panda/pull/648)
