@@ -119,13 +119,15 @@
 //! // Generate an Ed25519 private key which will be used to authenticate your peer towards others.
 //! let private_key = PrivateKey::new();
 //!
+//! // TODO(glyph): Remove this...
 //! // Use mDNS to discover other peers on the local network.
-//! let mdns_discovery = LocalDiscovery::new()?;
+//! //let mdns_discovery = LocalDiscovery::new()?;
 //!
 //! // Establish the p2p network which will automatically connect you to any discovered peers.
 //! let network = NetworkBuilder::new(network_id)
 //!     .private_key(private_key)
-//!     .discovery(mdns_discovery)
+//!     .local_discovery()
+//!     //.discovery(mdns_discovery)
 //!     .build()
 //!     .await?;
 //!

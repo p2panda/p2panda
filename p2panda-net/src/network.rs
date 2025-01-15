@@ -127,12 +127,12 @@ use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_gossip::proto::Config as GossipConfig;
+use iroh_net::discovery::DiscoveryItem;
 use iroh_net::endpoint::TransportConfig;
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
@@ -181,7 +181,7 @@ pub enum RelayMode {
 pub struct NetworkBuilder<T> {
     bind_port: Option<u16>,
     direct_node_addresses: Vec<NodeAddr>,
-    discovery: DiscoveryMap,
+    local_discovery: bool,
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
@@ -202,7 +202,7 @@ where
         Self {
             bind_port: None,
             direct_node_addresses: Vec::new(),
-            discovery: DiscoveryMap::default(),
+            local_discovery: false,
             gossip_config: None,
             network_id,
             protocols: Default::default(),
@@ -286,9 +286,9 @@ where
         self
     }
 
-    /// Adds one or more discovery strategy, such as mDNS.
-    pub fn discovery(mut self, handler: impl Discovery + 'static) -> Self {
-        self.discovery.add(handler);
+    /// Enable local network discovery using mDNS.
+    pub fn local_discovery(mut self) -> Self {
+        self.local_discovery = true;
         self
     }
 
@@ -363,10 +363,16 @@ where
             let socket_address_v4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, bind_port);
             let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, bind_port + 1, 0, 0);
 
-            Endpoint::builder()
+            let mut endpoint = Endpoint::builder()
                 .transport_config(transport_config)
                 .secret_key(secret_key.clone())
-                .relay_mode(relay_mode)
+                .relay_mode(relay_mode);
+
+            if self.local_discovery {
+                endpoint = endpoint.discovery_local_network();
+            }
+
+            endpoint
                 .bind_addr_v4(socket_address_v4)
                 .bind_addr_v6(socket_address_v6)
                 .bind()
@@ -394,7 +400,7 @@ where
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
             relay: relay.clone(),
-            discovery: self.discovery,
+            //discovery: self.discovery,
             endpoint: endpoint.clone(),
             engine,
             gossip: gossip.clone(),
@@ -467,7 +473,7 @@ where
 struct NetworkInner<T> {
     cancel_token: CancellationToken,
     relay: Option<RelayNode>,
-    discovery: DiscoveryMap,
+    //discovery: DiscoveryMap,
     endpoint: Endpoint,
     engine: Engine<T>,
     #[allow(dead_code)]
@@ -500,6 +506,7 @@ where
 
         let mut join_set = JoinSet::<Result<()>>::new();
 
+        /*
         // Spawn a task that updates the gossip endpoints and discovery services.
         {
             let inner = self.clone();
@@ -533,6 +540,20 @@ where
             .discovery
             .subscribe(self.network_id)
             .expect("discovery map needs to be given");
+        */
+
+        // Subscribe to all discovery channels where we might find new peers.
+        let discovery_services = self.endpoint.discovery();
+
+        // @TODO(glyph): Clean up.
+        let mut discovery_stream = if let Some(discovery) = discovery_services {
+            discovery
+                .subscribe()
+                .expect("discovery map needs to be given")
+        } else {
+            let stream = tokio_stream::empty::<DiscoveryItem>();
+            stream.boxed()
+        };
 
         loop {
             tokio::select! {
@@ -562,19 +583,12 @@ where
                 },
                 // Handle discovered peers.
                 Some(event) = discovery_stream.next() => {
-                    match event {
-                        Ok(event) => {
-                            if let Err(err) = self.engine.add_peer(event.node_addr).await {
-                                error!("engine failed on add_peer: {err:?}");
-                                break;
-                            }
-                        }
-                        Err(err) => {
-                            error!("discovery service failed: {err:?}");
-                            break;
-                        },
+                    let node_addr = NodeAddr { node_id: event.node_id, info: event.addr_info };
+                    if let Err(err) = self.engine.add_peer(node_addr).await {
+                        error!("engine failed on add_peer: {err:?}");
+                        break;
                     }
-                },
+               },
                 // Handle task terminations and quit on panics.
                 res = join_set.join_next(), if !join_set.is_empty() => {
                     match res {

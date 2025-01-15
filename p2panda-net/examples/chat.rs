@@ -45,7 +45,8 @@ async fn main() -> Result<()> {
     let private_key = PrivateKey::new();
 
     let network = NetworkBuilder::new(network_id)
-        .discovery(LocalDiscovery::new()?)
+        .local_discovery()
+        //.discovery(LocalDiscovery::new()?)
         .build()
         .await?;
 
