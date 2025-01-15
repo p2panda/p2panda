@@ -9,7 +9,6 @@ use anyhow::Result;
 use bytes::Bytes;
 use futures_lite::StreamExt;
 use futures_util::Stream;
-use iroh_base::rpc::RpcError;
 use iroh_blobs::provider::AddProgress;
 use iroh_blobs::store::{ImportMode, ImportProgress, Store};
 use iroh_blobs::util::local_pool::LocalPoolHandle;
@@ -17,6 +16,7 @@ use iroh_blobs::util::progress::{AsyncChannelProgressSender, ProgressSender};
 use iroh_blobs::{BlobFormat, HashAndFormat};
 use p2panda_core::Hash;
 use serde::{Deserialize, Serialize};
+use serde_error::Error as RpcError;
 
 /// Status of a blob import attempt.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -34,8 +34,11 @@ pub(crate) async fn import_blob<S: Store>(
 
     let sender = sender.clone();
     pool_handle.spawn_detached(|| async move {
-        if let Err(e) = add_from_path(store, path, sender.clone()).await {
-            sender.send(AddProgress::Abort(e.into())).await.ok();
+        if let Err(err) = add_from_path(store, path, sender.clone()).await {
+            sender
+                .send(AddProgress::Abort(RpcError::new(&*err)))
+                .await
+                .ok();
         }
     });
 
@@ -67,8 +70,11 @@ where
 
     let sender = sender.clone();
     pool_handle.spawn_detached(|| async move {
-        if let Err(e) = add_from_stream(store, data, sender.clone()).await {
-            sender.send(AddProgress::Abort(e.into())).await.ok();
+        if let Err(err) = add_from_stream(store, data, sender.clone()).await {
+            sender
+                .send(AddProgress::Abort(RpcError::new(&*err)))
+                .await
+                .ok();
         }
     });
 
