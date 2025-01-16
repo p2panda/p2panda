@@ -126,7 +126,6 @@ use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
-use iroh_gossip::proto::Config as GossipConfig;
 use iroh_net::endpoint::TransportConfig;
 use iroh_net::key::SecretKey;
 use iroh_net::relay::{RelayMap, RelayNode};
@@ -141,7 +140,7 @@ use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error, error_span, warn, Instrument};
 
 use crate::addrs::DEFAULT_STUN_PORT;
-use crate::config::{Config, DEFAULT_BIND_PORT};
+use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};

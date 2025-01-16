@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Alternative configuration API which can be passed into `Network::from_config` constructor
-//! instead of using `NetworkBuilder`.
+//! Configuration for network nodes and gossip.
+//!
+//! `Config` offers an alternative configuration API which can be passed into `Network::from_config`
+//! constructor instead of using `NetworkBuilder`.
+//!
+//! `GossipConfig` allows configuration of swarm membership, gossip broadcast and maximum message
+//! size. It is passed into `Network::gossip`.
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{NetworkId, NodeAddress, RelayUrl};
+
+pub use iroh_gossip::proto::topic::Config as GossipConfig;
 
 /// Default port of a node socket.
 pub const DEFAULT_BIND_PORT: u16 = 2022;
