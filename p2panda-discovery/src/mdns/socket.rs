@@ -12,6 +12,12 @@ use tracing::error;
 const MDNS_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
 
+pub fn socket_v4_unbound() -> Result<UdpSocket> {
+    let socket =
+        Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).context("Socket::new")?;
+    UdpSocket::from_std(std::net::UdpSocket::from(socket)).context("from_std")
+}
+
 pub fn socket_v4() -> Result<UdpSocket> {
     let socket =
         Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).context("Socket::new")?;
@@ -23,12 +29,10 @@ pub fn socket_v4() -> Result<UdpSocket> {
     socket
         .bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, MDNS_PORT).into())
         .context("bind")?;
+    socket.join_multicast_v4(&MDNS_IPV4, &Ipv4Addr::UNSPECIFIED)?;
     socket
         .set_multicast_loop_v4(true)
         .context("set_multicast_loop_v4")?;
-    socket
-        .join_multicast_v4(&MDNS_IPV4, &Ipv4Addr::UNSPECIFIED)
-        .context("join_multicast_v4")?;
     socket
         .set_multicast_ttl_v4(16)
         .context("set_multicast_ttl_v4")?;

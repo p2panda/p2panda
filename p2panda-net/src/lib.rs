@@ -120,7 +120,7 @@
 //! let private_key = PrivateKey::new();
 //!
 //! // Use mDNS to discover other peers on the local network.
-//! let mdns_discovery = LocalDiscovery::new()?;
+//! let mdns_discovery = LocalDiscovery::new();
 //!
 //! // Establish the p2p network which will automatically connect you to any discovered peers.
 //! let network = NetworkBuilder::new(network_id)

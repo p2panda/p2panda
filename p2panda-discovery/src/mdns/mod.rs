@@ -10,18 +10,22 @@ use std::time::Duration;
 
 use anyhow::Result;
 use flume::Sender;
-use futures_lite::StreamExt;
+use futures_lite::{FutureExt, StreamExt};
 use hickory_proto::rr::Name;
 use iroh_base::base32;
 use iroh_net::NodeAddr;
+use netwatch::netmon::Monitor;
+use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::task::AbortOnDropHandle;
+use tracing::{debug, warn};
 
 use crate::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
-use crate::mdns::socket::{send, socket_v4};
+use crate::mdns::socket::{send, socket_v4, socket_v4_unbound};
 use crate::{BoxedStream, Discovery, DiscoveryEvent};
 
 const MDNS_PROVENANCE: &str = "mdns";
 const MDNS_QUERY_INTERVAL: Duration = Duration::from_millis(1000);
+const SOCKET_REBIND_INTERVAL: Duration = Duration::from_millis(5000);
 
 pub type ServiceName = Name;
 
@@ -39,23 +43,63 @@ pub struct LocalDiscovery {
     tx: Sender<Message>,
 }
 
+/// Create a new network monitor and subscribe to major interface changes.
+async fn network_monitor() -> Result<Receiver<bool>> {
+    let network_monitor = Monitor::new().await?;
+    let (interface_change_tx, interface_change_rx) = mpsc::channel(8);
+    let _token = network_monitor
+        .subscribe(move |is_major| {
+            debug!("detected major network interface change");
+            let interface_change_tx = interface_change_tx.clone();
+            async move {
+                interface_change_tx.send(is_major).await.ok();
+            }
+            .boxed()
+        })
+        .await?;
+
+    Ok(interface_change_rx)
+}
+
+impl Default for LocalDiscovery {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LocalDiscovery {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
         let (tx, rx) = flume::bounded(64);
 
-        let socket = socket_v4()?;
+        let mut socket_is_bound = false;
+        let mut socket = match socket_v4() {
+            Ok(socket) => {
+                socket_is_bound = true;
+                socket
+            }
+            Err(err) => {
+                warn!("failed to create udp socket for mdns discovery: {}", err);
+                socket_v4_unbound().expect("create udp socket")
+            }
+        };
 
         let mut subscribers: HashMap<ServiceName, Vec<SubscribeSender>> = HashMap::new();
         let mut my_node_addr: Option<NodeAddr> = None;
 
         let handle = tokio::task::spawn(async move {
+            let mut interface_change_rx = network_monitor().await.expect("start network monitor");
+            let mut socket_interval = tokio::time::interval(SOCKET_REBIND_INTERVAL);
             let mut interval = tokio::time::interval(MDNS_QUERY_INTERVAL);
             let mut buf = [0; 1472];
 
             loop {
                 tokio::select! {
                     biased;
-                    Ok(len) = socket.recv(&mut buf) => {
+                    Some(true) = interface_change_rx.recv() => {
+                        // Force a recreation of the socket on the next tick.
+                        socket_is_bound = false;
+                    }
+                    Ok(len) = socket.recv(&mut buf), if socket_is_bound => {
                         let Some(msg) = parse_message(&buf[..len]) else {
                             continue;
                         };
@@ -98,12 +142,12 @@ impl LocalDiscovery {
                             }
                         }
                     },
-                    _ = interval.tick() => {
+                    _ = interval.tick(), if socket_is_bound => {
                         for service_name in subscribers.keys() {
                             send(&socket, make_query(service_name)).await;
                         }
                     },
-                    Ok(msg) = rx.recv_async() => {
+                    Ok(msg) = rx.recv_async(), if socket_is_bound => {
                         match msg {
                             Message::Subscribe(service_name, subscribe_tx) => {
                                 if let Some(subscriber) = subscribers.get_mut(&service_name) {
@@ -117,15 +161,27 @@ impl LocalDiscovery {
                             }
                         }
                     },
+                    _ = socket_interval.tick() => {
+                        if !socket_is_bound {
+                            match socket_v4() {
+                                Ok(bound_socket) => {
+                                    socket = bound_socket;
+                                    debug!("bound udp socket for mdns discovery");
+                                    socket_is_bound = true;
+                                }
+                                Err(err) => warn!("failed to rebind socket: {}", err)
+                            }
+                        }
+                    }
                     else => break,
                 }
             }
         });
 
-        Ok(Self {
+        Self {
             handle: AbortOnDropHandle::new(handle),
             tx,
-        })
+        }
     }
 }
 
