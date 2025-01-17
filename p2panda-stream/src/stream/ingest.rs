@@ -316,18 +316,13 @@ mod tests {
 
         // Incoming operations in order: 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 (<-- first operation in log
         // comes last in).
-        let mut items: Vec<RawOperation> = {
-            let operations: Vec<RawOperation> = mock_stream().take(10).collect().await;
-            let first_operation = operations[0].clone();
-            let mut result = operations[1..10].to_vec();
-            result.push(first_operation);
-            result
-        };
+        let mut operations: Vec<RawOperation> = mock_stream().take(10).collect().await;
+        operations.rotate_left(1);
 
         tokio::spawn(async move {
             // Reverse operations and pop one after another from the back to ingest.
-            items.reverse();
-            while let Some(operation) = items.pop() {
+            operations.reverse();
+            while let Some(operation) = operations.pop() {
                 let _ = tx.send(operation).await;
 
                 // Waiting here is crucial to cause the bug: The polling logic will not receive a
