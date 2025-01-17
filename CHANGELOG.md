@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
+- Expose API for setting IPv4 and IPv6 IP and port [#663](https://github.com/p2panda/p2panda/pull/663)
 - Re-export gossip config from iroh-gossip [#662](https://github.com/p2panda/p2panda/pull/662)
 - Introduce offline-first capability for `LocalDiscovery` mDNS service [#660](https://github.com/p2panda/p2panda/pull/660)
 - Update to iroh `v0.28.1` [#661](https://github.com/p2panda/p2panda/pull/661)
