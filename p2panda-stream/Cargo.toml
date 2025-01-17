@@ -27,7 +27,7 @@ thiserror = "1.0.63"
 async-stream = "0.3.5"
 serde = { version = "1.0.215", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["rt", "macros"] }
-tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-stream = "0.1.17"
 
 [lints]
 workspace = true
