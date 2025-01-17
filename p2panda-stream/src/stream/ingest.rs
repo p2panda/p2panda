@@ -123,13 +123,13 @@ where
                             Some(IngestAttempt(header, body, header_bytes, 1))
                         }
                         Poll::Pending => {
-                            // If we're getting back to the buffer queue after an failed ingest
-                            // attempt, we should park here instead and allow the runtime to try
+                            // If we're getting back to the buffer queue after a failed ingest
+                            // attempt, we should "park" here instead and allow the runtime to try
                             // polling the stream again next time.
                             //
-                            // Otherwise we run into an loop where the runtime will never have the
-                            // chance again to take in new operations and we end up with exhausting
-                            // our re-attempt counter.
+                            // Otherwise we run into a loop where the runtime will never have the
+                            // chance again to take in new operations and we end up exhausting our
+                            // re-attempt counter for no reason.
                             if park_buffer {
                                 return Poll::Pending;
                             }
