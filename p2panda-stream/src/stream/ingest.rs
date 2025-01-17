@@ -106,6 +106,7 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut store = self.store.clone();
         let mut this = self.project();
+        let mut park_buffer = false;
 
         loop {
             // 1. Pull in the next item from the external stream or out-of-order buffer.
@@ -121,7 +122,19 @@ where
                         Poll::Ready(Some((header, body, header_bytes))) => {
                             Some(IngestAttempt(header, body, header_bytes, 1))
                         }
-                        Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
+                        Poll::Pending => {
+                            // If we're getting back to the buffer queue after an failed ingest
+                            // attempt, we should park here instead and allow the runtime to try
+                            // polling the stream again next time.
+                            //
+                            // Otherwise we run into an loop where the runtime will never have the
+                            // chance again to take in new operations and we end up with exhausting
+                            // our re-attempt counter.
+                            if park_buffer {
+                                return Poll::Pending;
+                            }
+                            ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
+                        }
                         Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
                             Poll::Ready(Some(attempt)) => Some(attempt),
                             // If there's no value coming from the buffer _and_ the external stream is
@@ -188,6 +201,9 @@ where
                     )) else {
                         break Poll::Ready(None);
                     };
+
+                    // In the next iteration we should prioritize the stream again.
+                    park_buffer = true;
 
                     continue;
                 }
@@ -314,10 +330,9 @@ mod tests {
             while let Some(operation) = items.pop() {
                 let _ = tx.send(operation).await;
 
-                // @NOTE(adz): Waiting here seems to be crucial to cause the bug, I assume it's
-                // because we give our ingest implementation more time to loop / iterate (and cause
-                // the bug).
-                time::sleep(Duration::from_millis(25)).await;
+                // Waiting here is crucial to cause the bug: The polling logic will not receive a
+                // new item directly from the stream but rather prioritize the buffer.
+                time::sleep(Duration::from_millis(10)).await;
             }
         });
 
@@ -329,7 +344,7 @@ mod tests {
                     Err(_) => None,
                 }
             })
-            .ingest(store, 128);
+            .ingest(store, 128); // out-of-order buffer is large enough
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
         assert_eq!(res.len(), items_num);
