@@ -7,6 +7,7 @@
 //!
 //! `GossipConfig` allows configuration of swarm membership, gossip broadcast and maximum message
 //! size. It is passed into `Network::gossip`.
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -27,8 +28,17 @@ pub const DEFAULT_NETWORK_ID: NetworkId = [
 /// Configuration parameters for the local network node.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
-    /// Bind port for the IPv4 socket. The IPv6 socket will be bound to `bind_port` + 1.
-    pub bind_port: u16,
+    /// Bind IP for the IPv4 socket.
+    pub bind_ip_v4: Ipv4Addr,
+
+    /// Bind port for the IPv4 socket.
+    pub bind_port_v4: u16,
+
+    /// Bind IP for the IPv6 socket.
+    pub bind_ip_v6: Ipv6Addr,
+
+    /// Bind port for the IPv6 socket.
+    pub bind_port_v6: u16,
 
     /// Node addresses of remote peers which are directly reachable (no STUN or relay required).
     /// These will be added to the address book.
@@ -49,7 +59,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            bind_port: DEFAULT_BIND_PORT,
+            bind_ip_v4: Ipv4Addr::UNSPECIFIED,
+            bind_port_v4: DEFAULT_BIND_PORT,
+            bind_ip_v6: Ipv6Addr::UNSPECIFIED,
+            bind_port_v6: DEFAULT_BIND_PORT + 1,
             direct_node_addresses: vec![],
             network_id: DEFAULT_NETWORK_ID,
             private_key: None,
