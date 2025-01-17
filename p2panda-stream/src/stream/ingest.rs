@@ -231,10 +231,15 @@ struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, usize);
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use futures_util::stream::iter;
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Operation, RawOperation};
     use p2panda_store::MemoryStore;
+    use tokio::sync::mpsc;
+    use tokio::time;
+    use tokio_stream::wrappers::ReceiverStream;
 
     use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
@@ -282,6 +287,49 @@ mod tests {
             // the buffer size at least as big as the sample size. Like this we can guarantee that
             // ingest (and this test) will be successful.
             .ingest(store, items_num);
+
+        let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
+        assert_eq!(res.len(), items_num);
+    }
+
+    #[tokio::test]
+    async fn exhaust_re_attempts_too_early_bug() {
+        let items_num = 10;
+        let store = MemoryStore::<StreamName, Extensions>::new();
+        let (tx, rx) = mpsc::channel::<RawOperation>(items_num);
+
+        // Incoming operations in order: 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 (<-- first operation in log
+        // comes last in).
+        let mut items: Vec<RawOperation> = {
+            let operations: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
+            let first_operation = operations[0].clone();
+            let mut result = operations[1..10].to_vec();
+            result.push(first_operation);
+            result
+        };
+
+        tokio::spawn(async move {
+            // Reverse operations and pop one after another from the back to ingest.
+            items.reverse();
+            while let Some(operation) = items.pop() {
+                let _ = tx.send(operation).await;
+
+                // @NOTE(adz): Waiting here seems to be crucial to cause the bug, I assume it's
+                // because we give our ingest implementation more time to loop / iterate (and cause
+                // the bug).
+                time::sleep(Duration::from_millis(25)).await;
+            }
+        });
+
+        let stream = ReceiverStream::new(rx)
+            .decode()
+            .filter_map(|item| async {
+                match item {
+                    Ok((header, body, header_bytes)) => Some((header, body, header_bytes)),
+                    Err(_) => None,
+                }
+            })
+            .ingest(store, 128);
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
         assert_eq!(res.len(), items_num);
