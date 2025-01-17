@@ -178,7 +178,10 @@ pub enum RelayMode {
 /// topic where they'll send and receive data.
 #[derive(Debug)]
 pub struct NetworkBuilder<T> {
-    bind_port: Option<u16>,
+    bind_ip_v4: Option<Ipv4Addr>,
+    bind_port_v4: Option<u16>,
+    bind_ip_v6: Option<Ipv6Addr>,
+    bind_port_v6: Option<u16>,
     direct_node_addresses: Vec<NodeAddr>,
     discovery: DiscoveryMap,
     gossip_config: Option<GossipConfig>,
@@ -199,7 +202,10 @@ where
     /// data.
     pub fn new(network_id: NetworkId) -> Self {
         Self {
-            bind_port: None,
+            bind_ip_v4: None,
+            bind_port_v4: None,
+            bind_ip_v6: None,
+            bind_port_v6: None,
             direct_node_addresses: Vec::new(),
             discovery: DiscoveryMap::default(),
             gossip_config: None,
@@ -213,7 +219,11 @@ where
 
     /// Returns a new instance of `NetworkBuilder` using the given configuration.
     pub fn from_config(config: Config) -> Self {
-        let mut network_builder = Self::new(config.network_id).bind_port(config.bind_port);
+        let mut network_builder = Self::new(config.network_id)
+            .bind_ip_v4(config.bind_ip_v4)
+            .bind_port_v4(config.bind_port_v4)
+            .bind_ip_v6(config.bind_ip_v6)
+            .bind_port_v6(config.bind_port_v6);
 
         for (public_key, addresses, relay_addr) in config.direct_node_addresses {
             network_builder = network_builder.direct_address(public_key, addresses, relay_addr)
@@ -227,11 +237,35 @@ where
         network_builder
     }
 
+    /// Sets or overwrites the local IP for IPv4 sockets.
+    ///
+    /// Default is 0.0.0.0 (`UNSPECIFIED`).
+    pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
+        self.bind_ip_v4.replace(ip);
+        self
+    }
+
     /// Sets or overwrites the local bind port for IPv4 sockets.
     ///
-    /// Note that IPv6 sockets are automatically bound to the specified port + 1.
-    pub fn bind_port(mut self, port: u16) -> Self {
-        self.bind_port.replace(port);
+    /// Default is 2022.
+    pub fn bind_port_v4(mut self, port: u16) -> Self {
+        self.bind_port_v4.replace(port);
+        self
+    }
+
+    /// Sets or overwrites the local IP for IPv6 sockets.
+    ///
+    /// Default is :: (`UNSPECIFIED`).
+    pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
+        self.bind_ip_v6.replace(ip);
+        self
+    }
+
+    /// Sets or overwrites the local bind port for IPv6 sockets.
+    ///
+    /// Default is 2023.
+    pub fn bind_port_v6(mut self, port: u16) -> Self {
+        self.bind_port_v6.replace(port);
         self
     }
 
@@ -356,11 +390,12 @@ where
                 ),
             };
 
-            // @TODO: Expose finer-grained config options. Right now we only provide the option of
-            // defining the IPv4 port; everything else is hard-coded.
-            let bind_port = self.bind_port.unwrap_or(DEFAULT_BIND_PORT);
-            let socket_address_v4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, bind_port);
-            let socket_address_v6 = SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, bind_port + 1, 0, 0);
+            let bind_ip_v4 = self.bind_ip_v4.unwrap_or(Ipv4Addr::UNSPECIFIED);
+            let bind_port_v4 = self.bind_port_v4.unwrap_or(DEFAULT_BIND_PORT);
+            let bind_ip_v6 = self.bind_ip_v6.unwrap_or(Ipv6Addr::UNSPECIFIED);
+            let bind_port_v6 = self.bind_port_v6.unwrap_or(DEFAULT_BIND_PORT + 1);
+            let socket_address_v4 = SocketAddrV4::new(bind_ip_v4, bind_port_v4);
+            let socket_address_v6 = SocketAddrV6::new(bind_ip_v6, bind_port_v6, 0, 0);
 
             Endpoint::builder()
                 .transport_config(transport_config)
@@ -991,6 +1026,7 @@ pub(crate) mod sync_protocols {
 #[cfg(test)]
 pub(crate) mod tests {
     use std::collections::HashMap;
+    use std::net::{Ipv4Addr, Ipv6Addr};
     use std::path::PathBuf;
     use std::time::Duration;
 
@@ -1071,7 +1107,10 @@ pub(crate) mod tests {
         let relay_address: RelayUrl = "https://example.net".parse().unwrap();
 
         let config = Config {
-            bind_port: 2024,
+            bind_ip_v4: Ipv4Addr::new(7, 7, 7, 7),
+            bind_port_v4: 2024,
+            bind_ip_v6: Ipv6Addr::new(8, 8, 8, 8, 8, 8, 8, 8),
+            bind_port_v6: 2025,
             network_id: [1; 32],
             private_key: Some(PathBuf::new().join("secret-key.txt")),
             direct_node_addresses: vec![(
@@ -1084,7 +1123,13 @@ pub(crate) mod tests {
 
         let builder = NetworkBuilder::<TestTopic>::from_config(config);
 
-        assert_eq!(builder.bind_port, Some(2024));
+        assert_eq!(builder.bind_ip_v4, Some(Ipv4Addr::new(7, 7, 7, 7)));
+        assert_eq!(builder.bind_port_v4, Some(2024));
+        assert_eq!(
+            builder.bind_ip_v6,
+            Some(Ipv6Addr::new(8, 8, 8, 8, 8, 8, 8, 8))
+        );
+        assert_eq!(builder.bind_port_v6, Some(2025));
         assert_eq!(builder.network_id, [1; 32]);
         assert!(builder.secret_key.is_none());
         assert_eq!(builder.direct_node_addresses.len(), 1);
