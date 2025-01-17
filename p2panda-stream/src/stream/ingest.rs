@@ -310,14 +310,14 @@ mod tests {
 
     #[tokio::test]
     async fn exhaust_re_attempts_too_early_bug() {
-        let items_num = 10;
+        // Related issue: https://github.com/p2panda/p2panda/issues/665
         let store = MemoryStore::<StreamName, Extensions>::new();
-        let (tx, rx) = mpsc::channel::<RawOperation>(items_num);
+        let (tx, rx) = mpsc::channel::<RawOperation>(10);
 
         // Incoming operations in order: 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 (<-- first operation in log
         // comes last in).
         let mut items: Vec<RawOperation> = {
-            let operations: Vec<RawOperation> = mock_stream().take(items_num).collect().await;
+            let operations: Vec<RawOperation> = mock_stream().take(10).collect().await;
             let first_operation = operations[0].clone();
             let mut result = operations[1..10].to_vec();
             result.push(first_operation);
@@ -347,6 +347,6 @@ mod tests {
             .ingest(store, 128); // out-of-order buffer is large enough
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
-        assert_eq!(res.len(), items_num);
+        assert_eq!(res.len(), 10);
     }
 }
