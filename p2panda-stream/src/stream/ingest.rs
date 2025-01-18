@@ -106,6 +106,7 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut store = self.store.clone();
         let mut this = self.project();
+        let mut park_buffer = false;
 
         loop {
             // 1. Pull in the next item from the external stream or out-of-order buffer.
@@ -121,7 +122,19 @@ where
                         Poll::Ready(Some((header, body, header_bytes))) => {
                             Some(IngestAttempt(header, body, header_bytes, 1))
                         }
-                        Poll::Pending => ready!(this.ooo_buffer_rx.as_mut().poll_next(cx)),
+                        Poll::Pending => {
+                            // If we're getting back to the buffer queue after a failed ingest
+                            // attempt, we should "park" here instead and allow the runtime to try
+                            // polling the stream again next time.
+                            //
+                            // Otherwise we run into a loop where the runtime will never have the
+                            // chance again to take in new operations and we end up exhausting our
+                            // re-attempt counter for no reason.
+                            if park_buffer {
+                                return Poll::Pending;
+                            }
+                            ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
+                        }
                         Poll::Ready(None) => match this.ooo_buffer_rx.as_mut().poll_next(cx) {
                             Poll::Ready(Some(attempt)) => Some(attempt),
                             // If there's no value coming from the buffer _and_ the external stream is
@@ -189,6 +202,9 @@ where
                         break Poll::Ready(None);
                     };
 
+                    // In the next iteration we should prioritize the stream again.
+                    park_buffer = true;
+
                     continue;
                 }
                 Ok(IngestResult::Complete(operation)) => {
@@ -231,10 +247,15 @@ struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, usize);
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use futures_util::stream::iter;
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Operation, RawOperation};
     use p2panda_store::MemoryStore;
+    use tokio::sync::mpsc;
+    use tokio::time;
+    use tokio_stream::wrappers::ReceiverStream;
 
     use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
@@ -285,5 +306,42 @@ mod tests {
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
         assert_eq!(res.len(), items_num);
+    }
+
+    #[tokio::test]
+    async fn exhaust_re_attempts_too_early_bug() {
+        // Related issue: https://github.com/p2panda/p2panda/issues/665
+        let store = MemoryStore::<StreamName, Extensions>::new();
+        let (tx, rx) = mpsc::channel::<RawOperation>(10);
+
+        // Incoming operations in order: 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 (<-- first operation in log
+        // comes last in).
+        let mut operations: Vec<RawOperation> = mock_stream().take(10).collect().await;
+        operations.rotate_left(1);
+
+        tokio::spawn(async move {
+            // Reverse operations and pop one after another from the back to ingest.
+            operations.reverse();
+            while let Some(operation) = operations.pop() {
+                let _ = tx.send(operation).await;
+
+                // Waiting here is crucial to cause the bug: The polling logic will not receive a
+                // new item directly from the stream but rather prioritize the buffer.
+                time::sleep(Duration::from_millis(10)).await;
+            }
+        });
+
+        let stream = ReceiverStream::new(rx)
+            .decode()
+            .filter_map(|item| async {
+                match item {
+                    Ok((header, body, header_bytes)) => Some((header, body, header_bytes)),
+                    Err(_) => None,
+                }
+            })
+            .ingest(store, 128); // out-of-order buffer is large enough
+
+        let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
+        assert_eq!(res.len(), 10);
     }
 }

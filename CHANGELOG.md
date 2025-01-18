@@ -20,6 +20,10 @@ Highlights are marked with a pancake 🥞
 - Reset sync and gossip state on major network interface change [#648](https://github.com/p2panda/p2panda/pull/648)
 - Remove `Default`, `Sync` and `Send` from `LogId` supertrait definition [#633](https://github.com/p2panda/p2panda/pull/633)
 
+### Fixed
+
+- Fix re-attempt logic for out-of-order buffer in `Ingest` stream [#666](https://github.com/p2panda/p2panda/pull/666)
+
 ## [0.1.0]
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
