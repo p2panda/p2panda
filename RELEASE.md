@@ -2,8 +2,6 @@
 
 _This example assumes we are publishing version `1.2.0`._
 
-_Requires `cargo-release` to be installed (`cargo install cargo-release`)_
-
 ## Checks and preparations
 
 1. Check that the CI has passed on the p2panda project's
@@ -22,22 +20,34 @@ _Requires `cargo-release` to be installed (`cargo install cargo-release`)_
    _Unreleased_ stuff. Follow the formatting given by previous entries.
 7. Remember to update the links to your release and the unreleased git log at
    the bottom of `CHANGELOG.md`.
-
-## Publish using [`cargo-release`](https://github.com/crate-ci/cargo-release)
-
-8. If a new crate was introduced make sure to add the following to it's `Cargo.toml`.
-
-```toml
-[package.metadata.release]
-publish = true
-```
-
-9. Commit any changes made so far during release with `git add .` and
+8. Commit any changes made so far during release with `git add .` and
    `git commit -m "Prepare for release v1.2.0"`.
-10. Run the `cargo-release` in dry-run mode `cargo-release release 1.2.0`. Check the output, make
-    sure everything looks correct and no errors.
-11. Run the `cargo-release` for real `cargo-release release 1.2.0 --execute`. This command
-    publishes all crates to crates.io.
+
+## Publishing
+
+Crates _must_ be published in the following order to account for
+intra-workspace dependencies:
+
+- `p2panda-core`
+- `p2panda-discovery`
+- `p2panda-store`
+- `p2panda-sync`
+- `p2panda-stream`
+- `p2panda-net`
+- `p2panda-blobs`
+
+10. Move into the directory of the crate you wish to publish, taking into
+    account the order listed above.
+11. Open the manifest (`Cargo.toml`) and update the version at the top.
+12. If the crate has dependencies on other `p2panda-` crates, make sure those
+    have already been published and update the `version = ...` field for each
+    dependency.
+13. Run `cargo publish --dry-run`. Check the output; ensure everything looks
+    correct and there are no errors.
+14. Run `cargo login` to ensure you're prepared to publish to `crates.io`.
+15. Run `cargo publish` to publish.
+16. Move on to the next crate you wish to publish, taking into account the
+    order listed above.
 
 ## Tagging and release
 
