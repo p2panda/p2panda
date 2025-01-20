@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-net"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = [
   "adz <x12@adz.garden>",
@@ -32,9 +32,9 @@ iroh-gossip = "0.28.1"
 iroh-net = "0.28.1"
 iroh-quinn = { version = "0.12.0", features = ["futures-io"] }
 netwatch = "0.2.0"
-p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
-p2panda-discovery = { path = "../p2panda-discovery", version = "0.1.0" }
-p2panda-sync = { path = "../p2panda-sync", version = "0.1.0", features = ["log-sync"] }
+p2panda-core = { path = "../p2panda-core", version = "0.2.0" }
+p2panda-discovery = { path = "../p2panda-discovery", version = "0.2.0" }
+p2panda-sync = { path = "../p2panda-sync", version = "0.2.0", features = ["log-sync"] }
 rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "1.0.63"
@@ -45,4 +45,4 @@ tracing = "0.1.40"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-p2panda-store = { path = "../p2panda-store", version = "0.1.0" }
+p2panda-store = { path = "../p2panda-store", version = "0.2.0" }
