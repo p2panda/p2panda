@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-store"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = [
   "adz <x12@adz.garden>",
@@ -20,7 +20,7 @@ default = ["memory"]
 memory = []
 
 [dependencies]
-p2panda-core = { path = "../p2panda-core", version = "0.1.0" }
+p2panda-core = { path = "../p2panda-core", version = "0.2.0" }
 trait-variant = "0.1.2"
 
 [dev-dependencies]
