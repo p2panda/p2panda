@@ -31,6 +31,3 @@ tokio-stream = "0.1.17"
 
 [lints]
 workspace = true
-
-[package.metadata.release]
-publish = true
