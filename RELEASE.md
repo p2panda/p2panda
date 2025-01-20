@@ -36,23 +36,39 @@ intra-workspace dependencies:
 - `p2panda-net`
 - `p2panda-blobs`
 
-10. Move into the directory of the crate you wish to publish, taking into
+9. Move into the directory of the crate you wish to publish, taking into
     account the order listed above.
-11. Open the manifest (`Cargo.toml`) and update the version at the top.
-12. If the crate has dependencies on other `p2panda-` crates, make sure those
-    have already been published and update the `version = ...` field for each
-    dependency.
-13. Run `cargo publish --dry-run`. Check the output; ensure everything looks
+10. Open the manifest (`Cargo.toml`) and update the version at the top to
+    `0.2.0`.
+11. Update the version in the manifest of every `p2panda-` crate which depends
+    on the one you are about to publish. For example, if you're publishing
+    `p2panda-core` `0.2.0`, you need to update the manifest dependencies of every
+    `p2panda-` crate to `p2panda-core = { path = "../p2panda-core", version = "0.2.0" }`.
+12. Run `cargo publish --dry-run`. Check the output; ensure everything looks
     correct and there are no errors.
-14. Run `cargo login` to ensure you're prepared to publish to `crates.io`.
-15. Run `cargo publish` to publish.
-16. Move on to the next crate you wish to publish, taking into account the
+13. Run `cargo login` to ensure you're prepared to publish to `crates.io`.
+14. Run `cargo publish` to publish.
+15. Move on to the next crate you wish to publish, taking into account the
     order listed above.
 
 ## Tagging and release
 
-12. Run `git tag v1.2.0` and push including your tags using `git push origin
+16. Run `git tag v0.2.0` and push including your tags using `git push origin
     main --tags`.
-13. Manually create a release on github, copying the changelog entry you authored 
+17. Manually create a release on github, copying the changelog entry you authored
     into Github's [new release page](https://github.com/p2panda/p2panda/releases/new)'s 
-    description field. Title it with your version `v1.2.0`.
+    description field. Title it with your version `v0.2.0`.
+
+## Troubleshooting
+
+If you see a `failed to select a version` error (as below), see point `11`
+above.
+
+```
+cargo publish -p p2panda-core --dry-run
+    Updating crates.io index
+error: failed to select a version for the requirement `p2panda-core = "^0.1.0"`
+candidate versions found which didn't match: 0.2.0
+location searched: /home/glyph/Projects/p2panda/p2panda/p2panda-core
+required by package `p2panda-net v0.1.0 (/home/glyph/Projects/p2panda/p2panda/p2panda-net)`
+```
