@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-sync"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = [
   "adz <x12@adz.garden>",
@@ -20,8 +20,8 @@ log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
 [dependencies]
 async-trait = "0.1.82"
 futures = "0.3.30"
-p2panda-core = { path = "../p2panda-core", version = "0.1.0", optional = true }
-p2panda-store = { path = "../p2panda-store", version = "0.1.0", optional = true, default-features = false }
+p2panda-core = { path = "../p2panda-core", version = "0.2.0", optional = true }
+p2panda-store = { path = "../p2panda-store", version = "0.2.0", optional = true, default-features = false }
 serde = { version = "1.0.215" }
 tokio-util = { version = "0.7.11", features = [
     "codec",
@@ -31,6 +31,6 @@ tokio = { version = "1.42.0", features = ["sync", "time", "rt"], optional = true
 thiserror = "1.0.63"
 
 [dev-dependencies]
-p2panda-store = { path = "../p2panda-store", version = "0.1.0", features = [ "memory" ] }
+p2panda-store = { path = "../p2panda-store", version = "0.2.0", features = [ "memory" ] }
 tokio = { version = "1.42.0", features = ["rt", "macros", "net", "io-util"] }
 tokio-stream = { version = "0.1.15" }
