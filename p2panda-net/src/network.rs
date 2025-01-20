@@ -133,6 +133,7 @@ use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -713,6 +714,13 @@ where
     /// convenience of advanced users.
     pub fn endpoint(&self) -> &Endpoint {
         &self.inner.endpoint
+    }
+
+    /// Returns a receiver of system events.
+    ///
+    // @TODO(glyph): Write more about the types of events.
+    pub fn events(&self) -> Receiver<SystemEvent> {
+        todo!()
     }
 
     /// Returns the public key of the node.

@@ -197,6 +197,7 @@ where
             }
             GossipEvent::NeighborDown(_) => {
                 // Not used currently
+                // @TODO(glyph): We need to send this event for the system events API.
             }
         }
         Ok(())
