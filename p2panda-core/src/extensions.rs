@@ -61,16 +61,18 @@ use crate::Header;
 
 /// Trait definition of a single header extension type.
 pub trait Extension<T>: Extensions {
-    fn from_header<E: Extension<T>>(header: &Header<E>) -> Option<T> {
+    /// Extract the raw extension value of an extension based on it's type.
+    fn extract(&self) -> Option<T> {
+        None
+    }
+
+    /// Extract the extension value with the option to derive it from material contained in the
+    /// passed header.
+    fn with_header(header: &Header<Self>) -> Option<T> {
         match &header.extensions {
             Some(extensions) => extensions.extract(),
             None => None,
         }
-    }
-    
-    /// Extract the value of an extension based on it's type.
-    fn extract(&self) -> Option<T> {
-        None
     }
 }
 
@@ -87,6 +89,6 @@ where
     E: Extension<T>,
 {
     fn extract(&self) -> Option<T> {
-        <Header<E> as Extension<T>>::from_header(&self)
+        <E as Extension<T>>::with_header(&self)
     }
 }
