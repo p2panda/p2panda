@@ -89,6 +89,6 @@ where
     E: Extension<T>,
 {
     fn extract(&self) -> Option<T> {
-        <E as Extension<T>>::with_header(&self)
+        <E as Extension<T>>::with_header(self)
     }
 }
