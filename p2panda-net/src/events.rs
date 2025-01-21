@@ -25,6 +25,12 @@ pub enum SystemEvent<T> {
     /// This event will be emitted approximately 30 seconds after the connection is lost.
     GossipNeighborDown { topic_id: [u8; 32], peer: PublicKey },
 
+    /// Started a sync session.
+    SyncStarted { topic: Option<T>, peer: PublicKey },
+
     /// Completed a sync session.
     SyncDone { topic: T, peer: PublicKey },
+
+    /// Failed to complete a sync session.
+    SyncFailed { topic: Option<T>, peer: PublicKey },
 }

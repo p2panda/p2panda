@@ -291,7 +291,7 @@ where
                     .await?;
             }
             ToEngineActor::SyncStart { topic, peer } => {
-                self.topic_streams.on_sync_start(topic, peer);
+                self.on_sync_start(topic, peer).await?;
             }
             ToEngineActor::SyncHandshakeSuccess { topic, peer } => {
                 self.topic_streams.on_sync_handshake_success(topic, peer);
@@ -310,7 +310,7 @@ where
                 self.on_sync_done(topic, peer).await?;
             }
             ToEngineActor::SyncFailed { topic, peer } => {
-                self.topic_streams.on_sync_failed(topic, peer).await?;
+                self.on_sync_failed(topic, peer).await?;
             }
             ToEngineActor::Shutdown { .. } => {
                 unreachable!("handled in run_inner");
@@ -449,6 +449,20 @@ where
         Ok(())
     }
 
+    /// Process sync session starting.
+    pub async fn on_sync_start(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
+        self.topic_streams.on_sync_start(topic.clone(), node_id);
+
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::SyncStarted {
+                topic,
+                peer: node_id,
+            })?;
+        }
+
+        Ok(())
+    }
+
     /// Process sync session finishing.
     pub async fn on_sync_done(&mut self, topic: T, node_id: NodeId) -> Result<()> {
         self.topic_streams
@@ -458,6 +472,22 @@ where
         // Notify any system event subscribers.
         if let Some(event_tx) = &self.system_event_tx {
             event_tx.send(SystemEvent::SyncDone {
+                topic,
+                peer: node_id,
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Process sync session failure.
+    pub async fn on_sync_failed(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
+        self.topic_streams
+            .on_sync_failed(topic.clone(), node_id)
+            .await?;
+
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::SyncFailed {
                 topic,
                 peer: node_id,
             })?;
