@@ -691,6 +691,9 @@ where
     }
 
     /// Returns a receiver of system events.
+    ///
+    /// This method can be called repeatedly if multiple event receivers are required. Each
+    /// receiver will receive all emitted events.
     pub async fn events(&self) -> Result<broadcast::Receiver<SystemEvent<T>>> {
         self.inner.engine.events().await
     }
