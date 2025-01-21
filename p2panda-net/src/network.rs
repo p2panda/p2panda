@@ -1051,6 +1051,7 @@ pub(crate) mod tests {
     use crate::addrs::DEFAULT_STUN_PORT;
     use crate::bytes::ToBytes;
     use crate::config::Config;
+    use crate::events::SystemEvent;
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::sync::SyncConfiguration;
     use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
@@ -1532,5 +1533,101 @@ pub(crate) mod tests {
         assert!(result2.is_ok());
         assert!(result3.is_ok());
         assert!(result4.is_ok());
+    }
+
+    #[tokio::test]
+    async fn gossip_and_sync_events() {
+        setup_logging();
+
+        let network_id = [1; 32];
+        let chat_topic = TestTopic::new("chat");
+        let chat_topic_id = chat_topic.clone().id();
+        let sync_config = SyncConfiguration::new(PingPongProtocol {});
+
+        let node_1 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+
+        let node_2_id = node_2.endpoint().node_id();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1.add_peer(node_2_addr.clone()).await.unwrap();
+        node_2.add_peer(node_1_addr.clone()).await.unwrap();
+
+        // Subscribe to network events for each node.
+        let mut event_rx_1 = node_1.events().await.unwrap();
+
+        // Subscribe to the same topic from all nodes.
+        let (_tx_1, _rx_1, ready_1) = node_1.subscribe(chat_topic.clone()).await.unwrap();
+        let (_tx_2, _rx_2, ready_2) = node_2.subscribe(chat_topic.clone()).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by all both nodes for the given topic.
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
+
+        // Start a third node.
+        let node_3 = NetworkBuilder::new(network_id).build().await.unwrap();
+        let node_3_id = node_3.endpoint().node_id();
+        node_3.add_peer(node_1_addr).await.unwrap();
+        let (_tx_3, _rx_3, ready_3) = node_3.subscribe(chat_topic.clone()).await.unwrap();
+        assert!(ready_3.await.is_ok());
+
+        // Events we expect to receive on node 1.
+        let expected_events = vec![
+            // Join the network-wide gossip overlay by connecting to node 2.
+            SystemEvent::GossipJoined {
+                topic_id: network_id,
+                peers: vec![node_2_id],
+            },
+            // Complete sync (part one) with node 2.
+            SystemEvent::SyncDone {
+                topic: chat_topic.clone(),
+                peer: node_2_id,
+            },
+            // Join the topic gossip overlay by connecting to node 2.
+            SystemEvent::GossipJoined {
+                topic_id: chat_topic_id,
+                peers: vec![node_2_id],
+            },
+            // Complete sync (part two) with node 2.
+            SystemEvent::SyncDone {
+                topic: chat_topic.clone(),
+                peer: node_2_id,
+            },
+            // Gain a direct neighbor in the network-wide gossip overlay by connecting to node 3.
+            SystemEvent::GossipNeighborUp {
+                topic_id: network_id,
+                peer: node_3_id,
+            },
+            // Gain a direct neighbor in the topic gossip overlay by connecting to node 3.
+            SystemEvent::GossipNeighborUp {
+                topic_id: chat_topic_id,
+                peer: node_3_id,
+            },
+        ];
+
+        // Receive the first six events on the node one receiver.
+        let mut received_events = Vec::new();
+        while let Ok(event) = event_rx_1.recv().await {
+            received_events.push(event);
+            if received_events.len() == 6 {
+                break;
+            }
+        }
+
+        // Ensure the correct events are received.
+        assert_eq!(received_events, expected_events);
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
     }
 }
