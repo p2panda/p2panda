@@ -129,6 +129,9 @@
 //!     .build()
 //!     .await?;
 //!
+//! // Subscribe to network events.
+//! let mut event_rx = network.events().await?;
+//!
 //! // From now on we can send and receive bytes to any peer interested in the same chat.
 //! let my_friends_group = ChatGroup::new("me-and-my-friends");
 //! let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
@@ -139,12 +142,14 @@ mod addrs;
 mod bytes;
 pub mod config;
 mod engine;
+mod events;
 pub mod network;
 mod protocols;
 mod sync;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
+pub use events::SystemEvent;
 pub use network::{FromNetwork, Network, NetworkBuilder, RelayMode, ToNetwork};
 pub use protocols::ProtocolHandler;
 pub use sync::{ResyncConfiguration, SyncConfiguration};

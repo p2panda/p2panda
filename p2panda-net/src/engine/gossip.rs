@@ -192,11 +192,13 @@ where
                     .send(ToEngineActor::GossipNeighborUp { topic_id, peer })
                     .await?;
             }
-            GossipEvent::Joined(_) => {
-                // Not used currently
+            GossipEvent::Joined(_peers) => {
+                // We send this event to the engine actor in `on_joined()`.
             }
-            GossipEvent::NeighborDown(_) => {
-                // Not used currently
+            GossipEvent::NeighborDown(peer) => {
+                self.engine_actor_tx
+                    .send(ToEngineActor::GossipNeighborDown { topic_id, peer })
+                    .await?;
             }
         }
         Ok(())
@@ -205,13 +207,17 @@ where
     async fn on_joined(&mut self, topic_id: [u8; 32], stream: GossipTopic) -> Result<()> {
         self.joined.insert(topic_id);
 
-        // Split the gossip stream and insert handles to the receiver and sender
+        // Split the gossip stream and insert handles to the receiver and sender.
         let (stream_tx, stream_rx) = stream.split();
+
+        // Collect all our current direct neighbors for this gossip topic.
+        let peers: Vec<PublicKey> = stream_rx.neighbors().collect();
+
         self.gossip_events.insert(topic_id, stream_rx);
         self.gossip_senders.insert(topic_id, stream_tx);
 
         self.engine_actor_tx
-            .send(ToEngineActor::GossipJoined { topic_id })
+            .send(ToEngineActor::GossipJoined { topic_id, peers })
             .await?;
 
         Ok(())
