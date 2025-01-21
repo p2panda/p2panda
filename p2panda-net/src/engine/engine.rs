@@ -6,7 +6,7 @@ use iroh_net::key::{PublicKey, SecretKey};
 use iroh_net::{Endpoint, NodeAddr, NodeId};
 use netwatch::netmon::Monitor;
 use p2panda_sync::TopicQuery;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
@@ -18,6 +18,7 @@ use crate::engine::constants::{
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::topic_discovery::TopicDiscovery;
 use crate::engine::topic_streams::TopicStreams;
+use crate::events::SystemEvent;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, TopicId};
@@ -27,10 +28,13 @@ pub enum ToEngineActor<T> {
     AddPeer {
         node_addr: NodeAddr,
     },
+    SubscribeEvents {
+        reply: oneshot::Sender<broadcast::Receiver<SystemEvent<T>>>,
+    },
     KnownPeers {
         reply: oneshot::Sender<Vec<NodeAddr>>,
     },
-    Subscribe {
+    SubscribeTopic {
         topic: T,
         from_network_tx: mpsc::Sender<FromNetwork>,
         to_network_rx: mpsc::Receiver<ToNetwork>,
@@ -38,8 +42,13 @@ pub enum ToEngineActor<T> {
     },
     GossipJoined {
         topic_id: [u8; 32],
+        peers: Vec<PublicKey>,
     },
     GossipNeighborUp {
+        topic_id: [u8; 32],
+        peer: PublicKey,
+    },
+    GossipNeighborDown {
         topic_id: [u8; 32],
         peer: PublicKey,
     },
@@ -84,6 +93,7 @@ pub struct EngineActor<T> {
     inbox: mpsc::Receiver<ToEngineActor<T>>,
     network_id: NetworkId,
     sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
+    system_event_tx: Option<broadcast::Sender<SystemEvent<T>>>,
     topic_discovery: TopicDiscovery,
     topic_streams: TopicStreams<T>,
 }
@@ -117,6 +127,7 @@ where
             inbox,
             network_id,
             sync_actor_tx,
+            system_event_tx: None,
             topic_discovery,
             topic_streams,
         }
@@ -245,11 +256,15 @@ where
             ToEngineActor::AddPeer { node_addr } => {
                 self.add_peer(node_addr).await?;
             }
+            ToEngineActor::SubscribeEvents { reply } => {
+                let event_rx = self.events();
+                reply.send(event_rx).ok();
+            }
             ToEngineActor::KnownPeers { reply } => {
                 let list = self.address_book.known_peers().await;
                 reply.send(list).ok();
             }
-            ToEngineActor::Subscribe {
+            ToEngineActor::SubscribeTopic {
                 topic,
                 from_network_tx,
                 to_network_rx,
@@ -258,11 +273,14 @@ where
                 self.on_subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
                     .await?;
             }
-            ToEngineActor::GossipJoined { topic_id } => {
-                self.on_gossip_joined(topic_id).await;
+            ToEngineActor::GossipJoined { topic_id, peers } => {
+                self.on_gossip_joined(topic_id, peers).await?;
             }
             ToEngineActor::GossipNeighborUp { topic_id, peer } => {
-                self.on_peer_joined(topic_id, peer).await?;
+                self.on_peer_connected(topic_id, peer).await?;
+            }
+            ToEngineActor::GossipNeighborDown { topic_id, peer } => {
+                self.on_peer_disconnected(topic_id, peer).await?;
             }
             ToEngineActor::GossipMessage {
                 bytes,
@@ -289,7 +307,7 @@ where
                     .await?;
             }
             ToEngineActor::SyncDone { topic, peer } => {
-                self.topic_streams.on_sync_done(topic, peer).await?;
+                self.on_sync_done(topic, peer).await?;
             }
             ToEngineActor::SyncFailed { topic, peer } => {
                 self.topic_streams.on_sync_failed(topic, peer).await?;
@@ -326,20 +344,37 @@ where
         Ok(())
     }
 
+    /// Return a receiver for system events.
+    fn events(&mut self) -> broadcast::Receiver<SystemEvent<T>> {
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.subscribe()
+        } else {
+            let (event_tx, event_rx) = broadcast::channel(128);
+            self.system_event_tx = Some(event_tx);
+            event_rx
+        }
+    }
+
     /// Update the join status for the given gossip overlay.
-    async fn on_gossip_joined(&mut self, topic_id: [u8; 32]) {
+    async fn on_gossip_joined(&mut self, topic_id: [u8; 32], peers: Vec<PublicKey>) -> Result<()> {
         if topic_id == self.network_id {
             self.topic_discovery.on_gossip_joined();
         } else {
             self.topic_streams.on_gossip_joined(topic_id).await;
         }
+
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::GossipJoined { topic_id, peers })?;
+        }
+
+        Ok(())
     }
 
     /// Register the topic and public key of a peer who just became our direct neighbor in the
     /// gossip overlay.
     ///
     /// Through this we can use gossip algorithms also as an additional "peer discovery" mechanism.
-    async fn on_peer_joined(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
+    async fn on_peer_connected(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
         self.address_book.add_topic_id(node_id, topic_id).await;
 
         // At this point we only have the public key of the peer, which is not enough to establish
@@ -356,6 +391,27 @@ where
             self.topic_discovery
                 .announce(my_topic_ids, &self.secret_key)
                 .await?;
+        }
+
+        // Notify any system event subscribers.
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::GossipNeighborUp {
+                topic_id,
+                peer: node_id,
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// The given peer is no longer our direct neighbor in the gossip overlay.
+    async fn on_peer_disconnected(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
+        // Notify any system event subscribers.
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::GossipNeighborDown {
+                topic_id,
+                peer: node_id,
+            })?;
         }
 
         Ok(())
@@ -389,6 +445,23 @@ where
         self.topic_discovery
             .announce(my_topic_ids, &self.secret_key)
             .await?;
+
+        Ok(())
+    }
+
+    /// Process sync session finishing.
+    pub async fn on_sync_done(&mut self, topic: T, node_id: NodeId) -> Result<()> {
+        self.topic_streams
+            .on_sync_done(topic.clone(), node_id)
+            .await?;
+
+        // Notify any system event subscribers.
+        if let Some(event_tx) = &self.system_event_tx {
+            event_tx.send(SystemEvent::SyncDone {
+                topic,
+                peer: node_id,
+            })?;
+        }
 
         Ok(())
     }
