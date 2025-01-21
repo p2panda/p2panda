@@ -1591,9 +1591,21 @@ pub(crate) mod tests {
                 topic_id: network_id,
                 peers: vec![node_2_id],
             },
+            // Discover node 2 via an announcement on the network-wide gossip overlay.
+            SystemEvent::PeerDiscovered { peer: node_2_id },
+            // Start sync (part one) with node 2.
+            SystemEvent::SyncStarted {
+                topic: None,
+                peer: node_2_id,
+            },
             // Complete sync (part one) with node 2.
             SystemEvent::SyncDone {
                 topic: chat_topic.clone(),
+                peer: node_2_id,
+            },
+            // Start sync (part two) with node 2.
+            SystemEvent::SyncStarted {
+                topic: Some(chat_topic.clone()),
                 peer: node_2_id,
             },
             // Join the topic gossip overlay by connecting to node 2.
@@ -1611,6 +1623,10 @@ pub(crate) mod tests {
                 topic_id: network_id,
                 peer: node_3_id,
             },
+            // Discover node 2 (again) via an announcement on the network-wide gossip overlay.
+            SystemEvent::PeerDiscovered { peer: node_2_id },
+            // Discover node 3 via an announcement on the network-wide gossip overlay.
+            SystemEvent::PeerDiscovered { peer: node_3_id },
             // Gain a direct neighbor in the topic gossip overlay by connecting to node 3.
             SystemEvent::GossipNeighborUp {
                 topic_id: chat_topic_id,
@@ -1618,11 +1634,11 @@ pub(crate) mod tests {
             },
         ];
 
-        // Receive the first six events on the node one receiver.
+        // Receive events on the node one receiver.
         let mut received_events = Vec::new();
         while let Ok(event) = event_rx_1.recv().await {
             received_events.push(event);
-            if received_events.len() == 6 {
+            if received_events.len() == 11 {
                 break;
             }
         }
