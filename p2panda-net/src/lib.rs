@@ -139,6 +139,7 @@ mod addrs;
 mod bytes;
 pub mod config;
 mod engine;
+mod events;
 pub mod network;
 mod protocols;
 mod sync;

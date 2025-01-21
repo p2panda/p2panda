@@ -18,7 +18,7 @@ use iroh_gossip::net::Gossip;
 use iroh_net::key::SecretKey;
 use iroh_net::{Endpoint, NodeAddr};
 use p2panda_sync::TopicQuery;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error};
@@ -26,6 +26,7 @@ use tracing::{debug, error};
 pub use crate::engine::address_book::AddressBook;
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
+use crate::events::SystemEvent;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::manager::SyncActor;
 use crate::sync::{SyncConfiguration, SyncConnection};
@@ -111,6 +112,15 @@ where
         Ok(())
     }
 
+    /// Returns a receiver for system events.
+    pub async fn events(&self) -> Result<broadcast::Receiver<SystemEvent<T>>> {
+        let (reply, reply_rx) = oneshot::channel();
+        self.engine_actor_tx
+            .send(ToEngineActor::SubscribeEvents { reply })
+            .await?;
+        Ok(reply_rx.await?)
+    }
+
     /// Retrieves the node addresses of all peers the engine currently knows about.
     pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
         let (reply, reply_rx) = oneshot::channel();
@@ -129,7 +139,7 @@ where
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.engine_actor_tx
-            .send(ToEngineActor::Subscribe {
+            .send(ToEngineActor::SubscribeTopic {
                 topic,
                 from_network_tx,
                 to_network_rx,

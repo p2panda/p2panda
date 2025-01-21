@@ -133,8 +133,7 @@ use iroh_net::{Endpoint, NodeAddr, NodeId};
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -143,6 +142,7 @@ use tracing::{debug, error, error_span, warn, Instrument};
 use crate::addrs::DEFAULT_STUN_PORT;
 use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
+use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
 use crate::{NetworkId, RelayUrl, TopicId};
@@ -690,6 +690,11 @@ where
         self.inner.engine.add_peer(node_addr).await
     }
 
+    /// Returns a receiver of system events.
+    pub async fn events(&self) -> Result<broadcast::Receiver<SystemEvent<T>>> {
+        self.inner.engine.events().await
+    }
+
     /// Returns the addresses of all known peers.
     pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
         self.inner.engine.known_peers().await
@@ -714,13 +719,6 @@ where
     /// convenience of advanced users.
     pub fn endpoint(&self) -> &Endpoint {
         &self.inner.endpoint
-    }
-
-    /// Returns a receiver of system events.
-    ///
-    // @TODO(glyph): Write more about the types of events.
-    pub fn events(&self) -> Receiver<SystemEvent> {
-        todo!()
     }
 
     /// Returns the public key of the node.
@@ -1479,6 +1477,7 @@ pub(crate) mod tests {
             node.shutdown().await.unwrap();
         })
     }
+
     #[tokio::test]
     async fn multi_hop_topic_discovery_and_sync() {
         setup_logging();
