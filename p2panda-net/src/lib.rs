@@ -129,6 +129,9 @@
 //!     .build()
 //!     .await?;
 //!
+//! // Subscribe to network events.
+//! let event_rx = network.events().await?;
+//!
 //! // From now on we can send and receive bytes to any peer interested in the same chat.
 //! let my_friends_group = ChatGroup::new("me-and-my-friends");
 //! let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
