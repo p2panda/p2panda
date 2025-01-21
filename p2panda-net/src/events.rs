@@ -2,54 +2,24 @@
 
 use iroh_net::key::PublicKey;
 
-#[derive(Debug, Clone)]
+/// Network system events.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SystemEvent<T> {
+    /// Joined a gossip topic via a connection to the given peer(s).
     GossipJoined {
         topic_id: [u8; 32],
         peers: Vec<PublicKey>,
     },
-    GossipLeft {
-        topic_id: [u8; 32],
-    },
-    GossipNeighborUp {
-        topic_id: [u8; 32],
-        peer: PublicKey,
-    },
-    GossipNeighborDown {
-        topic_id: [u8; 32],
-        peer: PublicKey,
-    },
-    SyncDone {
-        topic: T,
-        peer: PublicKey,
-    },
+    /// Left a gossip topic.
+    // @TODO: This requires `unsubscribe()` to be implemented.
+    // https://github.com/p2panda/p2panda/issues/639
+    GossipLeft { topic_id: [u8; 32] },
+    /// Established a connection with a neighbor.
+    GossipNeighborUp { topic_id: [u8; 32], peer: PublicKey },
+    /// Lost a connection to a neighbor.
+    ///
+    /// This event will be emitted approximately 30 seconds after the connection is lost.
+    GossipNeighborDown { topic_id: [u8; 32], peer: PublicKey },
+    /// Completed a sync session.
+    SyncDone { topic: T, peer: PublicKey },
 }
-
-/*
-#[derive(Debug)]
-pub struct SystemState<T> {
-    events: Receiver<SystemEvent<T>>,
-    completed_sync_sessions: HashMap<T, u16>,
-    gossip_peers: HashMap<[u8; 32], u16>,
-}
-
-impl SystemState {
-    pub fn new(events: Receiver<SystemEvent>) -> Self {
-        Self {
-            events,
-            completed_sync_sessions: 0,
-            gossip_peers: HashMap::new(),
-        }
-    }
-
-    pub fn run(&mut self) -> Result<()> {
-        // Process events by passing them off to event handlers.
-        todo!();
-    }
-
-    fn on_sync_done(&mut self, topic: T) {
-        // Increment the counter for the given topic.
-        todo!();
-    }
-}
-*/
