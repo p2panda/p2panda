@@ -25,6 +25,9 @@ pub enum SystemEvent<T> {
     /// This event will be emitted approximately 30 seconds after the connection is lost.
     GossipNeighborDown { topic_id: [u8; 32], peer: PublicKey },
 
+    /// Discovered a new peer in the network.
+    PeerDiscovered { peer: PublicKey },
+
     /// Started a sync session.
     SyncStarted { topic: Option<T>, peer: PublicKey },
 

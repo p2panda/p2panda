@@ -513,6 +513,10 @@ where
                     self.topic_streams
                         .on_discovered_topic_ids(topic_ids, node_id)
                         .await?;
+
+                    if let Some(event_tx) = &self.system_event_tx {
+                        event_tx.send(SystemEvent::PeerDiscovered { peer: node_id })?;
+                    }
                 }
                 Err(err) => {
                     warn!(
