@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! System events API.
-
 use iroh_net::key::PublicKey;
 
 /// Network system events.
@@ -12,16 +11,20 @@ pub enum SystemEvent<T> {
         topic_id: [u8; 32],
         peers: Vec<PublicKey>,
     },
+
     /// Left a gossip topic.
     // @TODO: This requires `unsubscribe()` to be implemented.
     // https://github.com/p2panda/p2panda/issues/639
     GossipLeft { topic_id: [u8; 32] },
+
     /// Established a connection with a neighbor.
     GossipNeighborUp { topic_id: [u8; 32], peer: PublicKey },
+
     /// Lost a connection to a neighbor.
     ///
     /// This event will be emitted approximately 30 seconds after the connection is lost.
     GossipNeighborDown { topic_id: [u8; 32], peer: PublicKey },
+
     /// Completed a sync session.
     SyncDone { topic: T, peer: PublicKey },
 }
