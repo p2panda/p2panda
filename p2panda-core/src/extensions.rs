@@ -61,18 +61,9 @@ use crate::Header;
 
 /// Trait definition of a single header extension type.
 pub trait Extension<T>: Extensions {
-    /// Extract the raw extension value of an extension based on it's type.
-    fn extract(&self) -> Option<T> {
+    /// Extract the extension value from a header.
+    fn extract(_header: &Header<Self>) -> Option<T> {
         None
-    }
-
-    /// Extract the extension value with the option to derive it from material contained in the
-    /// passed header.
-    fn with_header(header: &Header<Self>) -> Option<T> {
-        match &header.extensions {
-            Some(extensions) => extensions.extract(),
-            None => None,
-        }
     }
 }
 
@@ -81,14 +72,3 @@ pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 
 /// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
 impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
-
-/// Generic implementation of `Extension<T>` for `Header<E>` allowing access to the extension
-/// values.
-impl<T, E> Extension<T> for Header<E>
-where
-    E: Extension<T>,
-{
-    fn extract(&self) -> Option<T> {
-        <E as Extension<T>>::with_header(self)
-    }
-}

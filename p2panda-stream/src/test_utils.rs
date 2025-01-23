@@ -29,14 +29,20 @@ pub struct Extensions {
 }
 
 impl Extension<StreamName> for Extensions {
-    fn extract(&self) -> Option<StreamName> {
-        Some(self.stream_name.clone())
+    fn extract(header: &Header<Self>) -> Option<StreamName> {
+        header
+            .extensions
+            .as_ref()
+            .map(|extensions| extensions.stream_name.clone())
     }
 }
 
 impl Extension<PruneFlag> for Extensions {
-    fn extract(&self) -> Option<PruneFlag> {
-        Some(self.prune_flag.clone())
+    fn extract(header: &Header<Self>) -> Option<PruneFlag> {
+        header
+            .extensions
+            .as_ref()
+            .map(|extensions| extensions.prune_flag.clone())
     }
 }
 

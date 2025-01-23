@@ -154,10 +154,10 @@ where
             //    get's persisted and the log optionally pruned.
             let ingest_fut = async {
                 let log_id = header
-                    .extract()
+                    .extension()
                     .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
                 let prune_flag: PruneFlag = header
-                    .extract()
+                    .extension()
                     .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
                 ingest_operation::<S, L, E>(
                     &mut store,
