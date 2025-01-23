@@ -65,8 +65,12 @@
 //! }
 //!
 //! impl Extension<PruneFlag> for CustomExtensions {
-//!     fn extract(&self) -> Option<PruneFlag> {
-//!         Some(self.prune_flag.to_owned())
+//!     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
+//!         let Some(extensions) = header.extensions.as_ref() else {
+//!             return None;
+//!         };
+//! 
+//!         Some(extensions.prune_flag.clone())
 //!     }
 //! }
 //!
@@ -90,7 +94,7 @@
 //!
 //! header.sign(&private_key);
 //!
-//! let prune_flag: PruneFlag = header.extract().unwrap();
+//! let prune_flag: PruneFlag = header.extension().unwrap();
 //! assert!(prune_flag.is_set())
 //! ```
 use thiserror::Error;
@@ -269,7 +273,7 @@ where
     where
         E: Extension<T>,
     {
-        E::extract(&self)
+        E::extract(self)
     }
 }
 

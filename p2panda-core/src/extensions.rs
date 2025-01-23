@@ -20,39 +20,6 @@
 //!
 //! Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
 //! requirements that `Header` requires, including `Serialize` and `Deserialize`.
-//!
-//! ## Example
-//!
-//! ```
-//! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
-//! use serde::{Serialize, Deserialize};
-//!
-//! // Extend our operations with an "expiry" field we can use to implement "ephemeral messages" in
-//! // our application, which get automatically deleted after the expiration timestamp is due.
-//! #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
-//! pub struct Expiry(u64);
-//!
-//! // Multiple extensions can be combined in a custom type.
-//! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-//! struct CustomExtensions {
-//!     expiry: Expiry,
-//! }
-//!
-//! // Implement `Extension<T>` for each extension we want to add to our `CustomExtensions`.
-//! impl Extension<Expiry> for CustomExtensions {
-//!     fn extract(&self) -> Option<Expiry> {
-//!         Some(self.expiry.to_owned())
-//!     }
-//! }
-//!
-//! // Create a custom extension instance, this can be added to an operation's header.
-//! let extensions = CustomExtensions {
-//!     expiry: Expiry(1733170246),
-//! };
-//!
-//! // Extract the extension we are interested in.
-//! let expiry: Expiry = extensions.extract().expect("expiry field should be set");
-//! ```
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
