@@ -2,10 +2,10 @@
 
 //! SQLite persistent storage.
 use anyhow::{Error, Result};
+use sqlx::migrate;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::Sqlite;
-//use sqlx::migrate;
 
 /// Re-export of SQLite connection pool type.
 pub type Pool = SqlitePool;
@@ -42,10 +42,8 @@ pub async fn connection_pool(url: &str, max_connections: u32) -> Result<Pool, Er
     Ok(pool)
 }
 
-/*
 /// Run any pending database migrations from inside the application.
 pub async fn run_pending_migrations(pool: &Pool) -> Result<()> {
     migrate!().run(pool).await?;
     Ok(())
 }
-*/

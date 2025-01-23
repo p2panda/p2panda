@@ -23,7 +23,7 @@
 #[cfg(feature = "memory")]
 pub mod memory_store;
 #[cfg(feature = "sqlite")]
-pub mod sqlite_store;
+pub mod sqlite;
 
 use std::fmt::{Debug, Display};
 
