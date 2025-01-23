@@ -69,7 +69,7 @@
 //!         let Some(extensions) = header.extensions.as_ref() else {
 //!             return None;
 //!         };
-//! 
+//!
 //!         Some(extensions.prune_flag.clone())
 //!     }
 //! }
