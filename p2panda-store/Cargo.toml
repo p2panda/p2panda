@@ -18,10 +18,11 @@ workspace = true
 [features]
 default = ["memory"]
 memory = []
-sqlite = ["dep:anyhow", "dep:sqlx"]
+sqlite = ["dep:anyhow", "dep:ciborium", "dep:sqlx"]
 
 [dependencies]
 anyhow = { version = "1.0.86", optional = true }
+ciborium = { version = "0.2.2", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.2.0" }
 sqlx = { version = "0.8.3", optional = true, features = ["sqlite",
 "runtime-tokio"] }
