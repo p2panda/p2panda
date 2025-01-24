@@ -188,8 +188,11 @@ impl Discovery for LocalDiscovery {
     fn subscribe(&self, network_id: [u8; 32]) -> Option<BoxedStream<Result<DiscoveryEvent>>> {
         let (subscribe_tx, subscribe_rx) = flume::bounded(16);
         let service_tx = self.tx.clone();
-        let service_name =
-            Name::from_str(&format!("_{}._udp.local.", hex::encode(network_id))).unwrap();
+        let name = format!(
+            "_{}._udp.local.",
+            base32::encode(base32::Alphabet::Z, &network_id)
+        );
+        let service_name = Name::from_str(&name).expect("correctly formatted DNS name");
 
         tokio::spawn(async move {
             service_tx

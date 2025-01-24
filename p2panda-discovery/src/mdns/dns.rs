@@ -33,7 +33,10 @@ pub fn make_response(service_name: &ServiceName, node_addr: &NodeAddr) -> Messag
     msg.set_message_type(MessageType::Response);
     msg.set_authoritative(true);
 
-    let node_id_str = node_addr.node_id.to_string();
+    let node_id_str = format!(
+        "{}",
+        base32::encode(base32::Alphabet::Z, node_addr.node_id.as_bytes())
+    );
 
     let my_srv_name = Name::from_str(&node_id_str)
         .expect("node id was checked already")
