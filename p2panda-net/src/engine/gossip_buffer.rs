@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use iroh_net::key::PublicKey;
+use iroh_base::key::PublicKey;
 use tracing::debug;
 
 #[derive(Debug, Default)]

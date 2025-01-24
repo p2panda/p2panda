@@ -125,11 +125,11 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
+use iroh::net::relay::{RelayMap, RelayNode};
+use iroh::net::{Endpoint, NodeAddr, NodeId};
+use iroh_base::key::SecretKey;
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
-use iroh_net::endpoint::TransportConfig;
-use iroh_net::key::SecretKey;
-use iroh_net::relay::{RelayMap, RelayNode};
-use iroh_net::{Endpoint, NodeAddr, NodeId};
+use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
@@ -384,8 +384,8 @@ where
                 .max_concurrent_uni_streams(0u32.into());
 
             let relay_mode = match self.relay_mode {
-                RelayMode::Disabled => iroh_net::relay::RelayMode::Disabled,
-                RelayMode::Custom(node) => iroh_net::relay::RelayMode::Custom(
+                RelayMode::Disabled => iroh::net::relay::RelayMode::Disabled,
+                RelayMode::Custom(node) => iroh::net::relay::RelayMode::Custom(
                     RelayMap::from_nodes(vec![node])
                         .expect("relay list can not contain duplicates"),
                 ),
@@ -790,7 +790,7 @@ pub enum FromNetwork {
 /// The connection is accepted if the handshake is successful and the peer is operating with
 /// a supported ALPN protocol.
 async fn handle_connection(
-    mut connecting: iroh_net::endpoint::Connecting,
+    mut connecting: iroh::net::endpoint::Connecting,
     protocols: Arc<ProtocolMap>,
 ) {
     let alpn = match connecting.alpn().await {
@@ -1040,7 +1040,7 @@ pub(crate) mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use iroh_net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
+    use iroh::net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};

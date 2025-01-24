@@ -2,8 +2,8 @@
 
 use anyhow::{Context, Result};
 use futures_lite::FutureExt;
-use iroh_net::key::{PublicKey, SecretKey};
-use iroh_net::{Endpoint, NodeAddr, NodeId};
+use iroh::net::{Endpoint, NodeAddr, NodeId};
+use iroh_base::key::{PublicKey, SecretKey};
 use netwatch::netmon::Monitor;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{broadcast, mpsc, oneshot};

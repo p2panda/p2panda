@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
-use iroh_net::key::PublicKey;
-use iroh_net::NodeId;
+use iroh::net::NodeId;
+use iroh_base::key::PublicKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
@@ -399,7 +399,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures_util::{FutureExt, StreamExt};
-    use iroh_net::NodeAddr;
+    use iroh::net::NodeAddr;
     use p2panda_core::PrivateKey;
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
@@ -430,7 +430,7 @@ mod tests {
         let private_key = PrivateKey::new();
         let public_key = private_key.public_key();
         let bytes = public_key.as_bytes();
-        NodeAddr::new(iroh_net::NodeId::from_bytes(bytes).unwrap())
+        NodeAddr::new(iroh::net::NodeId::from_bytes(bytes).unwrap())
     }
 
     #[tokio::test]

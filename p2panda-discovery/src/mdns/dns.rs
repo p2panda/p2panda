@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use hickory_proto::op::{Message, MessageType, Query};
 use hickory_proto::rr::{rdata, DNSClass, Name, RData, Record, RecordType};
-use iroh_net::{NodeAddr, NodeId};
+use iroh::net::{NodeAddr, NodeId};
 use tracing::{debug, trace};
 
 use crate::mdns::ServiceName;

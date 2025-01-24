@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use anyhow::{bail, Context, Result};
-use iroh_net::key::{PublicKey, SecretKey, Signature};
+use iroh_base::key::{PublicKey, SecretKey, Signature};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -173,10 +173,12 @@ impl TopicDiscoveryMessage {
 
 #[cfg(test)]
 mod tests {
-    use iroh_net::{key::SecretKey, NodeAddr};
+    use iroh::net::NodeAddr;
+    use iroh_base::key::SecretKey;
     use tokio::sync::mpsc;
 
-    use crate::{bytes::ToBytes, engine::AddressBook};
+    use crate::bytes::ToBytes;
+    use crate::engine::AddressBook;
 
     use super::{Status, TopicDiscovery, TopicDiscoveryMessage};
 

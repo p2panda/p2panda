@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use iroh_net::{NodeAddr, NodeId};
+use iroh::net::{NodeAddr, NodeId};
 use rand::seq::IteratorRandom;
 use tokio::sync::RwLock;
 

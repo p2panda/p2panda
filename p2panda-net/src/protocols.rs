@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use futures_util::future::join_all;
-use iroh_net::endpoint::Connecting;
+use iroh::net::endpoint::Connecting;
 use tracing::debug;
 
 /// Interface to accept incoming connections for custom protocol implementations.

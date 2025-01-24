@@ -15,7 +15,7 @@ use std::pin::Pin;
 use anyhow::Result;
 use futures_buffered::MergeBounded;
 use futures_lite::stream::Stream;
-use iroh_net::NodeAddr;
+use iroh::net::NodeAddr;
 
 pub type BoxedStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 

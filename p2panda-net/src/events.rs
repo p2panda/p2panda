@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! System events API.
-use iroh_net::key::PublicKey;
+use iroh_base::key::PublicKey;
 
 /// Network system events.
 #[derive(Debug, Clone, Eq, PartialEq)]

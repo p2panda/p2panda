@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 use anyhow::Context;
-use iroh_net::relay::RelayUrl as IrohRelayUrl;
-use iroh_net::{NodeAddr as IrohNodeAddr, NodeId};
+use iroh::net::relay::RelayUrl as IrohRelayUrl;
+use iroh::net::{NodeAddr as IrohNodeAddr, NodeId};
 use p2panda_core::PublicKey;
 use serde::{Deserialize, Serialize};
 
