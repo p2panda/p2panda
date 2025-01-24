@@ -20,7 +20,7 @@ bytes = "1.7.1"
 futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
-iroh = "0.31.0"
+iroh = { version = "0.31.0", default-features = false }
 iroh-base = "0.31.0"
 iroh-blobs = { version = "0.31.0", features = ["downloader", "fs-store"], default-features = false }
 iroh-io = "0.6.1"

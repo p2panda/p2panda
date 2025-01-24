@@ -24,7 +24,7 @@ futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 hex = { version = "0.4.3", optional = true }
 hickory-proto = { version = "0.24.1", optional = true }
-iroh = "0.31.0"
+iroh = { version = "0.31.0", default-features = false }
 iroh-base = "0.31.0"
 netwatch = "0.2.0"
 socket2 = { version = "0.5.7", optional = true }
