@@ -154,12 +154,26 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
             };
             let Cow::Borrowed(node_id_str) = String::from_utf8_lossy(node_id_bytes) else {
                 debug!(
-                    "received mdns response with invalid node id {:?}",
+                    "received mdns response with invalid node id utf8 string {:?}",
                     node_id_bytes
                 );
                 continue;
             };
-            let Ok(node_id) = NodeId::from_str(node_id_str) else {
+            let Some(decoded) = base32::decode(base32::Alphabet::Z, node_id_str) else {
+                debug!(
+                    "received mdns response with invalid base32 encoding {:?}",
+                    node_id_bytes
+                );
+                continue;
+            };
+            let Ok(node_id_bytes) = TryInto::<[u8; 32]>::try_into(decoded) else {
+                debug!(
+                    "received mdns response with invalid node id bytes {:?}",
+                    node_id_bytes
+                );
+                continue;
+            };
+            let Ok(node_id) = NodeId::from_bytes(&node_id_bytes) else {
                 debug!(
                     "received mdns response with invalid node id {:?}",
                     node_id_bytes
