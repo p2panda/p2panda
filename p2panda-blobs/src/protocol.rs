@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
-use iroh::net::endpoint::Connecting;
+use iroh::endpoint::Connecting;
 use iroh_blobs::protocol::ALPN;
 use iroh_blobs::provider::{self, EventSender};
 use iroh_blobs::store::Store;

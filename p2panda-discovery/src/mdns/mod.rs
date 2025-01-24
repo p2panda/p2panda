@@ -12,8 +12,7 @@ use anyhow::Result;
 use flume::Sender;
 use futures_lite::{FutureExt, StreamExt};
 use hickory_proto::rr::Name;
-use iroh::net::NodeAddr;
-use iroh_base::base32;
+use iroh::NodeAddr;
 use netwatch::netmon::Monitor;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::task::AbortOnDropHandle;
@@ -190,7 +189,7 @@ impl Discovery for LocalDiscovery {
         let (subscribe_tx, subscribe_rx) = flume::bounded(16);
         let service_tx = self.tx.clone();
         let service_name =
-            Name::from_str(&format!("_{}._udp.local.", base32::fmt(network_id))).unwrap();
+            Name::from_str(&format!("_{}._udp.local.", hex::encode(network_id))).unwrap();
 
         tokio::spawn(async move {
             service_tx

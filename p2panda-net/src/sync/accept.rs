@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
-use iroh_base::key::PublicKey;
+use iroh_base::PublicKey;
 use p2panda_sync::{FromSync, SyncError, SyncProtocol, TopicQuery};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;

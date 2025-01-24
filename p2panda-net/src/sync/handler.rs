@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
-use iroh::net::endpoint::{self, Connecting, Connection};
+use iroh::endpoint::{self, Connecting, Connection};
 use p2panda_sync::{SyncProtocol, TopicQuery};
 use tokio::sync::mpsc;
 use tracing::{debug, debug_span};

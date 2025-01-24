@@ -149,7 +149,7 @@ mod sync_protocols {
 use std::sync::Arc;
 
 use futures_util::FutureExt;
-use iroh::net::NodeId;
+use iroh::NodeId;
 use p2panda_core::{Hash, PrivateKey};
 use p2panda_sync::{SyncError, TopicQuery};
 use serde::{Deserialize, Serialize};

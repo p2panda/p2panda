@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{Context, Result};
 use futures_lite::StreamExt;
 use futures_util::FutureExt;
-use iroh_base::key::PublicKey;
+use iroh_base::PublicKey;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;

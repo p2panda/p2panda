@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::{Context, Error, Result};
-use iroh::net::{Endpoint, NodeId};
+use iroh::{Endpoint, NodeId};
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -393,9 +393,8 @@ mod tests {
     use std::sync::Arc;
 
     use futures_util::FutureExt;
-    use iroh::net::relay::RelayMode;
-    use iroh::net::Endpoint;
-    use iroh_base::key::PublicKey;
+    use iroh::{Endpoint, RelayMode};
+    use iroh_base::PublicKey;
     use iroh_quinn::TransportConfig;
     use tokio::sync::mpsc;
     use tokio::time::{sleep, Duration};
@@ -515,7 +514,7 @@ mod tests {
     }
 
     async fn handle_connection(
-        mut connecting: iroh::net::endpoint::Connecting,
+        mut connecting: iroh::endpoint::Connecting,
         protocols: Arc<ProtocolMap>,
     ) {
         let alpn = match connecting.alpn().await {

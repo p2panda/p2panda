@@ -125,9 +125,8 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
-use iroh::net::relay::{RelayMap, RelayNode};
-use iroh::net::{Endpoint, NodeAddr, NodeId};
-use iroh_base::key::SecretKey;
+use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayNode};
+use iroh_base::SecretKey;
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
@@ -291,6 +290,7 @@ where
             url: url.into(),
             stun_only,
             stun_port,
+            quic: None,
         });
         self
     }
@@ -384,8 +384,8 @@ where
                 .max_concurrent_uni_streams(0u32.into());
 
             let relay_mode = match self.relay_mode {
-                RelayMode::Disabled => iroh::net::relay::RelayMode::Disabled,
-                RelayMode::Custom(node) => iroh::net::relay::RelayMode::Custom(
+                RelayMode::Disabled => iroh::RelayMode::Disabled,
+                RelayMode::Custom(node) => iroh::RelayMode::Custom(
                     RelayMap::from_nodes(vec![node])
                         .expect("relay list can not contain duplicates"),
                 ),
@@ -790,7 +790,7 @@ pub enum FromNetwork {
 /// The connection is accepted if the handshake is successful and the peer is operating with
 /// a supported ALPN protocol.
 async fn handle_connection(
-    mut connecting: iroh::net::endpoint::Connecting,
+    mut connecting: iroh::endpoint::Connecting,
     protocols: Arc<ProtocolMap>,
 ) {
     let alpn = match connecting.alpn().await {
@@ -1040,7 +1040,7 @@ pub(crate) mod tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use iroh::net::relay::{RelayNode, RelayUrl as IrohRelayUrl};
+    use iroh::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
@@ -1147,6 +1147,7 @@ pub(crate) mod tests {
             url: IrohRelayUrl::from(relay_address),
             stun_only: false,
             stun_port: DEFAULT_STUN_PORT,
+            quic: None,
         };
         assert_eq!(builder.relay_mode, RelayMode::Custom(relay_node));
     }
