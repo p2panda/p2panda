@@ -149,7 +149,6 @@ mod sync_protocols {
 use std::sync::Arc;
 
 use futures_util::FutureExt;
-use iroh::NodeId;
 use p2panda_core::{Hash, PrivateKey};
 use p2panda_sync::{SyncError, TopicQuery};
 use serde::{Deserialize, Serialize};
@@ -184,8 +183,8 @@ async fn run_sync_impl(
 ) {
     let topic = TestTopic::new("run test protocol impl");
 
-    let initiator_node_id = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
-    let acceptor_node_id = NodeId::from_bytes(PrivateKey::new().public_key().as_bytes()).unwrap();
+    let initiator_node_id = PrivateKey::new().public_key();
+    let acceptor_node_id = PrivateKey::new().public_key();
 
     let sync_protocol = Arc::new(protocol);
 

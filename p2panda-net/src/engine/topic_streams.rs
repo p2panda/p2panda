@@ -4,8 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
-use iroh::NodeId;
-use iroh_base::PublicKey;
+use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
@@ -16,7 +15,7 @@ use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
-use crate::{to_public_key, TopicId};
+use crate::TopicId;
 
 /// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
@@ -240,7 +239,7 @@ where
         &mut self,
         topic_id: [u8; 32],
         bytes: Vec<u8>,
-        delivered_from: NodeId,
+        delivered_from: PublicKey,
     ) -> Result<()> {
         if !self.has_joined_gossip(topic_id).await {
             warn!("received message for unknown topic {topic_id:?}");
@@ -269,7 +268,7 @@ where
             from_network_tx
                 .send(FromNetwork::GossipMessage {
                     bytes: bytes.clone(),
-                    delivered_from: to_public_key(delivered_from),
+                    delivered_from,
                 })
                 .await?;
         }
@@ -282,7 +281,7 @@ where
     pub async fn on_discovered_topic_ids(
         &mut self,
         their_topic_ids: Vec<[u8; 32]>,
-        peer: NodeId,
+        peer: PublicKey,
     ) -> Result<()> {
         debug!("learned about topic ids of {}: {:?}", peer, their_topic_ids);
 
@@ -314,7 +313,7 @@ where
     /// If a topic is known we've initiated the sync session. If it is `None` we accepted a sync
     /// session and still need to learn about the topic (see `on_sync_handshake_success`).
     #[allow(unused_variables)]
-    pub fn on_sync_start(&self, topic: Option<T>, node_id: NodeId) {
+    pub fn on_sync_start(&self, topic: Option<T>, peer: PublicKey) {
         // Do nothing here for now ..
     }
 
@@ -322,8 +321,8 @@ where
     ///
     /// In the handshake phase peers usually handle authorization and exchange the topic which will
     /// be synced.
-    pub fn on_sync_handshake_success(&mut self, topic: T, node_id: NodeId) {
-        self.gossip_buffer.lock(node_id, topic.id());
+    pub fn on_sync_handshake_success(&mut self, topic: T, peer: PublicKey) {
+        self.gossip_buffer.lock(peer, topic.id());
     }
 
     /// Process application-data message resulting from the sync session.
@@ -345,7 +344,7 @@ where
                 .send(FromNetwork::SyncMessage {
                     header: header.clone(),
                     payload: payload.clone(),
-                    delivered_from: to_public_key(delivered_from),
+                    delivered_from,
                 })
                 .await?;
         }
@@ -354,20 +353,20 @@ where
     }
 
     /// Process sync session finishing.
-    pub async fn on_sync_done(&mut self, topic: T, node_id: NodeId) -> Result<()> {
+    pub async fn on_sync_done(&mut self, topic: T, peer: PublicKey) -> Result<()> {
         let topic_id = topic.id();
-        let counter = self.gossip_buffer.unlock(node_id, topic_id);
+        let counter = self.gossip_buffer.unlock(peer, topic_id);
 
         // If no locks are available anymore for that peer over that topic we can finally re-play
         // the gossip messages we've intercepted and kept around for the time of the sync session.
         if counter == 0 {
             let buffer = self
                 .gossip_buffer
-                .drain(node_id, topic_id)
+                .drain(peer, topic_id)
                 .expect("missing expected gossip buffer");
 
             for bytes in buffer {
-                self.on_gossip_message(topic_id, bytes, node_id).await?;
+                self.on_gossip_message(topic_id, bytes, peer).await?;
             }
         }
 
@@ -375,19 +374,19 @@ where
     }
 
     /// Process sync session failure by draining the associated gossip buffer.
-    pub async fn on_sync_failed(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
+    pub async fn on_sync_failed(&mut self, topic: Option<T>, peer: PublicKey) -> Result<()> {
         // If we already learned about a topic during the sync handshake phase when this error took
         // place we likely have opened up a gossip message buffer already, so we should make sure
         // to close it here.
         if let Some(topic) = topic {
             let topic_id = topic.id();
-            let counter = self.gossip_buffer.unlock(node_id, topic_id);
+            let counter = self.gossip_buffer.unlock(peer, topic_id);
 
             // If no locks are available anymore for that peer over that topic we can drain the gossip
             // messages from the buffer and drop them.
             if counter == 0 {
                 self.gossip_buffer
-                    .drain(node_id, topic_id)
+                    .drain(peer, topic_id)
                     .expect("missing expected gossip buffer");
             }
         }
@@ -399,7 +398,6 @@ where
 #[cfg(test)]
 mod tests {
     use futures_util::{FutureExt, StreamExt};
-    use iroh::NodeAddr;
     use p2panda_core::PrivateKey;
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
@@ -408,7 +406,7 @@ mod tests {
 
     use crate::engine::AddressBook;
     use crate::network::FromNetwork;
-    use crate::{to_public_key, TopicId};
+    use crate::{NodeAddress, TopicId};
 
     use super::TopicStreams;
 
@@ -426,11 +424,9 @@ mod tests {
         }
     }
 
-    fn generate_node_id() -> NodeAddr {
+    fn generate_node_addr() -> NodeAddress {
         let private_key = PrivateKey::new();
-        let public_key = private_key.public_key();
-        let bytes = public_key.as_bytes();
-        NodeAddr::new(iroh::NodeId::from_bytes(bytes).unwrap())
+        NodeAddress::from_public_key(private_key.public_key())
     }
 
     #[tokio::test]
@@ -447,9 +443,11 @@ mod tests {
 
         let mut address_book = AddressBook::new([1; 32]);
 
-        let peer_1 = generate_node_id();
+        let peer_1 = generate_node_addr();
         address_book.add_peer(peer_1.clone()).await;
-        address_book.add_topic_id(peer_1.node_id, topic.id()).await;
+        address_book
+            .add_topic_id(peer_1.public_key, topic.id())
+            .await;
 
         let mut topic_streams =
             TopicStreams::<TestTopic>::new(gossip_actor_tx, address_book, Some(sync_actor_tx));
@@ -466,15 +464,15 @@ mod tests {
 
         topic_streams.on_gossip_joined(topic_id).await;
 
-        topic_streams.on_sync_start(Some(topic.clone()), peer_1.node_id);
-        topic_streams.on_sync_handshake_success(topic.clone(), peer_1.node_id);
+        topic_streams.on_sync_start(Some(topic.clone()), peer_1.public_key);
+        topic_streams.on_sync_handshake_success(topic.clone(), peer_1.public_key);
 
         topic_streams
-            .on_gossip_message(topic_id, b"a new cmos battery".to_vec(), peer_1.node_id)
+            .on_gossip_message(topic_id, b"a new cmos battery".to_vec(), peer_1.public_key)
             .await
             .unwrap();
         topic_streams
-            .on_gossip_message(topic_id, b"and icecream".to_vec(), peer_1.node_id)
+            .on_gossip_message(topic_id, b"and icecream".to_vec(), peer_1.public_key)
             .await
             .unwrap();
 
@@ -484,7 +482,7 @@ mod tests {
         );
 
         topic_streams
-            .on_sync_done(topic, peer_1.node_id)
+            .on_sync_done(topic, peer_1.public_key)
             .await
             .unwrap();
 
@@ -492,14 +490,14 @@ mod tests {
             from_network_rx_stream.next().await.unwrap(),
             FromNetwork::GossipMessage {
                 bytes: b"a new cmos battery".to_vec(),
-                delivered_from: to_public_key(peer_1.node_id),
+                delivered_from: peer_1.public_key,
             }
         );
         assert_eq!(
             from_network_rx_stream.next().await.unwrap(),
             FromNetwork::GossipMessage {
                 bytes: b"and icecream".to_vec(),
-                delivered_from: to_public_key(peer_1.node_id),
+                delivered_from: peer_1.public_key,
             }
         );
     }

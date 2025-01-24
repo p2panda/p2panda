@@ -4,9 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
 use futures_lite::StreamExt;
-use futures_util::FutureExt;
-use iroh_base::PublicKey;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
+use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -14,6 +13,7 @@ use tokio_stream::StreamMap;
 use tracing::{error, warn};
 
 use crate::engine::ToEngineActor;
+use crate::{from_public_key, to_public_key};
 
 #[derive(Debug)]
 pub enum ToGossipActor {
@@ -114,11 +114,14 @@ where
             }
             ToGossipActor::Join { topic_id, peers } => {
                 let gossip = self.gossip.clone();
+                let peers = peers
+                    .iter()
+                    .map(|key: &p2panda_core::PublicKey| from_public_key(*key))
+                    .collect();
                 let fut = async move {
-                    let stream = gossip.join(topic_id.into(), peers).await?;
-                    Ok(stream)
-                }
-                .map(move |stream| (topic_id, stream));
+                    let stream = gossip.subscribe_and_join(topic_id.into(), peers).await;
+                    (topic_id, stream)
+                };
                 self.want_join.insert(topic_id);
                 self.pending_joins.spawn(fut);
             }
@@ -182,14 +185,17 @@ where
                 self.engine_actor_tx
                     .send(ToEngineActor::GossipMessage {
                         bytes: msg.content.into(),
-                        delivered_from: msg.delivered_from,
+                        delivered_from: to_public_key(msg.delivered_from),
                         topic_id,
                     })
                     .await?;
             }
             GossipEvent::NeighborUp(peer) => {
                 self.engine_actor_tx
-                    .send(ToEngineActor::GossipNeighborUp { topic_id, peer })
+                    .send(ToEngineActor::GossipNeighborUp {
+                        topic_id,
+                        peer: to_public_key(peer),
+                    })
                     .await?;
             }
             GossipEvent::Joined(_peers) => {
@@ -197,7 +203,10 @@ where
             }
             GossipEvent::NeighborDown(peer) => {
                 self.engine_actor_tx
-                    .send(ToEngineActor::GossipNeighborDown { topic_id, peer })
+                    .send(ToEngineActor::GossipNeighborDown {
+                        topic_id,
+                        peer: to_public_key(peer),
+                    })
                     .await?;
             }
         }
@@ -211,7 +220,7 @@ where
         let (stream_tx, stream_rx) = stream.split();
 
         // Collect all our current direct neighbors for this gossip topic.
-        let peers: Vec<PublicKey> = stream_rx.neighbors().collect();
+        let peers: Vec<PublicKey> = stream_rx.neighbors().map(to_public_key).collect();
 
         self.gossip_events.insert(topic_id, stream_rx);
         self.gossip_senders.insert(topic_id, stream_tx);

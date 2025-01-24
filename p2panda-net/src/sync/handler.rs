@@ -11,7 +11,7 @@ use tracing::{debug, debug_span};
 
 use crate::engine::ToEngineActor;
 use crate::protocols::ProtocolHandler;
-use crate::sync;
+use crate::{sync, to_public_key};
 
 pub const SYNC_CONNECTION_ALPN: &[u8] = b"/p2panda-net-sync/0";
 
@@ -37,7 +37,7 @@ where
 
     /// Handle an inbound connection using the `SYNC_CONNECTION_ALPN` and accept a sync session.
     async fn handle_connection(&self, connection: Connection) -> Result<()> {
-        let peer = endpoint::get_remote_node_id(&connection)?;
+        let peer = to_public_key(endpoint::get_remote_node_id(&connection)?);
         let remote_addr = connection.remote_address();
         let connection_id = connection.stable_id() as u64;
 

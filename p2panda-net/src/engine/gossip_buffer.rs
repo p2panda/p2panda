@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use iroh_base::PublicKey;
+use p2panda_core::PublicKey;
 use tracing::debug;
 
 #[derive(Debug, Default)]

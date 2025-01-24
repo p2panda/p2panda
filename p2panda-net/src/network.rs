@@ -125,8 +125,7 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
-use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayNode};
-use iroh_base::SecretKey;
+use iroh::{Endpoint, RelayMap, RelayNode};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
@@ -138,13 +137,13 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, error, error_span, warn, Instrument};
 
-use crate::addrs::DEFAULT_STUN_PORT;
+use crate::addrs::{to_node_addr, to_relay_url, DEFAULT_STUN_PORT};
 use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
-use crate::{NetworkId, RelayUrl, TopicId};
+use crate::{from_private_key, NetworkId, NodeAddress, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -182,13 +181,13 @@ pub struct NetworkBuilder<T> {
     bind_port_v4: Option<u16>,
     bind_ip_v6: Option<Ipv6Addr>,
     bind_port_v6: Option<u16>,
-    direct_node_addresses: Vec<NodeAddr>,
+    direct_node_addresses: Vec<NodeAddress>,
     discovery: DiscoveryMap,
     gossip_config: Option<GossipConfig>,
     network_id: NetworkId,
     protocols: ProtocolMap,
     relay_mode: RelayMode,
-    secret_key: Option<SecretKey>,
+    private_key: Option<PrivateKey>,
     sync_config: Option<SyncConfiguration<T>>,
 }
 
@@ -212,7 +211,7 @@ where
             network_id,
             protocols: Default::default(),
             relay_mode: RelayMode::Disabled,
-            secret_key: None,
+            private_key: None,
             sync_config: None,
         }
     }
@@ -225,8 +224,12 @@ where
             .bind_ip_v6(config.bind_ip_v6)
             .bind_port_v6(config.bind_port_v6);
 
-        for (public_key, addresses, relay_addr) in config.direct_node_addresses {
-            network_builder = network_builder.direct_address(public_key, addresses, relay_addr)
+        for addr in config.direct_node_addresses {
+            network_builder = network_builder.direct_address(
+                addr.public_key,
+                addr.direct_addresses,
+                addr.relay_url,
+            )
         }
 
         if let Some(url) = config.relay {
@@ -274,7 +277,7 @@ where
     /// If this value is not set, the `NetworkBuilder` will generate a new, random key when
     /// building the network.
     pub fn private_key(mut self, private_key: PrivateKey) -> Self {
-        self.secret_key = Some(SecretKey::from_bytes(private_key.as_bytes()));
+        self.private_key = Some(private_key);
         self
     }
 
@@ -307,16 +310,15 @@ where
     /// is using the same relay node.
     pub fn direct_address(
         mut self,
-        node_id: PublicKey,
-        addresses: Vec<SocketAddr>,
-        relay_addr: Option<RelayUrl>,
+        public_key: PublicKey,
+        direct_addresses: Vec<SocketAddr>,
+        relay_url: Option<RelayUrl>,
     ) -> Self {
-        let node_id = NodeId::from_bytes(node_id.as_bytes()).expect("invalid public key");
-        let mut node_addr = NodeAddr::new(node_id).with_direct_addresses(addresses);
-        if let Some(url) = relay_addr {
-            node_addr = node_addr.with_relay_url(url.into());
-        }
-        self.direct_node_addresses.push(node_addr);
+        self.direct_node_addresses.push(NodeAddress {
+            public_key,
+            direct_addresses,
+            relay_url,
+        });
         self
     }
 
@@ -369,7 +371,7 @@ where
     where
         T: TopicQuery + TopicId + 'static,
     {
-        let secret_key = self.secret_key.unwrap_or(SecretKey::generate());
+        let private_key = self.private_key.unwrap_or_default();
 
         let relay: Option<RelayNode> = match self.relay_mode {
             RelayMode::Disabled => None,
@@ -400,7 +402,7 @@ where
 
             Endpoint::builder()
                 .transport_config(transport_config)
-                .secret_key(secret_key.clone())
+                .secret_key(from_private_key(private_key.clone()))
                 .relay_mode(relay_mode)
                 .bind_addr_v4(socket_address_v4)
                 .bind_addr_v6(socket_address_v6)
@@ -410,14 +412,13 @@ where
 
         let node_addr = endpoint.node_addr().await?;
 
-        let gossip = Gossip::from_endpoint(
-            endpoint.clone(),
-            self.gossip_config.unwrap_or_default(),
-            &node_addr.info,
-        );
+        let gossip = Gossip::builder()
+            .max_message_size(self.gossip_config.unwrap_or_default().max_message_size)
+            .spawn(endpoint.clone())
+            .await?;
 
         let engine = Engine::new(
-            secret_key.clone(),
+            private_key.clone(),
             self.network_id,
             endpoint.clone(),
             gossip.clone(),
@@ -434,7 +435,7 @@ where
             engine,
             gossip: gossip.clone(),
             network_id: self.network_id,
-            secret_key,
+            private_key,
         });
 
         self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
@@ -468,10 +469,13 @@ where
         // address.
         let wait_for_endpoints = {
             async move {
-                tokio::time::timeout(DIRECT_ADDRESSES_WAIT, endpoint.direct_addresses().next())
-                    .await
-                    .context("waiting for endpoint")?
-                    .context("no endpoints given to establish at least one connection")?;
+                tokio::time::timeout(
+                    DIRECT_ADDRESSES_WAIT,
+                    endpoint.direct_addresses().initialized(),
+                )
+                .await
+                .context("waiting for endpoint")?
+                .context("no endpoints given to establish at least one connection")?;
                 Ok(())
             }
         };
@@ -482,12 +486,12 @@ where
         }
 
         for mut direct_addr in self.direct_node_addresses {
-            if direct_addr.relay_url().is_none() {
+            if direct_addr.relay_url.is_none() {
                 // If given address does not hold any relay information we optimistically add ours
                 // (if we have one). It's not guaranteed that this address will have the same relay
                 // url as we have, but it's better than nothing!
                 if let Some(ref relay_node) = relay {
-                    direct_addr = direct_addr.with_relay_url(relay_node.url.clone());
+                    direct_addr.relay_url = Some(to_relay_url(relay_node.url.clone()))
                 }
             }
 
@@ -509,7 +513,7 @@ struct NetworkInner<T> {
     gossip: Gossip,
     network_id: NetworkId,
     #[allow(dead_code)]
-    secret_key: SecretKey,
+    private_key: PrivateKey,
 }
 
 impl<T> NetworkInner<T>
@@ -539,23 +543,21 @@ where
         {
             let inner = self.clone();
             join_set.spawn(async move {
-                let mut addrs_stream = inner.endpoint.direct_addresses();
-                let mut my_node_addr = NodeAddr::new(inner.endpoint.node_id());
-                if let Some(node) = &inner.relay {
-                    my_node_addr = my_node_addr.with_relay_url(node.url.to_owned());
+                let mut addrs_stream = inner.endpoint.direct_addresses().stream();
+                let mut my_node_addr = iroh::NodeAddr::from(inner.endpoint.node_id());
+                if let Some(relay) = &inner.relay {
+                    my_node_addr = my_node_addr.with_relay_url(relay.url.clone());
                 }
 
-                loop {
-                    tokio::select! {
-                        // Learn about our direct addresses and changes to them.
-                        Some(endpoints) = addrs_stream.next() => {
-                            let direct_addresses = endpoints.iter().map(|endpoint| endpoint.addr).collect();
-                            my_node_addr.info.direct_addresses = direct_addresses;
-                            if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
-                                warn!("failed to update direct addresses for discovery: {err:?}");
-                            }
-                        },
-                        else => break,
+                while let Some(endpoints) = addrs_stream.next().await {
+                    // Learn about our direct addresses and changes to them.
+                    let direct_addresses: Option<Vec<SocketAddr>> = endpoints
+                        .map(|endpoints| endpoints.iter().map(|endpoint| endpoint.addr).collect());
+                    if let Some(addresses) = direct_addresses {
+                        my_node_addr = my_node_addr.with_direct_addresses(addresses);
+                        if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
+                            warn!("failed to update direct addresses for discovery: {err:?}");
+                        }
                     }
                 }
 
@@ -599,7 +601,7 @@ where
                 Some(event) = discovery_stream.next() => {
                     match event {
                         Ok(event) => {
-                            if let Err(err) = self.engine.add_peer(event.node_addr).await {
+                            if let Err(err) = self.engine.add_peer(to_node_addr(event.node_addr)).await {
                                 error!("engine failed on add_peer: {err:?}");
                                 break;
                             }
@@ -648,9 +650,7 @@ where
             // Closing the Endpoint is the equivalent of calling `Connection::close` on all
             // connections: Operations will immediately fail with `ConnectionError::LocallyClosed`.
             // All streams are interrupted, this is not graceful.
-            self.endpoint
-                .clone()
-                .close(1u32.into(), b"provider terminating"),
+            self.endpoint.close(),
             self.engine.shutdown(),
             protocols.shutdown(),
         );
@@ -686,7 +686,7 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     /// Adds a peer to the address book.
-    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
+    pub async fn add_peer(&self, node_addr: NodeAddress) -> Result<()> {
         self.inner.engine.add_peer(node_addr).await
     }
 
@@ -699,18 +699,23 @@ where
     }
 
     /// Returns the addresses of all known peers.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddress>> {
         self.inner.engine.known_peers().await
     }
 
     /// Returns the direct addresses of this node.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
-        self.inner
+        match self
+            .inner
             .endpoint
             .direct_addresses()
-            .next()
+            .initialized()
             .await
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
+        {
+            Ok(result) => Some(result),
+            Err(_) => None,
+        }
     }
 
     /// Returns a handle to the network endpoint.
@@ -1051,13 +1056,13 @@ pub(crate) mod tests {
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::EnvFilter;
 
-    use crate::addrs::DEFAULT_STUN_PORT;
+    use crate::addrs::{to_node_addr, DEFAULT_STUN_PORT};
     use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::events::SystemEvent;
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::sync::SyncConfiguration;
-    use crate::{NetworkBuilder, RelayMode, RelayUrl, TopicId};
+    use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, Network, ToNetwork};
 
@@ -1123,11 +1128,11 @@ pub(crate) mod tests {
             bind_port_v6: 2025,
             network_id: [1; 32],
             private_key: Some(PathBuf::new().join("secret-key.txt")),
-            direct_node_addresses: vec![(
-                direct_node_public_key,
-                vec!["0.0.0.0:2026".parse().unwrap()],
-                None,
-            )],
+            direct_node_addresses: vec![NodeAddress {
+                public_key: direct_node_public_key,
+                direct_addresses: vec!["0.0.0.0:2026".parse().unwrap()],
+                relay_url: None,
+            }],
             relay: Some(relay_address.clone()),
         };
 
@@ -1141,7 +1146,7 @@ pub(crate) mod tests {
         );
         assert_eq!(builder.bind_port_v6, Some(2025));
         assert_eq!(builder.network_id, [1; 32]);
-        assert!(builder.secret_key.is_none());
+        assert!(builder.private_key.is_none());
         assert_eq!(builder.direct_node_addresses.len(), 1);
         let relay_node = RelayNode {
             url: IrohRelayUrl::from(relay_address),
@@ -1165,8 +1170,8 @@ pub(crate) mod tests {
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
 
-        node_1.add_peer(node_2_addr).await.unwrap();
-        node_2.add_peer(node_1_addr).await.unwrap();
+        node_1.add_peer(to_node_addr(node_2_addr)).await.unwrap();
+        node_2.add_peer(to_node_addr(node_1_addr)).await.unwrap();
 
         // Subscribe to the same topic from both nodes
         let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
@@ -1219,8 +1224,8 @@ pub(crate) mod tests {
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
 
-        node_1.add_peer(node_2_addr).await.unwrap();
-        node_2.add_peer(node_1_addr).await.unwrap();
+        node_1.add_peer(to_node_addr(node_1_addr)).await.unwrap();
+        node_2.add_peer(to_node_addr(node_2_addr)).await.unwrap();
 
         // Subscribe to the same topic from both nodes which should kick off sync
         let topic_clone = topic.clone();
@@ -1336,8 +1341,8 @@ pub(crate) mod tests {
         let node_a_addr = node_a.endpoint().node_addr().await.unwrap();
         let node_b_addr = node_b.endpoint().node_addr().await.unwrap();
 
-        node_a.add_peer(node_b_addr).await.unwrap();
-        node_b.add_peer(node_a_addr).await.unwrap();
+        node_a.add_peer(to_node_addr(node_b_addr)).await.unwrap();
+        node_b.add_peer(to_node_addr(node_a_addr)).await.unwrap();
 
         // Subscribe to the same topic from both nodes which should kick off sync.
         let topic_clone = topic.clone();
@@ -1414,9 +1419,12 @@ pub(crate) mod tests {
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
 
-        node_1.add_peer(node_2_addr.clone()).await.unwrap();
-        node_2.add_peer(node_1_addr).await.unwrap();
-        node_3.add_peer(node_2_addr).await.unwrap();
+        node_1
+            .add_peer(to_node_addr(node_2_addr.clone()))
+            .await
+            .unwrap();
+        node_2.add_peer(to_node_addr(node_1_addr)).await.unwrap();
+        node_3.add_peer(to_node_addr(node_2_addr)).await.unwrap();
 
         // Subscribe to the same topic from all nodes
         let (tx_1, _rx_1, ready_1) = node_1.subscribe(chat_topic.clone()).await.unwrap();
@@ -1518,10 +1526,19 @@ pub(crate) mod tests {
         let node_3_addr = node_3.endpoint().node_addr().await.unwrap();
 
         // All peers know about only one other peer.
-        node_1.add_peer(node_2_addr.clone()).await.unwrap();
-        node_2.add_peer(node_1_addr).await.unwrap();
-        node_3.add_peer(node_2_addr.clone()).await.unwrap();
-        node_4.add_peer(node_3_addr.clone()).await.unwrap();
+        node_1
+            .add_peer(to_node_addr(node_2_addr.clone()))
+            .await
+            .unwrap();
+        node_2.add_peer(to_node_addr(node_1_addr)).await.unwrap();
+        node_3
+            .add_peer(to_node_addr(node_2_addr.clone()))
+            .await
+            .unwrap();
+        node_4
+            .add_peer(to_node_addr(node_3_addr.clone()))
+            .await
+            .unwrap();
 
         // Run all nodes. We are testing that peers gracefully handle starting a sync session while
         // not knowing the other peer's address yet. Eventually all peers complete at least one
@@ -1564,8 +1581,14 @@ pub(crate) mod tests {
         let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
         let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
 
-        node_1.add_peer(node_2_addr.clone()).await.unwrap();
-        node_2.add_peer(node_1_addr.clone()).await.unwrap();
+        node_1
+            .add_peer(to_node_addr(node_2_addr.clone()))
+            .await
+            .unwrap();
+        node_2
+            .add_peer(to_node_addr(node_1_addr.clone()))
+            .await
+            .unwrap();
 
         // Subscribe to network events for each node.
         let mut event_rx_1 = node_1.events().await.unwrap();
@@ -1581,7 +1604,7 @@ pub(crate) mod tests {
         // Start a third node.
         let node_3 = NetworkBuilder::new(network_id).build().await.unwrap();
         let node_3_id = node_3.endpoint().node_id();
-        node_3.add_peer(node_1_addr).await.unwrap();
+        node_3.add_peer(to_node_addr(node_1_addr)).await.unwrap();
         let (_tx_3, _rx_3, ready_3) = node_3.subscribe(chat_topic.clone()).await.unwrap();
         assert!(ready_3.await.is_ok());
 
@@ -1590,48 +1613,54 @@ pub(crate) mod tests {
             // Join the network-wide gossip overlay by connecting to node 2.
             SystemEvent::GossipJoined {
                 topic_id: network_id,
-                peers: vec![node_2_id],
+                peers: vec![to_public_key(node_2_id)],
             },
             // Discover node 2 via an announcement on the network-wide gossip overlay.
-            SystemEvent::PeerDiscovered { peer: node_2_id },
+            SystemEvent::PeerDiscovered {
+                peer: to_public_key(node_2_id),
+            },
             // Start sync (part one) with node 2.
             SystemEvent::SyncStarted {
                 topic: None,
-                peer: node_2_id,
+                peer: to_public_key(node_2_id),
             },
             // Complete sync (part one) with node 2.
             SystemEvent::SyncDone {
                 topic: chat_topic.clone(),
-                peer: node_2_id,
+                peer: to_public_key(node_2_id),
             },
             // Start sync (part two) with node 2.
             SystemEvent::SyncStarted {
                 topic: Some(chat_topic.clone()),
-                peer: node_2_id,
+                peer: to_public_key(node_2_id),
             },
             // Join the topic gossip overlay by connecting to node 2.
             SystemEvent::GossipJoined {
                 topic_id: chat_topic_id,
-                peers: vec![node_2_id],
+                peers: vec![to_public_key(node_2_id)],
             },
             // Complete sync (part two) with node 2.
             SystemEvent::SyncDone {
                 topic: chat_topic.clone(),
-                peer: node_2_id,
+                peer: to_public_key(node_2_id),
             },
             // Gain a direct neighbor in the network-wide gossip overlay by connecting to node 3.
             SystemEvent::GossipNeighborUp {
                 topic_id: network_id,
-                peer: node_3_id,
+                peer: to_public_key(node_3_id),
             },
             // Discover node 2 (again) via an announcement on the network-wide gossip overlay.
-            SystemEvent::PeerDiscovered { peer: node_2_id },
+            SystemEvent::PeerDiscovered {
+                peer: to_public_key(node_2_id),
+            },
             // Discover node 3 via an announcement on the network-wide gossip overlay.
-            SystemEvent::PeerDiscovered { peer: node_3_id },
+            SystemEvent::PeerDiscovered {
+                peer: to_public_key(node_3_id),
+            },
             // Gain a direct neighbor in the topic gossip overlay by connecting to node 3.
             SystemEvent::GossipNeighborUp {
                 topic_id: chat_topic_id,
-                peer: node_3_id,
+                peer: to_public_key(node_3_id),
             },
         ];
 

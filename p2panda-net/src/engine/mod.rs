@@ -14,9 +14,9 @@ use std::fmt::Debug;
 use anyhow::Result;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
-use iroh::{Endpoint, NodeAddr};
-use iroh_base::SecretKey;
+use iroh::Endpoint;
 use iroh_gossip::net::Gossip;
+use p2panda_core::PrivateKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
@@ -30,7 +30,7 @@ use crate::events::SystemEvent;
 use crate::network::{FromNetwork, JoinErrToStr, ToNetwork};
 use crate::sync::manager::SyncActor;
 use crate::sync::{SyncConfiguration, SyncConnection};
-use crate::{NetworkId, TopicId};
+use crate::{NetworkId, NodeAddress, TopicId};
 pub use engine::ToEngineActor;
 
 /// The `Engine` is responsible for instantiating various system actors (including engine, gossip
@@ -48,7 +48,7 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
-        secret_key: SecretKey,
+        private_key: PrivateKey,
         network_id: NetworkId,
         endpoint: Endpoint,
         gossip: Gossip,
@@ -71,7 +71,7 @@ where
         };
 
         let engine_actor = EngineActor::new(
-            secret_key,
+            private_key,
             endpoint,
             address_book,
             engine_actor_rx,
@@ -105,7 +105,7 @@ where
     ///
     /// Learning about a peer gives us information on how to connect to them, for learning about
     /// the topics it's interested in we need a separate process named "topic discovery".
-    pub async fn add_peer(&self, node_addr: NodeAddr) -> Result<()> {
+    pub async fn add_peer(&self, node_addr: NodeAddress) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::AddPeer { node_addr })
             .await?;
@@ -122,7 +122,7 @@ where
     }
 
     /// Retrieves the node addresses of all peers the engine currently knows about.
-    pub async fn known_peers(&self) -> Result<Vec<NodeAddr>> {
+    pub async fn known_peers(&self) -> Result<Vec<NodeAddress>> {
         let (reply, reply_rx) = oneshot::channel();
         self.engine_actor_tx
             .send(ToEngineActor::KnownPeers { reply })
