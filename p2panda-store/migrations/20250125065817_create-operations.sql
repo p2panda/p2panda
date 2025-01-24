@@ -15,6 +15,5 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     extensions              BLOB            NULL,
     body                    BLOB            NULL,
     header_bytes            TEXT            NOT NULL,
-    -- @TODO(glyph): Should primary key be hash instead?
-    PRIMARY KEY (public_key, log_id, seq_num)
+    PRIMARY KEY (hash)
 );

@@ -7,10 +7,11 @@ use anyhow::{Error, Result};
 use sqlx::migrate;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::{query, Sqlite};
+use sqlx::{query, query_as, Sqlite};
 
 use p2panda_core::{Body, Extensions, Hash, Header, RawOperation};
 
+use crate::sqlite::models::OperationRow;
 use crate::{LogId, OperationStore};
 
 /// Re-export of SQLite connection pool type.
@@ -67,6 +68,15 @@ fn serialize_extensions<T: Extensions>(extensions: &T) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+pub(crate) fn deserialize_extensions<T>(bytes: Vec<u8>) -> Result<T>
+where
+    T: Extensions,
+{
+    let extensions = ciborium::de::from_reader(&bytes[..])?;
+
+    Ok(extensions)
+}
+
 impl<L, E> OperationStore<L, E> for SqliteStore
 where
     L: LogId + Send + Sync,
@@ -114,18 +124,18 @@ where
         .bind(hash.to_hex())
         .bind(calculate_hash(log_id).to_string())
         .bind(header.version.to_string())
-        .bind(header.public_key.to_string())
-        .bind(header.signature.map(|sig| sig.to_string()))
+        .bind(header.public_key.to_hex())
+        .bind(header.signature.map(|sig| sig.to_hex()))
         .bind(header.payload_size.to_string())
-        .bind(header.payload_hash.map(|hash| hash.to_string()))
+        .bind(header.payload_hash.map(|hash| hash.to_hex()))
         .bind(header.timestamp.to_string())
         .bind(header.seq_num.to_string())
-        .bind(header.backlink.map(|backlink| backlink.to_string()))
+        .bind(header.backlink.map(|backlink| backlink.to_hex()))
         .bind(
             header
                 .previous
                 .iter()
-                .map(|previous| previous.to_string())
+                .map(|previous| previous.to_hex())
                 .collect::<Vec<String>>()
                 .concat(),
         )
@@ -140,44 +150,37 @@ where
 
     async fn get_operation(
         &self,
-        _hash: Hash,
+        hash: Hash,
     ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
-        /*
-        let operation_rows = query_as::<_, OperationFieldsJoinedRow>(
+        let operation_row = query_as::<_, OperationRow>(
             "
             SELECT
+                operations_v1.hash,
+                operations_v1.log_id,
+                operations_v1.version,
                 operations_v1.public_key,
-                operations_v1.document_id,
-                operations_v1.operation_id,
-                operations_v1.action,
-                operations_v1.schema_id,
+                operations_v1.signature,
+                operations_v1.payload_size,
+                operations_v1.payload_hash,
+                operations_v1.timestamp,
+                operations_v1.seq_num,
+                operations_v1.backlink,
                 operations_v1.previous,
-                operations_v1.sorted_index,
-                operation_fields_v1.name,
-                operation_fields_v1.field_type,
-                operation_fields_v1.value,
-                operation_fields_v1.list_index
+                operations_v1.extensions,
+                operations_v1.body,
+                operations_v1.header_bytes,
             FROM
                 operations_v1
-            LEFT JOIN operation_fields_v1
-                ON
-                    operation_fields_v1.operation_id = operations_v1.operation_id
-            WHERE
-                operations_v1.operation_id = $1
-            ORDER BY
-                operation_fields_v1.list_index ASC
             ",
         )
-        .bind(id.as_str())
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| OperationStorageError::FatalStorageError(e.to_string()))?;
+        .bind(hash.to_string())
+        .fetch_one(&self.pool)
+        .await?;
 
-        let operation = parse_operation_rows(operation_rows);
-        Ok(operation)
-        */
+        let body = operation_row.body.clone().map(|body| body.into());
+        let header: Header<E> = operation_row.into();
 
-        Ok(None)
+        Ok(Some((header, body)))
     }
 
     async fn get_raw_operation(&self, _hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
