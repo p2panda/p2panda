@@ -15,7 +15,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
-- Use iroh crate instead of iroh-net [#672](https://github.com/p2panda/p2panda/pull/672)
+- Update to iroh `v0.31.0` [#672](https://github.com/p2panda/p2panda/pull/672)
 
 ## [0.2.0] - 20/01/2025
 
