@@ -3,7 +3,7 @@
 use std::convert::From;
 use std::str::FromStr;
 
-use p2panda_core::{Extensions, Hash, Header, PublicKey, Signature};
+use p2panda_core::{Extensions, Hash, Header, PublicKey, RawOperation, Signature};
 use sqlx::FromRow;
 
 use crate::sqlite::store::deserialize_extensions;
@@ -62,5 +62,11 @@ where
                 .extensions
                 .map(|extensions| deserialize_extensions(extensions).unwrap()),
         }
+    }
+}
+
+impl From<OperationRow> for RawOperation {
+    fn from(operation_row: OperationRow) -> Self {
+        (operation_row.header_bytes, operation_row.body)
     }
 }
