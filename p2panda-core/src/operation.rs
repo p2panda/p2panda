@@ -269,6 +269,7 @@ where
         Hash::new(self.to_bytes())
     }
 
+    /// Extract an extension value from the header.
     pub fn extension<T>(&self) -> Option<T>
     where
         E: Extension<T>,

@@ -4,7 +4,8 @@
 //!
 //! User-defined extensions can be added to an operation's `Header` in order to extend the basic
 //! functionality of the core p2panda data types or to encode application-specific fields which
-//! should not be contained in the [`Body`](crate::Body).
+//! should not be contained in the [`Body`](crate::Body). Extension values can themselves be
+//! derived from other header material, such as `PublicKey` or a headers' `Hash`.
 //!
 //! At a lower level this might be information relating to capabilities or group encryption schemes
 //! which is required to enforce access-control restrictions during sync. Alternatively, extensions
