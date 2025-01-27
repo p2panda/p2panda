@@ -10,7 +10,6 @@ use crate::sqlite::store::deserialize_extensions;
 
 /// A struct representing a single operation row as it is inserted in the database.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub struct OperationRow {
     hash: String,
     log_id: String,
