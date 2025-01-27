@@ -223,8 +223,23 @@ where
         Ok(exists.is_some())
     }
 
-    async fn delete_operation(&mut self, _hash: Hash) -> Result<bool, Self::Error> {
-        todo!()
+    async fn delete_operation(&mut self, hash: Hash) -> Result<bool, Self::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        let result = sqlx::query(
+            "
+            DELETE
+            FROM
+                operations_v1
+            WHERE
+                hash = ?
+            ",
+        )
+        .bind(hash.to_string())
+        .execute(&mut *tx)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 
     async fn delete_payload(&mut self, _hash: Hash) -> Result<bool, Self::Error> {
