@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
 
+### Changed
+
+- Update to iroh `v0.31.0` [#672](https://github.com/p2panda/p2panda/pull/672)
+
 ## [0.2.0] - 20/01/2025
 
 ### Changed

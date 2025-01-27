@@ -15,16 +15,17 @@ keywords = ["discovery", "mdns", "p2p"]
 
 [features]
 default = []
-mdns = ["dep:hickory-proto", "dep:socket2"]
+mdns = ["dep:hickory-proto", "dep:socket2", "dep:base32"]
 
 [dependencies]
 anyhow = "1.0.86"
+base32 = { version = "0.5.1", optional = true }
 flume = "0.11.0"
 futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 hickory-proto = { version = "0.24.1", optional = true }
-iroh-base = "0.28.0"
-iroh-net = "0.28.1"
+iroh = { version = "0.31.0", default-features = false }
+iroh-base = "0.31.0"
 netwatch = "0.2.0"
 socket2 = { version = "0.5.7", optional = true }
 tokio = { version = "1.42.0", features = ["net", "sync"] }

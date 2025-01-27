@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{NetworkId, NodeAddress, RelayUrl};
 
-pub use iroh_gossip::proto::topic::Config as GossipConfig;
-
 /// Default port of a node socket.
 pub const DEFAULT_BIND_PORT: u16 = 2022;
 
@@ -67,6 +65,21 @@ impl Default for Config {
             network_id: DEFAULT_NETWORK_ID,
             private_key: None,
             relay: None,
+        }
+    }
+}
+
+/// Configuration parameters for gossip overlays.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GossipConfig {
+    /// Maximum gossip message size in bytes.
+    pub max_message_size: usize,
+}
+
+impl Default for GossipConfig {
+    fn default() -> Self {
+        Self {
+            max_message_size: 4096,
         }
     }
 }
