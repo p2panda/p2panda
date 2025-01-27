@@ -183,12 +183,44 @@ where
         Ok(Some((header, body)))
     }
 
-    async fn get_raw_operation(&self, _hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
-        todo!()
+    async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
+        let operation_row = query_as::<_, OperationRow>(
+            "
+            SELECT
+                operations_v1.body,
+                operations_v1.header_bytes,
+            FROM
+                operations_v1
+            ",
+        )
+        .bind(hash.to_string())
+        .fetch_one(&self.pool)
+        .await?;
+
+        let raw_operation = operation_row.into();
+
+        Ok(Some(raw_operation))
     }
 
-    async fn has_operation(&self, _hash: Hash) -> Result<bool, Self::Error> {
-        todo!()
+    async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error> {
+        let exists = query(
+            "
+            SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    operations_v1
+                WHERE
+                    hash = ?
+            )
+            ",
+        )
+        .bind(hash.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(exists.is_some())
     }
 
     async fn delete_operation(&mut self, _hash: Hash) -> Result<bool, Self::Error> {
