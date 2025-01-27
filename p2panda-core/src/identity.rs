@@ -289,6 +289,14 @@ impl fmt::Debug for Signature {
     }
 }
 
+impl FromStr for Signature {
+    type Err = IdentityError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::try_from(hex::decode(value)?.as_slice())
+    }
+}
+
 impl From<Signature> for ed25519_dalek::Signature {
     fn from(value: Signature) -> Self {
         value.0
