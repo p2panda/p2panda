@@ -2,6 +2,7 @@
 
 //! SQLite persistent storage.
 use std::hash::{DefaultHasher, Hash as StdHash, Hasher};
+use std::marker::PhantomData;
 
 use anyhow::{Error, Result};
 use sqlx::migrate;
@@ -19,14 +20,22 @@ pub type Pool = SqlitePool;
 
 /// SQLite-based persistent store.
 #[derive(Clone, Debug)]
-pub struct SqliteStore {
+pub struct SqliteStore<L, E> {
     pub(crate) pool: Pool,
+    _marker: PhantomData<(L, E)>,
 }
 
-impl SqliteStore {
+impl<L, E> SqliteStore<L, E>
+where
+    L: LogId,
+    E: Extensions,
+{
     /// Create a new `SqliteStore` using the provided db `Pool`.
     pub fn new(pool: Pool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            _marker: PhantomData {},
+        }
     }
 }
 
@@ -86,7 +95,7 @@ where
     Ok(extensions)
 }
 
-impl<L, E> OperationStore<L, E> for SqliteStore
+impl<L, E> OperationStore<L, E> for SqliteStore<L, E>
 where
     L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
@@ -130,7 +139,7 @@ where
                 ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ",
         )
-        .bind(hash.to_hex())
+        .bind(hash.to_string())
         .bind(calculate_hash(log_id).to_string())
         .bind(header.version.to_string())
         .bind(header.public_key.to_hex())
@@ -161,43 +170,48 @@ where
         &self,
         hash: Hash,
     ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
-        let operation_row = query_as::<_, OperationRow>(
+        if let Some(operation_row) = query_as::<_, OperationRow>(
             "
             SELECT
-                operations_v1.hash,
-                operations_v1.log_id,
-                operations_v1.version,
-                operations_v1.public_key,
-                operations_v1.signature,
-                operations_v1.payload_size,
-                operations_v1.payload_hash,
-                operations_v1.timestamp,
-                operations_v1.seq_num,
-                operations_v1.backlink,
-                operations_v1.previous,
-                operations_v1.extensions,
-                operations_v1.body,
-                operations_v1.header_bytes
+                hash,
+                log_id,
+                version,
+                public_key,
+                signature,
+                payload_size,
+                payload_hash,
+                timestamp,
+                seq_num,
+                backlink,
+                previous,
+                extensions,
+                body,
+                header_bytes
             FROM
                 operations_v1
+            WHERE
+                hash = ?
             ",
         )
         .bind(hash.to_string())
-        .fetch_one(&self.pool)
-        .await?;
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            let body = operation_row.body.clone().map(|body| body.into());
+            let header: Header<E> = operation_row.into();
 
-        let body = operation_row.body.clone().map(|body| body.into());
-        let header: Header<E> = operation_row.into();
-
-        Ok(Some((header, body)))
+            Ok(Some((header, body)))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
         let operation_row = query_as::<_, OperationRow>(
             "
             SELECT
-                operations_v1.body,
-                operations_v1.header_bytes
+                body,
+                header_bytes
             FROM
                 operations_v1
             ",
@@ -261,7 +275,7 @@ where
             SET
                 body = NULL
             WHERE
-                hash = ?
+                operations_v1.hash = ?
             ",
         )
         .bind(hash.to_string())
@@ -385,5 +399,40 @@ mod tests {
             .await
             .expect("no errors");
         assert!(inserted);
+    }
+
+    #[tokio::test]
+    async fn insert_get_operation() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
+
+        let inserted = store
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
+            .await
+            .expect("no errors");
+        assert!(inserted);
+        assert!(store.has_operation(hash).await.expect("no error"));
+
+        let (header_again, body_again) = store
+            .get_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+
+        assert_eq!(header.hash(), header_again.hash());
+        assert_eq!(Some(body.clone()), body_again);
+
+        let (header_bytes_again, body_bytes_again) = store
+            .get_raw_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+
+        assert_eq!(header_bytes_again, header_bytes);
+        assert_eq!(body_bytes_again, Some(body.to_bytes()));
     }
 }
