@@ -65,8 +65,12 @@
 //! }
 //!
 //! impl Extension<PruneFlag> for CustomExtensions {
-//!     fn extract(&self) -> Option<PruneFlag> {
-//!         Some(self.prune_flag.to_owned())
+//!     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
+//!         let Some(extensions) = header.extensions.as_ref() else {
+//!             return None;
+//!         };
+//!
+//!         Some(extensions.prune_flag.clone())
 //!     }
 //! }
 //!
@@ -90,7 +94,7 @@
 //!
 //! header.sign(&private_key);
 //!
-//! let prune_flag: PruneFlag = header.extract().unwrap();
+//! let prune_flag: PruneFlag = header.extension().unwrap();
 //! assert!(prune_flag.is_set())
 //! ```
 use thiserror::Error;
@@ -98,7 +102,7 @@ use thiserror::Error;
 use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
-use crate::Extensions;
+use crate::{Extension, Extensions};
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -263,6 +267,14 @@ where
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
         Hash::new(self.to_bytes())
+    }
+
+    /// Extract an extension value from the header.
+    pub fn extension<T>(&self) -> Option<T>
+    where
+        E: Extension<T>,
+    {
+        E::extract(self)
     }
 }
 
@@ -667,40 +679,45 @@ mod tests {
 
     #[test]
     fn extensions() {
-        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-        struct LogId(u64);
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct LogId(Hash);
 
-        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Serialize, Deserialize)]
         struct Expiry(u64);
 
-        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Serialize, Deserialize)]
         struct CustomExtensions {
-            log_id: LogId,
+            log_id: Option<LogId>,
             expires: Expiry,
         }
 
         impl Extension<LogId> for CustomExtensions {
-            fn extract(&self) -> Option<LogId> {
-                Some(self.log_id.to_owned())
+            fn extract(header: &Header<Self>) -> Option<LogId> {
+                if header.seq_num == 0 {
+                    return Some(LogId(header.hash()));
+                };
+
+                let Some(extensions) = header.extensions.as_ref() else {
+                    return None;
+                };
+
+                extensions.log_id.clone()
             }
         }
 
         impl Extension<Expiry> for CustomExtensions {
-            fn extract(&self) -> Option<Expiry> {
-                Some(self.expires.to_owned())
+            fn extract(header: &Header<Self>) -> Option<Expiry> {
+                header
+                    .extensions
+                    .as_ref()
+                    .map(|extensions| extensions.expires.clone())
             }
         }
 
         let extensions = CustomExtensions {
-            log_id: LogId(0),
+            log_id: None,
             expires: Expiry(0123456),
         };
-
-        let log_id = Extension::<LogId>::extract(&extensions).unwrap();
-        let expiry = Extension::<Expiry>::extract(&extensions).unwrap();
-
-        assert_eq!(extensions.log_id.0, log_id.0);
-        assert_eq!(extensions.expires.0, expiry.0);
 
         let private_key = PrivateKey::new();
         let body: Body = Body::new("Hello, Sloth!".as_bytes());
@@ -722,10 +739,10 @@ mod tests {
 
         // Thanks to blanket implementation of Extension<T> on Header we can extract the extension
         // value from the header itself.
-        let log_id = Extension::<LogId>::extract(&header).unwrap();
-        let expiry = Extension::<Expiry>::extract(&header).unwrap();
+        let log_id: LogId = header.extension().unwrap();
+        let expiry: Expiry = header.extension().unwrap();
 
-        assert_eq!(extensions.log_id.0, log_id.0);
+        assert_eq!(header.hash(), log_id.0);
         assert_eq!(extensions.expires.0, expiry.0);
     }
 }

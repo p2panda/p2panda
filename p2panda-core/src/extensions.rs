@@ -4,7 +4,8 @@
 //!
 //! User-defined extensions can be added to an operation's `Header` in order to extend the basic
 //! functionality of the core p2panda data types or to encode application-specific fields which
-//! should not be contained in the [`Body`](crate::Body).
+//! should not be contained in the [`Body`](crate::Body). Extension values can themselves be
+//! derived from other header material, such as `PublicKey` or a headers' `Hash`.
 //!
 //! At a lower level this might be information relating to capabilities or group encryption schemes
 //! which is required to enforce access-control restrictions during sync. Alternatively, extensions
@@ -21,37 +22,75 @@
 //! Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
 //! requirements that `Header` requires, including `Serialize` and `Deserialize`.
 //!
-//! ## Example
+//! //! ## Example
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+//! use p2panda_core::{Body, Hash, Extension, Header, PrivateKey};
 //! use serde::{Serialize, Deserialize};
 //!
-//! // Extend our operations with an "expiry" field we can use to implement "ephemeral messages" in
-//! // our application, which get automatically deleted after the expiration timestamp is due.
-//! #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
-//! pub struct Expiry(u64);
+//! #[derive(Clone, Debug, Serialize, Deserialize)]
+//! struct LogId(Hash);
 //!
-//! // Multiple extensions can be combined in a custom type.
 //! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+//! struct Expiry(u64);
+//!
+//! #[derive(Clone, Debug, Serialize, Deserialize)]
 //! struct CustomExtensions {
-//!     expiry: Expiry,
+//!     log_id: Option<LogId>,
+//!     expires: Expiry,
 //! }
 //!
-//! // Implement `Extension<T>` for each extension we want to add to our `CustomExtensions`.
-//! impl Extension<Expiry> for CustomExtensions {
-//!     fn extract(&self) -> Option<Expiry> {
-//!         Some(self.expiry.to_owned())
+//! impl Extension<LogId> for CustomExtensions {
+//!     fn extract(header: &Header<Self>) -> Option<LogId> {
+//!         if header.seq_num == 0 {
+//!             return Some(LogId(header.hash()));
+//!         };
+//!
+//!         let Some(extensions) = header.extensions.as_ref() else {
+//!             return None;
+//!         };
+//!
+//!         extensions.log_id.clone()
 //!     }
 //! }
 //!
-//! // Create a custom extension instance, this can be added to an operation's header.
+//! impl Extension<Expiry> for CustomExtensions {
+//!     fn extract(header: &Header<Self>) -> Option<Expiry> {
+//!         header
+//!             .extensions
+//!             .as_ref()
+//!             .map(|extensions| extensions.expires.clone())
+//!     }
+//! }
+//!
 //! let extensions = CustomExtensions {
-//!     expiry: Expiry(1733170246),
+//!     log_id: None,
+//!     expires: Expiry(0123456),
 //! };
 //!
-//! // Extract the extension we are interested in.
-//! let expiry: Expiry = extensions.extract().expect("expiry field should be set");
+//! let private_key = PrivateKey::new();
+//! let body: Body = Body::new("Hello, Sloth!".as_bytes());
+//!
+//! let mut header = Header {
+//!     version: 1,
+//!     public_key: private_key.public_key(),
+//!     signature: None,
+//!     payload_size: body.size(),
+//!     payload_hash: Some(body.hash()),
+//!     timestamp: 0,
+//!     seq_num: 0,
+//!     backlink: None,
+//!     previous: vec![],
+//!     extensions: Some(extensions.clone()),
+//! };
+//!
+//! header.sign(&private_key);
+//!
+//! let log_id: LogId = header.extension().unwrap();
+//! let expiry: Expiry = header.extension().unwrap();
+//!
+//! assert_eq!(header.hash(), log_id.0);
+//! assert_eq!(extensions.expires.0, expiry.0);
 //! ```
 use std::fmt::Debug;
 
@@ -61,8 +100,8 @@ use crate::Header;
 
 /// Trait definition of a single header extension type.
 pub trait Extension<T>: Extensions {
-    /// Extract the value of an extension based on it's type.
-    fn extract(&self) -> Option<T> {
+    /// Extract the extension value from a header.
+    fn extract(_header: &Header<Self>) -> Option<T> {
         None
     }
 }
@@ -72,17 +111,3 @@ pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 
 /// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
 impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
-
-/// Generic implementation of `Extension<T>` for `Header<E>` allowing access to the extension
-/// values.
-impl<T, E> Extension<T> for Header<E>
-where
-    E: Extension<T>,
-{
-    fn extract(&self) -> Option<T> {
-        match &self.extensions {
-            Some(extensions) => Extension::<T>::extract(extensions),
-            None => None,
-        }
-    }
-}
