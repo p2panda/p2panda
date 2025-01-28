@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use hickory_proto::op::{Message, MessageType, Query};
 use hickory_proto::rr::{rdata, DNSClass, Name, RData, Record, RecordType};
-use iroh_net::{NodeAddr, NodeId};
+use iroh::{NodeAddr, NodeId};
 use tracing::{debug, trace};
 
 use crate::mdns::ServiceName;
@@ -33,7 +33,7 @@ pub fn make_response(service_name: &ServiceName, node_addr: &NodeAddr) -> Messag
     msg.set_message_type(MessageType::Response);
     msg.set_authoritative(true);
 
-    let node_id_str = node_addr.node_id.to_string();
+    let node_id_str = base32::encode(base32::Alphabet::Z, node_addr.node_id.as_bytes());
 
     let my_srv_name = Name::from_str(&node_id_str)
         .expect("node id was checked already")
@@ -151,12 +151,26 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
             };
             let Cow::Borrowed(node_id_str) = String::from_utf8_lossy(node_id_bytes) else {
                 debug!(
-                    "received mdns response with invalid node id {:?}",
+                    "received mdns response with invalid node id utf8 string {:?}",
                     node_id_bytes
                 );
                 continue;
             };
-            let Ok(node_id) = NodeId::from_str(node_id_str) else {
+            let Some(decoded) = base32::decode(base32::Alphabet::Z, node_id_str) else {
+                debug!(
+                    "received mdns response with invalid base32 encoding {:?}",
+                    node_id_bytes
+                );
+                continue;
+            };
+            let Ok(node_id_bytes) = TryInto::<[u8; 32]>::try_into(decoded) else {
+                debug!(
+                    "received mdns response with invalid node id bytes {:?}",
+                    node_id_bytes
+                );
+                continue;
+            };
+            let Ok(node_id) = NodeId::from_bytes(&node_id_bytes) else {
                 debug!(
                     "received mdns response with invalid node id {:?}",
                     node_id_bytes

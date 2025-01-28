@@ -2,15 +2,16 @@
 
 use anyhow::{Context, Result};
 use futures_lite::FutureExt;
-use iroh_net::key::{PublicKey, SecretKey};
-use iroh_net::{Endpoint, NodeAddr, NodeId};
+use iroh::Endpoint;
 use netwatch::netmon::Monitor;
+use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_sync::TopicQuery;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
+use crate::addrs::{from_node_addr, to_relay_url};
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::{
     ANNOUNCE_TOPICS_INTERVAL, JOIN_NETWORK_INTERVAL, JOIN_TOPICS_INTERVAL,
@@ -21,18 +22,18 @@ use crate::engine::topic_streams::TopicStreams;
 use crate::events::SystemEvent;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
-use crate::{NetworkId, TopicId};
+use crate::{from_public_key, to_public_key, NetworkId, NodeAddress, TopicId};
 
 #[derive(Debug)]
 pub enum ToEngineActor<T> {
     AddPeer {
-        node_addr: NodeAddr,
+        node_addr: NodeAddress,
     },
     SubscribeEvents {
         reply: oneshot::Sender<broadcast::Receiver<SystemEvent<T>>>,
     },
     KnownPeers {
-        reply: oneshot::Sender<Vec<NodeAddr>>,
+        reply: oneshot::Sender<Vec<NodeAddress>>,
     },
     SubscribeTopic {
         topic: T,
@@ -86,7 +87,7 @@ pub enum ToEngineActor<T> {
 
 /// The core event orchestrator of the networking layer.
 pub struct EngineActor<T> {
-    secret_key: SecretKey,
+    private_key: PrivateKey,
     address_book: AddressBook,
     endpoint: Endpoint,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
@@ -103,7 +104,7 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
-        secret_key: SecretKey,
+        private_key: PrivateKey,
         endpoint: Endpoint,
         address_book: AddressBook,
         inbox: mpsc::Receiver<ToEngineActor<T>>,
@@ -120,7 +121,7 @@ where
         );
 
         Self {
-            secret_key,
+            private_key,
             address_book,
             endpoint,
             gossip_actor_tx,
@@ -240,7 +241,7 @@ where
                 // Attempt announcing our currently subscribed topics to other peers.
                 _ = announce_topics_interval.tick() => {
                     let my_topic_ids = self.topic_streams.topic_ids();
-                    self.topic_discovery.announce(my_topic_ids, &self.secret_key).await?;
+                    self.topic_discovery.announce(my_topic_ids, &self.private_key).await?;
                 },
                 // Attempt joining the application's topic gossips if we haven't yet.
                 _ = join_topics_interval.tick() => {
@@ -324,14 +325,18 @@ where
     ///
     /// Any provided network addresses are registered with the endpoint so that automatic
     /// connection attempts can be made.
-    async fn add_peer(&mut self, node_addr: NodeAddr) -> Result<()> {
-        let node_id = node_addr.node_id;
+    async fn add_peer(&mut self, node_addr: NodeAddress) -> Result<()> {
+        let public_key = node_addr.public_key;
 
         // Make sure the low-level networking endpoint also knows about this address, otherwise
         // connection attempts might fail.
-        if self.endpoint.add_node_addr(node_addr.clone()).is_err() {
+        if self
+            .endpoint
+            .add_node_addr(from_node_addr(node_addr.clone()))
+            .is_err()
+        {
             // This can fail if we're trying to add ourselves.
-            debug!("tried to add invalid node {node_id} to known peers list");
+            debug!("tried to add invalid node {public_key} to known peers list");
             return Ok(());
         }
 
@@ -374,14 +379,19 @@ where
     /// gossip overlay.
     ///
     /// Through this we can use gossip algorithms also as an additional "peer discovery" mechanism.
-    async fn on_peer_connected(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
-        self.address_book.add_topic_id(node_id, topic_id).await;
+    async fn on_peer_connected(&mut self, topic_id: [u8; 32], peer: PublicKey) -> Result<()> {
+        self.address_book.add_topic_id(peer, topic_id).await;
 
         // At this point we only have the public key of the peer, which is not enough to establish
         // direct connections, luckily iroh has handled storing networking information for us
         // internally already.
-        if let Some(info) = self.endpoint.remote_info(node_id) {
-            self.address_book.add_peer(info.into()).await;
+        if let Some(info) = self.endpoint.remote_info(from_public_key(peer)) {
+            let node_addr = NodeAddress {
+                public_key: to_public_key(info.node_id),
+                direct_addresses: info.addrs.iter().map(|addr| addr.addr).collect(),
+                relay_url: info.relay_url.map(|info| to_relay_url(info.relay_url)),
+            };
+            self.address_book.add_peer(node_addr).await;
         }
 
         // Hot path: Some other peer joined, so we send them our "topics of interest", this will
@@ -389,29 +399,23 @@ where
         if topic_id == self.network_id {
             let my_topic_ids = self.topic_streams.topic_ids();
             self.topic_discovery
-                .announce(my_topic_ids, &self.secret_key)
+                .announce(my_topic_ids, &self.private_key)
                 .await?;
         }
 
         // Notify any system event subscribers.
         if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::GossipNeighborUp {
-                topic_id,
-                peer: node_id,
-            })?;
+            event_tx.send(SystemEvent::GossipNeighborUp { topic_id, peer })?;
         }
 
         Ok(())
     }
 
     /// The given peer is no longer our direct neighbor in the gossip overlay.
-    async fn on_peer_disconnected(&mut self, topic_id: [u8; 32], node_id: NodeId) -> Result<()> {
+    async fn on_peer_disconnected(&mut self, topic_id: [u8; 32], peer: PublicKey) -> Result<()> {
         // Notify any system event subscribers.
         if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::GossipNeighborDown {
-                topic_id,
-                peer: node_id,
-            })?;
+            event_tx.send(SystemEvent::GossipNeighborDown { topic_id, peer })?;
         }
 
         Ok(())
@@ -443,54 +447,43 @@ where
         // up finding other peers.
         let my_topic_ids = self.topic_streams.topic_ids();
         self.topic_discovery
-            .announce(my_topic_ids, &self.secret_key)
+            .announce(my_topic_ids, &self.private_key)
             .await?;
 
         Ok(())
     }
 
     /// Process sync session starting.
-    pub async fn on_sync_start(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
-        self.topic_streams.on_sync_start(topic.clone(), node_id);
+    pub async fn on_sync_start(&mut self, topic: Option<T>, peer: PublicKey) -> Result<()> {
+        self.topic_streams.on_sync_start(topic.clone(), peer);
 
         if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::SyncStarted {
-                topic,
-                peer: node_id,
-            })?;
+            event_tx.send(SystemEvent::SyncStarted { topic, peer })?;
         }
 
         Ok(())
     }
 
     /// Process sync session finishing.
-    pub async fn on_sync_done(&mut self, topic: T, node_id: NodeId) -> Result<()> {
-        self.topic_streams
-            .on_sync_done(topic.clone(), node_id)
-            .await?;
+    pub async fn on_sync_done(&mut self, topic: T, peer: PublicKey) -> Result<()> {
+        self.topic_streams.on_sync_done(topic.clone(), peer).await?;
 
         // Notify any system event subscribers.
         if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::SyncDone {
-                topic,
-                peer: node_id,
-            })?;
+            event_tx.send(SystemEvent::SyncDone { topic, peer })?;
         }
 
         Ok(())
     }
 
     /// Process sync session failure.
-    pub async fn on_sync_failed(&mut self, topic: Option<T>, node_id: NodeId) -> Result<()> {
+    pub async fn on_sync_failed(&mut self, topic: Option<T>, peer: PublicKey) -> Result<()> {
         self.topic_streams
-            .on_sync_failed(topic.clone(), node_id)
+            .on_sync_failed(topic.clone(), peer)
             .await?;
 
         if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::SyncFailed {
-                topic,
-                peer: node_id,
-            })?;
+            event_tx.send(SystemEvent::SyncFailed { topic, peer })?;
         }
 
         Ok(())
@@ -509,13 +502,13 @@ where
     ) -> Result<()> {
         if topic_id == self.network_id {
             match self.topic_discovery.on_gossip_message(&bytes).await {
-                Ok((topic_ids, node_id)) => {
+                Ok((topic_ids, peer)) => {
                     self.topic_streams
-                        .on_discovered_topic_ids(topic_ids, node_id)
+                        .on_discovered_topic_ids(topic_ids, peer)
                         .await?;
 
                     if let Some(event_tx) = &self.system_event_tx {
-                        event_tx.send(SystemEvent::PeerDiscovered { peer: node_id })?;
+                        event_tx.send(SystemEvent::PeerDiscovered { peer })?;
                     }
                 }
                 Err(err) => {

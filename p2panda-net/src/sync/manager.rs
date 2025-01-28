@@ -3,7 +3,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::{Context, Error, Result};
-use iroh_net::{Endpoint, NodeId};
+use iroh::Endpoint;
+use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -12,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
 use crate::engine::ToEngineActor;
+use crate::from_public_key;
 use crate::sync::{self, SYNC_CONNECTION_ALPN};
 
 use super::SyncConfiguration;
@@ -22,27 +24,27 @@ const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
 #[derive(Debug)]
 pub enum ToSyncActor<T> {
     /// A new peer and topic combination was discovered.
-    Discovery { peer: NodeId, topic: T },
+    Discovery { peer: PublicKey, topic: T },
     /// A major network interface change was detected.
     Reset,
 }
 
 impl<T> ToSyncActor<T> {
-    pub(crate) fn new_discovery(peer: NodeId, topic: T) -> Self {
+    pub(crate) fn new_discovery(peer: PublicKey, topic: T) -> Self {
         Self::Discovery { peer, topic }
     }
 }
 
 #[derive(Debug)]
 struct SyncAttempt<T> {
-    peer: NodeId,
+    peer: PublicKey,
     topic: T,
     attempts: u8,
     completed: Option<Instant>,
 }
 
 impl<T> SyncAttempt<T> {
-    fn new(peer: NodeId, topic: T) -> Self {
+    fn new(peer: PublicKey, topic: T) -> Self {
         Self {
             peer,
             topic,
@@ -68,9 +70,9 @@ enum SyncAttemptError {
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
     config: SyncConfiguration<T>,
-    pending_sync_sessions: HashMap<T, HashSet<NodeId>>,
-    active_sync_sessions: HashMap<T, HashSet<NodeId>>,
-    completed_sync_sessions: HashMap<T, HashSet<NodeId>>,
+    pending_sync_sessions: HashMap<T, HashSet<PublicKey>>,
+    active_sync_sessions: HashMap<T, HashSet<PublicKey>>,
+    completed_sync_sessions: HashMap<T, HashSet<PublicKey>>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
@@ -248,7 +250,7 @@ where
     }
 
     /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &NodeId, topic: &T) -> bool {
+    fn is_active(&self, peer: &PublicKey, topic: &T) -> bool {
         if let Some(peers) = self.active_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -257,7 +259,7 @@ where
     }
 
     /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &NodeId, topic: &T) -> bool {
+    fn is_complete(&self, peer: &PublicKey, topic: &T) -> bool {
         if let Some(peers) = self.completed_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -266,7 +268,7 @@ where
     }
 
     /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: &NodeId, topic: &T) -> bool {
+    fn is_pending(&self, peer: &PublicKey, topic: &T) -> bool {
         if let Some(peers) = self.pending_sync_sessions.get(topic) {
             peers.contains(peer)
         } else {
@@ -275,7 +277,7 @@ where
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: NodeId, topic: T) -> Result<()> {
+    async fn connect_and_sync(&mut self, peer: PublicKey, topic: T) -> Result<()> {
         debug!("attempting peer connection for sync");
 
         self.active_sync_sessions
@@ -289,7 +291,7 @@ where
 
         let connection = self
             .endpoint
-            .connect(peer, SYNC_CONNECTION_ALPN)
+            .connect(from_public_key(peer), SYNC_CONNECTION_ALPN)
             .await
             .map_err(|_| SyncAttemptError::Connection)?;
 
@@ -393,10 +395,9 @@ mod tests {
     use std::sync::Arc;
 
     use futures_util::FutureExt;
-    use iroh_net::endpoint::TransportConfig;
-    use iroh_net::key::PublicKey;
-    use iroh_net::relay::RelayMode;
-    use iroh_net::Endpoint;
+    use iroh::{Endpoint, RelayMode};
+    use iroh_quinn::TransportConfig;
+    use p2panda_core::PublicKey;
     use tokio::sync::mpsc;
     use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
@@ -407,7 +408,7 @@ mod tests {
     use crate::network::tests::TestTopic;
     use crate::protocols::ProtocolMap;
     use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
-    use crate::{ResyncConfiguration, SyncConfiguration};
+    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
 
@@ -479,8 +480,8 @@ mod tests {
         let alpns_b = protocols_b.alpns();
         endpoint_b.set_alpns(alpns_b).unwrap();
 
-        let peer_a = endpoint_a.node_id();
-        let peer_b = endpoint_b.node_id();
+        let peer_a = to_public_key(endpoint_a.node_id());
+        let peer_b = to_public_key(endpoint_b.node_id());
 
         let peer_addr_a = endpoint_a.node_addr().await.unwrap();
         let peer_addr_b = endpoint_b.node_addr().await.unwrap();
@@ -515,7 +516,7 @@ mod tests {
     }
 
     async fn handle_connection(
-        mut connecting: iroh_net::endpoint::Connecting,
+        mut connecting: iroh::endpoint::Connecting,
         protocols: Arc<ProtocolMap>,
     ) {
         let alpn = match connecting.alpn().await {

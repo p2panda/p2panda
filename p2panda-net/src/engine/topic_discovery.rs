@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use anyhow::{bail, Context, Result};
-use iroh_net::key::{PublicKey, SecretKey, Signature};
+use p2panda_core::{PrivateKey, PublicKey, Signature};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -111,12 +111,12 @@ impl TopicDiscovery {
         Ok((topic_discovery_message.topic_ids, public_key))
     }
 
-    pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Result<()> {
+    pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, private_key: &PrivateKey) -> Result<()> {
         if self.status != Status::Active {
             return Ok(());
         }
 
-        let message = TopicDiscoveryMessage::new(topic_ids, secret_key);
+        let message = TopicDiscoveryMessage::new(topic_ids, private_key);
 
         self.gossip_actor_tx
             .send(ToGossipActor::Broadcast {
@@ -140,14 +140,14 @@ pub struct TopicDiscoveryMessage {
 }
 
 impl TopicDiscoveryMessage {
-    pub fn new(topic_ids: Vec<[u8; 32]>, secret_key: &SecretKey) -> Self {
+    pub fn new(topic_ids: Vec<[u8; 32]>, private_key: &PrivateKey) -> Self {
         // Message id is used to make every message unique, as duplicates get otherwise dropped
         // during gossip broadcast.
         let id = random();
 
-        let public_key = secret_key.public();
+        let public_key = private_key.public_key();
         let raw_message = (id, topic_ids.clone(), public_key);
-        let signature = secret_key.sign(&raw_message.to_bytes());
+        let signature = private_key.sign(&raw_message.to_bytes());
 
         Self {
             id,
@@ -158,12 +158,10 @@ impl TopicDiscoveryMessage {
     }
 
     pub fn verify(&self) -> bool {
-        self.public_key
-            .verify(
-                &(self.id, &self.topic_ids, self.public_key).to_bytes(),
-                &self.signature,
-            )
-            .is_ok()
+        self.public_key.verify(
+            &(self.id, &self.topic_ids, self.public_key).to_bytes(),
+            &self.signature,
+        )
     }
 
     pub fn public_key(&self) -> PublicKey {
@@ -173,10 +171,11 @@ impl TopicDiscoveryMessage {
 
 #[cfg(test)]
 mod tests {
-    use iroh_net::{key::SecretKey, NodeAddr};
+    use p2panda_core::PrivateKey;
     use tokio::sync::mpsc;
 
-    use crate::{bytes::ToBytes, engine::AddressBook};
+    use crate::engine::AddressBook;
+    use crate::{bytes::ToBytes, NodeAddress};
 
     use super::{Status, TopicDiscovery, TopicDiscoveryMessage};
 
@@ -185,8 +184,8 @@ mod tests {
         let network_id = [7; 32];
 
         let mut address_book = AddressBook::new(network_id);
-        let secret_key = SecretKey::generate();
-        let node_addr = NodeAddr::new(secret_key.public());
+        let private_key = PrivateKey::new();
+        let node_addr = NodeAddress::from_public_key(private_key.public_key());
         address_book.add_peer(node_addr).await;
 
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(64);
@@ -204,13 +203,13 @@ mod tests {
 
     #[test]
     fn verify_message() {
-        let secret_key = SecretKey::generate();
+        let private_key = PrivateKey::new();
         let topic_ids = vec![[0; 32]];
-        let message = TopicDiscoveryMessage::new(topic_ids.clone(), &secret_key);
+        let message = TopicDiscoveryMessage::new(topic_ids.clone(), &private_key);
         assert!(message.verify());
 
-        let wrong_secret_key = SecretKey::generate();
-        let wrong_signature = wrong_secret_key.sign(&topic_ids.to_bytes());
+        let wrong_public_key = PrivateKey::new();
+        let wrong_signature = wrong_public_key.sign(&topic_ids.to_bytes());
         let mut message = message;
         message.signature = wrong_signature;
         assert!(!message.verify())

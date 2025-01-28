@@ -2,6 +2,7 @@
 
 use anyhow::{ensure, Result};
 use futures_lite::{Stream, StreamExt};
+use iroh::NodeAddr;
 use iroh_blobs::downloader::{DownloadRequest, Downloader};
 use iroh_blobs::get::db::DownloadProgress;
 use iroh_blobs::get::Stats;
@@ -13,6 +14,8 @@ use p2panda_net::{Network, TopicId};
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use serde_error::Error as RpcError;
+
+use crate::from_node_addr;
 
 /// Status of a blob download attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +71,11 @@ async fn download_queued<T: TopicQuery + TopicId + 'static>(
     let addrs = network.known_peers().await?;
     ensure!(!addrs.is_empty(), "no way to reach a node for download");
 
-    let req = DownloadRequest::new(hash_and_format, addrs).progress_sender(progress);
+    let iroh_addrs: Vec<NodeAddr> = addrs
+        .iter()
+        .map(|addr| from_node_addr(addr.clone()))
+        .collect();
+    let req = DownloadRequest::new(hash_and_format, iroh_addrs).progress_sender(progress);
     let handle = downloader.queue(req).await;
 
     let stats = handle.await?;

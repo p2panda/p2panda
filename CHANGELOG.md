@@ -15,7 +15,8 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
-- Give access to `Header` in `Extension::extract` method [#670](https://github.com/p2panda/p2panda/pull/670)
+- Give access to header in `Extension::extract` method [#670](https://github.com/p2panda/p2panda/pull/670)
+- Update to iroh `v0.31.0` [#672](https://github.com/p2panda/p2panda/pull/672)
 
 ## [0.2.0] - 20/01/2025
 
