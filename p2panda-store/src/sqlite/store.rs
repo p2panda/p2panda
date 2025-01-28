@@ -349,4 +349,41 @@ mod tests {
 
         assert!(inserted);
     }
+
+    #[tokio::test]
+    async fn generic_extensions_mem_store() {
+        // Define our own custom extension type.
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        struct MyExtension {}
+
+        // Instantiate a database pool backed by an in-memory db.
+        let db_pool = initialize_sqlite_db().await;
+
+        // Construct a new store.
+        let mut store = SqliteStore::new(db_pool);
+
+        // Construct an operation using the custom extension.
+        let private_key = PrivateKey::new();
+        let body = Body::new("hello!".as_bytes());
+        let mut header = Header {
+            version: 1,
+            public_key: private_key.public_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: Some(MyExtension {}),
+        };
+        header.sign(&private_key);
+
+        // Insert the operation into the store, the extension type is inferred.
+        let inserted = store
+            .insert_operation(header.hash(), &header, Some(&body), &header.to_bytes(), &0)
+            .await
+            .expect("no errors");
+        assert!(inserted);
+    }
 }
