@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT OR Apache-2.0
 
 CREATE TABLE IF NOT EXISTS operations_v1 (
-    hash                    TEXT            NOT NULL    UNIQUE,
+    hash                    TEXT            NOT NULL    PRIMARY KEY,
     log_id                  TEXT            NOT NULL,
     version                 TEXT            NOT NULL,
     public_key              TEXT            NOT NULL,
@@ -14,6 +14,5 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     previous                TEXT            NOT NULL,
     extensions              BLOB            NULL,
     body                    BLOB            NULL,
-    header_bytes            TEXT            NOT NULL,
-    PRIMARY KEY (hash)
+    header_bytes            TEXT            NOT NULL
 );

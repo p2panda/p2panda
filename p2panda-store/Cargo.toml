@@ -30,5 +30,6 @@ sqlx = { version = "0.8.3", optional = true, features = ["sqlite",
 trait-variant = "0.1.2"
 
 [dev-dependencies]
+rand = "0.8.5"
 serde = "1.0.215"
 tokio = { version = "1.42.0", features = ["rt", "macros"] }
