@@ -10,6 +10,12 @@ use tokio::sync::mpsc;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
+// This is the URL of a relay operated by the p2panda team.
+//
+// Alternatively, an iroh staging relay can be used:
+// "https://staging-euw1-1.relay.iroh.network/".
+const RELAY_URL: &str = "https://wasser.liebechaos.org/";
+
 pub fn setup_logging() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
@@ -39,13 +45,14 @@ impl TopicId for ChatTopic {
 async fn main() -> Result<()> {
     setup_logging();
 
-    let network_id = [0; 32];
+    let network_id = Hash::new(b"p2panda_chat_example");
     let topic = ChatTopic::new("my_chat");
 
     let private_key = PrivateKey::new();
 
-    let network = NetworkBuilder::new(network_id)
+    let network = NetworkBuilder::new(network_id.into())
         .discovery(LocalDiscovery::new())
+        .relay(RELAY_URL.parse()?, false, 0)
         .build()
         .await?;
 
