@@ -12,7 +12,7 @@ use sqlx::{query, query_as, Sqlite};
 
 use p2panda_core::{Body, Extensions, Hash, Header, RawOperation};
 
-use crate::sqlite::models::OperationRow;
+use crate::sqlite::models::{OperationRow, RawOperationRow};
 use crate::{LogId, OperationStore};
 
 /// Re-export of SQLite connection pool type.
@@ -136,7 +136,7 @@ where
                     header_bytes
                 )
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(hash.to_string())
@@ -157,11 +157,15 @@ where
                 .collect::<Vec<String>>()
                 .concat(),
         )
-        .bind(serialize_extensions(&header.extensions)?)
+        .bind(header.extensions.as_ref().map(|extensions| {
+            serialize_extensions(extensions).expect("extenions are serializable")
+        }))
         .bind(body.map(|body| body.to_bytes()))
         .bind(header_bytes)
         .execute(&mut *tx)
         .await?;
+
+        tx.commit().await?;
 
         Ok(true)
     }
@@ -170,7 +174,7 @@ where
         &self,
         hash: Hash,
     ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
-        if let Some(operation_row) = query_as::<_, OperationRow>(
+        if let Some(operation) = query_as::<_, OperationRow>(
             "
             SELECT
                 hash,
@@ -197,8 +201,8 @@ where
         .fetch_optional(&self.pool)
         .await?
         {
-            let body = operation_row.body.clone().map(|body| body.into());
-            let header: Header<E> = operation_row.into();
+            let body = operation.body.clone().map(|body| body.into());
+            let header: Header<E> = operation.into();
 
             Ok(Some((header, body)))
         } else {
@@ -207,36 +211,39 @@ where
     }
 
     async fn get_raw_operation(&self, hash: Hash) -> Result<Option<RawOperation>, Self::Error> {
-        let operation_row = query_as::<_, OperationRow>(
+        if let Some(operation) = query_as::<_, RawOperationRow>(
             "
             SELECT
+                hash,
                 body,
                 header_bytes
             FROM
                 operations_v1
+            WHERE
+                hash = ?
             ",
         )
         .bind(hash.to_string())
-        .fetch_one(&self.pool)
-        .await?;
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            let raw_operation = operation.into();
 
-        let raw_operation = operation_row.into();
-
-        Ok(Some(raw_operation))
+            Ok(Some(raw_operation))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn has_operation(&self, hash: Hash) -> Result<bool, Self::Error> {
         let exists = query(
             "
             SELECT
-            EXISTS (
-                SELECT
-                    1
-                FROM
-                    operations_v1
-                WHERE
-                    hash = ?
-            )
+                1
+            FROM
+                operations_v1
+            WHERE
+                hash = ?
             ",
         )
         .bind(hash.to_string())
@@ -406,16 +413,25 @@ mod tests {
         let db_pool = initialize_sqlite_db().await;
         let mut store = SqliteStore::new(db_pool);
         let private_key = PrivateKey::new();
-        let body = Body::new("hello!".as_bytes());
 
+        // Create the first operation.
+        let body = Body::new("hello!".as_bytes());
         let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
 
+        // Create the second operation.
+        let body_2 = Body::new("buenas!".as_bytes());
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 0, 0, None);
+
+        // Only insert the first operation into the store.
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
             .expect("no errors");
         assert!(inserted);
+        // Ensure the store contains the first operation but not the second.
         assert!(store.has_operation(hash).await.expect("no error"));
+        assert!(!store.has_operation(hash_2).await.expect("no error"));
 
         let (header_again, body_again) = store
             .get_operation(hash)
@@ -423,7 +439,10 @@ mod tests {
             .expect("no error")
             .expect("operation exist");
 
+        // Ensure the hash of the created operation header matches that of the retrieved
+        // header hash.
         assert_eq!(header.hash(), header_again.hash());
+        // Ensure the body of the created operation matches that of the retrieved body.
         assert_eq!(Some(body.clone()), body_again);
 
         let (header_bytes_again, body_bytes_again) = store
