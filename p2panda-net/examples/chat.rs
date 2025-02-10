@@ -15,11 +15,6 @@ use tracing_subscriber::EnvFilter;
 
 pub const TEST_ALPN: &[u8] = b"/test-protocol/0";
 
-// Here we have two relay URLs:
-//
-// One is an iroh staging relay which should be running the latest iroh release version.
-// The other is operated by the p2panda team and may not be running the latest release version.
-// const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
 const RELAY_URL: &str = "https://wasser.liebechaos.org/";
 
 pub fn setup_logging() {
@@ -32,18 +27,6 @@ pub fn setup_logging() {
 
 #[derive(Parser)]
 struct Args {
-    // Specify a relay to be registered with the local network builder.
-    //
-    // This is required if you wish to connect to a non-local bootstrap node. The relay will
-    // facilitate a connection with the other node(s); either a direct connection or a proxied
-    // connection if that is not possible.
-    #[arg(short = 'r', long)]
-    use_relay: bool,
-
-    // Supply the public key of another peer to use it as a "bootstrap node" for discovery over
-    // the internet.
-    //
-    // If no value is supplied, peers can only be discovered over your local area network.
     #[arg(short = 'b', long, value_name = "PUBLIC_KEY")]
     bootstrap: Option<PublicKey>,
 }
@@ -77,14 +60,9 @@ async fn main() -> Result<()> {
 
     let test_protocol = TestProtocol {};
 
-    // Configure the network.
-    let mut network_builder =
-        NetworkBuilder::<ChatTopic>::new(network_id.into()).protocol(TEST_ALPN, test_protocol);
-
-    if args.use_relay {
-        println!("using relay: {}", RELAY_URL);
-        network_builder = network_builder.relay(RELAY_URL.parse()?, false, 0);
-    }
+    let network_builder = NetworkBuilder::<ChatTopic>::new(network_id.into())
+        .protocol(TEST_ALPN, test_protocol)
+        .relay(RELAY_URL.parse()?, false, 0);
 
     // if let Some(node_id) = args.bootstrap {
     //     network_builder = network_builder.direct_address(node_id, vec![], None);
@@ -92,40 +70,15 @@ async fn main() -> Result<()> {
 
     let network = network_builder.build().await?;
 
-    // let (tx, mut rx, ready) = network.subscribe(topic).await?;
-    //
-    // tokio::task::spawn(async move {
-    //     while let Some(event) = rx.recv().await {
-    //         match event {
-    //             FromNetwork::GossipMessage { bytes, .. } => {
-    //                 match Message::decode_and_verify(&bytes) {
-    //                     Ok(message) => {
-    //                         print!("{}: {}", message.public_key, message.text);
-    //                     }
-    //                     Err(err) => {
-    //                         eprintln!("invalid gossip message: {err}");
-    //                     }
-    //                 }
-    //             }
-    //             _ => panic!("no sync messages expected"),
-    //         }
-    //     }
-    // });
-
     println!("your public key is: {}", private_key.public_key());
 
     if let Some(node_id) = args.bootstrap {
         let network = network.clone();
         tokio::task::spawn(async move {
-            let connection = network
-                .endpoint()
-                .connect(
-                    NodeAddr::new(PublicKey::from_bytes(node_id.as_bytes()).unwrap())
-                        .with_relay_url(RELAY_URL.parse().unwrap()),
-                    TEST_ALPN,
-                )
-                .await
-                .unwrap();
+            let addr = NodeAddr::new(PublicKey::from_bytes(node_id.as_bytes()).unwrap())
+                .with_relay_url(RELAY_URL.parse().unwrap());
+
+            let connection = network.endpoint().connect(addr, TEST_ALPN).await.unwrap();
 
             let (mut send, mut recv) = connection.open_bi().await.unwrap();
             send.write_all(b"Hello, world!").await.unwrap();
@@ -135,18 +88,6 @@ async fn main() -> Result<()> {
             assert_eq!(&response, b"Hello, world!");
         });
     }
-
-    // println!(".. waiting for peers to join ..");
-    // let _ = ready.await;
-    // println!("found other peers, you're ready to chat!");
-    //
-    // let (line_tx, mut line_rx) = mpsc::channel(1);
-    // std::thread::spawn(move || input_loop(line_tx));
-    //
-    // while let Some(text) = line_rx.recv().await {
-    //     let bytes = Message::sign_and_encode(&private_key, &text)?;
-    //     tx.send(ToNetwork::Message { bytes }).await.ok();
-    // }
 
     tokio::signal::ctrl_c().await?;
 
