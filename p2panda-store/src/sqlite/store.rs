@@ -110,12 +110,6 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
-        // Start a transaction.
-        //
-        // Any insertions after this point, and before `execute()`, will be rolled back in the
-        // event of an error.
-        let mut tx = self.pool.begin().await?;
-
         query(
             "
             INSERT INTO
@@ -162,10 +156,8 @@ where
         }))
         .bind(body.map(|body| body.to_bytes()))
         .bind(header_bytes)
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await?;
-
-        tx.commit().await?;
 
         Ok(true)
     }
@@ -254,8 +246,6 @@ where
     }
 
     async fn delete_operation(&mut self, hash: Hash) -> Result<bool, Self::Error> {
-        let mut tx = self.pool.begin().await?;
-
         let result = query(
             "
             DELETE
@@ -266,17 +256,13 @@ where
             ",
         )
         .bind(hash.to_string())
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await?;
-
-        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
 
     async fn delete_payload(&mut self, hash: Hash) -> Result<bool, Self::Error> {
-        let mut tx = self.pool.begin().await?;
-
         let result = query(
             "
             UPDATE
@@ -288,10 +274,8 @@ where
             ",
         )
         .bind(hash.to_string())
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await?;
-
-        tx.commit().await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -302,7 +286,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{LogStore, OperationStore};
+    use crate::OperationStore;
 
     use super::{
         connection_pool, create_database, drop_database, run_pending_migrations, Pool, SqliteStore,
@@ -425,7 +409,7 @@ mod tests {
 
         // Create the second operation.
         let body_2 = Body::new("buenas!".as_bytes());
-        let (hash_2, header_2, header_bytes_2) =
+        let (hash_2, _header_2, _header_bytes_2) =
             create_operation(&private_key, &body_2, 0, 0, None);
 
         // Only insert the first operation into the store.
