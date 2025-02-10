@@ -291,6 +291,8 @@ where
         .execute(&mut *tx)
         .await?;
 
+        tx.commit().await?;
+
         Ok(result.rows_affected() > 0)
     }
 }
@@ -362,9 +364,10 @@ mod tests {
 
         let mut store = SqliteStore::new(db_pool);
         let private_key = PrivateKey::new();
-        let body = Body::new("hello!".as_bytes());
 
+        let body = Body::new("hello!".as_bytes());
         let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
+
         let inserted = store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
             .await
@@ -485,5 +488,38 @@ mod tests {
 
         let deleted_raw_operation = store.get_raw_operation(hash).await.expect("no error");
         assert!(deleted_raw_operation.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_payload() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+
+        let body = Body::new("hello!".as_bytes());
+        let (hash, header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
+
+        let inserted = store
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
+            .await
+            .expect("no errors");
+        assert!(inserted);
+
+        assert!(store.delete_payload(hash).await.expect("no error"));
+
+        let (_, no_body) = store
+            .get_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+        assert!(no_body.is_none());
+        assert!(store.has_operation(hash).await.expect("no error"));
+
+        let (_, no_body) = store
+            .get_raw_operation(hash)
+            .await
+            .expect("no error")
+            .expect("operation exist");
+        assert!(no_body.is_none());
     }
 }
