@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Implement SQLite `LocalOperationStore` [#680](https://github.com/p2panda/p2panda/pull/680)
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
 
 ### Changed
