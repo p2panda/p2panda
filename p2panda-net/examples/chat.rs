@@ -1,18 +1,19 @@
-use anyhow::{bail, Result};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
+use anyhow::Result;
 use clap::Parser;
+use iroh::endpoint::Connecting;
 use iroh::{NodeAddr, PublicKey};
-use p2panda_core::{Hash, PrivateKey, Signature};
-use p2panda_discovery::mdns::LocalDiscovery;
-use p2panda_net::network::{FromNetwork, ToNetwork};
-use p2panda_net::{NetworkBuilder, TopicId};
+use p2panda_core::{Hash, PrivateKey};
+use p2panda_net::{NetworkBuilder, ProtocolHandler, TopicId};
 use p2panda_sync::TopicQuery;
-use rand::random;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-pub const GOSSIP_ALPN: &[u8] = b"/iroh-gossip/0";
+pub const TEST_ALPN: &[u8] = b"/test-protocol/0";
 
 // Here we have two relay URLs:
 //
@@ -74,8 +75,11 @@ async fn main() -> Result<()> {
 
     let private_key = PrivateKey::new();
 
+    let test_protocol = TestProtocol {};
+
     // Configure the network.
-    let mut network_builder = NetworkBuilder::<ChatTopic>::new(network_id.into()); // .discovery(LocalDiscovery::new());
+    let mut network_builder =
+        NetworkBuilder::<ChatTopic>::new(network_id.into()).protocol(TEST_ALPN, test_protocol);
 
     if args.use_relay {
         println!("using relay: {}", RELAY_URL);
@@ -111,15 +115,25 @@ async fn main() -> Result<()> {
     println!("your public key is: {}", private_key.public_key());
 
     if let Some(node_id) = args.bootstrap {
-        network
-            .endpoint()
-            .connect(
-                NodeAddr::new(PublicKey::from_bytes(node_id.as_bytes()).unwrap())
-                    .with_relay_url(RELAY_URL.parse().unwrap()),
-                GOSSIP_ALPN,
-            )
-            .await
-            .unwrap();
+        let network = network.clone();
+        tokio::task::spawn(async move {
+            let connection = network
+                .endpoint()
+                .connect(
+                    NodeAddr::new(PublicKey::from_bytes(node_id.as_bytes()).unwrap())
+                        .with_relay_url(RELAY_URL.parse().unwrap()),
+                    TEST_ALPN,
+                )
+                .await
+                .unwrap();
+
+            let (mut send, mut recv) = connection.open_bi().await.unwrap();
+            send.write_all(b"Hello, world!").await.unwrap();
+            send.finish().unwrap();
+
+            let response = recv.read_to_end(1000).await.unwrap();
+            assert_eq!(&response, b"Hello, world!");
+        });
     }
 
     // println!(".. waiting for peers to join ..");
@@ -139,4 +153,28 @@ async fn main() -> Result<()> {
     network.shutdown().await?;
 
     Ok(())
+}
+
+pub type BoxedFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+#[derive(Debug)]
+struct TestProtocol {}
+
+impl ProtocolHandler for TestProtocol {
+    fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
+        Box::pin(async move {
+            println!("{:?}", connecting.remote_address());
+
+            let connection = connecting.await?;
+            let (mut send, mut recv) = connection.accept_bi().await?;
+
+            // Echo any bytes received back directly.
+            let _bytes_sent = tokio::io::copy(&mut recv, &mut send).await?;
+
+            send.finish()?;
+            connection.closed().await;
+
+            Ok(())
+        })
+    }
 }
