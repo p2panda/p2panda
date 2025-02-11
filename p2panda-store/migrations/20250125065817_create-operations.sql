@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     log_id                  TEXT            NOT NULL,
     version                 TEXT            NOT NULL,
     public_key              TEXT            NOT NULL,
-    signature               TEXT            NULL,
+    signature               TEXT            NOT NULL,
     payload_size            TEXT            NOT NULL,
     payload_hash            TEXT            NULL,
     timestamp               TEXT            NOT NULL,
