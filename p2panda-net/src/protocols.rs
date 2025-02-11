@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use futures_lite::future::Boxed as BoxedFuture;
 use futures_util::future::join_all;
 use iroh::endpoint::Connecting;
@@ -71,7 +71,12 @@ impl ProtocolMap {
 }
 
 impl ProtocolHandler for iroh_gossip::net::Gossip {
-    fn accept(self: Arc<Self>, conn: Connecting) -> BoxedFuture<Result<()>> {
-        Box::pin(async move { self.handle_connection(conn.await?).await })
+    fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
+        Box::pin(async move {
+            let connection = connecting.await.map_err(|err| anyhow!(err))?;
+            self.handle_connection(connection)
+                .await
+                .map_err(|err| anyhow!(err))
+        })
     }
 }

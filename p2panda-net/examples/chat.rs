@@ -15,7 +15,8 @@ use tracing_subscriber::EnvFilter;
 
 pub const TEST_ALPN: &[u8] = b"/test-protocol/0";
 
-const RELAY_URL: &str = "https://wasser.liebechaos.org/";
+const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+// const RELAY_URL: &str = "https://wasser.liebechaos.org/";
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -104,8 +105,6 @@ struct TestProtocol {}
 impl ProtocolHandler for TestProtocol {
     fn accept(self: Arc<Self>, connecting: Connecting) -> BoxedFuture<Result<()>> {
         Box::pin(async move {
-            println!("{:?}", connecting.remote_address());
-
             let connection = connecting.await?;
             let (mut send, mut recv) = connection.accept_bi().await?;
 

@@ -41,7 +41,7 @@ pub struct GossipActor<T> {
     gossip_senders: HashMap<[u8; 32], GossipSender>,
     inbox: mpsc::Receiver<ToGossipActor>,
     joined: HashSet<[u8; 32]>,
-    pending_joins: JoinSet<([u8; 32], Result<GossipTopic>)>,
+    pending_joins: JoinSet<([u8; 32], Result<GossipTopic, iroh_gossip::net::Error>)>,
     want_join: HashSet<[u8; 32]>,
 }
 
@@ -142,7 +142,10 @@ where
         Ok(true)
     }
 
-    async fn on_gossip_event(&mut self, event: Option<([u8; 32], Result<Event>)>) -> Result<()> {
+    async fn on_gossip_event(
+        &mut self,
+        event: Option<([u8; 32], Result<Event, iroh_gossip::net::Error>)>,
+    ) -> Result<()> {
         let (topic_id, event) = event.context("gossip event channel closed")?;
         let event = match event {
             Ok(Event::Gossip(event)) => event,
