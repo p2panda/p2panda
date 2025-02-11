@@ -18,7 +18,7 @@ use crate::to_public_key;
 pub const DEFAULT_STUN_PORT: u16 = 3478;
 
 /// URL identifying a relay server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelayUrl(IrohRelayUrl);
 
 impl RelayUrl {
@@ -54,7 +54,7 @@ pub(crate) fn to_relay_url(url: IrohRelayUrl) -> RelayUrl {
 }
 
 /// Node address including public key, socket address(es) and an optional relay URL.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeAddress {
     pub public_key: PublicKey,
     pub direct_addresses: Vec<SocketAddr>,
@@ -93,4 +93,27 @@ pub(crate) fn from_node_addr(addr: NodeAddress) -> IrohNodeAddr {
         node_addr = node_addr.with_relay_url(url.into());
     }
     node_addr
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use p2panda_core::PrivateKey;
+
+    use super::{from_node_addr, to_node_addr, NodeAddress};
+
+    #[test]
+    fn conversion() {
+        let private_key = PrivateKey::new();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+
+        let addr = NodeAddress {
+            public_key: private_key.public_key(),
+            direct_addresses: vec![socket],
+            relay_url: Some("https://relay.liebechaos.org/".parse().unwrap()),
+        };
+
+        assert_eq!(to_node_addr(from_node_addr(addr.clone())), addr);
+    }
 }
