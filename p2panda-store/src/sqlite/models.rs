@@ -12,7 +12,7 @@ use crate::sqlite::store::deserialize_extensions;
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
 pub struct RawOperationRow {
     hash: String,
-    pub body: Option<Vec<u8>>,
+    pub(crate) body: Option<Vec<u8>>,
     header_bytes: Vec<u8>,
 }
 
@@ -22,16 +22,16 @@ pub struct OperationRow {
     hash: String,
     log_id: String,
     version: String,
-    public_key: String,
+    pub(crate) public_key: String,
     signature: Option<String>,
     payload_size: String,
     payload_hash: Option<String>,
     timestamp: String,
-    seq_num: String,
+    pub(crate) seq_num: String,
     backlink: Option<String>,
     previous: String,
     extensions: Option<Vec<u8>>,
-    pub body: Option<Vec<u8>>,
+    pub(crate) body: Option<Vec<u8>>,
     header_bytes: Vec<u8>,
 }
 
@@ -69,5 +69,21 @@ where
 impl From<RawOperationRow> for RawOperation {
     fn from(row: RawOperationRow) -> Self {
         (row.header_bytes, row.body)
+    }
+}
+
+/// A single log height row as it is queried from the database.
+#[derive(FromRow, Debug, Clone, PartialEq, Eq)]
+pub struct LogHeightRow {
+    pub(crate) public_key: String,
+    pub(crate) seq_num: String,
+}
+
+impl From<LogHeightRow> for (PublicKey, u64) {
+    fn from(row: LogHeightRow) -> Self {
+        (
+            row.public_key.parse().unwrap(),
+            row.seq_num.parse().unwrap(),
+        )
     }
 }
