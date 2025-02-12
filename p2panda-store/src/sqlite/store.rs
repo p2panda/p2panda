@@ -10,10 +10,10 @@ use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::{query, query_as, Sqlite};
 
-use p2panda_core::{Body, Extensions, Hash, Header, RawOperation};
+use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
-use crate::sqlite::models::{OperationRow, RawOperationRow};
-use crate::{LogId, OperationStore};
+use crate::sqlite::models::{LogHeightRow, OperationRow, RawOperationRow};
+use crate::{LogId, LogStore, OperationStore};
 
 /// Re-export of SQLite connection pool type.
 pub type Pool = SqlitePool;
@@ -281,12 +281,243 @@ where
     }
 }
 
+impl<L, E> LogStore<L, E> for SqliteStore<L, E>
+where
+    L: LogId + Send + Sync,
+    E: Extensions + Send + Sync,
+{
+    type Error = Error;
+
+    async fn get_log(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<(Header<E>, Option<Body>)>>, Self::Error> {
+        let operations = query_as::<_, OperationRow>(
+            "
+            SELECT
+                hash,
+                log_id,
+                version,
+                public_key,
+                signature,
+                payload_size,
+                payload_hash,
+                timestamp,
+                seq_num,
+                backlink,
+                previous,
+                extensions,
+                body,
+                header_bytes
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) >= CAST(? as NUMERIC)
+            ORDER BY
+                CAST(seq_num AS NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(from.unwrap_or(0).to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        let log: Vec<(Header<E>, Option<Body>)> = operations
+            .into_iter()
+            .map(|operation| {
+                (
+                    operation.clone().into(),
+                    operation.body.map(|body| body.into()),
+                )
+            })
+            .collect();
+
+        if log.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(log))
+        }
+    }
+
+    async fn get_raw_log(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<RawOperation>>, Self::Error> {
+        let operations = query_as::<_, RawOperationRow>(
+            "
+            SELECT
+                hash,
+                body,
+                header_bytes
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) >= CAST(? as NUMERIC)
+            ORDER BY
+                CAST(seq_num AS NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(from.unwrap_or(0).to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        let log: Vec<RawOperation> = operations
+            .into_iter()
+            .map(|operation| operation.into())
+            .collect();
+
+        if log.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(log))
+        }
+    }
+
+    async fn latest_operation(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+    ) -> Result<Option<(Header<E>, Option<Body>)>, Self::Error> {
+        if let Some(operation) = query_as::<_, OperationRow>(
+            "
+            SELECT
+                hash,
+                log_id,
+                version,
+                public_key,
+                signature,
+                payload_size,
+                payload_hash,
+                timestamp,
+                seq_num,
+                backlink,
+                previous,
+                extensions,
+                body,
+                header_bytes
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+            ORDER BY
+                CAST(seq_num AS NUMERIC) DESC LIMIT 1
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            let body = operation.body.clone().map(|body| body.into());
+            let header: Header<E> = operation.into();
+
+            Ok(Some((header, body)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn delete_operations(
+        &mut self,
+        public_key: &PublicKey,
+        log_id: &L,
+        before: u64,
+    ) -> Result<bool, Self::Error> {
+        let result = query(
+            "
+            DELETE
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) < CAST(? as NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(before.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn delete_payloads(
+        &mut self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: u64,
+        to: u64,
+    ) -> Result<bool, Self::Error> {
+        let result = query(
+            "
+            UPDATE
+                operations_v1
+            SET
+                body = NULL
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) >= CAST(? as NUMERIC)
+                AND CAST(seq_num AS NUMERIC) < CAST(? as NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(from.to_string())
+        .bind(to.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn get_log_heights(&self, log_id: &L) -> Result<Vec<(PublicKey, u64)>, Self::Error> {
+        let operations = query_as::<_, LogHeightRow>(
+            "
+            SELECT
+                public_key,
+                CAST(MAX(CAST(seq_num AS NUMERIC)) AS TEXT) as seq_num
+            FROM
+                operations_v1
+            WHERE
+                log_id = ?
+            GROUP BY
+                public_key
+            ",
+        )
+        .bind(calculate_hash(log_id).to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        let log_heights: Vec<(PublicKey, u64)> = operations
+            .into_iter()
+            .map(|operation| operation.into())
+            .collect();
+
+        Ok(log_heights)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::OperationStore;
+    use crate::{LogStore, OperationStore};
 
     use super::{
         connection_pool, create_database, drop_database, run_pending_migrations, Pool, SqliteStore,
@@ -505,5 +736,328 @@ mod tests {
             .expect("no error")
             .expect("operation exist");
         assert!(no_body.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_log() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello for a third time!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 0, Some(hash_1));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &0)
+            .await
+            .expect("no errors");
+
+        // Get all log operations.
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 3);
+        assert_eq!(log[0].0.hash(), hash_0);
+        assert_eq!(log[1].0.hash(), hash_1);
+        assert_eq!(log[2].0.hash(), hash_2);
+        assert_eq!(log[0].1, Some(body_0.clone()));
+        assert_eq!(log[1].1, Some(body_1.clone()));
+        assert_eq!(log[2].1, Some(body_2.clone()));
+
+        // Get all log operations starting from sequence number 1.
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0.hash(), hash_1);
+        assert_eq!(log[1].0.hash(), hash_2);
+        assert_eq!(log[0].1, Some(body_1.clone()));
+        assert_eq!(log[1].1, Some(body_2.clone()));
+
+        // Get all raw log operations.
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 3);
+        assert_eq!(log[0].0, header_bytes_0);
+        assert_eq!(log[1].0, header_bytes_1);
+        assert_eq!(log[2].0, header_bytes_2);
+        assert_eq!(log[0].1, Some(body_0.to_bytes()));
+        assert_eq!(log[1].1, Some(body_1.to_bytes()));
+        assert_eq!(log[2].1, Some(body_2.to_bytes()));
+
+        // Get all raw log operations starting from sequence number 1.
+        let log = store
+            .get_raw_log(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].0, header_bytes_1);
+        assert_eq!(log[1].0, header_bytes_2);
+        assert_eq!(log[0].1, Some(body_1.to_bytes()));
+        assert_eq!(log[1].1, Some(body_2.to_bytes()));
+    }
+
+    #[tokio::test]
+    async fn get_latest_operation() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
+            .await
+            .expect("no errors");
+
+        let (latest_header, latest_body) = store
+            .latest_operation(&private_key.public_key(), &log_id)
+            .await
+            .expect("no errors")
+            .expect("there's an operation");
+
+        assert_eq!(latest_header.hash(), header_1.hash());
+        assert_eq!(latest_body, Some(body_1));
+    }
+
+    #[tokio::test]
+    async fn delete_operations() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("final hello!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &log_id)
+            .await
+            .expect("no errors");
+
+        // Get all log operations.
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        // We expect the log to have 3 operations.
+        assert_eq!(log.len(), 3);
+
+        // Delete all operations _before_ seq_num 2.
+        let deleted = store
+            .delete_operations(&private_key.public_key(), &log_id, 2)
+            .await
+            .expect("no errors");
+        assert!(deleted);
+
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        // There is now only one operation in the log.
+        assert_eq!(log.len(), 1);
+
+        // The remaining operation should be the latest (seq_num == 2).
+        assert_eq!(log[0].0.hash(), header_2.hash());
+
+        // Deleting the same range again should return `false`, meaning no deletion occurred.
+        let deleted = store
+            .delete_operations(&private_key.public_key(), &log_id, 2)
+            .await
+            .expect("no errors");
+        assert!(!deleted);
+    }
+
+    #[tokio::test]
+    async fn delete_payloads() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("final hello!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 100, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 200, Some(hash_1));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &log_id)
+            .await
+            .expect("no errors");
+
+        // Get all log operations.
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        // We expect the log to have 3 operations.
+        assert_eq!(log.len(), 3);
+
+        assert_eq!(log[0].1, Some(body_0));
+        assert_eq!(log[1].1, Some(body_1));
+        assert_eq!(log[2].1, Some(body_2.clone()));
+
+        // Delete all operation payloads from sequence number 0 up to but not including 2.
+        let deleted = store
+            .delete_payloads(&private_key.public_key(), &log_id, 0, 2)
+            .await
+            .expect("no errors");
+        assert!(deleted);
+
+        let log = store
+            .get_log(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(log[0].1, None);
+        assert_eq!(log[1].1, None);
+        assert_eq!(log[2].1, Some(body_2));
+    }
+
+    #[tokio::test]
+    async fn get_log_heights() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+
+        let log_id = 0;
+
+        let private_key_0 = PrivateKey::new();
+        let private_key_1 = PrivateKey::new();
+        let private_key_2 = PrivateKey::new();
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello for a third time!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key_0, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key_0, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key_0, &body_2, 2, 0, Some(hash_1));
+
+        let log_heights = store.get_log_heights(&log_id).await.expect("no errors");
+        assert!(log_heights.is_empty());
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &0)
+            .await
+            .expect("no errors");
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key_1, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key_1, &body_1, 1, 0, Some(hash_0));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
+            .await
+            .expect("no errors");
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key_2, &body_0, 0, 0, None);
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+
+        let log_heights = store.get_log_heights(&log_id).await.expect("no errors");
+
+        assert_eq!(log_heights.len(), 3);
+
+        // Ensure the correct sequence number for each public key.
+        assert!(log_heights.contains(&(private_key_0.public_key(), 2)));
+        assert!(log_heights.contains(&(private_key_1.public_key(), 1)));
+        assert!(log_heights.contains(&(private_key_2.public_key(), 0)));
     }
 }
