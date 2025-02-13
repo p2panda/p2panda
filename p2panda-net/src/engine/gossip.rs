@@ -123,7 +123,7 @@ where
                     .collect();
                 self.want_join.insert(topic_id);
                 self.pending_joins.spawn(async move {
-                    let stream = gossip.subscribe(topic_id.into(), peers);
+                    let stream = gossip.subscribe_and_join(topic_id.into(), peers).await;
                     (topic_id, stream)
                 });
             }
