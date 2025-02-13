@@ -113,6 +113,9 @@ where
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {
+                if self.want_join.contains(&topic_id) {
+                    return Ok(true);
+                }
                 let gossip = self.gossip.clone();
                 let peers = peers
                     .iter()
