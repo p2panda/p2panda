@@ -23,7 +23,7 @@ pub struct OperationRow {
     log_id: String,
     version: String,
     pub(crate) public_key: String,
-    signature: Option<String>,
+    signature: String,
     payload_size: String,
     payload_hash: Option<String>,
     timestamp: String,
@@ -52,7 +52,7 @@ where
         Header {
             version: row.version.parse::<u64>().unwrap(),
             public_key: PublicKey::from_str(&row.public_key).unwrap(),
-            signature: row.signature.map(|hex| Signature::from_str(&hex).unwrap()),
+            signature: Some(Signature::from_str(&row.signature).unwrap()),
             payload_size: row.payload_size.parse::<u64>().unwrap(),
             payload_hash: row.payload_hash.map(|hex| Hash::from_str(&hex).unwrap()),
             timestamp: row.timestamp.parse::<u64>().unwrap(),
