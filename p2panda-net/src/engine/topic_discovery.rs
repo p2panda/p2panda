@@ -64,15 +64,13 @@ impl TopicDiscovery {
             .random_set(self.network_id, JOIN_PEERS_SAMPLE_LEN)
             .await;
 
-        if !peers.is_empty() {
-            self.status = Status::Pending;
-            self.gossip_actor_tx
-                .send(ToGossipActor::Join {
-                    topic_id: self.network_id,
-                    peers,
-                })
-                .await?;
-        }
+        self.status = Status::Pending;
+        self.gossip_actor_tx
+            .send(ToGossipActor::Join {
+                topic_id: self.network_id,
+                peers,
+            })
+            .await?;
 
         Ok(())
     }
