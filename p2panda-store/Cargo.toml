@@ -18,10 +18,10 @@ workspace = true
 [features]
 default = ["memory"]
 memory = []
-sqlite = ["dep:anyhow", "dep:ciborium", "dep:sqlx", "dep:hex"]
+sqlite = ["dep:ciborium", "dep:sqlx", "dep:hex"]
 
 [dependencies]
-anyhow = { version = "1.0.86", optional = true }
+anyhow = { version = "1.0.86" }
 ciborium = { version = "0.2.2", optional = true }
 hex = { version = "0.4.3", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.2.0" }

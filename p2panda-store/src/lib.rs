@@ -25,10 +25,10 @@ pub mod memory;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 
-use std::fmt::{Debug, Display};
-
 #[cfg(feature = "memory")]
 pub use memory::MemoryStore;
+
+use std::fmt::{Debug, Display};
 
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 

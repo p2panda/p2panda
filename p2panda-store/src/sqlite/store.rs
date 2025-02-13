@@ -4,7 +4,7 @@
 use std::hash::{DefaultHasher, Hash as StdHash, Hasher};
 use std::marker::PhantomData;
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use sqlx::migrate;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
@@ -110,6 +110,12 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
+        if header.signature.is_none() {
+            return Err(anyhow!(
+                "store error: operation header must be signed prior to insertion"
+            ));
+        }
+
         query(
             "
             INSERT INTO
@@ -626,6 +632,32 @@ mod tests {
             .await
             .expect("no errors");
         assert!(inserted);
+    }
+
+    #[tokio::test]
+    async fn insert_operation_with_unsigned_header() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+
+        // Create the first operation.
+        let body = Body::new("hello!".as_bytes());
+        let (hash, mut header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
+
+        // Set signature to `None` for the sake of the test.
+        header.signature = None;
+
+        // Only insert the first operation into the store.
+        let inserted = store
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
+            .await;
+
+        // Ensure that the lack of a header signature returns an error.
+        assert!(inserted.is_err());
+        assert_eq!(
+            format!("{}", inserted.unwrap_err()),
+            "store error: operation header must be signed prior to insertion"
+        );
     }
 
     #[tokio::test]
