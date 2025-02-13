@@ -62,7 +62,10 @@ async fn main() -> Result<()> {
 
     let test_protocol = TestProtocol {};
 
+    println!("your public key is: {}", private_key.public_key());
+
     let network_builder = NetworkBuilder::<ChatTopic>::new(network_id.into())
+        .private_key(private_key)
         .protocol(TEST_ALPN, test_protocol)
         .relay(RELAY_URL.parse()?, false, 0);
 
@@ -71,8 +74,6 @@ async fn main() -> Result<()> {
     // }
 
     let network = network_builder.build().await?;
-
-    println!("your public key is: {}", private_key.public_key());
 
     if let Some(node_id) = args.bootstrap {
         let network = network.clone();
