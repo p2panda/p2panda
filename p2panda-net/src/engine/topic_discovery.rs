@@ -112,9 +112,9 @@ impl TopicDiscovery {
     }
 
     pub async fn announce(&self, topic_ids: Vec<[u8; 32]>, private_key: &PrivateKey) -> Result<()> {
-        if self.status != Status::Active {
-            return Ok(());
-        }
+        // if self.status != Status::Active {
+        //     return Ok(());
+        // }
 
         let message = TopicDiscoveryMessage::new(topic_ids, private_key);
 

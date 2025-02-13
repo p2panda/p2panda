@@ -1487,7 +1487,6 @@ pub(crate) mod tests {
             // Await at least one message received via sync.
             loop {
                 let msg = rx.recv().await.unwrap();
-                println!("{msg:?}");
                 match msg {
                     FromNetwork::SyncMessage { .. } => break,
                     _ => (),

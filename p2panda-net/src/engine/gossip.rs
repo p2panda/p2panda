@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{Context, Result};
 use futures_lite::StreamExt;
 use iroh_gossip::net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic};
-use p2panda_core::PublicKey;
+use p2panda_core::{Hash, PublicKey};
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -123,6 +123,11 @@ where
                     .collect();
                 self.want_join.insert(topic_id);
                 self.pending_joins.spawn(async move {
+                    println!(
+                        "attempt to join topic {} with {} peers",
+                        Hash::from_bytes(topic_id),
+                        peers.iter().len()
+                    );
                     let stream = gossip.subscribe_and_join(topic_id.into(), peers).await;
                     (topic_id, stream)
                 });
@@ -182,7 +187,6 @@ where
         topic_id: [u8; 32],
         event: GossipEvent,
     ) -> Result<()> {
-        println!("{:?}", event);
         match event {
             GossipEvent::Received(msg) => {
                 self.engine_actor_tx
@@ -217,6 +221,7 @@ where
     }
 
     async fn on_joined(&mut self, topic_id: [u8; 32], stream: GossipTopic) -> Result<()> {
+        println!("joined topic {}!", Hash::from_bytes(topic_id));
         self.joined.insert(topic_id);
 
         // Split the gossip stream and insert handles to the receiver and sender.
