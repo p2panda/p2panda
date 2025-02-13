@@ -218,11 +218,11 @@ where
             .random_set(topic_id, JOIN_PEERS_SAMPLE_LEN)
             .await;
 
-        if !peers.is_empty() {
-            self.gossip_actor_tx
-                .send(ToGossipActor::Join { topic_id, peers })
-                .await?;
-        }
+        // if !peers.is_empty() {
+        self.gossip_actor_tx
+            .send(ToGossipActor::Join { topic_id, peers })
+            .await?;
+        // }
 
         Ok(())
     }

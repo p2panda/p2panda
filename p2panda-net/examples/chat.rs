@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use iroh::{NodeAddr, PublicKey};
-use p2panda_core::{Hash, PrivateKey, Signature};
+use iroh::NodeAddr;
+use p2panda_core::{Hash, PrivateKey, PublicKey, Signature};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::network::{FromNetwork, ToNetwork};
 use p2panda_net::{NetworkBuilder, TopicId};
@@ -18,8 +18,8 @@ pub const GOSSIP_ALPN: &[u8] = b"/iroh-gossip/0";
 //
 // One is an iroh staging relay which should be running the latest iroh release version.
 // The other is operated by the p2panda team and may not be running the latest release version.
-// const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
-const RELAY_URL: &str = "https://wasser.liebechaos.org/";
+const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+// const RELAY_URL: &str = "https://wasser.liebechaos.org/";
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -71,72 +71,112 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     let network_id = Hash::new(b"p2panda_chat_example");
+    let topic = ChatTopic::new("my_chat");
 
     let private_key = PrivateKey::new();
+    println!("your public key is: {}", private_key.public_key());
 
     // Configure the network.
-    let mut network_builder = NetworkBuilder::<ChatTopic>::new(network_id.into()); // .discovery(LocalDiscovery::new());
+    let mut network_builder =
+        NetworkBuilder::<ChatTopic>::new(network_id.into()).private_key(private_key.clone());
 
-    if args.use_relay {
-        println!("using relay: {}", RELAY_URL);
-        network_builder = network_builder.relay(RELAY_URL.parse()?, false, 0);
+    network_builder = network_builder.relay(RELAY_URL.parse()?, false, 0);
+
+    if let Some(node_id) = args.bootstrap {
+        network_builder = network_builder.direct_address(node_id, vec![], None);
     }
-
-    // if let Some(node_id) = args.bootstrap {
-    //     network_builder = network_builder.direct_address(node_id, vec![], None);
-    // }
 
     let network = network_builder.build().await?;
 
-    // let (tx, mut rx, ready) = network.subscribe(topic).await?;
-    //
-    // tokio::task::spawn(async move {
-    //     while let Some(event) = rx.recv().await {
-    //         match event {
-    //             FromNetwork::GossipMessage { bytes, .. } => {
-    //                 match Message::decode_and_verify(&bytes) {
-    //                     Ok(message) => {
-    //                         print!("{}: {}", message.public_key, message.text);
-    //                     }
-    //                     Err(err) => {
-    //                         eprintln!("invalid gossip message: {err}");
-    //                     }
-    //                 }
-    //             }
-    //             _ => panic!("no sync messages expected"),
-    //         }
-    //     }
-    // });
+    let (tx, mut rx, ready) = network.subscribe(topic).await?;
 
-    println!("your public key is: {}", private_key.public_key());
+    tokio::task::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                FromNetwork::GossipMessage { bytes, .. } => {
+                    match Message::decode_and_verify(&bytes) {
+                        Ok(message) => {
+                            print!("{}: {}", message.public_key, message.text);
+                        }
+                        Err(err) => {
+                            eprintln!("invalid gossip message: {err}");
+                        }
+                    }
+                }
+                _ => panic!("no sync messages expected"),
+            }
+        }
+    });
 
-    if let Some(node_id) = args.bootstrap {
-        network
-            .endpoint()
-            .connect(
-                NodeAddr::new(PublicKey::from_bytes(node_id.as_bytes()).unwrap())
-                    .with_relay_url(RELAY_URL.parse().unwrap()),
-                GOSSIP_ALPN,
-            )
-            .await
-            .unwrap();
+    println!(".. waiting for peers to join ..");
+    let _ = ready.await;
+    println!("found other peers, you're ready to chat!");
+
+    let (line_tx, mut line_rx) = mpsc::channel(1);
+    std::thread::spawn(move || input_loop(line_tx));
+
+    while let Some(text) = line_rx.recv().await {
+        let bytes = Message::sign_and_encode(&private_key, &text)?;
+        tx.send(ToNetwork::Message { bytes }).await.ok();
     }
-
-    // println!(".. waiting for peers to join ..");
-    // let _ = ready.await;
-    // println!("found other peers, you're ready to chat!");
-    //
-    // let (line_tx, mut line_rx) = mpsc::channel(1);
-    // std::thread::spawn(move || input_loop(line_tx));
-    //
-    // while let Some(text) = line_rx.recv().await {
-    //     let bytes = Message::sign_and_encode(&private_key, &text)?;
-    //     tx.send(ToNetwork::Message { bytes }).await.ok();
-    // }
 
     tokio::signal::ctrl_c().await?;
 
     network.shutdown().await?;
 
     Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+struct Message {
+    id: u32,
+    signature: Signature,
+    public_key: PublicKey,
+    text: String,
+}
+
+impl Message {
+    pub fn sign_and_encode(private_key: &PrivateKey, text: &str) -> Result<Vec<u8>> {
+        // Sign text content
+        let mut text_bytes: Vec<u8> = Vec::new();
+        ciborium::ser::into_writer(text, &mut text_bytes)?;
+        let signature = private_key.sign(&text_bytes);
+
+        // Encode message
+        let message = Message {
+            // Make every message unique, as duplicates get ignored during gossip broadcast
+            id: random(),
+            signature,
+            public_key: private_key.public_key(),
+            text: text.to_owned(),
+        };
+        let mut bytes: Vec<u8> = Vec::new();
+        ciborium::ser::into_writer(&message, &mut bytes)?;
+
+        Ok(bytes)
+    }
+
+    fn decode_and_verify(bytes: &[u8]) -> Result<Self> {
+        // Decode message
+        let message: Self = ciborium::de::from_reader(bytes)?;
+
+        // Verify signature
+        let mut text_bytes: Vec<u8> = Vec::new();
+        ciborium::ser::into_writer(&message.text, &mut text_bytes)?;
+        if !message.public_key.verify(&text_bytes, &message.signature) {
+            bail!("invalid signature");
+        }
+
+        Ok(message)
+    }
+}
+
+fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
+    let mut buffer = String::new();
+    let stdin = std::io::stdin();
+    loop {
+        stdin.read_line(&mut buffer)?;
+        line_tx.blocking_send(buffer.clone())?;
+        buffer.clear();
+    }
 }

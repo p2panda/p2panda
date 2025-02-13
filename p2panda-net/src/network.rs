@@ -125,6 +125,7 @@ use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
+use iroh::protocol::{Router, RouterBuilder};
 use iroh::{Endpoint, RelayMap, RelayNode};
 use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
@@ -427,28 +428,34 @@ where
 
         let sync_handler = engine.sync_handler();
 
+        let router = RouterBuilder::new(endpoint.clone())
+            .accept(GOSSIP_ALPN, gossip.clone())
+            .spawn()
+            .await?;
+
         let inner = Arc::new(NetworkInner {
             cancel_token: CancellationToken::new(),
             relay: relay.clone(),
             discovery: self.discovery,
             endpoint: endpoint.clone(),
             engine,
+            router,
             gossip: gossip.clone(),
             network_id: self.network_id,
             private_key,
         });
 
-        self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
-        if let Some(sync_handler) = sync_handler {
-            self.protocols
-                .insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler));
-        };
+        // self.protocols.insert(GOSSIP_ALPN, Arc::new(gossip.clone()));
+        // if let Some(sync_handler) = sync_handler {
+        //     self.protocols
+        //         .insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler));
+        // };
         let protocols = Arc::new(self.protocols.clone());
-        let alpns = self.protocols.alpns();
-        if let Err(err) = inner.endpoint.set_alpns(alpns) {
-            inner.shutdown(protocols.clone()).await;
-            return Err(err);
-        }
+        // let alpns = self.protocols.alpns();
+        // if let Err(err) = inner.endpoint.set_alpns(alpns) {
+        //     inner.shutdown(protocols.clone()).await;
+        //     return Err(err);
+        // }
 
         let fut = inner
             .clone()
@@ -509,6 +516,7 @@ struct NetworkInner<T> {
     discovery: DiscoveryMap,
     endpoint: Endpoint,
     engine: Engine<T>,
+    router: Router,
     #[allow(dead_code)]
     gossip: Gossip,
     network_id: NetworkId,
@@ -580,23 +588,23 @@ where
                     break;
                 },
                 // Handle incoming p2p connections.
-                Some(incoming) = self.endpoint.accept() => {
-                    // @TODO: This is the point at which we can reject the connection if limits
-                    // have been reached.
-                    let connecting = match incoming.accept() {
-                        Ok(connecting) => connecting,
-                        Err(err) => {
-                            warn!("incoming connection failed: {err:#}");
-                            // This may be caused by retransmitted datagrams so we continue.
-                            continue;
-                        },
-                    };
-                    let protocols = protocols.clone();
-                    join_set.spawn(async move {
-                        handle_connection(connecting, protocols).await;
-                        Ok(())
-                    });
-                },
+                // Some(incoming) = self.endpoint.accept() => {
+                //     // @TODO: This is the point at which we can reject the connection if limits
+                //     // have been reached.
+                //     let connecting = match incoming.accept() {
+                //         Ok(connecting) => connecting,
+                //         Err(err) => {
+                //             warn!("incoming connection failed: {err:#}");
+                //             // This may be caused by retransmitted datagrams so we continue.
+                //             continue;
+                //         },
+                //     };
+                //     let protocols = protocols.clone();
+                //     join_set.spawn(async move {
+                //         handle_connection(connecting, protocols).await;
+                //         Ok(())
+                //     });
+                // },
                 // Handle discovered peers.
                 Some(event) = discovery_stream.next() => {
                     match event {
@@ -652,7 +660,8 @@ where
             // All streams are interrupted, this is not graceful.
             self.endpoint.close(),
             self.engine.shutdown(),
-            protocols.shutdown(),
+            self.router.shutdown(),
+            // protocols.shutdown(),
         );
     }
 }

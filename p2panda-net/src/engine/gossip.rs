@@ -81,7 +81,7 @@ where
                         break;
                     }
                 },
-                Some(res) = self.pending_joins.join_next(), if !self.pending_joins.is_empty() => {
+                Some(res) = self.pending_joins.join_next() => {
                     let (topic, res) = res.context("pending_joins closed")?;
                     match res {
                         Ok(stream) => {
@@ -113,17 +113,19 @@ where
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {
+                if self.want_join.contains(&topic_id) {
+                    return Ok(true);
+                }
                 let gossip = self.gossip.clone();
-                let peers = peers
+                let peers: Vec<iroh_base::PublicKey> = peers
                     .iter()
                     .map(|key: &p2panda_core::PublicKey| from_public_key(*key))
                     .collect();
-                let fut = async move {
-                    let stream = gossip.subscribe_and_join(topic_id.into(), peers).await;
-                    (topic_id, stream)
-                };
                 self.want_join.insert(topic_id);
-                self.pending_joins.spawn(fut);
+                self.pending_joins.spawn(async move {
+                    let stream = gossip.subscribe(topic_id.into(), peers);
+                    (topic_id, stream)
+                });
             }
             ToGossipActor::Leave { topic_id } => {
                 // Quit the topic by dropping all handles to `GossipTopic` for the given topic id.
@@ -180,6 +182,7 @@ where
         topic_id: [u8; 32],
         event: GossipEvent,
     ) -> Result<()> {
+        println!("{:?}", event);
         match event {
             GossipEvent::Received(msg) => {
                 self.engine_actor_tx
