@@ -18,8 +18,8 @@ pub const GOSSIP_ALPN: &[u8] = b"/iroh-gossip/0";
 //
 // One is an iroh staging relay which should be running the latest iroh release version.
 // The other is operated by the p2panda team and may not be running the latest release version.
-const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
-// const RELAY_URL: &str = "https://wasser.liebechaos.org/";
+//const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+const RELAY_URL: &str = "https://wasser.liebechaos.org/";
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -73,6 +73,8 @@ async fn main() -> Result<()> {
     let network_id = Hash::new(b"p2panda_chat_example");
     let topic = ChatTopic::new("my_chat");
 
+    println!("network id: {}", network_id);
+
     let private_key = PrivateKey::new();
     println!("your public key is: {}", private_key.public_key());
 
@@ -80,7 +82,7 @@ async fn main() -> Result<()> {
     let mut network_builder =
         NetworkBuilder::<ChatTopic>::new(network_id.into()).private_key(private_key.clone());
 
-    network_builder = network_builder.relay(RELAY_URL.parse()?, false, 0);
+    network_builder = network_builder.relay(RELAY_URL.parse()?, false, 3478);
 
     if let Some(node_id) = args.bootstrap {
         network_builder = network_builder.direct_address(node_id, vec![], None);
@@ -88,10 +90,31 @@ async fn main() -> Result<()> {
 
     let network = network_builder.build().await?;
 
+    /*
+    println!("node listening addresses:");
+    for local_endpoint in network
+        .endpoint()
+        .direct_addresses()
+        .initialized()
+        .await
+        .unwrap()
+    {
+        println!("\t{}", local_endpoint.addr)
+    }
+
+    let relay_url = network.endpoint()
+        .home_relay()
+        .get()
+        .unwrap()
+        .expect("should be connected to a relay server, try calling `endpoint.local_endpoints()` or `endpoint.connect()` first, to ensure the endpoint has actually attempted a connection before checking for the connected relay server");
+    println!("node relay server url: {relay_url}\n");
+    */
+
     let (tx, mut rx, ready) = network.subscribe(topic).await?;
 
     tokio::task::spawn(async move {
         while let Some(event) = rx.recv().await {
+            println!("event: {:?}", event);
             match event {
                 FromNetwork::GossipMessage { bytes, .. } => {
                     match Message::decode_and_verify(&bytes) {
