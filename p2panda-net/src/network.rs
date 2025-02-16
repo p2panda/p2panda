@@ -1052,9 +1052,6 @@ pub(crate) mod tests {
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::task::JoinHandle;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::EnvFilter;
 
     use crate::addrs::{to_node_addr, DEFAULT_STUN_PORT};
     use crate::bytes::ToBytes;
@@ -1065,14 +1062,6 @@ pub(crate) mod tests {
     use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, Network, ToNetwork};
-
-    fn setup_logging() {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-            .with(EnvFilter::from_default_env())
-            .try_init()
-            .ok();
-    }
 
     fn create_operation<E: Extensions>(
         private_key: &PrivateKey,
@@ -1159,8 +1148,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn join_gossip_overlay() {
-        setup_logging();
-
         let network_id = [1; 32];
         let topic = TestTopic::new("chat");
 
@@ -1203,8 +1190,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn ping_pong() {
-        setup_logging();
-
         let network_id = [1; 32];
         let topic = TestTopic::new("ping_pong");
         let ping_pong = PingPongProtocol {};
@@ -1275,8 +1260,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn e2e_log_height_sync() {
-        setup_logging();
-
         const NETWORK_ID: [u8; 32] = [1; 32];
 
         let peer_a_private_key = PrivateKey::new();
@@ -1407,8 +1390,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn multi_hop_join_gossip_overlay() {
-        setup_logging();
-
         let network_id = [1; 32];
         let chat_topic = TestTopic::new("chat");
 
@@ -1493,8 +1474,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn multi_hop_topic_discovery_and_sync() {
-        setup_logging();
-
         let network_id = [1; 32];
         let topic = TestTopic::new("chat");
         let sync_config = SyncConfiguration::new(PingPongProtocol {});
@@ -1558,8 +1537,6 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn gossip_and_sync_events() {
-        setup_logging();
-
         let network_id = [1; 32];
         let chat_topic = TestTopic::new("chat");
         let chat_topic_id = chat_topic.clone().id();
