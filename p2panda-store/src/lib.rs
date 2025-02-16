@@ -21,12 +21,14 @@
 //! `OperationStore` and `LogStore`. The store is gated by the `memory` feature flag and is enabled
 //! by default.
 #[cfg(feature = "memory")]
-pub mod memory_store;
-
-use std::fmt::{Debug, Display};
+pub mod memory;
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
 
 #[cfg(feature = "memory")]
-pub use memory_store::MemoryStore;
+pub use memory::MemoryStore;
+
+use std::fmt::{Debug, Display};
 
 use p2panda_core::{Body, Hash, Header, PublicKey, RawOperation};
 
