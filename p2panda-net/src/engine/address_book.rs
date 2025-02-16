@@ -104,3 +104,47 @@ impl AddressBook {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+
+    use p2panda_core::PrivateKey;
+
+    use crate::NodeAddress;
+
+    use super::AddressBook;
+
+    #[tokio::test]
+    async fn add_peer_without_duplication() {
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+
+        let network_id = [3; 32];
+
+        let mut address_book = AddressBook::new(network_id);
+
+        // Create a node address.
+        let mut node_addr = NodeAddress::from_public_key(public_key);
+        let socket_addr_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+        node_addr.direct_addresses = vec![socket_addr_v4];
+
+        // Add peer address and ensure a single peer is known.
+        address_book.add_peer(node_addr.clone()).await;
+        let known_peers = address_book.known_peers().await;
+        assert_eq!(known_peers.len(), 1);
+
+        let socket_addr_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 0);
+        node_addr.direct_addresses.push(socket_addr_v6);
+
+        // Add a second peer address and ensure two peers are known.
+        address_book.add_peer(node_addr.clone()).await;
+        let known_peers = address_book.known_peers().await;
+        assert_eq!(known_peers.len(), 2);
+
+        // Add the second peer address again and ensure no duplication occurs.
+        address_book.add_peer(node_addr.clone()).await;
+        let known_peers = address_book.known_peers().await;
+        assert_eq!(known_peers.len(), 2);
+    }
+}
