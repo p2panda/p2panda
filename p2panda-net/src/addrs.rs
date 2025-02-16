@@ -18,7 +18,7 @@ use crate::to_public_key;
 pub const DEFAULT_STUN_PORT: u16 = 3478;
 
 /// URL identifying a relay server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct RelayUrl(IrohRelayUrl);
 
 impl RelayUrl {
@@ -54,7 +54,7 @@ pub(crate) fn to_relay_url(url: IrohRelayUrl) -> RelayUrl {
 }
 
 /// Node address including public key, socket address(es) and an optional relay URL.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct NodeAddress {
     pub public_key: PublicKey,
     pub direct_addresses: Vec<SocketAddr>,

@@ -23,7 +23,7 @@ pub struct AddressBook {
 #[derive(Debug)]
 struct AddressBookInner {
     known_peer_topic_ids: HashMap<PublicKey, HashSet<[u8; 32]>>,
-    known_peer_addresses: HashMap<PublicKey, Vec<NodeAddress>>,
+    known_peer_addresses: HashMap<PublicKey, HashSet<NodeAddress>>,
 }
 
 impl AddressBook {
@@ -50,10 +50,8 @@ impl AddressBook {
         inner
             .known_peer_addresses
             .entry(public_key)
-            .and_modify(|addrs| {
-                addrs.push(node_addr.clone());
-            })
-            .or_insert(vec![node_addr]);
+            .or_default()
+            .insert(node_addr);
     }
 
     /// Associate peer with a topic id they are interested in.
