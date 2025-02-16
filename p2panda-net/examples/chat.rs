@@ -62,6 +62,9 @@ struct Args {
     /// Supply the public key of a bootstrap peer for discovery over the internet.
     #[arg(short = 'b', long, value_name = "PUBLIC_KEY")]
     bootstrap: Option<PublicKey>,
+
+    #[arg(short = 'p', long, value_name = "PRIVATE_KEY")]
+    private_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -90,8 +93,18 @@ async fn main() -> Result<()> {
     let network_id = Hash::new(b"p2panda_chat_example");
     let topic = ChatTopic::new("my_chat");
 
-    let private_key = PrivateKey::new();
+    let private_key = match args.private_key {
+        Some(hex) => PrivateKey::from_bytes(
+            hex::decode(hex)
+                .expect("hexadecimal encoding")
+                .as_slice()
+                .try_into()
+                .expect("32 bytes"),
+        ),
+        None => PrivateKey::new(),
+    };
     let public_key = private_key.public_key();
+    println!("private_key={}", hex::encode(private_key.as_bytes()));
 
     // Configure the network.
     let mut network_builder =

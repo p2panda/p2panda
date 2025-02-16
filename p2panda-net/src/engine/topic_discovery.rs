@@ -55,16 +55,16 @@ impl TopicDiscovery {
 
     /// Attempts joining the network-wide gossip overlay.
     pub async fn start(&mut self) -> Result<()> {
-        if self.status != Status::Idle {
-            return Ok(());
-        }
+        // if self.status != Status::Idle {
+        //     return Ok(());
+        // }
 
         let peers = self
             .address_book
             .random_set(self.network_id, JOIN_PEERS_SAMPLE_LEN)
             .await;
 
-        self.status = Status::Pending;
+        // self.status = Status::Pending;
         self.gossip_actor_tx
             .send(ToGossipActor::Join {
                 topic_id: self.network_id,
@@ -88,9 +88,9 @@ impl TopicDiscovery {
             return;
         }
 
-        if self.status == Status::Idle {
-            panic!("can't set state to 'active' if joining was never attempted")
-        }
+        // if self.status == Status::Idle {
+        //     panic!("can't set state to 'active' if joining was never attempted")
+        // }
 
         self.status = Status::Active;
     }
