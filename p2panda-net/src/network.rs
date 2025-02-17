@@ -1047,6 +1047,7 @@ pub(crate) mod tests {
     use async_trait::async_trait;
     use iroh::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
+    use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
     use p2panda_sync::TopicQuery;
@@ -1086,6 +1087,29 @@ pub(crate) mod tests {
         header.sign(private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
+    }
+
+    fn run_node<T: TopicId + TopicQuery + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
+
+            // Await the ready signal so we know the gossip overlay has been joined.
+            assert!(ready.await.is_ok());
+
+            // Await at least one message received via sync.
+            loop {
+                let msg = rx.recv().await.unwrap();
+                println!("{msg:?}");
+                match msg {
+                    FromNetwork::SyncMessage { .. } => break,
+                    _ => (),
+                }
+            }
+
+            // Give other nodes enough time to complete sync sessions.
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            node.shutdown().await.unwrap();
+        })
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -1159,6 +1183,51 @@ pub(crate) mod tests {
 
         node_1.add_peer(to_node_addr(node_2_addr)).await.unwrap();
         node_2.add_peer(to_node_addr(node_1_addr)).await.unwrap();
+
+        // Subscribe to the same topic from both nodes
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by both nodes for the given topic
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
+
+        // Broadcast a message and make sure it's received by the other node
+        tx_1.send(ToNetwork::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            FromNetwork::GossipMessage {
+                bytes: "Hello, Node".to_bytes(),
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn join_gossip_overlay_with_local_discovery() {
+        let network_id = [1; 32];
+        let topic = TestTopic::new("chat");
+
+        // Build two nodes with local discovery (mDNS) enabled.
+        let node_1 = NetworkBuilder::new(network_id)
+            .discovery(LocalDiscovery::new())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .discovery(LocalDiscovery::new())
+            .build()
+            .await
+            .unwrap();
 
         // Subscribe to the same topic from both nodes
         let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
@@ -1447,29 +1516,6 @@ pub(crate) mod tests {
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
         node_3.shutdown().await.unwrap();
-    }
-
-    fn run_node<T: TopicId + TopicQuery + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
-
-            // Await the ready signal so we know the gossip overlay has been joined.
-            assert!(ready.await.is_ok());
-
-            // Await at least one message received via sync.
-            loop {
-                let msg = rx.recv().await.unwrap();
-                println!("{msg:?}");
-                match msg {
-                    FromNetwork::SyncMessage { .. } => break,
-                    _ => (),
-                }
-            }
-
-            // Give other nodes enough time to complete sync sessions.
-            tokio::time::sleep(Duration::from_secs(3)).await;
-            node.shutdown().await.unwrap();
-        })
     }
 
     #[tokio::test]
