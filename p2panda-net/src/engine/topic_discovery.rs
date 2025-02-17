@@ -55,9 +55,15 @@ impl TopicDiscovery {
 
     /// Attempts joining the network-wide gossip overlay.
     pub async fn start(&mut self) -> Result<()> {
-        if self.status != Status::Idle {
-            return Ok(());
-        }
+        // @TODO(glyph): `start()` may be invoked before any peers have been discovered; in the
+        // case of local discovery (mDNS), this will result in a downstream blockage when
+        // attempting to join the network-wide gossip (see `src/engine/gossip.rs` L113).
+        // As a temporary bug fix, we remove the status check to allow this method to be called
+        // repeatedly.
+        //
+        // if self.status != Status::Idle {
+        //     return Ok(());
+        // }
 
         let peers = self
             .address_book

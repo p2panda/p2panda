@@ -113,9 +113,16 @@ where
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {
-                if self.want_join.contains(&topic_id) {
-                    return Ok(true);
-                }
+                // @TODO(glyph): This check prevents duplicate join attempts for the same topic id
+                // but it prevents us from joining the network-wide gossip topic when using local
+                // discovery (mDNS); the first `subscribe_and_join()` attempt is made before any
+                // peers have been discovered and thus it blocks. We allow duplicate attempts to
+                // overcome the blockage. This needs to be addressed in a refactor.
+                //
+                // if self.want_join.contains(&topic_id) {
+                //     return Ok(true);
+                // }
+
                 let gossip = self.gossip.clone();
                 let peers = peers
                     .iter()
@@ -125,6 +132,7 @@ where
                     let stream = gossip.subscribe_and_join(topic_id.into(), peers).await;
                     (topic_id, stream)
                 };
+
                 self.want_join.insert(topic_id);
                 self.pending_joins.spawn(fut);
             }
