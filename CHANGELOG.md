@@ -21,7 +21,7 @@ Highlights are marked with a pancake 🥞
 
 ### Fixed
 
-- Replace `Vec` with `HashSet` for `known_peer_addressses` [#691](https://github.com/p2panda/p2panda/pull/691)
+- Deduplicate node addresses in address book [#691](https://github.com/p2panda/p2panda/pull/691)
 
 ## [0.2.0] - 20/01/2025
 
