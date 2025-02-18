@@ -34,6 +34,7 @@ enum Status {
 // `Discovery` trait (for peer discovery), adjusted to work with topics.
 pub struct TopicDiscovery {
     address_book: AddressBook,
+    bootstrap: bool,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     network_id: NetworkId,
     status: Status,
@@ -44,9 +45,11 @@ impl TopicDiscovery {
         network_id: NetworkId,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         address_book: AddressBook,
+        bootstrap: bool,
     ) -> Self {
         Self {
             address_book,
+            bootstrap,
             gossip_actor_tx,
             network_id,
             status: Status::default(),
@@ -55,28 +58,29 @@ impl TopicDiscovery {
 
     /// Attempts joining the network-wide gossip overlay.
     pub async fn start(&mut self) -> Result<()> {
-        // @TODO(glyph): `start()` may be invoked before any peers have been discovered; in the
-        // case of local discovery (mDNS), this will result in a downstream blockage when
-        // attempting to join the network-wide gossip (see `src/engine/gossip.rs` L113).
-        // As a temporary bug fix, we remove the status check to allow this method to be called
-        // repeatedly.
-        //
-        // if self.status != Status::Idle {
-        //     return Ok(());
-        // }
+        // This method may be invoked before any peers have been discovered; in the case
+        // of local discovery (mDNS), this will result in a downstream blockage when
+        // attempting to join the network-wide gossip (see `src/engine/gossip.rs`).
+        // As a temporary bug fix, we ignore the status check to allow this method to be called
+        // repeatedly when not acting as a bootstrap node.
+        if !self.bootstrap && self.status != Status::Idle {
+            return Ok(());
+        }
 
         let peers = self
             .address_book
             .random_set(self.network_id, JOIN_PEERS_SAMPLE_LEN)
             .await;
 
-        self.status = Status::Pending;
-        self.gossip_actor_tx
-            .send(ToGossipActor::Join {
-                topic_id: self.network_id,
-                peers,
-            })
-            .await?;
+        if !peers.is_empty() || self.bootstrap {
+            self.status = Status::Pending;
+            self.gossip_actor_tx
+                .send(ToGossipActor::Join {
+                    topic_id: self.network_id,
+                    peers,
+                })
+                .await?;
+        }
 
         Ok(())
     }
@@ -193,7 +197,8 @@ mod tests {
         address_book.add_peer(node_addr).await;
 
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(64);
-        let mut topic_discovery = TopicDiscovery::new(network_id, gossip_actor_tx, address_book);
+        let mut topic_discovery =
+            TopicDiscovery::new(network_id, gossip_actor_tx, address_book, true);
 
         // We expect the status to transition from `Idle` to `Pending` when topic discovery is
         // started, since we already added a peer to the address book.

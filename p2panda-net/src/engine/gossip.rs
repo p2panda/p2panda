@@ -35,6 +35,7 @@ pub enum ToGossipActor {
 /// The `GossipActor` manages gossip topic membership (joining and leaving of topics) and
 /// facilitates flows of messages into and out of individual gossip overlays.
 pub struct GossipActor<T> {
+    bootstrap: bool,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     gossip: Gossip,
     gossip_events: StreamMap<[u8; 32], GossipReceiver>,
@@ -50,11 +51,13 @@ where
     T: TopicQuery + 'static,
 {
     pub fn new(
+        bootstrap: bool,
         inbox: mpsc::Receiver<ToGossipActor>,
         gossip: Gossip,
         engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     ) -> Self {
         Self {
+            bootstrap,
             engine_actor_tx,
             gossip,
             gossip_events: Default::default(),
@@ -113,15 +116,11 @@ where
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {
-                // @TODO(glyph): This check prevents duplicate join attempts for the same topic id
-                // but it prevents us from joining the network-wide gossip topic when using local
-                // discovery (mDNS); the first `subscribe_and_join()` attempt is made before any
-                // peers have been discovered and thus it blocks. We allow duplicate attempts to
-                // overcome the blockage. This needs to be addressed in a refactor.
-                //
-                // if self.want_join.contains(&topic_id) {
-                //     return Ok(true);
-                // }
+                // Only prevent this join attempt if our node is not acting as a bootstrap node
+                // and a subsequent join attempt has already been made.
+                if !self.bootstrap && self.want_join.contains(&topic_id) {
+                    return Ok(true);
+                }
 
                 let gossip = self.gossip.clone();
                 let peers = peers
