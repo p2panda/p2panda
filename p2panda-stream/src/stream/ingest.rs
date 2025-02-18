@@ -252,6 +252,8 @@ mod tests {
     use futures_util::stream::iter;
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Operation, RawOperation};
+    use p2panda_store::sqlite::store::SqliteStore;
+    use p2panda_store::sqlite::test_utils::initialize_sqlite_db;
     use p2panda_store::MemoryStore;
     use tokio::sync::mpsc;
     use tokio::time;
@@ -306,6 +308,20 @@ mod tests {
 
         let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("not fail");
         assert_eq!(res.len(), items_num);
+    }
+
+    #[tokio::test]
+    async fn ingest_async_store_bug() {
+        // Related issue: https://github.com/p2panda/p2panda/issues/694
+        let pool = initialize_sqlite_db().await;
+        let store = SqliteStore::<StreamName, Extensions>::new(pool);
+        let stream = mock_stream()
+            .take(5)
+            .decode()
+            .filter_map(|item| async { item.ok() })
+            .ingest(store, 16);
+        let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
+        assert!(res.is_ok());
     }
 
     #[tokio::test]
