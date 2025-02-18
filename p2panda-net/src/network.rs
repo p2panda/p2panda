@@ -1071,7 +1071,6 @@ pub(crate) mod tests {
     use crate::config::Config;
     use crate::events::SystemEvent;
     use crate::network::sync_protocols::PingPongProtocol;
-    use crate::network::to_relay_url;
     use crate::sync::SyncConfiguration;
     use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
