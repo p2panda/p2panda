@@ -27,6 +27,7 @@ hex = { version = "0.4.3", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.2.0" }
 sqlx = { version = "0.8.3", optional = true, features = ["sqlite",
 "runtime-tokio"] }
+thiserror = "2.0.11"
 trait-variant = "0.1.2"
 
 [dev-dependencies]
