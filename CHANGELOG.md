@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
-- Introduce a concrete error type for `SqliteStore` [#698](https://github.com/p2panda/p2panda/pull/698)
+- Introduce concrete error types for `MemoryStore` and `SqliteStore` [#698](https://github.com/p2panda/p2panda/pull/698)
 - Implement SQLite `OperationStore` & `LogStore` [#680](https://github.com/p2panda/p2panda/pull/680)
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
 
