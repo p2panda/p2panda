@@ -30,7 +30,7 @@ pub mod memory;
 pub mod sqlite;
 
 #[cfg(feature = "memory")]
-pub use memory::MemoryStore;
+pub use memory::{MemoryStore, MemoryStoreError};
 #[cfg(feature = "sqlite")]
 pub use sqlite::store::{SqliteStore, SqliteStoreError};
 
