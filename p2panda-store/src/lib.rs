@@ -20,6 +20,10 @@
 //! An in-memory storage solution is provided in the form of a `MemoryStore` which implements both
 //! `OperationStore` and `LogStore`. The store is gated by the `memory` feature flag and is enabled
 //! by default.
+//!
+//! A SQLite storage solution is provided in the form of a `SqliteStore` which implements both
+//! `OperationStore` and `LogStore`. The store is gated by the `sqlite` feature flag and is
+//! disabled by default.
 #[cfg(feature = "memory")]
 pub mod memory;
 #[cfg(feature = "sqlite")]
@@ -27,6 +31,8 @@ pub mod sqlite;
 
 #[cfg(feature = "memory")]
 pub use memory::MemoryStore;
+#[cfg(feature = "sqlite")]
+pub use sqlite::store::{SqliteStore, SqliteStoreError};
 
 use std::fmt::{Debug, Display};
 
