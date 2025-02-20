@@ -24,6 +24,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Deduplicate node addresses in address book [#691](https://github.com/p2panda/p2panda/pull/691)
+- Allow bootstrap peer to already enter topic-discovery overlay without any known peers [#688](https://github.com/p2panda/p2panda/pull/688)
 
 ## [0.2.0] - 20/01/2025
 
