@@ -6,7 +6,6 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use anyhow::{anyhow, Error, Result};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::{LogId, LogStore, OperationStore};
@@ -76,7 +75,7 @@ where
     L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
-    type Error = Error;
+    type Error = Infallible;
 
     async fn insert_operation(
         &mut self,
@@ -86,12 +85,6 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
-        if header.signature.is_none() {
-            return Err(anyhow!(
-                "store error: operation header must be signed prior to insertion"
-            ));
-        }
-
         let mut store = self.write_store();
 
         let log_meta = (header.seq_num, header.timestamp, hash);
@@ -417,31 +410,6 @@ mod tests {
             .await
             .expect("no errors");
         assert!(inserted);
-    }
-
-    #[tokio::test]
-    async fn insert_operation_with_unsigned_header() {
-        let mut store = MemoryStore::default();
-        let private_key = PrivateKey::new();
-
-        // Create the first operation.
-        let body = Body::new("hello!".as_bytes());
-        let (hash, mut header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
-
-        // Set signature to `None` for the sake of the test.
-        header.signature = None;
-
-        // Only insert the first operation into the store.
-        let inserted = store
-            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
-            .await;
-
-        // Ensure that the lack of a header signature returns an error.
-        assert!(inserted.is_err());
-        assert_eq!(
-            format!("{}", inserted.unwrap_err()),
-            "store error: operation header must be signed prior to insertion"
-        );
     }
 
     #[tokio::test]

@@ -3,10 +3,9 @@
 use std::convert::From;
 use std::str::FromStr;
 
+use p2panda_core::cbor::decode_cbor;
 use p2panda_core::{Extensions, Hash, Header, PublicKey, RawOperation, Signature};
 use sqlx::FromRow;
-
-use crate::sqlite::store::deserialize_extensions;
 
 /// A single "raw" operation row as it is inserted in the database.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
@@ -61,7 +60,7 @@ where
             previous,
             extensions: row
                 .extensions
-                .map(|extensions| deserialize_extensions(extensions).unwrap()),
+                .map(|extensions| decode_cbor(&extensions[..]).unwrap()),
         }
     }
 }

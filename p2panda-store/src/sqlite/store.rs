@@ -4,16 +4,35 @@
 use std::hash::{DefaultHasher, Hash as StdHash, Hasher};
 use std::marker::PhantomData;
 
-use anyhow::{anyhow, Error, Result};
 use sqlx::migrate;
-use sqlx::migrate::MigrateDatabase;
+use sqlx::migrate::{MigrateDatabase, MigrateError};
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::{query, query_as, Sqlite};
+use sqlx::{query, query_as, Error as SqlxError, Sqlite};
+use thiserror::Error;
 
+use p2panda_core::cbor::{encode_cbor, DecodeError, EncodeError};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::sqlite::models::{LogHeightRow, OperationRow, RawOperationRow};
 use crate::{LogId, LogStore, OperationStore};
+
+#[derive(Debug, Error)]
+pub enum SqliteStoreError {
+    #[error("failed to encode operation extensions: {0}")]
+    EncodingFailed(#[from] EncodeError),
+
+    #[error("failed to decode operation extensions: {0}")]
+    DecodingFailed(#[from] DecodeError),
+
+    #[error("an error occurred with the sqlite database: {0}")]
+    Database(#[from] SqlxError),
+}
+
+impl From<MigrateError> for SqliteStoreError {
+    fn from(error: MigrateError) -> Self {
+        Self::Database(SqlxError::Migrate(Box::new(error)))
+    }
+}
 
 /// Re-export of SQLite connection pool type.
 pub type Pool = SqlitePool;
@@ -40,25 +59,25 @@ where
 }
 
 /// Create the database if it doesn't already exist.
-pub async fn create_database(url: &str) -> Result<()> {
+pub async fn create_database(url: &str) -> Result<(), SqliteStoreError> {
     if !Sqlite::database_exists(url).await? {
-        Sqlite::create_database(url).await?;
+        Sqlite::create_database(url).await?
     }
 
     Ok(())
 }
 
 /// Drop the database if it exists.
-pub async fn drop_database(url: &str) -> Result<()> {
+pub async fn drop_database(url: &str) -> Result<(), SqliteStoreError> {
     if Sqlite::database_exists(url).await? {
-        Sqlite::drop_database(url).await?;
+        Sqlite::drop_database(url).await?
     }
 
     Ok(())
 }
 
 /// Create a connection pool.
-pub async fn connection_pool(url: &str, max_connections: u32) -> Result<Pool, Error> {
+pub async fn connection_pool(url: &str, max_connections: u32) -> Result<Pool, SqliteStoreError> {
     let pool: Pool = SqlitePoolOptions::new()
         .max_connections(max_connections)
         .connect(url)
@@ -68,8 +87,9 @@ pub async fn connection_pool(url: &str, max_connections: u32) -> Result<Pool, Er
 }
 
 /// Run any pending database migrations from inside the application.
-pub async fn run_pending_migrations(pool: &Pool) -> Result<()> {
+pub async fn run_pending_migrations(pool: &Pool) -> Result<(), SqliteStoreError> {
     migrate!().run(pool).await?;
+
     Ok(())
 }
 
@@ -79,28 +99,12 @@ fn calculate_hash<T: StdHash>(t: &T) -> u64 {
     s.finish()
 }
 
-fn serialize_extensions<T: Extensions>(extensions: &T) -> Result<Vec<u8>> {
-    let mut bytes: Vec<u8> = Vec::new();
-    ciborium::ser::into_writer(extensions, &mut bytes)?;
-
-    Ok(bytes)
-}
-
-pub(crate) fn deserialize_extensions<T>(bytes: Vec<u8>) -> Result<T>
-where
-    T: Extensions,
-{
-    let extensions = ciborium::de::from_reader(&bytes[..])?;
-
-    Ok(extensions)
-}
-
 impl<L, E> OperationStore<L, E> for SqliteStore<L, E>
 where
     L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
-    type Error = Error;
+    type Error = SqliteStoreError;
 
     async fn insert_operation(
         &mut self,
@@ -110,12 +114,6 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
-        if header.signature.is_none() {
-            return Err(anyhow!(
-                "store error: operation header must be signed prior to insertion"
-            ));
-        }
-
         query(
             "
             INSERT INTO
@@ -157,9 +155,12 @@ where
                 .collect::<Vec<String>>()
                 .concat(),
         )
-        .bind(header.extensions.as_ref().map(|extensions| {
-            serialize_extensions(extensions).expect("extenions are serializable")
-        }))
+        .bind(
+            header
+                .extensions
+                .as_ref()
+                .map(|extensions| encode_cbor(extensions).expect("extenions are serializable")),
+        )
         .bind(body.map(|body| body.to_bytes()))
         .bind(header_bytes)
         .execute(&self.pool)
@@ -292,7 +293,7 @@ where
     L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
-    type Error = Error;
+    type Error = SqliteStoreError;
 
     async fn get_log(
         &self,
@@ -656,7 +657,7 @@ mod tests {
         assert!(inserted.is_err());
         assert_eq!(
             format!("{}", inserted.unwrap_err()),
-            "store error: operation header must be signed prior to insertion"
+            "an error occurred with the sqlite database: error returned from database: (code: 1299) NOT NULL constraint failed: operations_v1.signature"
         );
     }
 
