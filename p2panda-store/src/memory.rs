@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
-use thiserror::Error;
 
 use crate::{LogId, LogStore, OperationStore};
 
@@ -17,12 +16,6 @@ type RawHeader = Vec<u8>;
 
 type LogMeta = (SeqNum, Timestamp, Hash);
 type StoredOperation<L, E> = (L, Header<E>, Option<Body>, RawHeader);
-
-#[derive(Debug, Error)]
-pub enum MemoryStoreError {
-    #[error("operation header must be signed prior to insertion")]
-    MissingHeaderSignature,
-}
 
 /// An in-memory store for core p2panda data types: `Operation` and `Log`.
 #[derive(Clone, Debug)]
@@ -82,7 +75,7 @@ where
     L: LogId + Send + Sync,
     E: Extensions + Send + Sync,
 {
-    type Error = MemoryStoreError;
+    type Error = Infallible;
 
     async fn insert_operation(
         &mut self,
@@ -92,10 +85,6 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
-        if header.signature.is_none() {
-            return Err(MemoryStoreError::MissingHeaderSignature);
-        }
-
         let mut store = self.write_store();
 
         let log_meta = (header.seq_num, header.timestamp, hash);
