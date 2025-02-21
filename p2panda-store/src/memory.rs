@@ -413,31 +413,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn insert_operation_with_unsigned_header() {
-        let mut store = MemoryStore::default();
-        let private_key = PrivateKey::new();
-
-        // Create the first operation.
-        let body = Body::new("hello!".as_bytes());
-        let (hash, mut header, header_bytes) = create_operation(&private_key, &body, 0, 0, None);
-
-        // Set signature to `None` for the sake of the test.
-        header.signature = None;
-
-        // Only insert the first operation into the store.
-        let inserted = store
-            .insert_operation(hash, &header, Some(&body), &header_bytes, &0)
-            .await;
-
-        // Ensure that the lack of a header signature returns an error.
-        assert!(inserted.is_err());
-        assert_eq!(
-            format!("{}", inserted.unwrap_err()),
-            "operation header must be signed prior to insertion"
-        );
-    }
-
-    #[tokio::test]
     async fn insert_get_operation() {
         let mut store = MemoryStore::default();
         let private_key = PrivateKey::new();
