@@ -18,9 +18,6 @@ use crate::{LogId, LogStore, OperationStore};
 
 #[derive(Debug, Error)]
 pub enum SqliteStoreError {
-    #[error("operation header must be signed prior to insertion")]
-    MissingHeaderSignature,
-
     #[error("failed to encode operation extensions: {0}")]
     EncodingFailed(#[from] EncodeError),
 
@@ -117,10 +114,6 @@ where
         header_bytes: &[u8],
         log_id: &L,
     ) -> Result<bool, Self::Error> {
-        if header.signature.is_none() {
-            return Err(SqliteStoreError::MissingHeaderSignature);
-        }
-
         query(
             "
             INSERT INTO
@@ -664,7 +657,7 @@ mod tests {
         assert!(inserted.is_err());
         assert_eq!(
             format!("{}", inserted.unwrap_err()),
-            "operation header must be signed prior to insertion"
+            "an error occurred with the sqlite database: error returned from database: (code: 1299) NOT NULL constraint failed: operations_v1.signature"
         );
     }
 
