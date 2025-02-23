@@ -124,4 +124,48 @@ mod tests {
         let item = checker.next();
         assert!(item.is_none());
     }
+
+    #[test]
+    fn recursive_dependency_check() {
+        let incomplete_graph = [
+            ("a", "A", vec![]),
+            ("c", "C", vec!["b"]),
+            ("d", "D", vec!["c"]),
+            ("e", "E", vec!["d"]),
+            ("f", "F", vec!["e"]),
+            ("g", "G", vec!["f"]),
+        ];
+
+        let mut checker = DependencyChecker::new();
+        for (key, value, dependencies) in incomplete_graph {
+            checker.process(key, value, dependencies);
+        }
+        assert!(checker.processed.len() == 1);
+        assert_eq!(checker.pending_queue.len(), 5);
+        assert_eq!(checker.ready_queue.len(), 1);
+
+        let missing_dependency = ("b", "B", vec!["a"]);
+
+        checker.process(missing_dependency.0, missing_dependency.1, missing_dependency.2);
+        assert!(checker.processed.len() == 7);
+        assert_eq!(checker.pending_queue.len(), 0);
+        assert_eq!(checker.ready_queue.len(), 7);
+
+        let item = checker.next();
+        assert_eq!(item, Some("A"));
+        let item = checker.next();
+        assert_eq!(item, Some("B"));
+        let item = checker.next();
+        assert_eq!(item, Some("C"));
+        let item = checker.next();
+        assert_eq!(item, Some("D"));
+        let item = checker.next();
+        assert_eq!(item, Some("E"));
+        let item = checker.next();
+        assert_eq!(item, Some("F"));
+        let item = checker.next();
+        assert_eq!(item, Some("G"));
+        let item = checker.next();
+        assert!(item.is_none());
+    }
 }
