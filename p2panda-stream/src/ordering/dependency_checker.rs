@@ -146,7 +146,11 @@ mod tests {
 
         let missing_dependency = ("b", "B", vec!["a"]);
 
-        checker.process(missing_dependency.0, missing_dependency.1, missing_dependency.2);
+        checker.process(
+            missing_dependency.0,
+            missing_dependency.1,
+            missing_dependency.2,
+        );
         assert!(checker.processed.len() == 7);
         assert_eq!(checker.pending_queue.len(), 0);
         assert_eq!(checker.ready_queue.len(), 7);
@@ -165,6 +169,65 @@ mod tests {
         assert_eq!(item, Some("F"));
         let item = checker.next();
         assert_eq!(item, Some("G"));
+        let item = checker.next();
+        assert!(item.is_none());
+    }
+
+    #[test]
+    fn complex_graph() {
+        // A <-- B1 <-- C1 <--\
+        //   \-- B2 <-- C2 <-- D
+        //        \---- C3 <--/
+        let incomplete_graph = [
+            ("a", "A", vec![]),
+            ("b1", "B1", vec!["a"]),
+            ("c1", "C1", vec!["b1"]),
+            ("c2", "C2", vec!["b2"]),
+            ("c3", "C3", vec!["b2"]),
+            ("d", "D", vec!["c1", "c2", "c3"]),
+        ];
+
+        let mut checker = DependencyChecker::new();
+        for (key, value, dependencies) in incomplete_graph {
+            checker.process(key, value, dependencies);
+        }
+
+        // A1, B1 and C1 have dependencies met and were already processed.
+        assert!(checker.processed.len() == 3);
+        assert_eq!(checker.pending_queue.len(), 3);
+        assert_eq!(checker.ready_queue.len(), 3);
+
+        let item = checker.next();
+        assert_eq!(item, Some("A"));
+        let item = checker.next();
+        assert_eq!(item, Some("B1"));
+        let item = checker.next();
+        assert_eq!(item, Some("C1"));
+        let item = checker.next();
+        assert!(item.is_none());
+
+        // No more ready items.
+        assert_eq!(checker.ready_queue.len(), 0);
+
+        // Process the missing item.
+        let missing_dependency = ("b2", "B2", vec!["a"]);
+        checker.process(
+            missing_dependency.0,
+            missing_dependency.1,
+            missing_dependency.2,
+        );
+        assert_eq!(checker.processed.len(), 7);
+        assert_eq!(checker.pending_queue.len(), 0);
+        assert_eq!(checker.ready_queue.len(), 4);
+
+        let item = checker.next();
+        assert_eq!(item, Some("B2"));
+        let item = checker.next();
+        assert_eq!(item, Some("C2"));
+        let item = checker.next();
+        assert_eq!(item, Some("C3"));
+        let item = checker.next();
+        assert_eq!(item, Some("D"));
         let item = checker.next();
         assert!(item.is_none());
     }
