@@ -216,6 +216,8 @@ mod tests {
             missing_dependency.1,
             missing_dependency.2,
         );
+
+        // All items have now been processed and new ones are waiting in the ready queue.
         assert_eq!(checker.processed.len(), 7);
         assert_eq!(checker.pending_queue.len(), 0);
         assert_eq!(checker.ready_queue.len(), 4);
@@ -230,5 +232,48 @@ mod tests {
         assert_eq!(item, Some("D"));
         let item = checker.next();
         assert!(item.is_none());
+    }
+
+    #[test]
+    fn very_out_of_order() {
+        // A <-- B1 <-- C1 <--\
+        //   \-- B2 <-- C2 <-- D
+        //        \---- C3 <--/
+        let out_of_order_graph = [
+            ("d", "D", vec!["c1", "c2", "c3"]),
+            ("c1", "C1", vec!["b1"]),
+            ("b1", "B1", vec!["a"]),
+            ("b2", "B2", vec!["a"]),
+            ("c3", "C3", vec!["b2"]),
+            ("c2", "C2", vec!["b2"]),
+            ("a", "A", vec![]),
+        ];
+
+        let mut checker = DependencyChecker::new();
+        for (key, value, dependencies) in out_of_order_graph {
+            checker.process(key, value, dependencies);
+        }
+
+        assert!(checker.processed.len() == 7);
+        assert_eq!(checker.pending_queue.len(), 0);
+        assert_eq!(checker.ready_queue.len(), 7);
+
+        let item = checker.next();
+        assert_eq!(item, Some("A"));
+        let item = checker.next();
+        assert_eq!(item, Some("B1"));
+        let item = checker.next();
+        assert_eq!(item, Some("C1"));
+        let item = checker.next();
+        assert_eq!(item, Some("B2"));
+        let item = checker.next();
+        assert_eq!(item, Some("C3"));
+        let item = checker.next();
+        assert_eq!(item, Some("C2"));
+        let item = checker.next();
+        assert_eq!(item, Some("D"));
+        let item = checker.next();
+        assert!(item.is_none());
+
     }
 }
