@@ -5,8 +5,13 @@ use std::hash::Hash as StdHash;
 
 #[derive(Debug)]
 pub struct DependencyChecker<K, V> {
+    /// Keys for all items we have processed.
     processed: HashSet<K>,
+
+    /// Map of missing dependencies `K` to all items which directly depend on them `(K, V, Vec<K>)`.
     pending_queue: HashMap<K, Vec<(K, V, Vec<K>)>>,
+
+    /// Queue of items whore dependencies are met. These are returned from calls to `next()`.
     ready_queue: VecDeque<V>,
 }
 
