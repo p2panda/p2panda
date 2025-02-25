@@ -3,9 +3,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash as StdHash;
 
+// @TODO: eventually processed and pending_queue needs to be populated from the database.
 #[derive(Debug)]
 pub struct DependencyChecker<K, V> {
     /// Keys for all items we have processed.
+    /// @TODO: store all items which are _not_ processed instead.
     processed: HashSet<K>,
 
     /// Map of missing dependencies `K` to all items which directly depend on them `(K, V, Vec<K>)`.
@@ -32,6 +34,7 @@ where
         self.ready_queue.pop_front()
     }
 
+    // @TODO: maybe we don't need a value here, just handle keys everywhere?
     pub fn process(&mut self, key: K, value: V, dependencies: Vec<K>) {
         let mut deps_met = true;
 
@@ -60,7 +63,7 @@ where
         self.process_pending(key);
     }
 
-    /// Recursively check if any pending items now have their dependencies met (due to another
+    // Recursively check if any pending items now have their dependencies met (due to another
     // item being processed).
     fn process_pending(&mut self, key: K) {
         // Take the entry at key from the pending_queue, the value contains all items which depend
