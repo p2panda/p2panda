@@ -3,7 +3,7 @@
 use async_stream::stream;
 use futures_util::Stream;
 use p2panda_core::prune::PruneFlag;
-use p2panda_core::{Body, Extension, Header, PrivateKey, PublicKey, RawOperation};
+use p2panda_core::{Body, Extension, Hash, Header, PrivateKey, PublicKey, RawOperation};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -46,41 +46,67 @@ impl Extension<PruneFlag> for Extensions {
     }
 }
 
-pub fn mock_stream() -> impl Stream<Item = RawOperation> {
-    let private_key = PrivateKey::new();
-    let public_key = private_key.public_key();
-    let body = Body::new(b"Hello, Penguin!");
+pub struct Log {
+    private_key: PrivateKey,
+    next_backlink: Option<Hash>,
+    next_seq_num: u64,
+}
 
-    let mut backlink = None;
-    let mut seq_num = 0;
-
-    stream! {
-        loop {
-            let extensions = Extensions {
-                stream_name: StreamName::new(public_key, Some("chat")),
-                ..Default::default()
-            };
-
-            let mut header = Header::<Extensions> {
-                public_key,
-                version: 1,
-                signature: None,
-                payload_size: body.size(),
-                payload_hash: Some(body.hash()),
-                timestamp: 0,
-                seq_num,
-                backlink,
-                previous: vec![],
-                extensions: Some(extensions),
-            };
-            header.sign(&private_key);
-
-            let bytes = header.to_bytes();
-
-            backlink = Some(header.hash());
-            seq_num += 1;
-
-            yield (bytes, Some(body.to_bytes()));
+impl Log {
+    pub fn new() -> Self {
+        Self {
+            private_key: PrivateKey::new(),
+            next_backlink: None,
+            next_seq_num: 0,
         }
     }
+
+    pub fn create_operation(&mut self) -> (Header<Extensions>, Option<Body>) {
+        let public_key = self.private_key.public_key();
+
+        let extensions = Extensions {
+            stream_name: StreamName::new(public_key, Some("chat")),
+            ..Default::default()
+        };
+
+        let body = Body::new(b"Blub, Jellyfish!");
+
+        let mut header = Header::<Extensions> {
+            public_key,
+            version: 1,
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            timestamp: 0,
+            seq_num: self.next_seq_num,
+            backlink: self.next_backlink,
+            previous: vec![],
+            extensions: Some(extensions),
+        };
+        header.sign(&self.private_key);
+
+        self.next_backlink = Some(header.hash());
+        self.next_seq_num += 1;
+
+        (header, Some(body))
+    }
+}
+
+pub fn mock_stream() -> impl Stream<Item = RawOperation> {
+    let mut log = Log::new();
+    stream! {
+        loop {
+            let (header, body) = log.create_operation();
+            yield (header.to_bytes(), body.map(|body| body.to_bytes()));
+        }
+    }
+}
+
+pub fn generate_operations(num: usize) -> Vec<(Header<Extensions>, Option<Body>)> {
+    let mut operations = Vec::with_capacity(num);
+    let mut log = Log::new();
+    for _ in 0..num {
+        operations.push(log.create_operation());
+    }
+    operations
 }
