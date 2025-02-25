@@ -1604,11 +1604,13 @@ pub(crate) mod tests {
             .await
             .unwrap();
         let node_3 = NetworkBuilder::new(network_id)
+            .bootstrap()
             .sync(sync_config.clone())
             .build()
             .await
             .unwrap();
         let node_4 = NetworkBuilder::new(network_id)
+            .bootstrap()
             .sync(sync_config.clone())
             .build()
             .await
