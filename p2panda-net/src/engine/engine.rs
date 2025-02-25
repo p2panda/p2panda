@@ -103,6 +103,7 @@ impl<T> EngineActor<T>
 where
     T: TopicQuery + TopicId + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         private_key: PrivateKey,
         endpoint: Endpoint,
@@ -111,9 +112,14 @@ where
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
         network_id: NetworkId,
+        bootstrap: bool,
     ) -> Self {
-        let topic_discovery =
-            TopicDiscovery::new(network_id, gossip_actor_tx.clone(), address_book.clone());
+        let topic_discovery = TopicDiscovery::new(
+            network_id,
+            gossip_actor_tx.clone(),
+            address_book.clone(),
+            bootstrap,
+        );
         let topic_streams = TopicStreams::new(
             gossip_actor_tx.clone(),
             address_book.clone(),

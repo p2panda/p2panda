@@ -48,6 +48,7 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
+        bootstrap: bool,
         private_key: PrivateKey,
         network_id: NetworkId,
         endpoint: Endpoint,
@@ -78,8 +79,10 @@ where
             gossip_actor_tx,
             sync_actor_tx,
             network_id,
+            bootstrap,
         );
-        let gossip_actor = GossipActor::new(gossip_actor_rx, gossip, engine_actor_tx.clone());
+        let gossip_actor =
+            GossipActor::new(bootstrap, gossip_actor_rx, gossip, engine_actor_tx.clone());
 
         let actor_handle = tokio::task::spawn(async move {
             if let Err(err) = engine_actor.run(gossip_actor, sync_actor).await {

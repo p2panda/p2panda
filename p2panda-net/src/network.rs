@@ -181,6 +181,7 @@ pub struct NetworkBuilder<T> {
     bind_port_v4: Option<u16>,
     bind_ip_v6: Option<Ipv6Addr>,
     bind_port_v6: Option<u16>,
+    bootstrap: bool,
     direct_node_addresses: Vec<NodeAddress>,
     discovery: DiscoveryMap,
     gossip_config: Option<GossipConfig>,
@@ -205,6 +206,7 @@ where
             bind_port_v4: None,
             bind_ip_v6: None,
             bind_port_v6: None,
+            bootstrap: false,
             direct_node_addresses: Vec::new(),
             discovery: DiscoveryMap::default(),
             gossip_config: None,
@@ -269,6 +271,15 @@ where
     /// Default is 2023.
     pub fn bind_port_v6(mut self, port: u16) -> Self {
         self.bind_port_v6.replace(port);
+        self
+    }
+
+    /// Sets the bootstrap flag.
+    ///
+    /// A bootstrap node is one which is not aware of any other peers at start-up and is intended
+    /// to serve as an entry node into the network for other peers.
+    pub fn bootstrap(mut self) -> Self {
+        self.bootstrap = true;
         self
     }
 
@@ -418,6 +429,7 @@ where
             .await?;
 
         let engine = Engine::new(
+            self.bootstrap,
             private_key.clone(),
             self.network_id,
             endpoint.clone(),
@@ -1047,6 +1059,7 @@ pub(crate) mod tests {
     use async_trait::async_trait;
     use iroh::{RelayNode, RelayUrl as IrohRelayUrl};
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
+    use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
     use p2panda_sync::TopicQuery;
@@ -1086,6 +1099,29 @@ pub(crate) mod tests {
         header.sign(private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
+    }
+
+    fn run_node<T: TopicId + TopicQuery + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
+
+            // Await the ready signal so we know the gossip overlay has been joined.
+            assert!(ready.await.is_ok());
+
+            // Await at least one message received via sync.
+            loop {
+                let msg = rx.recv().await.unwrap();
+                println!("{msg:?}");
+                match msg {
+                    FromNetwork::SyncMessage { .. } => break,
+                    _ => (),
+                }
+            }
+
+            // Give other nodes enough time to complete sync sessions.
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            node.shutdown().await.unwrap();
+        })
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -1167,6 +1203,107 @@ pub(crate) mod tests {
         // Ensure the gossip-overlay has been joined by both nodes for the given topic
         assert!(ready_2.await.is_ok());
         assert!(ready_1.await.is_ok());
+
+        // Broadcast a message and make sure it's received by the other node
+        tx_1.send(ToNetwork::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            FromNetwork::GossipMessage {
+                bytes: "Hello, Node".to_bytes(),
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn join_gossip_overlay_with_local_discovery() {
+        let network_id = [1; 32];
+        let topic = TestTopic::new("chat");
+
+        // Build two nodes with local discovery (mDNS) enabled.
+        let node_1 = NetworkBuilder::new(network_id)
+            .discovery(LocalDiscovery::new())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .discovery(LocalDiscovery::new())
+            .build()
+            .await
+            .unwrap();
+
+        // Subscribe to the same topic from both nodes
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by both nodes for the given topic
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
+
+        // Broadcast a message and make sure it's received by the other node
+        tx_1.send(ToNetwork::Message {
+            bytes: "Hello, Node".to_bytes(),
+        })
+        .await
+        .unwrap();
+
+        let rx_2_msg = rx_2.recv().await.unwrap();
+        assert_eq!(
+            rx_2_msg,
+            FromNetwork::GossipMessage {
+                bytes: "Hello, Node".to_bytes(),
+                delivered_from: node_1.node_id(),
+            }
+        );
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn join_gossip_overlay_with_relay() {
+        let network_id = [1; 32];
+        let topic = TestTopic::new("chat");
+
+        // @NOTE(glyph): I tried using the iroh test relay (`iroh::test_utils::run_relay_server()`)
+        // but it fails (the peers never find one another via the network-wide gossip overlay).
+        // For now we use the p2panda relay instead.
+        let relay_url: RelayUrl = "https://wasser.liebechaos.org/".parse().unwrap();
+
+        // Build the bootstrap node.
+        let node_1 = NetworkBuilder::new(network_id)
+            .bootstrap()
+            .relay(relay_url.clone(), false, 0)
+            .build()
+            .await
+            .unwrap();
+        // Ensure the connection to the relay has been initialized.
+        node_1.endpoint().home_relay().initialized().await.unwrap();
+
+        // Build the second node.
+        let node_2 = NetworkBuilder::new(network_id)
+            .relay(relay_url, false, 0)
+            .direct_address(node_1.node_id(), vec![], None)
+            .build()
+            .await
+            .unwrap();
+
+        // Subscribe to the same topic from both nodes
+        let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
+        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by both nodes for the given topic
+        assert!(ready_1.await.is_ok());
+        assert!(ready_2.await.is_ok());
 
         // Broadcast a message and make sure it's received by the other node
         tx_1.send(ToNetwork::Message {
@@ -1449,29 +1586,6 @@ pub(crate) mod tests {
         node_3.shutdown().await.unwrap();
     }
 
-    fn run_node<T: TopicId + TopicQuery + 'static>(node: Network<T>, topic: T) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let (_tx, mut rx, ready) = node.subscribe(topic).await.unwrap();
-
-            // Await the ready signal so we know the gossip overlay has been joined.
-            assert!(ready.await.is_ok());
-
-            // Await at least one message received via sync.
-            loop {
-                let msg = rx.recv().await.unwrap();
-                println!("{msg:?}");
-                match msg {
-                    FromNetwork::SyncMessage { .. } => break,
-                    _ => (),
-                }
-            }
-
-            // Give other nodes enough time to complete sync sessions.
-            tokio::time::sleep(Duration::from_secs(3)).await;
-            node.shutdown().await.unwrap();
-        })
-    }
-
     #[tokio::test]
     async fn multi_hop_topic_discovery_and_sync() {
         let network_id = [1; 32];
@@ -1490,11 +1604,13 @@ pub(crate) mod tests {
             .await
             .unwrap();
         let node_3 = NetworkBuilder::new(network_id)
+            .bootstrap()
             .sync(sync_config.clone())
             .build()
             .await
             .unwrap();
         let node_4 = NetworkBuilder::new(network_id)
+            .bootstrap()
             .sync(sync_config.clone())
             .build()
             .await
@@ -1537,7 +1653,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn gossip_and_sync_events() {
-        let network_id = [1; 32];
+        let network_id = [17; 32];
         let chat_topic = TestTopic::new("chat");
         let chat_topic_id = chat_topic.clone().id();
         let sync_config = SyncConfiguration::new(PingPongProtocol {});
@@ -1586,7 +1702,7 @@ pub(crate) mod tests {
         assert!(ready_3.await.is_ok());
 
         // Events we expect to receive on node 1.
-        let expected_events = vec![
+        let mut expected_events = vec![
             // Join the network-wide gossip overlay by connecting to node 2.
             SystemEvent::GossipJoined {
                 topic_id: network_id,
@@ -1644,14 +1760,13 @@ pub(crate) mod tests {
         // Receive events on the node one receiver.
         let mut received_events = Vec::new();
         while let Ok(event) = event_rx_1.recv().await {
-            received_events.push(event);
+            assert!(expected_events.contains(&event));
+            let index = expected_events.iter().position(|ev| *ev == event).unwrap();
+            received_events.push(expected_events.remove(index));
             if received_events.len() == 11 {
                 break;
             }
         }
-
-        // Ensure the correct events are received.
-        assert_eq!(received_events, expected_events);
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
