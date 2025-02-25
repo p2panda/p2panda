@@ -332,26 +332,14 @@ where
             session.remove(&sync_attempt.peer);
         }
 
-        if let Some(err) = err.downcast_ref() {
-            match err {
-                // If the sync attempt failed because of a connection error we want to retry up to
-                // `max_retry_attempts`. If error occurs after this we simply stop trying without
-                // informing the engine as it never knew the attempts were occurring.
-                SyncAttemptError::Connection => {
-                    warn!("sync attempt failed due to connection error");
-                    if sync_attempt.attempts <= self.config.max_retry_attempts {
-                        self.reschedule_attempt(sync_attempt).await?;
-                        return Ok(());
-                    }
-                }
-                SyncAttemptError::Sync(_) => {
-                    self.engine_actor_tx
-                        .send(ToEngineActor::SyncFailed {
-                            topic: Some(sync_attempt.topic),
-                            peer: sync_attempt.peer,
-                        })
-                        .await?;
-                }
+        if let Some(err) = err.downcast_ref::<SyncAttemptError>() {
+            // If the sync attempt failed for any reason we want to retry up to
+            // `max_retry_attempts`. If error occurs after this we simply stop trying without
+            // informing the engine as it never knew the attempts were occurring.
+            warn!("sync attempt failed: {err}");
+            if sync_attempt.attempts <= self.config.max_retry_attempts {
+                self.reschedule_attempt(sync_attempt).await?;
+                return Ok(());
             }
         }
 
