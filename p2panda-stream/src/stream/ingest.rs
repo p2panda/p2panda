@@ -45,8 +45,6 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 {
 }
 
-type IngestFut<E> = Box<dyn Future<Output = Result<IngestResult<E>, IngestError>>>;
-
 /// Stream for the [`ingest`](IngestExt::ingest) method.
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
@@ -110,7 +108,58 @@ where
         let mut park_buffer = false;
 
         loop {
-            // 1. Pull in the next item from the external stream or out-of-order buffer.
+            // 1. Attempt validating and ingesting operation (this is a future we need to poll
+            //    a while until it resolves).
+            if let Some(ingest_fut) = this.ingest_fut.as_mut() {
+                let ingest_res = ready!(ingest_fut.poll_unpin(cx));
+                this.ingest_fut.take();
+
+                // 2. If the operation arrived out-of-order we can push it back into the internal
+                //    buffer and try again later (attempted for a configured number of times),
+                //    otherwise forward the result to the stream consumer.
+                match ingest_res {
+                    Ok((IngestResult::Retry(header, body, header_bytes, num_missing), counter)) => {
+                        // The number of max. reattempts is equal the size of the buffer. As long as
+                        // the buffer is just a FIFO queue it doesn't make sense to optimize over
+                        // different parameters as in a worst-case distribution of items (exact
+                        // reverse) this will be the max. and min. required bound.
+                        if counter > *this.ooo_buffer_size {
+                            return Poll::Ready(Some(Err(IngestError::MaxAttemptsReached(
+                                num_missing,
+                            ))));
+                        }
+
+                        // Push operation back into the internal queue, if something goes wrong here
+                        // this must be an critical failure.
+                        let Ok(_) = ready!(this.ooo_buffer_tx.poll_ready(cx)) else {
+                            break Poll::Ready(None);
+                        };
+
+                        let Ok(_) = this.ooo_buffer_tx.start_send(IngestAttempt(
+                            header,
+                            body,
+                            header_bytes,
+                            counter + 1,
+                        )) else {
+                            break Poll::Ready(None);
+                        };
+
+                        // In the next iteration we should prioritize the stream again.
+                        park_buffer = true;
+
+                        continue;
+                    }
+                    Ok((IngestResult::Complete(operation), _)) => {
+                        return Poll::Ready(Some(Ok(operation)));
+                    }
+                    Err(err) => {
+                        // Ingest failed and we want the stream consumers to be aware of that.
+                        return Poll::Ready(Some(Err(err)));
+                    }
+                }
+            }
+
+            // 3. Pull in the next item from the external stream or out-of-order buffer.
             let res = {
                 // If the buffer ran full we prioritize pulling from it first, re-attempting
                 // ingest. This avoids clogging up the pipeline.
@@ -151,86 +200,32 @@ where
                 return Poll::Ready(None);
             };
 
-            // 2. Validate and check the log-integrity of the incoming operation. If it is valid it
+            // 4. Validate and check the log-integrity of the incoming operation. If it is valid it
             //    get's persisted and the log optionally pruned.
-            let ingest_res = loop {
-                if let Some(ingest_fut) = this.ingest_fut.as_mut() {
-                    let result = ready!(ingest_fut.poll_unpin(cx));
-                    this.ingest_fut.take();
-                    break result;
-                } else {
-                    let mut store = this.store.clone();
+            let mut store = this.store.clone();
 
-                    let body = body.clone();
-                    let header = header.clone();
-                    let header_bytes = header_bytes.clone();
+            let ingest_fut = async move {
+                let log_id = header
+                    .extension()
+                    .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
+                let prune_flag: PruneFlag = header
+                    .extension()
+                    .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
 
-                    let ingest_fut = async move {
-                        let log_id = header
-                            .extension()
-                            .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
-                        let prune_flag: PruneFlag = header
-                            .extension()
-                            .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
+                let ingest_res = ingest_operation::<S, L, E>(
+                    &mut store,
+                    header,
+                    body,
+                    header_bytes,
+                    &log_id,
+                    prune_flag.is_set(),
+                )
+                .await;
 
-                        ingest_operation::<S, L, E>(
-                            &mut store,
-                            header,
-                            body,
-                            header_bytes,
-                            &log_id,
-                            prune_flag.is_set(),
-                        )
-                        .await
-                    };
-
-                    this.ingest_fut.replace(Box::pin(ingest_fut));
-                }
+                ingest_res.map(|res| (res, counter))
             };
 
-            // 3. If the operation arrived out-of-order we can push it back into the internal
-            //    buffer and try again later (attempted for a configured number of times),
-            //    otherwise forward the result of ingest to the consumer.
-            match ingest_res {
-                Ok(IngestResult::Retry(header, body, header_bytes, num_missing)) => {
-                    // The number of max. reattempts is equal the size of the buffer. As long as
-                    // the buffer is just a FIFO queue it doesn't make sense to optimize over
-                    // different parameters as in a worst-case distribution of items (exact
-                    // reverse) this will be the max. and min. required bound.
-                    if counter > *this.ooo_buffer_size {
-                        return Poll::Ready(Some(Err(IngestError::MaxAttemptsReached(
-                            num_missing,
-                        ))));
-                    }
-
-                    // Push operation back into the internal queue, if something goes wrong here
-                    // this must be an critical failure.
-                    let Ok(_) = ready!(this.ooo_buffer_tx.poll_ready(cx)) else {
-                        break Poll::Ready(None);
-                    };
-
-                    let Ok(_) = this.ooo_buffer_tx.start_send(IngestAttempt(
-                        header,
-                        body,
-                        header_bytes,
-                        counter + 1,
-                    )) else {
-                        break Poll::Ready(None);
-                    };
-
-                    // In the next iteration we should prioritize the stream again.
-                    park_buffer = true;
-
-                    continue;
-                }
-                Ok(IngestResult::Complete(operation)) => {
-                    return Poll::Ready(Some(Ok(operation)));
-                }
-                Err(err) => {
-                    // Ingest failed and we want the stream consumers to be aware of that.
-                    return Poll::Ready(Some(Err(err)));
-                }
-            }
+            this.ingest_fut.replace(Box::pin(ingest_fut));
         }
     }
 }
@@ -258,8 +253,13 @@ where
     delegate_sink!(stream, (Header<E>, Option<Body>, Vec<u8>));
 }
 
+type AttemptCounter = usize;
+
+type IngestFut<E> =
+    Box<dyn Future<Output = Result<(IngestResult<E>, AttemptCounter), IngestError>>>;
+
 #[derive(Debug)]
-struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, usize);
+struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, AttemptCounter);
 
 #[cfg(test)]
 mod tests {
@@ -336,8 +336,8 @@ mod tests {
             .decode()
             .filter_map(|item| async { item.ok() })
             .ingest(store, 16);
-        let res: Result<Vec<Operation<Extensions>>, IngestError> = stream.try_collect().await;
-        assert!(res.is_ok());
+        let res: Vec<Operation<Extensions>> = stream.try_collect().await.expect("no fail");
+        assert_eq!(res.len(), 5);
     }
 
     #[tokio::test]
