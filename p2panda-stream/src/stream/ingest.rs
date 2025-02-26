@@ -45,6 +45,8 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 {
 }
 
+type IngestFut<E> = Box<dyn Future<Output = Result<IngestResult<E>, IngestError>>>;
+
 /// Stream for the [`ingest`](IngestExt::ingest) method.
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
@@ -61,7 +63,7 @@ where
     ooo_buffer_tx: mpsc::Sender<IngestAttempt<E>>,
     #[pin]
     ooo_buffer_rx: mpsc::Receiver<IngestAttempt<E>>,
-    ingest_fut: Option<Pin<Box<dyn Future<Output = Result<IngestResult<E>, IngestError>>>>>,
+    ingest_fut: Option<Pin<IngestFut<E>>>,
     _marker: PhantomData<L>,
 }
 
@@ -158,6 +160,7 @@ where
                     break result;
                 } else {
                     let mut store = this.store.clone();
+
                     let body = body.clone();
                     let header = header.clone();
                     let header_bytes = header_bytes.clone();
