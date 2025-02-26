@@ -7,12 +7,11 @@ use std::pin::Pin;
 use futures_channel::mpsc::{self};
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
-use futures_util::{ready, Sink, Stream, StreamExt};
+use futures_util::{ready, FutureExt, Sink, Stream, StreamExt};
 use p2panda_core::prune::PruneFlag;
 use p2panda_core::{Body, Extension, Extensions, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
-use pin_utils::pin_mut;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
 use crate::operation::{ingest_operation, IngestError, IngestResult};
@@ -47,7 +46,6 @@ impl<T: ?Sized, S, L, E> IngestExt<S, L, E> for T where
 }
 
 /// Stream for the [`ingest`](IngestExt::ingest) method.
-#[derive(Debug)]
 #[pin_project]
 #[must_use = "streams do nothing unless polled"]
 pub struct Ingest<St, S, L, E>
@@ -63,6 +61,7 @@ where
     ooo_buffer_tx: mpsc::Sender<IngestAttempt<E>>,
     #[pin]
     ooo_buffer_rx: mpsc::Receiver<IngestAttempt<E>>,
+    ingest_fut: Option<Pin<Box<dyn Future<Output = Result<IngestResult<E>, IngestError>>>>>,
     _marker: PhantomData<L>,
 }
 
@@ -88,6 +87,7 @@ where
             ooo_buffer_size,
             ooo_buffer_tx,
             ooo_buffer_rx,
+            ingest_fut: None,
             _marker: PhantomData,
         }
     }
@@ -98,13 +98,12 @@ where
 impl<St, S, L, E> Stream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
-    S: OperationStore<L, E> + LogStore<L, E>,
-    E: Extension<L> + Extension<PruneFlag> + Extensions,
+    S: OperationStore<L, E> + LogStore<L, E> + 'static,
+    E: Extension<L> + Extension<PruneFlag> + Extensions + 'static,
 {
     type Item = Result<Operation<E>, IngestError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut store = self.store.clone();
         let mut this = self.project();
         let mut park_buffer = false;
 
@@ -152,25 +151,39 @@ where
 
             // 2. Validate and check the log-integrity of the incoming operation. If it is valid it
             //    get's persisted and the log optionally pruned.
-            let ingest_fut = async {
-                let log_id = header
-                    .extension()
-                    .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
-                let prune_flag: PruneFlag = header
-                    .extension()
-                    .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
-                ingest_operation::<S, L, E>(
-                    &mut store,
-                    header,
-                    body,
-                    header_bytes,
-                    &log_id,
-                    prune_flag.is_set(),
-                )
-                .await
+            let ingest_res = loop {
+                if let Some(ingest_fut) = this.ingest_fut.as_mut() {
+                    let result = ready!(ingest_fut.poll_unpin(cx));
+                    this.ingest_fut.take();
+                    break result;
+                } else {
+                    let mut store = this.store.clone();
+                    let body = body.clone();
+                    let header = header.clone();
+                    let header_bytes = header_bytes.clone();
+
+                    let ingest_fut = async move {
+                        let log_id = header
+                            .extension()
+                            .ok_or(IngestError::MissingHeaderExtension("log_id".into()))?;
+                        let prune_flag: PruneFlag = header
+                            .extension()
+                            .ok_or(IngestError::MissingHeaderExtension("prune_flag".into()))?;
+
+                        ingest_operation::<S, L, E>(
+                            &mut store,
+                            header,
+                            body,
+                            header_bytes,
+                            &log_id,
+                            prune_flag.is_set(),
+                        )
+                        .await
+                    };
+
+                    this.ingest_fut.replace(Box::pin(ingest_fut));
+                }
             };
-            pin_mut!(ingest_fut);
-            let ingest_res = ready!(ingest_fut.poll(cx));
 
             // 3. If the operation arrived out-of-order we can push it back into the internal
             //    buffer and try again later (attempted for a configured number of times),
@@ -222,8 +235,8 @@ where
 impl<St: FusedStream, S, L, E> FusedStream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
-    S: OperationStore<L, E> + LogStore<L, E>,
-    E: Extension<L> + Extension<PruneFlag> + Extensions,
+    S: OperationStore<L, E> + LogStore<L, E> + 'static,
+    E: Extension<L> + Extension<PruneFlag> + Extensions + 'static,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated() && self.ooo_buffer_rx.is_terminated()
