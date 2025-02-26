@@ -8,9 +8,9 @@ use thiserror::Error;
 
 pub async fn validate_operation_retry<S, L, E>(
     store: &mut S,
-    header: Header<E>,
-    body: Option<Body>,
-    header_bytes: Vec<u8>,
+    header: &Header<E>,
+    body: Option<&Body>,
+    header_bytes: &[u8],
     log_id: &L,
     prune_flag: bool,
 ) -> Result<ValidationResult<E>, ValidationError>
@@ -20,8 +20,8 @@ where
 {
     let operation = Operation {
         hash: header.hash(),
-        header,
-        body,
+        header: header.clone(),
+        body: body.cloned(),
     };
 
     if let Err(err) = validate_operation(&operation) {
@@ -51,7 +51,7 @@ where
                         // We observe a gap in the log and therefore can't validate the backlink
                         // yet.
                         OperationError::SeqNumNonIncremental(expected, given) => {
-                            return Ok(ValidationResult::Retry(operation.header, operation.body, header_bytes, given - expected))
+                            return Ok(ValidationResult::Retry(operation.header, operation.body, header_bytes.to_vec(), given - expected))
                         }
                         _ => unreachable!("other error cases have been handled before"),
                     }
@@ -59,12 +59,13 @@ where
             }
             // We're missing the whole log so far.
             None => {
+                let seq_num_behind = operation.header.seq_num;
                 return Ok(ValidationResult::Retry(
-                    operation.header.clone(),
-                    operation.body.clone(),
-                    header_bytes,
-                    operation.header.seq_num,
-                ))
+                    operation.header,
+                    operation.body,
+                    header_bytes.to_vec(),
+                    seq_num_behind,
+                ));
             }
         }
     }

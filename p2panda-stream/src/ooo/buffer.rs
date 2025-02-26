@@ -59,19 +59,7 @@ where
         }
     }
 
-    pub async fn process(
-        &self,
-        header: Header<E>,
-        body: Option<Body>,
-        header_bytes: Vec<u8>,
-        log_id: L,
-        prune_flag: bool,
-    ) -> Result<Option<Operation<E>>, ValidationBufferError> {
-        self.validate(header, body, header_bytes, log_id, prune_flag, 1)
-            .await
-    }
-
-    pub fn process_queue(
+    pub fn queue(
         &self,
         header: Header<E>,
         body: Option<Body>,
@@ -79,36 +67,39 @@ where
         log_id: L,
         prune_flag: bool,
     ) -> Result<(), ValidationBufferError> {
-        self.queue(ValidationAttempt {
+        if self.is_full() {
+            return Err(ValidationBufferError::FullBuffer);
+        }
+
+        let attempt = ValidationAttempt {
             header,
             body,
             header_bytes,
             log_id,
             prune_flag,
-            attempts_counter: 1,
-        })?;
+            counter: 1,
+        };
+
+        // Push to the front of the queue so newly incoming operations are prioritized.
+        {
+            let mut queue = self.ooo_buffer_queue.borrow_mut();
+            queue.push_front(attempt);
+        }
+
         Ok(())
     }
 
-    pub async fn retry(&self) -> Result<Option<Operation<E>>, ValidationBufferError> {
-        let stuff = {
+    pub async fn next(&self) -> Result<Option<Operation<E>>, ValidationBufferError> {
+        let attempt = {
             let mut queue = self.ooo_buffer_queue.borrow_mut();
             queue.pop_front()
         };
 
-        let Some(attempt) = stuff else {
+        let Some(attempt) = attempt else {
             return Ok(None);
         };
 
-        self.validate(
-            attempt.header,
-            attempt.body,
-            attempt.header_bytes,
-            attempt.log_id,
-            attempt.prune_flag,
-            attempt.attempts_counter + 1,
-        )
-        .await
+        self.validate(attempt).await
     }
 
     pub fn len(&self) -> usize {
@@ -121,17 +112,19 @@ where
 
     async fn validate(
         &self,
-        header: Header<E>,
-        body: Option<Body>,
-        header_bytes: Vec<u8>,
-        log_id: L,
-        prune_flag: bool,
-        attempts_counter: usize,
+        mut attempt: ValidationAttempt<L, E>,
     ) -> Result<Option<Operation<E>>, ValidationBufferError> {
         let result = {
             let mut store = self.store.clone();
-            validate_operation_retry(&mut store, header, body, header_bytes, &log_id, prune_flag)
-                .await
+            validate_operation_retry(
+                &mut store,
+                &attempt.header,
+                attempt.body.as_ref(),
+                &attempt.header_bytes,
+                &attempt.log_id,
+                attempt.prune_flag,
+            )
+            .await
         };
 
         self.waker.take().map(Waker::wake);
@@ -146,36 +139,25 @@ where
                 // buffer is just a FIFO queue it doesn't make sense to optimize over different
                 // parameters as in a worst-case distribution of items (exact reverse) this will be
                 // the max. and min. required bound.
-                if attempts_counter > self.ooo_buffer_size {
+                if attempt.counter > self.ooo_buffer_size {
                     return Err(ValidationBufferError::MaxAttemptsReached(num_missing));
                 }
+                attempt.counter += 1;
 
-                self.queue(ValidationAttempt {
-                    header,
-                    body,
-                    header_bytes,
-                    log_id,
-                    prune_flag,
-                    attempts_counter,
-                })?;
+                if self.is_full() {
+                    return Err(ValidationBufferError::FullBuffer);
+                }
+
+                // Push to the back of the queue as out-of-order operations are deprioritized.
+                {
+                    let mut queue = self.ooo_buffer_queue.borrow_mut();
+                    queue.push_back(attempt);
+                }
 
                 Ok(None)
             }
             Err(err) => Err(ValidationBufferError::Validation(err)),
         }
-    }
-
-    fn queue(&self, attempt: ValidationAttempt<L, E>) -> Result<(), ValidationBufferError> {
-        if self.is_full() {
-            return Err(ValidationBufferError::FullBuffer);
-        }
-
-        {
-            let mut queue = self.ooo_buffer_queue.borrow_mut();
-            queue.push_back(attempt);
-        }
-
-        Ok(())
     }
 }
 
@@ -187,20 +169,22 @@ where
     type Output = Result<Option<Operation<E>>, ValidationBufferError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        {
-            let mut inner = self.waker.borrow_mut();
-            if let Some(waker) = inner.as_mut() {
-                waker.clone_from(cx.waker());
-            } else {
-                inner.replace(cx.waker().clone());
-            }
-        }
-
-        let fut = async { self.retry().await };
+        let fut = async { self.next().await };
         pin_mut!(fut);
 
-        let result = ready!(fut.poll_unpin(cx));
-        Poll::Ready(result)
+        match fut.poll_unpin(cx) {
+            Poll::Ready(result) => Poll::Ready(result),
+            Poll::Pending => {
+                let mut inner = self.waker.borrow_mut();
+                if let Some(waker) = inner.as_mut() {
+                    waker.clone_from(cx.waker());
+                } else {
+                    inner.replace(cx.waker().clone());
+                }
+
+                Poll::Pending
+            }
+        }
     }
 }
 
@@ -211,7 +195,7 @@ struct ValidationAttempt<L, E> {
     header_bytes: Vec<u8>,
     log_id: L,
     prune_flag: bool,
-    attempts_counter: usize,
+    counter: usize,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -239,34 +223,9 @@ mod tests {
 
     #[tokio::test]
     #[allow(unused_variables)]
-    async fn return_directly_on_success() {
-        let store = MemoryStore::<StreamName, Extensions>::new();
-        let mut buffer = ValidationBuffer::new(store, 8);
-
-        let mut log = Log::new();
-        let (header, body) = log.create_operation();
-        let hash = header.hash();
-
-        let result = {
-            let log_id: StreamName = header.extension().unwrap();
-            let header_bytes = header.to_bytes();
-            buffer
-                .process(header.clone(), body.clone(), header_bytes, log_id, false)
-                .await
-        };
-
-        assert!(
-            matches!(result, Ok(Some(Operation { hash, header, body }))),
-            "method should return operation directly"
-        );
-        assert_eq!(buffer.len(), 0, "buffer should be empty");
-    }
-
-    #[tokio::test]
-    #[allow(unused_variables)]
     async fn max_attempts_reached() {
         let store = MemoryStore::<StreamName, Extensions>::new();
-        let mut buffer = ValidationBuffer::new(store, 2);
+        let buffer = ValidationBuffer::new(store, 2);
 
         let operations = generate_operations(4);
 
@@ -275,23 +234,25 @@ mod tests {
         let log_id: StreamName = header.extension().unwrap();
         let header_bytes = header.to_bytes();
 
-        let result = buffer
-            .process(header.clone(), body.clone(), header_bytes, log_id, false)
-            .await;
+        let result = buffer.queue(header.clone(), body.clone(), header_bytes, log_id, false);
+        assert!(result.is_ok());
+        assert_eq!(buffer.len(), 1, "buffer should contain one operation");
+
+        let result = buffer.next().await;
         assert!(
             matches!(result, Ok(None)),
             "should not return anything on attempt 1"
         );
         assert_eq!(buffer.len(), 1, "buffer should contain one operation");
 
-        let result = buffer.retry().await;
+        let result = buffer.next().await;
         assert!(
             matches!(result, Ok(None)),
             "should not return anything on attempt 2"
         );
         assert_eq!(buffer.len(), 1, "buffer should contain one operation");
 
-        let result = buffer.retry().await;
+        let result = buffer.next().await;
         assert!(
             matches!(result, Err(ValidationBufferError::MaxAttemptsReached(3))),
             "should return error on attempt 3 with correct seq num"
