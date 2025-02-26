@@ -7,13 +7,13 @@ use std::hash::Hash as StdHash;
 #[derive(Debug)]
 pub struct DependencyChecker<K> {
     /// Keys for all items we have processed.
-    /// @TODO: store all items which are _not_ processed instead.
+    /// @TODO: Can we store all items which are _not_ processed instead?
     processed: HashSet<K>,
 
     /// Map of missing dependencies `K` to all items which directly depend on them `(K, V, Vec<K>)`.
     pending_queue: HashMap<K, Vec<(K, Vec<K>)>>,
 
-    /// Queue of items whore dependencies are met. These are returned from calls to `next()`.
+    /// Queue of items whose dependencies are met. These are returned from calls to `next()`.
     ready_queue: VecDeque<K>,
 }
 
@@ -58,6 +58,7 @@ where
         // And move it to the ready queue.
         self.ready_queue.push_back(key);
 
+        // Process any pending items which depend on this item.
         self.process_pending(key);
     }
 
