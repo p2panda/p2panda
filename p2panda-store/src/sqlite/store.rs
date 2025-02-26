@@ -524,37 +524,10 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
+    use crate::sqlite::test_utils::initialize_sqlite_db;
     use crate::{LogStore, OperationStore};
 
-    use super::{
-        connection_pool, create_database, drop_database, run_pending_migrations, Pool, SqliteStore,
-    };
-
-    fn db_test_url() -> String {
-        // Give each database a unique name.
-        let db_name = format!("dbmem{}", rand::random::<u32>());
-
-        // SQLite database stored in memory.
-        let url = format!("sqlite://{db_name}?mode=memory&cache=private");
-
-        url
-    }
-
-    async fn initialize_sqlite_db() -> Pool {
-        let url = db_test_url();
-
-        drop_database(&url).await.unwrap();
-        create_database(&url).await.unwrap();
-
-        let pool = connection_pool(&url, 1).await.unwrap();
-
-        if run_pending_migrations(&pool).await.is_err() {
-            pool.close().await;
-            panic!("Database migration failed");
-        }
-
-        pool
-    }
+    use super::SqliteStore;
 
     fn create_operation(
         private_key: &PrivateKey,
