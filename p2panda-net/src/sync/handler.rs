@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
-use iroh::endpoint::{self, Connecting, Connection};
+use iroh::endpoint::{Connecting, Connection};
 use p2panda_sync::{SyncProtocol, TopicQuery};
 use tokio::sync::mpsc;
 use tracing::{debug, debug_span};
@@ -37,11 +37,10 @@ where
 
     /// Handle an inbound connection using the `SYNC_CONNECTION_ALPN` and accept a sync session.
     async fn handle_connection(&self, connection: Connection) -> Result<()> {
-        let peer = to_public_key(endpoint::get_remote_node_id(&connection)?);
-        let remote_addr = connection.remote_address();
+        let peer = to_public_key(connection.remote_node_id()?);
         let connection_id = connection.stable_id() as u64;
 
-        let _span = debug_span!("connection", connection_id, %remote_addr);
+        let _span = debug_span!("connection", connection_id);
         debug!(parent: &_span, "handling inbound sync connection...");
 
         let (mut send, mut recv) = connection.accept_bi().await?;

@@ -72,6 +72,9 @@ impl ProtocolMap {
 
 impl ProtocolHandler for iroh_gossip::net::Gossip {
     fn accept(self: Arc<Self>, conn: Connecting) -> BoxedFuture<Result<()>> {
-        Box::pin(async move { self.handle_connection(conn.await?).await })
+        Box::pin(async move {
+            self.handle_connection(conn.await?).await?;
+            Ok(())
+        })
     }
 }
