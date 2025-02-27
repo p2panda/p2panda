@@ -22,6 +22,7 @@ Highlights are marked with a pancake 🥞
 - Remove logging from network tests [#693](https://github.com/p2panda/p2panda/pull/693)
 - Give access to header in `Extension::extract` method [#670](https://github.com/p2panda/p2panda/pull/670)
 - Update to iroh `v0.31.0` [#672](https://github.com/p2panda/p2panda/pull/672)
+- Update to iroh `v0.33.0` [#707](https://github.com/p2panda/p2panda/pull/707)
 - Update to Rust Edition 2024 [#706](https://github.com/p2panda/p2panda/pull/706)
 
 ### Fixed
