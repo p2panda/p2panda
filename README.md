@@ -50,7 +50,7 @@ p2panda is "broadcast-only" at it’s heart, making any data not only offline-fi
 
 🚧 `p2panda-access-control` - Manage access to data with capabilities.
 
-🚧 `p2panda-groups` - Local-first roles and group-encryption with Post-Compromise-Security and optional Forward-Secrecy.
+🚧 `p2panda-group` - Local-first roles and group-encryption with Post-Compromise-Security and optional Forward-Secrecy.
 
 ## License
 
