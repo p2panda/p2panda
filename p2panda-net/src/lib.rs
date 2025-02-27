@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! `p2panda-net` is a data-type-agnostic p2p networking layer offering robust, direct
 //! communication to any device, no matter where they are.
 //!

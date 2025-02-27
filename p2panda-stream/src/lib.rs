@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Stream-based methods to conveniently handle p2panda operations.
 //!
 //! `p2panda-stream` is a collection of various methods which help to decode, validate, order,

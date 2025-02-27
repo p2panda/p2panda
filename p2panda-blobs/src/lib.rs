@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Blobs service offering storage, retrieval and synchronisation of content-addressed data.
 //!
 //! `p2panda-blobs` relies on the

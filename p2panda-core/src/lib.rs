@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Core data types used across the p2panda stack to offer distributed, secure and efficient data
 //! transfer between peers.
 //!

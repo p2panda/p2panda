@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Peer discovery traits and services.
 //!
 //! This crate currently provides a single discovery service implementation: mDNS. It is disabled

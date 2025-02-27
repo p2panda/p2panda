@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Data- and transport-agnostic interface to implement custom sync protocols, compatible with
 //! `p2panda-net` or other peer-to-peer networking solutions.
 //!
