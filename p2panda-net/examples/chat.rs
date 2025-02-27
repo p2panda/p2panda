@@ -36,8 +36,6 @@ use tokio::sync::mpsc;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-pub const GOSSIP_ALPN: &[u8] = b"/iroh-gossip/0";
-
 // Relay server operated by p2panda team (may not be running the latest iroh release version).
 const RELAY_URL: &str = "https://wasser.liebechaos.org/";
 
