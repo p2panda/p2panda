@@ -1,17 +1,20 @@
 [package]
 name = "p2panda-net"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
-  "glyph <glyph@mycelial.technology>"
+  "glyph <glyph@mycelial.technology>",
 ]
 description = "Data-type-agnostic peer-to-peer networking"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "networking", "gossip", "sync"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

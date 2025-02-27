@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use p2panda_core::{PrivateKey, PublicKey, Signature};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
+use crate::NetworkId;
 use crate::bytes::{FromBytes, ToBytes};
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::gossip::ToGossipActor;
-use crate::NetworkId;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 enum Status {
@@ -183,7 +183,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::engine::AddressBook;
-    use crate::{bytes::ToBytes, NodeAddress};
+    use crate::{NodeAddress, bytes::ToBytes};
 
     use super::{Status, TopicDiscovery, TopicDiscoveryMessage};
 

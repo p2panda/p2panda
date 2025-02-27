@@ -6,20 +6,20 @@ use std::path::PathBuf;
 use anyhow::Result;
 use bytes::Bytes;
 use futures_util::Stream;
+use iroh_blobs::Hash as IrohHash;
 use iroh_blobs::downloader::Downloader;
 use iroh_blobs::store::{Map, Store};
 use iroh_blobs::util::local_pool::{Config as LocalPoolConfig, LocalPool};
-use iroh_blobs::Hash as IrohHash;
 use p2panda_core::Hash;
 use p2panda_net::{Network, NetworkBuilder, TopicId};
 use p2panda_sync::TopicQuery;
 
+use crate::DownloadBlobEvent;
 use crate::config::Config;
 use crate::download::download_blob;
 use crate::export::export_blob;
-use crate::import::{import_blob, import_blob_from_stream, ImportBlobEvent};
-use crate::protocol::{BlobsProtocol, BLOBS_ALPN};
-use crate::DownloadBlobEvent;
+use crate::import::{ImportBlobEvent, import_blob, import_blob_from_stream};
+use crate::protocol::{BLOBS_ALPN, BlobsProtocol};
 
 /// Blobs service offering storage, retrieval and synchronisation of content-addressed data.
 #[derive(Debug)]

@@ -25,7 +25,7 @@ pub use config::Config;
 pub use download::DownloadBlobEvent;
 pub use import::ImportBlobEvent;
 use p2panda_net::NodeAddress;
-pub use protocol::{BlobsProtocol, BLOBS_ALPN};
+pub use protocol::{BLOBS_ALPN, BlobsProtocol};
 
 /// In-memory storage database with support for partial blobs.
 pub type MemoryStore = store::mem::Store;

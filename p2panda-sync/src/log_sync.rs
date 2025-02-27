@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{stream, AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt};
+use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, StreamExt, stream};
 use p2panda_core::{Extensions, PublicKey};
 use p2panda_store::{LogId, LogStore};
 use serde::{Deserialize, Serialize};

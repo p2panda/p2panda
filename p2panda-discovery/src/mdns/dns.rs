@@ -6,7 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
 use hickory_proto::op::{Message, MessageType, Query};
-use hickory_proto::rr::{rdata, DNSClass, Name, RData, Record, RecordType};
+use hickory_proto::rr::{DNSClass, Name, RData, Record, RecordType, rdata};
 use iroh::{NodeAddr, NodeId};
 use tracing::{debug, trace};
 

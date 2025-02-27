@@ -7,10 +7,10 @@ use std::marker::PhantomData;
 use sqlx::migrate;
 use sqlx::migrate::{MigrateDatabase, MigrateError};
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::{query, query_as, Error as SqlxError, Sqlite};
+use sqlx::{Error as SqlxError, Sqlite, query, query_as};
 use thiserror::Error;
 
-use p2panda_core::cbor::{encode_cbor, DecodeError, EncodeError};
+use p2panda_core::cbor::{DecodeError, EncodeError, encode_cbor};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::sqlite::models::{LogHeightRow, OperationRow, RawOperationRow};

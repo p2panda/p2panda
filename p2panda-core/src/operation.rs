@@ -99,7 +99,7 @@
 //! ```
 use thiserror::Error;
 
-use crate::cbor::{decode_cbor, encode_cbor, DecodeError};
+use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
 use crate::{Extension, Extensions};

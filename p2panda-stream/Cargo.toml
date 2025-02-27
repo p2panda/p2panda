@@ -1,17 +1,23 @@
 [package]
 name = "p2panda-stream"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
-  "glyph <glyph@mycelial.technology>"
+  "glyph <glyph@mycelial.technology>",
 ]
 description = "Stream-based methods to conveniently handle p2panda operations"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["stream", "async"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
 
 [dependencies]
 ciborium = "0.2.2"
@@ -29,6 +35,3 @@ p2panda-store = { path = "../p2panda-store", version = "0.2.0", features = ["sql
 serde = { version = "1.0.215", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["rt", "macros"] }
 tokio-stream = "0.1.17"
-
-[lints]
-workspace = true

@@ -8,7 +8,7 @@ use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{interval, Duration, Instant};
+use tokio::time::{Duration, Instant, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
@@ -399,7 +399,7 @@ mod tests {
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
     use tokio::sync::mpsc;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
@@ -407,8 +407,8 @@ mod tests {
     use crate::network::sync_protocols::PingPongProtocol;
     use crate::network::tests::TestTopic;
     use crate::protocols::ProtocolMap;
-    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
-    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
+    use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
+    use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
 
     use super::{SyncActor, ToSyncActor};
 

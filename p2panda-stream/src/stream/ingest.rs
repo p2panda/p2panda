@@ -7,14 +7,14 @@ use std::pin::Pin;
 use futures_channel::mpsc::{self};
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
-use futures_util::{ready, FutureExt, Sink, Stream, StreamExt};
+use futures_util::{FutureExt, Sink, Stream, StreamExt, ready};
 use p2panda_core::prune::PruneFlag;
 use p2panda_core::{Body, Extension, Extensions, Header, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use pin_project::pin_project;
 
 use crate::macros::{delegate_access_inner, delegate_sink};
-use crate::operation::{ingest_operation, IngestError, IngestResult};
+use crate::operation::{IngestError, IngestResult, ingest_operation};
 
 /// An extension trait for `Stream`s that provides a convenient [`ingest`](IngestExt::ingest)
 /// method.
@@ -268,16 +268,16 @@ mod tests {
     use futures_util::stream::iter;
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Operation, RawOperation};
+    use p2panda_store::MemoryStore;
     use p2panda_store::sqlite::store::SqliteStore;
     use p2panda_store::sqlite::test_utils::initialize_sqlite_db;
-    use p2panda_store::MemoryStore;
     use tokio::sync::mpsc;
     use tokio::time;
     use tokio_stream::wrappers::ReceiverStream;
 
     use crate::operation::IngestError;
     use crate::stream::decode::DecodeExt;
-    use crate::test_utils::{mock_stream, Extensions, StreamName};
+    use crate::test_utils::{Extensions, StreamName, mock_stream};
 
     use super::IngestExt;
 

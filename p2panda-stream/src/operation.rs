@@ -2,7 +2,7 @@
 
 //! Methods to handle p2panda operations.
 use p2panda_core::{
-    validate_backlink, validate_operation, Body, Extensions, Header, Operation, OperationError,
+    Body, Extensions, Header, Operation, OperationError, validate_backlink, validate_operation,
 };
 use p2panda_store::{LogStore, OperationStore};
 use thiserror::Error;
@@ -76,7 +76,7 @@ where
                         operation.body.clone(),
                         header_bytes,
                         operation.header.seq_num,
-                    ))
+                    ));
                 }
             }
         }
@@ -148,7 +148,7 @@ mod tests {
     use p2panda_core::{Hash, Header, PrivateKey};
     use p2panda_store::MemoryStore;
 
-    use crate::operation::{ingest_operation, IngestResult};
+    use crate::operation::{IngestResult, ingest_operation};
     use crate::test_utils::Extensions;
 
     #[tokio::test]
