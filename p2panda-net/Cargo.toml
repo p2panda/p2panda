@@ -44,5 +44,6 @@ tokio-util = { version = "0.7.11", features = ["compat", "codec", "io-util", "io
 tracing = "0.1.40"
 
 [dev-dependencies]
+clap = { version = "4.5.29", features = ["derive"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 p2panda-store = { path = "../p2panda-store", version = "0.2.0" }
