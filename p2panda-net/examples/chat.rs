@@ -16,13 +16,13 @@
 //!
 //! Run the example with the `--use-relay` flag; take note of the `node id` in the terminal output.
 //!
-//! `cargo run --example chat -- --use-relay`
+//! `cargo run --example chat -- --use-relay --is-bootstrap`
 //!
 //! Run the example on a second computer or in a second terminal with the `--use-relay` and
-//! `--bootstrap <PUBLIC_KEY>` flags (passing in the `node id` from the first computer or
-//! terminal as `PUBLIC_KEY`.
+//! `--bootstrap-peer <PUBLIC_KEY>` flags (passing in the `node id` from the first computer or
+//! terminal as `PUBLIC_KEY`).
 //!
-//! `cargo run --example chat -- --use-relay --bootstrap <PUBLIC_KEY>`
+//! `cargo run --example chat -- --use-relay --bootstrap-peer <PUBLIC_KEY>`
 use anyhow::{Result, bail};
 use clap::Parser;
 use p2panda_core::{Hash, PrivateKey, PublicKey, Signature};
@@ -57,9 +57,13 @@ struct Args {
     #[arg(short = 'r', long)]
     use_relay: bool,
 
+    /// Enable bootstrap mode.
+    #[arg(short = 'b', long)]
+    is_bootstrap: bool,
+
     /// Supply the public key of a bootstrap peer for discovery over the internet.
-    #[arg(short = 'b', long, value_name = "PUBLIC_KEY")]
-    bootstrap: Option<PublicKey>,
+    #[arg(short = 'p', long, value_name = "PUBLIC_KEY")]
+    bootstrap_peer: Option<PublicKey>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -103,7 +107,11 @@ async fn main() -> Result<()> {
         network_builder = network_builder.relay(RELAY_URL.parse()?, false, 3478);
     }
 
-    if let Some(node_id) = args.bootstrap {
+    if args.is_bootstrap {
+        network_builder = network_builder.bootstrap();
+    }
+
+    if let Some(node_id) = args.bootstrap_peer {
         network_builder = network_builder.direct_address(node_id, vec![], None);
     }
 
@@ -142,8 +150,14 @@ async fn main() -> Result<()> {
     } else {
         println!("\tnot specified");
     }
+    println!("bootstrap mode:");
+    if args.is_bootstrap {
+        println!("\tenabled");
+    } else {
+        println!("\tdisabled");
+    }
     println!("bootstrap peer:");
-    if let Some(node_id) = args.bootstrap {
+    if let Some(node_id) = args.bootstrap_peer {
         println!("\t{node_id}");
     } else {
         println!("\tnot specified");
