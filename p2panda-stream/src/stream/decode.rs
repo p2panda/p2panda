@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use futures_util::stream::{Fuse, FusedStream};
 use futures_util::task::{Context, Poll};
-use futures_util::{ready, Sink, Stream, StreamExt};
-use p2panda_core::cbor::{decode_cbor, DecodeError};
+use futures_util::{Sink, Stream, StreamExt, ready};
+use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::{Body, Extensions, Header, RawOperation};
 use pin_project::pin_project;
 
@@ -104,7 +104,7 @@ mod tests {
     use futures_util::{StreamExt, TryStreamExt};
     use p2panda_core::{Body, Header};
 
-    use crate::test_utils::{mock_stream, Extensions};
+    use crate::test_utils::{Extensions, mock_stream};
 
     use super::DecodeExt;
 

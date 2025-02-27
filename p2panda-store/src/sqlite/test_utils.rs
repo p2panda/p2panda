@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::sqlite::store::{
-    connection_pool, create_database, drop_database, run_pending_migrations, Pool,
+    Pool, connection_pool, create_database, drop_database, run_pending_migrations,
 };
 
 pub fn db_test_url() -> String {

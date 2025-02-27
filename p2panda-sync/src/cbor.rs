@@ -6,7 +6,7 @@
 use std::marker::PhantomData;
 
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
-use p2panda_core::cbor::{decode_cbor, encode_cbor, DecodeError};
+use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_util::bytes::{Buf, BytesMut};

@@ -307,10 +307,10 @@ mod tests {
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
+    use crate::Body;
     use crate::hash::Hash;
     use crate::identity::{PrivateKey, PublicKey};
     use crate::operation::Header;
-    use crate::Body;
 
     use super::{deserialize_hex, serialize_hex};
 

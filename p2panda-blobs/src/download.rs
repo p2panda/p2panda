@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use futures_lite::{Stream, StreamExt};
 use iroh::NodeAddr;
 use iroh_blobs::downloader::{DownloadRequest, Downloader};
-use iroh_blobs::get::db::DownloadProgress;
 use iroh_blobs::get::Stats;
+use iroh_blobs::get::db::DownloadProgress;
 use iroh_blobs::util::local_pool::LocalPoolHandle;
 use iroh_blobs::util::progress::{AsyncChannelProgressSender, ProgressSender};
 use iroh_blobs::{BlobFormat, Hash as IrohHash, HashAndFormat};

@@ -15,7 +15,7 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{validate_backlink, Extensions, Header, OperationError};
+use crate::{Extensions, Header, OperationError, validate_backlink};
 
 /// Flag indicating that all preceding operations in a log can be deleted.
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -98,7 +98,7 @@ mod tests {
     use crate::cbor::{decode_cbor, encode_cbor};
     use crate::{Hash, Header, PrivateKey};
 
-    use super::{validate_prunable_backlink, PruneFlag};
+    use super::{PruneFlag, validate_prunable_backlink};
 
     #[test]
     fn validate_pruned_log() {

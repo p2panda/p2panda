@@ -18,7 +18,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::task::AbortOnDropHandle;
 use tracing::{debug, warn};
 
-use crate::mdns::dns::{make_query, make_response, parse_message, MulticastDNSMessage};
+use crate::mdns::dns::{MulticastDNSMessage, make_query, make_response, parse_message};
 use crate::mdns::socket::{send, socket_v4, socket_v4_unbound};
 use crate::{BoxedStream, Discovery, DiscoveryEvent};
 

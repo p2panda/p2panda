@@ -23,7 +23,7 @@
 //! terminal as `PUBLIC_KEY`.
 //!
 //! `cargo run --example chat -- --use-relay --bootstrap <PUBLIC_KEY>`
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use p2panda_core::{Hash, PrivateKey, PublicKey, Signature};
 use p2panda_discovery::mdns::LocalDiscovery;
@@ -33,8 +33,8 @@ use p2panda_sync::TopicQuery;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 // Relay server operated by p2panda team (may not be running the latest iroh release version).
 const RELAY_URL: &str = "https://wasser.liebechaos.org/";

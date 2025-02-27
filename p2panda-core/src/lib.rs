@@ -88,8 +88,8 @@ pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
 pub use operation::{
-    validate_backlink, validate_header, validate_operation, Body, Header, Operation,
-    OperationError, RawOperation,
+    Body, Header, Operation, OperationError, RawOperation, validate_backlink, validate_header,
+    validate_operation,
 };
 #[cfg(feature = "prune")]
 pub use prune::PruneFlag;
