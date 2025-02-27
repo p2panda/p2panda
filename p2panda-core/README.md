@@ -91,21 +91,15 @@ struct CustomExtensions {
 }
 
 // Implement `Extension<T>` for each extension we want to add to our
-// custom extensions.
+// header.
 impl Extension<Expiry> for CustomExtensions {
-    fn extract(&self) -> Option<Expiry> {
-        Some(self.expiry.to_owned())
+    fn extract(header: &Header<Self>) -> Option<Expiry> {
+        header
+            .extensions
+            .as_ref()
+            .map(|extensions| extensions.expiry.clone())
     }
 }
-
-// Create a custom extension instance, this can be added to an operation's
-// header.
-let extensions = CustomExtensions {
-    expiry: Expiry(1733170246),
-};
-
-// Extract the extension we are interested in.
-let expiry: Expiry = extensions.extract().expect("expiry field should be set");
 ```
 
 ## License
