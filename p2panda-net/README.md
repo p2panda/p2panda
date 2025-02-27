@@ -54,15 +54,12 @@ fallbacks, PlumTree and HyParView for broadcast-based gossip overlays.
 ## Example
 
 ```rust
+use anyhow::Result;
 use p2panda_core::{PrivateKey, Hash};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::{NetworkBuilder, TopicId};
 use p2panda_sync::TopicQuery;
 use serde::{Serialize, Deserialize};
-
-// Peers using the same "network id" will eventually find each other. This is the most global
-// identifier to group peers into multiple networks when necessary.
-let network_id = [1; 32];
 
 // The network can be used to automatically find and ask other peers about any data the
 // application is interested in. This is expressed through "network-wide queries" over topics.
@@ -86,22 +83,31 @@ impl TopicId for ChatGroup {
     }
 }
 
-// Generate an Ed25519 private key which will be used to authenticate your peer towards others.
-let private_key = PrivateKey::new();
+async fn run() -> Result<()> {
+    // Peers using the same "network id" will eventually find each other. This
+    // is the most global identifier to group peers into multiple networks when
+    // necessary.
+    let network_id = [1; 32];
 
-// Use mDNS to discover other peers on the local network.
-let mdns_discovery = LocalDiscovery::new()?;
+    // Generate an Ed25519 private key which will be used to authenticate your peer towards others.
+    let private_key = PrivateKey::new();
 
-// Establish the p2p network which will automatically connect you to any discovered peers.
-let network = NetworkBuilder::new(network_id)
-    .private_key(private_key)
-    .discovery(mdns_discovery)
-    .build()
-    .await?;
+    // Use mDNS to discover other peers on the local network.
+    let mdns_discovery = LocalDiscovery::new();
 
-// From now on we can send and receive bytes to any peer interested in the same chat.
-let my_friends_group = ChatGroup::new("me-and-my-friends");
-let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
+    // Establish the p2p network which will automatically connect you to any discovered peers.
+    let network = NetworkBuilder::new(network_id.into())
+        .private_key(private_key)
+        .discovery(mdns_discovery)
+        .build()
+        .await?;
+
+    // From now on we can send and receive bytes to any peer interested in the same chat.
+    let my_friends_group = ChatGroup::new("me-and-my-friends");
+    let (tx, mut rx, ready) = network.subscribe(my_friends_group).await?;
+
+    Ok(())
+}
 ```
 
 ## License

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(doctest, doc=include_str!("../README.md"))]
+
 //! Interfaces and implementations of persistence layers for core p2panda data types.
 //!
 //! The provided APIs allow for efficient implementations of `Operation` and log stores. These
