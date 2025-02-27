@@ -5,12 +5,16 @@ edition = "2021"
 authors = [
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
-  "glyph <glyph@mycelial.technology>"
+  "glyph <glyph@mycelial.technology>",
 ]
 description = "Store traits and implementations"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+keywords = ["sqlite", "storage"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
