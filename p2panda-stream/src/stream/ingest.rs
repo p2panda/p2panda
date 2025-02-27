@@ -99,7 +99,8 @@ impl<St, S, L, E> Stream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E> + 'static,
-    E: Extension<L> + Extension<PruneFlag> + Extensions + 'static,
+    E: Extension<L> + Extension<PruneFlag> + Extensions + Send + Sync + 'static,
+    L: Send + Sync,
 {
     type Item = Result<Operation<E>, IngestError>;
 
@@ -234,7 +235,8 @@ impl<St: FusedStream, S, L, E> FusedStream for Ingest<St, S, L, E>
 where
     St: Stream<Item = (Header<E>, Option<Body>, Vec<u8>)>,
     S: OperationStore<L, E> + LogStore<L, E> + 'static,
-    E: Extension<L> + Extension<PruneFlag> + Extensions + 'static,
+    E: Extension<L> + Extension<PruneFlag> + Extensions + Send + Sync + 'static,
+    L: Send + Sync,
 {
     fn is_terminated(&self) -> bool {
         self.stream.is_terminated() && self.ooo_buffer_rx.is_terminated()
@@ -256,7 +258,7 @@ where
 type AttemptCounter = usize;
 
 type IngestFut<E> =
-    Box<dyn Future<Output = Result<(IngestResult<E>, AttemptCounter), IngestError>>>;
+    Box<dyn Future<Output = Result<(IngestResult<E>, AttemptCounter), IngestError>> + Send>;
 
 #[derive(Debug)]
 struct IngestAttempt<E>(Header<E>, Option<Body>, Vec<u8>, AttemptCounter);
