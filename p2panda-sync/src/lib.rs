@@ -20,6 +20,8 @@
 pub mod cbor;
 #[cfg(feature = "log-sync")]
 pub mod log_sync;
+#[cfg(feature = "test-protocols")]
+pub mod test_protocols;
 
 use std::fmt::Debug;
 use std::hash::Hash;
