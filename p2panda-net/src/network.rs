@@ -121,12 +121,12 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh::{Endpoint, RelayMap, RelayNode};
-use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
+use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
@@ -135,15 +135,15 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{Instrument, debug, error, error_span, warn};
+use tracing::{debug, error, error_span, warn, Instrument};
 
-use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
-use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
+use crate::addrs::{to_node_addr, to_relay_url, DEFAULT_STUN_PORT};
+use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync::{SYNC_CONNECTION_ALPN, SyncConfiguration};
-use crate::{NetworkId, NodeAddress, RelayUrl, TopicId, from_private_key};
+use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
+use crate::{from_private_key, NetworkId, NodeAddress, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -831,226 +831,7 @@ pub(crate) type JoinErrToStr =
     Box<dyn Fn(tokio::task::JoinError) -> String + Send + Sync + 'static>;
 
 #[cfg(test)]
-pub(crate) mod sync_protocols {
-    use std::sync::Arc;
-
-    use async_trait::async_trait;
-    use futures_lite::{AsyncRead, AsyncWrite, StreamExt};
-    use futures_util::{Sink, SinkExt};
-    use p2panda_sync::cbor::{into_cbor_sink, into_cbor_stream};
-    use p2panda_sync::{FromSync, SyncError, SyncProtocol};
-    use serde::{Deserialize, Serialize};
-    use tracing::debug;
-
-    use super::tests::TestTopic;
-
-    #[derive(Debug, Serialize, Deserialize)]
-    enum DummyProtocolMessage {
-        TopicQuery(TestTopic),
-        Done,
-    }
-
-    /// A sync implementation which fulfills basic protocol requirements but nothing more
-    #[derive(Debug)]
-    pub struct DummyProtocol {}
-
-    #[async_trait]
-    impl<'a> SyncProtocol<'a, TestTopic> for DummyProtocol {
-        fn name(&self) -> &'static str {
-            static DUMMY_PROTOCOL_NAME: &str = "dummy_protocol";
-            DUMMY_PROTOCOL_NAME
-        }
-        async fn initiate(
-            self: Arc<Self>,
-            topic_query: TestTopic,
-            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
-            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<
-                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
-            >,
-        ) -> Result<(), SyncError> {
-            debug!("DummyProtocol: initiate sync session");
-
-            let mut sink = into_cbor_sink(tx);
-            let mut stream = into_cbor_stream(rx);
-
-            sink.send(DummyProtocolMessage::TopicQuery(topic_query.clone()))
-                .await?;
-            sink.send(DummyProtocolMessage::Done).await?;
-            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
-
-            while let Some(result) = stream.next().await {
-                let message: DummyProtocolMessage = result?;
-                debug!("message received: {:?}", message);
-
-                match &message {
-                    DummyProtocolMessage::TopicQuery(_) => panic!(),
-                    DummyProtocolMessage::Done => break,
-                }
-            }
-
-            sink.flush().await?;
-            app_tx.flush().await?;
-
-            Ok(())
-        }
-
-        async fn accept(
-            self: Arc<Self>,
-            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
-            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<
-                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
-            >,
-        ) -> Result<(), SyncError> {
-            debug!("DummyProtocol: accept sync session");
-
-            let mut sink = into_cbor_sink(tx);
-            let mut stream = into_cbor_stream(rx);
-
-            while let Some(result) = stream.next().await {
-                let message: DummyProtocolMessage = result?;
-                debug!("message received: {:?}", message);
-
-                match &message {
-                    DummyProtocolMessage::TopicQuery(topic_query) => {
-                        app_tx
-                            .send(FromSync::HandshakeSuccess(topic_query.clone()))
-                            .await?
-                    }
-                    DummyProtocolMessage::Done => break,
-                }
-            }
-
-            sink.send(DummyProtocolMessage::Done).await?;
-
-            sink.flush().await?;
-            app_tx.flush().await?;
-
-            Ok(())
-        }
-    }
-
-    // The protocol message types.
-    #[derive(Serialize, Deserialize)]
-    enum Message {
-        TopicQuery(TestTopic),
-        Ping,
-        Pong,
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct PingPongProtocol {}
-
-    /// A ping-pong sync protocol
-    #[async_trait]
-    impl<'a> SyncProtocol<'a, TestTopic> for PingPongProtocol {
-        fn name(&self) -> &'static str {
-            static SIMPLE_PROTOCOL_NAME: &str = "simple_protocol";
-            SIMPLE_PROTOCOL_NAME
-        }
-
-        async fn initiate(
-            self: Arc<Self>,
-            topic_query: TestTopic,
-            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
-            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<
-                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
-            >,
-        ) -> Result<(), SyncError> {
-            debug!("initiate sync session");
-            let mut sink = into_cbor_sink(tx);
-            let mut stream = into_cbor_stream(rx);
-
-            sink.send(Message::TopicQuery(topic_query.clone())).await?;
-            sink.send(Message::Ping).await?;
-            debug!("ping message sent");
-
-            app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
-
-            while let Some(result) = stream.next().await {
-                let message = result?;
-
-                match message {
-                    Message::TopicQuery(_) => panic!(),
-                    Message::Ping => {
-                        return Err(SyncError::UnexpectedBehaviour(
-                            "unexpected Ping message received".to_string(),
-                        ));
-                    }
-                    Message::Pong => {
-                        debug!("pong message received");
-                        app_tx
-                            .send(FromSync::Data {
-                                header: "PONG".as_bytes().to_owned(),
-                                payload: None,
-                            })
-                            .await
-                            .unwrap();
-                        break;
-                    }
-                }
-            }
-
-            // Flush all bytes so that no messages are lost.
-            sink.flush().await?;
-            app_tx.flush().await?;
-
-            Ok(())
-        }
-
-        async fn accept(
-            self: Arc<Self>,
-            tx: Box<&'a mut (dyn AsyncWrite + Send + Unpin)>,
-            rx: Box<&'a mut (dyn AsyncRead + Send + Unpin)>,
-            mut app_tx: Box<
-                &'a mut (dyn Sink<FromSync<TestTopic>, Error = SyncError> + Send + Unpin),
-            >,
-        ) -> Result<(), SyncError> {
-            debug!("accept sync session");
-            let mut sink = into_cbor_sink(tx);
-            let mut stream = into_cbor_stream(rx);
-
-            while let Some(result) = stream.next().await {
-                let message = result?;
-
-                match message {
-                    Message::TopicQuery(topic_query) => {
-                        app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?
-                    }
-                    Message::Ping => {
-                        debug!("ping message received");
-                        app_tx
-                            .send(FromSync::Data {
-                                header: "PING".as_bytes().to_owned(),
-                                payload: None,
-                            })
-                            .await
-                            .unwrap();
-
-                        sink.send(Message::Pong).await?;
-                        debug!("pong message sent");
-                        break;
-                    }
-                    Message::Pong => {
-                        return Err(SyncError::UnexpectedBehaviour(
-                            "unexpected Pong message received".to_string(),
-                        ));
-                    }
-                }
-            }
-
-            sink.flush().await?;
-            app_tx.flush().await?;
-
-            Ok(())
-        }
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use std::collections::HashMap;
     use std::net::{Ipv4Addr, Ipv6Addr};
     use std::path::PathBuf;
@@ -1061,20 +842,25 @@ pub(crate) mod tests {
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::TopicQuery;
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
-    use serde::{Deserialize, Serialize};
+    use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::TopicQuery;
     use tokio::task::JoinHandle;
 
-    use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr};
+    use crate::addrs::{to_node_addr, DEFAULT_STUN_PORT};
     use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::events::SystemEvent;
-    use crate::network::sync_protocols::PingPongProtocol;
     use crate::sync::SyncConfiguration;
-    use crate::{NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId, to_public_key};
+    use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, Network, ToNetwork};
+
+    impl TopicId for TestTopic {
+        fn id(&self) -> [u8; 32] {
+            self.1
+        }
+    }
 
     fn create_operation<E: Extensions>(
         private_key: &PrivateKey,
@@ -1122,23 +908,6 @@ pub(crate) mod tests {
             tokio::time::sleep(Duration::from_secs(3)).await;
             node.shutdown().await.unwrap();
         })
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
-    pub struct TestTopic(String, [u8; 32]);
-
-    impl TestTopic {
-        pub fn new(name: &str) -> Self {
-            Self(name.to_owned(), [0; 32])
-        }
-    }
-
-    impl TopicQuery for TestTopic {}
-
-    impl TopicId for TestTopic {
-        fn id(&self) -> [u8; 32] {
-            self.1
-        }
     }
 
     #[tokio::test]
