@@ -11,10 +11,10 @@
 //! depending on the requirements of the application (or each "topic" data stream). Like this a
 //! user can decide if they want to persist data or keep it "ephemeral", apply automatic pruning
 //! techniques for outdated operations etc.
-#[allow(dead_code)]
-mod ordering;
 mod macros;
 pub mod operation;
+#[allow(dead_code)]
+mod ordering;
 mod stream;
 #[cfg(test)]
 mod test_utils;

@@ -41,11 +41,7 @@ where
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(
-        &mut self,
-        key: K,
-        dependencies: Vec<K>,
-    ) -> Result<(), PartialOrderError> {
+    pub async fn process(&mut self, key: K, dependencies: Vec<K>) -> Result<(), PartialOrderError> {
         if !self.store.ready(&dependencies).await? {
             self.store.add_pending(key, dependencies).await?;
             return Ok(());
