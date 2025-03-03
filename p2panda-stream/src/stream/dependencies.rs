@@ -231,25 +231,25 @@ mod tests {
         assert!(result.is_ok());
         // Each operation gets inserted to the operation cache.
         assert_eq!(dependency_checker.operation_cache.len(), 1);
-        
+
         let result = dependency_checker.process(operations[3].clone()).await;
         assert!(result.is_ok());
         assert_eq!(dependency_checker.operation_cache.len(), 2);
-        
+
         let result = dependency_checker.process(operations[2].clone()).await;
         assert!(result.is_ok());
         assert_eq!(dependency_checker.operation_cache.len(), 3);
-        
+
         let result = dependency_checker.process(operations[1].clone()).await;
         assert!(result.is_ok());
         assert_eq!(dependency_checker.operation_cache.len(), 4);
-        
+
         let result = dependency_checker.process(operations[0].clone()).await;
         assert!(result.is_ok());
         assert_eq!(dependency_checker.operation_cache.len(), 5);
 
         // Calling next should give us the first operation which had all it's dependencies met, in
-        // this case it's the root of the graph OP1. 
+        // this case it's the root of the graph OP1.
         let next = dependency_checker.next().await.unwrap();
         assert_eq!(next.unwrap(), operations[0]);
 
