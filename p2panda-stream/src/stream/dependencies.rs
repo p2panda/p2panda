@@ -87,6 +87,8 @@ pub enum OperationDependencyCheckerError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use p2panda_core::{Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
 
@@ -98,8 +100,14 @@ mod tests {
     async fn operations_with_previous() {
         let private_key = PrivateKey::new();
         let mut operation_store = MemoryStore::<u64>::default();
+
+        // 0P0 <-- 0P1 <--\
+        //     \-- OP2 <-- OP4
+        //      \--OP3 <--/
+
         let mut header_0 = Header {
             public_key: private_key.public_key(),
+            timestamp: 0,
             ..Default::default()
         };
         header_0.sign(&private_key);
@@ -112,6 +120,7 @@ mod tests {
         let mut header_1 = Header {
             public_key: private_key.public_key(),
             previous: vec![header_0.hash()],
+            timestamp: 1,
             ..Default::default()
         };
         header_1.sign(&private_key);
@@ -121,18 +130,79 @@ mod tests {
             body: None,
         };
 
+        let mut header_2 = Header {
+            public_key: private_key.public_key(),
+            previous: vec![header_0.hash()],
+            timestamp: 2,
+            ..Default::default()
+        };
+        header_2.sign(&private_key);
+        let operation_2 = Operation {
+            hash: header_2.hash(),
+            header: header_2.clone(),
+            body: None,
+        };
+
+        let mut header_3 = Header {
+            public_key: private_key.public_key(),
+            previous: vec![header_0.hash()],
+            timestamp: 3,
+            ..Default::default()
+        };
+        header_3.sign(&private_key);
+        let operation_3 = Operation {
+            hash: header_3.hash(),
+            header: header_3.clone(),
+            body: None,
+        };
+
+        let mut header_4 = Header {
+            public_key: private_key.public_key(),
+            previous: vec![header_1.hash(), header_2.hash(), header_3.hash()],
+            timestamp: 4,
+            ..Default::default()
+        };
+        header_4.sign(&private_key);
+        let operation_4 = Operation {
+            hash: header_4.hash(),
+            header: header_4.clone(),
+            body: None,
+        };
+
         operation_store
             .insert_operation(header_0.hash(), &header_0, None, &header_0.to_bytes(), &0)
             .await
             .unwrap();
+
         operation_store
             .insert_operation(header_1.hash(), &header_1, None, &header_1.to_bytes(), &1)
+            .await
+            .unwrap();
+
+        operation_store
+            .insert_operation(header_2.hash(), &header_2, None, &header_2.to_bytes(), &2)
+            .await
+            .unwrap();
+
+        operation_store
+            .insert_operation(header_3.hash(), &header_3, None, &header_3.to_bytes(), &3)
+            .await
+            .unwrap();
+
+        operation_store
+            .insert_operation(header_4.hash(), &header_4, None, &header_4.to_bytes(), &4)
             .await
             .unwrap();
 
         let dependency_store = DependencyMemoryStore::default();
         let mut operation_checker = DependencyChecker::new(operation_store, dependency_store);
 
+        let result = operation_checker.process(operation_4.clone()).await;
+        assert!(result.is_ok());
+        let result = operation_checker.process(operation_3.clone()).await;
+        assert!(result.is_ok());
+        let result = operation_checker.process(operation_2.clone()).await;
+        assert!(result.is_ok());
         let result = operation_checker.process(operation_1.clone()).await;
         assert!(result.is_ok());
         let result = operation_checker.process(operation_0.clone()).await;
@@ -140,7 +210,26 @@ mod tests {
 
         let next = operation_checker.next().await.unwrap();
         assert_eq!(next.unwrap(), operation_0);
+
+        let mut concurrent_operations =
+            HashSet::from([operation_1.hash, operation_2.hash, operation_3.hash]);
+
         let next = operation_checker.next().await.unwrap();
-        assert_eq!(next.unwrap(), operation_1);
+        assert!(next.is_some());
+        let next = next.unwrap();
+        assert!(concurrent_operations.remove(&next.hash),);
+
+        let next = operation_checker.next().await.unwrap();
+        assert!(next.is_some());
+        let next = next.unwrap();
+        assert!(concurrent_operations.remove(&next.hash),);
+
+        let next = operation_checker.next().await.unwrap();
+        assert!(next.is_some());
+        let next = next.unwrap();
+        assert!(concurrent_operations.remove(&next.hash),);
+
+        let next = operation_checker.next().await.unwrap();
+        assert_eq!(next.unwrap(), operation_4);
     }
 }
