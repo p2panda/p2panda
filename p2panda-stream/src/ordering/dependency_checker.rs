@@ -7,11 +7,11 @@ use std::hash::Hash as StdHash;
 use thiserror::Error;
 
 /// Trait defining a store API for handling ready and pending dependencies.
-/// 
+///
 /// An implementation of this store trait provides the following functionality:
 /// - maintain a list of all items which have all their dependencies met
 /// - maintain a list of items which don't have their dependencies met
-/// - return all pending items which depend on a given item key 
+/// - return all pending items which depend on a given item key
 pub trait DependencyStore<K>
 where
     K: Clone + Copy + StdHash + PartialEq + Eq,
@@ -40,10 +40,19 @@ where
 }
 
 /// Memory implementation of the `DependencyStore` trait.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MemoryStore<K> {
     ready: HashSet<K>,
     pending: HashMap<K, HashSet<(K, Vec<K>)>>,
+}
+
+impl<K> Default for MemoryStore<K> {
+    fn default() -> Self {
+        Self {
+            ready: HashSet::new(),
+            pending: HashMap::new(),
+        }
+    }
 }
 
 impl<K> DependencyStore<K> for MemoryStore<K>
@@ -149,7 +158,7 @@ where
         };
 
         // For each dependent check if it has all it's dependencies met, if not then we do nothing
-        // as it is still in a pending state. 
+        // as it is still in a pending state.
         for (next_key, next_deps) in dependents {
             if !self.store.ready(&next_deps).await? {
                 continue;
