@@ -12,7 +12,7 @@
 //! user can decide if they want to persist data or keep it "ephemeral", apply automatic pruning
 //! techniques for outdated operations etc.
 #[allow(dead_code)]
-mod dependencies;
+mod ordering;
 mod macros;
 pub mod operation;
 mod stream;
