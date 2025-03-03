@@ -14,7 +14,7 @@
 mod macros;
 pub mod operation;
 mod stream;
-mod ordering;
+mod dependencies;
 #[cfg(test)]
 mod test_utils;
 

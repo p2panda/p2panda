@@ -1,30 +1,31 @@
 use std::{collections::HashMap, marker::PhantomData};
 
-use p2panda_core::{Body, Extension, Extensions, Hash, Header, Operation};
+use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use thiserror::Error;
 
-use super::dependency_checker::{
-    self, DependencyChecker, DependencyCheckerError, DependencyStore, MemoryStore,
+use crate::dependencies::{
+    DependencyChecker as InnerDependencyChecker, DependencyCheckerError, DependencyStore,
 };
 
-pub struct OperationDependencyChecker<L, E, OS, DS> {
-    store: OS,
-    dependency_checker: DependencyChecker<Hash, DS>,
+pub struct DependencyChecker<L, E, OS, DS> {
+    operation_store: OS,
+    inner: InnerDependencyChecker<Hash, DS>,
     operation_cache: HashMap<Hash, Operation<E>>,
     _phantom: PhantomData<(L, E)>,
 }
 
-impl<L, E, OS, DS> OperationDependencyChecker<L, E, OS, DS>
+impl<L, E, OS, DS> DependencyChecker<L, E, OS, DS>
 where
     OS: OperationStore<L, E> + LogStore<L, E>,
     DS: DependencyStore<Hash>,
     E: Extensions,
 {
-    pub fn new(store: OS, dependency_checker: DependencyChecker<Hash, DS>) -> Self {
-        OperationDependencyChecker {
-            store,
-            dependency_checker,
+    pub fn new(operation_store: OS, dependency_store: DS) -> Self {
+        let inner_dependency_checker = InnerDependencyChecker::new(dependency_store);
+        DependencyChecker {
+            operation_store,
+            inner: inner_dependency_checker,
             operation_cache: Default::default(),
             _phantom: PhantomData::default(),
         }
@@ -37,12 +38,12 @@ where
         let hash = operation.hash;
         let previous = operation.header.previous.clone();
         self.operation_cache.insert(operation.hash, operation);
-        self.dependency_checker.process(hash, previous).await?;
+        self.inner.process(hash, previous).await?;
         Ok(())
     }
 
     pub async fn next(&mut self) -> Result<Option<Operation<E>>, OperationDependencyCheckerError> {
-        let Some(hash) = self.dependency_checker.next() else {
+        let Some(hash) = self.inner.next() else {
             return Ok(None);
         };
 
@@ -51,7 +52,7 @@ where
         }
 
         if let Some((header, body)) = self
-            .store
+            .operation_store
             .get_operation(hash)
             .await
             .map_err(|err| OperationDependencyCheckerError::StoreError(err.to_string()))?
@@ -89,10 +90,9 @@ mod tests {
     use p2panda_core::{Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
 
-    use crate::ordering::{
-        dependency_checker::{self, DependencyChecker},
-        operation_dependency_checker::OperationDependencyChecker,
-    };
+    use crate::dependencies::MemoryStore as DependencyMemoryStore;
+
+    use super::DependencyChecker;
 
     #[tokio::test]
     async fn operations_with_previous() {
@@ -111,7 +111,6 @@ mod tests {
 
         let mut header_1 = Header {
             public_key: private_key.public_key(),
-            seq_num: 1,
             previous: vec![header_0.hash()],
             ..Default::default()
         };
@@ -127,14 +126,12 @@ mod tests {
             .await
             .unwrap();
         operation_store
-            .insert_operation(header_1.hash(), &header_1, None, &header_1.to_bytes(), &0)
+            .insert_operation(header_1.hash(), &header_1, None, &header_1.to_bytes(), &1)
             .await
             .unwrap();
 
-        let dependency_store = dependency_checker::MemoryStore::default();
-        let dependency_checker = DependencyChecker::new(dependency_store);
-        let mut operation_checker =
-            OperationDependencyChecker::new(operation_store, dependency_checker);
+        let dependency_store = DependencyMemoryStore::default();
+        let mut operation_checker = DependencyChecker::new(operation_store, dependency_store);
 
         let result = operation_checker.process(operation_1.clone()).await;
         assert!(result.is_ok());
