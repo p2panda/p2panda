@@ -29,7 +29,7 @@ where
             operation_store,
             inner: inner_dependency_checker,
             operation_cache: Default::default(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -66,10 +66,10 @@ where
                 header,
                 body,
             };
-            return Ok(Some(operation));
+            Ok(Some(operation))
         } else {
-            return Err(OperationDependencyCheckerError::MissingOperation(hash));
-        };
+            Err(OperationDependencyCheckerError::MissingOperation(hash))
+        }
     }
 
     /// Clear the operation cache.

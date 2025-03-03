@@ -2,6 +2,7 @@
 
 mod decode;
 mod ingest;
+#[allow(dead_code)]
 mod dependencies;
 
 pub use decode::{Decode, DecodeExt};

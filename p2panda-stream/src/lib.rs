@@ -12,6 +12,7 @@
 mod macros;
 pub mod operation;
 mod stream;
+#[allow(dead_code)]
 mod dependencies;
 #[cfg(test)]
 mod test_utils;
