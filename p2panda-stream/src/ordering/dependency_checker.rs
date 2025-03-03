@@ -6,28 +6,40 @@ use std::hash::Hash as StdHash;
 
 use thiserror::Error;
 
+/// Trait defining a store API for handling ready and pending dependencies.
+/// 
+/// An implementation of this store trait provides the following functionality:
+/// - maintain a list of all items which have all their dependencies met
+/// - maintain a list of items which don't have their dependencies met
+/// - return all pending items which depend on a given item key 
 pub trait DependencyStore<K>
 where
     K: Clone + Copy + StdHash + PartialEq + Eq,
 {
+    /// Add an item to the store which has all it's dependencies met already.
     async fn add_ready(&mut self, key: K) -> Result<bool, DependencyCheckerError>;
 
+    /// Add an item which does not have all it's dependencies met yet.
     async fn add_pending(
         &mut self,
         key: K,
         dependencies: Vec<K>,
     ) -> Result<bool, DependencyCheckerError>;
 
+    /// Get all pending items which directly depend on the given key.
     async fn get_next_pending(
         &self,
         key: K,
     ) -> Result<Option<HashSet<(K, Vec<K>)>>, DependencyCheckerError>;
 
+    /// Remove all items from the pending queue which depend on the passed key.
     async fn remove_pending(&mut self, key: K) -> Result<bool, DependencyCheckerError>;
 
+    /// Returns `true` of all the passed keys are present in the ready list.
     async fn ready(&self, keys: &[K]) -> Result<bool, DependencyCheckerError>;
 }
 
+/// Memory implementation of the `DependencyStore` trait.
 #[derive(Clone, Default)]
 pub struct MemoryStore<K> {
     ready: HashSet<K>,
@@ -85,12 +97,9 @@ pub enum DependencyCheckerError {
     StoreError(String),
 }
 
-// @TODO: eventually processed and pending_queue needs to be populated from the database.
 #[derive(Debug)]
 pub struct DependencyChecker<K, S> {
     store: S,
-
-    /// Queue of items whose dependencies are met. These are returned from calls to `next()`.
     ready_queue: VecDeque<K>,
 }
 
@@ -106,55 +115,55 @@ where
         }
     }
 
+    /// Pop the next item from the ready queue.
     pub fn next(&mut self) -> Option<K> {
         self.ready_queue.pop_front()
     }
 
+    /// Process a new item which may be in a "ready" or "pending" state.
     pub async fn process(
         &mut self,
         key: K,
         dependencies: Vec<K>,
     ) -> Result<(), DependencyCheckerError> {
         if !self.store.ready(&dependencies).await? {
-            // Add pending item to the store.
             self.store.add_pending(key, dependencies).await?;
             return Ok(());
         }
 
-        // Add ready item to the store.
         self.store.add_ready(key).await?;
-
-        // And move it to the ready queue.
         self.ready_queue.push_back(key);
 
-        // Process any pending items which depend on this item.
+        // We added a new ready item to the store so now we want to process any pending items
+        // which depend on it as they may now have transitioned into a ready state.
         self.process_pending(key).await?;
 
         Ok(())
     }
 
-    // Recursively check if any pending items now have their dependencies met (due to another
-    // item being processed).
+    /// Recursively check if any pending items now have their dependencies met.
     async fn process_pending(&mut self, key: K) -> Result<(), DependencyCheckerError> {
+        // Get all items which depend on the passed key.
         let Some(dependents) = self.store.get_next_pending(key).await? else {
             return Ok(());
         };
 
+        // For each dependent check if it has all it's dependencies met, if not then we do nothing
+        // as it is still in a pending state. 
         for (next_key, next_deps) in dependents {
             if !self.store.ready(&next_deps).await? {
                 continue;
             }
 
             self.store.add_ready(next_key).await?;
-
-            // And insert this value to the ready_queue.
             self.ready_queue.push_back(next_key);
 
-            // Now check if this item moving into the processed set results in any other
-            // items having all their dependencies met.
+            // Recurse down the dependency graph by now checking any pending items which depend on
+            // the current item.
             Box::pin(self.process_pending(next_key)).await?;
         }
 
+        // Finally remove this item from the pending items queue.
         self.store.remove_pending(key).await?;
 
         Ok(())
