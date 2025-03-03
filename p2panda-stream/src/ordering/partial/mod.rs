@@ -1,29 +1,32 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+pub mod store;
+
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 
 use thiserror::Error;
 
-use super::DependencyStore;
+use store::PartialOrderStore;
 
 #[derive(Debug, Error)]
-pub enum DependencyCheckerError {
+pub enum PartialOrderError {
     #[error("store error: {0}")]
     StoreError(String),
 }
 
+/// Struct for partially ordering items in DAG.
 #[derive(Debug)]
-pub struct DependencyChecker<K, S> {
+pub struct PartialOrder<K, S> {
     store: S,
     ready_queue: VecDeque<K>,
 }
 
-impl<K, S> DependencyChecker<K, S>
+impl<K, S> PartialOrder<K, S>
 where
     K: Clone + Copy + Display + StdHash + PartialEq + Eq,
-    S: DependencyStore<K>,
+    S: PartialOrderStore<K>,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -42,7 +45,7 @@ where
         &mut self,
         key: K,
         dependencies: Vec<K>,
-    ) -> Result<(), DependencyCheckerError> {
+    ) -> Result<(), PartialOrderError> {
         if !self.store.ready(&dependencies).await? {
             self.store.add_pending(key, dependencies).await?;
             return Ok(());
@@ -59,7 +62,7 @@ where
     }
 
     /// Recursively check if any pending items now have their dependencies met.
-    async fn process_pending(&mut self, key: K) -> Result<(), DependencyCheckerError> {
+    async fn process_pending(&mut self, key: K) -> Result<(), PartialOrderError> {
         // Get all items which depend on the passed key.
         let Some(dependents) = self.store.get_next_pending(key).await? else {
             return Ok(());
@@ -91,15 +94,15 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use crate::dependencies::MemoryStore;
+    use crate::ordering::MemoryStore;
 
-    use super::DependencyChecker;
+    use super::PartialOrder;
 
     #[tokio::test]
     async fn dependency_check() {
         // A has no dependencies and so it's added straight to the processed set and ready queue.
         let store = MemoryStore::default();
-        let mut checker = DependencyChecker::new(store);
+        let mut checker = PartialOrder::new(store);
         checker.process("a", vec![]).await.unwrap();
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 0);
@@ -148,7 +151,7 @@ mod tests {
         ];
 
         let store = MemoryStore::default();
-        let mut checker = DependencyChecker::new(store);
+        let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, dependencies).await.unwrap();
         }
@@ -199,7 +202,7 @@ mod tests {
         ];
 
         let store = MemoryStore::default();
-        let mut checker = DependencyChecker::new(store);
+        let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, dependencies).await.unwrap();
         }
@@ -263,7 +266,7 @@ mod tests {
         ];
 
         let store = MemoryStore::default();
-        let mut checker = DependencyChecker::new(store);
+        let mut checker = PartialOrder::new(store);
         for (key, dependencies) in out_of_order_graph {
             checker.process(key, dependencies).await.unwrap();
         }

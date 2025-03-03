@@ -4,28 +4,26 @@ use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use thiserror::Error;
 
-use crate::dependencies::{
-    DependencyChecker as InnerDependencyChecker, DependencyCheckerError, DependencyStore,
-};
+use crate::ordering::{PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore};
 
 /// Dependency checker which handles p2panda operations.
-pub struct DependencyChecker<L, E, OS, DS> {
+pub struct PartialOrder<L, E, OS, POS> {
     operation_store: OS,
-    inner: InnerDependencyChecker<Hash, DS>,
+    inner: InnerPartialOrder<Hash, POS>,
     operation_cache: HashMap<Hash, Operation<E>>,
     _phantom: PhantomData<(L, E)>,
 }
 
-impl<L, E, OS, DS> DependencyChecker<L, E, OS, DS>
+impl<L, E, OS, POS> PartialOrder<L, E, OS, POS>
 where
     OS: OperationStore<L, E> + LogStore<L, E>,
-    DS: DependencyStore<Hash>,
+    POS: PartialOrderStore<Hash>,
     E: Extensions,
 {
     /// Construct a new dependency checker from an operation store and dependency store.
-    pub fn new(operation_store: OS, dependency_store: DS) -> Self {
-        let inner_dependency_checker = InnerDependencyChecker::new(dependency_store);
-        DependencyChecker {
+    pub fn new(operation_store: OS, partial_order_store: POS) -> Self {
+        let inner_dependency_checker = InnerPartialOrder::new(partial_order_store);
+        PartialOrder {
             operation_store,
             inner: inner_dependency_checker,
             operation_cache: Default::default(),
@@ -81,7 +79,7 @@ where
 #[derive(Debug, Error)]
 pub enum OperationDependencyCheckerError {
     #[error(transparent)]
-    CheckerError(#[from] DependencyCheckerError),
+    CheckerError(#[from] PartialOrderError),
 
     #[error("store error: {0}")]
     StoreError(String),
@@ -97,9 +95,9 @@ mod tests {
     use p2panda_core::{Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
 
-    use crate::dependencies::MemoryStore as DependencyMemoryStore;
+    use crate::ordering::MemoryStore as PartialOrderMemoryStore;
 
-    use super::DependencyChecker;
+    use super::PartialOrder;
 
     /// Create operations which form the following graph with their previous links:
     ///
@@ -214,9 +212,9 @@ mod tests {
     async fn operations_with_previous() {
         let private_key = PrivateKey::new();
         let mut operation_store = MemoryStore::<u64>::default();
-        let dependency_store = DependencyMemoryStore::default();
+        let partial_order_store = PartialOrderMemoryStore::default();
         let mut dependency_checker =
-            DependencyChecker::new(operation_store.clone(), dependency_store);
+            PartialOrder::new(operation_store.clone(), partial_order_store);
 
         // Setup test data in the store. They form a dependency graph with the following form:
         //
@@ -283,9 +281,9 @@ mod tests {
         // Same test as above except we clear the cache before taking operations via the `next` method.
         let private_key = PrivateKey::new();
         let mut operation_store = MemoryStore::<u64>::default();
-        let dependency_store = DependencyMemoryStore::default();
+        let partial_order_store = PartialOrderMemoryStore::default();
         let mut dependency_checker =
-            DependencyChecker::new(operation_store.clone(), dependency_store);
+            PartialOrder::new(operation_store.clone(), partial_order_store);
 
         let operations = setup(&private_key, &mut operation_store).await;
 
@@ -338,9 +336,9 @@ mod tests {
     async fn missing_dependency() {
         let private_key = PrivateKey::new();
         let mut operation_store = MemoryStore::<u64>::default();
-        let dependency_store = DependencyMemoryStore::default();
+        let partial_order_store = PartialOrderMemoryStore::default();
         let mut dependency_checker =
-            DependencyChecker::new(operation_store.clone(), dependency_store);
+            PartialOrder::new(operation_store.clone(), partial_order_store);
 
         let operations = setup(&private_key, &mut operation_store).await;
 
