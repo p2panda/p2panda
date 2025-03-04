@@ -10,13 +10,43 @@ use thiserror::Error;
 
 use store::PartialOrderStore;
 
+/// Error types which may be returned from `PartialOrder` methods.
 #[derive(Debug, Error)]
 pub enum PartialOrderError {
     #[error("store error: {0}")]
     StoreError(String),
 }
 
-/// Struct for partially ordering items in DAG.
+/// Struct for establishing partial order over a Directed-Acyclic-Graph.
+///
+/// There are various approaches which can be taken when wanting to linearize items in a graph
+/// structure. This approach establishes a partial order, meaning not all items in the graph are
+/// comparable, and is non-deterministic. The main requirement is that all dependencies of an item
+/// are sorted "before" the item itself, the exact order is not a concern.
+///
+/// Example graph:
+///
+/// A <-- B2 <-- C
+///   \-- B1 <--/
+///
+/// Both of the following are possible and valid orderings for the above graph:
+///
+/// [A, B1, B2, C]
+/// [A, B2, B1, C]
+///
+/// Items will not be placed into an partial order until all their dependencies are met, in the
+/// following example item C will not be visited as we have not processed all of it's
+/// dependencies.
+///
+/// Example graph:
+///
+/// A <-- ?? <-- C
+///   \-- B1 <--/
+///
+/// C is not processed yet as we are missing one of its dependencies:
+///
+/// [A, B1]
+///
 #[derive(Debug)]
 pub struct PartialOrder<K, S> {
     store: S,
@@ -95,55 +125,77 @@ mod tests {
     use super::PartialOrder;
 
     #[tokio::test]
-    async fn dependency_check() {
+    async fn partial_order() {
+        // Graph
+        //
+        // A <-- B <--------- D
+        //        \--- C <---/
+        //
+        let graph = [
+            ("A", vec![]),
+            ("B", vec!["A"]),
+            ("C", vec!["B"]),
+            ("D", vec!["B", "C"]),
+        ];
+
         // A has no dependencies and so it's added straight to the processed set and ready queue.
         let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
-        checker.process("a", vec![]).await.unwrap();
+        let item = graph[0].clone();
+        checker.process(item.0, item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 1);
 
-        // B has it's dependencies met and so it too is added to the processed set and ready queue.
-        checker.process("b", vec!["a"]).await.unwrap();
+        // B has it's dependencies met and so it too is added to the processed set and ready
+        // queue.
+        let item = graph[1].clone();
+        checker.process(item.0, item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 2);
 
         // D doesn't have both its dependencies met yet so it waits in the pending queue.
-        checker.process("d", vec!["b", "c"]).await.unwrap();
+        let item = graph[3].clone();
+        checker.process(item.0, item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 1);
         assert_eq!(checker.ready_queue.len(), 2);
 
         // C satisfies D's dependencies and so both C & D are added to the processed set
         // and ready queue.
-        checker.process("c", vec!["b"]).await.unwrap();
+        let item = graph[2].clone();
+        checker.process(item.0, item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 4);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 4);
 
         let item = checker.next();
-        assert_eq!(item, Some("a"));
+        assert_eq!(item, Some("A"));
         let item = checker.next();
-        assert_eq!(item, Some("b"));
+        assert_eq!(item, Some("B"));
         let item = checker.next();
-        assert_eq!(item, Some("c"));
+        assert_eq!(item, Some("C"));
         let item = checker.next();
-        assert_eq!(item, Some("d"));
+        assert_eq!(item, Some("D"));
         let item = checker.next();
         assert!(item.is_none());
     }
 
     #[tokio::test]
-    async fn recursive_dependency_check() {
+    async fn partial_order_with_recursion() {
+        // Graph
+        //
+        // A <-- B <--------- D
+        //        \--- C <---/
+        //
         let incomplete_graph = [
-            ("a", vec![]),
-            ("c", vec!["b"]),
-            ("d", vec!["c"]),
-            ("e", vec!["d"]),
-            ("f", vec!["e"]),
-            ("g", vec!["f"]),
+            ("A", vec![]),
+            ("C", vec!["B"]),
+            ("D", vec!["C"]),
+            ("E", vec!["D"]),
+            ("F", vec!["E"]),
+            ("G", vec!["F"]),
         ];
 
         let store = MemoryStore::default();
@@ -155,7 +207,7 @@ mod tests {
         assert_eq!(checker.store.pending.len(), 5);
         assert_eq!(checker.ready_queue.len(), 1);
 
-        let missing_dependency = ("b", vec!["a"]);
+        let missing_dependency = ("B", vec!["A"]);
 
         checker
             .process(missing_dependency.0, missing_dependency.1)
@@ -166,35 +218,40 @@ mod tests {
         assert_eq!(checker.ready_queue.len(), 7);
 
         let item = checker.next();
-        assert_eq!(item, Some("a"));
+        assert_eq!(item, Some("A"));
         let item = checker.next();
-        assert_eq!(item, Some("b"));
+        assert_eq!(item, Some("B"));
         let item = checker.next();
-        assert_eq!(item, Some("c"));
+        assert_eq!(item, Some("C"));
         let item = checker.next();
-        assert_eq!(item, Some("d"));
+        assert_eq!(item, Some("D"));
         let item = checker.next();
-        assert_eq!(item, Some("e"));
+        assert_eq!(item, Some("E"));
         let item = checker.next();
-        assert_eq!(item, Some("f"));
+        assert_eq!(item, Some("F"));
         let item = checker.next();
-        assert_eq!(item, Some("g"));
+        assert_eq!(item, Some("G"));
         let item = checker.next();
         assert!(item.is_none());
     }
 
     #[tokio::test]
     async fn complex_graph() {
+        // Graph
+        //
         // A <-- B1 <-- C1 <--\
-        //   \-- B2 <-- C2 <-- D
+        //   \-- ?? <-- C2 <-- D
         //        \---- C3 <--/
+        //
         let incomplete_graph = [
-            ("a", vec![]),
-            ("b1", vec!["a"]),
-            ("c1", vec!["b1"]),
-            ("c2", vec!["b2"]),
-            ("c3", vec!["b2"]),
-            ("d", vec!["c1", "c2", "c3"]),
+            ("A", vec![]),
+            ("B1", vec!["A"]),
+            // This item is missing.
+            // ("B2", vec!["A"]),
+            ("C1", vec!["B1"]),
+            ("C2", vec!["B2"]),
+            ("C3", vec!["B2"]),
+            ("D", vec!["C1", "C2", "C3"]),
         ];
 
         let store = MemoryStore::default();
@@ -209,11 +266,11 @@ mod tests {
         assert_eq!(checker.ready_queue.len(), 3);
 
         let item = checker.next();
-        assert_eq!(item, Some("a"));
+        assert_eq!(item, Some("A"));
         let item = checker.next();
-        assert_eq!(item, Some("b1"));
+        assert_eq!(item, Some("B1"));
         let item = checker.next();
-        assert_eq!(item, Some("c1"));
+        assert_eq!(item, Some("C1"));
         let item = checker.next();
         assert!(item.is_none());
 
@@ -221,7 +278,7 @@ mod tests {
         assert_eq!(checker.ready_queue.len(), 0);
 
         // Process the missing item.
-        let missing_dependency = ("b2", vec!["a"]);
+        let missing_dependency = ("B2", vec!["A"]);
         checker
             .process(missing_dependency.0, missing_dependency.1)
             .await
@@ -232,33 +289,36 @@ mod tests {
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 4);
 
-        let mut concurrent_items = HashSet::from(["c2", "c3"]);
+        let mut concurrent_items = HashSet::from(["C2", "C3"]);
 
         let item = checker.next().unwrap();
-        assert_eq!(item, "b2");
+        assert_eq!(item, "B2");
         let item = checker.next().unwrap();
         assert!(concurrent_items.remove(item));
         let item = checker.next().unwrap();
         assert!(concurrent_items.remove(item));
         let item = checker.next().unwrap();
-        assert_eq!(item, "d");
+        assert_eq!(item, "D");
         let item = checker.next();
         assert!(item.is_none());
     }
 
     #[tokio::test]
     async fn very_out_of_order() {
+        // Graph
+        //
         // A <-- B1 <-- C1 <--\
         //   \-- B2 <-- C2 <-- D
         //        \---- C3 <--/
+        //
         let out_of_order_graph = [
-            ("d", vec!["c1", "c2", "c3"]),
-            ("c1", vec!["b1"]),
-            ("b1", vec!["a"]),
-            ("b2", vec!["a"]),
-            ("c3", vec!["b2"]),
-            ("c2", vec!["b2"]),
-            ("a", vec![]),
+            ("D", vec!["C1", "C2", "C3"]),
+            ("C1", vec!["B1"]),
+            ("B1", vec!["A"]),
+            ("B2", vec!["A"]),
+            ("C3", vec!["B2"]),
+            ("C2", vec!["B2"]),
+            ("A", vec![]),
         ];
 
         let store = MemoryStore::default();
@@ -272,9 +332,9 @@ mod tests {
         assert_eq!(checker.ready_queue.len(), 7);
 
         let item = checker.next();
-        assert_eq!(item, Some("a"));
+        assert_eq!(item, Some("A"));
 
-        let mut concurrent_items = HashSet::from(["b1", "b2", "c1", "c2", "c3"]);
+        let mut concurrent_items = HashSet::from(["B1", "B2", "C1", "C2", "C3"]);
 
         let item = checker.next().unwrap();
         assert!(concurrent_items.remove(item));
@@ -287,7 +347,7 @@ mod tests {
         let item = checker.next().unwrap();
         assert!(concurrent_items.remove(item));
         let item = checker.next().unwrap();
-        assert_eq!(item, "d");
+        assert_eq!(item, "D");
         let item = checker.next();
         assert!(item.is_none());
     }
