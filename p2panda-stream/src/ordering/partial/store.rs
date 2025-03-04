@@ -11,7 +11,7 @@ use super::PartialOrderError;
 /// An implementation of this store trait provides the following functionality:
 /// - maintain a list of all items which have all their dependencies met
 /// - maintain a list of items which don't have their dependencies met
-/// - return all pending items which depend on a given item key
+/// - return all pending items which depend on a given item
 pub trait PartialOrderStore<K>
 where
     K: Clone + Copy + StdHash + PartialEq + Eq,
