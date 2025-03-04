@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub mod store;
+pub mod operations;
 
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
@@ -59,7 +60,10 @@ pub enum PartialOrderError {
 /// another layer. 
 #[derive(Debug)]
 pub struct PartialOrder<K, S> {
+    /// Store for managing "ready" and "pending" items.
     store: S,
+
+    /// Sorted queue of "ready" items.
     ready_queue: VecDeque<K>,
 }
 
