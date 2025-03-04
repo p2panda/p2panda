@@ -8,10 +8,23 @@ use thiserror::Error;
 
 use crate::ordering::{PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore};
 
-/// Dependency checker which handles p2panda operations.
+/// Struct for processing p2panda operations into a partial order based on dependencies expressed
+/// in their `previous` field.
+/// 
+/// This struct is a thin wrapper around ordering::PartialOrder struct which takes care of sorting
+/// the operation DAG into a partial order. Here we have the addition of a `LogStore` and
+/// `OperationStore` implementation (traits from `p2panda-store`) and an operation cache which
+/// helps us avoid unnecessary calls to the database. 
 pub struct PartialOrder<L, E, OS, POS> {
+    /// A store containing p2panda operations.
     operation_store: OS,
+
+    /// The inner PartialOrder struct which sorts the operation DAG into a partial order.
     inner: InnerPartialOrder<Hash, POS>,
+
+    /// In memory cache of operations we have processed, before retrieving "ready" operations from
+    /// the store they will be taken from here if present. The store can be cleared at any time
+    /// in order to reduce memory use. 
     operation_cache: HashMap<Hash, Operation<E>>,
     _phantom: PhantomData<(L, E)>,
 }

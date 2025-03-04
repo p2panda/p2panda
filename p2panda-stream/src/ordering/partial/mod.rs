@@ -17,12 +17,20 @@ pub enum PartialOrderError {
     StoreError(String),
 }
 
-/// Struct for establishing partial order over a Directed-Acyclic-Graph.
+/// Struct for establishing partial order over items in a Directed-Acyclic-Graph.
 ///
 /// There are various approaches which can be taken when wanting to linearize items in a graph
 /// structure. This approach establishes a partial order, meaning not all items in the graph are
 /// comparable, and is non-deterministic. The main requirement is that all dependencies of an item
 /// are sorted "before" the item itself, the exact order is not a concern.
+/// 
+/// Items are considered in a "ready" state when all dependencies are met, and in a "pending"
+/// state when their dependencies are not yet met. Calls to `next` will return "ready" items in
+/// the order that they became ready.
+/// 
+/// If an item is processed an in a "pending" state then it is held in a pending queue and if it's
+/// dependencies are later processed and "ready", then the so far "pending" item will be moved to
+/// the "ready" queue. This processing of pending items recursively checks all pending dependents. 
 ///
 /// Example graph:
 ///
@@ -47,6 +55,8 @@ pub enum PartialOrderError {
 ///
 /// [A, B1]
 ///
+/// Note that no checks are made for cycles occurring in the graph, this should be validated on
+/// another layer. 
 #[derive(Debug)]
 pub struct PartialOrder<K, S> {
     store: S,
