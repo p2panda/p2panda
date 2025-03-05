@@ -249,6 +249,10 @@ pub enum FailingProtocol {
     /// A critical error is triggered inside `initiate()` after the handshake is complete.
     InitiatorFailsCritical,
 
+    /// An unexpected behaviour error is triggered inside `initiate()` after the topic query has
+    /// been sent.
+    InitiatorFailsUnexpected,
+
     /// An unexpected behaviour error is triggered inside `accept()` by sending the topic twice
     /// from `initiate()`.
     InitiatorSendsTopicTwice,
@@ -293,6 +297,11 @@ impl<'a> SyncProtocol<'a, SyncTestTopic> for FailingProtocol {
             return Err(SyncError::Critical(
                 "something really bad happened in the initiator".to_string(),
             ));
+        }
+
+        // Simulate unexpected behaviour (such as a broken pipe due to disconnection).
+        if let FailingProtocol::InitiatorFailsUnexpected = *self {
+            return Err(SyncError::UnexpectedBehaviour("bang!".to_string()));
         }
 
         sink.send(FailingProtocolMessage::Done).await?;
