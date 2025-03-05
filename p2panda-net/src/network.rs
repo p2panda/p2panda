@@ -843,7 +843,9 @@ mod tests {
     use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
-    use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::test_protocols::{
+        FailingProtocol, PingPongProtocol, SyncTestTopic as TestTopic,
+    };
     use p2panda_sync::TopicQuery;
     use tokio::task::JoinHandle;
 
@@ -1536,6 +1538,106 @@ mod tests {
                 break;
             }
         }
+
+        node_1.shutdown().await.unwrap();
+        node_2.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn resync_after_error() {
+        let network_id = [17; 32];
+        let chat_topic = TestTopic::new("chat");
+        let sync_config = SyncConfiguration::new(FailingProtocol::InitiatorFailsUnexpected);
+
+        let node_1 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+        let node_2 = NetworkBuilder::new(network_id)
+            .sync(sync_config.clone())
+            .build()
+            .await
+            .unwrap();
+
+        let node_2_id = node_2.endpoint().node_id();
+
+        let node_1_addr = node_1.endpoint().node_addr().await.unwrap();
+        let node_2_addr = node_2.endpoint().node_addr().await.unwrap();
+
+        node_1
+            .add_peer(to_node_addr(node_2_addr.clone()))
+            .await
+            .unwrap();
+        node_2
+            .add_peer(to_node_addr(node_1_addr.clone()))
+            .await
+            .unwrap();
+
+        // Subscribe to network events for the first node.
+        let mut event_rx_1 = node_1.events().await.unwrap();
+
+        // Subscribe to the same topic from all nodes.
+        let (_tx_1, _rx_1, ready_1) = node_1.subscribe(chat_topic.clone()).await.unwrap();
+        let (_tx_2, _rx_2, ready_2) = node_2.subscribe(chat_topic.clone()).await.unwrap();
+
+        // Ensure the gossip-overlay has been joined by all both nodes for the given topic.
+        assert!(ready_2.await.is_ok());
+        assert!(ready_1.await.is_ok());
+
+        // Events we expect to receive on node 1.
+        let expected_events = vec![
+            // Start sync (first attempt) as acceptor with node 2.
+            SystemEvent::SyncStarted {
+                topic: None,
+                peer: to_public_key(node_2_id),
+            },
+            // Fail sync (first attempt) as acceptor with node 2.
+            SystemEvent::SyncFailed {
+                topic: None,
+                peer: to_public_key(node_2_id),
+            },
+            // Start sync (second attempt) as acceptor with node 2.
+            SystemEvent::SyncStarted {
+                topic: None,
+                peer: to_public_key(node_2_id),
+            },
+            // Start sync (first attempt) as initiator with node 2.
+            //
+            // The initiator side of the sync protocol fails before the `HandshakeSuccess` message
+            // is sent, so we never lock the gossip buffer and therefore never send `SyncFailed`.
+            SystemEvent::SyncStarted {
+                topic: Some(chat_topic.clone()),
+                peer: to_public_key(node_2_id),
+            },
+            // Start sync (second attempt) as initiator with node 2.
+            SystemEvent::SyncStarted {
+                topic: Some(chat_topic.clone()),
+                peer: to_public_key(node_2_id),
+            },
+        ];
+
+        // Receive events on the node one receiver.
+        let mut received_events = Vec::new();
+        while let Ok(event) = event_rx_1.recv().await {
+            received_events.push(event);
+
+            // Twelve events should be enough to detect the subset we're looking for.
+            if received_events.len() == 12 {
+                break;
+            }
+        }
+
+        // Iterate through the expected events, making sure that each one appears in the received
+        // events.
+        expected_events.into_iter().for_each(|event| {
+            assert!(received_events.contains(&event));
+
+            // Remove the event from received events list so we can ensure that the expected
+            // duplicate events have been received.
+            let index = received_events.iter().position(|ev| *ev == event).unwrap();
+            received_events.remove(index);
+        });
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
