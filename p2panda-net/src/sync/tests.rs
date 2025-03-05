@@ -118,6 +118,47 @@ async fn initiator_fails_critical() {
 }
 
 #[tokio::test]
+async fn initiator_fails_unexpected() {
+    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
+        run_sync_impl(FailingProtocol::InitiatorFailsUnexpected).await;
+
+    // Expected initiator messages.
+    assert!(matches!(
+        rx_initiator.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    // Note: "SyncFailed" message is handled by manager for initiators.
+    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
+
+    // Expected acceptor messages.
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncStart { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncHandshakeSuccess { .. })
+    ));
+
+    assert!(matches!(
+        rx_acceptor.recv().await,
+        Some(ToEngineActor::SyncFailed { .. })
+    ));
+
+    // Expected handler results.
+    assert_eq!(
+        initiator_handle.await.unwrap(),
+        Err(SyncError::UnexpectedBehaviour("bang!".into(),))
+    );
+    assert_eq!(
+        acceptor_handle.await.unwrap(),
+        Err(SyncError::UnexpectedBehaviour("broken pipe".into()))
+    );
+}
+
+#[tokio::test]
 async fn initiator_sends_topic_twice() {
     let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
         run_sync_impl(FailingProtocol::InitiatorSendsTopicTwice).await;
