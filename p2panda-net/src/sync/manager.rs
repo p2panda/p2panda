@@ -334,9 +334,18 @@ where
 
         if let Some(err) = err.downcast_ref::<SyncAttemptError>() {
             // If the sync attempt failed for any reason we want to retry up to
-            // `max_retry_attempts`. If error occurs after this we simply stop trying without
-            // informing the engine as it never knew the attempts were occurring.
+            // `max_retry_attempts`.
             warn!("sync attempt failed: {err}");
+
+            // We need to inform the engine of the failed attempt so that the gossip buffer counter
+            // can be decremented.
+            self.engine_actor_tx
+                .send(ToEngineActor::SyncFailed {
+                    topic: Some(sync_attempt.topic.clone()),
+                    peer: sync_attempt.peer,
+                })
+                .await?;
+
             if sync_attempt.attempts <= self.config.max_retry_attempts {
                 self.reschedule_attempt(sync_attempt).await?;
                 return Ok(());
