@@ -17,6 +17,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
+- Schedule sync re-attempt after any error occurred [#702](https://github.com/p2panda/p2panda/pull/702) 
 - Expose bootstrap mode setting for network chat example via CLI arg [#709](https://github.com/p2panda/p2panda/pull/709) 
 - Expand chat example with relay, mdns and bootstrap options [#690](https://github.com/p2panda/p2panda/pull/690) 
 - Remove logging from network tests [#693](https://github.com/p2panda/p2panda/pull/693)
