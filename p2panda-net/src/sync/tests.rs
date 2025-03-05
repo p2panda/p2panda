@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use futures_util::FutureExt;
 use p2panda_core::PrivateKey;
-use p2panda_sync::test_protocols::{FailingProtocol, SyncTestTopic};
 use p2panda_sync::SyncError;
+use p2panda_sync::test_protocols::{FailingProtocol, SyncTestTopic};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};

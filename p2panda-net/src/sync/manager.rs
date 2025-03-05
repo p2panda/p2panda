@@ -395,8 +395,8 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
-    use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
     use p2panda_sync::SyncProtocol;
+    use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
     use tokio::sync::mpsc;
     use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
