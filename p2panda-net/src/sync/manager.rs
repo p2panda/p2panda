@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::hash_map::Entry as HashMapEntry;
+use std::collections::{HashMap, VecDeque};
 
 use anyhow::{Context, Error, Result};
 use iroh::Endpoint;
@@ -8,22 +9,19 @@ use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{Duration, Instant, interval};
+use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::from_public_key;
-use crate::sync::{self, SYNC_CONNECTION_ALPN};
-
-use super::SyncConfiguration;
-
-const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
+use crate::sync::config::FALLBACK_RESYNC_INTERVAL_SEC;
+use crate::sync::{self, SyncConfiguration, SYNC_CONNECTION_ALPN};
 
 /// Events sent to the sync manager.
 #[derive(Debug)]
 pub enum ToSyncActor<T> {
-    /// A new peer and topic combination was discovered.
+    /// A new peer-topic combination was discovered.
     Discovery { peer: PublicKey, topic: T },
     /// A major network interface change was detected.
     Reset,
@@ -35,22 +33,46 @@ impl<T> ToSyncActor<T> {
     }
 }
 
-#[derive(Debug)]
-struct SyncAttempt<T> {
-    peer: PublicKey,
-    topic: T,
-    attempts: u8,
-    completed: Option<Instant>,
+/// Sync session status.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Status {
+    Pending,
+    Active,
+    Complete(Instant),
+    Failed(Instant),
 }
 
-impl<T> SyncAttempt<T> {
+/// Sync session scope; defined as a peer-topic combination.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct Scope<T> {
+    peer: PublicKey,
+    topic: T,
+}
+
+impl<T> Scope<T> {
     fn new(peer: PublicKey, topic: T) -> Self {
+        Self { peer, topic }
+    }
+}
+
+/// Sync session attempt tracker with associated status and number of attempts.
+#[derive(Clone, Debug)]
+struct Attempt {
+    status: Status,
+    attempts: u8,
+}
+
+impl Attempt {
+    fn new() -> Self {
         Self {
-            peer,
-            topic,
+            status: Status::Pending,
             attempts: 0,
-            completed: None,
         }
+    }
+
+    fn reset(&mut self) {
+        self.status = Status::Pending;
+        self.attempts = 0;
     }
 }
 
@@ -70,15 +92,14 @@ enum SyncAttemptError {
 #[derive(Debug)]
 pub(crate) struct SyncActor<T> {
     config: SyncConfiguration<T>,
-    pending_sync_sessions: HashMap<T, HashSet<PublicKey>>,
-    active_sync_sessions: HashMap<T, HashSet<PublicKey>>,
-    completed_sync_sessions: HashMap<T, HashSet<PublicKey>>,
+    sessions: HashMap<Scope<T>, Attempt>,
     endpoint: Endpoint,
     engine_actor_tx: Sender<ToEngineActor<T>>,
     inbox: Receiver<ToSyncActor<T>>,
-    resync_queue: VecDeque<SyncAttempt<T>>,
-    sync_queue_tx: Sender<SyncAttempt<T>>,
-    sync_queue_rx: Receiver<SyncAttempt<T>>,
+    resync_queue: VecDeque<Scope<T>>,
+    retry_queue: VecDeque<Scope<T>>,
+    sync_queue_tx: Sender<Scope<T>>,
+    sync_queue_rx: Receiver<Scope<T>>,
 }
 
 impl<T> SyncActor<T>
@@ -96,13 +117,12 @@ where
 
         let sync_manager = Self {
             config,
-            pending_sync_sessions: HashMap::new(),
-            active_sync_sessions: HashMap::new(),
-            completed_sync_sessions: HashMap::new(),
+            sessions: HashMap::new(),
             endpoint,
             engine_actor_tx,
             inbox: sync_manager_rx,
             resync_queue: VecDeque::new(),
+            retry_queue: VecDeque::new(),
             sync_queue_tx,
             sync_queue_rx,
         };
@@ -110,73 +130,15 @@ where
         (sync_manager, sync_manager_tx)
     }
 
-    /// Add a peer and topic combination to the sync connection queue for initial sync.
-    async fn schedule_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_complete(&sync_attempt.peer, &sync_attempt.topic)
-        {
-            return Ok(());
-        }
-
-        self.pending_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
-
-        // Only send if the queue is not full; this prevents the possibility of blocking on send.
-        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-            self.sync_queue_tx.send(sync_attempt).await?;
-        } else {
-            self.sync_queue_tx
-                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Add a peer and topic combination to the sync connection queue for resync.
-    async fn schedule_resync_attempt(&mut self, sync_attempt: SyncAttempt<T>) -> Result<()> {
-        if self.is_pending(&sync_attempt.peer, &sync_attempt.topic)
-            || self.is_active(&sync_attempt.peer, &sync_attempt.topic)
-        {
-            return Ok(());
-        }
-
-        self.pending_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
-
-        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
-            self.sync_queue_tx.send(sync_attempt).await?;
-        } else {
-            self.sync_queue_tx
-                .send_timeout(sync_attempt, self.config.sync_queue_send_timeout)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Add a peer and topic combination to the sync connection queue, incrementing the number of
-    /// previous attempts.
-    async fn reschedule_attempt(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
-        sync_attempt.attempts += 1;
-        self.schedule_attempt(sync_attempt).await?;
-
-        Ok(())
-    }
-
     /// The sync connection event loop.
     ///
     /// Listens and responds to three kinds of events:
     ///
     /// - A shutdown signal from the engine
+    /// - A new peer-topic combination received from the engine
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
-    /// - A new peer and topic combination received from the engine
     /// - A tick of the resync poll interval, resulting in a resync attempt if one is in the queue
+    /// - A tick of the retry poll interval, resulting in a retry attempt if one is in the queue
     pub async fn run(mut self, token: CancellationToken) -> Result<()> {
         // Define the resync intervals based on supplied configuration parameters if resync has
         // been enabled. Otherwise create long-duration fallback values; this is mostly just
@@ -188,6 +150,11 @@ where
                 let one_hour = Duration::from_secs(FALLBACK_RESYNC_INTERVAL_SEC);
                 (interval(one_hour), one_hour)
             };
+        // Define the retry intervals.
+        let (mut retry_poll_interval, retry_interval) = (
+            interval(self.config.retry_poll_interval),
+            self.config.retry_interval,
+        );
 
         loop {
             tokio::select! {
@@ -197,48 +164,79 @@ where
                     debug!("sync manager received shutdown signal from engine");
                     break;
                 }
-                Some(sync_attempt) = self.sync_queue_rx.recv() => {
-                    match self
-                       .connect_and_sync(sync_attempt.peer, sync_attempt.topic.clone())
-                       .await
-                   {
-                       Ok(()) => self.complete_successful_sync(sync_attempt).await?,
-                       Err(err) => self.complete_failed_sync(sync_attempt, err).await?,
-                   }
-                },
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
                     match msg {
+                        // A peer-topic announcement has been received from the discovery layer.
                         ToSyncActor::Discovery { peer, topic } => {
-                            let sync_attempt = SyncAttempt::new(peer, topic);
+                            let scope = Scope::new(peer, topic);
 
-                            if let Err(err) = self.schedule_attempt(sync_attempt).await {
-                                // The attempt will fail if the sync queue is full, indicating that a high
-                                // volume of sync sessions are underway. In that case, we drop the attempt
-                                // completely. Another attempt will be scheduled when the next announcement of
-                                // this peer-topic combination is received from the network-wide gossip
-                                // overlay.
-                                error!("failed to schedule sync attempt: {}", err)
+                            // Only schedule an attempt if we're not already tracking sessions for this
+                            // scope.
+                            if let HashMapEntry::Vacant(entry) = self.sessions.entry(scope.clone()) {
+                                let attempt = Attempt::new();
+                                entry.insert(attempt);
+
+                                if let Err(err) = self.schedule_attempt(scope).await {
+                                    // The attempt will fail if the sync queue is full, indicating that a high
+                                    // volume of sync sessions are underway. In that case, we drop the attempt
+                                    // completely. Another attempt will be scheduled when the next announcement of
+                                    // this peer-topic combination is received from the network-wide gossip
+                                    // overlay.
+                                    error!("failed to schedule sync attempt: {}", err)
+                                }
                             }
                         },
                         // In the event of a disconnection, two peers who had previously synced may
                         // fall back out of sync. In order to invoke resync upon reconnection, we
-                        // clear the map of completed sync sessions when we detect a major network
-                        // interface change. This allows the peers to resync before entering "live
-                        // mode" (gossip) again.
-                        ToSyncActor::Reset => self.completed_sync_sessions.clear()
+                        // reset the status of all sessions and schedule an attempt for each one.
+                        // This allows the peers to resync before entering "live mode" (gossip) again.
+                        ToSyncActor::Reset => {
+                            for attempt in self.sessions.values_mut() {
+                                attempt.reset();
+                            }
+
+                            for scope in self.sessions.keys() {
+                                self.schedule_attempt(scope.clone()).await?;
+                            }
+                        }
                     }
                 }
-                _ = resync_poll_interval.tick() => {
-                    if let Some(attempt) = self.resync_queue.pop_front() {
-                        if let Some(completion) = attempt.completed {
-                            if completion.elapsed() >= resync_interval {
-                                trace!("schedule resync attempt {attempt:?}");
-                                if let Err(err) = self.schedule_resync_attempt(attempt).await {
-                                    error!("failed to schedule resync attempt: {}", err)
+                Some(scope) = self.sync_queue_rx.recv() => {
+                    match self
+                       .connect_and_sync(scope.clone())
+                       .await
+                   {
+                       Ok(()) => self.complete_successful_sync(scope).await?,
+                       Err(err) => self.complete_failed_sync(scope, err).await?,
+                   }
+                },
+                 _ = resync_poll_interval.tick() => {
+                    if let Some(scope) = self.resync_queue.pop_front() {
+                        if let Some(attempt) = self.sessions.get(&scope) {
+                            if let Status::Complete(completion) = attempt.status {
+                                if completion.elapsed() >= resync_interval {
+                                    if let Err(err) = self.schedule_attempt(scope).await {
+                                        error!("failed to schedule resync attempt: {}", err)
+                                    }
+                                } else {
+                                    self.resync_queue.push_back(scope)
                                 }
-                            } else {
-                                self.resync_queue.push_back(attempt)
+                            }
+                        }
+                    }
+                }
+                _ = retry_poll_interval.tick() => {
+                    if let Some(scope) = self.retry_queue.pop_front() {
+                        if let Some(attempt) = self.sessions.get(&scope) {
+                            if let Status::Failed(failure) = attempt.status {
+                                if failure.elapsed() >= retry_interval {
+                                    if let Err(err) = self.schedule_attempt(scope).await {
+                                        error!("failed to schedule resync attempt: {}", err)
+                                    }
+                                } else {
+                                    self.retry_queue.push_back(scope)
+                                }
                             }
                         }
                     }
@@ -249,45 +247,28 @@ where
         Ok(())
     }
 
-    /// Do we have an active sync session underway for the given peer topic combination?
-    fn is_active(&self, peer: &PublicKey, topic: &T) -> bool {
-        if let Some(peers) = self.active_sync_sessions.get(topic) {
-            peers.contains(peer)
+    /// Schedule a sync attempt for the given scope (peer-topic combination).
+    async fn schedule_attempt(&self, scope: Scope<T>) -> Result<()> {
+        // Only send if the queue is not full; this prevents the possibility of blocking on send.
+        if self.sync_queue_tx.capacity() < self.sync_queue_tx.max_capacity() {
+            self.sync_queue_tx.send(scope).await?;
         } else {
-            false
+            self.sync_queue_tx
+                .send_timeout(scope, self.config.sync_queue_send_timeout)
+                .await?;
         }
-    }
 
-    /// Do we have a complete sync session for the given peer topic combination?
-    fn is_complete(&self, peer: &PublicKey, topic: &T) -> bool {
-        if let Some(peers) = self.completed_sync_sessions.get(topic) {
-            peers.contains(peer)
-        } else {
-            false
-        }
-    }
-
-    /// Do we have a pending sync session for the given peer topic combination?
-    fn is_pending(&self, peer: &PublicKey, topic: &T) -> bool {
-        if let Some(peers) = self.pending_sync_sessions.get(topic) {
-            peers.contains(peer)
-        } else {
-            false
-        }
+        Ok(())
     }
 
     /// Attempt to connect with the given peer and initiate a sync session.
-    async fn connect_and_sync(&mut self, peer: PublicKey, topic: T) -> Result<()> {
-        debug!("attempting peer connection for sync");
-
-        self.active_sync_sessions
-            .entry(topic.clone())
-            .or_default()
-            .insert(peer);
-
-        if let Some(session) = self.pending_sync_sessions.get_mut(&topic) {
-            session.remove(&peer);
+    async fn connect_and_sync(&mut self, scope: Scope<T>) -> Result<()> {
+        if let Some(attempt) = self.sessions.get_mut(&scope) {
+            attempt.status = Status::Active
         }
+
+        let peer = scope.peer;
+        let topic = scope.topic;
 
         let connection = self
             .endpoint
@@ -322,64 +303,53 @@ where
         Ok(())
     }
 
-    /// Clean up after a failed sync attempt.
-    async fn complete_failed_sync(
-        &mut self,
-        sync_attempt: SyncAttempt<T>,
-        err: Error,
-    ) -> Result<()> {
-        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
-            session.remove(&sync_attempt.peer);
+    /// Mark the status of the attempt as `Complete`.
+    ///
+    /// The attempt is pushed to the back of the resync queue if resync mode is active.
+    async fn complete_successful_sync(&mut self, scope: Scope<T>) -> Result<()> {
+        if let Some(attempt) = self.sessions.get_mut(&scope) {
+            attempt.status = Status::Complete(Instant::now())
         }
 
-        if let Some(err) = err.downcast_ref::<SyncAttemptError>() {
-            // If the sync attempt failed for any reason we want to retry up to
-            // `max_retry_attempts`.
-            warn!("sync attempt failed: {err}");
-
-            // We need to inform the engine of the failed attempt so that the gossip buffer counter
-            // can be decremented.
-            self.engine_actor_tx
-                .send(ToEngineActor::SyncFailed {
-                    topic: Some(sync_attempt.topic.clone()),
-                    peer: sync_attempt.peer,
-                })
-                .await?;
-
-            if sync_attempt.attempts <= self.config.max_retry_attempts {
-                self.reschedule_attempt(sync_attempt).await?;
-                return Ok(());
-            }
+        if self.config.is_resync() {
+            self.resync_queue.push_back(scope);
         }
-
-        // @TODO(glyph): We may want to maintain a map of failed peer-topic combinations that can
-        // be checked against each announcement received by the sync manager. Otherwise we may run
-        // into the case where we are repeatedly initiating a sync session with a faulty peer (this
-        // would happen every time we receive an announcement, approximately every 2.2 seconds).
 
         Ok(())
     }
 
-    /// Remove the given topic from the set of active sync sessions for the given peer and add them
-    /// to the set of completed sync sessions.
+    /// Mark the status of the attempt as `Failed`, increment the attempts counter and inform the
+    /// engine of the failure.
     ///
-    /// If resync is active, a timestamp is created to mark the time of sync completion and the
-    /// attempt is then pushed to the back of the resync queue.
-    async fn complete_successful_sync(&mut self, mut sync_attempt: SyncAttempt<T>) -> Result<()> {
-        trace!("complete_successful_sync");
-        self.completed_sync_sessions
-            .entry(sync_attempt.topic.clone())
-            .or_default()
-            .insert(sync_attempt.peer);
+    /// The attempt is pushed to the back of the retry queue if the maximum number of retry
+    /// attempts has not been exceeded.
+    async fn complete_failed_sync(&mut self, scope: Scope<T>, err: Error) -> Result<()> {
+        warn!("sync attempt failed for scope {:?}: {}", scope, err);
 
-        if let Some(session) = self.active_sync_sessions.get_mut(&sync_attempt.topic) {
-            session.remove(&sync_attempt.peer);
-        }
+        // @TODO(glyph): There is a bug in this flow. If the sync initiation attempt fails before
+        // `HandshakeSuccess` is sent, we have not locked the buffer. That means that the attempt
+        // to unlock the buffer can panic. The logic in the gossip buffers needs to be reconsidered
+        // (ie. potentially not panicing if a gossip buffer counter doesn't exist for the given
+        // scope.
+        //
+        // We need to inform the engine of the failed attempt so that the gossip buffer counter
+        // can be decremented.
+        /*
+        self.engine_actor_tx
+            .send(ToEngineActor::SyncFailed {
+                topic: Some(scope.topic.clone()),
+                peer: scope.peer,
+            })
+            .await?;
+        */
 
-        if self.config.is_resync() {
-            trace!("schedule re-sync attempt");
-            sync_attempt.completed = Some(Instant::now());
-            self.resync_queue.push_back(sync_attempt);
+        if let Some(attempt) = self.sessions.get_mut(&scope) {
+            attempt.status = Status::Failed(Instant::now());
+            attempt.attempts += 1;
+
+            if attempt.attempts <= self.config.max_retry_attempts {
+                self.retry_queue.push_back(scope);
+            }
         }
 
         Ok(())
@@ -395,17 +365,17 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
-    use p2panda_sync::SyncProtocol;
     use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::SyncProtocol;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
     use crate::engine::ToEngineActor;
     use crate::protocols::ProtocolMap;
-    use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
-    use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
+    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
+    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
 
