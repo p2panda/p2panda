@@ -332,26 +332,23 @@ where
             session.remove(&sync_attempt.peer);
         }
 
-        if let Some(err) = err.downcast_ref() {
-            match err {
-                // If the sync attempt failed because of a connection error we want to retry up to
-                // `max_retry_attempts`. If error occurs after this we simply stop trying without
-                // informing the engine as it never knew the attempts were occurring.
-                SyncAttemptError::Connection => {
-                    warn!("sync attempt failed due to connection error");
-                    if sync_attempt.attempts <= self.config.max_retry_attempts {
-                        self.reschedule_attempt(sync_attempt).await?;
-                        return Ok(());
-                    }
-                }
-                SyncAttemptError::Sync(_) => {
-                    self.engine_actor_tx
-                        .send(ToEngineActor::SyncFailed {
-                            topic: Some(sync_attempt.topic),
-                            peer: sync_attempt.peer,
-                        })
-                        .await?;
-                }
+        if let Some(err) = err.downcast_ref::<SyncAttemptError>() {
+            // If the sync attempt failed for any reason we want to retry up to
+            // `max_retry_attempts`.
+            warn!("sync attempt failed: {err}");
+
+            // We need to inform the engine of the failed attempt so that the gossip buffer counter
+            // can be decremented.
+            self.engine_actor_tx
+                .send(ToEngineActor::SyncFailed {
+                    topic: Some(sync_attempt.topic.clone()),
+                    peer: sync_attempt.peer,
+                })
+                .await?;
+
+            if sync_attempt.attempts <= self.config.max_retry_attempts {
+                self.reschedule_attempt(sync_attempt).await?;
+                return Ok(());
             }
         }
 
@@ -398,14 +395,14 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
+    use p2panda_sync::SyncProtocol;
+    use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
     use tokio::sync::mpsc;
     use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
     use crate::engine::ToEngineActor;
-    use crate::network::sync_protocols::PingPongProtocol;
-    use crate::network::tests::TestTopic;
     use crate::protocols::ProtocolMap;
     use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
     use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
@@ -433,7 +430,8 @@ mod tests {
 
     // Sync actor creation, along with all prerequisite setup steps, to reduce boilerplate
     // duplication in the tests which follow.
-    async fn prepare_for_sync(
+    async fn prepare_for_sync<P>(
+        protocol: P,
         resync: bool,
     ) -> (
         TestTopic,
@@ -450,14 +448,17 @@ mod tests {
         mpsc::Receiver<ToEngineActor<TestTopic>>,
         ProtocolMap,
         CancellationToken,
-    ) {
-        let test_topic = TestTopic::new("ping_pong");
-        let ping_pong = PingPongProtocol {};
+    )
+    where
+        P: for<'a> SyncProtocol<'a, TestTopic> + Clone + 'static,
+    {
+        let test_topic = TestTopic::new("sync_test");
+
         let config_a = if resync {
             let resync_config = ResyncConfiguration::new().interval(3).poll_interval(1);
-            SyncConfiguration::new(ping_pong.clone()).resync(resync_config)
+            SyncConfiguration::new(protocol.clone()).resync(resync_config)
         } else {
-            SyncConfiguration::new(ping_pong.clone())
+            SyncConfiguration::new(protocol.clone())
         };
         let config_b = config_a.clone();
 
@@ -469,13 +470,13 @@ mod tests {
 
         let mut protocols_a = ProtocolMap::default();
         let sync_handler_a =
-            SyncConnection::new(Arc::new(ping_pong.clone()), engine_actor_tx_a.clone());
+            SyncConnection::new(Arc::new(protocol.clone()), engine_actor_tx_a.clone());
         protocols_a.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_a));
         let alpns_a = protocols_a.alpns();
         endpoint_a.set_alpns(alpns_a).unwrap();
 
         let mut protocols_b = ProtocolMap::default();
-        let sync_handler_b = SyncConnection::new(Arc::new(ping_pong), engine_actor_tx_b.clone());
+        let sync_handler_b = SyncConnection::new(Arc::new(protocol), engine_actor_tx_b.clone());
         protocols_b.insert(SYNC_CONNECTION_ALPN, Arc::new(sync_handler_b));
         let alpns_b = protocols_b.alpns();
         endpoint_b.set_alpns(alpns_b).unwrap();
@@ -537,6 +538,8 @@ mod tests {
 
     #[tokio::test]
     async fn single_sync() {
+        let protocol = PingPongProtocol {};
+
         let (
             test_topic,
             peer_a,
@@ -552,7 +555,7 @@ mod tests {
             mut engine_actor_rx_b,
             protocols_b,
             shutdown_token_b,
-        ) = prepare_for_sync(false).await;
+        ) = prepare_for_sync(protocol, false).await;
 
         // Spawn the sync actor for peer A.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -659,6 +662,8 @@ mod tests {
 
     #[tokio::test]
     async fn second_sync_without_resync() {
+        let protocol = PingPongProtocol {};
+
         let (
             test_topic,
             peer_a,
@@ -674,7 +679,7 @@ mod tests {
             mut engine_actor_rx_b,
             protocols_b,
             shutdown_token_b,
-        ) = prepare_for_sync(false).await;
+        ) = prepare_for_sync(protocol, false).await;
 
         // Spawn the sync actor for peer A.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -803,6 +808,8 @@ mod tests {
 
     #[tokio::test]
     async fn second_sync_after_reset() {
+        let protocol = PingPongProtocol {};
+
         let (
             test_topic,
             peer_a,
@@ -818,7 +825,7 @@ mod tests {
             mut engine_actor_rx_b,
             protocols_b,
             shutdown_token_b,
-        ) = prepare_for_sync(false).await;
+        ) = prepare_for_sync(protocol, false).await;
 
         // Spawn the sync actor for peer A.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });
@@ -951,6 +958,8 @@ mod tests {
 
     #[tokio::test]
     async fn resync() {
+        let protocol = PingPongProtocol {};
+
         let (
             test_topic,
             peer_a,
@@ -966,7 +975,7 @@ mod tests {
             mut engine_actor_rx_b,
             protocols_b,
             shutdown_token_b,
-        ) = prepare_for_sync(true).await;
+        ) = prepare_for_sync(protocol, true).await;
 
         // Spawn the sync actor for peer A.
         tokio::task::spawn(async move { sync_actor_a.run(shutdown_token_a).await.unwrap() });

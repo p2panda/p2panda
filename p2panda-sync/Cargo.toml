@@ -22,10 +22,14 @@ workspace = true
 [features]
 cbor = ["dep:tokio", "dep:tokio-util"]
 log-sync = ["dep:p2panda-core", "dep:p2panda-store", "cbor"]
+test-protocols = ["dep:p2panda-core", "serde/derive", "cbor", "dep:tracing",
+"dep:futures-lite", "dep:futures-util"]
 
 [dependencies]
 async-trait = "0.1.82"
 futures = "0.3.30"
+futures-lite = { version = "2.3.0", optional = true }
+futures-util = { version = "0.3.30", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.2.0", optional = true }
 p2panda-store = { path = "../p2panda-store", version = "0.2.0", optional = true, default-features = false }
 serde = { version = "1.0.215" }
@@ -35,6 +39,7 @@ tokio-util = { version = "0.7.11", features = [
 ], optional = true }
 tokio = { version = "1.42.0", features = ["sync", "time", "rt"], optional = true }
 thiserror = "1.0.63"
+tracing = { version = "0.1.40", optional = true }
 
 [dev-dependencies]
 p2panda-store = { path = "../p2panda-store", version = "0.2.0", features = [ "memory" ] }
