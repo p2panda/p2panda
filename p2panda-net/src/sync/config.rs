@@ -9,8 +9,11 @@ use p2panda_sync::{SyncProtocol, TopicQuery};
 const MAX_CONCURRENT_SYNC_SESSIONS: usize = 128;
 const MAX_RETRY_ATTEMPTS: u8 = 5;
 const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
-const RESYNC_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const RESYNC_POLL_INTERVAL: Duration = Duration::from_secs(3);
+const RETRY_INTERVAL: Duration = Duration::from_secs(5);
+const RETRY_POLL_INTERVAL: Duration = Duration::from_secs(3);
 const SYNC_QUEUE_SEND_TIMEOUT: Duration = Duration::from_millis(100);
+pub(crate) const FALLBACK_RESYNC_INTERVAL_SEC: u64 = 3600;
 
 /// Configuration parameters for resync behaviour.
 #[derive(Clone, Debug)]
@@ -22,7 +25,7 @@ pub struct ResyncConfiguration {
 
     /// Minimum interval between each poll of the resync queue.
     ///
-    /// Default: 1 second.
+    /// Default: 3 second.
     pub(crate) poll_interval: Duration,
 }
 
@@ -73,6 +76,16 @@ pub struct SyncConfiguration<T> {
     /// Default: 5.
     pub(crate) max_retry_attempts: u8,
 
+    /// Minimum interval between sync retry attempts (following a failed attempt).
+    ///
+    /// Default: 5 seconds.
+    pub(crate) retry_interval: Duration,
+
+    /// Minimum interval between each poll of the resync queue.
+    ///
+    /// Default: 3 seconds.
+    pub(crate) retry_poll_interval: Duration,
+
     /// Maximum time to wait for sync attempt queue to have an open slot before failing.
     ///
     /// Default: 100 milliseconds.
@@ -90,6 +103,8 @@ where
             max_concurrent_sync_sessions: MAX_CONCURRENT_SYNC_SESSIONS,
             max_retry_attempts: MAX_RETRY_ATTEMPTS,
             resync: None,
+            retry_interval: RETRY_INTERVAL,
+            retry_poll_interval: RETRY_POLL_INTERVAL,
             sync_queue_send_timeout: SYNC_QUEUE_SEND_TIMEOUT,
         }
     }
@@ -121,6 +136,19 @@ where
     /// Is resync enabled?
     pub fn is_resync(&mut self) -> bool {
         self.resync.is_some()
+    }
+
+    /// Define the minimum number of seconds between retry attempts for a single peer-topic
+    /// combination.
+    pub fn retry_interval(mut self, seconds: u64) -> Self {
+        self.retry_interval = Duration::from_secs(seconds);
+        self
+    }
+
+    /// Define the minimum number of seconds between poll of the retry queue.
+    pub fn retry_poll_interval(mut self, seconds: u64) -> Self {
+        self.retry_poll_interval = Duration::from_secs(seconds);
+        self
     }
 
     /// Define the maximum number of seconds to wait for sync attempt queue to have an open slot
