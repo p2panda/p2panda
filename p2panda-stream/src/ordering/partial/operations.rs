@@ -20,7 +20,7 @@ use crate::ordering::partial::{
 #[derive(Debug)]
 pub struct PartialOrder<L, E, OS, POS> {
     /// A store containing p2panda operations.
-    /// 
+    ///
     /// It is assumed that any operations being processed by the PartialOrder struct are already
     /// present in the store, as we may need to retrieve them later.
     operation_store: OS,
@@ -80,11 +80,7 @@ where
             .await
             .map_err(|err| OperationDependencyCheckerError::StoreError(err.to_string()))?
         {
-            let operation = Operation {
-                hash,
-                header,
-                body,
-            };
+            let operation = Operation { hash, header, body };
             Ok(Some(operation))
         } else {
             Err(OperationDependencyCheckerError::MissingOperation(hash))
