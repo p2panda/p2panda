@@ -54,7 +54,7 @@ where
         let hash = operation.hash;
         let previous = operation.header.previous.clone();
         self.operation_cache.insert(operation.hash, operation);
-        self.inner.process(hash, previous).await?;
+        self.inner.process(hash, &previous).await?;
         Ok(())
     }
 

@@ -85,9 +85,9 @@ where
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&mut self, key: K, dependencies: Vec<K>) -> Result<(), PartialOrderError> {
+    pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), PartialOrderError> {
         if !self.store.ready(&dependencies).await? {
-            self.store.add_pending(key, dependencies).await?;
+            self.store.add_pending(key, dependencies.to_vec()).await?;
             return Ok(());
         }
 
@@ -154,7 +154,7 @@ mod tests {
         let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         let item = graph[0].clone();
-        checker.process(item.0, item.1).await.unwrap();
+        checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 1);
@@ -162,14 +162,14 @@ mod tests {
         // B has it's dependencies met and so it too is added to the processed set and ready
         // queue.
         let item = graph[1].clone();
-        checker.process(item.0, item.1).await.unwrap();
+        checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 2);
 
         // D doesn't have both its dependencies met yet so it waits in the pending queue.
         let item = graph[3].clone();
-        checker.process(item.0, item.1).await.unwrap();
+        checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 1);
         assert_eq!(checker.ready_queue.len(), 2);
@@ -177,7 +177,7 @@ mod tests {
         // C satisfies D's dependencies and so both C & D are added to the processed set
         // and ready queue.
         let item = graph[2].clone();
-        checker.process(item.0, item.1).await.unwrap();
+        checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 4);
         assert_eq!(checker.store.pending.len(), 0);
         assert_eq!(checker.ready_queue.len(), 4);
@@ -213,7 +213,7 @@ mod tests {
         let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
-            checker.process(key, dependencies).await.unwrap();
+            checker.process(key, &dependencies).await.unwrap();
         }
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 5);
@@ -222,7 +222,7 @@ mod tests {
         let missing_dependency = ("B", vec!["A"]);
 
         checker
-            .process(missing_dependency.0, missing_dependency.1)
+            .process(missing_dependency.0, &missing_dependency.1)
             .await
             .unwrap();
         assert_eq!(checker.store.ready.len(), 7);
@@ -269,7 +269,7 @@ mod tests {
         let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
-            checker.process(key, dependencies).await.unwrap();
+            checker.process(key, &dependencies).await.unwrap();
         }
 
         // A1, B1 and C1 have dependencies met and were already processed.
@@ -292,7 +292,7 @@ mod tests {
         // Process the missing item.
         let missing_dependency = ("B2", vec!["A"]);
         checker
-            .process(missing_dependency.0, missing_dependency.1)
+            .process(missing_dependency.0, &missing_dependency.1)
             .await
             .unwrap();
 
@@ -336,7 +336,7 @@ mod tests {
         let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in out_of_order_graph {
-            checker.process(key, dependencies).await.unwrap();
+            checker.process(key, &dependencies).await.unwrap();
         }
 
         assert!(checker.store.ready.len() == 7);
