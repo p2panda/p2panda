@@ -121,12 +121,12 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh::{Endpoint, RelayMap, RelayNode};
-use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
+use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
@@ -135,15 +135,15 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{Instrument, debug, error, error_span, warn};
+use tracing::{debug, error, error_span, warn, Instrument};
 
-use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
-use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
+use crate::addrs::{to_node_addr, to_relay_url, DEFAULT_STUN_PORT};
+use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
 use crate::engine::Engine;
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync::{SYNC_CONNECTION_ALPN, SyncConfiguration};
-use crate::{NetworkId, NodeAddress, RelayUrl, TopicId, from_private_key};
+use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
+use crate::{from_private_key, NetworkId, NodeAddress, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -842,19 +842,19 @@ mod tests {
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::TopicQuery;
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
     use p2panda_sync::test_protocols::{
         FailingProtocol, PingPongProtocol, SyncTestTopic as TestTopic,
     };
+    use p2panda_sync::TopicQuery;
     use tokio::task::JoinHandle;
 
-    use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr};
+    use crate::addrs::{to_node_addr, DEFAULT_STUN_PORT};
     use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::events::SystemEvent;
     use crate::sync::SyncConfiguration;
-    use crate::{NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId, to_public_key};
+    use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, Network, ToNetwork};
 
@@ -1521,11 +1521,6 @@ mod tests {
             SystemEvent::PeerDiscovered {
                 peer: to_public_key(node_3_id),
             },
-            // Gain a direct neighbor in the topic gossip overlay by connecting to node 3.
-            SystemEvent::GossipNeighborUp {
-                topic_id: chat_topic_id,
-                peer: to_public_key(node_3_id),
-            },
         ];
 
         // Receive events on the node one receiver.
@@ -1534,7 +1529,7 @@ mod tests {
             assert!(expected_events.contains(&event));
             let index = expected_events.iter().position(|ev| *ev == event).unwrap();
             received_events.push(expected_events.remove(index));
-            if received_events.len() == 11 {
+            if received_events.len() == 10 {
                 break;
             }
         }
@@ -1622,8 +1617,8 @@ mod tests {
         while let Ok(event) = event_rx_1.recv().await {
             received_events.push(event);
 
-            // Twelve events should be enough to detect the subset we're looking for.
-            if received_events.len() == 12 {
+            // Fourteen events should be enough to detect the subset we're looking for.
+            if received_events.len() == 14 {
                 break;
             }
         }
