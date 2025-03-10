@@ -18,5 +18,5 @@ mod stream;
 #[cfg(test)]
 mod test_utils;
 
-pub use stream::*;
 pub use ordering::*;
+pub use stream::*;
