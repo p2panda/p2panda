@@ -6,7 +6,9 @@ use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use thiserror::Error;
 
-use crate::ordering::partial::{PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore};
+use crate::ordering::partial::{
+    PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore,
+};
 
 /// Struct for processing p2panda operations into a partial order based on dependencies expressed
 /// in their `previous` field.
@@ -60,7 +62,7 @@ where
 
     /// Take the next ready operation from the queue.
     pub async fn next(&mut self) -> Result<Option<Operation<E>>, OperationDependencyCheckerError> {
-        let Some(hash) = self.inner.next() else {
+        let Some(hash) = self.inner.next().await? else {
             return Ok(None);
         };
 
