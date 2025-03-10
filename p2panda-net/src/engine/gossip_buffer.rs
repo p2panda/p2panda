@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use p2panda_core::PublicKey;
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug, Default)]
 pub struct GossipBuffer {
@@ -24,17 +24,20 @@ impl GossipBuffer {
         );
     }
 
-    pub fn unlock(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> usize {
-        match self.counters.get_mut(&(peer, topic_id)) {
-            Some(counter) => {
-                *counter -= 1;
-                debug!(
-                    "unlock gossip buffer with {} on topic {:?}: {}",
-                    peer, topic_id, counter
-                );
-                *counter
-            }
-            None => panic!("attempted to unlock non-existing gossip buffer"),
+    pub fn unlock(&mut self, peer: PublicKey, topic_id: [u8; 32]) -> Option<usize> {
+        if let Some(counter) = self.counters.get_mut(&(peer, topic_id)) {
+            *counter -= 1;
+            debug!(
+                "unlock gossip buffer with {} on topic {:?}: {}",
+                peer, topic_id, counter
+            );
+            Some(*counter)
+        } else {
+            warn!(
+                "attempted to unlock non-existing gossip buffer with {} on topic {:?}",
+                peer, topic_id
+            );
+            None
         }
     }
 
