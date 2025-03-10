@@ -13,10 +13,10 @@
 //! techniques for outdated operations etc.
 mod macros;
 pub mod operation;
-#[allow(dead_code)]
 mod ordering;
 mod stream;
 #[cfg(test)]
 mod test_utils;
 
 pub use stream::*;
+pub use ordering::*;
