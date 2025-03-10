@@ -1521,11 +1521,6 @@ mod tests {
             SystemEvent::PeerDiscovered {
                 peer: to_public_key(node_3_id),
             },
-            // Gain a direct neighbor in the topic gossip overlay by connecting to node 3.
-            SystemEvent::GossipNeighborUp {
-                topic_id: chat_topic_id,
-                peer: to_public_key(node_3_id),
-            },
         ];
 
         // Receive events on the node one receiver.
@@ -1534,7 +1529,7 @@ mod tests {
             assert!(expected_events.contains(&event));
             let index = expected_events.iter().position(|ev| *ev == event).unwrap();
             received_events.push(expected_events.remove(index));
-            if received_events.len() == 11 {
+            if received_events.len() == 10 {
                 break;
             }
         }
@@ -1622,8 +1617,8 @@ mod tests {
         while let Ok(event) = event_rx_1.recv().await {
             received_events.push(event);
 
-            // Twelve events should be enough to detect the subset we're looking for.
-            if received_events.len() == 12 {
+            // Fourteen events should be enough to detect the subset we're looking for.
+            if received_events.len() == 14 {
                 break;
             }
         }

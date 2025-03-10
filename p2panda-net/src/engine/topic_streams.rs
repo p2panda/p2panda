@@ -355,18 +355,18 @@ where
     /// Process sync session finishing.
     pub async fn on_sync_done(&mut self, topic: T, peer: PublicKey) -> Result<()> {
         let topic_id = topic.id();
-        let counter = self.gossip_buffer.unlock(peer, topic_id);
+        if let Some(counter) = self.gossip_buffer.unlock(peer, topic_id) {
+            // If no locks are available anymore for that peer over that topic we can finally re-play
+            // the gossip messages we've intercepted and kept around for the time of the sync session.
+            if counter == 0 {
+                let buffer = self
+                    .gossip_buffer
+                    .drain(peer, topic_id)
+                    .expect("missing expected gossip buffer");
 
-        // If no locks are available anymore for that peer over that topic we can finally re-play
-        // the gossip messages we've intercepted and kept around for the time of the sync session.
-        if counter == 0 {
-            let buffer = self
-                .gossip_buffer
-                .drain(peer, topic_id)
-                .expect("missing expected gossip buffer");
-
-            for bytes in buffer {
-                self.on_gossip_message(topic_id, bytes, peer).await?;
+                for bytes in buffer {
+                    self.on_gossip_message(topic_id, bytes, peer).await?;
+                }
             }
         }
 
@@ -380,14 +380,14 @@ where
         // to close it here.
         if let Some(topic) = topic {
             let topic_id = topic.id();
-            let counter = self.gossip_buffer.unlock(peer, topic_id);
-
-            // If no locks are available anymore for that peer over that topic we can drain the gossip
-            // messages from the buffer and drop them.
-            if counter == 0 {
-                self.gossip_buffer
-                    .drain(peer, topic_id)
-                    .expect("missing expected gossip buffer");
+            if let Some(counter) = self.gossip_buffer.unlock(peer, topic_id) {
+                // If no locks are available anymore for that peer over that topic we can drain the gossip
+                // messages from the buffer and drop them.
+                if counter == 0 {
+                    self.gossip_buffer
+                        .drain(peer, topic_id)
+                        .expect("missing expected gossip buffer");
+                }
             }
         }
 
