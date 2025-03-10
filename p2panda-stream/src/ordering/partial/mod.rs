@@ -5,9 +5,9 @@ pub mod store;
 
 pub use store::{MemoryStore, PartialOrderStore};
 
-use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
 
 use thiserror::Error;
 
@@ -62,9 +62,7 @@ pub enum PartialOrderError {
 pub struct PartialOrder<K, S> {
     /// Store for managing "ready" and "pending" items.
     store: S,
-
-    /// Sorted queue of "ready" items.
-    ready_queue: VecDeque<K>,
+    _phantom: PhantomData<K>,
 }
 
 impl<K, S> PartialOrder<K, S>
@@ -75,13 +73,13 @@ where
     pub fn new(store: S) -> Self {
         Self {
             store,
-            ready_queue: VecDeque::new(),
+            _phantom: PhantomData,
         }
     }
 
     /// Pop the next item from the ready queue.
-    pub fn next(&mut self) -> Option<K> {
-        self.ready_queue.pop_front()
+    pub async fn next(&mut self) -> Result<Option<K>, PartialOrderError> {
+        self.store.take_next_ready().await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
@@ -92,7 +90,6 @@ where
         }
 
         self.store.mark_ready(key).await?;
-        self.ready_queue.push_back(key);
 
         // We added a new ready item to the store so now we want to process any pending items
         // which depend on it as they may now have transitioned into a ready state.
@@ -116,7 +113,6 @@ where
             }
 
             self.store.mark_ready(next_key).await?;
-            self.ready_queue.push_back(next_key);
 
             // Recurse down the dependency graph by now checking any pending items which depend on
             // the current item.
@@ -157,7 +153,7 @@ mod tests {
         checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 1);
+        assert_eq!(checker.store.ready_queue.len(), 1);
 
         // B has it's dependencies met and so it too is added to the processed set and ready
         // queue.
@@ -165,14 +161,14 @@ mod tests {
         checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 2);
+        assert_eq!(checker.store.ready_queue.len(), 2);
 
         // D doesn't have both its dependencies met yet so it waits in the pending queue.
         let item = graph[3].clone();
         checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 2);
         assert_eq!(checker.store.pending.len(), 1);
-        assert_eq!(checker.ready_queue.len(), 2);
+        assert_eq!(checker.store.ready_queue.len(), 2);
 
         // C satisfies D's dependencies and so both C & D are added to the processed set
         // and ready queue.
@@ -180,17 +176,17 @@ mod tests {
         checker.process(item.0, &item.1).await.unwrap();
         assert_eq!(checker.store.ready.len(), 4);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 4);
+        assert_eq!(checker.store.ready_queue.len(), 4);
 
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("B"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("C"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("D"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert!(item.is_none());
     }
 
@@ -217,7 +213,7 @@ mod tests {
         }
         assert_eq!(checker.store.ready.len(), 1);
         assert_eq!(checker.store.pending.len(), 5);
-        assert_eq!(checker.ready_queue.len(), 1);
+        assert_eq!(checker.store.ready_queue.len(), 1);
 
         let missing_dependency = ("B", vec!["A"]);
 
@@ -227,23 +223,23 @@ mod tests {
             .unwrap();
         assert_eq!(checker.store.ready.len(), 7);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 7);
+        assert_eq!(checker.store.ready_queue.len(), 7);
 
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("B"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("C"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("D"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("E"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("F"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("G"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert!(item.is_none());
     }
 
@@ -275,19 +271,19 @@ mod tests {
         // A1, B1 and C1 have dependencies met and were already processed.
         assert!(checker.store.ready.len() == 3);
         assert_eq!(checker.store.pending.len(), 3);
-        assert_eq!(checker.ready_queue.len(), 3);
+        assert_eq!(checker.store.ready_queue.len(), 3);
 
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("B1"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("C1"));
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert!(item.is_none());
 
         // No more ready items.
-        assert_eq!(checker.ready_queue.len(), 0);
+        assert_eq!(checker.store.ready_queue.len(), 0);
 
         // Process the missing item.
         let missing_dependency = ("B2", vec!["A"]);
@@ -299,19 +295,19 @@ mod tests {
         // All items have now been processed and new ones are waiting in the ready queue.
         assert_eq!(checker.store.ready.len(), 7);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 4);
+        assert_eq!(checker.store.ready_queue.len(), 4);
 
         let mut concurrent_items = HashSet::from(["C2", "C3"]);
 
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert_eq!(item, "B2");
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert_eq!(item, "D");
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert!(item.is_none());
     }
 
@@ -341,26 +337,26 @@ mod tests {
 
         assert!(checker.store.ready.len() == 7);
         assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.ready_queue.len(), 7);
+        assert_eq!(checker.store.ready_queue.len(), 7);
 
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
 
         let mut concurrent_items = HashSet::from(["B1", "B2", "C1", "C2", "C3"]);
 
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert!(concurrent_items.remove(item));
-        let item = checker.next().unwrap();
+        let item = checker.next().await.unwrap().unwrap();
         assert_eq!(item, "D");
-        let item = checker.next();
+        let item = checker.next().await.unwrap();
         assert!(item.is_none());
     }
 }

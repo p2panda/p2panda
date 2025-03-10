@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
@@ -33,6 +33,8 @@ where
         key: K,
     ) -> Result<Option<HashSet<(K, Vec<K>)>>, PartialOrderError>;
 
+    async fn take_next_ready(&mut self) -> Result<Option<K>, PartialOrderError>;
+
     /// Remove all items from the pending queue which depend on the passed key.
     async fn remove_pending(&mut self, key: K) -> Result<bool, PartialOrderError>;
 
@@ -44,6 +46,7 @@ where
 #[derive(Clone)]
 pub struct MemoryStore<K> {
     pub(crate) ready: HashSet<K>,
+    pub(crate) ready_queue: VecDeque<K>,
     pub(crate) pending: HashMap<K, HashSet<(K, Vec<K>)>>,
 }
 
@@ -51,6 +54,7 @@ impl<K> Default for MemoryStore<K> {
     fn default() -> Self {
         Self {
             ready: HashSet::new(),
+            ready_queue: VecDeque::new(),
             pending: HashMap::new(),
         }
     }
@@ -62,6 +66,9 @@ where
 {
     async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError> {
         let result = self.ready.insert(key);
+        if result {
+            self.ready_queue.push_back(key);
+        }
         Ok(result)
     }
 
@@ -88,6 +95,10 @@ where
         key: K,
     ) -> Result<Option<HashSet<(K, Vec<K>)>>, PartialOrderError> {
         Ok(self.pending.get(&key).cloned())
+    }
+
+    async fn take_next_ready(&mut self) -> Result<Option<K>, PartialOrderError> {
+        Ok(self.ready_queue.pop_front())
     }
 
     async fn remove_pending(&mut self, key: K) -> Result<bool, PartialOrderError> {
