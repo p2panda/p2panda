@@ -87,11 +87,11 @@ where
     /// Process a new item which may be in a "ready" or "pending" state.
     pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), PartialOrderError> {
         if !self.store.ready(&dependencies).await? {
-            self.store.add_pending(key, dependencies.to_vec()).await?;
+            self.store.mark_pending(key, dependencies.to_vec()).await?;
             return Ok(());
         }
 
-        self.store.add_ready(key).await?;
+        self.store.mark_ready(key).await?;
         self.ready_queue.push_back(key);
 
         // We added a new ready item to the store so now we want to process any pending items
@@ -115,7 +115,7 @@ where
                 continue;
             }
 
-            self.store.add_ready(next_key).await?;
+            self.store.mark_ready(next_key).await?;
             self.ready_queue.push_back(next_key);
 
             // Recurse down the dependency graph by now checking any pending items which depend on
@@ -134,7 +134,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use super::{PartialOrder, MemoryStore};
+    use super::{MemoryStore, PartialOrder};
 
     #[tokio::test]
     async fn partial_order() {
