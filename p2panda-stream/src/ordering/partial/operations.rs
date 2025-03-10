@@ -17,6 +17,7 @@ use crate::ordering::partial::{
 /// the operation DAG into a partial order. Here we have the addition of a `LogStore` and
 /// `OperationStore` implementation (traits from `p2panda-store`) and an operation cache which
 /// helps us avoid unnecessary calls to the database.
+#[derive(Debug)]
 pub struct PartialOrder<L, E, OS, POS> {
     /// A store containing p2panda operations.
     /// 
