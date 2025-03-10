@@ -6,7 +6,7 @@ use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::{LogStore, OperationStore};
 use thiserror::Error;
 
-use crate::ordering::{PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore};
+use crate::ordering::partial::{PartialOrder as InnerPartialOrder, PartialOrderError, PartialOrderStore};
 
 /// Struct for processing p2panda operations into a partial order based on dependencies expressed
 /// in their `previous` field.
@@ -110,7 +110,7 @@ mod tests {
     use p2panda_core::{Header, Operation, PrivateKey};
     use p2panda_store::{MemoryStore, OperationStore};
 
-    use crate::ordering::MemoryStore as PartialOrderMemoryStore;
+    use crate::ordering::partial::MemoryStore as PartialOrderMemoryStore;
 
     use super::PartialOrder;
 

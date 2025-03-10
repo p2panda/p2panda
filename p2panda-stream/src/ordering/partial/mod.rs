@@ -3,13 +3,13 @@
 pub mod operations;
 pub mod store;
 
+pub use store::{MemoryStore, PartialOrderStore};
+
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 
 use thiserror::Error;
-
-use store::PartialOrderStore;
 
 /// Error types which may be returned from `PartialOrder` methods.
 #[derive(Debug, Error)]
@@ -134,9 +134,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use crate::ordering::MemoryStore;
-
-    use super::PartialOrder;
+    use super::{PartialOrder, MemoryStore};
 
     #[tokio::test]
     async fn partial_order() {
