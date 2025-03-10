@@ -18,10 +18,10 @@ where
     K: Clone + Copy + StdHash + PartialEq + Eq,
 {
     /// Add an item to the store which has all it's dependencies met already.
-    async fn add_ready(&mut self, key: K) -> Result<bool, PartialOrderError>;
+    async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError>;
 
     /// Add an item which does not have all it's dependencies met yet.
-    async fn add_pending(
+    async fn mark_pending(
         &mut self,
         key: K,
         dependencies: Vec<K>,
@@ -60,12 +60,12 @@ impl<K> PartialOrderStore<K> for MemoryStore<K>
 where
     K: Clone + Copy + Debug + StdHash + PartialEq + Eq,
 {
-    async fn add_ready(&mut self, key: K) -> Result<bool, PartialOrderError> {
+    async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError> {
         let result = self.ready.insert(key);
         Ok(result)
     }
 
-    async fn add_pending(
+    async fn mark_pending(
         &mut self,
         key: K,
         dependencies: Vec<K>,
