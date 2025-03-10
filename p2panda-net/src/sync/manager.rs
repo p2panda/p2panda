@@ -9,14 +9,14 @@ use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{Duration, Instant, interval};
+use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::from_public_key;
 use crate::sync::config::FALLBACK_RESYNC_INTERVAL_SEC;
-use crate::sync::{self, SYNC_CONNECTION_ALPN, SyncConfiguration};
+use crate::sync::{self, SyncConfiguration, SYNC_CONNECTION_ALPN};
 
 /// Events sent to the sync manager.
 #[derive(Debug)]
@@ -326,22 +326,14 @@ where
     async fn complete_failed_sync(&mut self, scope: Scope<T>, err: Error) -> Result<()> {
         warn!("sync attempt failed for scope {:?}: {}", scope, err);
 
-        // @TODO(glyph): There is a bug in this flow. If the sync initiation attempt fails before
-        // `HandshakeSuccess` is sent, we have not locked the buffer. That means that the attempt
-        // to unlock the buffer can panic. The logic in the gossip buffers needs to be reconsidered
-        // (ie. potentially not panicing if a gossip buffer counter doesn't exist for the given
-        // scope.
-        //
-        // We need to inform the engine of the failed attempt so that the gossip buffer counter
-        // can be decremented.
-        /*
+        // Inform the engine of the failed attempt so that the gossip buffer counter
+        // can be decremented (if one exists).
         self.engine_actor_tx
             .send(ToEngineActor::SyncFailed {
                 topic: Some(scope.topic.clone()),
                 peer: scope.peer,
             })
             .await?;
-        */
 
         if let Some(attempt) = self.sessions.get_mut(&scope) {
             attempt.status = Status::Failed(Instant::now());
@@ -365,17 +357,17 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
-    use p2panda_sync::SyncProtocol;
     use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::SyncProtocol;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
     use crate::engine::ToEngineActor;
     use crate::protocols::ProtocolMap;
-    use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
-    use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
+    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
+    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
 
