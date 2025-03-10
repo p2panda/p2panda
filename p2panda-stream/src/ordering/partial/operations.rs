@@ -19,6 +19,9 @@ use crate::ordering::partial::{
 /// helps us avoid unnecessary calls to the database.
 pub struct PartialOrder<L, E, OS, POS> {
     /// A store containing p2panda operations.
+    /// 
+    /// It is assumed that any operations being processed by the PartialOrder struct are already
+    /// present in the store, as we may need to retrieve them later.
     operation_store: OS,
 
     /// The inner PartialOrder struct which sorts the operation DAG into a partial order.
