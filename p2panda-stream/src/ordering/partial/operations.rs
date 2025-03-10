@@ -77,7 +77,7 @@ where
             .map_err(|err| OperationDependencyCheckerError::StoreError(err.to_string()))?
         {
             let operation = Operation {
-                hash: header.hash(),
+                hash,
                 header,
                 body,
             };
