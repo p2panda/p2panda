@@ -17,7 +17,8 @@ pub trait PartialOrderStore<K>
 where
     K: Clone + Copy + StdHash + PartialEq + Eq,
 {
-    /// Add an item to the store which has all it's dependencies met already.
+    /// Add an item to the store which has all it's dependencies met already. If this is the first
+    /// time the item has been added it should also be pushed to the end of a "ready" queue.
     async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError>;
 
     /// Add an item which does not have all it's dependencies met yet.
@@ -33,6 +34,7 @@ where
         key: K,
     ) -> Result<Option<HashSet<(K, Vec<K>)>>, PartialOrderError>;
 
+    /// Take the next ready item from the ready queue.
     async fn take_next_ready(&mut self) -> Result<Option<K>, PartialOrderError>;
 
     /// Remove all items from the pending queue which depend on the passed key.

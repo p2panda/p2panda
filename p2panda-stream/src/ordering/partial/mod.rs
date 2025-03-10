@@ -84,7 +84,7 @@ where
 
     /// Process a new item which may be in a "ready" or "pending" state.
     pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), PartialOrderError> {
-        if !self.store.ready(&dependencies).await? {
+        if !self.store.ready(dependencies).await? {
             self.store.mark_pending(key, dependencies.to_vec()).await?;
             return Ok(());
         }
