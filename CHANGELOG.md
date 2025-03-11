@@ -9,12 +9,6 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-### Added
-
-### Changed
-
-### Fixed
-
 ## [0.3.0] - 11/03/2025
 
 ### Added
@@ -26,7 +20,6 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Refactor sync manager to reduce complexity [#714](https://github.com/p2panda/p2panda/pull/714)
-- Schedule sync re-attempt after any error occurred [#702](https://github.com/p2panda/p2panda/pull/702) 
 - Expose bootstrap mode setting for network chat example via CLI arg [#709](https://github.com/p2panda/p2panda/pull/709) 
 - Expand chat example with relay, mdns and bootstrap options [#690](https://github.com/p2panda/p2panda/pull/690) 
 - Remove logging from network tests [#693](https://github.com/p2panda/p2panda/pull/693)
@@ -40,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Deduplicate node addresses in address book [#691](https://github.com/p2panda/p2panda/pull/691)
 - Allow bootstrap peer to already enter topic-discovery overlay without any known peers [#688](https://github.com/p2panda/p2panda/pull/688)
 - Poll logic causing ingest to never resolve [#697](https://github.com/p2panda/p2panda/pull/697)
+- Schedule sync re-attempt after any error occurred [#702](https://github.com/p2panda/p2panda/pull/702)
 
 ## [0.2.0] - 20/01/2025
 
