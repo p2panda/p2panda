@@ -50,4 +50,4 @@ tracing = "0.1.40"
 clap = { version = "4.5.29", features = ["derive"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 p2panda-sync = { path = "../p2panda-sync", version = "0.2.0", features = ["log-sync", "test-protocols"] }
-p2panda-store = { path = "../p2panda-store", version = "0.2.0" }
+p2panda-store = { path = "../p2panda-store", version = "0.3.0" }
