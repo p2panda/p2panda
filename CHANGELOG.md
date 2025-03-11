@@ -11,6 +11,14 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.3.0] - 11/03/2025
+
+### Added
+
 - Introduce concrete error type for `SqliteStore` [#698](https://github.com/p2panda/p2panda/pull/698)
 - Implement SQLite `OperationStore` & `LogStore` [#680](https://github.com/p2panda/p2panda/pull/680)
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
@@ -54,6 +62,7 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
 [0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
