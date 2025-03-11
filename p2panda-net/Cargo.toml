@@ -35,7 +35,7 @@ iroh-base = "0.33.0"
 iroh-gossip = "0.33.0"
 iroh-quinn = { version = "0.13.0", features = ["futures-io"] }
 netwatch = "0.2.0"
-p2panda-core = { path = "../p2panda-core", version = "0.2.0" }
+p2panda-core = { path = "../p2panda-core", version = "0.3.0" }
 p2panda-discovery = { path = "../p2panda-discovery", version = "0.2.0" }
 p2panda-sync = { path = "../p2panda-sync", version = "0.2.0", features = ["log-sync"] }
 rand = "0.8.5"
