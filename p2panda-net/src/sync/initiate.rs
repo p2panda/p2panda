@@ -6,7 +6,7 @@ use anyhow::Result;
 use futures_util::{AsyncRead, AsyncWrite, SinkExt};
 use p2panda_core::PublicKey;
 use p2panda_sync::{FromSync, SyncError, SyncProtocol, TopicQuery};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::PollSender;
 use tracing::{debug, error, warn};
@@ -103,12 +103,15 @@ where
                     }
                     sync_handshake_success = true;
 
+                    let (topic_is_known_tx, topic_is_known_rx) = oneshot::channel();
+
                     // Inform the engine that we are expecting sync messages from the peer on this
                     // topic.
                     engine_actor_tx
                         .send(ToEngineActor::SyncHandshakeSuccess {
                             peer,
                             topic: topic.clone(),
+                            topic_is_known_tx,
                         })
                         .await
                         .map_err(|err| {
@@ -116,6 +119,25 @@ where
                                 "engine_actor_tx failed sending sync handshake success: {err}"
                             ))
                         })?;
+
+                    // Wait to learn whether the sync topic is known locally.
+                    //
+                    // This should always return `true` in this context, since we are acting as the
+                    // sync protocol initiator and therefore know the topic. By extension, this
+                    // means that we are subscribed to the topic and want to sync over it.
+                    match topic_is_known_rx.await {
+                        Ok(true) => (),
+                        Ok(false) => {
+                            return Err(SyncError::UnknownTopic(
+                                "initiator doesn't know about {topic:?}".into(),
+                            ));
+                        }
+                        Err(_) => {
+                            return Err(SyncError::Critical(
+                                "oneshot sender dropped; failed to learn whether the sync topic is of interest".into(),
+                            ));
+                        }
+                    }
 
                     continue;
                 }
