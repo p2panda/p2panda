@@ -124,12 +124,15 @@ where
 
                         topic = Some(handshake_topic.clone());
 
+                        let (topic_is_known_tx, topic_is_known_rx) = oneshot::channel();
+
                         // Inform the engine that we are expecting sync messages from the peer on
                         // this topic.
                         engine_actor_tx
                             .send(ToEngineActor::SyncHandshakeSuccess {
                                 peer,
                                 topic: handshake_topic,
+                                topic_is_known_tx,
                             })
                             .await
                             .map_err(|err| {
@@ -137,6 +140,27 @@ where
                                     format!("engine_actor_tx failed sending handshake success: {err}")
                                 )
                             })?;
+
+                        // Wait to learn whether the sync topic is known locally.
+                        //
+                        // We only want to proceed to phase II if we are specifically interested in
+                        // this topic (ie. we have subscribed to this topic and therefore want to
+                        // sync over it).
+                        match topic_is_known_rx.await {
+                            Ok(true) => (),
+                            Ok(false) => {
+                                return Err(SyncError::UnknownTopic(
+                                    "acceptor doesn't know about {topic:?}".into(),
+                                ));
+                            }
+                            Err(_) => {
+                                return Err(SyncError::Critical(
+                                    "oneshot sender dropped; failed to learn whether the sync topic is of interest".into(),
+                                ));
+                            }
+                        }
+
+
 
                         continue;
                     }
