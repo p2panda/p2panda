@@ -321,8 +321,25 @@ where
     ///
     /// In the handshake phase peers usually handle authorization and exchange the topic which will
     /// be synced.
-    pub fn on_sync_handshake_success(&mut self, topic: T, peer: PublicKey) {
-        self.gossip_buffer.lock(peer, topic.id());
+    pub fn on_sync_handshake_success(
+        &mut self,
+        topic: T,
+        peer: PublicKey,
+        topic_is_known_tx: oneshot::Sender<bool>,
+    ) -> Result<()> {
+        if self.topic_ids().contains(&topic.id()) {
+            // Only lock the gossip buffer if we are tracking the topic and wish to sync over it.
+            self.gossip_buffer.lock(peer, topic.id());
+
+            // Inform the sync protocol about whether or not we're interested in this topic.
+            if topic_is_known_tx.send(true).is_err() {
+                warn!("handshake topic knowledge query receiver dropped")
+            }
+        } else if topic_is_known_tx.send(false).is_err() {
+            warn!("handshake topic knowledge query receiver dropped")
+        }
+
+        Ok(())
     }
 
     /// Process application-data message resulting from the sync session.

@@ -65,6 +65,7 @@ pub enum ToEngineActor<T> {
     SyncHandshakeSuccess {
         topic: T,
         peer: PublicKey,
+        topic_is_known_tx: oneshot::Sender<bool>,
     },
     SyncMessage {
         topic: T,
@@ -300,8 +301,13 @@ where
             ToEngineActor::SyncStart { topic, peer } => {
                 self.on_sync_start(topic, peer).await?;
             }
-            ToEngineActor::SyncHandshakeSuccess { topic, peer } => {
-                self.topic_streams.on_sync_handshake_success(topic, peer);
+            ToEngineActor::SyncHandshakeSuccess {
+                topic,
+                peer,
+                topic_is_known_tx,
+            } => {
+                self.topic_streams
+                    .on_sync_handshake_success(topic, peer, topic_is_known_tx)?;
             }
             ToEngineActor::SyncMessage {
                 topic,
