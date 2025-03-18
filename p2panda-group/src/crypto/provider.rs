@@ -10,8 +10,8 @@ use std::sync::RwLock;
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
-use crate::crypto::aead;
 use crate::crypto::traits::{CryptoProvider, RandProvider};
+use crate::crypto::{aead, hkdf};
 
 pub struct Provider {
     rng: RwLock<rand_chacha::ChaCha20Rng>,
@@ -60,6 +60,15 @@ impl CryptoProvider for Provider {
         let plaintext = aead::aead_decrypt(key, ciphertext_tag, nonce, aad)?;
         Ok(plaintext)
     }
+
+    fn hkdf<const N: usize>(
+        salt: &[u8],
+        ikm: &[u8],
+        info: Option<&[u8]>,
+    ) -> Result<[u8; N], Self::Error> {
+        let key_material = hkdf::hkdf(salt, ikm, info)?;
+        Ok(key_material)
+    }
 }
 
 impl RandProvider for Provider {
@@ -95,6 +104,9 @@ pub enum ProviderError {
 pub enum CryptoError {
     #[error(transparent)]
     Aead(#[from] aead::AeadError),
+
+    #[error(transparent)]
+    Hkdf(#[from] hkdf::HkdfError),
 }
 
 #[derive(Debug, Error)]

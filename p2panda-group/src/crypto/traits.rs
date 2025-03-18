@@ -23,6 +23,12 @@ pub trait CryptoProvider {
         nonce: Self::AeadNonce,
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, Self::Error>;
+
+    fn hkdf<const N: usize>(
+        salt: &[u8],
+        ikm: &[u8],
+        info: Option<&[u8]>,
+    ) -> Result<[u8; N], Self::Error>;
 }
 
 pub trait RandProvider {
