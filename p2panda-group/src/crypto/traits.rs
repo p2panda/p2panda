@@ -16,6 +16,12 @@ pub trait CryptoProvider {
 
     type HpkeCiphertext;
 
+    type SigningKey;
+
+    type VerifyingKey;
+
+    type Signature;
+
     fn aead_encrypt(
         &self,
         key: &Self::AeadKey,
@@ -55,7 +61,20 @@ pub trait CryptoProvider {
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, Self::Error>;
 
-    fn hash(&self, data: &[&[u8]]) -> Result<Vec<u8>, Self::Error>;
+    fn hash(&self, bytes: &[&[u8]]) -> Result<Vec<u8>, Self::Error>;
+
+    fn sign(
+        &self,
+        signing_key: &Self::SigningKey,
+        bytes: &[u8],
+    ) -> Result<Self::Signature, Self::Error>;
+
+    fn verify(
+        &self,
+        bytes: &[u8],
+        verifying_key: &Self::VerifyingKey,
+        signature: &Self::Signature,
+    ) -> Result<(), Self::Error>;
 }
 
 pub trait RandProvider {

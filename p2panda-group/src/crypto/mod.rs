@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod aead;
+mod ed25519;
 mod hkdf;
 mod hpke;
 mod provider;

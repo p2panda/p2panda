@@ -11,7 +11,7 @@ use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
 use crate::crypto::traits::{CryptoProvider, RandProvider};
-use crate::crypto::{aead, hkdf, hpke, sha2, x25519};
+use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519};
 
 #[derive(Debug)]
 pub struct Provider {
@@ -47,6 +47,12 @@ impl CryptoProvider for Provider {
     type SecretKey = x25519::SecretKey;
 
     type HpkeCiphertext = hpke::HpkeCiphertext;
+
+    type SigningKey = ed25519::SigningKey;
+
+    type VerifyingKey = ed25519::VerifyingKey;
+
+    type Signature = ed25519::Signature;
 
     fn aead_encrypt(
         &self,
@@ -102,8 +108,27 @@ impl CryptoProvider for Provider {
         Ok(plaintext)
     }
 
-    fn hash(&self, data: &[&[u8]]) -> Result<Vec<u8>, Self::Error> {
-        Ok(sha2::sha2_512(data).to_vec())
+    fn hash(&self, bytes: &[&[u8]]) -> Result<Vec<u8>, Self::Error> {
+        Ok(sha2::sha2_512(bytes).to_vec())
+    }
+
+    fn sign(
+        &self,
+        signing_key: &Self::SigningKey,
+        bytes: &[u8],
+    ) -> Result<Self::Signature, Self::Error> {
+        let signature = signing_key.sign(bytes)?;
+        Ok(signature)
+    }
+
+    fn verify(
+        &self,
+        bytes: &[u8],
+        verifying_key: &Self::VerifyingKey,
+        signature: &Self::Signature,
+    ) -> Result<(), Self::Error> {
+        verifying_key.verify(bytes, signature)?;
+        Ok(())
     }
 }
 
@@ -146,6 +171,9 @@ pub enum CryptoError<RNG: RandProvider> {
 
     #[error(transparent)]
     Hpke(#[from] hpke::HpkeError<RNG>),
+
+    #[error(transparent)]
+    Signature(#[from] ed25519::SignatureError),
 }
 
 #[derive(Debug, Error)]
