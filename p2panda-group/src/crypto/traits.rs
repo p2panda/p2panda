@@ -10,7 +10,14 @@ pub trait CryptoProvider {
 
     type AeadKey;
 
+    type PublicKey;
+
+    type SecretKey;
+
+    type HpkeCiphertext;
+
     fn aead_encrypt(
+        &self,
         key: &Self::AeadKey,
         plaintext: &[u8],
         nonce: Self::AeadNonce,
@@ -18,6 +25,7 @@ pub trait CryptoProvider {
     ) -> Result<Vec<u8>, Self::Error>;
 
     fn aead_decrypt(
+        &self,
         key: &Self::AeadKey,
         ciphertext_tag: &[u8],
         nonce: Self::AeadNonce,
@@ -25,10 +33,27 @@ pub trait CryptoProvider {
     ) -> Result<Vec<u8>, Self::Error>;
 
     fn hkdf<const N: usize>(
+        &self,
         salt: &[u8],
         ikm: &[u8],
         info: Option<&[u8]>,
     ) -> Result<[u8; N], Self::Error>;
+
+    fn hpke_seal(
+        &self,
+        public_key: &Self::PublicKey,
+        info: Option<&[u8]>,
+        aad: Option<&[u8]>,
+        plaintext: &[u8],
+    ) -> Result<Self::HpkeCiphertext, <Self as CryptoProvider>::Error>;
+
+    fn hpke_open(
+        &self,
+        input: &Self::HpkeCiphertext,
+        secret_key: &Self::SecretKey,
+        info: Option<&[u8]>,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error>;
 }
 
 pub trait RandProvider {

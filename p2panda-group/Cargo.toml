@@ -19,3 +19,5 @@ workspace = true
 thiserror = "2.0.12"
 libcrux = { git = "https://github.com/cryspen/libcrux", rev = "cf292a2829172cf9b36390f2f05f7a32b2304888" }
 rand_chacha = { version = "0.9.0", features = ["os_rng"] }
+zeroize = { version = "1.8.1", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }

@@ -11,8 +11,9 @@ use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
 use crate::crypto::traits::{CryptoProvider, RandProvider};
-use crate::crypto::{aead, hkdf};
+use crate::crypto::{aead, hkdf, hpke, x25519};
 
+#[derive(Debug)]
 pub struct Provider {
     rng: RwLock<rand_chacha::ChaCha20Rng>,
 }
@@ -35,13 +36,20 @@ impl Provider {
 }
 
 impl CryptoProvider for Provider {
-    type Error = CryptoError;
+    type Error = CryptoError<Self>;
 
     type AeadNonce = aead::AeadNonce;
 
     type AeadKey = aead::AeadKey;
 
+    type PublicKey = x25519::PublicKey;
+
+    type SecretKey = x25519::SecretKey;
+
+    type HpkeCiphertext = hpke::HpkeCiphertext;
+
     fn aead_encrypt(
+        &self,
         key: &Self::AeadKey,
         plaintext: &[u8],
         nonce: Self::AeadNonce,
@@ -52,6 +60,7 @@ impl CryptoProvider for Provider {
     }
 
     fn aead_decrypt(
+        &self,
         key: &Self::AeadKey,
         ciphertext_tag: &[u8],
         nonce: Self::AeadNonce,
@@ -62,12 +71,35 @@ impl CryptoProvider for Provider {
     }
 
     fn hkdf<const N: usize>(
+        &self,
         salt: &[u8],
         ikm: &[u8],
         info: Option<&[u8]>,
     ) -> Result<[u8; N], Self::Error> {
         let key_material = hkdf::hkdf(salt, ikm, info)?;
         Ok(key_material)
+    }
+
+    fn hpke_seal(
+        &self,
+        public_key: &Self::PublicKey,
+        info: Option<&[u8]>,
+        aad: Option<&[u8]>,
+        plaintext: &[u8],
+    ) -> Result<Self::HpkeCiphertext, Self::Error> {
+        let ciphertext = hpke::hpke_seal(public_key, info, aad, plaintext, self)?;
+        Ok(ciphertext)
+    }
+
+    fn hpke_open(
+        &self,
+        input: &Self::HpkeCiphertext,
+        secret_key: &Self::SecretKey,
+        info: Option<&[u8]>,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error> {
+        let plaintext = hpke::hpke_open(input, secret_key, info, aad)?;
+        Ok(plaintext)
     }
 }
 
@@ -92,21 +124,24 @@ impl RandProvider for Provider {
 }
 
 #[derive(Debug, Error)]
-pub enum ProviderError {
+pub enum ProviderError<RNG: RandProvider> {
     #[error(transparent)]
-    Crypto(#[from] CryptoError),
+    Crypto(#[from] CryptoError<RNG>),
 
     #[error(transparent)]
     Rand(#[from] RandError),
 }
 
 #[derive(Debug, Error)]
-pub enum CryptoError {
+pub enum CryptoError<RNG: RandProvider> {
     #[error(transparent)]
     Aead(#[from] aead::AeadError),
 
     #[error(transparent)]
     Hkdf(#[from] hkdf::HkdfError),
+
+    #[error(transparent)]
+    Hpke(#[from] hpke::HpkeError<RNG>),
 }
 
 #[derive(Debug, Error)]
