@@ -54,6 +54,8 @@ pub trait CryptoProvider {
         info: Option<&[u8]>,
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, Self::Error>;
+
+    fn hash(&self, data: &[&[u8]]) -> Result<Vec<u8>, Self::Error>;
 }
 
 pub trait RandProvider {

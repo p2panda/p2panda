@@ -11,7 +11,7 @@ use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
 use crate::crypto::traits::{CryptoProvider, RandProvider};
-use crate::crypto::{aead, hkdf, hpke, x25519};
+use crate::crypto::{aead, hkdf, hpke, sha2, x25519};
 
 #[derive(Debug)]
 pub struct Provider {
@@ -100,6 +100,10 @@ impl CryptoProvider for Provider {
     ) -> Result<Vec<u8>, Self::Error> {
         let plaintext = hpke::hpke_open(input, secret_key, info, aad)?;
         Ok(plaintext)
+    }
+
+    fn hash(&self, data: &[&[u8]]) -> Result<Vec<u8>, Self::Error> {
+        Ok(sha2::sha2_512(data).to_vec())
     }
 }
 

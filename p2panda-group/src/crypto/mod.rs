@@ -4,6 +4,7 @@ mod aead;
 mod hkdf;
 mod hpke;
 mod provider;
+mod sha2;
 mod traits;
 mod x25519;
 
