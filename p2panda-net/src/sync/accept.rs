@@ -153,7 +153,7 @@ where
                             Ok(true) => (),
                             Ok(false) => {
                                 return Err(SyncError::UnknownTopic(
-                                    "acceptor doesn't know about {topic:?}".into(),
+                                    "acceptor is not subscribed to {topic:?}".into(),
                                 ));
                             }
                             Err(_) => {
