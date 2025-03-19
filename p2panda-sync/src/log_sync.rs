@@ -608,8 +608,10 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages = [Message::Done,
-            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![])];
+        let messages = [
+            Message::Done,
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
+        ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -683,8 +685,10 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages = [Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
-            Message::Done];
+        let messages = [
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
+            Message::Done,
+        ];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
