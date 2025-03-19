@@ -20,7 +20,7 @@ pub fn x_aead_encrypt(
 
     let cipher = XChaCha20Poly1305::new(key);
     cipher
-        .encrypt_in_place(&nonce, &aad.unwrap_or_default(), &mut ciphertext)
+        .encrypt_in_place(nonce, aad.unwrap_or_default(), &mut ciphertext)
         .map_err(XAeadError::Encrypt)?;
 
     Ok(ciphertext)
@@ -38,7 +38,7 @@ pub fn x_aead_decrypt(
 
     let cipher = XChaCha20Poly1305::new(key);
     cipher
-        .decrypt_in_place(&nonce, &aad.unwrap_or_default(), &mut plaintext)
+        .decrypt_in_place(nonce, aad.unwrap_or_default(), &mut plaintext)
         .map_err(XAeadError::Encrypt)?;
 
     Ok(plaintext)
