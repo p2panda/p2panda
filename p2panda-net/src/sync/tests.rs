@@ -92,10 +92,21 @@ async fn initiator_fails_critical() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    // We expect a `SyncHandshakeSuccess` message and need to respond using the oneshot sender (to
+    // let the `accept` side of the protocol that we're interested in the topic.
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_acceptor.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from acceptor")
+    }
 
     assert!(matches!(
         rx_acceptor.recv().await,
@@ -137,10 +148,21 @@ async fn initiator_fails_unexpected() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    // We expect a `SyncHandshakeSuccess` message and need to respond using the oneshot sender (to
+    // let the `accept` side of the protocol that we're interested in the topic.
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_acceptor.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from acceptor")
+    }
 
     assert!(matches!(
         rx_acceptor.recv().await,
@@ -169,10 +191,19 @@ async fn initiator_sends_topic_twice() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_initiator.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from initiator")
+    }
 
     assert!(matches!(
         rx_initiator.recv().await,
@@ -212,10 +243,21 @@ async fn acceptor_fails_critical() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    // We expect a `SyncHandshakeSuccess` message and need to respond using the oneshot sender (to
+    // let the `initiate` side of the protocol that we're interested in the topic.
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_initiator.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from initiator")
+    }
 
     assert!(matches!(
         rx_initiator.recv().await,
@@ -256,10 +298,19 @@ async fn acceptor_sends_topic() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_initiator.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from initiator")
+    }
 
     // Note: "SyncFailed" message is handled by manager for initiators.
     assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
@@ -270,10 +321,19 @@ async fn acceptor_sends_topic() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_acceptor.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from acceptor")
+    }
 
     assert!(matches!(
         rx_acceptor.recv().await,
@@ -303,7 +363,11 @@ async fn run_sync_without_error() {
 
     assert!(matches!(
         rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
+        Some(ToEngineActor::SyncHandshakeSuccess {
+            peer: _,
+            topic: _,
+            topic_is_known_tx: None,
+        })
     ));
 
     assert!(matches!(
@@ -317,10 +381,19 @@ async fn run_sync_without_error() {
         Some(ToEngineActor::SyncStart { .. })
     ));
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+    if let Some(ToEngineActor::SyncHandshakeSuccess {
+        peer: _,
+        topic: _,
+        topic_is_known_tx,
+    }) = rx_acceptor.recv().await
+    {
+        if let Some(tx) = topic_is_known_tx {
+            tx.send(true)
+                .expect("topic_is_known receiver already dropped");
+        }
+    } else {
+        panic!("expected sync handshake success message from acceptor")
+    }
 
     assert!(matches!(
         rx_acceptor.recv().await,
