@@ -9,6 +9,14 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+- Only decrement the gossip buffer counter if it exists and is greater than zero [#722](https://github.com/p2panda/p2panda/pull/722)
+
 ## [0.3.0] - 11/03/2025
 
 ### Added
