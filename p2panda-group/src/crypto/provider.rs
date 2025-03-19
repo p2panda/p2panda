@@ -16,7 +16,7 @@ use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
 use crate::crypto::traits::{CryptoProvider, RandProvider, XCryptoProvider};
-use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xeddsa};
+use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xchacha20, xeddsa};
 
 #[derive(Debug)]
 pub struct Provider {
@@ -140,11 +140,37 @@ impl CryptoProvider for Provider {
 impl XCryptoProvider for Provider {
     type Error = XCryptoError<Self>;
 
+    type XAeadNonce = xchacha20::XAeadNonce;
+
+    type XAeadKey = xchacha20::XAeadKey;
+
     type XSigningKey = x25519::SecretKey;
 
     type XVerifyingKey = x25519::PublicKey;
 
     type XSignature = xeddsa::XSignature;
+
+    fn x_aead_encrypt(
+        &self,
+        key: &Self::XAeadKey,
+        plaintext: &[u8],
+        nonce: Self::XAeadNonce,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error> {
+        let ciphertext = xchacha20::x_aead_encrypt(key, plaintext, nonce, aad)?;
+        Ok(ciphertext)
+    }
+
+    fn x_aead_decrypt(
+        &self,
+        key: &Self::XAeadKey,
+        ciphertext_tag: &[u8],
+        nonce: Self::XAeadNonce,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error> {
+        let plaintext = xchacha20::x_aead_decrypt(key, ciphertext_tag, nonce, aad)?;
+        Ok(plaintext)
+    }
 
     fn x_sign(
         &self,
@@ -212,6 +238,9 @@ pub enum CryptoError<RNG: RandProvider> {
 
 #[derive(Debug, Error)]
 pub enum XCryptoError<RNG: RandProvider> {
+    #[error(transparent)]
+    XAead(#[from] xchacha20::XAeadError),
+
     #[error(transparent)]
     XEdDSA(#[from] xeddsa::XEdDSAError<RNG>),
 }

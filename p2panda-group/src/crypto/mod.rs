@@ -8,6 +8,7 @@ mod provider;
 mod sha2;
 mod traits;
 mod x25519;
+mod xchacha20;
 mod xeddsa;
 
 pub use aead::{AeadKey, AeadNonce};

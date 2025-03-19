@@ -80,11 +80,31 @@ pub trait CryptoProvider {
 pub trait XCryptoProvider {
     type Error: Error;
 
+    type XAeadNonce;
+
+    type XAeadKey;
+
     type XSigningKey;
 
     type XVerifyingKey;
 
     type XSignature;
+
+    fn x_aead_encrypt(
+        &self,
+        key: &Self::XAeadKey,
+        plaintext: &[u8],
+        nonce: Self::XAeadNonce,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error>;
+
+    fn x_aead_decrypt(
+        &self,
+        key: &Self::XAeadKey,
+        ciphertext_tag: &[u8],
+        nonce: Self::XAeadNonce,
+        aad: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Self::Error>;
 
     fn x_sign(
         &self,
