@@ -900,10 +900,7 @@ mod tests {
             loop {
                 let msg = rx.recv().await.unwrap();
                 println!("{msg:?}");
-                match msg {
-                    FromNetwork::SyncMessage { .. } => break,
-                    _ => (),
-                }
+                if let FromNetwork::SyncMessage { .. } = msg { break }
             }
 
             // Give other nodes enough time to complete sync sessions.

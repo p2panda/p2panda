@@ -480,7 +480,7 @@ mod tests {
             previous: vec![],
             extensions: None,
         };
-        header.sign(&private_key);
+        header.sign(private_key);
         let header_bytes = header.to_bytes();
         (header.hash(), header, header_bytes)
     }
@@ -571,7 +571,7 @@ mod tests {
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
-        let _ = protocol
+        protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
@@ -608,10 +608,8 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages = vec![
-            Message::Done,
-            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
-        ];
+        let messages = [Message::Done,
+            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![])];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -624,7 +622,7 @@ mod tests {
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| crate::SyncError::Critical(err.to_string()));
-        let _ = protocol
+        protocol
             .initiate(
                 topic_query.clone(),
                 Box::new(&mut peer_a_write.compat_write()),
@@ -685,10 +683,8 @@ mod tests {
         let (app_tx, mut app_rx) = mpsc::channel(128);
 
         // Write some message into peer_b's send buffer
-        let messages = vec![
-            Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
-            Message::Done,
-        ];
+        let messages = [Message::Have::<LogHeightTopic>(topic_query.clone(), vec![]),
+            Message::Done];
         let message_bytes = messages.iter().fold(Vec::new(), |mut acc, message| {
             acc.extend(message.to_bytes());
             acc
@@ -701,7 +697,7 @@ mod tests {
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
-        let _ = protocol
+        protocol
             .accept(
                 Box::new(&mut peer_a_write.compat_write()),
                 Box::new(&mut peer_a_read.compat()),
@@ -774,7 +770,7 @@ mod tests {
         let protocol = Arc::new(LogSyncProtocol::new(topic_map, store));
         let mut sink =
             PollSender::new(app_tx).sink_map_err(|err| SyncError::Critical(err.to_string()));
-        let _ = protocol
+        protocol
             .initiate(
                 topic_query.clone(),
                 Box::new(&mut peer_a_write.compat_write()),

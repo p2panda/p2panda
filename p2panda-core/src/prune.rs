@@ -106,7 +106,7 @@ mod tests {
         let mut header = Header::<()> {
             public_key: private_key.public_key(),
             seq_num: 7,
-            backlink: Some(Hash::new(&[1, 2, 3])),
+            backlink: Some(Hash::new([1, 2, 3])),
             ..Default::default()
         };
         header.sign(&private_key);

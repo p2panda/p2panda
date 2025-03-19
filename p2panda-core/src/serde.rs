@@ -410,7 +410,7 @@ mod tests {
         mut header: Header<E>,
         private_key: &PrivateKey,
     ) {
-        header.sign(&private_key);
+        header.sign(private_key);
 
         let mut bytes = Vec::new();
         ciborium::ser::into_writer(&header, &mut bytes).unwrap();
