@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn diffie_hellmann() {
-        let rng = Provider::default();
+        let rng = Provider::from_seed([1; 32]);
 
         let alice_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_public_key = alice_secret_key.public_key().unwrap();
