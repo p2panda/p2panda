@@ -124,6 +124,9 @@ where
 
                         topic = Some(handshake_topic.clone());
 
+                        // Channel to communicate with the engine actor and ensure that the topic
+                        // for this sync session is known / subscribed to. If it's not, we don't
+                        // want to continue with the session.
                         let (topic_is_known_tx, topic_is_known_rx) = oneshot::channel();
 
                         // Inform the engine that we are expecting sync messages from the peer on
@@ -132,7 +135,7 @@ where
                             .send(ToEngineActor::SyncHandshakeSuccess {
                                 peer,
                                 topic: handshake_topic,
-                                topic_is_known_tx,
+                                topic_is_known_tx: Some(topic_is_known_tx),
                             })
                             .await
                             .map_err(|err| {
