@@ -4,12 +4,14 @@
 //!
 //! Following algorithms are used:
 //! * ChaCha random number generator with 20 rounds
-//! * AES-256-GCM AEAD
 //! * HPKE with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
 //! * HKDF with SHA256
 //! * SHA2-512 hashing function
 //! * EdDSA related to Curve25519 with SHA-512
 //! * ECDH key agreement with X25519
+//! * AES-256-GCM AEAD used by X3DH
+//! * XEdDSA used by X3DH
+//! * XChaCha20Poly1305 AEAD used by data encryption scheme
 use std::sync::RwLock;
 
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
