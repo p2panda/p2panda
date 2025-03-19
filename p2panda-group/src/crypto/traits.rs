@@ -65,8 +65,8 @@ pub trait CryptoProvider {
 
     fn sign(
         &self,
-        signing_key: &Self::SigningKey,
         bytes: &[u8],
+        signing_key: &Self::SigningKey,
     ) -> Result<Self::Signature, Self::Error>;
 
     fn verify(
@@ -74,6 +74,29 @@ pub trait CryptoProvider {
         bytes: &[u8],
         verifying_key: &Self::VerifyingKey,
         signature: &Self::Signature,
+    ) -> Result<(), Self::Error>;
+}
+
+pub trait XCryptoProvider {
+    type Error: Error;
+
+    type XSigningKey;
+
+    type XVerifyingKey;
+
+    type XSignature;
+
+    fn x_sign(
+        &self,
+        bytes: &[u8],
+        signing_key: &Self::XSigningKey,
+    ) -> Result<Self::XSignature, Self::Error>;
+
+    fn x_verify(
+        &self,
+        bytes: &[u8],
+        verifying_key: &Self::XVerifyingKey,
+        signature: &Self::XSignature,
     ) -> Result<(), Self::Error>;
 }
 

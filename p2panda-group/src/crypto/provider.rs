@@ -15,8 +15,8 @@ use std::sync::RwLock;
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
-use crate::crypto::traits::{CryptoProvider, RandProvider};
-use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519};
+use crate::crypto::traits::{CryptoProvider, RandProvider, XCryptoProvider};
+use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xeddsa};
 
 #[derive(Debug)]
 pub struct Provider {
@@ -119,8 +119,8 @@ impl CryptoProvider for Provider {
 
     fn sign(
         &self,
-        signing_key: &Self::SigningKey,
         bytes: &[u8],
+        signing_key: &Self::SigningKey,
     ) -> Result<Self::Signature, Self::Error> {
         let signature = signing_key.sign(bytes)?;
         Ok(signature)
@@ -133,6 +133,35 @@ impl CryptoProvider for Provider {
         signature: &Self::Signature,
     ) -> Result<(), Self::Error> {
         verifying_key.verify(bytes, signature)?;
+        Ok(())
+    }
+}
+
+impl XCryptoProvider for Provider {
+    type Error = XCryptoError<Self>;
+
+    type XSigningKey = x25519::SecretKey;
+
+    type XVerifyingKey = x25519::PublicKey;
+
+    type XSignature = xeddsa::XSignature;
+
+    fn x_sign(
+        &self,
+        bytes: &[u8],
+        signing_key: &Self::XSigningKey,
+    ) -> Result<Self::XSignature, Self::Error> {
+        let signature = xeddsa::xeddsa_sign(bytes, signing_key, self)?;
+        Ok(signature)
+    }
+
+    fn x_verify(
+        &self,
+        bytes: &[u8],
+        verifying_key: &Self::XVerifyingKey,
+        signature: &Self::XSignature,
+    ) -> Result<(), Self::Error> {
+        xeddsa::xeddsa_verify(bytes, verifying_key, signature)?;
         Ok(())
     }
 }
@@ -179,6 +208,12 @@ pub enum CryptoError<RNG: RandProvider> {
 
     #[error(transparent)]
     Signature(#[from] ed25519::SignatureError),
+}
+
+#[derive(Debug, Error)]
+pub enum XCryptoError<RNG: RandProvider> {
+    #[error(transparent)]
+    XEdDSA(#[from] xeddsa::XEdDSAError<RNG>),
 }
 
 #[derive(Debug, Error)]
