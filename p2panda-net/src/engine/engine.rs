@@ -65,7 +65,7 @@ pub enum ToEngineActor<T> {
     SyncHandshakeSuccess {
         topic: T,
         peer: PublicKey,
-        topic_is_known_tx: oneshot::Sender<bool>,
+        topic_is_known_tx: Option<oneshot::Sender<bool>>,
     },
     SyncMessage {
         topic: T,

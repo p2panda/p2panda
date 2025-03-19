@@ -325,18 +325,23 @@ where
         &mut self,
         topic: T,
         peer: PublicKey,
-        topic_is_known_tx: oneshot::Sender<bool>,
+        topic_is_known_tx: Option<oneshot::Sender<bool>>,
     ) -> Result<()> {
         if self.topic_ids().contains(&topic.id()) {
             // Only lock the gossip buffer if we are tracking the topic and wish to sync over it.
             self.gossip_buffer.lock(peer, topic.id());
 
             // Inform the sync protocol about whether or not we're interested in this topic.
-            if topic_is_known_tx.send(true).is_err() {
+            // This only applies to the `accept` half of the sync protocol.
+            if let Some(tx) = topic_is_known_tx {
+                if tx.send(true).is_err() {
+                    warn!("handshake topic knowledge query receiver dropped")
+                }
+            }
+        } else if let Some(tx) = topic_is_known_tx {
+            if tx.send(false).is_err() {
                 warn!("handshake topic knowledge query receiver dropped")
             }
-        } else if topic_is_known_tx.send(false).is_err() {
-            warn!("handshake topic knowledge query receiver dropped")
         }
 
         Ok(())
@@ -482,7 +487,12 @@ mod tests {
         topic_streams.on_gossip_joined(topic_id).await;
 
         topic_streams.on_sync_start(Some(topic.clone()), peer_1.public_key);
-        topic_streams.on_sync_handshake_success(topic.clone(), peer_1.public_key);
+
+        let (topic_is_known_tx, topic_is_known_rx) = oneshot::channel();
+        topic_streams
+            .on_sync_handshake_success(topic.clone(), peer_1.public_key, Some(topic_is_known_tx))
+            .unwrap();
+        topic_is_known_rx.await.unwrap();
 
         topic_streams
             .on_gossip_message(topic_id, b"a new cmos battery".to_vec(), peer_1.public_key)
