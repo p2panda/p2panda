@@ -510,6 +510,11 @@ where
             network.add_peer(direct_addr.clone()).await?;
         }
 
+        // Wait until we've successfully connected to relay.
+        if relay.is_some() {
+            network.endpoint().home_relay().initialized().await?;
+        }
+
         Ok(network)
     }
 }
@@ -561,8 +566,12 @@ where
                     my_node_addr = my_node_addr.with_relay_url(relay.url.clone());
                 }
 
-                while let Some(endpoints) = addrs_stream.next().await {
-                    // Learn about our direct addresses and changes to them.
+                loop {
+                    // Wait until we've learned about first direct address.
+                    let Some(endpoints) = addrs_stream.next().await else {
+                        continue;
+                    };
+
                     let direct_addresses: Option<Vec<SocketAddr>> = endpoints
                         .map(|endpoints| endpoints.iter().map(|endpoint| endpoint.addr).collect());
                     if let Some(addresses) = direct_addresses {
@@ -572,8 +581,6 @@ where
                         }
                     }
                 }
-
-                Ok(())
             });
         }
 
