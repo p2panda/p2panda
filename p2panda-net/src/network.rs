@@ -510,6 +510,11 @@ where
             network.add_peer(direct_addr.clone()).await?;
         }
 
+        // Wait until we've successfully connected to relay.
+        if relay.is_some() {
+            network.endpoint().home_relay().initialized().await?;
+        }
+
         Ok(network)
     }
 }
@@ -551,23 +556,44 @@ where
 
         let mut join_set = JoinSet::<Result<()>>::new();
 
-        // Spawn a task that updates the gossip endpoints and discovery services.
+        // Spawn a task that updates discovery services as our local addresses change.
         {
             let inner = self.clone();
             join_set.spawn(async move {
-                let mut addrs_stream = inner.endpoint.direct_addresses().stream();
-                let mut my_node_addr = iroh::NodeAddr::from(inner.endpoint.node_id());
+                // Wait for the first set of local direct addresses to be discovered.
+                let local_direct_addresses =
+                    inner.endpoint.direct_addresses().initialized().await?;
+
+                // Build the local address from these parts:
+                //
+                // - Public key
+                // - Relay URL
+                // - Direct addresses (IP & port)
+                let mut local_address = iroh::NodeAddr::from(inner.endpoint.node_id());
                 if let Some(relay) = &inner.relay {
-                    my_node_addr = my_node_addr.with_relay_url(relay.url.clone());
+                    local_address = local_address.with_relay_url(relay.url.clone());
+                }
+                let direct_addresses: Vec<SocketAddr> = local_direct_addresses
+                    .iter()
+                    .map(|endpoint| endpoint.addr)
+                    .collect();
+                local_address = local_address.with_direct_addresses(direct_addresses);
+
+                // Update the discovery service with the local address.
+                if let Err(err) = inner.discovery.update_local_address(&local_address) {
+                    warn!("failed to update direct addresses for discovery: {err:?}");
                 }
 
-                while let Some(endpoints) = addrs_stream.next().await {
-                    // Learn about our direct addresses and changes to them.
+                // Now we can subscribe to a stream of direct address updates for our endpoint.
+                let mut direct_addresses_stream = inner.endpoint.direct_addresses().stream();
+
+                // Update the discovery service as we learn of address changes.
+                while let Some(endpoints) = direct_addresses_stream.next().await {
                     let direct_addresses: Option<Vec<SocketAddr>> = endpoints
                         .map(|endpoints| endpoints.iter().map(|endpoint| endpoint.addr).collect());
                     if let Some(addresses) = direct_addresses {
-                        my_node_addr = my_node_addr.with_direct_addresses(addresses);
-                        if let Err(err) = inner.discovery.update_local_address(&my_node_addr) {
+                        local_address = local_address.with_direct_addresses(addresses);
+                        if let Err(err) = inner.discovery.update_local_address(&local_address) {
                             warn!("failed to update direct addresses for discovery: {err:?}");
                         }
                     }
