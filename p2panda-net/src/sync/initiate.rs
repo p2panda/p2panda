@@ -109,6 +109,9 @@ where
                         .send(ToEngineActor::SyncHandshakeSuccess {
                             peer,
                             topic: topic.clone(),
+                            // There is no need to check if the topic is known,
+                            // since we're acting as the initiator.
+                            topic_is_known_tx: None,
                         })
                         .await
                         .map_err(|err| {

@@ -199,10 +199,28 @@ where
 ///
 /// 1. Critical system failures (ie. bug in p2panda code or sync implementation, sync
 ///    implementation did not follow "2. Phase Flow" requirements, lack of system resources, etc.)
-/// 2. Unexpected Behaviour (ie. remote peer abruptly disconnected, error which got correctly
+/// 2. Invalid encoding (ie. remote peer sent a message which can't be decoded properly)
+/// 3. Unexpected behaviour (ie. remote peer abruptly disconnected, error which got correctly
 ///    caught in sync implementation, etc.)
+/// 4. Unknown topic (ie. either the initiator or acceptor completes a handshake with a topic that
+///    they are not subscribed to)
 #[derive(Debug, PartialEq, Error)]
 pub enum SyncError {
+    /// Critical error due to system failure on our end.
+    ///
+    /// This indicates that our system is running out of resources (storage layer failure etc.) or
+    /// we have a buggy implementation.
+    #[error("sync session failed due critical system error: {0}")]
+    Critical(String),
+
+    /// Error due to invalid encoding of a message sent by remote peer.
+    ///
+    /// Note that this error is intended for receiving messages from _remote_ peers which we can't
+    /// decode properly. If we fail with encoding our _own_ messages we should rather consider this
+    /// an `Critical` error type, as it likely means that there's a buggy implementation.
+    #[error("sync session failed due to invalid encoding of message sent by remote peer: {0}")]
+    InvalidEncoding(String),
+
     /// Error due to unexpected (buggy or malicious) behaviour of the remote peer.
     ///
     /// Indicates that the sync protocol was not correctly followed, for example due to unexpected
@@ -213,20 +231,18 @@ pub enum SyncError {
     #[error("sync session failed due to unexpected protocol behaviour of remote peer: {0}")]
     UnexpectedBehaviour(String),
 
-    /// Error due to invalid encoding of a message sent by remote peer.
+    /// Error due to a sync session being initiated for an unknown topic (ie. a topic which has not
+    /// been subscribed to and is therefore not of interest).
     ///
-    /// Note that this error is intended for receiving messages from _remote_ peers which we can't
-    /// decode properly. If we fail with encoding our _own_ messages we should rather consider this
-    /// an `Critical` error type, as it likely means that there's a buggy implementation.
-    #[error("sync session failed due to invalid encoding of message sent by remote peer: {0}")]
-    InvalidEncoding(String),
-
-    /// Critical error due to system failure on our end.
+    /// This can occur when the sync protocol acceptor receives a sync request from an initiator.
+    /// The acceptor learns the topic during the handshake; if it's not interested in the given
+    /// topic, this error is returned. The initiator can then use this information to inform future
+    /// sync request behaviour.
     ///
-    /// This indicates that our system is running out of resources (storage layer failure etc.) or
-    /// we have a buggy implementation.
-    #[error("sync session failed due critical system error: {0}")]
-    Critical(String),
+    /// The error will also be returned if the sync protocol initiator tries to initiate a session
+    /// using a topic which it is not subscribed to.
+    #[error("sync session failed because the topic is unknown: {0}")]
+    UnknownTopic(String),
 }
 
 /// Converts critical I/O error (which occurs during codec stream handling) into [`SyncError`].

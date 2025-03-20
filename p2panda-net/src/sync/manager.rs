@@ -564,8 +564,11 @@ mod tests {
         assert_eq!(peer, peer_b);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: None,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
@@ -598,9 +601,17 @@ mod tests {
         assert_eq!(peer, peer_a);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_b.recv().await
-        else {
+        if let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx,
+        }) = engine_actor_rx_b.recv().await
+        {
+            if let Some(tx) = topic_is_known_tx {
+                tx.send(true)
+                    .expect("topic_is_known receiver already dropped");
+            }
+        } else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
 
@@ -691,8 +702,11 @@ mod tests {
         assert_eq!(peer, peer_b);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: None,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
@@ -725,9 +739,17 @@ mod tests {
         assert_eq!(peer, peer_a);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_b.recv().await
-        else {
+        if let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx,
+        }) = engine_actor_rx_b.recv().await
+        {
+            if let Some(tx) = topic_is_known_tx {
+                tx.send(true)
+                    .expect("topic_is_known receiver already dropped");
+            }
+        } else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
 
@@ -836,16 +858,12 @@ mod tests {
         assert_eq!(topic, Some(test_topic.to_owned()));
         assert_eq!(peer, peer_b);
 
-        // Receive `SyncStart`.
-        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
-            panic!("expected to receive SyncStart on engine actor receiver for peer a")
-        };
-        assert_eq!(topic, None);
-        assert_eq!(peer, peer_a);
-
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: None,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
@@ -866,6 +884,34 @@ mod tests {
         else {
             panic!("expected to receive SyncDone on engine actor receiver for peer a")
         };
+
+        /* --- PEER B SYNC EVENTS --- */
+        /* --- role: acceptor     --- */
+        /* --- initial session    --- */
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer b")
+        };
+        assert_eq!(topic, None);
+        assert_eq!(peer, peer_a);
+
+        // Receive `SyncHandshakeSuccess`.
+        if let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx,
+        }) = engine_actor_rx_b.recv().await
+        {
+            if let Some(tx) = topic_is_known_tx {
+                tx.send(true)
+                    .expect("topic_is_known receiver already dropped");
+            }
+        } else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer b")
+        };
+
+        /* --- PEER A RESET SYNC STATUS --- */
 
         // Trigger reset of sync session completed state for peer A.
         //
@@ -894,8 +940,11 @@ mod tests {
         assert_eq!(peer, peer_b);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: _,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
@@ -986,16 +1035,12 @@ mod tests {
         assert_eq!(topic, Some(test_topic.to_owned()));
         assert_eq!(peer, peer_b);
 
-        // Receive `SyncStart`.
-        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
-            panic!("expected to receive SyncStart on engine actor receiver for peer a")
-        };
-        assert_eq!(topic, None);
-        assert_eq!(peer, peer_a);
-
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: None,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
@@ -1017,6 +1062,32 @@ mod tests {
             panic!("expected to receive SyncDone on engine actor receiver for peer a")
         };
 
+        /* --- PEER B SYNC EVENTS --- */
+        /* --- role: acceptor    --- */
+        /* --- initial session    --- */
+
+        // Receive `SyncStart`.
+        let Some(ToEngineActor::SyncStart { topic, peer }) = engine_actor_rx_b.recv().await else {
+            panic!("expected to receive SyncStart on engine actor receiver for peer a")
+        };
+        assert_eq!(topic, None);
+        assert_eq!(peer, peer_a);
+
+        // Receive `SyncHandshakeSuccess`.
+        if let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx,
+        }) = engine_actor_rx_b.recv().await
+        {
+            if let Some(tx) = topic_is_known_tx {
+                tx.send(true)
+                    .expect("topic_is_known receiver already dropped");
+            }
+        } else {
+            panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer b")
+        };
+
         /* --- PEER A SYNC EVENTS --- */
         /* --- role: initiator    --- */
         /* --- resync session     --- */
@@ -1033,8 +1104,11 @@ mod tests {
         assert_eq!(peer, peer_b);
 
         // Receive `SyncHandshakeSuccess`.
-        let Some(ToEngineActor::SyncHandshakeSuccess { topic: _, peer: _ }) =
-            engine_actor_rx_a.recv().await
+        let Some(ToEngineActor::SyncHandshakeSuccess {
+            topic: _,
+            peer: _,
+            topic_is_known_tx: None,
+        }) = engine_actor_rx_a.recv().await
         else {
             panic!("expected to receive SyncHandshakeSuccess on engine actor receiver for peer a")
         };
