@@ -239,6 +239,7 @@ where
                     if let Some(sync_actor_tx) = &self.sync_actor_tx {
                         sync_actor_tx.send(ToSyncActor::Reset).await?;
                     }
+                    self.gossip_actor_tx.send(ToGossipActor::Reset).await?;
                 }
                 // Attempt to start topic discovery if it didn't happen yet.
                 _ = join_network_interval.tick() => {

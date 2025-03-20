@@ -31,6 +31,7 @@ pub enum ToGossipActor {
     Leave {
         topic_id: [u8; 32],
     },
+    Reset,
     Shutdown,
 }
 
@@ -143,6 +144,7 @@ where
                 self.joined.remove(&topic_id);
                 self.want_join.remove(&topic_id);
             }
+            ToGossipActor::Reset => self.want_join.clear(),
             ToGossipActor::Shutdown => {
                 for topic_id in self.joined.iter() {
                     let _handle = self.gossip_events.remove(topic_id);
