@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
-use std::fmt;
+use std::fmt::{self, Debug};
 
 use libcrux::ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,8 @@ const ALGORITHM: Algorithm = Algorithm::X25519;
 pub const SECRET_KEY_SIZE: usize = 32;
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+#[cfg_attr(test, derive(Debug))]
 pub struct SecretKey(#[serde(with = "serde_bytes")] [u8; SECRET_KEY_SIZE]);
 
 impl SecretKey {
@@ -30,10 +31,6 @@ impl SecretKey {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; SECRET_KEY_SIZE] {
-        self.0
-    }
-
     pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
         let bytes = libcrux::ecdh::secret_to_public(ALGORITHM, self.0)
             .map_err(|_| X25519Error::InvalidCurve)?;
@@ -48,6 +45,13 @@ impl SecretKey {
         let shared_secret = libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0)
             .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(shared_secret)
+    }
+}
+
+#[cfg(not(test))]
+impl fmt::Debug for SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SeretKey").field(&"***").finish()
     }
 }
 

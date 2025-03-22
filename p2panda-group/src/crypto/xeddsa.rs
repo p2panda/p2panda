@@ -59,8 +59,8 @@ pub fn xeddsa_sign<RNG: RandProvider>(
         rng.random_array().map_err(|err| XEdDSAError::Rand(err))?;
 
     // calculate_key_pair
-    let key_data = secret_key.to_bytes();
-    let a = Scalar::from_bytes_mod_order(key_data);
+    let key_data = secret_key.as_bytes();
+    let a = Scalar::from_bytes_mod_order(*key_data);
     let ed_public_key_point = &a * ED25519_BASEPOINT_TABLE;
     let ed_public_key = ed_public_key_point.compress();
     let sign_bit = ed_public_key.as_bytes()[31] & 0b1000_0000_u8;
@@ -157,7 +157,7 @@ pub enum XEdDSAError<RNG: RandProvider> {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Crypto, SecretKey};
+    use crate::crypto::{Crypto, SecretKey, XEdDSAError};
     use crate::traits::RandProvider;
 
     use super::{xeddsa_sign, xeddsa_verify};
@@ -171,5 +171,34 @@ mod tests {
 
         let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
         assert!(xeddsa_verify::<Crypto>(b"Hello, Panda!", &public_key, &signature).is_ok());
+    }
+
+    #[test]
+    fn failed_verify() {
+        let rng = Crypto::from_seed([1; 32]);
+
+        let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
+        let public_key = secret_key.public_key().unwrap();
+        let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
+
+        let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
+        let invalid_public_key = invalid_secret_key.public_key().unwrap();
+        let invalid_signature = xeddsa_sign(b"Hello, Panda!", &invalid_secret_key, &rng).unwrap();
+
+        assert_ne!(public_key, invalid_public_key);
+        assert_ne!(signature, invalid_signature);
+
+        assert!(matches!(
+            xeddsa_verify::<Crypto>(b"Invalid Data", &public_key, &signature),
+            Err(XEdDSAError::VerificationFailed)
+        ));
+        assert!(matches!(
+            xeddsa_verify::<Crypto>(b"Hello, Panda!", &invalid_public_key, &signature),
+            Err(XEdDSAError::VerificationFailed)
+        ));
+        assert!(matches!(
+            xeddsa_verify::<Crypto>(b"Hello, Panda!", &public_key, &invalid_signature),
+            Err(XEdDSAError::VerificationFailed)
+        ));
     }
 }

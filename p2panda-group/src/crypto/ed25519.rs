@@ -11,7 +11,8 @@ pub const SIGNING_KEY_SIZE: usize = 32;
 pub const VERIFYING_KEY_SIZE: usize = 32;
 pub const SIGNATURE_SIZE: usize = 64;
 
-#[derive(Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+#[cfg_attr(test, derive(Debug))]
 pub struct SigningKey([u8; SIGNING_KEY_SIZE]);
 
 impl SigningKey {
@@ -28,10 +29,6 @@ impl SigningKey {
         &self.0
     }
 
-    pub fn to_bytes(&self) -> [u8; SIGNING_KEY_SIZE] {
-        self.0
-    }
-
     pub fn verifying_key(&self) -> VerifyingKey {
         let mut bytes = [0u8; VERIFYING_KEY_SIZE];
         libcrux_ed25519::secret_to_public(&mut bytes, &self.0);
@@ -42,6 +39,13 @@ impl SigningKey {
         let bytes =
             libcrux_ed25519::sign(bytes, &self.0).map_err(|_| SignatureError::SigningFailed)?;
         Ok(Signature(bytes))
+    }
+}
+
+#[cfg(not(test))]
+impl fmt::Debug for SigningKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SigningKey").field(&"***").finish()
     }
 }
 
