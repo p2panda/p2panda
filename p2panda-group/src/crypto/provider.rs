@@ -6,15 +6,14 @@ use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
 use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xchacha20, xeddsa};
-use crate::provider::{CryptoProvider, RandProvider, XCryptoProvider};
+use crate::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 
-/// Default cryptographic algorithms and secure random number provider for `p2panda-group`.
 #[derive(Debug)]
-pub struct Provider {
+pub struct Crypto {
     rng: RwLock<rand_chacha::ChaCha20Rng>,
 }
 
-impl Default for Provider {
+impl Default for Crypto {
     fn default() -> Self {
         Self {
             rng: RwLock::new(rand_chacha::ChaCha20Rng::from_os_rng()),
@@ -23,7 +22,7 @@ impl Default for Provider {
 }
 
 #[cfg(test)]
-impl Provider {
+impl Crypto {
     pub fn from_seed(seed: [u8; 32]) -> Self {
         Self {
             rng: RwLock::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
@@ -31,7 +30,7 @@ impl Provider {
     }
 }
 
-impl CryptoProvider for Provider {
+impl CryptoProvider for Crypto {
     type Error = CryptoError<Self>;
 
     type AeadNonce = aead::AeadNonce;
@@ -128,7 +127,7 @@ impl CryptoProvider for Provider {
     }
 }
 
-impl XCryptoProvider for Provider {
+impl XCryptoProvider for Crypto {
     type Error = XCryptoError<Self>;
 
     type XAeadNonce = xchacha20::XAeadNonce;
@@ -192,7 +191,7 @@ impl XCryptoProvider for Provider {
     }
 }
 
-impl RandProvider for Provider {
+impl RandProvider for Crypto {
     type Error = RandError;
 
     fn random_array<const N: usize>(&self) -> Result<[u8; N], Self::Error> {
@@ -259,19 +258,19 @@ pub enum RandError {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::RandProvider;
+    use crate::traits::RandProvider;
 
-    use super::Provider;
+    use super::Crypto;
 
     #[test]
     fn deterministic_randomness() {
         let sample_1 = {
-            let rng = Provider::from_seed([1; 32]);
+            let rng = Crypto::from_seed([1; 32]);
             rng.random_vec(128).unwrap()
         };
 
         let sample_2 = {
-            let rng = Provider::from_seed([1; 32]);
+            let rng = Crypto::from_seed([1; 32]);
             rng.random_vec(128).unwrap()
         };
 

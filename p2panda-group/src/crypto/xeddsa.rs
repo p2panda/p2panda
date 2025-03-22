@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::crypto::ed25519::SIGNATURE_SIZE;
 use crate::crypto::sha2::sha2_512;
 use crate::crypto::x25519::{PublicKey, SecretKey};
-use crate::provider::RandProvider;
+use crate::traits::RandProvider;
 
 const HASH_1_PREFIX: [u8; 32] = [
     0xFEu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
@@ -144,19 +144,19 @@ pub enum XEdDSAError<RNG: RandProvider> {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::x25519::SecretKey;
-    use crate::provider::{Provider, RandProvider};
+    use crate::crypto::{Crypto, SecretKey};
+    use crate::traits::RandProvider;
 
     use super::{xeddsa_sign, xeddsa_verify};
 
     #[test]
     fn xeddsa_signatures() {
-        let rng = Provider::from_seed([1; 32]);
+        let rng = Crypto::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let public_key = secret_key.public_key().unwrap();
 
         let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
-        assert!(xeddsa_verify::<Provider>(b"Hello, Panda!", &public_key, &signature).is_ok());
+        assert!(xeddsa_verify::<Crypto>(b"Hello, Panda!", &public_key, &signature).is_ok());
     }
 }

@@ -94,13 +94,14 @@ pub enum SignatureError {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::{Provider, RandProvider};
+    use crate::crypto::Crypto;
+    use crate::traits::RandProvider;
 
     use super::{SignatureError, SigningKey};
 
     #[test]
     fn sign_and_verify() {
-        let rng = Provider::from_seed([1; 32]);
+        let rng = Crypto::from_seed([1; 32]);
 
         let signing_key = SigningKey::from_bytes(rng.random_array().unwrap());
         let verifying_key = signing_key.verifying_key();
@@ -111,7 +112,7 @@ mod tests {
 
     #[test]
     fn failed_verify() {
-        let rng = Provider::from_seed([1; 32]);
+        let rng = Crypto::from_seed([1; 32]);
 
         let signing_key = SigningKey::from_bytes(rng.random_array().unwrap());
         let verifying_key = signing_key.verifying_key();

@@ -70,13 +70,14 @@ pub enum AeadError {
 
 #[cfg(test)]
 mod tests {
-    use crate::provider::{Provider, RandProvider};
+    use crate::crypto::Crypto;
+    use crate::traits::RandProvider;
 
     use super::{AeadError, AeadKey, AeadNonce, aead_decrypt, aead_encrypt};
 
     #[test]
     fn encrypt_decrypt() {
-        let rng = Provider::from_seed([1; 32]);
+        let rng = Crypto::from_seed([1; 32]);
 
         let key: AeadKey = rng.random_array().unwrap();
         let nonce: AeadNonce = rng.random_array().unwrap();
@@ -89,7 +90,7 @@ mod tests {
 
     #[test]
     fn decryption_failed() {
-        let rng = Provider::from_seed([1; 32]);
+        let rng = Crypto::from_seed([1; 32]);
 
         let key: AeadKey = rng.random_array().unwrap();
         let nonce: AeadNonce = rng.random_array().unwrap();

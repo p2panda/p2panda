@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Traits definining interfaces for interacting with cryptographic algorithms and providing random
-//! number generation used for group encryption schemes.
+//! Interface definitions for providing cryptographic algorithms and random number generators used
+//! by p2panda's group encryption schemes.
 use std::error::Error;
 
 /// Provider for Authenticated Encryption with Additional Data (AEAD), Hybrid Public Key Encryption

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(feature = "provider")]
+#[cfg(feature = "crypto")]
 pub mod crypto;
-pub mod provider;
+pub mod traits;
