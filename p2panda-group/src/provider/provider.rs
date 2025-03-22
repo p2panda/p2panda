@@ -5,8 +5,8 @@ use std::sync::RwLock;
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
-use crate::crypto::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xchacha20, xeddsa};
+use crate::provider::{CryptoProvider, RandProvider, XCryptoProvider};
 
 /// Default cryptographic algorithms and secure random number provider for `p2panda-group`.
 #[derive(Debug)]
@@ -259,7 +259,7 @@ pub enum RandError {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::RandProvider;
+    use crate::provider::RandProvider;
 
     use super::Provider;
 

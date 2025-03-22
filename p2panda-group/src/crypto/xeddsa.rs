@@ -11,8 +11,8 @@ use thiserror::Error;
 
 use crate::crypto::ed25519::SIGNATURE_SIZE;
 use crate::crypto::sha2::sha2_512;
-use crate::crypto::traits::RandProvider;
 use crate::crypto::x25519::{PublicKey, SecretKey};
+use crate::provider::RandProvider;
 
 const HASH_1_PREFIX: [u8; 32] = [
     0xFEu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
@@ -145,7 +145,7 @@ pub enum XEdDSAError<RNG: RandProvider> {
 #[cfg(test)]
 mod tests {
     use crate::crypto::x25519::SecretKey;
-    use crate::crypto::{Provider, RandProvider};
+    use crate::provider::{Provider, RandProvider};
 
     use super::{xeddsa_sign, xeddsa_verify};
 

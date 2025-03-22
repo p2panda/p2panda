@@ -74,7 +74,7 @@ pub enum X25519Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Provider, RandProvider};
+    use crate::provider::{Provider, RandProvider};
 
     use super::SecretKey;
 

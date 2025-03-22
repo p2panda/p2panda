@@ -4,8 +4,8 @@
 use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem};
 use thiserror::Error;
 
-use crate::crypto::RandProvider;
 use crate::crypto::x25519::{PublicKey, SecretKey};
+use crate::provider::RandProvider;
 
 const KEM: kem::KEM = kem::KEM::DHKEM_X25519_HKDF_SHA256;
 const KDF: kdf::KDF = kdf::KDF::HKDF_SHA256;
@@ -84,7 +84,7 @@ pub enum HpkeError<RNG: RandProvider> {
 #[cfg(test)]
 mod tests {
     use crate::crypto::x25519::SecretKey;
-    use crate::crypto::{Provider, RandProvider};
+    use crate::provider::{Provider, RandProvider};
 
     use super::{HpkeError, hpke_open, hpke_seal};
 

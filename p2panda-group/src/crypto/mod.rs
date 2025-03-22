@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Trait interfaces and implementations for providing encryption, digital signing, hashing and
-//! other cryptographic algorithms and random number generators.
-mod aead;
-mod ed25519;
-mod hkdf;
-mod hpke;
-mod provider;
-mod sha2;
-mod traits;
-mod x25519;
-mod xchacha20;
-mod xeddsa;
-
-pub use aead::{AeadKey, AeadNonce};
-pub use hpke::HpkeCiphertext;
-pub use provider::{CryptoError, Provider, ProviderError, RandError};
-pub use traits::{CryptoProvider, RandProvider, XCryptoProvider};
+/// Implementations using `libcrux` and other crates for all cryptographic algorithms required for
+/// group encryption.
+pub mod aead;
+pub mod ed25519;
+pub mod hkdf;
+pub mod hpke;
+pub mod sha2;
+pub mod x25519;
+pub mod xchacha20;
+pub mod xeddsa;

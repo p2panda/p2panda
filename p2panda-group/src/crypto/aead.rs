@@ -70,8 +70,7 @@ pub enum AeadError {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::provider::Provider;
-    use crate::crypto::traits::RandProvider;
+    use crate::provider::{Provider, RandProvider};
 
     use super::{AeadError, AeadKey, AeadNonce, aead_decrypt, aead_encrypt};
 

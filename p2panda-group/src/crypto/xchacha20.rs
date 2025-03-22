@@ -55,7 +55,7 @@ pub enum XAeadError {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Provider, RandProvider};
+    use crate::provider::{Provider, RandProvider};
 
     use super::{XAeadKey, XAeadNonce, x_aead_decrypt, x_aead_encrypt};
 
