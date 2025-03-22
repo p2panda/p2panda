@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Edwards-Curve Digital Signature Algorithm (EdDSA) related to Curve25519 using SHA-512.
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zeroize::ZeroizeOnDrop;
@@ -59,6 +61,10 @@ impl VerifyingKey {
         self.0
     }
 
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+
     pub fn verify(&self, bytes: &[u8], signature: &Signature) -> Result<(), SignatureError> {
         libcrux_ed25519::verify(bytes, &self.0, &signature.0)
             .map_err(|_| SignatureError::VerificationFailed)?;
@@ -66,8 +72,14 @@ impl VerifyingKey {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Signature([u8; SIGNATURE_SIZE]);
+impl fmt::Display for VerifyingKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Signature(#[serde(with = "serde_bytes")] [u8; SIGNATURE_SIZE]);
 
 impl Signature {
     pub fn from_bytes(bytes: [u8; SIGNATURE_SIZE]) -> Self {
@@ -80,6 +92,16 @@ impl Signature {
 
     pub fn to_bytes(&self) -> [u8; SIGNATURE_SIZE] {
         self.0
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 

@@ -5,8 +5,7 @@
 use std::error::Error;
 
 /// Provider for Authenticated Encryption with Additional Data (AEAD), Hybrid Public Key Encryption
-/// (HPKE), Hybrid Key Derivation Function (HKDF), Digital Signature Algorithm (DSA) and
-/// Cryptographically Secure Hashing.
+/// (HPKE), Hybrid Key Derivation Function (HKDF) and Digital Signature Algorithm (DSA).
 pub trait CryptoProvider {
     type Error: Error;
 
@@ -64,8 +63,6 @@ pub trait CryptoProvider {
         info: Option<&[u8]>,
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, Self::Error>;
-
-    fn hash(&self, bytes: &[&[u8]]) -> Result<Vec<u8>, Self::Error>;
 
     fn sign(
         &self,

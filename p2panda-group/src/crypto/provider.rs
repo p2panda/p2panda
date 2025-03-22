@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
-use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xchacha20, xeddsa};
+use crate::crypto::{aead, ed25519, hkdf, hpke, x25519, xchacha20, xeddsa};
 use crate::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 
 #[derive(Debug)]
@@ -101,10 +101,6 @@ impl CryptoProvider for Crypto {
     ) -> Result<Vec<u8>, Self::Error> {
         let plaintext = hpke::hpke_open(input, secret_key, info, aad)?;
         Ok(plaintext)
-    }
-
-    fn hash(&self, bytes: &[&[u8]]) -> Result<Vec<u8>, Self::Error> {
-        Ok(sha2::sha2_512(bytes).to_vec())
     }
 
     fn sign(

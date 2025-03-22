@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Hybrid Public Key Encryption with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD parameters.
+//! Hybrid Public Key Encryption (HPKE) with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
+//! parameters.
 use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::{PublicKey, SecretKey};
@@ -11,9 +13,12 @@ const KEM: kem::KEM = kem::KEM::DHKEM_X25519_HKDF_SHA256;
 const KDF: kdf::KDF = kdf::KDF::HKDF_SHA256;
 const AEAD: aead::AEAD = aead::AEAD::AES_256_GCM;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HpkeCiphertext {
+    #[serde(with = "serde_bytes")]
     pub kem_output: Vec<u8>,
+
+    #[serde(with = "serde_bytes")]
     pub ciphertext: Vec<u8>,
 }
 

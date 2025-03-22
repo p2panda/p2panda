@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! XChaCha20Poly1305 is a ChaCha20Poly1305 AEAD variant with an extended 192-bit (24-byte) nonce.
+//! XChaCha20Poly1305 is a ChaCha20 AEAD variant with an extended 192-bit (24-byte) nonce.
 use chacha20poly1305::{AeadInPlace, Key, KeyInit, XChaCha20Poly1305, XNonce};
 use thiserror::Error;
 
+/// 192-bit nonce.
 pub type XAeadNonce = [u8; 24];
 
+/// 256-bit key.
 pub type XAeadKey = [u8; 32];
 
 pub fn x_aead_encrypt(
@@ -39,23 +41,23 @@ pub fn x_aead_decrypt(
     let cipher = XChaCha20Poly1305::new(key);
     cipher
         .decrypt_in_place(nonce, aad.unwrap_or_default(), &mut plaintext)
-        .map_err(XAeadError::Encrypt)?;
+        .map_err(XAeadError::Decrypt)?;
 
     Ok(plaintext)
 }
 
 #[derive(Debug, Error)]
 pub enum XAeadError {
-    #[error("could not encrypt with xchacha20poly1305 aead: {0}")]
+    #[error("plaintext could not be encrypted with xchacha20 aead: {0}")]
     Encrypt(chacha20poly1305::Error),
 
-    #[error("could not decrypt with xchacha20poly1305 aead: {0}")]
+    #[error("ciphertext could not be decrypted with xchacha20 aead: {0}")]
     Decrypt(chacha20poly1305::Error),
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::Crypto;
+    use crate::crypto::{Crypto, XAeadError};
     use crate::traits::RandProvider;
 
     use super::{XAeadKey, XAeadNonce, x_aead_decrypt, x_aead_encrypt};
@@ -71,5 +73,36 @@ mod tests {
         let plaintext = x_aead_decrypt(&key, &ciphertext, nonce, None).unwrap();
 
         assert_eq!(plaintext, b"Hello, Panda!");
+    }
+
+    #[test]
+    fn decryption_failed() {
+        let rng = Crypto::from_seed([1; 32]);
+
+        let key: XAeadKey = rng.random_array().unwrap();
+        let nonce: XAeadNonce = rng.random_array().unwrap();
+
+        let ciphertext = x_aead_encrypt(&key, b"Hello, Panda!", nonce, None).unwrap();
+
+        let invalid_key: XAeadKey = rng.random_array().unwrap();
+        let invalid_nonce: XAeadNonce = rng.random_array().unwrap();
+
+        // Invalid key.
+        assert!(matches!(
+            x_aead_decrypt(&invalid_key, &ciphertext, nonce, None),
+            Err(XAeadError::Decrypt(chacha20poly1305::Error))
+        ));
+
+        // Invalid nonce.
+        assert!(matches!(
+            x_aead_decrypt(&key, &ciphertext, invalid_nonce, None),
+            Err(XAeadError::Decrypt(chacha20poly1305::Error))
+        ));
+
+        // Invalid additional data.
+        assert!(matches!(
+            x_aead_decrypt(&key, &ciphertext, nonce, Some(b"invalid aad")),
+            Err(XAeadError::Decrypt(chacha20poly1305::Error))
+        ));
     }
 }

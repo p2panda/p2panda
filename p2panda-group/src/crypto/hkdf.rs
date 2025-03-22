@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Hybrid Key-Derivation-Function (HKDF) using hash-mode with SHA256.
+//! Hybrid Key-Derivation-Function (HKDF) using "hash-mode" with SHA256.
 use libcrux::hkdf::Algorithm;
 use thiserror::Error;
 

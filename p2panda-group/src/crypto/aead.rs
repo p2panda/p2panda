@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! AES-256-GCM authenticated symmetric encryption with additional data (AEAD) with 256-bit key,
-//! 16-bit tag and 96-bit nonce.
+//! AES-256-GCM authenticated encryption with additional data (AEAD).
 use libcrux::aead::{Algorithm, Iv, Key, Tag, decrypt_detached, encrypt_detached};
 use thiserror::Error;
 
 const AEAD_ALGORITHM: Algorithm = Algorithm::Aes256Gcm;
 
+/// 96-bit nonce.
 pub type AeadNonce = [u8; AEAD_ALGORITHM.nonce_size()];
 
+/// 256-bit secret key.
 pub type AeadKey = [u8; AEAD_ALGORITHM.key_size()];
 
 pub fn aead_encrypt(
@@ -61,10 +62,10 @@ pub enum AeadError {
     #[error("invalid aead argument: {0}")]
     InvalidArgument(libcrux::aead::InvalidArgumentError),
 
-    #[error("could not encrypt with aead: {0}")]
+    #[error("plaintext could not be encrypted with aead: {0}")]
     Encrypt(libcrux::aead::EncryptError),
 
-    #[error("could not decrypt with aead: {0}")]
+    #[error("ciphertext could not be decrypted with aead: {0}")]
     Decrypt(libcrux::aead::DecryptError),
 }
 
@@ -98,10 +99,27 @@ mod tests {
         let ciphertext = aead_encrypt(&key, b"Hello, Panda!", nonce, None).unwrap();
 
         let invalid_key: AeadKey = rng.random_array().unwrap();
-        let result = aead_decrypt(&invalid_key, &ciphertext, nonce, None);
+        let invalid_nonce: AeadNonce = rng.random_array().unwrap();
 
+        // Invalid key.
         assert!(matches!(
-            result,
+            aead_decrypt(&invalid_key, &ciphertext, nonce, None),
+            Err(AeadError::Decrypt(
+                libcrux::aead::DecryptError::DecryptionFailed
+            ))
+        ));
+
+        // Invalid nonce.
+        assert!(matches!(
+            aead_decrypt(&key, &ciphertext, invalid_nonce, None),
+            Err(AeadError::Decrypt(
+                libcrux::aead::DecryptError::DecryptionFailed
+            ))
+        ));
+
+        // Invalid additional data.
+        assert!(matches!(
+            aead_decrypt(&key, &ciphertext, nonce, Some(b"invalid aad")),
             Err(AeadError::Decrypt(
                 libcrux::aead::DecryptError::DecryptionFailed
             ))

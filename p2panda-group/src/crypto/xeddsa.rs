@@ -4,8 +4,11 @@
 //! and Ed25199 signatures.
 //!
 //! <https://signal.org/docs/specifications/xeddsa/>
+use std::fmt;
+
 use curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 use curve25519_dalek::{EdwardsPoint, MontgomeryPoint, Scalar};
+use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use thiserror::Error;
 
@@ -20,8 +23,8 @@ const HASH_1_PREFIX: [u8; 32] = [
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
 ];
 
-#[derive(Copy, Clone, Debug)]
-pub struct XSignature([u8; SIGNATURE_SIZE]);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XSignature(#[serde(with = "serde_bytes")] [u8; SIGNATURE_SIZE]);
 
 impl XSignature {
     pub fn from_bytes(bytes: [u8; SIGNATURE_SIZE]) -> Self {
@@ -34,6 +37,16 @@ impl XSignature {
 
     pub fn to_bytes(self) -> [u8; SIGNATURE_SIZE] {
         self.0
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
+
+impl fmt::Display for XSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 

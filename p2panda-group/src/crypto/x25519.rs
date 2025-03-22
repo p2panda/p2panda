@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
+use std::fmt;
+
 use libcrux::ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -11,8 +13,8 @@ const ALGORITHM: Algorithm = Algorithm::X25519;
 pub const SECRET_KEY_SIZE: usize = 32;
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
-#[derive(Clone, Debug, Serialize, Deserialize, ZeroizeOnDrop)]
-pub struct SecretKey([u8; SECRET_KEY_SIZE]);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+pub struct SecretKey(#[serde(with = "serde_bytes")] [u8; SECRET_KEY_SIZE]);
 
 impl SecretKey {
     pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
@@ -50,7 +52,7 @@ impl SecretKey {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
+pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; PUBLIC_KEY_SIZE]);
 
 impl PublicKey {
     pub fn from_bytes(public_key: [u8; PUBLIC_KEY_SIZE]) -> Self {
@@ -63,6 +65,16 @@ impl PublicKey {
 
     pub fn to_bytes(self) -> [u8; PUBLIC_KEY_SIZE] {
         self.0
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
+
+impl fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 
