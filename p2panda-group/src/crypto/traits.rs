@@ -101,8 +101,6 @@ pub trait XCryptoProvider {
 
     type XSignature;
 
-    type XAgreement;
-
     fn x_aead_encrypt(
         &self,
         key: &Self::XAeadKey,
@@ -136,7 +134,7 @@ pub trait XCryptoProvider {
         &self,
         secret_key: &Self::XSigningKey,
         public_key: &Self::XVerifyingKey,
-    ) -> Result<Self::XAgreement, Self::Error>;
+    ) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// Provider for a Cryptographically Secure Pseudo-Random Number Generator (CSPRNG).

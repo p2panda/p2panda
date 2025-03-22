@@ -141,8 +141,6 @@ impl XCryptoProvider for Provider {
 
     type XSignature = xeddsa::XSignature;
 
-    type XAgreement = x25519::XAgreement;
-
     fn x_aead_encrypt(
         &self,
         key: &Self::XAeadKey,
@@ -188,7 +186,7 @@ impl XCryptoProvider for Provider {
         &self,
         secret_key: &Self::XSigningKey,
         public_key: &Self::XVerifyingKey,
-    ) -> Result<Self::XAgreement, Self::Error> {
+    ) -> Result<Vec<u8>, Self::Error> {
         let agreement = secret_key.calculate_agreement(public_key)?;
         Ok(agreement)
     }
