@@ -4,6 +4,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 use zeroize::ZeroizeOnDrop;
 
@@ -11,12 +12,12 @@ pub const SIGNING_KEY_SIZE: usize = 32;
 pub const VERIFYING_KEY_SIZE: usize = 32;
 pub const SIGNATURE_SIZE: usize = 64;
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Clone, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
 #[cfg_attr(test, derive(Debug))]
 pub struct SigningKey([u8; SIGNING_KEY_SIZE]);
 
 impl SigningKey {
-    pub fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
+    pub(crate) fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
         // Clamping
         let mut bytes = bytes;
         bytes[0] &= 248u8;
@@ -25,7 +26,7 @@ impl SigningKey {
         SigningKey(bytes)
     }
 
-    pub fn as_bytes(&self) -> &[u8; SIGNING_KEY_SIZE] {
+    pub(crate) fn as_bytes(&self) -> &[u8; SIGNING_KEY_SIZE] {
         &self.0
     }
 
@@ -39,6 +40,12 @@ impl SigningKey {
         let bytes =
             libcrux_ed25519::sign(bytes, &self.0).map_err(|_| SignatureError::SigningFailed)?;
         Ok(Signature(bytes))
+    }
+}
+
+impl PartialEq for SigningKey {
+    fn eq(&self, other: &Self) -> bool {
+        bool::from(self.0.ct_eq(&other.0))
     }
 }
 

@@ -5,6 +5,7 @@ use std::fmt::{self, Debug};
 
 use libcrux::ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 use zeroize::ZeroizeOnDrop;
 
@@ -13,12 +14,12 @@ const ALGORITHM: Algorithm = Algorithm::X25519;
 pub const SECRET_KEY_SIZE: usize = 32;
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Clone, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
 #[cfg_attr(test, derive(Debug))]
 pub struct SecretKey(#[serde(with = "serde_bytes")] [u8; SECRET_KEY_SIZE]);
 
 impl SecretKey {
-    pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
+    pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         // Clamping
         let mut bytes = bytes;
         bytes[0] &= 248u8;
@@ -27,7 +28,7 @@ impl SecretKey {
         SecretKey(bytes)
     }
 
-    pub fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
+    pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
         &self.0
     }
 
@@ -45,6 +46,12 @@ impl SecretKey {
         let shared_secret = libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0)
             .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(shared_secret)
+    }
+}
+
+impl PartialEq for SecretKey {
+    fn eq(&self, other: &Self) -> bool {
+        bool::from(self.0.ct_eq(&other.0))
     }
 }
 
