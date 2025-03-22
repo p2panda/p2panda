@@ -43,15 +43,31 @@ impl SecretKey {
         ))
     }
 
-    pub fn calculate_agreement(
-        &self,
-        their_public: &PublicKey,
-    ) -> Result<[u8; AGREEMENT_SIZE], X25519Error> {
+    pub fn calculate_agreement(&self, their_public: &PublicKey) -> Result<XAgreement, X25519Error> {
         let shared_secret = libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0)
             .map_err(|_| X25519Error::InvalidCurve)?;
-        Ok(shared_secret
-            .try_into()
-            .expect("correct shared secret size from ecdh method"))
+        Ok(XAgreement::from_bytes(
+            shared_secret
+                .try_into()
+                .expect("correct shared secret size from ecdh method"),
+        ))
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct XAgreement([u8; AGREEMENT_SIZE]);
+
+impl XAgreement {
+    pub fn from_bytes(bytes: [u8; AGREEMENT_SIZE]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; AGREEMENT_SIZE] {
+        &self.0
+    }
+
+    pub fn to_bytes(self) -> [u8; AGREEMENT_SIZE] {
+        self.0
     }
 }
 

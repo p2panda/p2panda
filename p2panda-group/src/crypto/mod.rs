@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Trait interfaces and implementations for providing encryption, digital signing, hashing and
+//! other cryptographic algorithms and random number generators.
 mod aead;
 mod ed25519;
 mod hkdf;

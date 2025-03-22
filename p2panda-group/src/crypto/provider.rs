@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Cryptographic algorithms and secure random number provider for `p2panda-group`.
-//!
-//! Following algorithms are used:
-//! * ChaCha random number generator with 20 rounds
-//! * HPKE with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
-//! * HKDF with SHA256
-//! * SHA2-512 hashing function
-//! * EdDSA related to Curve25519 with SHA-512
-//! * ECDH key agreement with X25519
-//! * AES-256-GCM AEAD used by X3DH
-//! * XEdDSA used by X3DH
-//! * XChaCha20Poly1305 AEAD used by data encryption scheme
 use std::sync::RwLock;
 
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
@@ -20,6 +8,7 @@ use thiserror::Error;
 use crate::crypto::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 use crate::crypto::{aead, ed25519, hkdf, hpke, sha2, x25519, xchacha20, xeddsa};
 
+/// Default cryptographic algorithms and secure random number provider for `p2panda-group`.
 #[derive(Debug)]
 pub struct Provider {
     rng: RwLock<rand_chacha::ChaCha20Rng>,
@@ -152,6 +141,8 @@ impl XCryptoProvider for Provider {
 
     type XSignature = xeddsa::XSignature;
 
+    type XAgreement = x25519::XAgreement;
+
     fn x_aead_encrypt(
         &self,
         key: &Self::XAeadKey,
@@ -191,6 +182,15 @@ impl XCryptoProvider for Provider {
     ) -> Result<(), Self::Error> {
         xeddsa::xeddsa_verify(bytes, verifying_key, signature)?;
         Ok(())
+    }
+
+    fn x_calculate_agreement(
+        &self,
+        secret_key: &Self::XSigningKey,
+        public_key: &Self::XVerifyingKey,
+    ) -> Result<Self::XAgreement, Self::Error> {
+        let agreement = secret_key.calculate_agreement(public_key)?;
+        Ok(agreement)
     }
 }
 
@@ -245,6 +245,9 @@ pub enum XCryptoError<RNG: RandProvider> {
 
     #[error(transparent)]
     XEdDSA(#[from] xeddsa::XEdDSAError<RNG>),
+
+    #[error(transparent)]
+    X25519(#[from] x25519::X25519Error),
 }
 
 #[derive(Debug, Error)]

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Traits for core cryptographic operations and random number generation.
+//! Traits definining interfaces for interacting with cryptographic algorithms and providing random
+//! number generation used for group encryption schemes.
 use std::error::Error;
 
+/// Provider for Authenticated Encryption with Additional Data (AEAD), Hybrid Public Key Encryption
+/// (HPKE), Hybrid Key Derivation Function (HKDF), Digital Signature Algorithm (DSA) and
+/// Cryptographically Secure Hashing.
 pub trait CryptoProvider {
     type Error: Error;
 
@@ -77,6 +81,13 @@ pub trait CryptoProvider {
     ) -> Result<(), Self::Error>;
 }
 
+/// Provider for "extended" AEAD and hybrid DSA / Key Agreement algorithms.
+///
+/// Depending on the group encryption scheme we sometimes need specialised cryptographic algorithms
+/// which are not standardised. This provider offers implementation interfaces to AEAD schemes with
+/// larger nonces (allowing nonces to be generated randomly while preventing collisions leading to
+/// nonce re-use) and hybrid "EdDSA" (public-key encryption algorithms used for both DSA and key
+/// agreement).
 pub trait XCryptoProvider {
     type Error: Error;
 
@@ -89,6 +100,8 @@ pub trait XCryptoProvider {
     type XVerifyingKey;
 
     type XSignature;
+
+    type XAgreement;
 
     fn x_aead_encrypt(
         &self,
@@ -118,8 +131,15 @@ pub trait XCryptoProvider {
         verifying_key: &Self::XVerifyingKey,
         signature: &Self::XSignature,
     ) -> Result<(), Self::Error>;
+
+    fn x_calculate_agreement(
+        &self,
+        secret_key: &Self::XSigningKey,
+        public_key: &Self::XVerifyingKey,
+    ) -> Result<Self::XAgreement, Self::Error>;
 }
 
+/// Provider for a Cryptographically Secure Pseudo-Random Number Generator (CSPRNG).
 pub trait RandProvider {
     type Error: Error;
 
