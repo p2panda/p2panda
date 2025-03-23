@@ -4,17 +4,16 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use subtle::ConstantTimeEq;
 use thiserror::Error;
-use zeroize::ZeroizeOnDrop;
+
+use crate::secret::Secret;
 
 pub const SIGNING_KEY_SIZE: usize = 32;
 pub const VERIFYING_KEY_SIZE: usize = 32;
 pub const SIGNATURE_SIZE: usize = 64;
 
-#[derive(Clone, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
-#[cfg_attr(test, derive(Debug))]
-pub struct SigningKey([u8; SIGNING_KEY_SIZE]);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SigningKey(Secret<SIGNING_KEY_SIZE>);
 
 impl SigningKey {
     pub(crate) fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
@@ -23,36 +22,23 @@ impl SigningKey {
         bytes[0] &= 248u8;
         bytes[31] &= 127u8;
         bytes[31] |= 64u8;
-        SigningKey(bytes)
+        SigningKey(Secret::from_bytes(bytes))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SIGNING_KEY_SIZE] {
-        &self.0
+        &self.0.as_bytes()
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {
         let mut bytes = [0u8; VERIFYING_KEY_SIZE];
-        libcrux_ed25519::secret_to_public(&mut bytes, &self.0);
+        libcrux_ed25519::secret_to_public(&mut bytes, &self.0.as_bytes());
         VerifyingKey(bytes)
     }
 
     pub fn sign(&self, bytes: &[u8]) -> Result<Signature, SignatureError> {
-        let bytes =
-            libcrux_ed25519::sign(bytes, &self.0).map_err(|_| SignatureError::SigningFailed)?;
+        let bytes = libcrux_ed25519::sign(bytes, &self.0.as_bytes())
+            .map_err(|_| SignatureError::SigningFailed)?;
         Ok(Signature(bytes))
-    }
-}
-
-impl PartialEq for SigningKey {
-    fn eq(&self, other: &Self) -> bool {
-        bool::from(self.0.ct_eq(&other.0))
-    }
-}
-
-#[cfg(not(test))]
-impl fmt::Debug for SigningKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SigningKey").field(&"***").finish()
     }
 }
 

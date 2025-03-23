@@ -5,18 +5,17 @@ use std::fmt::{self, Debug};
 
 use libcrux::ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
-use subtle::ConstantTimeEq;
 use thiserror::Error;
-use zeroize::ZeroizeOnDrop;
+
+use crate::secret::Secret;
 
 const ALGORITHM: Algorithm = Algorithm::X25519;
 
 pub const SECRET_KEY_SIZE: usize = 32;
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
-#[derive(Clone, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
-#[cfg_attr(test, derive(Debug))]
-pub struct SecretKey(#[serde(with = "serde_bytes")] [u8; SECRET_KEY_SIZE]);
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
@@ -25,15 +24,15 @@ impl SecretKey {
         bytes[0] &= 248u8;
         bytes[31] &= 127u8;
         bytes[31] |= 64u8;
-        SecretKey(bytes)
+        SecretKey(Secret::from_bytes(bytes))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
-        &self.0
+        &self.0.as_bytes()
     }
 
     pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
-        let bytes = libcrux::ecdh::secret_to_public(ALGORITHM, self.0)
+        let bytes = libcrux::ecdh::secret_to_public(ALGORITHM, self.0.as_bytes())
             .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(PublicKey(
             bytes
@@ -43,22 +42,10 @@ impl SecretKey {
     }
 
     pub fn calculate_agreement(&self, their_public: &PublicKey) -> Result<Vec<u8>, X25519Error> {
-        let shared_secret = libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0)
-            .map_err(|_| X25519Error::InvalidCurve)?;
+        let shared_secret =
+            libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0.as_bytes())
+                .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(shared_secret)
-    }
-}
-
-impl PartialEq for SecretKey {
-    fn eq(&self, other: &Self) -> bool {
-        bool::from(self.0.ct_eq(&other.0))
-    }
-}
-
-#[cfg(not(test))]
-impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SeretKey").field(&"***").finish()
     }
 }
 
