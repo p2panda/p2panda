@@ -8,14 +8,21 @@ use thiserror::Error;
 
 use crate::secret::Secret;
 
+/// 256-bit signing key.
 pub const SIGNING_KEY_SIZE: usize = 32;
+
+/// 256-bit verifying key.
 pub const VERIFYING_KEY_SIZE: usize = 32;
+
+/// 512-bit signature.
 pub const SIGNATURE_SIZE: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigningKey(Secret<SIGNING_KEY_SIZE>);
 
 impl SigningKey {
+    // TODO: Remove this in later PRs.
+    #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
         // Clamping
         let mut bytes = bytes;
@@ -25,18 +32,20 @@ impl SigningKey {
         SigningKey(Secret::from_bytes(bytes))
     }
 
+    // TODO: Remove this in later PRs.
+    #[allow(dead_code)]
     pub(crate) fn as_bytes(&self) -> &[u8; SIGNING_KEY_SIZE] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {
         let mut bytes = [0u8; VERIFYING_KEY_SIZE];
-        libcrux_ed25519::secret_to_public(&mut bytes, &self.0.as_bytes());
+        libcrux_ed25519::secret_to_public(&mut bytes, self.0.as_bytes());
         VerifyingKey(bytes)
     }
 
     pub fn sign(&self, bytes: &[u8]) -> Result<Signature, SignatureError> {
-        let bytes = libcrux_ed25519::sign(bytes, &self.0.as_bytes())
+        let bytes = libcrux_ed25519::sign(bytes, self.0.as_bytes())
             .map_err(|_| SignatureError::SigningFailed)?;
         Ok(Signature(bytes))
     }

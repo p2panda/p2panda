@@ -82,9 +82,8 @@ pub trait CryptoProvider {
 ///
 /// Depending on the group encryption scheme we sometimes need specialised cryptographic algorithms
 /// which are not standardised. This provider offers implementation interfaces to AEAD schemes with
-/// larger nonces (allowing nonces to be generated randomly while preventing collisions leading to
-/// nonce re-use) and hybrid "EdDSA" (public-key encryption algorithms used for both DSA and key
-/// agreement).
+/// larger nonces (allowing nonces to be generated randomly, lowering risk of nonce re-use) and
+/// hybrid "EdDSA" (public-key encryption algorithms used for both DSA and key agreement).
 pub trait XCryptoProvider {
     type Error: Error;
 

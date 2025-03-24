@@ -11,13 +11,18 @@ use crate::secret::Secret;
 
 const ALGORITHM: Algorithm = Algorithm::X25519;
 
+/// 256-bit secret key size.
 pub const SECRET_KEY_SIZE: usize = 32;
+
+/// 256-bit public key size.
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
+    // TODO: Remove this in later PRs.
+    #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         // Clamping
         let mut bytes = bytes;
@@ -28,7 +33,7 @@ impl SecretKey {
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 
     pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
