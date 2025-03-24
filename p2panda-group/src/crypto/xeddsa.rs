@@ -51,39 +51,60 @@ impl fmt::Display for XSignature {
     }
 }
 
-/// Calculates an XEdDSA signature using the X25519 private key directly.
+/// Calculates an XEdDSA signature using the X25519 secret key directly.
 pub fn xeddsa_sign<RNG: RandProvider>(
     bytes: &[u8],
     secret_key: &SecretKey,
     rng: &RNG,
 ) -> Result<XSignature, XEdDSAError<RNG>> {
-    let random_bytes: [u8; SIGNATURE_SIZE] =
-        rng.random_array().map_err(|err| XEdDSAError::Rand(err))?;
+    // M = Message to sign (byte sequence)
+    let cap_m = bytes;
 
-    let key_data = secret_key.as_bytes();
-    let a = Scalar::from_bytes_mod_order(*key_data);
-    let ed_public_key_point = &a * ED25519_BASEPOINT_TABLE;
-    let ed_public_key = ed_public_key_point.compress();
-    let sign_bit = ed_public_key.as_bytes()[31] & 0b1000_0000_u8;
+    // Z = 64 bytes secure random data (byte sequence)
+    let cap_z: [u8; SIGNATURE_SIZE] = rng.random_array().map_err(|err| XEdDSAError::Rand(err))?;
 
+    // A, a = calculate_key_pair(k)
+    let (cap_a, a) = {
+        // k = Montgomery private key (integer mod q)
+        let k_bytes = secret_key.as_bytes();
+        let k = Scalar::from_bytes_mod_order(*k_bytes);
+
+        // calculate_key_pair(k)
+        let cap_e = &k * ED25519_BASEPOINT_TABLE; // E = kB
+        let mut cap_a = cap_e.compress(); // A.y = E.y
+        let sign_bit = cap_a.0[31] >> 7; // sign_bit = E.s
+        cap_a.0[31] &= 0x7F; // A.s = 0
+
+        // if E.s == 1:
+        //   a = -k (mod q)
+        // else:
+        //   a = k (mod q)
+        let a = if sign_bit == 1 { -k } else { k };
+
+        (cap_a, a)
+    };
+
+    // r = hash1(a || M || Z) (mod q)
     let r = Scalar::from_bytes_mod_order_wide(&{
         // Explicitly pass a slice to avoid generating multiple versions of update().
-        sha2_512(&[&HASH_1_PREFIX[..], &key_data[..], bytes, &random_bytes[..]])
+        sha2_512(&[&HASH_1_PREFIX[..], a.as_bytes(), cap_m, &cap_z[..]])
     });
 
+    // R = rB
     let cap_r = (&r * ED25519_BASEPOINT_TABLE).compress();
 
+    // h = hash(R || A || M) (mod q)
     let h = Scalar::from_bytes_mod_order_wide(&{
-        sha2_512(&[cap_r.as_bytes(), ed_public_key.as_bytes(), bytes])
+        sha2_512(&[cap_r.as_bytes(), cap_a.as_bytes(), cap_m])
     });
 
-    let s = (h * a) + r;
+    // s = r + ha (mod q)
+    let s = r + (h * a);
 
+    // return R || s
     let mut result = [0u8; SIGNATURE_SIZE];
     result[..32].copy_from_slice(cap_r.as_bytes());
     result[32..].copy_from_slice(s.as_bytes());
-    result[SIGNATURE_SIZE - 1] &= 0b0111_1111_u8;
-    result[SIGNATURE_SIZE - 1] |= sign_bit;
     Ok(XSignature::from_bytes(result))
 }
 
@@ -93,36 +114,59 @@ pub fn xeddsa_verify<RNG: RandProvider>(
     their_public_key: &PublicKey,
     signature: &XSignature,
 ) -> Result<(), XEdDSAError<RNG>> {
-    let signature = signature.as_bytes();
+    // M = Message to sign (byte sequence)
+    let cap_m = bytes;
 
-    let mont_point = MontgomeryPoint(their_public_key.to_bytes());
-    let ed_pub_key_point =
-        match mont_point.to_edwards((signature[SIGNATURE_SIZE - 1] & 0b1000_0000_u8) >> 7) {
-            Some(x) => x,
-            None => return Err(XEdDSAError::InvalidArgument),
-        };
-    let cap_a = ed_pub_key_point.compress();
+    // u = Montgomery public key (byte sequence of b bits).
+    let u = their_public_key;
+
+    // R || s = Signature to verify (byte sequence of 2b bits)
     let mut cap_r = [0u8; 32];
-    cap_r.copy_from_slice(&signature[..32]);
+    cap_r.copy_from_slice(&signature.as_bytes()[..32]);
     let mut s = [0u8; 32];
-    s.copy_from_slice(&signature[32..]);
+    s.copy_from_slice(&signature.as_bytes()[32..]);
     s[31] &= 0b0111_1111_u8;
+
+    // Reject s if it has excess bits.
     if (s[31] & 0b1110_0000_u8) != 0 {
         return Err(XEdDSAError::InvalidArgument);
     }
-    let minus_cap_a = -ed_pub_key_point;
 
+    // convert_mont(u):
+    //   umasked = u (mod 2|p|)
+    //   P.y = u_to_y(umasked)
+    //   P.s = 0
+    //   return P
+    let a = {
+        let mont_point = MontgomeryPoint(u.to_bytes());
+        match mont_point.to_edwards(0) {
+            Some(x) => x,
+            // if not on_curve(A):
+            //   return false
+            None => return Err(XEdDSAError::InvalidArgument),
+        }
+    };
+    let cap_a = a.compress();
+
+    // h = hash(R || A || M) (mod q)
     let h = Scalar::from_bytes_mod_order_wide(&{
         // Explicitly pass a slice to avoid generating multiple versions of update().
-        sha2_512(&[&cap_r[..], cap_a.as_bytes(), bytes])
+        sha2_512(&[&cap_r[..], cap_a.as_bytes(), cap_m])
     });
 
-    let cap_r_check_point = EdwardsPoint::vartime_double_scalar_mul_basepoint(
-        &h,
-        &minus_cap_a,
-        &Scalar::from_bytes_mod_order(s),
-    );
-    let cap_r_check = cap_r_check_point.compress();
+    // Rcheck = sB - hA
+    let cap_r_check = {
+        let minus_cap_a = -a;
+        let cap_r_check_point = EdwardsPoint::vartime_double_scalar_mul_basepoint(
+            &h,
+            &minus_cap_a,
+            &Scalar::from_bytes_mod_order(s),
+        );
+        cap_r_check_point.compress()
+    };
+
+    // if bytes_equal(R, Rcheck):
+    //   return true
     if bool::from(cap_r_check.as_bytes().ct_eq(&cap_r)) {
         Ok(())
     } else {
