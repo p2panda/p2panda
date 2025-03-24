@@ -8,6 +8,11 @@ use thiserror::Error;
 use crate::crypto::{aead, ed25519, hkdf, hpke, x25519, xchacha20, xeddsa};
 use crate::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 
+/// Default implementation of the cryptographic algorithms which can be considered the "reference
+/// implementation" of p2panda's group encryption.
+///
+/// Most of the implementations use the [`libcrux`](https://github.com/cryspen/libcrux) crate
+/// internally.
 #[derive(Debug)]
 pub struct Crypto {
     rng: RwLock<rand_chacha::ChaCha20Rng>,

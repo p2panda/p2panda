@@ -24,6 +24,7 @@ const HASH_1_PREFIX: [u8; 32] = [
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
 ];
 
+/// XEdDSA signature.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct XSignature(#[serde(with = "serde_bytes")] [u8; SIGNATURE_SIZE]);
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
-use std::fmt::{self, Debug};
+use std::fmt;
 
 use libcrux_ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,7 @@ pub const SECRET_KEY_SIZE: usize = 32;
 /// 256-bit public key size.
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
+/// Secret Curve25519 key used for ECDH key agreement.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
@@ -54,6 +55,7 @@ impl SecretKey {
     }
 }
 
+/// Public Curve25519 key used for ECDH key agreement.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; PUBLIC_KEY_SIZE]);
 

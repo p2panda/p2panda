@@ -2,6 +2,8 @@
 
 //! Hybrid Public Key Encryption (HPKE) with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
 //! parameters.
+//!
+//! <https://www.rfc-editor.org/rfc/rfc9180>
 // TODO: Switch to `libcrux-hpke` as soon as it's ready.
 use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem};
 use serde::{Deserialize, Serialize};
@@ -16,13 +18,24 @@ const AEAD: aead::AEAD = aead::AEAD::AES_256_GCM;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HpkeCiphertext {
+    /// Encrypted, shared secret generated for this transaction.
     #[serde(with = "serde_bytes")]
     pub kem_output: Vec<u8>,
 
+    /// Encrypted payload.
     #[serde(with = "serde_bytes")]
     pub ciphertext: Vec<u8>,
 }
 
+/// Encrypt a secret payload to a public key using HPKE.
+///
+/// The sender in HPKE uses a KEM to generate the shared secret as well as the encapsulation. The
+/// shared secret is then used in an AEAD (after running it through a key schedule) in order to
+/// encrypt a payload.
+///
+/// In order to encrypt a payload to a public key the sender needs to provide the receiver’s public
+/// key, some information `info` and additional data `aad` to bind the encryption to a certain
+/// context, as well as the payload `plaintext`.
 pub fn hpke_seal<RNG: RandProvider>(
     public_key: &PublicKey,
     info: Option<&[u8]>,
@@ -52,6 +65,11 @@ pub fn hpke_seal<RNG: RandProvider>(
     })
 }
 
+/// Decrypt a secret payload for a receiver holding the secret key using HPKE.
+///
+/// When decrypting the receiver uses the secret key to retrieve the shared secret and decrypt the
+/// ciphertext. The `info` and `aad` (additional data) are the same as entered on the sender’s
+/// side.
 pub fn hpke_open<RNG: RandProvider>(
     input: &HpkeCiphertext,
     secret_key: &SecretKey,

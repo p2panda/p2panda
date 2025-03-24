@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Hybrid Key-Derivation-Function (HKDF) using "hash-mode" with SHA256.
+//! Hashed Message Authentication Code (HMAC)-based key derivation function (HKDF) using
+//! "hash-mode" with SHA256.
+//!
+//! <https://www.rfc-editor.org/rfc/rfc5869>
 use libcrux_hkdf::Algorithm;
 use thiserror::Error;
 

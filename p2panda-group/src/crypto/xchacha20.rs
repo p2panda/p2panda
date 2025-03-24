@@ -5,12 +5,13 @@
 use chacha20poly1305::{AeadInPlace, Key, KeyInit, XChaCha20Poly1305, XNonce};
 use thiserror::Error;
 
-/// 192-bit nonce.
+/// "Extended" 192-bit nonce.
 pub type XAeadNonce = [u8; 24];
 
 /// 256-bit key.
 pub type XAeadKey = [u8; 32];
 
+/// XChaCha20-Poly1305 AEAD encryption function.
 pub fn x_aead_encrypt(
     key: &XAeadKey,
     plaintext: &[u8],
@@ -29,6 +30,7 @@ pub fn x_aead_encrypt(
     Ok(ciphertext)
 }
 
+/// XChaCha20-Poly1305 AEAD decryption function.
 pub fn x_aead_decrypt(
     key: &XAeadKey,
     ciphertext_tag: &[u8],
