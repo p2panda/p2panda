@@ -11,6 +11,19 @@ use crate::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 /// Default implementation of the cryptographic algorithms which can be considered the "reference
 /// implementation" of p2panda's group encryption.
 ///
+/// "Basic" Algorithms:
+/// - DHKEM-X25519 HPKE
+/// - SHA256 HKDF
+/// - ChaCha20Poly1305 AEAD
+/// - Ed25519 (SHA512) DSA
+///
+/// "Extended" Algorithms:
+/// - XEdDSA (DSA with X25519)
+/// - XChaCha20Poly1305 (large IVs)
+///
+/// Random Number Generator:
+/// - ChaCha20 stream cipher, seeded via `getrandom`
+///
 /// Most of the implementations use the [`libcrux`](https://github.com/cryspen/libcrux) crate
 /// internally.
 #[derive(Debug)]
