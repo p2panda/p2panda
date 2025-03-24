@@ -6,16 +6,104 @@ use std::sync::Arc;
 use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
-use tokio::sync::{RwLock, mpsc, oneshot};
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
-use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
+use crate::TopicId;
+
+use super::ToEngineActor;
+
+// @TODO(glyph): the TopicStreams struct is where we keep the reference counters for the stream
+// subscribers.
+
+#[derive(Debug)]
+pub struct TopicStreamSender<T> {
+    topic: T,
+    stream_id: usize,
+    to_network_tx: mpsc::Sender<ToNetwork>,
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+}
+
+impl<T> TopicStreamSender<T>
+where
+    T: TopicQuery + TopicId + 'static,
+{
+    async fn new(
+        topic: T,
+        stream_id: usize,
+        to_network_tx: mpsc::Sender<ToNetwork>,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+    ) -> Self {
+        Self {
+            topic,
+            stream_id,
+            to_network_tx,
+            engine_actor_tx,
+        }
+    }
+
+    async fn send(&mut self, to_network_bytes: ToNetwork) -> Result<(), SendError<ToNetwork>> {
+        self.to_network_tx.send(to_network_bytes).await?;
+
+        Ok(())
+    }
+}
+
+impl<T> Drop for TopicStreamSender<T> {
+    fn drop(&mut self) {
+        todo!()
+
+        // self.engine_actor_tx.send(ToEngineActor::UnsubscribeTopic { .. })
+    }
+}
+
+#[derive(Debug)]
+pub struct TopicStreamReceiver<T> {
+    topic: T,
+    stream_id: usize,
+    from_network_rx: mpsc::Receiver<FromNetwork>,
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+}
+
+impl<T> TopicStreamReceiver<T>
+where
+    T: TopicQuery + TopicId + 'static,
+{
+    async fn new(
+        topic: T,
+        stream_id: usize,
+        from_network_rx: mpsc::Receiver<FromNetwork>,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+    ) -> Self {
+        Self {
+            topic,
+            stream_id,
+            from_network_rx,
+            engine_actor_tx,
+        }
+    }
+
+    // @TODO(glyph): Probably want to implement `recv()`, `recv_many()` and `try_recv()`.
+
+    async fn recv(&mut self) -> Option<FromNetwork> {
+        self.from_network_rx.recv().await
+    }
+}
+
+impl<T> Drop for TopicStreamReceiver<T> {
+    fn drop(&mut self) {
+        todo!()
+
+        // self.engine_actor_tx.send(ToEngineActor::UnsubscribeTopic { .. })
+    }
+}
 
 /// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
@@ -26,6 +114,7 @@ type TopicStreamId = usize;
 /// Manages subscriptions to topics in form of data streams.
 ///
 /// A stream has quite a bit of state to deal with, this includes:
+///
 /// 1. Try to enter a gossip overlay for sending messages in "live mode" over a topic id.
 /// 2. Help the sync manager with learning about topics of interest and guide it to connect to
 ///    peers for syncing up state with them.
@@ -38,6 +127,7 @@ type TopicStreamId = usize;
 #[derive(Debug)]
 pub struct TopicStreams<T> {
     address_book: AddressBook,
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
     gossip_actor_tx: mpsc::Sender<ToGossipActor>,
     gossip_buffer: GossipBuffer,
     gossip_joined: Arc<RwLock<HashSet<[u8; 32]>>>,
@@ -54,12 +144,14 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
-        gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         address_book: AddressBook,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+        gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
     ) -> Self {
         Self {
             address_book,
+            engine_actor_tx,
             gossip_actor_tx,
             gossip_buffer: Default::default(),
             gossip_joined: Arc::new(RwLock::new(HashSet::new())),
@@ -85,13 +177,42 @@ where
     pub async fn subscribe(
         &mut self,
         topic: T,
-        from_network_tx: mpsc::Sender<FromNetwork>,
-        mut to_network_rx: mpsc::Receiver<ToNetwork>,
+        topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
+        topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
+        let (to_network_tx, mut to_network_rx) = mpsc::channel::<ToNetwork>(128);
+        let (from_network_tx, from_network_rx) = mpsc::channel::<FromNetwork>(128);
+
         // Every subscription stream receives its own unique identifier.
         let stream_id = self.next_stream_id;
         self.next_stream_id += 1;
+
+        // Create two parts of a topic stream channel. These are used to send bytes into the
+        // network and receive bytes out of the network. Unsubscribe "clean up" actions will
+        // be triggered when both the sender and receiver have been dropped.
+        let topic_stream_tx = TopicStreamSender::new(
+            topic.clone(),
+            stream_id,
+            to_network_tx,
+            self.engine_actor_tx.clone(),
+        )
+        .await;
+        let topic_stream_rx = TopicStreamReceiver::new(
+            topic.clone(),
+            stream_id,
+            from_network_rx,
+            self.engine_actor_tx.clone(),
+        )
+        .await;
+
+        // Send the topic stream channels back to the subscriber.
+        if topic_stream_sender_tx.send(topic_stream_tx).is_err() {
+            warn!("topic stream sender oneshot receiver dropped")
+        }
+        if topic_stream_receiver_tx.send(topic_stream_rx).is_err() {
+            warn!("topic stream receiver oneshot receiver dropped")
+        }
 
         // Prepare all relevant earmarks and data streams to aid other processes dealing with
         // gossip, buffering or sync.
