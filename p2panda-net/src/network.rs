@@ -121,29 +121,29 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use futures_lite::StreamExt;
 use futures_util::future::{MapErr, Shared};
 use futures_util::{FutureExt, TryFutureExt};
 use iroh::{Endpoint, RelayMap, RelayNode};
-use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
+use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
 use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{Instrument, debug, error, error_span, warn};
+use tracing::{debug, error, error_span, warn, Instrument};
 
-use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
-use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
-use crate::engine::Engine;
+use crate::addrs::{to_node_addr, to_relay_url, DEFAULT_STUN_PORT};
+use crate::config::{Config, GossipConfig, DEFAULT_BIND_PORT};
+use crate::engine::{Engine, TopicStreamReceiver, TopicStreamSender};
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
-use crate::sync::{SYNC_CONNECTION_ALPN, SyncConfiguration};
-use crate::{NetworkId, NodeAddress, RelayUrl, TopicId, from_private_key};
+use crate::sync::{SyncConfiguration, SYNC_CONNECTION_ALPN};
+use crate::{from_private_key, NetworkId, NodeAddress, RelayUrl, TopicId};
 
 /// Maximum number of streams accepted on a QUIC connection.
 const MAX_STREAMS: u32 = 1024;
@@ -786,22 +786,35 @@ where
 
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and written
     /// to, along with a oneshot receiver to be informed when the gossip overlay has been joined.
+    ///
+    /// The topic will automatically be unsubscribed from once both the sender and receiver have
+    /// been dropped.
     pub async fn subscribe(
         &self,
         topic: T,
     ) -> Result<(
-        mpsc::Sender<ToNetwork>,
-        mpsc::Receiver<FromNetwork>,
+        TopicStreamSender<T>,
+        TopicStreamReceiver<T>,
         oneshot::Receiver<()>,
     )> {
-        let (to_network_tx, to_network_rx) = mpsc::channel::<ToNetwork>(128);
-        let (from_network_tx, from_network_rx) = mpsc::channel::<FromNetwork>(128);
+        let (topic_stream_sender_tx, topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
         let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
 
         self.inner
             .engine
-            .subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
+            .subscribe(
+                topic,
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
+                gossip_ready_tx,
+            )
             .await?;
+
+        // Receive the network sender and receiver channels for this topic from the `topic_streams`
+        // module.
+        let to_network_tx = topic_stream_sender_rx.await?;
+        let from_network_rx = topic_stream_receiver_rx.await?;
 
         Ok((to_network_tx, from_network_rx, gossip_ready_rx))
     }
@@ -868,19 +881,19 @@ mod tests {
     use p2panda_core::{Body, Extensions, Hash, Header, PrivateKey, PublicKey};
     use p2panda_discovery::mdns::LocalDiscovery;
     use p2panda_store::{MemoryStore, OperationStore};
-    use p2panda_sync::TopicQuery;
     use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
     use p2panda_sync::test_protocols::{
         FailingProtocol, PingPongProtocol, SyncTestTopic as TestTopic,
     };
+    use p2panda_sync::TopicQuery;
     use tokio::task::JoinHandle;
 
-    use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr};
+    use crate::addrs::{to_node_addr, DEFAULT_STUN_PORT};
     use crate::bytes::ToBytes;
     use crate::config::Config;
     use crate::events::SystemEvent;
     use crate::sync::SyncConfiguration;
-    use crate::{NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId, to_public_key};
+    use crate::{to_public_key, NetworkBuilder, NodeAddress, RelayMode, RelayUrl, TopicId};
 
     use super::{FromNetwork, Network, ToNetwork};
 

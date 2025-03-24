@@ -9,20 +9,22 @@ use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{Duration, Instant, interval};
+use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::from_public_key;
 use crate::sync::config::FALLBACK_RESYNC_INTERVAL_SEC;
-use crate::sync::{self, SYNC_CONNECTION_ALPN, SyncConfiguration};
+use crate::sync::{self, SyncConfiguration, SYNC_CONNECTION_ALPN};
 
 /// Events sent to the sync manager.
 #[derive(Debug)]
 pub enum ToSyncActor<T> {
     /// A new peer-topic combination was discovered.
     Discovery { peer: PublicKey, topic: T },
+    /// A topic was unsubscribed.
+    Forget { topic: T },
     /// A major network interface change was detected.
     Reset,
 }
@@ -136,6 +138,7 @@ where
     ///
     /// - A shutdown signal from the engine
     /// - A new peer-topic combination received from the engine
+    /// - A "forget" request from the engine; used to signal an unsubscribe event for a topic
     /// - A sync attempt pulled from the queue, resulting in a call to `connect_and_sync()`
     /// - A tick of the resync poll interval, resulting in a resync attempt if one is in the queue
     /// - A tick of the retry poll interval, resulting in a retry attempt if one is in the queue
@@ -187,6 +190,10 @@ where
                                 }
                             }
                         },
+                        // @TODO(glyph): Remove all sessions relating to this topic.
+                        ToSyncActor::Forget { topic: _ } => {
+                            todo!()
+                        }
                         // In the event of a disconnection, two peers who had previously synced may
                         // fall back out of sync. In order to invoke resync upon reconnection, we
                         // reset the status of all sessions and schedule an attempt for each one.
@@ -357,17 +364,17 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
-    use p2panda_sync::SyncProtocol;
     use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::SyncProtocol;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
     use crate::engine::ToEngineActor;
     use crate::protocols::ProtocolMap;
-    use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
-    use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
+    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
+    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
 
