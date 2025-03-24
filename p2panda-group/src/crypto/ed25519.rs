@@ -17,6 +17,7 @@ pub const VERIFYING_KEY_SIZE: usize = 32;
 /// 512-bit signature.
 pub const SIGNATURE_SIZE: usize = 64;
 
+/// Ed25519 signing key which can be used to produce signatures.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigningKey(Secret<SIGNING_KEY_SIZE>);
 
@@ -38,12 +39,14 @@ impl SigningKey {
         self.0.as_bytes()
     }
 
+    /// Get the [`VerifyingKey`] for this [`SigningKey`].
     pub fn verifying_key(&self) -> VerifyingKey {
         let mut bytes = [0u8; VERIFYING_KEY_SIZE];
         libcrux_ed25519::secret_to_public(&mut bytes, self.0.as_bytes());
         VerifyingKey(bytes)
     }
 
+    /// Sign the provided data using returning a digital signature.
     pub fn sign(&self, bytes: &[u8]) -> Result<Signature, SignatureError> {
         let bytes = libcrux_ed25519::sign(bytes, self.0.as_bytes())
             .map_err(|_| SignatureError::SigningFailed)?;
@@ -51,6 +54,7 @@ impl SigningKey {
     }
 }
 
+/// An Ed25519 public key.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerifyingKey([u8; VERIFYING_KEY_SIZE]);
 
@@ -71,6 +75,7 @@ impl VerifyingKey {
         hex::encode(self.as_bytes())
     }
 
+    /// Verify a signature on provided data with this signing key's public key.
     pub fn verify(&self, bytes: &[u8], signature: &Signature) -> Result<(), SignatureError> {
         libcrux_ed25519::verify(bytes, &self.0, &signature.0)
             .map_err(|_| SignatureError::VerificationFailed)?;
@@ -84,6 +89,7 @@ impl fmt::Display for VerifyingKey {
     }
 }
 
+/// Ed25519 signature.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signature(#[serde(with = "serde_bytes")] [u8; SIGNATURE_SIZE]);
 

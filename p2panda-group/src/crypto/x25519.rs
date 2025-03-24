@@ -3,7 +3,7 @@
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
 use std::fmt::{self, Debug};
 
-use libcrux::ecdh::Algorithm;
+use libcrux_ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -37,7 +37,7 @@ impl SecretKey {
     }
 
     pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
-        let bytes = libcrux::ecdh::secret_to_public(ALGORITHM, self.0.as_bytes())
+        let bytes = libcrux_ecdh::secret_to_public(ALGORITHM, self.0.as_bytes())
             .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(PublicKey(
             bytes
@@ -48,7 +48,7 @@ impl SecretKey {
 
     pub fn calculate_agreement(&self, their_public: &PublicKey) -> Result<Vec<u8>, X25519Error> {
         let shared_secret =
-            libcrux::ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0.as_bytes())
+            libcrux_ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0.as_bytes())
                 .map_err(|_| X25519Error::InvalidCurve)?;
         Ok(shared_secret)
     }

@@ -17,6 +17,7 @@ use crate::crypto::sha2::sha2_512;
 use crate::crypto::x25519::{PublicKey, SecretKey};
 use crate::traits::RandProvider;
 
+/// Hash1 changes the first byte to 0xFE.
 const HASH_1_PREFIX: [u8; 32] = [
     0xFEu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
@@ -50,6 +51,7 @@ impl fmt::Display for XSignature {
     }
 }
 
+/// Calculates an XEdDSA signature using the X25519 private key directly.
 pub fn xeddsa_sign<RNG: RandProvider>(
     bytes: &[u8],
     secret_key: &SecretKey,
@@ -58,31 +60,25 @@ pub fn xeddsa_sign<RNG: RandProvider>(
     let random_bytes: [u8; SIGNATURE_SIZE] =
         rng.random_array().map_err(|err| XEdDSAError::Rand(err))?;
 
-    // calculate_key_pair
     let key_data = secret_key.as_bytes();
     let a = Scalar::from_bytes_mod_order(*key_data);
     let ed_public_key_point = &a * ED25519_BASEPOINT_TABLE;
     let ed_public_key = ed_public_key_point.compress();
     let sign_bit = ed_public_key.as_bytes()[31] & 0b1000_0000_u8;
 
-    // r = hash1(a || M || Z) (mod q)
     let r = Scalar::from_bytes_mod_order_wide(&{
         // Explicitly pass a slice to avoid generating multiple versions of update().
         sha2_512(&[&HASH_1_PREFIX[..], &key_data[..], bytes, &random_bytes[..]])
     });
 
-    // R = rB
     let cap_r = (&r * ED25519_BASEPOINT_TABLE).compress();
 
-    // h = hash(R || A || M) (mod q)
     let h = Scalar::from_bytes_mod_order_wide(&{
         sha2_512(&[cap_r.as_bytes(), ed_public_key.as_bytes(), bytes])
     });
 
-    // s = r + ha (mod q)
     let s = (h * a) + r;
 
-    // return R || s
     let mut result = [0u8; SIGNATURE_SIZE];
     result[..32].copy_from_slice(cap_r.as_bytes());
     result[32..].copy_from_slice(s.as_bytes());
@@ -91,6 +87,7 @@ pub fn xeddsa_sign<RNG: RandProvider>(
     Ok(XSignature::from_bytes(result))
 }
 
+/// Verifies a XEdDSA signature on provided data using the X25519 public counter-part.
 pub fn xeddsa_verify<RNG: RandProvider>(
     bytes: &[u8],
     their_public_key: &PublicKey,
@@ -98,11 +95,6 @@ pub fn xeddsa_verify<RNG: RandProvider>(
 ) -> Result<(), XEdDSAError<RNG>> {
     let signature = signature.as_bytes();
 
-    // if u >= p or R.y >= 2|p| or s >= 2|q|:
-    //     return false
-    // A = convert_mont(u)
-    // if not on_curve(A):
-    //     return false
     let mont_point = MontgomeryPoint(their_public_key.to_bytes());
     let ed_pub_key_point =
         match mont_point.to_edwards((signature[SIGNATURE_SIZE - 1] & 0b1000_0000_u8) >> 7) {
@@ -120,16 +112,11 @@ pub fn xeddsa_verify<RNG: RandProvider>(
     }
     let minus_cap_a = -ed_pub_key_point;
 
-    // h = hash(R || A || M) (mod q)
     let h = Scalar::from_bytes_mod_order_wide(&{
         // Explicitly pass a slice to avoid generating multiple versions of update().
         sha2_512(&[&cap_r[..], cap_a.as_bytes(), bytes])
     });
 
-    // Rcheck = sB - hA
-    // if bytes_equal(R, Rcheck):
-    //     return true
-    // return false
     let cap_r_check_point = EdwardsPoint::vartime_double_scalar_mul_basepoint(
         &h,
         &minus_cap_a,

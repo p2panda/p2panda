@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Hybrid Key-Derivation-Function (HKDF) using "hash-mode" with SHA256.
-use libcrux::hkdf::Algorithm;
+use libcrux_hkdf::Algorithm;
 use thiserror::Error;
 
 const HKDF: Algorithm = Algorithm::Sha256;
@@ -11,7 +11,7 @@ pub fn hkdf<const N: usize>(
     ikm: &[u8],
     info: Option<&[u8]>,
 ) -> Result<[u8; N], HkdfError> {
-    let hash = libcrux::hkdf::hkdf(HKDF, salt, ikm, info.unwrap_or_default(), N)
+    let hash = libcrux_hkdf::hkdf(HKDF, salt, ikm, info.unwrap_or_default(), N)
         .map_err(|_| HkdfError::InvalidArguments)?;
     Ok(hash
         .try_into()

@@ -2,6 +2,7 @@
 
 //! Hybrid Public Key Encryption (HPKE) with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
 //! parameters.
+// TODO: Switch to `libcrux-hpke` as soon as it's ready.
 use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

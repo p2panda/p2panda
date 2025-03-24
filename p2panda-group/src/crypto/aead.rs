@@ -1,72 +1,61 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! AES-256-GCM authenticated encryption with additional data (AEAD).
-use libcrux::aead::{Algorithm, Iv, Key, Tag, decrypt_detached, encrypt_detached};
+//! ChaCha20-Poly1305 authenticated encryption with additional data (AEAD).
+use libcrux_chacha20poly1305::{KEY_LEN, NONCE_LEN, TAG_LEN};
 use thiserror::Error;
 
-const AEAD_ALGORITHM: Algorithm = Algorithm::Aes256Gcm;
-
 /// 96-bit nonce.
-pub type AeadNonce = [u8; AEAD_ALGORITHM.nonce_size()];
+pub type AeadNonce = [u8; NONCE_LEN];
 
 /// 256-bit secret key.
-pub type AeadKey = [u8; AEAD_ALGORITHM.key_size()];
+pub type AeadKey = [u8; KEY_LEN];
 
+/// ChaCha20-Poly1305 AEAD encryption function.
 pub fn aead_encrypt(
     key: &AeadKey,
     plaintext: &[u8],
     nonce: AeadNonce,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
-    let key = Key::from_slice(AEAD_ALGORITHM, key).map_err(AeadError::InvalidArgument)?;
-    let nonce = Iv::new(nonce).map_err(AeadError::InvalidArgument)?;
-
-    let (tag, mut ciphertext) = encrypt_detached(&key, plaintext, nonce, aad.unwrap_or_default())
-        .map_err(AeadError::Encrypt)?;
-
-    // Attach authenticated tag to the end of ciphertext.
-    ciphertext.extend_from_slice(tag.as_ref());
-
-    Ok(ciphertext)
+    // Implementation attaches authenticated tag (16 bytes) automatically to the end of ciphertext.
+    let mut ciphertext_tag = vec![0; plaintext.len() + TAG_LEN];
+    libcrux_chacha20poly1305::encrypt(
+        key,
+        plaintext,
+        &mut ciphertext_tag,
+        aad.unwrap_or_default(),
+        &nonce,
+    )
+    .map_err(AeadError::Encrypt)?;
+    Ok(ciphertext_tag)
 }
 
+/// ChaCha20-Poly1305 AEAD decryption function.
 pub fn aead_decrypt(
     key: &AeadKey,
     ciphertext_tag: &[u8],
     nonce: AeadNonce,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
-    if ciphertext_tag.len() < AEAD_ALGORITHM.tag_size() {
-        return Err(AeadError::InvalidArgument(
-            libcrux::aead::InvalidArgumentError::InvalidTag,
-        ));
-    }
-
-    // Extract authenticated tag from the end of ciphertext.
-    let boundary = ciphertext_tag.len() - AEAD_ALGORITHM.tag_size();
-    let ciphertext = &ciphertext_tag[..boundary];
-    let tag = &ciphertext_tag[boundary..];
-
-    let key = Key::from_slice(AEAD_ALGORITHM, key).map_err(AeadError::InvalidArgument)?;
-    let nonce = Iv::new(nonce).map_err(AeadError::InvalidArgument)?;
-    let tag = Tag::from_slice(tag).map_err(AeadError::InvalidArgument)?;
-
-    let plaintext = decrypt_detached(&key, ciphertext, nonce, aad.unwrap_or_default(), &tag)
-        .map_err(AeadError::Decrypt)?;
-
-    Ok(plaintext)
+    let mut buffer = vec![0; ciphertext_tag.len()];
+    let plaintext = libcrux_chacha20poly1305::decrypt(
+        key,
+        &mut buffer,
+        ciphertext_tag,
+        aad.unwrap_or_default(),
+        &nonce,
+    )
+    .map_err(AeadError::Decrypt)?;
+    Ok(plaintext.to_vec())
 }
 
 #[derive(Debug, Error)]
 pub enum AeadError {
-    #[error("invalid aead argument: {0}")]
-    InvalidArgument(libcrux::aead::InvalidArgumentError),
-
     #[error("plaintext could not be encrypted with aead: {0}")]
-    Encrypt(libcrux::aead::EncryptError),
+    Encrypt(libcrux_chacha20poly1305::AeadError),
 
     #[error("ciphertext could not be decrypted with aead: {0}")]
-    Decrypt(libcrux::aead::DecryptError),
+    Decrypt(libcrux_chacha20poly1305::AeadError),
 }
 
 #[cfg(test)]
@@ -105,7 +94,7 @@ mod tests {
         assert!(matches!(
             aead_decrypt(&invalid_key, &ciphertext, nonce, None),
             Err(AeadError::Decrypt(
-                libcrux::aead::DecryptError::DecryptionFailed
+                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
             ))
         ));
 
@@ -113,7 +102,7 @@ mod tests {
         assert!(matches!(
             aead_decrypt(&key, &ciphertext, invalid_nonce, None),
             Err(AeadError::Decrypt(
-                libcrux::aead::DecryptError::DecryptionFailed
+                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
             ))
         ));
 
@@ -121,7 +110,7 @@ mod tests {
         assert!(matches!(
             aead_decrypt(&key, &ciphertext, nonce, Some(b"invalid aad")),
             Err(AeadError::Decrypt(
-                libcrux::aead::DecryptError::DecryptionFailed
+                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
             ))
         ));
     }
