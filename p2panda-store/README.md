@@ -25,8 +25,7 @@
 This crate provides APIs to allow for efficient implementations of p2panda operations- and log stores. These persistence and query APIs are utilised by higher-level components of the p2panda stack, such
 as `p2panda-sync` and `p2panda-stream`.
 
-An in-memory storage solution is provided in the form of a `MemoryStore` which implements both the
-`OperationStore` and `LogStore` traits.
+A SQLite3 and in-memory solution for both operation and log meta-data storage is provided.
 
 ## License
 
