@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Hybrid Public Key Encryption (HPKE) with DHKEM-X25519, HKDF SHA256 and AES-256-GCM AEAD
+//! Hybrid Public Key Encryption (HPKE) with DHKEM-X25519, HKDF SHA256 and ChaCha20Poly1305 AEAD
 //! parameters.
 //!
 //! <https://www.rfc-editor.org/rfc/rfc9180>
@@ -14,7 +14,7 @@ use crate::traits::RandProvider;
 
 const KEM: kem::KEM = kem::KEM::DHKEM_X25519_HKDF_SHA256;
 const KDF: kdf::KDF = kdf::KDF::HKDF_SHA256;
-const AEAD: aead::AEAD = aead::AEAD::AES_256_GCM;
+const AEAD: aead::AEAD = aead::AEAD::ChaCha20Poly1305;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HpkeCiphertext {

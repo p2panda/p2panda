@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! ChaCha20-Poly1305 authenticated encryption with additional data (AEAD).
+//! ChaCha20Poly1305 authenticated encryption with additional data (AEAD).
 use libcrux_chacha20poly1305::{KEY_LEN, NONCE_LEN, TAG_LEN};
 use thiserror::Error;
 
@@ -10,7 +10,7 @@ pub type AeadNonce = [u8; NONCE_LEN];
 /// 256-bit secret key.
 pub type AeadKey = [u8; KEY_LEN];
 
-/// ChaCha20-Poly1305 AEAD encryption function.
+/// ChaCha20Poly1305 AEAD encryption function.
 pub fn aead_encrypt(
     key: &AeadKey,
     plaintext: &[u8],
@@ -30,7 +30,7 @@ pub fn aead_encrypt(
     Ok(ciphertext_tag)
 }
 
-/// ChaCha20-Poly1305 AEAD decryption function.
+/// ChaCha20Poly1305 AEAD decryption function.
 pub fn aead_decrypt(
     key: &AeadKey,
     ciphertext_tag: &[u8],
