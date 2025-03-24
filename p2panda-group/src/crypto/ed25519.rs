@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Edwards-Curve Digital Signature Algorithm (EdDSA) related to Curve25519 using SHA-512.
+//!
+//! <https://www.rfc-editor.org/rfc/rfc8032>
 use std::fmt;
 
 use serde::{Deserialize, Serialize};

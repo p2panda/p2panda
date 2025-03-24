@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! ChaCha20Poly1305 authenticated encryption with additional data (AEAD).
+//!
+//! <https://www.rfc-editor.org/rfc/rfc7905>
 use libcrux_chacha20poly1305::{KEY_LEN, NONCE_LEN, TAG_LEN};
 use thiserror::Error;
 
