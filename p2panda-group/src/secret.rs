@@ -29,6 +29,6 @@ impl<const N: usize> PartialEq for Secret<N> {
 #[cfg(not(test))]
 impl<const N: usize> fmt::Debug for Secret<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SeretKey").field(&"***").finish()
+        f.debug_tuple("Secret").field("value", &"***").finish()
     }
 }
