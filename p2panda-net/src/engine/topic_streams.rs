@@ -7,16 +7,16 @@ use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc::error::SendError;
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{RwLock, mpsc, oneshot};
 use tracing::{debug, error, warn};
 
+use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
-use crate::TopicId;
 
 use super::ToEngineActor;
 

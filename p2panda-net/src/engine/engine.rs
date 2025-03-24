@@ -21,7 +21,7 @@ use crate::engine::topic_discovery::TopicDiscovery;
 use crate::engine::topic_streams::{TopicStreamReceiver, TopicStreamSender, TopicStreams};
 use crate::events::SystemEvent;
 use crate::sync::manager::{SyncActor, ToSyncActor};
-use crate::{from_public_key, to_public_key, NetworkId, NodeAddress, TopicId};
+use crate::{NetworkId, NodeAddress, TopicId, from_public_key, to_public_key};
 
 #[derive(Debug)]
 pub enum ToEngineActor<T> {
