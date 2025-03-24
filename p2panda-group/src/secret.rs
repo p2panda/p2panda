@@ -15,7 +15,7 @@ use zeroize::ZeroizeOnDrop;
 /// 3. Hide bytes value when printing debug info.
 /// 4. Constant-time comparison implementation to prevent timing attacks.
 ///
-/// This represents a “best-effort” attempt, since side-channels are ultimately a property of a
+/// This represents a "best-effort" attempt, since side-channels are ultimately a property of a
 /// deployed cryptographic system including the hardware it runs on, not just of software.
 #[derive(Clone, Eq, Serialize, Deserialize, ZeroizeOnDrop)]
 #[cfg_attr(test, derive(Debug))]
