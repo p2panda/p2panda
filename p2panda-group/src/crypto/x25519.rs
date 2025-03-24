@@ -3,6 +3,7 @@
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
 use std::fmt;
 
+use curve25519_dalek::scalar::clamp_integer;
 use libcrux_ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,12 +26,7 @@ impl SecretKey {
     // TODO: Remove this in later PRs.
     #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
-        // Clamping
-        let mut bytes = bytes;
-        bytes[0] &= 248u8;
-        bytes[31] &= 127u8;
-        bytes[31] |= 64u8;
-        SecretKey(Secret::from_bytes(bytes))
+        SecretKey(Secret::from_bytes(clamp_integer(bytes)))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {

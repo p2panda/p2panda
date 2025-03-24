@@ -5,6 +5,7 @@
 //! <https://www.rfc-editor.org/rfc/rfc8032>
 use std::fmt;
 
+use curve25519_dalek::scalar::clamp_integer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -27,12 +28,7 @@ impl SigningKey {
     // TODO: Remove this in later PRs.
     #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
-        // Clamping
-        let mut bytes = bytes;
-        bytes[0] &= 248u8;
-        bytes[31] &= 127u8;
-        bytes[31] |= 64u8;
-        SigningKey(Secret::from_bytes(bytes))
+        SigningKey(Secret::from_bytes(clamp_integer(bytes)))
     }
 
     // TODO: Remove this in later PRs.
