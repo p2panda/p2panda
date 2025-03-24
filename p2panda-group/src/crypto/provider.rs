@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
@@ -28,13 +28,13 @@ use crate::traits::{CryptoProvider, RandProvider, XCryptoProvider};
 /// internally.
 #[derive(Debug)]
 pub struct Crypto {
-    rng: RwLock<rand_chacha::ChaCha20Rng>,
+    rng: Mutex<rand_chacha::ChaCha20Rng>,
 }
 
 impl Default for Crypto {
     fn default() -> Self {
         Self {
-            rng: RwLock::new(rand_chacha::ChaCha20Rng::from_os_rng()),
+            rng: Mutex::new(rand_chacha::ChaCha20Rng::from_os_rng()),
         }
     }
 }
@@ -43,7 +43,7 @@ impl Default for Crypto {
 impl Crypto {
     pub fn from_seed(seed: [u8; 32]) -> Self {
         Self {
-            rng: RwLock::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
+            rng: Mutex::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
         }
     }
 }
@@ -209,7 +209,7 @@ impl RandProvider for Crypto {
     type Error = RandError;
 
     fn random_array<const N: usize>(&self) -> Result<[u8; N], Self::Error> {
-        let mut rng = self.rng.write().map_err(|_| RandError::LockPoisoned)?;
+        let mut rng = self.rng.lock().map_err(|_| RandError::LockPoisoned)?;
         let mut out = [0u8; N];
         rng.try_fill_bytes(&mut out)
             .map_err(|_| RandError::NotEnoughRandomness)?;
@@ -217,7 +217,7 @@ impl RandProvider for Crypto {
     }
 
     fn random_vec(&self, len: usize) -> Result<Vec<u8>, Self::Error> {
-        let mut rng = self.rng.write().map_err(|_| RandError::LockPoisoned)?;
+        let mut rng = self.rng.lock().map_err(|_| RandError::LockPoisoned)?;
         let mut out = vec![0u8; len];
         rng.try_fill_bytes(&mut out)
             .map_err(|_| RandError::NotEnoughRandomness)?;
