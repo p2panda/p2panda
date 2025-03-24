@@ -151,6 +151,7 @@ mod sync;
 
 pub use addrs::{NodeAddress, RelayUrl};
 pub use config::Config;
+pub use engine::{TopicStreamReceiver, TopicStreamSender};
 pub use events::SystemEvent;
 pub use network::{FromNetwork, Network, NetworkBuilder, RelayMode, ToNetwork};
 pub use protocols::ProtocolHandler;
