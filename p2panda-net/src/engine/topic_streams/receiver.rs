@@ -2,6 +2,7 @@
 
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TryRecvError;
 
 use crate::engine::engine::ToEngineActor;
 use crate::network::FromNetwork;
@@ -34,10 +35,24 @@ where
         }
     }
 
-    // @TODO(glyph): Probably want to implement `recv()`, `recv_many()` and `try_recv()`.
-
-    async fn recv(&mut self) -> Option<FromNetwork> {
+    pub async fn recv(&mut self) -> Option<FromNetwork> {
         self.from_network_rx.recv().await
+    }
+
+    pub async fn recv_many(&mut self, buffer: &mut Vec<FromNetwork>, limit: usize) -> usize {
+        self.from_network_rx.recv_many(buffer, limit).await
+    }
+
+    pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
+        self.from_network_rx.try_recv()
+    }
+
+    pub fn close(&mut self) {
+        self.from_network_rx.close()
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.from_network_rx.is_closed()
     }
 }
 
