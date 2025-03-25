@@ -2,4 +2,4 @@
 
 mod key_bundle;
 
-pub use key_bundle::{KeyBundle, OneTimeKeyId};
+pub use key_bundle::KeyBundle;

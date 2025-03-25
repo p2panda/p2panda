@@ -1,58 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::crypto::Rng;
-use crate::crypto::x25519::{PUBLIC_KEY_SIZE, PublicKey, SecretKey};
-use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_sign, xeddsa_verify};
-use crate::traits::{KeyBundle, OneTimeKeyId};
-use crate::two_party::X3DHError;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PreKey(PublicKey);
-
-impl PreKey {
-    pub fn new(prekey: PublicKey) -> Self {
-        Self(prekey)
-    }
-
-    pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_SIZE] {
-        self.0.as_bytes()
-    }
-
-    pub fn to_bytes(self) -> [u8; PUBLIC_KEY_SIZE] {
-        self.0.to_bytes()
-    }
-
-    pub fn sign(&self, secret_key: &SecretKey, rng: &Rng) -> Result<XSignature, XEdDSAError> {
-        xeddsa_sign(self.0.as_bytes(), secret_key, rng)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OneTimeKey(PublicKey, OneTimeKeyId);
-
-impl OneTimeKey {
-    pub fn new(onetime_prekey: PublicKey, id: OneTimeKeyId) -> Self {
-        Self(onetime_prekey, id)
-    }
-
-    pub fn key(&self) -> &PublicKey {
-        &self.0
-    }
-
-    pub fn id(&self) -> OneTimeKeyId {
-        self.1
-    }
-
-    pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_SIZE] {
-        self.0.as_bytes()
-    }
-
-    pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_SIZE] {
-        self.0.to_bytes()
-    }
-}
+use crate::crypto::x25519::PublicKey;
+use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_verify};
+use crate::key_bundle::{LifetimeError, OneTimeKey, OneTimeKeyId, PreKey};
+use crate::traits::KeyBundle;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OneTimeKeyBundle {
@@ -84,23 +38,28 @@ impl KeyBundle for OneTimeKeyBundle {
     }
 
     fn signed_prekey(&self) -> &PublicKey {
-        &self.signed_prekey.0
+        self.signed_prekey.key()
     }
 
     fn onetime_prekey(&self) -> Option<&PublicKey> {
-        self.onetime_prekey.as_ref().map(|key| &key.0)
+        self.onetime_prekey.as_ref().map(|key| key.key())
     }
 
     fn onetime_prekey_id(&self) -> Option<OneTimeKeyId> {
-        self.onetime_prekey.as_ref().map(|key| key.1)
+        self.onetime_prekey.as_ref().map(|key| key.id())
     }
 
-    fn verify(&self) -> Result<(), X3DHError> {
+    fn verify(&self) -> Result<(), KeyBundleError> {
+        // Check lifetime.
+        self.signed_prekey.verify_lifetime()?;
+
+        // Check signature.
         xeddsa_verify(
             self.signed_prekey.as_bytes(),
             &self.identity_key,
             &self.prekey_signature,
         )?;
+
         Ok(())
     }
 }
@@ -132,7 +91,7 @@ impl KeyBundle for LongTermKeyBundle {
     }
 
     fn signed_prekey(&self) -> &PublicKey {
-        &self.signed_prekey.0
+        self.signed_prekey.key()
     }
 
     fn onetime_prekey(&self) -> Option<&PublicKey> {
@@ -143,12 +102,26 @@ impl KeyBundle for LongTermKeyBundle {
         None
     }
 
-    fn verify(&self) -> Result<(), X3DHError> {
+    fn verify(&self) -> Result<(), KeyBundleError> {
+        // Check lifetime.
+        self.signed_prekey.verify_lifetime()?;
+
+        // Check signature.
         xeddsa_verify(
             self.signed_prekey.as_bytes(),
             &self.identity_key,
             &self.prekey_signature,
         )?;
+
         Ok(())
     }
+}
+
+#[derive(Debug, Error)]
+pub enum KeyBundleError {
+    #[error(transparent)]
+    XEdDSA(#[from] XEdDSAError),
+
+    #[error(transparent)]
+    Lifetime(#[from] LifetimeError),
 }

@@ -11,8 +11,6 @@
 //!
 //! A "two party secure messaging" protocol (2SM in short) is concerned around exactly that 1:1
 //! secure communication.
-mod key_bundle;
 mod x3dh;
 
-pub use key_bundle::{LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
 pub use x3dh::{X3DHError, x3dh_decrypt, x3dh_encrypt};

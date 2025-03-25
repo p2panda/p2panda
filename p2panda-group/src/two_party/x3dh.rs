@@ -16,9 +16,9 @@ use thiserror::Error;
 use crate::crypto::aead::{AeadError, AeadNonce, aead_decrypt, aead_encrypt};
 use crate::crypto::hkdf::{HkdfError, hkdf};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
-use crate::crypto::xeddsa::XEdDSAError;
 use crate::crypto::{Rng, RngError};
-use crate::traits::{KeyBundle, OneTimeKeyId};
+use crate::key_bundle::{KeyBundleError, OneTimeKeyId};
+use crate::traits::KeyBundle;
 
 /// ASCII string identifying the application as specified in X3DH used for KDF.
 const KDF_INFO: &[u8; 7] = b"p2panda";
@@ -165,14 +165,14 @@ pub enum X3DHError {
     X25519(#[from] X25519Error),
 
     #[error(transparent)]
-    XEdDSA(#[from] XEdDSAError),
+    KeyBundle(#[from] KeyBundleError),
 }
 
 #[cfg(test)]
 mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::two_party::{LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
+    use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
 
     use super::{x3dh_decrypt, x3dh_encrypt};
 
@@ -183,7 +183,8 @@ mod tests {
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
         let bob_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_signed_prekey = PreKey::new(bob_prekey_secret.public_key().unwrap());
+        let bob_signed_prekey =
+            PreKey::new(bob_prekey_secret.public_key().unwrap(), Lifetime::default());
 
         let bob_onetime_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_onetime_prekey = OneTimeKey::new(bob_onetime_secret.public_key().unwrap(), 2);
@@ -225,7 +226,8 @@ mod tests {
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
         let bob_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_signed_prekey = PreKey::new(bob_prekey_secret.public_key().unwrap());
+        let bob_signed_prekey =
+            PreKey::new(bob_prekey_secret.public_key().unwrap(), Lifetime::default());
 
         let bob_prekey_signature = bob_signed_prekey.sign(&bob_identity_secret, &rng).unwrap();
 
