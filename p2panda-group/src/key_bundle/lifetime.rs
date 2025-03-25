@@ -61,6 +61,16 @@ impl Default for Lifetime {
     }
 }
 
+#[cfg(test)]
+impl Lifetime {
+    pub fn from_range(not_before: u64, not_after: u64) -> Self {
+        Self {
+            not_before,
+            not_after,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LifetimeError {
     #[error("lifetime of pre-key is not valid")]
@@ -68,4 +78,33 @@ pub enum LifetimeError {
 
     #[error(transparent)]
     SystemTime(std::time::SystemTimeError),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::Lifetime;
+
+    #[test]
+    fn verify() {
+        // Default lifetimes are correct.
+        let lifetime = Lifetime::default();
+        assert!(lifetime.verify().is_ok());
+
+        // Lifetimes of a minute are correct.
+        let lifetime = Lifetime::new(60);
+        assert!(lifetime.verify().is_ok());
+
+        // Invalid lifetimes throw an error.
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+        let lifetime = Lifetime::from_range(now + 60, now + 60); // too early
+        assert!(lifetime.verify().is_err());
+
+        let lifetime = Lifetime::from_range(now - 120, now - 60); // too late
+        assert!(lifetime.verify().is_err());
+    }
 }
