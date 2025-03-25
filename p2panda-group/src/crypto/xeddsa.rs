@@ -87,8 +87,7 @@ pub fn xeddsa_sign<RNG: RandProvider>(
 
     // r = hash1(a || M || Z) (mod q)
     let r = Scalar::from_bytes_mod_order_wide(&{
-        // Explicitly pass a slice to avoid generating multiple versions of update().
-        sha2_512(&[&HASH_1_PREFIX[..], a.as_bytes(), cap_m, &cap_z[..]])
+        sha2_512(&[&HASH_1_PREFIX, a.as_bytes(), cap_m, &cap_z])
     });
 
     // R = rB
@@ -150,10 +149,7 @@ pub fn xeddsa_verify<RNG: RandProvider>(
     let cap_a = a.compress();
 
     // h = hash(R || A || M) (mod q)
-    let h = Scalar::from_bytes_mod_order_wide(&{
-        // Explicitly pass a slice to avoid generating multiple versions of update().
-        sha2_512(&[&cap_r[..], cap_a.as_bytes(), cap_m])
-    });
+    let h = Scalar::from_bytes_mod_order_wide(&{ sha2_512(&[&cap_r, cap_a.as_bytes(), cap_m]) });
 
     // Rcheck = sB - hA
     let cap_r_check = {
