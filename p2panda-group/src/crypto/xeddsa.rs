@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::crypto::ed25519::SIGNATURE_SIZE;
 use crate::crypto::sha2::sha2_512;
 use crate::crypto::x25519::{PublicKey, SecretKey};
-use crate::traits::RandProvider;
+use crate::crypto::{Rng, RngError};
 
 /// Hash1 changes the first byte to 0xFE.
 const HASH_1_PREFIX: [u8; 32] = [
@@ -53,16 +53,16 @@ impl fmt::Display for XSignature {
 }
 
 /// Calculates an XEdDSA signature using the X25519 secret key directly.
-pub fn xeddsa_sign<RNG: RandProvider>(
+pub fn xeddsa_sign(
     bytes: &[u8],
     secret_key: &SecretKey,
-    rng: &RNG,
-) -> Result<XSignature, XEdDSAError<RNG>> {
+    rng: &Rng,
+) -> Result<XSignature, XEdDSAError> {
     // M = Message to sign (byte sequence)
     let cap_m = bytes;
 
     // Z = 64 bytes secure random data (byte sequence)
-    let cap_z: [u8; SIGNATURE_SIZE] = rng.random_array().map_err(|err| XEdDSAError::Rand(err))?;
+    let cap_z: [u8; SIGNATURE_SIZE] = rng.random_array()?;
 
     // A, a = calculate_key_pair(k)
     let (cap_a, a) = {
@@ -109,11 +109,11 @@ pub fn xeddsa_sign<RNG: RandProvider>(
 }
 
 /// Verifies a XEdDSA signature on provided data using the X25519 public counter-part.
-pub fn xeddsa_verify<RNG: RandProvider>(
+pub fn xeddsa_verify(
     bytes: &[u8],
     their_public_key: &PublicKey,
     signature: &XSignature,
-) -> Result<(), XEdDSAError<RNG>> {
+) -> Result<(), XEdDSAError> {
     // M = Message to sign (byte sequence)
     let cap_m = bytes;
 
@@ -172,9 +172,9 @@ pub fn xeddsa_verify<RNG: RandProvider>(
 }
 
 #[derive(Debug, Error)]
-pub enum XEdDSAError<RNG: RandProvider> {
+pub enum XEdDSAError {
     #[error(transparent)]
-    Rand(RNG::Error),
+    Rng(#[from] RngError),
 
     #[error("invalid xeddsa public key or signature")]
     InvalidArgument,
@@ -185,25 +185,25 @@ pub enum XEdDSAError<RNG: RandProvider> {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Crypto, SecretKey, XEdDSAError};
-    use crate::traits::RandProvider;
+    use crate::crypto::Rng;
+    use crate::crypto::x25519::SecretKey;
 
-    use super::{xeddsa_sign, xeddsa_verify};
+    use super::{XEdDSAError, xeddsa_sign, xeddsa_verify};
 
     #[test]
     fn xeddsa_signatures() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let public_key = secret_key.public_key().unwrap();
 
         let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
-        assert!(xeddsa_verify::<Crypto>(b"Hello, Panda!", &public_key, &signature).is_ok());
+        assert!(xeddsa_verify(b"Hello, Panda!", &public_key, &signature).is_ok());
     }
 
     #[test]
     fn failed_verify() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let public_key = secret_key.public_key().unwrap();
@@ -217,15 +217,15 @@ mod tests {
         assert_ne!(signature, invalid_signature);
 
         assert!(matches!(
-            xeddsa_verify::<Crypto>(b"Invalid Data", &public_key, &signature),
+            xeddsa_verify(b"Invalid Data", &public_key, &signature),
             Err(XEdDSAError::VerificationFailed)
         ));
         assert!(matches!(
-            xeddsa_verify::<Crypto>(b"Hello, Panda!", &invalid_public_key, &signature),
+            xeddsa_verify(b"Hello, Panda!", &invalid_public_key, &signature),
             Err(XEdDSAError::VerificationFailed)
         ));
         assert!(matches!(
-            xeddsa_verify::<Crypto>(b"Hello, Panda!", &public_key, &invalid_signature),
+            xeddsa_verify(b"Hello, Panda!", &public_key, &invalid_signature),
             Err(XEdDSAError::VerificationFailed)
         ));
     }

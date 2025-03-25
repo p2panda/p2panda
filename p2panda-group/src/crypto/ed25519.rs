@@ -9,7 +9,7 @@ use curve25519_dalek::scalar::clamp_integer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::secret::Secret;
+use crate::crypto::Secret;
 
 /// 256-bit signing key.
 pub const SIGNING_KEY_SIZE: usize = 32;
@@ -126,14 +126,13 @@ pub enum SignatureError {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::Crypto;
-    use crate::traits::RandProvider;
+    use crate::crypto::Rng;
 
     use super::{SignatureError, SigningKey};
 
     #[test]
     fn sign_and_verify() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let signing_key = SigningKey::from_bytes(rng.random_array().unwrap());
         let verifying_key = signing_key.verifying_key();
@@ -144,7 +143,7 @@ mod tests {
 
     #[test]
     fn failed_verify() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let signing_key = SigningKey::from_bytes(rng.random_array().unwrap());
         let verifying_key = signing_key.verifying_key();

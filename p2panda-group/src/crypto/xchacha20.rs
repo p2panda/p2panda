@@ -60,14 +60,13 @@ pub enum XAeadError {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Crypto, XAeadError};
-    use crate::traits::RandProvider;
+    use crate::crypto::Rng;
 
-    use super::{XAeadKey, XAeadNonce, x_aead_decrypt, x_aead_encrypt};
+    use super::{XAeadError, XAeadKey, XAeadNonce, x_aead_decrypt, x_aead_encrypt};
 
     #[test]
     fn encrypt_decrypt() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let key: XAeadKey = rng.random_array().unwrap();
         let nonce: XAeadNonce = rng.random_array().unwrap();
@@ -80,7 +79,7 @@ mod tests {
 
     #[test]
     fn decryption_failed() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let key: XAeadKey = rng.random_array().unwrap();
         let nonce: XAeadNonce = rng.random_array().unwrap();

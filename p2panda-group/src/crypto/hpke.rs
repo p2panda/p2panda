@@ -9,8 +9,8 @@ use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::crypto::{PublicKey, SecretKey};
-use crate::traits::RandProvider;
+use crate::crypto::x25519::{PublicKey, SecretKey};
+use crate::crypto::{Rng, RngError};
 
 const KEM: kem::KEM = kem::KEM::DHKEM_X25519_HKDF_SHA256;
 const KDF: kdf::KDF = kdf::KDF::HKDF_SHA256;
@@ -36,17 +36,15 @@ pub struct HpkeCiphertext {
 /// In order to encrypt a payload to a public key the sender needs to provide the receiver’s public
 /// key, some information `info` and additional data `aad` to bind the encryption to a certain
 /// context, as well as the payload `plaintext`.
-pub fn hpke_seal<RNG: RandProvider>(
+pub fn hpke_seal(
     public_key: &PublicKey,
     info: Option<&[u8]>,
     aad: Option<&[u8]>,
     plaintext: &[u8],
-    rng: &RNG,
-) -> Result<HpkeCiphertext, HpkeError<RNG>> {
+    rng: &Rng,
+) -> Result<HpkeCiphertext, HpkeError> {
     let config = HPKEConfig(Mode::mode_base, KEM, KDF, AEAD);
-    let randomness = rng
-        .random_vec(kem::Nsk(KEM))
-        .map_err(|err| HpkeError::Rand(err))?;
+    let randomness = rng.random_vec(kem::Nsk(KEM))?;
     let libcrux::hpke::HPKECiphertext(kem_output, ciphertext) = HpkeSeal(
         config,
         public_key.as_bytes(),
@@ -70,12 +68,12 @@ pub fn hpke_seal<RNG: RandProvider>(
 /// When decrypting the receiver uses the secret key to retrieve the shared secret and decrypt the
 /// ciphertext. The `info` and `aad` (additional data) are the same as entered on the sender’s
 /// side.
-pub fn hpke_open<RNG: RandProvider>(
+pub fn hpke_open(
     input: &HpkeCiphertext,
     secret_key: &SecretKey,
     info: Option<&[u8]>,
     aad: Option<&[u8]>,
-) -> Result<Vec<u8>, HpkeError<RNG>> {
+) -> Result<Vec<u8>, HpkeError> {
     let config = HPKEConfig(Mode::mode_base, KEM, KDF, AEAD);
     let ciphertext =
         libcrux::hpke::HPKECiphertext(input.kem_output.to_vec(), input.ciphertext.to_vec());
@@ -94,9 +92,9 @@ pub fn hpke_open<RNG: RandProvider>(
 }
 
 #[derive(Debug, Error)]
-pub enum HpkeError<RNG: RandProvider> {
+pub enum HpkeError {
     #[error(transparent)]
-    Rand(RNG::Error),
+    Rng(#[from] RngError),
 
     #[error("could not encrypt with hpke: {0:?}")]
     Encryption(errors::HpkeError),
@@ -107,14 +105,14 @@ pub enum HpkeError<RNG: RandProvider> {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{Crypto, SecretKey};
-    use crate::traits::RandProvider;
+    use crate::crypto::Rng;
+    use crate::crypto::x25519::SecretKey;
 
     use super::{HpkeError, hpke_open, hpke_seal};
 
     #[test]
     fn seal_and_open() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let public_key = secret_key.public_key().unwrap();
@@ -123,15 +121,14 @@ mod tests {
         let aad = b"some aad";
         let ciphertext =
             hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!", &rng).unwrap();
-        let plaintext =
-            hpke_open::<Crypto>(&ciphertext, &secret_key, Some(info), Some(aad)).unwrap();
+        let plaintext = hpke_open(&ciphertext, &secret_key, Some(info), Some(aad)).unwrap();
 
         assert_eq!(plaintext, b"Hello, Panda!");
     }
 
     #[test]
     fn decryption_failed() {
-        let rng = Crypto::from_seed([1; 32]);
+        let rng = Rng::from_seed([1; 32]);
 
         let valid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let public_key = valid_secret_key.public_key().unwrap();
@@ -143,15 +140,15 @@ mod tests {
 
         // Invalid secret key.
         let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let result = hpke_open::<Crypto>(&ciphertext, &invalid_secret_key, Some(info), Some(aad));
+        let result = hpke_open(&ciphertext, &invalid_secret_key, Some(info), Some(aad));
         assert!(matches!(result, Err(HpkeError::Decryption(_))));
 
         // Invalid info tag.
-        let result = hpke_open::<Crypto>(&ciphertext, &valid_secret_key, None, Some(aad));
+        let result = hpke_open(&ciphertext, &valid_secret_key, None, Some(aad));
         assert!(matches!(result, Err(HpkeError::Decryption(_))));
 
         // Invalid aad.
-        let result = hpke_open::<Crypto>(&ciphertext, &valid_secret_key, Some(info), None);
+        let result = hpke_open(&ciphertext, &valid_secret_key, Some(info), None);
         assert!(matches!(result, Err(HpkeError::Decryption(_))));
     }
 }
