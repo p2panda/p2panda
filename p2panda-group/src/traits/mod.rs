@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-mod key_bundle;
+mod keybundle;
 
-pub use key_bundle::KeyBundle;
+pub use keybundle::KeyBundle;

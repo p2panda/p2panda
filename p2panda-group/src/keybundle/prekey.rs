@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::crypto::Rng;
 use crate::crypto::x25519::{PUBLIC_KEY_SIZE, PublicKey, SecretKey};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_sign};
-use crate::key_bundle::{Lifetime, LifetimeError};
+use crate::keybundle::{Lifetime, LifetimeError};
 
 pub type OneTimeKeyId = u64;
 

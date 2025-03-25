@@ -17,13 +17,14 @@ use crate::crypto::aead::{AeadError, AeadNonce, aead_decrypt, aead_encrypt};
 use crate::crypto::hkdf::{HkdfError, hkdf};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::key_bundle::{KeyBundleError, OneTimeKeyId};
+use crate::keybundle::{KeyBundleError, OneTimeKeyId};
 use crate::traits::KeyBundle;
 
 /// ASCII string identifying the application as specified in X3DH used for KDF.
 const KDF_INFO: &[u8; 7] = b"p2panda";
 
-/// Encrypted payload and meta-data to be delivered from sender to receiver using X3DH.
+/// Message containing encrypted payload and X3DH session-data to be delivered from sender to
+/// receiver.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct X3DHCiphertext {
     /// Identity of the sender.
@@ -184,7 +185,7 @@ pub enum X3DHError {
 mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
+    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
 
     use super::{x3dh_decrypt, x3dh_encrypt};
 
