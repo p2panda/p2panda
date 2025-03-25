@@ -17,7 +17,7 @@ use crate::crypto::aead::{AeadError, AeadNonce, aead_decrypt, aead_encrypt};
 use crate::crypto::hkdf::{HkdfError, hkdf};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::keybundle::{KeyBundleError, OneTimeKeyId};
+use crate::keybundle::{KeyBundleError, OneTimePreKeyId};
 use crate::traits::KeyBundle;
 
 /// ASCII string identifying the application as specified in X3DH used for KDF.
@@ -32,7 +32,7 @@ pub struct X3DHCiphertext {
 
     /// Identifier of the used one-time pre-key. Is none when no one-time key was used (for example
     /// in long-term key bundles).
-    pub onetime_prekey_id: Option<OneTimeKeyId>,
+    pub onetime_prekey_id: Option<OneTimePreKeyId>,
 
     /// Encrypted payload for the receiver.
     pub ciphertext: Vec<u8>,
@@ -185,7 +185,7 @@ pub enum X3DHError {
 mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
+    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, PreKey};
 
     use super::{x3dh_decrypt, x3dh_encrypt};
 
@@ -200,7 +200,7 @@ mod tests {
             PreKey::new(bob_prekey_secret.public_key().unwrap(), Lifetime::default());
 
         let bob_onetime_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_onetime_prekey = OneTimeKey::new(bob_onetime_secret.public_key().unwrap(), 2);
+        let bob_onetime_prekey = OneTimePreKey::new(bob_onetime_secret.public_key().unwrap(), 2);
 
         let bob_prekey_signature = bob_signed_prekey.sign(&bob_identity_secret, &rng).unwrap();
 

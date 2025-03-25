@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Key bundles a member can publish in the network to asynchronously receive encrypted data from
-//! others.
+//! Key bundles published by group member into the network to asynchronously receive encrypted data
+//! from others.
 //!
-//! This is for asynchronous settings where one user ("Bob") is offline but has published key
-//! bundle (their identity key, pre keys, etc.) beforehands. Another user ("Alice") wants to use
-//! that information to send encrypted data to Bob.
+//! This is for asynchronous settings where one user ("Bob") is offline but has published a key
+//! bundle (containing their identity key, pre keys, etc.) beforehands. Another user ("Alice")
+//! wants to use that information to send encrypted data to Bob.
 //!
 //! Depending on the security of the chat group this key bundle should be used only once with
-//! [`OneTimeKeyBundle`] or only within a given "lifetime" (one day, one week, etc.) with
+//! [`OneTimeKeyBundle`] or only within a given "lifetime" (one day, two weeks, etc.) with
 //! [`LongTermKeyBundle`]. Members need to make sure that there is always fresh key bundles from
 //! them available in the network for others.
 //!
@@ -29,7 +29,7 @@
 //!
 //! Another solution for very strong forward secrecy, where we can make sure the pre-key is only
 //! used once, is a "bilateral session state establishment" process where peers can only establish
-//! a group chat with each other after both parties have been online. They don’t need to be online
+//! a group chat with each other after both parties have been online. They don't need to be online
 //! at the same time, just to be online at least once and receive the messages of the other party.
 //! This puts a slight restriction on the "offline-first" nature for peer-to-peer applications.
 //!
@@ -47,4 +47,4 @@ mod prekey;
 
 pub use keybundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle};
 pub use lifetime::{Lifetime, LifetimeError};
-pub use prekey::{OneTimeKey, OneTimeKeyId, PreKey};
+pub use prekey::{OneTimePreKey, OneTimePreKeyId, PreKey};

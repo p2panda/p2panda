@@ -5,15 +5,16 @@ use thiserror::Error;
 
 use crate::crypto::x25519::PublicKey;
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_verify};
-use crate::keybundle::{LifetimeError, OneTimeKey, OneTimeKeyId, PreKey};
+use crate::keybundle::{LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
 use crate::traits::KeyBundle;
 
+/// Key-bundle with pre-published public keys to be used exactly _once_.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OneTimeKeyBundle {
     identity_key: PublicKey,
     signed_prekey: PreKey,
     prekey_signature: XSignature,
-    onetime_prekey: Option<OneTimeKey>,
+    onetime_prekey: Option<OneTimePreKey>,
 }
 
 impl OneTimeKeyBundle {
@@ -21,7 +22,7 @@ impl OneTimeKeyBundle {
         identity_key: PublicKey,
         signed_prekey: PreKey,
         prekey_signature: XSignature,
-        onetime_prekey: Option<OneTimeKey>,
+        onetime_prekey: Option<OneTimePreKey>,
     ) -> Self {
         Self {
             identity_key,
@@ -45,7 +46,7 @@ impl KeyBundle for OneTimeKeyBundle {
         self.onetime_prekey.as_ref().map(|key| key.key())
     }
 
-    fn onetime_prekey_id(&self) -> Option<OneTimeKeyId> {
+    fn onetime_prekey_id(&self) -> Option<OneTimePreKeyId> {
         self.onetime_prekey.as_ref().map(|key| key.id())
     }
 
@@ -64,6 +65,7 @@ impl KeyBundle for OneTimeKeyBundle {
     }
 }
 
+/// Key-bundle with pre-published public keys to be used until the pre-key expired.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LongTermKeyBundle {
     identity_key: PublicKey,
@@ -95,10 +97,12 @@ impl KeyBundle for LongTermKeyBundle {
     }
 
     fn onetime_prekey(&self) -> Option<&PublicKey> {
+        // No one-time pre-key in long-term key bundle.
         None
     }
 
-    fn onetime_prekey_id(&self) -> Option<OneTimeKeyId> {
+    fn onetime_prekey_id(&self) -> Option<OneTimePreKeyId> {
+        // No one-time pre-key in long-term key bundle.
         None
     }
 
@@ -131,7 +135,7 @@ mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
     use crate::crypto::xeddsa::xeddsa_sign;
-    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimeKey, PreKey};
+    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimePreKey, PreKey};
     use crate::traits::KeyBundle;
 
     use super::OneTimeKeyBundle;
@@ -151,7 +155,7 @@ mod tests {
         let prekey_signature = xeddsa_sign(signed_prekey.as_bytes(), &secret_key, &rng).unwrap();
 
         let onetime_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let onetime_prekey = OneTimeKey::new(onetime_prekey_secret.public_key().unwrap(), 1);
+        let onetime_prekey = OneTimePreKey::new(onetime_prekey_secret.public_key().unwrap(), 1);
 
         // Valid key-bundles.
         assert!(

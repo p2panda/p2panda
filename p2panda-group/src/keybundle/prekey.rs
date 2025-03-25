@@ -7,7 +7,7 @@ use crate::crypto::x25519::{PUBLIC_KEY_SIZE, PublicKey, SecretKey};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_sign};
 use crate::keybundle::{Lifetime, LifetimeError};
 
-pub type OneTimeKeyId = u64;
+pub type OneTimePreKeyId = u64;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreKey(PublicKey, Lifetime);
@@ -39,10 +39,10 @@ impl PreKey {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OneTimeKey(PublicKey, OneTimeKeyId);
+pub struct OneTimePreKey(PublicKey, OneTimePreKeyId);
 
-impl OneTimeKey {
-    pub fn new(onetime_prekey: PublicKey, id: OneTimeKeyId) -> Self {
+impl OneTimePreKey {
+    pub fn new(onetime_prekey: PublicKey, id: OneTimePreKeyId) -> Self {
         Self(onetime_prekey, id)
     }
 
@@ -50,7 +50,7 @@ impl OneTimeKey {
         &self.0
     }
 
-    pub fn id(&self) -> OneTimeKeyId {
+    pub fn id(&self) -> OneTimePreKeyId {
         self.1
     }
 
