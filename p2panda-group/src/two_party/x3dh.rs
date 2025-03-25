@@ -23,20 +23,30 @@ use crate::traits::KeyBundle;
 /// ASCII string identifying the application as specified in X3DH used for KDF.
 const KDF_INFO: &[u8; 7] = b"p2panda";
 
+/// Encrypted payload and meta-data to be delivered from sender to receiver using X3DH.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PreKeyCiphertext {
+pub struct X3DHCiphertext {
+    /// Identity of the sender.
     pub identity_key: PublicKey,
+
+    /// Identifier of the used one-time pre-key. Is none when no one-time key was used (for example
+    /// in long-term key bundles).
     pub onetime_prekey_id: Option<OneTimeKeyId>,
+
+    /// Encrypted payload for the receiver.
     pub ciphertext: Vec<u8>,
+
+    /// Ephemeral public key used for this session.
     pub ephemeral_key: PublicKey,
 }
 
+/// Encrypt message towards a receiver using X3DH protocol with their public pre-key material.
 pub fn x3dh_encrypt<K: KeyBundle>(
     plaintext: &[u8],
     our_identity_secret: &SecretKey,
     their_prekey_bundle: &K,
     rng: &Rng,
-) -> Result<PreKeyCiphertext, X3DHError> {
+) -> Result<X3DHCiphertext, X3DHError> {
     their_prekey_bundle.verify()?;
 
     let our_identity_key = our_identity_secret.public_key()?;
@@ -88,7 +98,7 @@ pub fn x3dh_encrypt<K: KeyBundle>(
     let nonce: AeadNonce = hkdf(b"", &sk, None)?;
     let ciphertext = aead_encrypt(&sk, plaintext, nonce, Some(&ad))?;
 
-    Ok(PreKeyCiphertext {
+    Ok(X3DHCiphertext {
         ciphertext,
         ephemeral_key: our_ephemeral_key,
         identity_key: our_identity_key,
@@ -96,8 +106,10 @@ pub fn x3dh_encrypt<K: KeyBundle>(
     })
 }
 
+/// Decrypt message using the X3DH protocol and the secrets of the key material the sender used to
+/// encrypt the payload towards us.
 pub fn x3dh_decrypt(
-    their_ciphertext: &PreKeyCiphertext,
+    their_ciphertext: &X3DHCiphertext,
     our_identity_secret: &SecretKey,
     our_prekey_secret: &SecretKey,
     our_onetime_secret: Option<&SecretKey>,
