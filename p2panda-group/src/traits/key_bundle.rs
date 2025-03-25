@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::error::Error;
-
 use crate::crypto::x25519::PublicKey;
+use crate::two_party::X3DHError;
 
 pub type OneTimeKeyId = u64;
 
 // TODO: Add lifetime.
 pub trait KeyBundle {
-    type Error: Error;
-
     fn identity_key(&self) -> &PublicKey;
 
     fn signed_prekey(&self) -> &PublicKey;
@@ -18,5 +15,5 @@ pub trait KeyBundle {
 
     fn onetime_prekey_id(&self) -> Option<OneTimeKeyId>;
 
-    fn verify(&self) -> Result<(), Self::Error>;
+    fn verify(&self) -> Result<(), X3DHError>;
 }

@@ -79,8 +79,6 @@ impl OneTimeKeyBundle {
 }
 
 impl KeyBundle for OneTimeKeyBundle {
-    type Error = X3DHError;
-
     fn identity_key(&self) -> &PublicKey {
         &self.identity_key
     }
@@ -97,7 +95,7 @@ impl KeyBundle for OneTimeKeyBundle {
         self.onetime_prekey.as_ref().map(|key| key.1)
     }
 
-    fn verify(&self) -> Result<(), Self::Error> {
+    fn verify(&self) -> Result<(), X3DHError> {
         xeddsa_verify(
             self.signed_prekey.as_bytes(),
             &self.identity_key,
@@ -129,8 +127,6 @@ impl LongTermKeyBundle {
 }
 
 impl KeyBundle for LongTermKeyBundle {
-    type Error = X3DHError;
-
     fn identity_key(&self) -> &PublicKey {
         &self.identity_key
     }
