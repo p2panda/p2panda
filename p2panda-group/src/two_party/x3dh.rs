@@ -172,13 +172,13 @@ pub enum X3DHError {
 mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::two_party::{OneTimeKey, OneTimeKeyBundle, PreKey};
+    use crate::two_party::{LongTermKeyBundle, OneTimeKey, OneTimeKeyBundle, PreKey};
 
     use super::{x3dh_decrypt, x3dh_encrypt};
 
     #[test]
     fn encrypt_decrypt() {
-        let rng = Rng::default();
+        let rng = Rng::from_seed([1; 32]);
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
@@ -214,6 +214,39 @@ mod tests {
             Some(&bob_onetime_secret),
         )
         .unwrap();
+
+        assert_eq!(b"Hello, Panda!", plaintext.as_slice());
+    }
+
+    #[test]
+    fn longterm_key_bundle() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        let bob_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let bob_signed_prekey = PreKey::new(bob_prekey_secret.public_key().unwrap());
+
+        let bob_prekey_signature = bob_signed_prekey.sign(&bob_identity_secret, &rng).unwrap();
+
+        let bob_prekey_bundle = LongTermKeyBundle::new(
+            bob_identity_secret.public_key().unwrap(),
+            bob_signed_prekey,
+            bob_prekey_signature,
+        );
+
+        let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        let ciphertext = x3dh_encrypt(
+            b"Hello, Panda!",
+            &alice_identity_secret,
+            &bob_prekey_bundle,
+            &rng,
+        )
+        .unwrap();
+
+        let plaintext =
+            x3dh_decrypt(&ciphertext, &bob_identity_secret, &bob_prekey_secret, None).unwrap();
 
         assert_eq!(b"Hello, Panda!", plaintext.as_slice());
     }
