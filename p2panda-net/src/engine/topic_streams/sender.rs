@@ -2,7 +2,7 @@
 
 use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::error::{SendError, TrySendError};
 
 use crate::engine::engine::ToEngineActor;
 use crate::network::ToNetwork;
@@ -42,6 +42,20 @@ where
         self.to_network_tx.send(to_network_bytes).await?;
 
         Ok(())
+    }
+
+    fn try_send(&mut self, to_network_bytes: ToNetwork) -> Result<(), TrySendError<ToNetwork>> {
+        self.to_network_tx.try_send(to_network_bytes)?;
+
+        Ok(())
+    }
+
+    async fn closed(&self) {
+        self.to_network_tx.closed().await
+    }
+
+    fn is_closed(&self) -> bool {
+        self.to_network_tx.is_closed()
     }
 }
 
