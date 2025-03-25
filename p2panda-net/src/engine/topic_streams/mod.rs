@@ -1,109 +1,28 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+mod receiver;
+mod sender;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::{RwLock, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
-use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
+use crate::engine::engine::ToEngineActor;
 use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
+use crate::TopicId;
 
-use super::ToEngineActor;
-
-// @TODO(glyph): the TopicStreams struct is where we keep the reference counters for the stream
-// subscribers.
-
-#[derive(Debug)]
-pub struct TopicStreamSender<T> {
-    topic: T,
-    stream_id: usize,
-    to_network_tx: mpsc::Sender<ToNetwork>,
-    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-}
-
-impl<T> TopicStreamSender<T>
-where
-    T: TopicQuery + TopicId + 'static,
-{
-    async fn new(
-        topic: T,
-        stream_id: usize,
-        to_network_tx: mpsc::Sender<ToNetwork>,
-        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-    ) -> Self {
-        Self {
-            topic,
-            stream_id,
-            to_network_tx,
-            engine_actor_tx,
-        }
-    }
-
-    async fn send(&mut self, to_network_bytes: ToNetwork) -> Result<(), SendError<ToNetwork>> {
-        self.to_network_tx.send(to_network_bytes).await?;
-
-        Ok(())
-    }
-}
-
-impl<T> Drop for TopicStreamSender<T> {
-    fn drop(&mut self) {
-        todo!()
-
-        // self.engine_actor_tx.send(ToEngineActor::UnsubscribeTopic { .. })
-    }
-}
-
-#[derive(Debug)]
-pub struct TopicStreamReceiver<T> {
-    topic: T,
-    stream_id: usize,
-    from_network_rx: mpsc::Receiver<FromNetwork>,
-    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-}
-
-impl<T> TopicStreamReceiver<T>
-where
-    T: TopicQuery + TopicId + 'static,
-{
-    async fn new(
-        topic: T,
-        stream_id: usize,
-        from_network_rx: mpsc::Receiver<FromNetwork>,
-        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
-    ) -> Self {
-        Self {
-            topic,
-            stream_id,
-            from_network_rx,
-            engine_actor_tx,
-        }
-    }
-
-    // @TODO(glyph): Probably want to implement `recv()`, `recv_many()` and `try_recv()`.
-
-    async fn recv(&mut self) -> Option<FromNetwork> {
-        self.from_network_rx.recv().await
-    }
-}
-
-impl<T> Drop for TopicStreamReceiver<T> {
-    fn drop(&mut self) {
-        todo!()
-
-        // self.engine_actor_tx.send(ToEngineActor::UnsubscribeTopic { .. })
-    }
-}
+pub use crate::engine::topic_streams::receiver::TopicStreamReceiver;
+pub use crate::engine::topic_streams::sender::TopicStreamSender;
 
 /// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
