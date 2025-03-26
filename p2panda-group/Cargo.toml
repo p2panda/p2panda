@@ -1,0 +1,38 @@
+[package]
+name = "p2panda-group"
+version = "0.1.0"
+edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+]
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# TODO: Replace this with `libcrux-chacha20poly1305` as soon as it contains an
+# XChaCha20-Poly1305 implementation.
+chacha20poly1305 = "0.10.1"
+curve25519-dalek = "4.1.3"
+hex = "0.4.3"
+# TODO: Replace this with `libcrux-hpke` as soon as it's released.
+libcrux = { git = "https://github.com/cryspen/libcrux", rev = "cf292a2829172cf9b36390f2f05f7a32b2304888" }
+libcrux-chacha20poly1305 = "0.0.2-beta.3"
+libcrux-ecdh = "0.0.2-beta.3"
+libcrux-ed25519 = "0.0.2-beta.3"
+libcrux-hkdf = "0.0.2-beta.3"
+libcrux-sha2 = "0.0.2-beta.3"
+libcrux-traits = "0.0.2-beta.3"
+# TODO: Find out if we can use libcrux's DRBG instead.
+rand_chacha = { version = "0.9.0", features = ["os_rng"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_bytes = "0.11.17"
+subtle = "2.6.1"
+thiserror = "2.0.12"
+zeroize = { version = "1.8.1", features = ["derive"] }
