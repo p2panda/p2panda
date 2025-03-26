@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod crypto;
-pub mod key_bundle;
-pub mod key_manager;
+// TODO: To be removed.
+#![allow(dead_code)]
+mod crypto;
+mod key_bundle;
+mod key_manager;
 pub mod traits;
-pub mod two_party;
+mod two_party;
+
+pub use key_bundle::{
+    Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId,
+};
+pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};

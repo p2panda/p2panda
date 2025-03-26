@@ -18,15 +18,17 @@ use crate::traits::{IdentityManager, PreKeyManager};
 #[derive(Debug)]
 pub struct KeyManager;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Serializable state of key manager (for persistance).
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Clone))]
 pub struct KeyManagerState {
-    identity_secret: SecretKey,
-    identity_key: PublicKey,
-    prekey_secret: SecretKey,
-    prekey: PreKey,
-    prekey_signature: XSignature,
-    onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
-    onetime_next_id: OneTimePreKeyId,
+    pub identity_secret: SecretKey,
+    pub identity_key: PublicKey,
+    pub prekey_secret: SecretKey,
+    pub prekey: PreKey,
+    pub prekey_signature: XSignature,
+    pub onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
+    pub onetime_next_id: OneTimePreKeyId,
 }
 
 impl KeyManager {
@@ -74,7 +76,7 @@ impl PreKeyManager for KeyManager {
     }
 
     fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
-        LongTermKeyBundle::new(y.identity_key, y.prekey, y.prekey_signature.clone())
+        LongTermKeyBundle::new(y.identity_key, y.prekey, y.prekey_signature)
     }
 
     fn generate_onetime_bundle(
@@ -95,7 +97,7 @@ impl PreKeyManager for KeyManager {
         let bundle = OneTimeKeyBundle::new(
             y.identity_key,
             y.prekey,
-            y.prekey_signature.clone(),
+            y.prekey_signature,
             Some(onetime_key),
         );
 
