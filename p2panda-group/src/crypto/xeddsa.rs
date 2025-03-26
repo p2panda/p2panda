@@ -74,7 +74,7 @@ pub fn xeddsa_sign(
         let cap_e = &k * ED25519_BASEPOINT_TABLE; // E = kB
         let mut cap_a = cap_e.compress(); // A.y = E.y
         let sign_bit = cap_a.0[31] >> 7; // sign_bit = E.s
-        cap_a.0[31] &= 0x7F; // A.s = 0
+        cap_a.0[31] &= 0b0111_1111_u8; // A.s = 0
 
         // if E.s == 1:
         //   a = -k (mod q)
