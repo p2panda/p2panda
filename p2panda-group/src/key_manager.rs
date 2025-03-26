@@ -32,6 +32,8 @@ pub struct KeyManagerState {
 }
 
 impl KeyManager {
+    /// Returns newly initialised key-manager state, holding our identity secret and a new signed
+    /// pre-key secret which can be used to generate key-bundles.
     pub fn init(
         identity_secret: &SecretKey,
         lifetime: Lifetime,
@@ -53,6 +55,7 @@ impl KeyManager {
 }
 
 impl IdentityManager<KeyManagerState> for KeyManager {
+    /// Returns identity key secret.
     fn identity_secret(y: &KeyManagerState) -> &SecretKey {
         &y.identity_secret
     }
@@ -63,10 +66,12 @@ impl PreKeyManager for KeyManager {
 
     type Error = KeyManagerError;
 
+    /// Returns long-term pre-key secret.
     fn prekey_secret(y: &Self::State) -> &SecretKey {
         &y.prekey_secret
     }
 
+    /// Generates a new long-term pre-key secret with the given lifetime.
     fn rotate_prekey(
         y: Self::State,
         lifetime: Lifetime,
@@ -75,10 +80,12 @@ impl PreKeyManager for KeyManager {
         Self::init(&y.identity_secret, lifetime, rng)
     }
 
+    /// Returns public long-term key-bundle which can be published on the network.
     fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
         LongTermKeyBundle::new(y.identity_key, y.prekey, y.prekey_signature)
     }
 
+    /// Creates a new public one-time key-bundle.
     fn generate_onetime_bundle(
         mut y: Self::State,
         rng: &Rng,
@@ -106,6 +113,13 @@ impl PreKeyManager for KeyManager {
         Ok((y, bundle))
     }
 
+    /// Returns one-time pre-key secret used by a sender during X3DH.
+    ///
+    /// Throws an error when requested pre-key secret is unknown (and thus probably was already
+    /// used once).
+    ///
+    /// Returns none when this key-manager doesn't have any one-time pre-keys. New ones can be
+    /// created by calling `generate_onetime_bundle`.
     fn use_onetime_secret(
         mut y: Self::State,
         id: OneTimePreKeyId,
@@ -128,7 +142,7 @@ pub enum KeyManagerError {
     #[error(transparent)]
     X25519(#[from] X25519Error),
 
-    #[error("could not find onetime prekey secret with id {0}")]
+    #[error("could not find one-time pre-key secret with id {0}")]
     UnknownOneTimeSecret(OneTimePreKeyId),
 }
 
