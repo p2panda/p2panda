@@ -4,10 +4,10 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
+use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use crate::crypto::hpke::{HpkeCiphertext, HpkeError, hpke_open, hpke_seal};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
