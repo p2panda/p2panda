@@ -11,7 +11,7 @@ use zeroize::ZeroizeOnDrop;
 ///
 /// In particular this implementation provides:
 /// 1. Zeroise memory on drop.
-/// 2. Private API methods to retreive bytes, preventing misuse.
+/// 2. Private API methods to retrieve bytes, preventing misuse.
 /// 3. Hide bytes value when printing debug info.
 /// 4. Constant-time comparison implementation to prevent timing attacks.
 ///
