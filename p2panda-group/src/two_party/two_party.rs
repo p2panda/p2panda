@@ -87,6 +87,7 @@ where
     KEY: IdentityManager<KEY::State> + PreKeyManager,
     KB: KeyBundle,
 {
+    /// Initialise new 2SM state using the other party's pre-key bundle.
     pub fn init(their_prekey_bundle: KB) -> TwoPartyState<KB> {
         TwoPartyState {
             our_next_key_index: 1,
@@ -100,6 +101,7 @@ where
         }
     }
 
+    /// Securely send a message `plaintext` to the other party.
     pub fn send(
         y: TwoPartyState<KB>,
         y_manager: &KEY::State,
@@ -134,6 +136,7 @@ where
         Ok((y_i, message))
     }
 
+    /// Handle receiving a secure message from the other party.
     pub fn receive(
         y: TwoPartyState<KB>,
         y_manager: KEY::State,
@@ -151,6 +154,7 @@ where
     }
 }
 
+/// 2SM states indicating which key material was used.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::enum_variant_names)]
 pub enum KeyUsed {
@@ -161,29 +165,44 @@ pub enum KeyUsed {
     ReceivedKey,
 
     /// Key the receiving peer generated themselves at some time. We can refer to the exact key by
-    /// the it's index.
+    /// it's index.
     OwnKey(u64),
 }
 
+/// Message to be sent over the network.
+///
+/// Note that this does not contain any additional information about the sender and receiver. This
+/// information needs to be added in applications.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TwoPartyMessage {
     ciphertext: TwoPartyCiphertext,
     key_used: KeyUsed,
 }
 
-pub type TwoPartyResult<T> = Result<T, TwoPartyError>;
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TwoPartyCiphertext {
+    /// Message was encrypted using X3DH pre-keys (initial round).
     PreKey(X3DHCiphertext),
+
+    /// Message was encrypted using HPKE.
     Hpke(HpkeCiphertext),
 }
 
+/// Payload from sender which will be encrypted containing the actual message `plaintext` and
+/// meta-data we need for the 2SM protocol.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TwoPartyPlaintext {
+    /// Secret message for the receiver.
     plaintext: Vec<u8>,
+
+    /// Newly generated secret for the receiver, to-be used in future 2SM rounds.
     receiver_new_secret: SecretKey,
+
+    /// Newly generated public key of the sender, to-be used in future 2SM rounds.
     sender_new_public_key: PublicKey,
+
+    /// Index of the newly generated key of the sender, the receiver refers to it when using it in
+    /// future 2SM rounds.
     sender_next_index: u64,
 }
 
@@ -331,6 +350,8 @@ impl<KEY, KB> TwoParty<KEY, KB> {
         ))
     }
 }
+
+pub type TwoPartyResult<T> = Result<T, TwoPartyError>;
 
 #[derive(Debug, Error)]
 pub enum TwoPartyError {
