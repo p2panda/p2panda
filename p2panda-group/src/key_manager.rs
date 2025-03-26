@@ -81,6 +81,9 @@ impl PreKeyManager for KeyManager {
     }
 
     /// Returns public long-term key-bundle which can be published on the network.
+    ///
+    /// Note that returned key-bundles can be expired and thus invalid. Applications need to check
+    /// the validity of the bundles and generate new ones when necessary.
     fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
         LongTermKeyBundle::new(y.identity_key, y.prekey, y.prekey_signature)
     }
@@ -95,6 +98,7 @@ impl PreKeyManager for KeyManager {
 
         {
             let existing_key = y.onetime_secrets.insert(onetime_key.id(), onetime_secret);
+            // Sanity check.
             assert!(
                 existing_key.is_none(),
                 "should never insert same id more than once"
@@ -148,6 +152,8 @@ pub enum KeyManagerError {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use crate::crypto::x25519::SecretKey;
     use crate::traits::KeyBundle;
     use crate::{crypto::Rng, key_bundle::Lifetime};
@@ -156,7 +162,7 @@ mod tests {
 
     #[test]
     fn generate_onetime_keys() {
-        let rng = Rng::default();
+        let rng = Rng::from_seed([1; 32]);
 
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let state = KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap();
@@ -216,5 +222,40 @@ mod tests {
         // One-time prekeys are unique.
         assert_ne!(bundle_1.onetime_prekey(), bundle_2.onetime_prekey());
         assert_ne!(bundle_1.onetime_prekey_id(), bundle_2.onetime_prekey_id());
+    }
+
+    #[test]
+    fn expired_prekey_bundles() {
+        let rng = Rng::from_seed([1; 32]);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        let y = KeyManager::init(
+            &identity_secret,
+            Lifetime::from_range(now - 120, now - 60), // expired lifetime
+            &rng,
+        )
+        .unwrap();
+
+        // Current pre-key bundle is invalid.
+        let key_bundle = KeyManager::prekey_bundle(&y);
+
+        // Check pre-key bundle and generate a new one when invalid.
+        let (key_bundle_i, _y_i) = {
+            if key_bundle.verify().is_ok() {
+                (key_bundle.clone(), y)
+            } else {
+                let y_i = KeyManager::rotate_prekey(y, Lifetime::default(), &rng).unwrap();
+                let key_bundle_i = KeyManager::prekey_bundle(&y_i);
+                (key_bundle_i, y_i)
+            }
+        };
+
+        // Make sure new pre-key bundle is different.
+        assert_ne!(key_bundle, key_bundle_i);
     }
 }
