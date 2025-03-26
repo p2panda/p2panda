@@ -7,6 +7,7 @@ use crate::crypto::x25519::{PUBLIC_KEY_SIZE, PublicKey, SecretKey};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_sign};
 use crate::keybundle::{Lifetime, LifetimeError};
 
+/// Unique identifier of a member's one-time pre-key.
 pub type OneTimePreKeyId = u64;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
