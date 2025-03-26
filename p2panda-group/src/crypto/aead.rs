@@ -20,30 +20,30 @@ pub fn aead_encrypt(
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
     // Implementation attaches authenticated tag (16 bytes) automatically to the end of ciphertext.
-    let mut ciphertext_tag = vec![0; plaintext.len() + TAG_LEN];
+    let mut ciphertext_with_tag = vec![0; plaintext.len() + TAG_LEN];
     libcrux_chacha20poly1305::encrypt(
         key,
         plaintext,
-        &mut ciphertext_tag,
+        &mut ciphertext_with_tag,
         aad.unwrap_or_default(),
         &nonce,
     )
     .map_err(AeadError::Encrypt)?;
-    Ok(ciphertext_tag)
+    Ok(ciphertext_with_tag)
 }
 
 /// ChaCha20Poly1305 AEAD decryption function.
 pub fn aead_decrypt(
     key: &AeadKey,
-    ciphertext_tag: &[u8],
+    ciphertext_with_tag: &[u8],
     nonce: AeadNonce,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
-    let mut buffer = vec![0; ciphertext_tag.len()];
+    let mut buffer = vec![0; ciphertext_with_tag.len()];
     let plaintext = libcrux_chacha20poly1305::decrypt(
         key,
         &mut buffer,
-        ciphertext_tag,
+        ciphertext_with_tag,
         aad.unwrap_or_default(),
         &nonce,
     )

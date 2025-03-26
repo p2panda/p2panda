@@ -33,13 +33,13 @@ pub fn x_aead_encrypt(
 /// XChaCha20-Poly1305 AEAD decryption function.
 pub fn x_aead_decrypt(
     key: &XAeadKey,
-    ciphertext_tag: &[u8],
+    ciphertext_with_tag: &[u8],
     nonce: XAeadNonce,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, XAeadError> {
     let key = Key::from_slice(key);
     let nonce = XNonce::from_slice(&nonce);
-    let mut plaintext: Vec<u8> = Vec::from(ciphertext_tag);
+    let mut plaintext: Vec<u8> = Vec::from(ciphertext_with_tag);
 
     let cipher = XChaCha20Poly1305::new(key);
     cipher
