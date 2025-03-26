@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn two_party_secret_messaging_protocol() {
-        let rng = Rng::default();
+        let rng = Rng::from_seed([1; 32]);
 
         // Alice generates their key material.
 
