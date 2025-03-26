@@ -115,6 +115,9 @@ pub fn x3dh_encrypt<K: KeyBundle>(
 
 /// Decrypt message using the X3DH protocol and the secrets of the key material the sender used to
 /// encrypt the payload towards us.
+///
+/// Note that an application using X3DH should reject the received ciphertext when an expired
+/// pre-key or already used one-time pre-key was used by the sender.
 pub fn x3dh_decrypt(
     their_ciphertext: &X3DHCiphertext,
     our_identity_secret: &SecretKey,
