@@ -3,13 +3,14 @@
 use std::error::Error;
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+
 use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
 use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKeyId};
 
 pub trait PreKeyManager {
-    // TODO: State should be serializable (for persistance).
-    type State: Debug;
+    type State: Debug + Serialize + for<'a> Deserialize<'a>;
 
     type Error: Error;
 
