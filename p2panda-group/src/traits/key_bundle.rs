@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::crypto::x25519::PublicKey;
-use crate::keybundle::{KeyBundleError, OneTimePreKeyId};
+use crate::key_bundle::{KeyBundleError, OneTimePreKeyId};
 
 pub trait KeyBundle {
     fn identity_key(&self) -> &PublicKey;

@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::crypto::x25519::PublicKey;
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_verify};
-use crate::keybundle::{LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
+use crate::key_bundle::{LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
 use crate::traits::KeyBundle;
 
 /// Key-bundle with pre-published public keys to be used exactly _once_.
@@ -135,7 +135,7 @@ mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
     use crate::crypto::xeddsa::xeddsa_sign;
-    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimePreKey, PreKey};
+    use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimePreKey, PreKey};
     use crate::traits::KeyBundle;
 
     use super::OneTimeKeyBundle;

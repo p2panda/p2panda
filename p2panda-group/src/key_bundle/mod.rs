@@ -41,10 +41,10 @@
 //! on the network, other peers need to make sure they keep collecting the latest bundles
 //! regularily.
 #[allow(clippy::module_inception)]
-mod keybundle;
+mod key_bundle;
 mod lifetime;
 mod prekey;
 
-pub use keybundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle};
+pub use key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle};
 pub use lifetime::{Lifetime, LifetimeError};
 pub use prekey::{OneTimePreKey, OneTimePreKeyId, PreKey};

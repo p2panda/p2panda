@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub mod crypto;
-pub mod keybundle;
+pub mod key_bundle;
 pub mod traits;
-pub mod twoparty;
+pub mod two_party;

@@ -6,7 +6,7 @@
 //! based on public keys. X3DH provides forward secrecy and cryptographic deniability.
 //!
 //! X3DH is designed for asynchronous settings where one user ("Bob") is offline but has published
-//! some information to a server. Another user ("Alice") wants to use that information to send
+//! public key bundles in the network. Another user ("Alice") wants to use that information to send
 //! encrypted data to Bob, and also establish a shared secret key for future communication.
 //!
 //! <https://signal.org/docs/specifications/x3dh/>
@@ -17,7 +17,7 @@ use crate::crypto::aead::{AeadError, AeadNonce, aead_decrypt, aead_encrypt};
 use crate::crypto::hkdf::{HkdfError, hkdf};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::keybundle::{KeyBundleError, OneTimePreKeyId};
+use crate::key_bundle::{KeyBundleError, OneTimePreKeyId};
 use crate::traits::KeyBundle;
 
 /// ASCII string identifying the application as specified in X3DH used for KDF.
@@ -185,7 +185,7 @@ pub enum X3DHError {
 mod tests {
     use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::keybundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, PreKey};
+    use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, PreKey};
 
     use super::{x3dh_decrypt, x3dh_encrypt};
 
