@@ -20,6 +20,12 @@
 //! only the public key.
 //!
 //! <https://eprint.iacr.org/2020/1281.pdf>
+#[allow(clippy::module_inception)]
+mod two_party;
 mod x3dh;
 
-pub use x3dh::{X3DHError, x3dh_decrypt, x3dh_encrypt};
+pub use two_party::{
+    LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError,
+    TwoPartyMessage, TwoPartyPlaintext, TwoPartyState,
+};
+pub use x3dh::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};

@@ -42,10 +42,10 @@ pub struct X3DHCiphertext {
 }
 
 /// Encrypt message towards a receiver using X3DH protocol with their public pre-key material.
-pub fn x3dh_encrypt<K: KeyBundle>(
+pub fn x3dh_encrypt<KB: KeyBundle>(
     plaintext: &[u8],
     our_identity_secret: &SecretKey,
-    their_prekey_bundle: &K,
+    their_prekey_bundle: &KB,
     rng: &Rng,
 ) -> Result<X3DHCiphertext, X3DHError> {
     their_prekey_bundle.verify()?;
