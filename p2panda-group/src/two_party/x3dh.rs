@@ -65,22 +65,27 @@ pub fn x3dh_encrypt<K: KeyBundle>(
 
     ikm.extend_from_slice(&[0xFFu8; 32]); // "discontinuity bytes"
 
+    // DH1 = DH(IKA, SPKB)
     ikm.extend_from_slice(
         &our_identity_secret.calculate_agreement(their_prekey_bundle.signed_prekey())?,
     );
 
+    // DH2 = DH(EKA, IKB)
     ikm.extend_from_slice(
         &our_ephemeral_secret.calculate_agreement(their_prekey_bundle.identity_key())?,
     );
 
+    // DH3 = DH(EKA, SPKB)
     ikm.extend_from_slice(
         &our_ephemeral_secret.calculate_agreement(their_prekey_bundle.signed_prekey())?,
     );
 
+    // DH4 = DH(EKA, OPKB)
     if let Some(onetime_prekey) = their_prekey_bundle.onetime_prekey() {
         ikm.extend_from_slice(&our_ephemeral_secret.calculate_agreement(onetime_prekey)?);
     }
 
+    // SK = KDF(DH1 || DH2 || DH3 || DH4)
     let sk: [u8; 32] = {
         let salt = vec![0_u8; 32];
         hkdf(&salt, &ikm, Some(KDF_INFO))?
@@ -89,6 +94,7 @@ pub fn x3dh_encrypt<K: KeyBundle>(
     drop(our_ephemeral_secret);
     drop(ikm);
 
+    // AD = Encode(IKA) || Encode(IKB)
     let ad = {
         let mut buf = Vec::new();
         buf.extend_from_slice(our_identity_key.as_bytes());
@@ -143,6 +149,7 @@ pub fn x3dh_decrypt(
         );
     }
 
+    // SK = KDF(DH1 || DH2 || DH3 || DH4)
     let sk: [u8; 32] = {
         let salt = vec![0_u8; 32];
         hkdf(&salt, &ikm, Some(KDF_INFO))?
@@ -150,6 +157,7 @@ pub fn x3dh_decrypt(
 
     drop(ikm);
 
+    // AD = Encode(IKA) || Encode(IKB)
     let ad = {
         let mut buf = Vec::new();
         buf.extend_from_slice(their_ciphertext.identity_key.as_bytes());
