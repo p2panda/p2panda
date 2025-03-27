@@ -195,6 +195,9 @@ mod tests {
         let (state, onetime_secret_2) =
             KeyManager::use_onetime_secret(state, bundle_2.onetime_prekey_id().unwrap()).unwrap();
 
+        // Secrets got removed from state.
+        assert_eq!(state.onetime_secrets.len(), 0);
+
         // Retreiving unknown one-time prekeys throws an error.
         assert!(KeyManager::use_onetime_secret(state.clone(), 42).is_err());
 
