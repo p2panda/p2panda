@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 pub trait AckedGroupMembership<ID, OP> {
-    type State: Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
     type Error: Error;
 
