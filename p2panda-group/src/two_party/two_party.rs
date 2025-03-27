@@ -557,6 +557,14 @@ mod tests {
         // Bob used Alice's latest public key (2) to encrypt this message.
         assert_eq!(message_3.key_used, KeyUsed::OwnKey(2));
 
+        // Bob generated their own secret key and sends the public part to Alice for future rounds.
+        assert_eq!(bob_2sm.our_secret_keys.len(), 1);
+        assert_eq!(bob_2sm.our_min_key_index, 1);
+        assert_eq!(bob_2sm.our_next_key_index, 2);
+
+        // Bob assumes now that Alice will use Bob's secret key for future messages.
+        assert_eq!(bob_2sm.their_next_key_used, KeyUsed::ReceivedKey);
+
         // 5. Alice receives the message from Bob.
         let (alice_2sm, alice_manager, receive_3) =
             OneTimeTwoParty::receive(alice_2sm, alice_manager, message_3).unwrap();
@@ -591,12 +599,17 @@ mod tests {
         let (alice_2sm, message_7) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Oh wait.", &rng).unwrap();
 
-        let (_, _, receive_6) =
+        let (alice_2sm, _, receive_6) =
             OneTimeTwoParty::receive(alice_2sm, alice_manager, message_6).unwrap();
-        let (_, _, receive_7) = OneTimeTwoParty::receive(bob_2sm, bob_manager, message_7).unwrap();
+        let (bob_2sm, _, receive_7) =
+            OneTimeTwoParty::receive(bob_2sm, bob_manager, message_7).unwrap();
 
         assert_eq!(receive_6, b":-(");
         assert_eq!(receive_7, b"Oh wait.");
+
+        // Both Alice and Bob still only have one secret key and all other keys have been removed.
+        assert_eq!(alice_2sm.our_secret_keys.len(), 1);
+        assert_eq!(bob_2sm.our_secret_keys.len(), 1);
     }
 
     #[test]
