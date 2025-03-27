@@ -9,6 +9,10 @@ use p2panda_group::test_utils::SecretKey;
 use p2panda_group::traits::PreKeyManager;
 use p2panda_group::{KeyManager, Lifetime, OneTimeTwoParty, Rng, TwoPartyMessage};
 
+/// Max. number of messages in a member's inbox.
+const INBOX_CAPACITY: usize = 128;
+
+/// Assertable 2SM message.
 struct Message {
     /// Expected message in plaintext.
     expected: Vec<u8>,
@@ -46,14 +50,14 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
     let mut alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle.clone());
     let mut bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle.clone());
 
-    let mut to_alice_inbox = VecDeque::<Message>::new();
-    let mut to_bob_inbox = VecDeque::<Message>::new();
+    let mut to_alice_inbox = VecDeque::<Message>::with_capacity(INBOX_CAPACITY);
+    let mut to_bob_inbox = VecDeque::<Message>::with_capacity(INBOX_CAPACITY);
 
     for action in actions {
         match action % 4 {
             0 => {
                 // Only send to Bob if their inbox is not too full.
-                if to_bob_inbox.len() > 128 {
+                if to_bob_inbox.len() >= INBOX_CAPACITY {
                     continue;
                 }
 
@@ -72,7 +76,7 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
             }
             1 => {
                 // Only send to Alice if their inbox is not too full.
-                if to_alice_inbox.len() > 128 {
+                if to_alice_inbox.len() >= INBOX_CAPACITY {
                     continue;
                 }
 
