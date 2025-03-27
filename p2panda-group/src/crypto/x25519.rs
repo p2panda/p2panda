@@ -27,6 +27,11 @@ impl SecretKey {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
+        SecretKey(Secret::from_bytes(clamp_integer(bytes)))
+    }
+
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
         self.0.as_bytes()
     }
