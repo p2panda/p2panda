@@ -6,6 +6,7 @@ mod crypto;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
+mod message_scheme;
 pub mod traits;
 mod two_party;
 
