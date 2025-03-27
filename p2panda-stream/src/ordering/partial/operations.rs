@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{collections::HashMap, marker::PhantomData};
+use std::marker::PhantomData;
 
 use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::{LogStore, OperationStore};
@@ -15,8 +15,7 @@ use crate::ordering::partial::{
 ///
 /// This struct is a thin wrapper around ordering::PartialOrder struct which takes care of sorting
 /// the operation DAG into a partial order. Here we have the addition of a `LogStore` and
-/// `OperationStore` implementation (traits from `p2panda-store`) and an operation cache which
-/// helps us avoid unnecessary calls to the database.
+/// `OperationStore` implementation (traits from `p2panda-store`).
 #[derive(Debug)]
 pub struct PartialOrder<L, E, OS, POS> {
     /// A store containing p2panda operations.
@@ -28,10 +27,6 @@ pub struct PartialOrder<L, E, OS, POS> {
     /// The inner PartialOrder struct which sorts the operation DAG into a partial order.
     inner: InnerPartialOrder<Hash, POS>,
 
-    /// In memory cache of operations we have processed, before retrieving "ready" operations from
-    /// the store they will be taken from here if present. The store can be cleared at any time
-    /// in order to reduce memory use.
-    operation_cache: HashMap<Hash, Operation<E>>,
     _phantom: PhantomData<(L, E)>,
 }
 
@@ -47,7 +42,6 @@ where
         PartialOrder {
             operation_store,
             inner: inner_dependency_checker,
-            operation_cache: Default::default(),
             _phantom: PhantomData,
         }
     }
@@ -59,7 +53,6 @@ where
     ) -> Result<(), OperationDependencyCheckerError> {
         let hash = operation.hash;
         let previous = operation.header.previous.clone();
-        self.operation_cache.insert(operation.hash, operation);
         self.inner.process(hash, &previous).await?;
         Ok(())
     }
@@ -69,10 +62,6 @@ where
         let Some(hash) = self.inner.next().await? else {
             return Ok(None);
         };
-
-        if let Some(operation) = self.operation_cache.remove(&hash) {
-            return Ok(Some(operation));
-        }
 
         if let Some((header, body)) = self
             .operation_store
@@ -85,11 +74,6 @@ where
         } else {
             Err(OperationDependencyCheckerError::MissingOperation(hash))
         }
-    }
-
-    /// Clear the operation cache.
-    pub fn clear_cache(&mut self) {
-        self.operation_cache.clear();
     }
 }
 
@@ -244,24 +228,18 @@ mod tests {
         // Process each operation out-of-order.
         let result = dependency_checker.process(operations[4].clone()).await;
         assert!(result.is_ok());
-        // Each operation gets inserted to the operation cache.
-        assert_eq!(dependency_checker.operation_cache.len(), 1);
 
         let result = dependency_checker.process(operations[3].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 2);
 
         let result = dependency_checker.process(operations[2].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 3);
 
         let result = dependency_checker.process(operations[1].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 4);
 
         let result = dependency_checker.process(operations[0].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 5);
 
         // Calling next should give us the first operation which had all it's dependencies met, in
         // this case it's the root of the graph OP1.
@@ -294,62 +272,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_cache() {
-        // Same test as above except we clear the cache before taking operations via the `next` method.
-        let private_key = PrivateKey::new();
-        let mut operation_store = MemoryStore::<u64>::default();
-        let partial_order_store = PartialOrderMemoryStore::default();
-        let mut dependency_checker =
-            PartialOrder::new(operation_store.clone(), partial_order_store);
-
-        let operations = setup(&private_key, &mut operation_store).await;
-
-        let result = dependency_checker.process(operations[4].clone()).await;
-        assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 1);
-        let result = dependency_checker.process(operations[3].clone()).await;
-        assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 2);
-        let result = dependency_checker.process(operations[2].clone()).await;
-        assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 3);
-        let result = dependency_checker.process(operations[1].clone()).await;
-        assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 4);
-        let result = dependency_checker.process(operations[0].clone()).await;
-        assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 5);
-
-        // Clear the cache!
-        dependency_checker.clear_cache();
-        assert_eq!(dependency_checker.operation_cache.len(), 0);
-
-        let next = dependency_checker.next().await.unwrap();
-        assert_eq!(next.unwrap(), operations[0]);
-
-        let mut concurrent_operations =
-            HashSet::from([operations[1].hash, operations[2].hash, operations[3].hash]);
-
-        let next = dependency_checker.next().await.unwrap();
-        assert!(next.is_some());
-        let next = next.unwrap();
-        assert!(concurrent_operations.remove(&next.hash),);
-
-        let next = dependency_checker.next().await.unwrap();
-        assert!(next.is_some());
-        let next = next.unwrap();
-        assert!(concurrent_operations.remove(&next.hash),);
-
-        let next = dependency_checker.next().await.unwrap();
-        assert!(next.is_some());
-        let next = next.unwrap();
-        assert!(concurrent_operations.remove(&next.hash),);
-
-        let next = dependency_checker.next().await.unwrap();
-        assert_eq!(next.unwrap(), operations[4]);
-    }
-
-    #[tokio::test]
     async fn missing_dependency() {
         let private_key = PrivateKey::new();
         let mut operation_store = MemoryStore::<u64>::default();
@@ -361,16 +283,12 @@ mod tests {
 
         let result = dependency_checker.process(operations[1].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 1);
         let result = dependency_checker.process(operations[2].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 2);
         let result = dependency_checker.process(operations[3].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 3);
         let result = dependency_checker.process(operations[4].clone()).await;
         assert!(result.is_ok());
-        assert_eq!(dependency_checker.operation_cache.len(), 4);
 
         let next = dependency_checker.next().await.unwrap();
         assert!(next.is_none());
