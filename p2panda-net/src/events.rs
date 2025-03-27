@@ -13,8 +13,6 @@ pub enum SystemEvent<T> {
     },
 
     /// Left a gossip topic.
-    // @TODO: This requires `unsubscribe()` to be implemented.
-    // https://github.com/p2panda/p2panda/issues/639
     GossipLeft { topic_id: [u8; 32] },
 
     /// Established a connection with a neighbor.
