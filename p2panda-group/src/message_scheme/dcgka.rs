@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::crypto::Secret;
 use crate::key_bundle::OneTimeKeyBundle;
 use crate::traits::{
@@ -41,11 +43,16 @@ pub struct Dcgka<ID, OP, PKI, DGM, KEY> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KEY)>,
 }
 
+/// Serializable state of DCGKA (for persistance).
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Clone))]
 pub struct DcgkaState<ID, OP, PKI, DGM, KEY>
 where
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
     KEY: IdentityManager<KEY::State> + PreKeyManager,
+    ID: IdentityHandle,
+    OP: OperationId,
 {
     /// Public Key Infrastructure. From here we receive the identity keys and one-time prekey
     /// bundles for each member to do 2SM.
@@ -119,6 +126,10 @@ where
 // TODO
 const RATCHET_KEY_SIZE: usize = 32;
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Clone))]
 pub struct NextSeed(Secret<RATCHET_KEY_SIZE>);
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Clone))]
 pub struct ChainSecret(Secret<RATCHET_KEY_SIZE>);
