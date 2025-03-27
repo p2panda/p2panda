@@ -3,10 +3,12 @@
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
+mod dgm;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
 
+pub use dgm::AckedGroupMembership;
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
