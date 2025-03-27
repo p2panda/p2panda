@@ -18,30 +18,44 @@ pub enum PartialOrderError {
     StoreError(String),
 }
 
-/// Struct for establishing partial order over items in a Directed-Acyclic-Graph.
+/// Struct for establishing partial order over a set of items which form a dependency graph.
+///
+/// This functionality is required when, for example, processing a set of messages where some
+/// messages _must_ be processed before others. A set such as this would naturally form a graph
+/// structure, each item would have a chain of dependencies. Another example would be a package
+/// dependency tree, where a certain package depends on one or many others. In order to understand
+/// which order we should install these packages, we need to partially order the set and process
+/// them from start to finish.
 ///
 /// There are various approaches which can be taken when wanting to linearize items in a graph
-/// structure. This approach establishes a partial order, meaning not all items in the graph are
-/// comparable, and is non-deterministic. The main requirement is that all dependencies of an item
-/// are sorted "before" the item itself, the exact order is not a concern.
+/// structure. The approach taken in this module establishes a partial order over all items in the
+/// set. The word "partial" indicates that we accept some items may not be directly comparable,
+/// items in different branches of the graph may not have a direct path between them, and so we
+/// don't know "which should come first". In fact, as there is no dependency relation between
+/// them, it makes no difference which comes first, and depending on the order items are processed
+/// the ordering process may arrive at different results (it is a non-deterministic algorithm).
 ///
-/// Items are considered in a "ready" state when all dependencies are met, and in a "pending"
-/// state when their dependencies are not yet met. Calls to `next` will return "ready" items in
-/// the order that they became ready.
+/// Items in the process of being ordered are considered to be in one of two states. They are
+/// considered in a "ready" state when all their dependencies have themselves been processed, and
+/// in a "pending" state when their dependencies have not yet been processed.
 ///
-/// If an item is processed an in a "pending" state then it is held in a pending queue and if it's
-/// dependencies are later processed and "ready", then the so far "pending" item will be moved to
-/// the "ready" queue. This processing of pending items recursively checks all pending dependents.
+/// If an item is in a "pending" state then it is held in a pending queue and if it's dependencies
+/// are later processed and "ready", then the so far "pending" item will be moved to the "ready"
+/// queue. This processing of pending items recursively checks all pending dependents.
 ///
 /// Example graph:
 ///
+/// ```
 /// A <-- B2 <-- C
 ///   \-- B1 <--/
+/// ```
 ///
 /// Both of the following are possible and valid orderings for the above graph:
 ///
+/// ```
 /// [A, B1, B2, C]
 /// [A, B2, B1, C]
+/// ```
 ///
 /// Items will not be placed into an partial order until all their dependencies are met, in the
 /// following example item C will not be visited as we have not processed all of it's
@@ -49,12 +63,16 @@ pub enum PartialOrderError {
 ///
 /// Example graph:
 ///
+/// ```
 /// A <-- ?? <-- C
-///   \-- B1 <--/
+///  \-- B1 <--/
+/// ```
 ///
 /// C is not processed yet as we are missing one of its dependencies:
 ///
+/// ```
 /// [A, B1]
+/// ```
 ///
 /// Note that no checks are made for cycles occurring in the graph, this should be validated on
 /// another layer.
