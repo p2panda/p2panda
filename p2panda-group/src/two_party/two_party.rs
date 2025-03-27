@@ -56,6 +56,12 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// the other party, resulting in a more optimal O(n) cost when rotating keys. This allows us to
 /// "heal" the group in less steps after a member is removed.
 ///
+/// ## Message Ordering
+///
+/// 2SM assumes that all messages are received in the order they have been sent. The application or
+/// underlying networking protocol needs to handle ordering. The DCGKA protocol (as specified in
+/// the paper) and causally-ordered, authenticated broadcast in p2panda itself handle this for us.
+///
 /// <https://eprint.iacr.org/2020/1281.pdf>
 pub struct TwoParty<KEY, KB> {
     _marker: PhantomData<(KEY, KB)>,
@@ -423,7 +429,7 @@ mod tests {
     use crate::key_manager::KeyManager;
     use crate::traits::PreKeyManager;
 
-    use super::{KeyUsed, LongTermTwoParty, OneTimeTwoParty};
+    use super::{KeyUsed, LongTermTwoParty, OneTimeTwoParty, TwoPartyError};
 
     #[test]
     fn two_party_secret_messaging_protocol() {
@@ -684,5 +690,57 @@ mod tests {
         // The keys for the first round should be different across groups.
 
         assert_ne!(bob_public_key_1, bob_public_key_2);
+    }
+
+    #[test]
+    fn invalid_replayed_messages() {
+        let rng = Rng::from_seed([1; 32]);
+
+        // Alice generates their key material.
+
+        let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let alice_manager =
+            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+
+        let (alice_manager, alice_prekey_bundle) =
+            KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
+
+        // Bob generates their key material.
+
+        let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let bob_manager =
+            KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+
+        let (bob_manager, bob_prekey_bundle) =
+            KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();
+
+        // Alice and Bob set up the 2SM protocol handlers for each other.
+
+        let alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle);
+        let bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle);
+
+        // Alice sends a message to Bob.
+
+        let (alice_2sm, message_1) =
+            OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, Bob!", &rng).unwrap();
+        let (bob_2sm, bob_manager, receive_1) =
+            OneTimeTwoParty::receive(bob_2sm, bob_manager, message_1.clone()).unwrap();
+
+        // Bob receives the same message again.
+
+        let result = OneTimeTwoParty::receive(bob_2sm.clone(), bob_manager.clone(), message_1);
+        assert!(matches!(result, Err(TwoPartyError::PreKeyReuse)));
+
+        // Alice sends another message to Bob.
+
+        let (alice_2sm, message_2) =
+            OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, again, Bob!", &rng).unwrap();
+        let (bob_2sm, bob_manager, receive_2) =
+            OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2.clone()).unwrap();
+
+        // Bob receives the same message again.
+
+        let result = OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2);
+        assert!(matches!(result, Err(TwoPartyError::Hpke(_))));
     }
 }
