@@ -727,7 +727,7 @@ mod tests {
 
         let (alice_2sm, message_1) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, Bob!", &rng).unwrap();
-        let (bob_2sm, bob_manager, receive_1) =
+        let (bob_2sm, bob_manager, _receive_1) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_1.clone()).unwrap();
 
         // Bob receives the same message again.
@@ -737,9 +737,9 @@ mod tests {
 
         // Alice sends another message to Bob.
 
-        let (alice_2sm, message_2) =
+        let (_alice_2sm, message_2) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, again, Bob!", &rng).unwrap();
-        let (bob_2sm, bob_manager, receive_2) =
+        let (bob_2sm, bob_manager, _receive_2) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2.clone()).unwrap();
 
         // Bob receives the same message again.
