@@ -11,11 +11,12 @@ use crate::crypto::x25519::PublicKey;
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
 use crate::{LongTermKeyBundle, OneTimeKeyBundle};
 
+/// Key registry to maintain public key material of other members we've collected.
 pub struct KeyRegistry<ID> {
     _marker: PhantomData<ID>,
 }
 
-/// Serializable state of key manager (for persistance).
+/// Serializable state of key registry (for persistance).
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
 pub struct KeyRegistryState<ID>
@@ -31,6 +32,7 @@ impl<ID> KeyRegistry<ID>
 where
     ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
 {
+    /// Returns newly initialised key-registry state.
     pub fn init() -> KeyRegistryState<ID> {
         KeyRegistryState {
             identities: HashMap::new(),
@@ -39,7 +41,8 @@ where
         }
     }
 
-    pub fn register_longterm(
+    /// Adds long-term pre-key bundle to the registry.
+    pub fn add_longterm_bundle(
         mut y: KeyRegistryState<ID>,
         id: ID,
         key_bundle: LongTermKeyBundle,
@@ -56,7 +59,8 @@ where
         y
     }
 
-    pub fn register_onetime(
+    /// Adds one-time pre-key bundle to the registry.
+    pub fn add_onetime_bundle(
         mut y: KeyRegistryState<ID>,
         id: ID,
         key_bundle: OneTimeKeyBundle,
