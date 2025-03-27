@@ -13,6 +13,9 @@ use crate::traits::{
 };
 use crate::two_party::TwoPartyState;
 
+/// 256-bit secret "outer" chain- and update key.
+const RATCHET_KEY_SIZE: usize = 32;
+
 /// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "message
 /// encryption" scheme with strong forward-secrecy and post-compromise security.
 ///
@@ -77,20 +80,20 @@ use crate::two_party::TwoPartyState;
 /// their ratchet.
 ///
 /// <https://eprint.iacr.org/2020/1281.pdf>
-pub struct Dcgka<ID, OP, PKI, DGM, KEY> {
-    _marker: PhantomData<(ID, OP, PKI, DGM, KEY)>,
+pub struct Dcgka<ID, OP, PKI, DGM, MGT> {
+    _marker: PhantomData<(ID, OP, PKI, DGM, MGT)>,
 }
 
 /// Serializable state of DCGKA (for persistance).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
-pub struct DcgkaState<ID, OP, PKI, DGM, KEY>
+pub struct DcgkaState<ID, OP, PKI, DGM, MGT>
 where
-    PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
-    DGM: AckedGroupMembership<ID, OP>,
-    KEY: IdentityManager<KEY::State> + PreKeyManager,
     ID: IdentityHandle,
     OP: OperationId,
+    PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
+    DGM: AckedGroupMembership<ID, OP>,
+    MGT: IdentityManager<MGT::State> + PreKeyManager,
 {
     /// Public Key Infrastructure. From here we retrieve the identity keys and one-time prekey
     /// bundles for each member to do 2SM.
@@ -98,7 +101,7 @@ where
 
     /// Our own key mananger holding the secret parts for our own identity keys and published
     /// one-time prekey bundles so we can do 2SM.
-    my_keys: KEY::State,
+    my_keys: MGT::State,
 
     /// Our id which is used as an unique handle.
     my_id: ID,
@@ -134,20 +137,20 @@ where
     dgm: DGM::State,
 }
 
-impl<ID, OP, PKI, DGM, KEY> Dcgka<ID, OP, PKI, DGM, KEY>
+impl<ID, OP, PKI, DGM, MGT> Dcgka<ID, OP, PKI, DGM, MGT>
 where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
-    KEY: IdentityManager<KEY::State> + PreKeyManager,
+    MGT: IdentityManager<MGT::State> + PreKeyManager,
 {
     pub fn init(
         my_id: ID,
-        my_keys: KEY::State,
+        my_keys: MGT::State,
         pki: PKI::State,
         dgm: DGM::State,
-    ) -> DcgkaState<ID, OP, PKI, DGM, KEY> {
+    ) -> DcgkaState<ID, OP, PKI, DGM, MGT> {
         DcgkaState {
             pki,
             my_id,
@@ -160,9 +163,6 @@ where
         }
     }
 }
-
-// TODO
-const RATCHET_KEY_SIZE: usize = 32;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
