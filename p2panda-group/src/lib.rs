@@ -13,7 +13,9 @@ pub use key_bundle::{
     Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId,
 };
 pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};
-pub use two_party::{LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyError};
+pub use two_party::{
+    LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError, TwoPartyMessage,
+};
 
 #[cfg(feature = "test_utils")]
 pub mod test_utils {

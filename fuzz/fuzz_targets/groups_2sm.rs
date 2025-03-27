@@ -1,11 +1,24 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
+use std::collections::VecDeque;
 
+use libfuzzer_sys::fuzz_target;
 use p2panda_group::test_utils::SecretKey;
 use p2panda_group::traits::PreKeyManager;
-use p2panda_group::{KeyManager, Lifetime, OneTimeTwoParty, Rng};
+use p2panda_group::{KeyManager, Lifetime, OneTimeTwoParty, Rng, TwoPartyMessage};
 
+struct Message {
+    /// Expected message in plaintext.
+    expected: Vec<u8>,
+
+    /// Encrypted message.
+    ciphertext: TwoPartyMessage,
+}
+
+// Create a 2SM session between Alice and Bob and randomly choose who sends a message to each
+// other. The number of total actions per session is also picked randomly (1-128).
 fuzz_target!(|args: ([u8; 32], &[u8])| {
     let (seed, actions) = args;
 
@@ -33,33 +46,78 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
     let mut alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle.clone());
     let mut bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle.clone());
 
+    let mut to_alice_inbox = VecDeque::<Message>::new();
+    let mut to_bob_inbox = VecDeque::<Message>::new();
+
     for action in actions {
-        // Generate a random message with 128 characters.
-        let expected: Vec<u8> = rng.random_vec(128).unwrap();
+        match action % 4 {
+            0 => {
+                // Only send to Bob if their inbox is not too full.
+                if to_bob_inbox.len() > 128 {
+                    continue;
+                }
 
-        // Randomly decide if Alice sends a message to Bob or vice versa.
-        if action & 1 == 0 {
-            let (alice_2sm_i, message) =
-                OneTimeTwoParty::send(alice_2sm, &alice_manager, &expected, &rng).unwrap();
-            let (bob_2sm_i, bob_manager_i, received) =
-                OneTimeTwoParty::receive(bob_2sm, bob_manager, message).unwrap();
+                // Alice sends a random message with 32 characters to Bob.
+                let expected: Vec<u8> = rng.random_vec(32).unwrap();
 
-            alice_2sm = alice_2sm_i;
-            bob_2sm = bob_2sm_i;
-            bob_manager = bob_manager_i;
+                let (alice_2sm_i, ciphertext) =
+                    OneTimeTwoParty::send(alice_2sm, &alice_manager, &expected, &rng).unwrap();
 
-            assert_eq!(expected, received);
-        } else {
-            let (bob_2sm_i, message) =
-                OneTimeTwoParty::send(bob_2sm, &bob_manager, &expected, &rng).unwrap();
-            let (alice_2sm_i, alice_manager_i, received) =
-                OneTimeTwoParty::receive(alice_2sm, alice_manager, message).unwrap();
+                alice_2sm = alice_2sm_i;
 
-            bob_2sm = bob_2sm_i;
-            alice_2sm = alice_2sm_i;
-            alice_manager = alice_manager_i;
+                to_bob_inbox.push_back(Message {
+                    expected,
+                    ciphertext,
+                });
+            }
+            1 => {
+                // Only send to Alice if their inbox is not too full.
+                if to_alice_inbox.len() > 128 {
+                    continue;
+                }
 
-            assert_eq!(expected, received);
-        };
+                // Bob sends a random message with 32 characters to Alice.
+                let expected: Vec<u8> = rng.random_vec(32).unwrap();
+
+                let (bob_2sm_i, ciphertext) =
+                    OneTimeTwoParty::send(bob_2sm, &bob_manager, &expected, &rng).unwrap();
+
+                bob_2sm = bob_2sm_i;
+
+                to_alice_inbox.push_back(Message {
+                    expected,
+                    ciphertext,
+                });
+            }
+            2 => {
+                // Alice reads their messages in the inbox if there is anything.
+                let Some(message) = to_alice_inbox.pop_front() else {
+                    break;
+                };
+
+                let (alice_2sm_i, alice_manager_i, received) =
+                    OneTimeTwoParty::receive(alice_2sm, alice_manager, message.ciphertext).unwrap();
+
+                alice_2sm = alice_2sm_i;
+                alice_manager = alice_manager_i;
+
+                assert_eq!(message.expected, received);
+            }
+            3 => {
+                // Bob reads their messages in the inbox if there is anything.
+                let Some(message) = to_bob_inbox.pop_front() else {
+                    break;
+                };
+
+                let (bob_2sm_i, bob_manager_i, received) =
+                    OneTimeTwoParty::receive(bob_2sm, bob_manager, message.ciphertext).unwrap();
+
+                bob_2sm = bob_2sm_i;
+                bob_manager = bob_manager_i;
+
+                assert_eq!(message.expected, received);
+            }
+            _ => unreachable!(),
+        }
     }
 });
