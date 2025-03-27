@@ -185,7 +185,7 @@ pub enum KeyUsed {
     /// Previously published keys ("prekeys") for X3DH.
     PreKey,
 
-    /// Key the receiving peer received last time from the sending peer.
+    /// Key the receiving peer received last time from the sending peer for HPKE.
     ReceivedKey,
 
     /// Key the receiving peer generated themselves at some time. We can refer to the exact key by
@@ -247,6 +247,8 @@ where
     KEY: IdentityManager<KEY::State> + PreKeyManager,
     KB: KeyBundle,
 {
+    /// Encrypt a message toward the other party using X3DH when it is the first round or HPKE for
+    /// sub-sequent rounds.
     fn encrypt(
         mut y: TwoPartyState<KB>,
         y_manager: &KEY::State,
@@ -277,6 +279,8 @@ where
         Ok((y, ciphertext))
     }
 
+    /// Decrypt a message from the other party using X3DH when it is the first round or HPKE for
+    /// sub-sequent rounds.
     fn decrypt(
         mut y: TwoPartyState<KB>,
         y_manager: KEY::State,
@@ -344,17 +348,11 @@ where
     }
 }
 
-struct NewKeysForUs {
-    our_new_secret: SecretKey,
-    their_new_public_key: PublicKey,
-}
-
-struct NewKeysForThem {
-    our_new_public_key: PublicKey,
-    their_new_secret: SecretKey,
-}
-
 impl<KEY, KB> TwoParty<KEY, KB> {
+    /// Generate fresh key material for us and the other party for future 2SM rounds.
+    ///
+    /// This material is sent as part of the encrypted ciphertext, attached next to the actual
+    /// secret message. Each party prepares the received keys to be available for future rounds.
     fn generate_keys(rng: &Rng) -> TwoPartyResult<(NewKeysForUs, NewKeysForThem)> {
         let our_new_secret = SecretKey::from_bytes(rng.random_array()?);
         let our_new_public_key = our_new_secret.public_key()?;
@@ -373,6 +371,16 @@ impl<KEY, KB> TwoParty<KEY, KB> {
             },
         ))
     }
+}
+
+struct NewKeysForUs {
+    our_new_secret: SecretKey,
+    their_new_public_key: PublicKey,
+}
+
+struct NewKeysForThem {
+    our_new_public_key: PublicKey,
+    their_new_secret: SecretKey,
 }
 
 pub type TwoPartyResult<T> = Result<T, TwoPartyError>;
