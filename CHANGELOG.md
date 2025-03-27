@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
 - Introduce concrete error type for `SqliteStore` [#698](https://github.com/p2panda/p2panda/pull/698)
 - Implement SQLite `OperationStore` & `LogStore` [#680](https://github.com/p2panda/p2panda/pull/680)
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
