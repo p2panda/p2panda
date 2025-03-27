@@ -13,8 +13,8 @@ use crate::traits::{
 };
 use crate::two_party::TwoPartyState;
 
-/// A decentralized continuous group key agreement scheme (DCGKA) for p2panda's "message
-/// encryption" scheme.
+/// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "message
+/// encryption" scheme with strong forward-secrecy and post-compromise security.
 ///
 /// The implementation follows the DCGKA protocol specified in the paper: "Key Agreement for
 /// Decentralized Secure Group Messaging with Strong Security Guarantees" by Matthew Weidner,
@@ -26,6 +26,44 @@ use crate::two_party::TwoPartyState;
 /// a PCS update is requested. The DCGKA protocol ensures that all users observe the same sequence
 /// of update secrets for each group member, regardless of the order in which concurrent messages
 /// are received.
+///
+/// ```text
+///                ┌────────────────────────────────────────────────┐
+///                │                 "Outer" Ratchet                │
+///   Alice        ├────────────────────────────────────────────────┤
+///     │          │                                                │
+///     │          │                         Previous Chain Secret  │
+///     │          │                               for Bob          │
+/// Delivered      │                                                │
+///  via 2SM       │                                  │             │
+///     │          │                                  │             │
+///     │          │                                  │             │   ┌─────┐
+///     ▼          │                                  │ ◄───────────┼───│"Ack"│
+///   ┌────┐       │                                  │             │   └─────┘
+///   │Seed├───────│──►  HKDF                         │             │
+///   └────┘       │      │           Bob             │             │
+///                │      │     ┌─────────────┐       │             │
+///                │      ├───► │Member Secret├───────┼─► HKDF ─────┼──► Update Secret
+///                │      │     └─────────────┘       │             │        │
+///                │      │                           ▼             │        │
+///                │      │         Charlie          HKDF           │        │
+///                │      │     ┌─────────────┐       │             │        │
+///                │      ├───► │Member Secret├─...   │             │        ▼
+///                │      │     └─────────────┘       │             │ ┌───────────────┐
+///                │      │                           │             │ │Message Ratchet│
+///                │      │           ...             │             │ └───────────────┘
+///                │      │     ┌─────────────┐       │             │
+///                │      └───► │Member Secret├─...   │             │
+///                │            └─────────────┘       │             │
+///                │                                  │             │
+///                │                                  ▼             │
+///                │                           New Chain Secret     │
+///                │                                  │             │
+///                │                                  │             │
+///                │                                  ▼  ...        │
+///                │                                                │
+///                └────────────────────────────────────────────────┘
+/// ```
 ///
 /// To initiate a PCS update, a user generates a fresh random value called a seed secret, and sends
 /// it to each other group member via a two-party secure channel, like in Sender Keys. On receiving
@@ -54,15 +92,15 @@ where
     ID: IdentityHandle,
     OP: OperationId,
 {
-    /// Public Key Infrastructure. From here we receive the identity keys and one-time prekey
+    /// Public Key Infrastructure. From here we retrieve the identity keys and one-time prekey
     /// bundles for each member to do 2SM.
     pki: PKI::State,
 
-    /// Our own key mananger holding the secret counterparts for our own identity keys and
-    /// published one-time prekey bundles so we can do 2SM.
+    /// Our own key mananger holding the secret parts for our own identity keys and published
+    /// one-time prekey bundles so we can do 2SM.
     my_keys: KEY::State,
 
-    /// Our id. This is not necessarly something crypographic, just anything generic.
+    /// Our id which is used as an unique handle.
     my_id: ID,
 
     /// Randomly generated seed we keep temporarily around when creating or updating a group or
