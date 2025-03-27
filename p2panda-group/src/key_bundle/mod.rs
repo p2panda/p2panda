@@ -8,7 +8,7 @@
 //!
 //! Depending on the security of the chat group this key bundle should be _used only once_ with
 //! [`OneTimeKeyBundle`] or only within a given "lifetime" (one day, two weeks, etc.) with
-//! [`LongTermKeyBundle`]. Members need to make sure that there is always fresh key bundles from
+//! [`LongTermKeyBundle`]. Members need to make sure that there are always fresh key bundles from
 //! them available in the network for others.
 //!
 //! ## Forward secrecy
@@ -37,8 +37,8 @@
 //! seems even worse.
 //!
 //! For longer-living ("long-term") pre-key bundles we can lift the strict "use once" requirement
-//! and peers can regularily publish fresh key bundles on the network, other peers need to make
-//! sure they keep collecting the latest bundles regularily.
+//! and peers can regularly publish fresh key bundles on the network, other peers need to make
+//! sure they keep collecting the latest bundles regularly.
 //!
 //! ## Authenticated Messaging
 //!
