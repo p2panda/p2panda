@@ -335,10 +335,10 @@ where
                     None => return Err(TwoPartyError::UnknownSecretUsed(index)),
                 };
 
-                for i in y.our_min_key_index..index {
+                for i in y.our_min_key_index..index + 1 {
                     y.our_secret_keys.remove(&i);
                 }
-                y.our_min_key_index = index;
+                y.our_min_key_index = index + 1;
 
                 (y_manager, plaintext)
             }
@@ -423,7 +423,7 @@ mod tests {
     use crate::key_manager::KeyManager;
     use crate::traits::PreKeyManager;
 
-    use super::OneTimeTwoParty;
+    use super::{KeyUsed, LongTermTwoParty, OneTimeTwoParty};
 
     #[test]
     fn two_party_secret_messaging_protocol() {
@@ -450,25 +450,124 @@ mod tests {
         // Alice and Bob set up the 2SM protocol handlers for each other.
 
         let alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle);
+
+        // Alice doesn't have any secret HPKE keys yet and will use Bob's pre-keys for X3DH.
+        assert_eq!(alice_2sm.our_secret_keys.len(), 0);
+        assert_eq!(alice_2sm.our_min_key_index, 1);
+        assert_eq!(alice_2sm.our_next_key_index, 1);
+        assert_eq!(alice_2sm.their_next_key_used, KeyUsed::PreKey);
+
         let bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle);
+
+        // Bob doesn't have any secret HPKE keys yet and will use Alice's pre-keys for X3DH.
+        assert_eq!(bob_2sm.our_secret_keys.len(), 0);
+        assert_eq!(bob_2sm.our_min_key_index, 1);
+        assert_eq!(bob_2sm.our_next_key_index, 1);
+        assert_eq!(bob_2sm.their_next_key_used, KeyUsed::PreKey);
 
         // They start exchanging "secret messages" to each other.
 
+        // 1. Alice sends a message to Bob using their pre-keys for X3DH.
         let (alice_2sm, message_1) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, Bob!", &rng).unwrap();
+
+        // Alice generated their own secret key and sends the public part to Bob for future rounds.
+        assert_eq!(alice_2sm.our_secret_keys.len(), 1);
+        assert_eq!(alice_2sm.our_min_key_index, 1);
+        assert_eq!(alice_2sm.our_next_key_index, 2);
+
+        // Alice also generated the secret key for Bob, so Alice also knows their public key
+        // for the future already.
+        assert!(alice_2sm.their_public_key.is_some());
+
+        // Alice didn't receive anything from Bob yet.
+        assert!(alice_2sm.our_received_secret_key.is_none());
+
+        // In the future Alice would use the key they just generated to decrypt messages from Bob.
+        assert_eq!(alice_2sm.their_next_key_used, KeyUsed::ReceivedKey);
+
+        // Alice dropped the now-used pre-keys of Bob.
+        assert!(alice_2sm.their_prekey_bundle.is_none());
+
+        // 2. Bob receives Alice's message.
         let (bob_2sm, bob_manager, receive_1) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_1).unwrap();
 
+        // Bob still doesn't have any generated keys yet.
+        assert_eq!(bob_2sm.our_secret_keys.len(), 0);
+        assert_eq!(bob_2sm.our_min_key_index, 1);
+        assert_eq!(bob_2sm.our_next_key_index, 1);
+
+        // Bob learned about the new public key (1) of Alice.
+        assert_eq!(
+            bob_2sm
+                .their_public_key
+                .expect("bob learned about public key of alice"),
+            alice_2sm
+                .our_secret_keys
+                .get(&1)
+                .expect("alice has one secret key")
+                .public_key()
+                .unwrap()
+        );
+
+        // Bob got their new secret key from Alice.
+        assert!(bob_2sm.our_received_secret_key.is_some());
+
+        // Bob would use Alice's new secret key for decrypting future messages.
+        assert_eq!(bob_2sm.their_next_key_used, KeyUsed::OwnKey(1));
+
+        // Bob still has Alice's pre-key bundle.
+        assert!(bob_2sm.their_prekey_bundle.is_some());
+
+        // 3. Alice sends another message to Bob and they receive it.
         let (alice_2sm, message_2) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"How are you doing?", &rng).unwrap();
         let (bob_2sm, bob_manager, receive_2) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2).unwrap();
 
+        // Alice generated another secret and keeps now two of them around as Bob didn't reply yet.
+        assert_eq!(alice_2sm.our_secret_keys.len(), 2);
+        assert_eq!(alice_2sm.our_min_key_index, 1);
+        assert_eq!(alice_2sm.our_next_key_index, 3);
+
+        // The secret keys are unique for each round.
+        assert_ne!(
+            alice_2sm.our_secret_keys.get(&1).unwrap(),
+            alice_2sm.our_secret_keys.get(&2).unwrap(),
+        );
+
+        // Bob learned about the new public key (2) of Alice.
+        assert_eq!(
+            bob_2sm
+                .their_public_key
+                .expect("bob learned about public key of alice"),
+            alice_2sm
+                .our_secret_keys
+                .get(&2)
+                .expect("alice has one secret key")
+                .public_key()
+                .unwrap()
+        );
+
+        // 4. Bob answers to Alice.
         let (bob_2sm, message_3) =
             OneTimeTwoParty::send(bob_2sm, &bob_manager, b"I'm alright. Thank you!", &rng).unwrap();
+
+        // Bob used Alice's latest public key (2) to encrypt this message.
+        assert_eq!(message_3.key_used, KeyUsed::OwnKey(2));
+
+        // 5. Alice receives the message from Bob.
         let (alice_2sm, alice_manager, receive_3) =
             OneTimeTwoParty::receive(alice_2sm, alice_manager, message_3).unwrap();
 
+        // Alice removed the used secret key of this message (2) and all previous secrets as well
+        // (1) for forward-secrecy.
+        assert_eq!(alice_2sm.our_secret_keys.len(), 0);
+        assert_eq!(alice_2sm.our_min_key_index, 3);
+        assert_eq!(alice_2sm.our_next_key_index, 3);
+
+        // 6. Both parties continue chatting with each other ..
         let (bob_2sm, message_4) =
             OneTimeTwoParty::send(bob_2sm, &bob_manager, b"How are you?", &rng).unwrap();
         let (alice_2sm, alice_manager, receive_4) =
@@ -479,14 +578,14 @@ mod tests {
         let (bob_2sm, bob_manager, receive_5) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_5).unwrap();
 
+        // Messages can be correctly decrypted.
         assert_eq!(receive_1, b"Hello, Bob!");
         assert_eq!(receive_2, b"How are you doing?");
         assert_eq!(receive_3, b"I'm alright. Thank you!");
         assert_eq!(receive_4, b"How are you?");
         assert_eq!(receive_5, b"I'm bored.");
 
-        // They write a message to each other at the same time.
-
+        // 7. They write a message to each other at the same time.
         let (bob_2sm, message_6) =
             OneTimeTwoParty::send(bob_2sm, &bob_manager, b":-(", &rng).unwrap();
         let (alice_2sm, message_7) =
@@ -498,5 +597,79 @@ mod tests {
 
         assert_eq!(receive_6, b":-(");
         assert_eq!(receive_7, b"Oh wait.");
+    }
+
+    #[test]
+    fn long_term_prekeys() {
+        let rng = Rng::from_seed([1; 32]);
+
+        // Alice generates their long-term key material.
+
+        let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let alice_manager =
+            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+
+        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager);
+
+        // Bob generates their long-term key material.
+
+        let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let bob_manager =
+            KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+
+        let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager);
+
+        // Alice and Bob set up the 2SM protocol handlers for each other.
+
+        let alice_2sm_a = LongTermTwoParty::init(bob_prekey_bundle.clone());
+        let bob_2sm_a = LongTermTwoParty::init(alice_prekey_bundle.clone());
+
+        // They start exchanging "secret messages" to each other in Group A.
+
+        let (alice_2sm_a, message_1) =
+            LongTermTwoParty::send(alice_2sm_a, &alice_manager, b"Hello, Bob!", &rng).unwrap();
+
+        // Public key of "Bob" for the first round in Group A.
+        let bob_public_key_1 = alice_2sm_a.their_public_key;
+
+        let (bob_2sm_a, bob_manager, receive_1) =
+            LongTermTwoParty::receive(bob_2sm_a, bob_manager, message_1).unwrap();
+
+        let (_bob_2sm_a, message_2) =
+            LongTermTwoParty::send(bob_2sm_a, &bob_manager, b"Hello, Alice!", &rng).unwrap();
+        let (_alice_2sm_a, alice_manager, receive_2) =
+            LongTermTwoParty::receive(alice_2sm_a, alice_manager, message_2).unwrap();
+
+        assert_eq!(receive_1, b"Hello, Bob!");
+        assert_eq!(receive_2, b"Hello, Alice!");
+
+        // Sometime later they start another group B with the same long-term pre-keys.
+
+        let alice_2sm_b = LongTermTwoParty::init(bob_prekey_bundle);
+        let bob_2sm_b = LongTermTwoParty::init(alice_prekey_bundle);
+
+        // They start exchanging "secret messages" to each other.
+
+        let (alice_2sm_b, message_1) =
+            LongTermTwoParty::send(alice_2sm_b, &alice_manager, b"Hello, again, Bob!", &rng)
+                .unwrap();
+
+        // Public key of "Bob" for the first round in Group B.
+        let bob_public_key_2 = alice_2sm_b.their_public_key;
+
+        let (bob_2sm_b, bob_manager, receive_1) =
+            LongTermTwoParty::receive(bob_2sm_b, bob_manager, message_1).unwrap();
+
+        let (_bob_2sm_b, message_2) =
+            LongTermTwoParty::send(bob_2sm_b, &bob_manager, b"Hello, again, Alice!", &rng).unwrap();
+        let (_alice_2sm_b, _alice_manager, receive_2) =
+            LongTermTwoParty::receive(alice_2sm_b, alice_manager, message_2).unwrap();
+
+        assert_eq!(receive_1, b"Hello, again, Bob!");
+        assert_eq!(receive_2, b"Hello, again, Alice!");
+
+        // The keys for the first round should be different across groups.
+
+        assert_ne!(bob_public_key_1, bob_public_key_2);
     }
 }
