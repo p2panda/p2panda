@@ -53,31 +53,31 @@ pub type LongTermTwoParty = TwoParty<KeyManager, LongTermKeyBundle>;
 pub struct TwoPartyState<KB: KeyBundle> {
     /// Index of key we will use during next send. The receiver can use the public key and refer to
     /// it through that index when they want to encrypt a message back to us.
-    pub our_next_key_index: u64,
+    our_next_key_index: u64,
 
     /// Index of the last key which was used by the other peer to encrypt a message towards us. We
     /// keep it around to understand which secret keys we can remove.
-    pub our_min_key_index: u64,
+    our_min_key_index: u64,
 
     /// List of all secret keys we generated ourselves. We sent the public counterpart to the other
     /// peer.
-    pub our_secret_keys: HashMap<u64, SecretKey>,
+    our_secret_keys: HashMap<u64, SecretKey>,
 
     /// Last secret key the other peer generated for us. This is part of the 2SM protocol and an
     /// optimization where the remote end can _also_ generate secrets for us.
-    pub our_received_secret_key: Option<SecretKey>,
+    our_received_secret_key: Option<SecretKey>,
 
     /// Which key we use to decrypt the next incoming message.
-    pub their_next_key_used: KeyUsed,
+    their_next_key_used: KeyUsed,
 
     /// Public identity key of the other peer. We use it to verify the signature of their prekey.
-    pub their_identity_key: PublicKey,
+    their_identity_key: PublicKey,
 
     /// Key-material we need to encrypt the first message with the help of X3DH and prekeys.
-    pub their_prekey_bundle: Option<KB>,
+    their_prekey_bundle: Option<KB>,
 
     /// Last known public key of the other peer. We use it to encrypt a message towards them.
-    pub their_public_key: Option<PublicKey>,
+    their_public_key: Option<PublicKey>,
 }
 
 // Public methods.

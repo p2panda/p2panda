@@ -15,20 +15,19 @@ use crate::traits::{IdentityManager, PreKeyManager};
 
 /// Key manager to maintain secret key material (like our identity key) and to generate signed
 /// public pre-key bundles.
-#[derive(Debug)]
 pub struct KeyManager;
 
 /// Serializable state of key manager (for persistance).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
 pub struct KeyManagerState {
-    pub identity_secret: SecretKey,
-    pub identity_key: PublicKey,
-    pub prekey_secret: SecretKey,
-    pub prekey: PreKey,
-    pub prekey_signature: XSignature,
-    pub onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
-    pub onetime_next_id: OneTimePreKeyId,
+    identity_secret: SecretKey,
+    identity_key: PublicKey,
+    prekey_secret: SecretKey,
+    prekey: PreKey,
+    prekey_signature: XSignature,
+    onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
+    onetime_next_id: OneTimePreKeyId,
 }
 
 impl KeyManager {
