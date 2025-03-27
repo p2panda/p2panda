@@ -9,10 +9,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
-use tokio::sync::{RwLock, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
-use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::engine::ToEngineActor;
@@ -20,6 +19,7 @@ use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
+use crate::TopicId;
 
 pub use crate::engine::topic_streams::receiver::TopicStreamReceiver;
 pub use crate::engine::topic_streams::sender::TopicStreamSender;
@@ -51,11 +51,7 @@ impl TopicStreamState {
     }
 
     fn is_active(&self) -> bool {
-        if self.sender || self.receiver {
-            true
-        } else {
-            false
-        }
+        self.sender || self.receiver
     }
 }
 

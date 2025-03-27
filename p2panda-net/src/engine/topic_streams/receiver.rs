@@ -56,13 +56,14 @@ impl<T> TopicStreamReceiver<T> {
 impl<T> Drop for TopicStreamReceiver<T> {
     fn drop(&mut self) {
         if let Some(topic) = self.topic.take() {
-            if let Err(_) = self
+            if self
                 .engine_actor_tx
                 .blocking_send(ToEngineActor::UnsubscribeTopic {
                     topic,
                     stream_id: self.stream_id,
                     channel_type: TopicStreamChannel::Receiver,
                 })
+                .is_err()
             {
                 warn!("engine actor receiver dropped before topic unsubscribe event could be sent")
             }
