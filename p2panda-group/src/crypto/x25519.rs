@@ -23,9 +23,13 @@ pub const PUBLIC_KEY_SIZE: usize = 32;
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
-    // TODO: Remove this in later PRs.
-    #[allow(dead_code)]
+    #[cfg(not(feature = "test_utils"))]
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
+        SecretKey(Secret::from_bytes(clamp_integer(bytes)))
+    }
+
+    #[cfg(feature = "test_utils")]
+    pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
     }
 
