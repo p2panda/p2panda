@@ -5,6 +5,7 @@
 mod crypto;
 mod key_bundle;
 mod key_manager;
+mod key_registry;
 pub mod traits;
 mod two_party;
 
@@ -13,6 +14,7 @@ pub use key_bundle::{
     Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId,
 };
 pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};
+pub use key_registry::{KeyRegistry, KeyRegistryState};
 pub use two_party::{
     LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError, TwoPartyMessage,
 };
