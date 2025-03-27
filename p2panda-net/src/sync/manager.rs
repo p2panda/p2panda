@@ -9,14 +9,14 @@ use p2panda_core::PublicKey;
 use p2panda_sync::{SyncError, TopicQuery};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{Duration, Instant, interval};
+use tokio::time::{interval, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::engine::ToEngineActor;
 use crate::from_public_key;
 use crate::sync::config::FALLBACK_RESYNC_INTERVAL_SEC;
-use crate::sync::{self, SYNC_CONNECTION_ALPN, SyncConfiguration};
+use crate::sync::{self, SyncConfiguration, SYNC_CONNECTION_ALPN};
 
 /// Events sent to the sync manager.
 #[derive(Debug)]
@@ -170,43 +170,9 @@ where
                 msg = self.inbox.recv() => {
                     let msg = msg.context("sync manager inbox closed")?;
                     match msg {
-                        // A peer-topic announcement has been received from the discovery layer.
-                        ToSyncActor::Discovery { peer, topic } => {
-                            let scope = Scope::new(peer, topic);
-
-                            // Only schedule an attempt if we're not already tracking sessions for this
-                            // scope.
-                            if let HashMapEntry::Vacant(entry) = self.sessions.entry(scope.clone()) {
-                                let attempt = Attempt::new();
-                                entry.insert(attempt);
-
-                                if let Err(err) = self.schedule_attempt(scope).await {
-                                    // The attempt will fail if the sync queue is full, indicating that a high
-                                    // volume of sync sessions are underway. In that case, we drop the attempt
-                                    // completely. Another attempt will be scheduled when the next announcement of
-                                    // this peer-topic combination is received from the network-wide gossip
-                                    // overlay.
-                                    error!("failed to schedule sync attempt: {}", err)
-                                }
-                            }
-                        },
-                        // @TODO(glyph): Remove all sessions relating to this topic.
-                        ToSyncActor::Forget { topic: _ } => {
-                            todo!()
-                        }
-                        // In the event of a disconnection, two peers who had previously synced may
-                        // fall back out of sync. In order to invoke resync upon reconnection, we
-                        // reset the status of all sessions and schedule an attempt for each one.
-                        // This allows the peers to resync before entering "live mode" (gossip) again.
-                        ToSyncActor::Reset => {
-                            for attempt in self.sessions.values_mut() {
-                                attempt.reset();
-                            }
-
-                            for scope in self.sessions.keys() {
-                                self.schedule_attempt(scope.clone()).await?;
-                            }
-                        }
+                        ToSyncActor::Discovery { peer, topic } => self.on_discovery(peer, topic).await,
+                        ToSyncActor::Forget { topic } => self.on_forget(topic).await,
+                        ToSyncActor::Reset => self.on_reset().await,
                     }
                 }
                 Some(scope) = self.sync_queue_rx.recv() => {
@@ -252,6 +218,52 @@ where
         }
 
         Ok(())
+    }
+
+    /// A peer-topic announcement has been received from the discovery layer.
+    async fn on_discovery(&mut self, peer: PublicKey, topic: T) {
+        let scope = Scope::new(peer, topic);
+
+        // Only schedule an attempt if we're not already tracking sessions for this
+        // scope.
+        if let HashMapEntry::Vacant(entry) = self.sessions.entry(scope.clone()) {
+            let attempt = Attempt::new();
+            entry.insert(attempt);
+
+            if let Err(err) = self.schedule_attempt(scope).await {
+                // The attempt will fail if the sync queue is full, indicating that a high
+                // volume of sync sessions are underway. In that case, we drop the attempt
+                // completely. Another attempt will be scheduled when the next announcement of
+                // this peer-topic combination is received from the network-wide gossip
+                // overlay.
+                error!("failed to schedule sync attempt: {}", err)
+            }
+        }
+    }
+
+    /// Remove all sessions for the given topic.
+    async fn on_forget(&mut self, topic: T) {
+        self.sessions.retain(|scope, _| scope.topic == topic);
+        self.resync_queue.retain(|scope| scope.topic == topic);
+        self.retry_queue.retain(|scope| scope.topic == topic);
+    }
+
+    /// Reset state for all sessions and schedule new attempts.
+    ///
+    /// In the event of a disconnection, two peers who had previously synced may
+    /// fall back out of sync. In order to invoke resync upon reconnection, we
+    /// reset the status of all sessions and schedule an attempt for each one.
+    /// This allows the peers to resync before entering "live mode" (gossip) again.
+    async fn on_reset(&mut self) {
+        for attempt in self.sessions.values_mut() {
+            attempt.reset();
+        }
+
+        for scope in self.sessions.keys() {
+            if let Err(err) = self.schedule_attempt(scope.clone()).await {
+                error!("failed to schedule sync attempt: {}", err)
+            }
+        }
     }
 
     /// Schedule a sync attempt for the given scope (peer-topic combination).
@@ -364,17 +376,17 @@ mod tests {
     use iroh::{Endpoint, RelayMode};
     use iroh_quinn::TransportConfig;
     use p2panda_core::PublicKey;
-    use p2panda_sync::SyncProtocol;
     use p2panda_sync::test_protocols::{PingPongProtocol, SyncTestTopic as TestTopic};
+    use p2panda_sync::SyncProtocol;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
     use tracing::warn;
 
     use crate::engine::ToEngineActor;
     use crate::protocols::ProtocolMap;
-    use crate::sync::{SYNC_CONNECTION_ALPN, SyncConnection};
-    use crate::{ResyncConfiguration, SyncConfiguration, to_public_key};
+    use crate::sync::{SyncConnection, SYNC_CONNECTION_ALPN};
+    use crate::{to_public_key, ResyncConfiguration, SyncConfiguration};
 
     use super::{SyncActor, ToSyncActor};
 
