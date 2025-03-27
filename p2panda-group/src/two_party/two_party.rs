@@ -23,6 +23,30 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// the "seed" for establishing new secret state. 2SM is pair-wise between all members of an
 /// encrypted group. p2panda uses 2SM for both "data-" and "message encryption" schemes.
 ///
+/// ## Protocol
+///
+/// An initiator "Alice" of a 2SM session uses the pre-keys of "Bob" to send the first encrypted
+/// message using the X3DH protocol. This only takes place once and the pre-keys can be considered
+/// "used" afterwards (which is especially important for one-time pre-keys). All sub-sequent rounds
+/// will from now on be using HPKE and both Alice and Bob can send messages to each other. For each
+/// round the sender uses the previous keys for HPKE and generates and attaches to the payload as a
+/// new key-pair for future rounds. In 2SM the sender also generates the key-pair for the _other
+/// party. party (see "cost of key-agreements"). Both parties keep around their own secret keys and
+/// the other party's public key for each round. To accommodate for messages arriving "out of
+/// order" the secret key is kept for until it's been used or if a newer secret was used, in this
+/// case all "previous" secret keys will be dropped.
+///
+/// ## Forward-secrecy
+///
+/// During the initial 2SM "round" using X3DH the forward-secrecy is defined by the lifetime of the
+/// used pre-keys. For strong security guarantees it is recommended to use one-time pre-keys. If
+/// this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
+/// defined by the application.
+///
+/// For each sub-sequent 2SM HPKE round there's exactly only one secret key used, then dropped and
+/// a new key-pair generated. This gives the key-agreement protocol strong forward secrecy
+/// guarantees for each round, independent of the used pre-keys.
+///
 /// ## Cost of key-agreements
 ///
 /// To make a group aware of a new secret key we could encrypt the secret pairwise with public-key
@@ -41,7 +65,7 @@ pub type OneTimeTwoParty = TwoParty<KeyManager, OneTimeKeyBundle>;
 
 pub type LongTermTwoParty = TwoParty<KeyManager, LongTermKeyBundle>;
 
-/// State of 2SM session between a sending- ("our") and receiving member ("their").
+/// State of 2SM session between two members.
 ///
 /// All 2SM methods are expressed as "pure functions" without any side-effects, returning an
 /// updated state object. This allows applications to be more crash-resiliant, persisting the final
