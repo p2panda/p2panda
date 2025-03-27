@@ -94,7 +94,7 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
                 });
             }
             2 => {
-                // Alice reads their messages in the inbox if there is anything.
+                // Alice reads one message in their inbox if there is anything.
                 let Some(message) = to_alice_inbox.pop_front() else {
                     break;
                 };
@@ -108,7 +108,7 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
                 assert_eq!(message.expected, received);
             }
             3 => {
-                // Bob reads their messages in the inbox if there is anything.
+                // Bob reads one message in their inbox if there is anything.
                 let Some(message) = to_bob_inbox.pop_front() else {
                     break;
                 };
