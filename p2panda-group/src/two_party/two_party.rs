@@ -27,14 +27,18 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 ///
 /// An initiator "Alice" of a 2SM session uses the pre-keys of "Bob" to send the first encrypted
 /// message using the X3DH protocol. This only takes place once and the pre-keys can be considered
-/// "used" afterwards (which is especially important for one-time pre-keys). All sub-sequent rounds
-/// will from now on be using HPKE and both Alice and Bob can send messages to each other. For each
-/// round the sender uses the previous keys for HPKE and generates and attaches to the payload as a
-/// new key-pair for future rounds. In 2SM the sender also generates the key-pair for the _other
-/// party. party (see "cost of key-agreements"). Both parties keep around their own secret keys and
-/// the other party's public key for each round. To accommodate for messages arriving "out of
-/// order" the secret key is kept for until it's been used or if a newer secret was used, in this
-/// case all "previous" secret keys will be dropped.
+/// "used" afterwards (which is especially important for one-time pre-keys).
+///
+/// All subsequent rounds will from now on be using HPKE and both Alice and Bob can send messages
+/// to each other. For each round the sender uses the previous keys for HPKE and generates and
+/// attaches to the payload as a new key-pair for future rounds.
+///
+/// To avoid reusing public keys (which would make FS impossible), whenever a party sends a
+/// message, it also updates the other party's public key. To do so, it sends a new secret key
+/// along with its message, then deletes its own copy, storing only the public key.
+///
+/// To accommodate for messages arriving "late" the secret key is kept for until it's been used or
+/// if a newer secret was used, in this case all "previous" secret keys will be dropped.
 ///
 /// ## Forward-secrecy
 ///
@@ -43,7 +47,7 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
 /// defined by the application.
 ///
-/// For each sub-sequent 2SM HPKE round there's exactly only one secret key used, then dropped and
+/// For each subsequent 2SM HPKE round there's exactly only one secret key used, then dropped and
 /// a new key-pair generated. This gives the key-agreement protocol strong forward secrecy
 /// guarantees for each round, independent of the used pre-keys.
 ///
@@ -254,7 +258,7 @@ where
     KB: KeyBundle,
 {
     /// Encrypt a message toward the other party using X3DH when it is the first round or HPKE for
-    /// sub-sequent rounds.
+    /// subsequent rounds.
     fn encrypt(
         mut y: TwoPartyState<KB>,
         y_manager: &KEY::State,
@@ -286,7 +290,7 @@ where
     }
 
     /// Decrypt a message from the other party using X3DH when it is the first round or HPKE for
-    /// sub-sequent rounds.
+    /// subsequent rounds.
     fn decrypt(
         mut y: TwoPartyState<KB>,
         y_manager: KEY::State,
