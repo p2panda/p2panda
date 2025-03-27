@@ -170,14 +170,14 @@ mod tests {
             OneTimeKeyBundle::new(
                 identity_key,
                 signed_prekey,
-                prekey_signature.clone(),
+                prekey_signature,
                 Some(onetime_prekey.clone()),
             )
             .verify()
             .is_ok()
         );
         assert!(
-            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature.clone())
+            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature)
                 .verify()
                 .is_ok()
         );
@@ -191,14 +191,14 @@ mod tests {
             OneTimeKeyBundle::new(
                 identity_key,
                 signed_prekey,
-                prekey_signature.clone(),
+                prekey_signature,
                 Some(onetime_prekey.clone()),
             )
             .verify()
             .is_err()
         );
         assert!(
-            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature.clone())
+            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature)
                 .verify()
                 .is_err()
         );
@@ -209,14 +209,14 @@ mod tests {
             OneTimeKeyBundle::new(
                 identity_key,
                 signed_prekey,
-                prekey_signature.clone(),
+                prekey_signature,
                 Some(onetime_prekey.clone()),
             )
             .verify()
             .is_err()
         );
         assert!(
-            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature.clone())
+            LongTermKeyBundle::new(identity_key, signed_prekey, prekey_signature)
                 .verify()
                 .is_err()
         );
