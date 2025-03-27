@@ -185,7 +185,7 @@ where
         }
     }
 
-    /// Handler for when a control message is received.
+    /// Handler for when a control message is received from the network.
     ///
     /// It takes the user ID of the message sender, a control message, and a direct message (or
     /// none if there is no associated direct message).
@@ -229,6 +229,17 @@ where
         Ok((y_i, output))
     }
 
+    /// Handler which is _always_ be called _after_ every local group membership operation
+    /// ("create", "update", "remove" or "add") which was applied by us.
+    ///
+    /// Invoking a membership operation always returns a "control message" which needs to be
+    /// processed by the application _before_ we can process it locally (and thus finally updating
+    /// our local state). This is because some applications have more complex requirements around
+    /// wrapping the control message around their own message type which will be published on the
+    /// network (for example an append-only log entry with signature, vector clocks, etc.) and we
+    /// can't "guess" the resulting operation id.
+    ///
+    /// Calling this method will _never_ yield another control- or direct message.
     pub fn process_local(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         seq: OP,
@@ -266,14 +277,14 @@ where
         ))
     }
 
-    /// Takes a set of users IDs, including pre-keys, and creates a new group with those members.
+    /// Takes a set of users IDs (including us) and creates a new group with those members.
+    ///
+    /// Note that every member ID needs to be unique for this group.
     ///
     /// A group is created in three steps: 1. one user calls "create" and broadcasts a control
     /// message of type "create" (plus direct messages) to the initial members; 2. each member
     /// processes that message and broadcasts an "ack" control message; 3. each member processes
     /// the ack from each other member.
-    // NOTE: for docs.
-    // * Mention that IDs need to be unique!
     pub fn create(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         initial_members: Vec<ID>,
@@ -318,6 +329,7 @@ where
         ))
     }
 
+    /// Called by group members when they receive the "create" message.
     fn process_create(
         mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         sender: ID,
@@ -331,8 +343,9 @@ where
         Self::process_seed(y, &sender, seq, direct_message, rng)
     }
 
-    /// Called by group members when they receive the "ack" message. In this function, ackID and
-    /// ackSeq are the sender and sequence number of the acknowledged message.
+    /// Called by group members when they receive the "ack" message.
+    ///
+    /// In this function, `ackID` and `ackOP` are the user id and id of the acknowledged message.
     fn process_ack(
         mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         sender: ID,
@@ -403,6 +416,8 @@ where
         ))
     }
 
+    /// Generate a new seed for the group. This "refreshes" the group's entropy and should be
+    /// called frequently if no other group operations took place for a while.
     pub fn update(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         rng: &Rng,
@@ -428,6 +443,7 @@ where
         ))
     }
 
+    /// Called by group members when they receive the "update" control message.
     fn process_update(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         sender: ID,
@@ -438,6 +454,9 @@ where
         Self::process_seed(y, &sender, seq, direct_message, rng)
     }
 
+    /// Remove a member from the group.
+    ///
+    /// This generates a new seed for the remaining members for post-compromise security (PCS).
     pub fn remove(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         removed: ID,
@@ -464,6 +483,7 @@ where
         ))
     }
 
+    /// Called by group members when they receive the "remove" control message.
     fn process_remove(
         mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         sender: ID,
@@ -478,6 +498,9 @@ where
     }
 
     /// Adds a new group member.
+    ///
+    /// The added group member will receive a direct "welcome" message, every member will process
+    /// an "add" control message.
     pub fn add(
         y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         added: ID,
@@ -863,6 +886,11 @@ where
         Ok((y_i, direct_messages))
     }
 
+    /// Handle the next seed for the group, either generated locally by us or received as an
+    /// encrypted message by another member.
+    ///
+    /// We use the seed to derive independent member secrets for each group member by combining
+    /// the seed secret and each user ID using HKDF.
     fn process_seed(
         mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
         sender: &ID,
@@ -1211,12 +1239,12 @@ pub type DcgkaOperationResult<ID, OP, PKI, DGM, MGT> =
 ///
 /// The control message must be distributed to the other group members through Authenticated Causal
 /// Broadcast, calling the process function on the recipient when they are delivered.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlMessage<ID, OP> {
-    pub message_type: ControlMessageType<ID, OP>,
+    message_type: ControlMessageType<ID, OP>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlMessageType<ID, OP> {
     Create(CreateMessage<ID>),
     Ack(AckMessage<ID, OP>),
@@ -1243,31 +1271,31 @@ impl<ID, OP> Display for ControlMessageType<ID, OP> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateMessage<ID> {
     pub initial_members: Vec<ID>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AckMessage<ID, OP> {
     pub ack_sender: ID,
     pub ack_seq: OP,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateMessage;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoveMessage<ID> {
     pub removed: ID,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddMessage<ID> {
     pub added: ID,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddAckMessage<ID, OP> {
     pub ack_sender: ID,
     pub ack_seq: OP,
