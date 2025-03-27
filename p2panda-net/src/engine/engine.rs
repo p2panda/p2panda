@@ -18,10 +18,12 @@ use crate::engine::constants::{
 };
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::topic_discovery::TopicDiscovery;
-use crate::engine::topic_streams::{TopicStreamReceiver, TopicStreamSender, TopicStreams};
+use crate::engine::topic_streams::{
+    TopicStreamChannel, TopicStreamReceiver, TopicStreamSender, TopicStreams,
+};
 use crate::events::SystemEvent;
 use crate::sync::manager::{SyncActor, ToSyncActor};
-use crate::{NetworkId, NodeAddress, TopicId, from_public_key, to_public_key};
+use crate::{from_public_key, to_public_key, NetworkId, NodeAddress, TopicId};
 
 #[derive(Debug)]
 pub enum ToEngineActor<T> {
@@ -39,6 +41,11 @@ pub enum ToEngineActor<T> {
         topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
         topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
+    },
+    UnsubscribeTopic {
+        topic: T,
+        stream_id: usize,
+        channel_type: TopicStreamChannel,
     },
     GossipJoined {
         topic_id: [u8; 32],
@@ -289,6 +296,13 @@ where
                 )
                 .await?;
             }
+            ToEngineActor::UnsubscribeTopic {
+                topic,
+                stream_id,
+                channel_type,
+            } => {
+                self.on_unsubscribe(topic, stream_id, channel_type).await?;
+            }
             ToEngineActor::GossipJoined { topic_id, peers } => {
                 self.on_gossip_joined(topic_id, peers).await?;
             }
@@ -464,6 +478,33 @@ where
         self.topic_discovery
             .announce(my_topic_ids, &self.private_key)
             .await?;
+
+        Ok(())
+    }
+
+    /// Handle a topic unsubscription.
+    async fn on_unsubscribe(
+        &mut self,
+        topic: T,
+        stream_id: usize,
+        channel_type: TopicStreamChannel,
+    ) -> Result<()> {
+        let unsubscribe_is_complete = self
+            .topic_streams
+            .unsubscribe(topic.id(), stream_id, channel_type)
+            .await?;
+
+        if unsubscribe_is_complete {
+            if let Some(system_event_tx) = &self.system_event_tx {
+                system_event_tx.send(SystemEvent::GossipLeft {
+                    topic_id: topic.id(),
+                })?;
+            }
+
+            if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                sync_actor_tx.send(ToSyncActor::Forget { topic }).await?;
+            }
+        }
 
         Ok(())
     }
