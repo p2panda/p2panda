@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+mod receiver;
+mod sender;
+
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -12,10 +15,14 @@ use tracing::{debug, error, warn};
 use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
+use crate::engine::engine::ToEngineActor;
 use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
+
+pub use crate::engine::topic_streams::receiver::{TopicReceiver, TopicReceiverStream};
+pub use crate::engine::topic_streams::sender::TopicSender;
 
 /// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
@@ -23,9 +30,35 @@ type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
 /// Every stream has a unique identifier.
 type TopicStreamId = usize;
 
+#[derive(Debug)]
+pub enum TopicChannelType {
+    Sender,
+    Receiver,
+}
+
+#[derive(Debug)]
+struct TopicStreamState {
+    sender: bool,
+    receiver: bool,
+}
+
+impl TopicStreamState {
+    fn new() -> Self {
+        Self {
+            sender: true,
+            receiver: true,
+        }
+    }
+
+    fn is_active(&self) -> bool {
+        self.sender || self.receiver
+    }
+}
+
 /// Manages subscriptions to topics in form of data streams.
 ///
 /// A stream has quite a bit of state to deal with, this includes:
+///
 /// 1. Try to enter a gossip overlay for sending messages in "live mode" over a topic id.
 /// 2. Help the sync manager with learning about topics of interest and guide it to connect to
 ///    peers for syncing up state with them.
@@ -37,16 +70,18 @@ type TopicStreamId = usize;
 ///    there's duplicates.
 #[derive(Debug)]
 pub struct TopicStreams<T> {
-    address_book: AddressBook,
-    gossip_actor_tx: mpsc::Sender<ToGossipActor>,
-    gossip_buffer: GossipBuffer,
-    gossip_joined: Arc<RwLock<HashSet<[u8; 32]>>>,
-    gossip_pending: HashMap<[u8; 32], oneshot::Sender<()>>,
     next_stream_id: usize,
+    address_book: AddressBook,
+    gossip_buffer: GossipBuffer,
+    engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+    gossip_actor_tx: mpsc::Sender<ToGossipActor>,
+    sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
+    gossip_joined: Arc<RwLock<HashMap<[u8; 32], usize>>>,
+    gossip_pending: HashMap<[u8; 32], oneshot::Sender<()>>,
     subscribed: HashMap<TopicStreamId, TopicStream<T>>,
+    active_streams: HashMap<TopicStreamId, TopicStreamState>,
     topic_id_to_stream: HashMap<[u8; 32], Vec<TopicStreamId>>,
     topic_to_stream: HashMap<T, Vec<TopicStreamId>>,
-    sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
 }
 
 impl<T> TopicStreams<T>
@@ -54,21 +89,24 @@ where
     T: TopicQuery + TopicId + 'static,
 {
     pub fn new(
-        gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         address_book: AddressBook,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
+        gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
     ) -> Self {
         Self {
-            address_book,
-            gossip_actor_tx,
-            gossip_buffer: Default::default(),
-            gossip_joined: Arc::new(RwLock::new(HashSet::new())),
-            gossip_pending: HashMap::new(),
             next_stream_id: 1,
+            address_book,
+            gossip_buffer: Default::default(),
+            engine_actor_tx,
+            gossip_actor_tx,
+            sync_actor_tx,
+            gossip_joined: Arc::new(RwLock::new(HashMap::new())),
+            gossip_pending: HashMap::new(),
             subscribed: HashMap::new(),
+            active_streams: HashMap::new(),
             topic_id_to_stream: HashMap::new(),
             topic_to_stream: HashMap::new(),
-            sync_actor_tx,
         }
     }
 
@@ -85,13 +123,49 @@ where
     pub async fn subscribe(
         &mut self,
         topic: T,
-        from_network_tx: mpsc::Sender<FromNetwork>,
-        mut to_network_rx: mpsc::Receiver<ToNetwork>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
+        let (to_network_tx, mut to_network_rx) = mpsc::channel::<ToNetwork>(128);
+        let (from_network_tx, from_network_rx) = mpsc::channel::<FromNetwork>(128);
+
         // Every subscription stream receives its own unique identifier.
         let stream_id = self.next_stream_id;
         self.next_stream_id += 1;
+
+        // Create two parts of a topic stream channel. These are used to send bytes into the
+        // network and receive bytes out of the network. Unsubscribe "clean up" actions will
+        // be triggered when both the sender and receiver have been dropped.
+        let topic_tx = TopicSender::new(
+            topic.clone(),
+            stream_id,
+            to_network_tx,
+            self.engine_actor_tx.clone(),
+        )
+        .await;
+        let topic_rx = TopicReceiver::new(
+            topic.clone(),
+            stream_id,
+            from_network_rx,
+            self.engine_actor_tx.clone(),
+        )
+        .await;
+
+        // Send the topic stream channels back to the subscriber.
+        if topic_sender_tx.send(topic_tx).is_err() {
+            warn!("topic stream sender oneshot receiver dropped")
+        }
+        if topic_receiver_tx.send(topic_rx).is_err() {
+            warn!("topic stream receiver oneshot receiver dropped")
+        }
+
+        // Track the state of the topic stream channel.
+        //
+        // This allows us to only initiate unsubscribe logic for a topic once both the sender and
+        // receiver have been dropped.
+        self.active_streams
+            .insert(stream_id, TopicStreamState::new());
 
         // Prepare all relevant earmarks and data streams to aid other processes dealing with
         // gossip, buffering or sync.
@@ -119,7 +193,7 @@ where
             tokio::task::spawn(async move {
                 while let Some(event) = to_network_rx.recv().await {
                     let gossip_joined = gossip_joined.read().await;
-                    if !gossip_joined.contains(&topic.id()) {
+                    if !gossip_joined.contains_key(&topic.id()) {
                         // If we haven't joined the gossip yet messages will be silently dropped
                         // here.
                         //
@@ -158,6 +232,69 @@ where
         Ok(())
     }
 
+    /// Cleans up all state for the stream associated with the given topic ID once the sender and
+    /// receiver have both been dropeed.
+    ///
+    /// A single stream can be unsubscribed from without affecting any other active streams for the
+    /// same topic ID.
+    ///
+    /// Returns `true` if the unsubscribe process is complete for the given stream ID. This
+    /// is only the case once this method has been called for both the sender and receiver
+    /// of the stream.
+    ///
+    /// Returns `false` if the unsubscribe process is not yet complete for the given stream ID.
+    pub async fn unsubscribe(
+        &mut self,
+        topic_id: [u8; 32],
+        stream_id: usize,
+        channel_type: TopicChannelType,
+    ) -> Result<bool> {
+        let mut unsubscribe_is_complete = false;
+
+        // Update the channel state for this stream.
+        if let Some(channel_state) = self.active_streams.get_mut(&stream_id) {
+            match channel_type {
+                TopicChannelType::Sender => channel_state.sender = false,
+                TopicChannelType::Receiver => channel_state.receiver = false,
+            }
+        }
+
+        // Only execute clean up logic if both the sender and receiver have been dropped.
+        if let Some(stream) = self.active_streams.get(&stream_id) {
+            if !stream.is_active() {
+                self.active_streams.remove(&stream_id);
+
+                let _ = self.subscribed.remove(&stream_id);
+                for (_topic, streams) in self.topic_to_stream.iter_mut() {
+                    streams.retain(|&id| id != stream_id)
+                }
+                for (_topic, streams) in self.topic_id_to_stream.iter_mut() {
+                    streams.retain(|&id| id != stream_id)
+                }
+
+                let mut gossip_joined = self.gossip_joined.write().await;
+                if let Some(counter) = gossip_joined.get_mut(&topic_id) {
+                    if *counter != 0 {
+                        *counter -= 1
+                    }
+                }
+
+                // If the counter has reached zero that means that no more active subscribers remain for
+                // this topic id and we can remove it completely from the set.
+                //
+                // All topics from `joined` get moved to `pending` when we reset; this would result in
+                // unsubscribed topics being erroneously re-joined. So we need them to be removed.
+                if let Some(0) = gossip_joined.get(&topic_id) {
+                    gossip_joined.remove(&topic_id);
+                }
+
+                unsubscribe_is_complete = true;
+            }
+        }
+
+        Ok(unsubscribe_is_complete)
+    }
+
     /// Returns a list of all gossip topic ids we're interested in.
     pub fn topic_ids(&self) -> Vec<[u8; 32]> {
         self.subscribed
@@ -174,7 +311,7 @@ where
     /// rejoined.
     pub async fn move_joined_to_pending(&mut self) {
         let mut gossip_joined = self.gossip_joined.write().await;
-        for topic in gossip_joined.drain() {
+        for (topic, _counter) in gossip_joined.drain() {
             let (ready_tx, _ready_rx) = oneshot::channel();
             self.gossip_pending.insert(topic, ready_tx);
         }
@@ -197,7 +334,11 @@ where
     pub async fn on_gossip_joined(&mut self, topic_id: [u8; 32]) {
         if let Some(ready_tx) = self.gossip_pending.remove(&topic_id) {
             let mut gossip_joined = self.gossip_joined.write().await;
-            gossip_joined.insert(topic_id);
+            if let Some(counter) = gossip_joined.get_mut(&topic_id) {
+                *counter += 1;
+            } else {
+                gossip_joined.insert(topic_id, 1);
+            }
 
             // Inform local topic subscribers that the gossip overlay has been joined and is ready
             // for messages.
@@ -229,7 +370,7 @@ where
 
     async fn has_joined_gossip(&self, topic_id: [u8; 32]) -> bool {
         let gossip_joined = self.gossip_joined.read().await;
-        gossip_joined.contains(&topic_id)
+        gossip_joined.contains_key(&topic_id)
     }
 
     /// Handle incoming messages from gossip.
@@ -402,13 +543,13 @@ mod tests {
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::sync::{mpsc, oneshot};
-    use tokio_stream::wrappers::ReceiverStream;
 
     use crate::engine::AddressBook;
+
     use crate::network::FromNetwork;
     use crate::{NodeAddress, TopicId};
 
-    use super::TopicStreams;
+    use super::{TopicReceiverStream, TopicStreams};
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
     enum TestTopic {
@@ -431,12 +572,13 @@ mod tests {
 
     #[tokio::test]
     async fn ooo_gossip_buffering() {
+        let (engine_actor_tx, _engine_actor_rx) = mpsc::channel(128);
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
         let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
-        let (from_network_tx, from_network_rx) = mpsc::channel(128);
-        let (_to_network_tx, to_network_rx) = mpsc::channel(128);
+
         let (gossip_ready_tx, _) = oneshot::channel();
-        let mut from_network_rx_stream = ReceiverStream::new(from_network_rx);
+        let (topic_stream_sender_tx, _topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
 
         let topic = TestTopic::Primary;
         let topic_id = topic.id();
@@ -449,18 +591,25 @@ mod tests {
             .add_topic_id(peer_1.public_key, topic.id())
             .await;
 
-        let mut topic_streams =
-            TopicStreams::<TestTopic>::new(gossip_actor_tx, address_book, Some(sync_actor_tx));
+        let mut topic_streams = TopicStreams::<TestTopic>::new(
+            address_book,
+            engine_actor_tx,
+            gossip_actor_tx,
+            Some(sync_actor_tx),
+        );
 
         topic_streams
             .subscribe(
                 topic.clone(),
-                from_network_tx,
-                to_network_rx,
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
                 gossip_ready_tx,
             )
             .await
             .unwrap();
+
+        let from_network_rx = topic_stream_receiver_rx.await.unwrap();
+        let mut from_network_rx_stream = TopicReceiverStream::new(from_network_rx);
 
         topic_streams.on_gossip_joined(topic_id).await;
 

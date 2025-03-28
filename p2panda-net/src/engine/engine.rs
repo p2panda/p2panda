@@ -18,9 +18,8 @@ use crate::engine::constants::{
 };
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::topic_discovery::TopicDiscovery;
-use crate::engine::topic_streams::TopicStreams;
+use crate::engine::topic_streams::{TopicChannelType, TopicReceiver, TopicSender, TopicStreams};
 use crate::events::SystemEvent;
-use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, NodeAddress, TopicId, from_public_key, to_public_key};
 
@@ -37,9 +36,14 @@ pub enum ToEngineActor<T> {
     },
     SubscribeTopic {
         topic: T,
-        from_network_tx: mpsc::Sender<FromNetwork>,
-        to_network_rx: mpsc::Receiver<ToNetwork>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
+    },
+    UnsubscribeTopic {
+        topic: T,
+        stream_id: usize,
+        channel_type: TopicChannelType,
     },
     GossipJoined {
         topic_id: [u8; 32],
@@ -108,6 +112,7 @@ where
         private_key: PrivateKey,
         endpoint: Endpoint,
         address_book: AddressBook,
+        engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
         inbox: mpsc::Receiver<ToEngineActor<T>>,
         gossip_actor_tx: mpsc::Sender<ToGossipActor>,
         sync_actor_tx: Option<mpsc::Sender<ToSyncActor<T>>>,
@@ -121,8 +126,9 @@ where
             bootstrap,
         );
         let topic_streams = TopicStreams::new(
-            gossip_actor_tx.clone(),
             address_book.clone(),
+            engine_actor_tx,
+            gossip_actor_tx.clone(),
             sync_actor_tx.clone(),
         );
 
@@ -273,12 +279,19 @@ where
             }
             ToEngineActor::SubscribeTopic {
                 topic,
-                from_network_tx,
-                to_network_rx,
+                topic_sender_tx,
+                topic_receiver_tx,
                 gossip_ready_tx,
             } => {
-                self.on_subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
+                self.on_subscribe(topic, topic_sender_tx, topic_receiver_tx, gossip_ready_tx)
                     .await?;
+            }
+            ToEngineActor::UnsubscribeTopic {
+                topic,
+                stream_id,
+                channel_type,
+            } => {
+                self.on_unsubscribe(topic, stream_id, channel_type).await?;
             }
             ToEngineActor::GossipJoined { topic_id, peers } => {
                 self.on_gossip_joined(topic_id, peers).await?;
@@ -436,15 +449,15 @@ where
     async fn on_subscribe(
         &mut self,
         topic: T,
-        from_network_tx: mpsc::Sender<FromNetwork>,
-        to_network_rx: mpsc::Receiver<ToNetwork>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.topic_streams
             .subscribe(
                 topic.clone(),
-                from_network_tx,
-                to_network_rx,
+                topic_sender_tx,
+                topic_receiver_tx,
                 gossip_ready_tx,
             )
             .await?;
@@ -455,6 +468,33 @@ where
         self.topic_discovery
             .announce(my_topic_ids, &self.private_key)
             .await?;
+
+        Ok(())
+    }
+
+    /// Handle a topic unsubscription.
+    async fn on_unsubscribe(
+        &mut self,
+        topic: T,
+        stream_id: usize,
+        channel_type: TopicChannelType,
+    ) -> Result<()> {
+        let unsubscribe_is_complete = self
+            .topic_streams
+            .unsubscribe(topic.id(), stream_id, channel_type)
+            .await?;
+
+        if unsubscribe_is_complete {
+            if let Some(system_event_tx) = &self.system_event_tx {
+                system_event_tx.send(SystemEvent::GossipLeft {
+                    topic_id: topic.id(),
+                })?;
+            }
+
+            if let Some(sync_actor_tx) = &self.sync_actor_tx {
+                sync_actor_tx.send(ToSyncActor::Forget { topic }).await?;
+            }
+        }
 
         Ok(())
     }

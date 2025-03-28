@@ -131,7 +131,7 @@ use iroh_quinn::TransportConfig;
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::{Discovery, DiscoveryMap};
 use p2panda_sync::TopicQuery;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
@@ -139,7 +139,7 @@ use tracing::{Instrument, debug, error, error_span, warn};
 
 use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
 use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
-use crate::engine::Engine;
+use crate::engine::{Engine, TopicReceiver, TopicSender};
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::{SYNC_CONNECTION_ALPN, SyncConfiguration};
@@ -786,22 +786,31 @@ where
 
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and written
     /// to, along with a oneshot receiver to be informed when the gossip overlay has been joined.
+    ///
+    /// The topic will automatically be unsubscribed from once both the sender and receiver have
+    /// been dropped.
     pub async fn subscribe(
         &self,
         topic: T,
-    ) -> Result<(
-        mpsc::Sender<ToNetwork>,
-        mpsc::Receiver<FromNetwork>,
-        oneshot::Receiver<()>,
-    )> {
-        let (to_network_tx, to_network_rx) = mpsc::channel::<ToNetwork>(128);
-        let (from_network_tx, from_network_rx) = mpsc::channel::<FromNetwork>(128);
+    ) -> Result<(TopicSender<T>, TopicReceiver<T>, oneshot::Receiver<()>)> {
+        let (topic_stream_sender_tx, topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
         let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
 
         self.inner
             .engine
-            .subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
+            .subscribe(
+                topic,
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
+                gossip_ready_tx,
+            )
             .await?;
+
+        // Receive the network sender and receiver channels for this topic from the `topic_streams`
+        // module.
+        let to_network_tx = topic_stream_sender_rx.await?;
+        let from_network_rx = topic_stream_receiver_rx.await?;
 
         Ok((to_network_tx, from_network_rx, gossip_ready_rx))
     }
