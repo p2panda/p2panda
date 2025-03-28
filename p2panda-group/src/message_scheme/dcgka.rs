@@ -93,14 +93,15 @@ const RATCHET_KEY_SIZE: usize = 32;
 /// * Renamed `process` to `process_remote`.
 /// * Added `rng` as an argument to most methods.
 /// * `seq` is taken care of _outside_ of this implementation. Methods return control messages
-///   which need to be assigned a "seq", that is a vector clock, hash, seq_num or similar.
-/// * After calling a group operation create, add, remove or update the user needs to process
-///   themselves by calling `process_local`. This allows an user of the API to correctly craft a
-///   `seq` for their messages.
-/// * Instead of sending history of control messages in "welcome" message we send the "processed"
-///   state of DGM.
-/// * Not recording "add" control message to history before sending welcome, the receiver of the
-///   welcome message needs to add themselves.
+///   which need to be manually assigned a "seq", that is a vector clock, hash, seq_num or similar.
+/// * After calling a group operation "create", "add", "remove" or "update" the user needs to process
+///   the output themselves by calling `process_local`. This allows an user of the API to correctly
+///   craft a `seq` for their control messages (see point above).
+/// * Instead of sending the history of control messages in "welcome" messages we send the
+///   "processed" and potentially garbage-collected CRDT state of DGM. This also allows
+///   implementations where control messages are encrypted as well.
+/// * We're not recording the "add" control message to the history before sending a "welcome"
+///   message after adding a member, the receiver of the "welcome" message needs to add themselves.
 pub struct Dcgka<ID, OP, PKI, DGM, MGT> {
     _marker: PhantomData<(ID, OP, PKI, DGM, MGT)>,
 }
