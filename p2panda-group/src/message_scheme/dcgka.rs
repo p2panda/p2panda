@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::hkdf::{HkdfError, hkdf};
-use crate::crypto::x25519::SECRET_KEY_SIZE;
 use crate::crypto::{Rng, RngError, Secret};
 use crate::key_bundle::OneTimeKeyBundle;
 use crate::traits::{
@@ -1466,7 +1465,7 @@ impl NextSeed {
         DGM: AckedGroupMembership<ID, OP>,
         MGT: PreKeyManager,
     {
-        let bytes: [u8; SECRET_KEY_SIZE] =
+        let bytes: [u8; RATCHET_KEY_SIZE] =
             bytes.try_into().map_err(|_| DcgkaError::InvalidKeySize)?;
         Ok(Self::from_bytes(bytes))
     }
@@ -1543,7 +1542,7 @@ impl UpdateSecret {
         DGM: AckedGroupMembership<ID, OP>,
         MGT: PreKeyManager,
     {
-        let bytes: [u8; SECRET_KEY_SIZE] =
+        let bytes: [u8; RATCHET_KEY_SIZE] =
             bytes.try_into().map_err(|_| DcgkaError::InvalidKeySize)?;
         Ok(Self::from_bytes(bytes))
     }
