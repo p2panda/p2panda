@@ -20,6 +20,8 @@ Highlights are marked with a pancake 🥞
 
 ## [0.3.0] - 11/03/2025
 
+### Added
+
 - Introduce concrete error type for `SqliteStore` [#698](https://github.com/p2panda/p2panda/pull/698)
 - Implement SQLite `OperationStore` & `LogStore` [#680](https://github.com/p2panda/p2panda/pull/680)
 - Introduce network system events API [#669](https://github.com/p2panda/p2panda/pull/669)
