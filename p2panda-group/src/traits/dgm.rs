@@ -6,7 +6,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-/// Decentralised group membership algorithm with acknowledgements.
+/// Decentralised group membership (DGM) algorithm with acknowledgements.
 ///
 /// Tracking acknowledgements is required for understanding concurrent group operations and
 /// handling possible cases where members would otherwise miss out on crucial state to set up their
