@@ -1360,10 +1360,12 @@ where
     }
 }
 
-/// Calling "create", "add", "remove" and "update" return a tuple of three variables (control,
-/// dmsgs, I) after changing the state for the current user: control is a control message that
-/// should be broadcast to the group, dmsgs is a set of (u, m) pairs where m is a direct message
-/// that should be sent to user u, and I is a new update secret for the current user.
+/// Calling "create", "add", "remove" and "update" return a tuple of three variables (`control`,
+/// `dmsgs` and `I`) after changing the state for the current user.
+///
+/// `control` is a control message that should be broadcast to the group, `dmsgs` is a set of `(u,
+/// m)` pairs where `m` is a direct message that should be sent to user `u`, and `I` is a new
+/// update secret for the current user.
 pub struct OperationOutput<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -1386,7 +1388,7 @@ where
 /// If direct messages are sent along with a control message, we assume that the direct message for
 /// the appropriate recipient is delivered in the same call to process. Our algorithm never sends a
 /// direct message without an associated broadcast control message.
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DirectMessage<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -1395,7 +1397,24 @@ where
     pub content: DirectMessageContent<ID, OP, DGM>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DirectMessageContent<ID, OP, DGM>
+where
+    DGM: AckedGroupMembership<ID, OP>,
+{
+    Welcome {
+        ciphertext: TwoPartyMessage,
+        history: DGM::State,
+    },
+    TwoParty {
+        ciphertext: TwoPartyMessage,
+    },
+    Forward {
+        ciphertext: TwoPartyMessage,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DirectMessageType {
     Welcome,
     TwoParty,
@@ -1427,23 +1446,6 @@ where
             DirectMessageContent::Forward { .. } => DirectMessageType::Forward,
         }
     }
-}
-
-#[derive(Clone)]
-pub enum DirectMessageContent<ID, OP, DGM>
-where
-    DGM: AckedGroupMembership<ID, OP>,
-{
-    Welcome {
-        ciphertext: TwoPartyMessage,
-        history: DGM::State,
-    },
-    TwoParty {
-        ciphertext: TwoPartyMessage,
-    },
-    Forward {
-        ciphertext: TwoPartyMessage,
-    },
 }
 
 /// Randomly generated seed we keep temporarily around when creating or updating a group or
