@@ -102,20 +102,20 @@ const RATCHET_KEY_SIZE: usize = 32;
 ///   implementations where control messages are encrypted as well.
 /// * We're not recording the "add" control message to the history before sending a "welcome"
 ///   message after adding a member, the receiver of the "welcome" message needs to add themselves.
-pub struct Dcgka<ID, OP, PKI, DGM, MGT> {
-    _marker: PhantomData<(ID, OP, PKI, DGM, MGT)>,
+pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
+    _marker: PhantomData<(ID, OP, PKI, DGM, KMG)>,
 }
 
 /// Serializable state of DCGKA (for persistance).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
-pub struct DcgkaState<ID, OP, PKI, DGM, MGT>
+pub struct DcgkaState<ID, OP, PKI, DGM, KMG>
 where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
-    MGT: IdentityManager<MGT::State> + PreKeyManager,
+    KMG: IdentityManager<KMG::State> + PreKeyManager,
 {
     /// Public Key Infrastructure. From here we retrieve the identity keys and one-time prekey
     /// bundles for each member to do 2SM.
@@ -123,7 +123,7 @@ where
 
     /// Our own key mananger holding the secret parts for our own identity keys and published
     /// one-time prekey bundles so we can do 2SM.
-    my_keys: MGT::State,
+    my_keys: KMG::State,
 
     /// Our id which is used as an unique handle.
     my_id: ID,
@@ -159,20 +159,20 @@ where
     dgm: DGM::State,
 }
 
-impl<ID, OP, PKI, DGM, MGT> Dcgka<ID, OP, PKI, DGM, MGT>
+impl<ID, OP, PKI, DGM, KMG> Dcgka<ID, OP, PKI, DGM, KMG>
 where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
-    MGT: IdentityManager<MGT::State> + PreKeyManager,
+    KMG: IdentityManager<KMG::State> + PreKeyManager,
 {
     pub fn init(
         my_id: ID,
-        my_keys: MGT::State,
+        my_keys: KMG::State,
         pki: PKI::State,
         dgm: DGM::State,
-    ) -> DcgkaState<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaState<ID, OP, PKI, DGM, KMG> {
         DcgkaState {
             pki,
             my_id,
@@ -193,10 +193,10 @@ where
     /// This is called externally as soon as a control message was received, validated and causally
     /// ordered.
     pub fn process_remote(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         input: ProcessInput<ID, OP, DGM>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         let ProcessInput { sender, seq, .. } = input;
         let (y_i, output) = match input.message {
             ProcessMessage::Create(CreateMessage { initial_members }, direct_message) => {
@@ -241,11 +241,11 @@ where
     ///
     /// Calling this method will _never_ yield another control- or direct message.
     pub fn process_local(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         seq: OP,
         input: OperationOutput<ID, OP, DGM>,
         rng: &Rng,
-    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let my_id = y.my_id;
         let (y_i, output) = match input.control_message.message_type {
             ControlMessageType::Create(ref message) => {
@@ -286,10 +286,10 @@ where
     /// processes that message and broadcasts an "ack" control message; 3. each member processes
     /// the ack from each other member.
     pub fn create(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         initial_members: Vec<ID>,
         rng: &Rng,
-    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // De-duplicate members.
         let mut initial_members: Vec<ID> =
             initial_members.into_iter().fold(Vec::new(), |mut acc, id| {
@@ -331,13 +331,13 @@ where
 
     /// Called by group members when they receive the "create" message.
     fn process_create(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         seq: OP,
         initial_members: Vec<ID>,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm =
             DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
         Self::process_seed(y, &sender, seq, direct_message, rng)
@@ -347,11 +347,11 @@ where
     ///
     /// In this function, `ackID` and `ackOP` are the user id and id of the acknowledged message.
     fn process_ack(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         ack: (&ID, OP),
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // If the acknowledged message was a group membership operation, we record the
         // acknowledgment. We do this because the member_view function needs to know which
         // operations have been acknowledged by which user.
@@ -419,9 +419,9 @@ where
     /// Generate a new seed for the group. This "refreshes" the group's entropy and should be
     /// called frequently if no other group operations took place for a while.
     pub fn update(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         rng: &Rng,
-    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let control_message = ControlMessage {
             message_type: ControlMessageType::Update(UpdateMessage),
         };
@@ -445,12 +445,12 @@ where
 
     /// Called by group members when they receive the "update" control message.
     fn process_update(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         seq: OP,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         Self::process_seed(y, &sender, seq, direct_message, rng)
     }
 
@@ -458,10 +458,10 @@ where
     ///
     /// This generates a new seed for the remaining members for post-compromise security (PCS).
     pub fn remove(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         removed: ID,
         rng: &Rng,
-    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let control_message = ControlMessage {
             message_type: ControlMessageType::Remove(RemoveMessage { removed }),
         };
@@ -485,13 +485,13 @@ where
 
     /// Called by group members when they receive the "remove" control message.
     fn process_remove(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         seq: OP,
         removed: &ID,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm = DGM::remove(y.dgm, sender, removed, seq)
             .map_err(|err| DcgkaError::DgmOperation(err))?;
         Self::process_seed(y, &sender, seq, direct_message, rng)
@@ -502,10 +502,10 @@ where
     /// The added group member will receive a direct "welcome" message, every member will process
     /// an "add" control message.
     pub fn add(
-        y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         added: ID,
         rng: &Rng,
-    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
         let control_message = ControlMessage {
             message_type: ControlMessageType::Add(AddMessage { added }),
@@ -569,13 +569,13 @@ where
     /// they are able to decrypt application messages that any group member sent after processing
     /// their addition.
     fn process_add(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         seq: OP,
         added: ID,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // Local user is the new group member being added. Call "process_welcome" instead and
         // return early.
         if added == y.my_id {
@@ -700,11 +700,11 @@ where
     /// Called by both the sender and each recipient of an "add-ack" message, including the new
     /// group member.
     fn process_add_ack(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         ack: (&ID, OP),
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // Add the acknowledgment to γ.history, like in process_ack.
         y.dgm = DGM::ack(y.dgm, sender, ack.1).map_err(|err| DcgkaError::DgmOperation(err))?;
 
@@ -768,12 +768,12 @@ where
     /// Second function called by a newly added group member (the first is the call to init that
     /// sets up their state).
     fn process_welcome(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         seq: OP,
         history: DGM::State,
         ciphertext: TwoPartyMessage,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // Adding user’s copy of γ.history sent in their welcome message, which is used to
         // initialize the added user’s history.
         y.dgm = DGM::from_welcome(y.my_id, history).map_err(|err| DcgkaError::DgmOperation(err))?;
@@ -851,10 +851,10 @@ where
     /// encrypt it for each other group member using the 2SM protocol. It returns the updated
     /// protocol state and the set of direct messages to send.
     fn generate_seed(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         recipients: &[ID],
         rng: &Rng,
-    ) -> GenerateSeedResult<ID, OP, PKI, DGM, MGT> {
+    ) -> GenerateSeedResult<ID, OP, PKI, DGM, KMG> {
         let mut direct_messages: Vec<DirectMessage<ID, OP, DGM>> =
             Vec::with_capacity(recipients.len());
 
@@ -892,12 +892,12 @@ where
     /// We use the seed to derive independent member secrets for each group member by combining
     /// the seed secret and each user ID using HKDF.
     fn process_seed(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
         seq: OP,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
         rng: &Rng,
-    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, MGT> {
+    ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // Determine the set of users who were group members at the time the control message was
         // sent, and hence the set of recipients of the message.
         let recipients: Vec<ID> = Self::member_view(&y, sender)?
@@ -1112,11 +1112,11 @@ where
     /// γ.2sm[ID]. We then use 2SM-Send to encrypt the message, and store the updated protocol
     /// state in γ.
     fn encrypt_to(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         recipient: &ID,
         plaintext: &[u8],
         rng: &Rng,
-    ) -> DcgkaResult<ID, OP, PKI, DGM, MGT, TwoPartyMessage> {
+    ) -> DcgkaResult<ID, OP, PKI, DGM, KMG, TwoPartyMessage> {
         let y_2sm = match y.two_party.remove(recipient) {
             Some(y_2sm) => y_2sm,
             None => {
@@ -1124,11 +1124,11 @@ where
                     .map_err(|err| DcgkaError::PreKeyRegistry(err))?;
                 y.pki = pki_i;
                 let prekey_bundle = prekey_bundle.ok_or(DcgkaError::MissingPreKeys(*recipient))?;
-                TwoParty::<MGT, OneTimeKeyBundle>::init(prekey_bundle)
+                TwoParty::<KMG, OneTimeKeyBundle>::init(prekey_bundle)
             }
         };
         let (y_2sm_i, ciphertext) =
-            TwoParty::<MGT, OneTimeKeyBundle>::send(y_2sm, &y.my_keys, plaintext, rng)?;
+            TwoParty::<KMG, OneTimeKeyBundle>::send(y_2sm, &y.my_keys, plaintext, rng)?;
         y.two_party.insert(*recipient, y_2sm_i);
         Ok((y, ciphertext))
     }
@@ -1137,10 +1137,10 @@ where
     /// then uses 2SM-Receive to decrypt the ciphertext, with the protocol state stored in
     /// γ.2sm[ID].
     fn decrypt_from(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
         ciphertext: TwoPartyMessage,
-    ) -> DcgkaResult<ID, OP, PKI, DGM, MGT, Vec<u8>> {
+    ) -> DcgkaResult<ID, OP, PKI, DGM, KMG, Vec<u8>> {
         let y_2sm = match y.two_party.remove(sender) {
             Some(y_2sm) => y_2sm,
             None => {
@@ -1148,11 +1148,11 @@ where
                     .map_err(|err| DcgkaError::PreKeyRegistry(err))?;
                 y.pki = pki_i;
                 let prekey_bundle = prekey_bundle.ok_or(DcgkaError::MissingPreKeys(*sender))?;
-                TwoParty::<MGT, OneTimeKeyBundle>::init(prekey_bundle)
+                TwoParty::<KMG, OneTimeKeyBundle>::init(prekey_bundle)
             }
         };
         let (y_2sm_i, y_my_keys_i, plaintext) =
-            TwoParty::<MGT, OneTimeKeyBundle>::receive(y_2sm, y.my_keys, ciphertext)?;
+            TwoParty::<KMG, OneTimeKeyBundle>::receive(y_2sm, y.my_keys, ciphertext)?;
         y.my_keys = y_my_keys_i;
         y.two_party.insert(*sender, y_2sm_i);
         Ok((y, plaintext))
@@ -1163,10 +1163,10 @@ where
     /// function HKDF to combine the ratchet state with an input, producing an update secret and a
     /// new ratchet state.
     fn update_ratchet(
-        mut y: DcgkaState<ID, OP, PKI, DGM, MGT>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         member: &ID,
         member_secret: ChainSecret,
-    ) -> DcgkaResult<ID, OP, PKI, DGM, MGT, UpdateSecret> {
+    ) -> DcgkaResult<ID, OP, PKI, DGM, KMG, UpdateSecret> {
         let identity_key = PKI::identity_key(&y.pki, member)
             .map_err(|err| DcgkaError::IdentityRegistry(err))?
             .ok_or(DcgkaError::MissingIdentityKey(*member))?;
@@ -1209,31 +1209,31 @@ where
     /// seen by ID, and then invoking the Decentralized Group Membership function DGM to compute
     /// the group membership.
     fn member_view(
-        y: &DcgkaState<ID, OP, PKI, DGM, MGT>,
+        y: &DcgkaState<ID, OP, PKI, DGM, KMG>,
         viewer: &ID,
-    ) -> Result<HashSet<ID>, DcgkaError<ID, OP, PKI, DGM, MGT>> {
+    ) -> Result<HashSet<ID>, DcgkaError<ID, OP, PKI, DGM, KMG>> {
         let members =
             DGM::members_view(&y.dgm, viewer).map_err(|err| DcgkaError::MembersView(err))?;
         Ok(members)
     }
 }
 
-pub type GenerateSeedResult<ID, OP, PKI, DGM, MGT> = Result<
+pub type GenerateSeedResult<ID, OP, PKI, DGM, KMG> = Result<
     (
-        DcgkaState<ID, OP, PKI, DGM, MGT>,
+        DcgkaState<ID, OP, PKI, DGM, KMG>,
         Vec<DirectMessage<ID, OP, DGM>>,
     ),
-    DcgkaError<ID, OP, PKI, DGM, MGT>,
+    DcgkaError<ID, OP, PKI, DGM, KMG>,
 >;
 
-pub type DcgkaResult<ID, OP, PKI, DGM, MGT, T> =
-    Result<(DcgkaState<ID, OP, PKI, DGM, MGT>, T), DcgkaError<ID, OP, PKI, DGM, MGT>>;
+pub type DcgkaResult<ID, OP, PKI, DGM, KMG, T> =
+    Result<(DcgkaState<ID, OP, PKI, DGM, KMG>, T), DcgkaError<ID, OP, PKI, DGM, KMG>>;
 
-pub type DcgkaProcessResult<ID, OP, PKI, DGM, MGT> =
-    DcgkaResult<ID, OP, PKI, DGM, MGT, ProcessOutput<ID, OP, DGM>>;
+pub type DcgkaProcessResult<ID, OP, PKI, DGM, KMG> =
+    DcgkaResult<ID, OP, PKI, DGM, KMG, ProcessOutput<ID, OP, DGM>>;
 
-pub type DcgkaOperationResult<ID, OP, PKI, DGM, MGT> =
-    DcgkaResult<ID, OP, PKI, DGM, MGT, OperationOutput<ID, OP, DGM>>;
+pub type DcgkaOperationResult<ID, OP, PKI, DGM, KMG> =
+    DcgkaResult<ID, OP, PKI, DGM, KMG, OperationOutput<ID, OP, DGM>>;
 
 /// Message that should be broadcast to the group.
 ///
@@ -1460,13 +1460,13 @@ impl NextSeed {
         Self(Secret::from_bytes(bytes))
     }
 
-    pub fn try_from_bytes<ID, OP, PKI, DGM, MGT>(
+    pub fn try_from_bytes<ID, OP, PKI, DGM, KMG>(
         bytes: &[u8],
-    ) -> Result<Self, DcgkaError<ID, OP, PKI, DGM, MGT>>
+    ) -> Result<Self, DcgkaError<ID, OP, PKI, DGM, KMG>>
     where
         PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
         DGM: AckedGroupMembership<ID, OP>,
-        MGT: PreKeyManager,
+        KMG: PreKeyManager,
     {
         let bytes: [u8; RATCHET_KEY_SIZE] =
             bytes.try_into().map_err(|_| DcgkaError::InvalidKeySize)?;
@@ -1537,13 +1537,13 @@ impl UpdateSecret {
         Self(Secret::from_bytes(bytes))
     }
 
-    pub fn try_from_bytes<ID, OP, PKI, DGM, MGT>(
+    pub fn try_from_bytes<ID, OP, PKI, DGM, KMG>(
         bytes: &[u8],
-    ) -> Result<Self, DcgkaError<ID, OP, PKI, DGM, MGT>>
+    ) -> Result<Self, DcgkaError<ID, OP, PKI, DGM, KMG>>
     where
         PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
         DGM: AckedGroupMembership<ID, OP>,
-        MGT: PreKeyManager,
+        KMG: PreKeyManager,
     {
         let bytes: [u8; RATCHET_KEY_SIZE] =
             bytes.try_into().map_err(|_| DcgkaError::InvalidKeySize)?;
@@ -1556,11 +1556,11 @@ impl UpdateSecret {
 }
 
 #[derive(Debug, Error)]
-pub enum DcgkaError<ID, OP, PKI, DGM, MGT>
+pub enum DcgkaError<ID, OP, PKI, DGM, KMG>
 where
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
-    MGT: PreKeyManager,
+    KMG: PreKeyManager,
 {
     #[error("the given key does not match the required 32 byte length")]
     InvalidKeySize,
@@ -1602,7 +1602,7 @@ where
     Rng(#[from] RngError),
 
     #[error(transparent)]
-    KeyManager(MGT::Error),
+    KeyManager(KMG::Error),
 
     #[error(transparent)]
     TwoParty(#[from] TwoPartyError),
