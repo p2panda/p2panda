@@ -5,19 +5,19 @@ use tokio::sync::mpsc::error::{SendError, TrySendError};
 use tracing::warn;
 
 use crate::engine::engine::ToEngineActor;
-use crate::engine::topic_streams::TopicStreamChannel;
+use crate::engine::topic_streams::TopicChannelType;
 use crate::network::ToNetwork;
 
 // @TODO(glyph): Docs.
 #[derive(Debug)]
-pub struct TopicStreamSender<T> {
+pub struct TopicSender<T> {
     topic: Option<T>,
     stream_id: usize,
     to_network_tx: mpsc::Sender<ToNetwork>,
     engine_actor_tx: mpsc::Sender<ToEngineActor<T>>,
 }
 
-impl<T> TopicStreamSender<T> {
+impl<T> TopicSender<T> {
     pub(crate) async fn new(
         topic: T,
         stream_id: usize,
@@ -32,36 +32,36 @@ impl<T> TopicStreamSender<T> {
         }
     }
 
-    async fn send(&mut self, to_network_bytes: ToNetwork) -> Result<(), SendError<ToNetwork>> {
+    pub async fn send(&self, to_network_bytes: ToNetwork) -> Result<(), SendError<ToNetwork>> {
         self.to_network_tx.send(to_network_bytes).await?;
 
         Ok(())
     }
 
-    fn try_send(&mut self, to_network_bytes: ToNetwork) -> Result<(), TrySendError<ToNetwork>> {
+    pub fn try_send(&self, to_network_bytes: ToNetwork) -> Result<(), TrySendError<ToNetwork>> {
         self.to_network_tx.try_send(to_network_bytes)?;
 
         Ok(())
     }
 
-    async fn closed(&self) {
+    pub async fn closed(&self) {
         self.to_network_tx.closed().await
     }
 
-    fn is_closed(&self) -> bool {
+    pub fn is_closed(&self) -> bool {
         self.to_network_tx.is_closed()
     }
 }
 
-impl<T> Drop for TopicStreamSender<T> {
+impl<T> Drop for TopicSender<T> {
     fn drop(&mut self) {
         if let Some(topic) = self.topic.take() {
             if self
                 .engine_actor_tx
-                .blocking_send(ToEngineActor::UnsubscribeTopic {
+                .try_send(ToEngineActor::UnsubscribeTopic {
                     topic,
                     stream_id: self.stream_id,
-                    channel_type: TopicStreamChannel::Sender,
+                    channel_type: TopicChannelType::Sender,
                 })
                 .is_err()
             {

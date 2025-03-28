@@ -18,9 +18,7 @@ use crate::engine::constants::{
 };
 use crate::engine::gossip::{GossipActor, ToGossipActor};
 use crate::engine::topic_discovery::TopicDiscovery;
-use crate::engine::topic_streams::{
-    TopicStreamChannel, TopicStreamReceiver, TopicStreamSender, TopicStreams,
-};
+use crate::engine::topic_streams::{TopicChannelType, TopicReceiver, TopicSender, TopicStreams};
 use crate::events::SystemEvent;
 use crate::sync::manager::{SyncActor, ToSyncActor};
 use crate::{NetworkId, NodeAddress, TopicId, from_public_key, to_public_key};
@@ -38,14 +36,14 @@ pub enum ToEngineActor<T> {
     },
     SubscribeTopic {
         topic: T,
-        topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
-        topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     },
     UnsubscribeTopic {
         topic: T,
         stream_id: usize,
-        channel_type: TopicStreamChannel,
+        channel_type: TopicChannelType,
     },
     GossipJoined {
         topic_id: [u8; 32],
@@ -281,20 +279,12 @@ where
             }
             ToEngineActor::SubscribeTopic {
                 topic,
-                //from_network_tx,
-                //to_network_rx,
-                topic_stream_sender_tx,
-                topic_stream_receiver_tx,
+                topic_sender_tx,
+                topic_receiver_tx,
                 gossip_ready_tx,
             } => {
-                //self.on_subscribe(topic, from_network_tx, to_network_rx, gossip_ready_tx)
-                self.on_subscribe(
-                    topic,
-                    topic_stream_sender_tx,
-                    topic_stream_receiver_tx,
-                    gossip_ready_tx,
-                )
-                .await?;
+                self.on_subscribe(topic, topic_sender_tx, topic_receiver_tx, gossip_ready_tx)
+                    .await?;
             }
             ToEngineActor::UnsubscribeTopic {
                 topic,
@@ -459,15 +449,15 @@ where
     async fn on_subscribe(
         &mut self,
         topic: T,
-        topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
-        topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.topic_streams
             .subscribe(
                 topic.clone(),
-                topic_stream_sender_tx,
-                topic_stream_receiver_tx,
+                topic_sender_tx,
+                topic_receiver_tx,
                 gossip_ready_tx,
             )
             .await?;
@@ -487,7 +477,7 @@ where
         &mut self,
         topic: T,
         stream_id: usize,
-        channel_type: TopicStreamChannel,
+        channel_type: TopicChannelType,
     ) -> Result<()> {
         let unsubscribe_is_complete = self
             .topic_streams
