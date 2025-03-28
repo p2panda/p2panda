@@ -3,13 +3,13 @@
 pub mod operations;
 pub mod store;
 
-pub use store::{MemoryStore, PartialOrderStore};
-
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use thiserror::Error;
+
+pub use crate::partial::store::{MemoryStore, PartialOrderStore};
 
 /// Error types which may be returned from `PartialOrder` methods.
 #[derive(Debug, Error)]
@@ -20,6 +20,9 @@ pub enum PartialOrderError {
 
 /// Struct for establishing partial order over a set of items which form a dependency graph.
 ///
+/// A partial order sorts items based on their causal relationships. An item can be "before",
+/// "after" or "at the same time" as any other item.
+///
 /// This functionality is required when, for example, processing a set of messages where some
 /// messages _must_ be processed before others. A set such as this would naturally form a graph
 /// structure, each item would have a chain of dependencies. Another example would be a package
@@ -29,11 +32,11 @@ pub enum PartialOrderError {
 ///
 /// There are various approaches which can be taken when wanting to linearize items in a graph
 /// structure. The approach taken in this module establishes a partial order over all items in the
-/// set. The word "partial" indicates that we accept some items may not be directly comparable,
-/// items in different branches of the graph may not have a direct path between them, and so we
-/// don't know "which should come first". In fact, as there is no dependency relation between
-/// them, it makes no difference which comes first, and depending on the order items are processed
-/// the ordering process may arrive at different results (it is a non-deterministic algorithm).
+/// set. The word "partial" indicates that some items may not be directly comparable. Items in
+/// different branches of the graph may not have a direct path between them, and so we don't know
+/// "which should come first". In fact, as there is no dependency relation between them, it makes
+/// no difference which comes first, and depending on the order items are processed the ordering
+/// process may arrive at different results (it is a non-deterministic algorithm).
 ///
 /// Items in the process of being ordered are considered to be in one of two states. They are
 /// considered in a "ready" state when all their dependencies have themselves been processed, and

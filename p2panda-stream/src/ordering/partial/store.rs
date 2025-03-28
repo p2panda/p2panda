@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
-use super::PartialOrderError;
+use crate::partial::PartialOrderError;
 
 /// Trait defining a store API for handling ready and pending dependencies.
 ///
