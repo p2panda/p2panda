@@ -139,7 +139,7 @@ use tracing::{Instrument, debug, error, error_span, warn};
 
 use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
 use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
-use crate::engine::{Engine, TopicStreamReceiver, TopicStreamSender};
+use crate::engine::{Engine, TopicReceiver, TopicSender};
 use crate::events::SystemEvent;
 use crate::protocols::{ProtocolHandler, ProtocolMap};
 use crate::sync::{SYNC_CONNECTION_ALPN, SyncConfiguration};
@@ -792,11 +792,7 @@ where
     pub async fn subscribe(
         &self,
         topic: T,
-    ) -> Result<(
-        TopicStreamSender<T>,
-        TopicStreamReceiver<T>,
-        oneshot::Receiver<()>,
-    )> {
+    ) -> Result<(TopicSender<T>, TopicReceiver<T>, oneshot::Receiver<()>)> {
         let (topic_stream_sender_tx, topic_stream_sender_rx) = oneshot::channel();
         let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
         let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();

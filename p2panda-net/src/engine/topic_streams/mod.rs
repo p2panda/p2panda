@@ -21,8 +21,8 @@ use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
 
-pub use crate::engine::topic_streams::receiver::TopicStreamReceiver;
-pub use crate::engine::topic_streams::sender::TopicStreamSender;
+pub use crate::engine::topic_streams::receiver::{TopicReceiver, TopicReceiverStream};
+pub use crate::engine::topic_streams::sender::TopicSender;
 
 /// Managed data stream over an application-defined topic.
 type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
@@ -31,7 +31,7 @@ type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
 type TopicStreamId = usize;
 
 #[derive(Debug)]
-pub enum TopicStreamChannel {
+pub enum TopicChannelType {
     Sender,
     Receiver,
 }
@@ -123,8 +123,8 @@ where
     pub async fn subscribe(
         &mut self,
         topic: T,
-        topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
-        topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         let (to_network_tx, mut to_network_rx) = mpsc::channel::<ToNetwork>(128);
@@ -137,14 +137,14 @@ where
         // Create two parts of a topic stream channel. These are used to send bytes into the
         // network and receive bytes out of the network. Unsubscribe "clean up" actions will
         // be triggered when both the sender and receiver have been dropped.
-        let topic_stream_tx = TopicStreamSender::new(
+        let topic_tx = TopicSender::new(
             topic.clone(),
             stream_id,
             to_network_tx,
             self.engine_actor_tx.clone(),
         )
         .await;
-        let topic_stream_rx = TopicStreamReceiver::new(
+        let topic_rx = TopicReceiver::new(
             topic.clone(),
             stream_id,
             from_network_rx,
@@ -153,10 +153,10 @@ where
         .await;
 
         // Send the topic stream channels back to the subscriber.
-        if topic_stream_sender_tx.send(topic_stream_tx).is_err() {
+        if topic_sender_tx.send(topic_tx).is_err() {
             warn!("topic stream sender oneshot receiver dropped")
         }
-        if topic_stream_receiver_tx.send(topic_stream_rx).is_err() {
+        if topic_receiver_tx.send(topic_rx).is_err() {
             warn!("topic stream receiver oneshot receiver dropped")
         }
 
@@ -247,15 +247,15 @@ where
         &mut self,
         topic_id: [u8; 32],
         stream_id: usize,
-        channel: TopicStreamChannel,
+        channel_type: TopicChannelType,
     ) -> Result<bool> {
         let mut unsubscribe_is_complete = false;
 
         // Update the channel state for this stream.
         if let Some(channel_state) = self.active_streams.get_mut(&stream_id) {
-            match channel {
-                TopicStreamChannel::Sender => channel_state.sender = false,
-                TopicStreamChannel::Receiver => channel_state.receiver = false,
+            match channel_type {
+                TopicChannelType::Sender => channel_state.sender = false,
+                TopicChannelType::Receiver => channel_state.receiver = false,
             }
         }
 
@@ -543,13 +543,13 @@ mod tests {
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::sync::{mpsc, oneshot};
-    use tokio_stream::wrappers::ReceiverStream;
 
     use crate::engine::AddressBook;
+
     use crate::network::FromNetwork;
     use crate::{NodeAddress, TopicId};
 
-    use super::TopicStreams;
+    use super::{TopicReceiverStream, TopicStreams};
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
     enum TestTopic {
@@ -572,12 +572,13 @@ mod tests {
 
     #[tokio::test]
     async fn ooo_gossip_buffering() {
+        let (engine_actor_tx, _engine_actor_rx) = mpsc::channel(128);
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
         let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
-        let (from_network_tx, from_network_rx) = mpsc::channel(128);
-        let (_to_network_tx, to_network_rx) = mpsc::channel(128);
+
         let (gossip_ready_tx, _) = oneshot::channel();
-        let mut from_network_rx_stream = ReceiverStream::new(from_network_rx);
+        let (topic_stream_sender_tx, _topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
 
         let topic = TestTopic::Primary;
         let topic_id = topic.id();
@@ -590,18 +591,25 @@ mod tests {
             .add_topic_id(peer_1.public_key, topic.id())
             .await;
 
-        let mut topic_streams =
-            TopicStreams::<TestTopic>::new(gossip_actor_tx, address_book, Some(sync_actor_tx));
+        let mut topic_streams = TopicStreams::<TestTopic>::new(
+            address_book,
+            engine_actor_tx,
+            gossip_actor_tx,
+            Some(sync_actor_tx),
+        );
 
         topic_streams
             .subscribe(
                 topic.clone(),
-                from_network_tx,
-                to_network_rx,
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
                 gossip_ready_tx,
             )
             .await
             .unwrap();
+
+        let from_network_rx = topic_stream_receiver_rx.await.unwrap();
+        let mut from_network_rx_stream = TopicReceiverStream::new(from_network_rx);
 
         topic_streams.on_gossip_joined(topic_id).await;
 

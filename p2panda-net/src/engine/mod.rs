@@ -26,7 +26,7 @@ use tracing::{debug, error};
 pub use crate::engine::address_book::AddressBook;
 use crate::engine::engine::EngineActor;
 use crate::engine::gossip::GossipActor;
-pub use crate::engine::topic_streams::{TopicStreamReceiver, TopicStreamSender};
+pub use crate::engine::topic_streams::{TopicReceiver, TopicReceiverStream, TopicSender};
 use crate::events::SystemEvent;
 use crate::network::JoinErrToStr;
 use crate::sync::manager::SyncActor;
@@ -139,15 +139,15 @@ where
     pub async fn subscribe(
         &self,
         topic: T,
-        topic_stream_sender_tx: oneshot::Sender<TopicStreamSender<T>>,
-        topic_stream_receiver_tx: oneshot::Sender<TopicStreamReceiver<T>>,
+        topic_sender_tx: oneshot::Sender<TopicSender<T>>,
+        topic_receiver_tx: oneshot::Sender<TopicReceiver<T>>,
         gossip_ready_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         self.engine_actor_tx
             .send(ToEngineActor::SubscribeTopic {
                 topic,
-                topic_stream_sender_tx,
-                topic_stream_receiver_tx,
+                topic_sender_tx,
+                topic_receiver_tx,
                 gossip_ready_tx,
             })
             .await?;
