@@ -48,14 +48,14 @@ pub enum PartialOrderError {
 ///
 /// Example graph:
 ///
-/// ```
+/// ```text
 /// A <-- B2 <-- C
 ///   \-- B1 <--/
 /// ```
 ///
 /// Both of the following are possible and valid orderings for the above graph:
 ///
-/// ```
+/// ```text
 /// [A, B1, B2, C]
 /// [A, B2, B1, C]
 /// ```
@@ -66,14 +66,14 @@ pub enum PartialOrderError {
 ///
 /// Example graph:
 ///
-/// ```
+/// ```text
 /// A <-- ?? <-- C
 ///  \-- B1 <--/
 /// ```
 ///
 /// C is not processed yet as we are missing one of its dependencies:
 ///
-/// ```
+/// ```text
 /// [A, B1]
 /// ```
 ///
