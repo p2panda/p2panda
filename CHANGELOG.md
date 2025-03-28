@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
+
 ### Fixed
 
 - Wait for relay connection initialisation and first direct address [#725](https://github.com/p2panda/p2panda/pull/725)
