@@ -156,7 +156,7 @@ where
     ratchet: HashMap<ID, ChainSecret>,
 
     /// Decentralised group membership algorithm.
-    dgm: DGM::State,
+    pub(crate) dgm: DGM::State,
 }
 
 impl<ID, OP, PKI, DGM, KMG> Dcgka<ID, OP, PKI, DGM, KMG>
@@ -247,15 +247,15 @@ where
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let my_id = y.my_id;
-        let (y_i, output) = match input.control_message.message_type {
-            ControlMessageType::Create(ref message) => {
+        let (y_i, output) = match input.control_message {
+            ControlMessage::Create(ref message) => {
                 Self::process_create(y, my_id, seq, message.initial_members.clone(), None, rng)?
             }
-            ControlMessageType::Update(_) => Self::process_update(y, my_id, seq, None, rng)?,
-            ControlMessageType::Remove(ref message) => {
+            ControlMessage::Update(_) => Self::process_update(y, my_id, seq, None, rng)?,
+            ControlMessage::Remove(ref message) => {
                 Self::process_remove(y, my_id, seq, &message.removed, None, rng)?
             }
-            ControlMessageType::Add(ref message) => {
+            ControlMessage::Add(ref message) => {
                 Self::process_add(y, my_id, seq, message.added, None, rng)?
             }
             _ => panic!(
@@ -305,11 +305,9 @@ where
         }
 
         // The "create" function constructs the "create" control message.
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Create(CreateMessage {
-                initial_members: initial_members.clone(),
-            }),
-        };
+        let control_message = ControlMessage::Create(CreateMessage {
+            initial_members: initial_members.clone(),
+        });
 
         // Generate the set of direct messages to send.
         let (y_ii, direct_messages) = Self::generate_seed(y, &initial_members, rng)?;
@@ -422,9 +420,7 @@ where
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Update(UpdateMessage),
-        };
+        let control_message = ControlMessage::Update(UpdateMessage);
 
         let recipient_ids: Vec<ID> = Self::member_view(&y, &y.my_id)?
             .into_iter()
@@ -462,9 +458,7 @@ where
         removed: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Remove(RemoveMessage { removed }),
-        };
+        let control_message = ControlMessage::Remove(RemoveMessage { removed });
 
         let recipient_ids: Vec<ID> = Self::member_view(&y, &y.my_id)?
             .into_iter()
@@ -507,9 +501,7 @@ where
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Add(AddMessage { added }),
-        };
+        let control_message = ControlMessage::Add(AddMessage { added });
 
         // Construct a welcome message that is sent to the new member as a direct message.
         //
@@ -655,12 +647,10 @@ where
         // Otherwise, we need to acknowledge the "add" message, so we construct a control message
         // of type "add-ack" to broadcast (note that add has its own acknowledgment type, whereas
         // create, update and remove all use "ack").
-        let control = ControlMessage {
-            message_type: ControlMessageType::AddAck(AddAckMessage {
-                ack_sender: sender,
-                ack_seq: seq,
-            }),
-        };
+        let control = ControlMessage::AddAck(AddAckMessage {
+            ack_sender: sender,
+            ack_seq: seq,
+        });
 
         // We then use 2SM to encrypt our current ratchet state to send as a direct message to the
         // added user, so that they can decrypt subsequent messages we send.
@@ -810,12 +800,10 @@ where
 
         // Finally, the new group member constructs an "ack" control message (not "add_ack") to
         // broadcast and calls process_ack to compute their first update secret Ime.
-        let control = ControlMessage {
-            message_type: ControlMessageType::Ack(AckMessage {
-                ack_sender: sender,
-                ack_seq: seq,
-            }),
-        };
+        let control = ControlMessage::Ack(AckMessage {
+            ack_sender: sender,
+            ack_seq: seq,
+        });
 
         // process_ack works as described previously, reading from γ.memberSecret the member secret
         // we just generated, and passing it to update_ratchet.
@@ -942,12 +930,10 @@ where
         } else {
             // 3. Otherwise we return an "ack" message without deriving an update secret. Case 3
             //    may occur when a group member is added concurrently to other messages.
-            let control = ControlMessage {
-                message_type: ControlMessageType::Ack(AckMessage {
-                    ack_sender: *sender,
-                    ack_seq: seq,
-                }),
-            };
+            let control = ControlMessage::Ack(AckMessage {
+                ack_sender: *sender,
+                ack_seq: seq,
+            });
             return Ok((
                 y,
                 ProcessOutput {
@@ -1024,12 +1010,10 @@ where
         // If we received the seed secret from another user, we construct an "ack" control message
         // to broadcast, including the sender ID and sequence number of the message we are
         // acknowledging.
-        let control = ControlMessage {
-            message_type: ControlMessageType::Ack(AckMessage {
-                ack_sender: *sender,
-                ack_seq: seq,
-            }),
-        };
+        let control = ControlMessage::Ack(AckMessage {
+            ack_sender: *sender,
+            ack_seq: seq,
+        });
 
         // Care is required when an add operation occurs concurrently with an update, remove, or
         // another add operation. We want all intended recipients to learn every update secret,
@@ -1240,12 +1224,7 @@ pub type DcgkaOperationResult<ID, OP, PKI, DGM, KMG> =
 /// The control message must be distributed to the other group members through Authenticated Causal
 /// Broadcast, calling the process function on the recipient when they are delivered.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ControlMessage<ID, OP> {
-    message_type: ControlMessageType<ID, OP>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ControlMessageType<ID, OP> {
+pub enum ControlMessage<ID, OP> {
     Create(CreateMessage<ID>),
     Ack(AckMessage<ID, OP>),
     Update(UpdateMessage),
@@ -1254,18 +1233,18 @@ pub enum ControlMessageType<ID, OP> {
     AddAck(AddAckMessage<ID, OP>),
 }
 
-impl<ID, OP> Display for ControlMessageType<ID, OP> {
+impl<ID, OP> Display for ControlMessage<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                ControlMessageType::Create(_) => "create",
-                ControlMessageType::Ack(_) => "ack",
-                ControlMessageType::Update(_) => "update",
-                ControlMessageType::Remove(_) => "remove",
-                ControlMessageType::Add(_) => "add",
-                ControlMessageType::AddAck(_) => "add_ack",
+                ControlMessage::Create(_) => "create",
+                ControlMessage::Ack(_) => "ack",
+                ControlMessage::Update(_) => "update",
+                ControlMessage::Remove(_) => "remove",
+                ControlMessage::Add(_) => "add",
+                ControlMessage::AddAck(_) => "add_ack",
             }
         )
     }
@@ -1415,7 +1394,7 @@ where
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DirectMessageType {
     Welcome,
     TwoParty,
