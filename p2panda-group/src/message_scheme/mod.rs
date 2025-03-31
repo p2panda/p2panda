@@ -5,6 +5,8 @@ mod dcgka;
 #[cfg(test)]
 mod tests;
 
+// TODO: Remove this later.
+#[allow(unused)]
 pub use dcgka::{
     Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage, DirectMessageContent,
     DirectMessageType, ProcessInput, ProcessMessage, ProcessOutput,
