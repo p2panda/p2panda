@@ -1508,7 +1508,7 @@ impl From<UpdateSecret> for ChainSecret {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct UpdateSecret(Secret<RATCHET_KEY_SIZE>);
 
 impl UpdateSecret {

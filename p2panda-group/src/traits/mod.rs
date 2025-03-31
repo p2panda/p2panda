@@ -19,10 +19,10 @@ pub use key_registry::{IdentityRegistry, PreKeyRegistry};
 /// string.
 pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl IdentityHandle for &str {}
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl IdentityHandle for usize {}
 
 /// Identifier for each group membership operation.
@@ -32,5 +32,5 @@ impl IdentityHandle for usize {}
 /// hash.
 pub trait OperationId: Copy + Debug + PartialEq + Eq + StdHash {}
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl OperationId for usize {}

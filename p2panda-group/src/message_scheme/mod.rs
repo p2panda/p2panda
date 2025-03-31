@@ -2,13 +2,16 @@
 
 pub mod acked_dgm;
 mod dcgka;
+#[cfg(any(test, feature = "test_utils"))]
+mod test_utils;
 #[cfg(test)]
 mod tests;
 
 // TODO: Remove this later.
 #[allow(unused)]
 pub use dcgka::{
-    ControlMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage,
-    DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessMessage,
-    ProcessOutput, UpdateSecret,
+    AckMessage, AddAckMessage, AddMessage, ControlMessage, CreateMessage, Dcgka, DcgkaError,
+    DcgkaResult, DcgkaState, DirectMessage, DirectMessageContent, DirectMessageType,
+    OperationOutput, ProcessInput, ProcessMessage, ProcessOutput, RemoveMessage, UpdateMessage,
+    UpdateSecret,
 };
