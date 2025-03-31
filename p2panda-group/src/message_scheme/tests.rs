@@ -4,8 +4,11 @@ use std::collections::{HashMap, HashSet};
 
 use crate::crypto::x25519::SecretKey;
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
-use crate::message_scheme::dcgka::{AckMessage, AddAckMessage, ControlMessage};
-use crate::message_scheme::{Dcgka, DcgkaState, DirectMessageType, ProcessInput, ProcessMessage};
+use crate::message_scheme::dcgka::{AckMessage, AddAckMessage};
+use crate::message_scheme::{
+    ControlMessage, Dcgka, DcgkaState, DirectMessageType, OperationOutput, ProcessInput,
+    ProcessMessage, UpdateSecret,
+};
 use crate::traits::{AckedGroupMembership, PreKeyManager};
 use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
 
@@ -67,6 +70,77 @@ fn init_dcgka_state<const N: usize>(member_ids: [MemberId; N], rng: &Rng) -> [Te
     result.try_into().unwrap()
 }
 
+/// Test tool to assert DCGKA group operations and states.
+struct AssertableDcgka {
+    update_secrets: HashMap<MemberId, UpdateSecret>,
+}
+
+impl AssertableDcgka {
+    pub fn new() -> Self {
+        Self {
+            update_secrets: HashMap::new(),
+        }
+    }
+
+    pub fn assert_create(
+        &mut self,
+        dcgka: &TestDcgkaState,
+        output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        creator_id: MemberId,
+        expected_members: &[MemberId],
+    ) {
+        // Creator broadcasts a "Create" control message to everyone.
+        let ControlMessage::Create(ref message) = output.control_message else {
+            panic!("expected \"create\" control message");
+        };
+        assert_eq!(
+            message.initial_members,
+            expected_members.to_vec(),
+            "create message should contain all expected initial members"
+        );
+
+        // Creator sends direct 2SM messages to each other member of the group.
+        assert_eq!(output.direct_messages.len(), expected_members.len() - 1);
+        for (index, expected_member) in expected_members
+            .iter()
+            .filter(|id| *id != &creator_id)
+            .enumerate()
+        {
+            assert_eq!(
+                output.direct_messages.get(index).unwrap().message_type(),
+                DirectMessageType::TwoParty,
+                "create operation should yield a 2SM direct message"
+            );
+            assert_eq!(
+                output.direct_messages.get(index).unwrap().recipient,
+                *expected_member,
+                "direct message should address expected initial member",
+            );
+        }
+
+        // Creator establishes the update secret for their own message ratchet.
+        assert!(
+            output.me_update_secret.is_some(),
+            "creator received a new update secret"
+        );
+
+        // Creator considers all members part of the group now.
+        for expected_member in expected_members {
+            assert_eq!(
+                AckedTestDGM::members_view(&dcgka.dgm, &expected_member).unwrap(),
+                HashSet::from_iter(expected_members.iter().cloned()),
+                "creator considers all initial members to be part of their group",
+            );
+        }
+
+        // Remember creator's update secret for later assertions.
+        self.update_secrets.insert(
+            creator_id,
+            output.me_update_secret.as_ref().unwrap().clone(),
+        );
+    }
+}
+
 #[test]
 fn it_works() {
     let rng = Rng::from_seed([1; 32]);
@@ -77,6 +151,8 @@ fn it_works() {
 
     // Generate key material for all members, register pre-keys and initialise DCGKA states.
     let [alice_dcgka, bob_dcgka, charlie_dcgka] = init_dcgka_state([alice, bob, charlie], &rng);
+
+    let mut test = AssertableDcgka::new();
 
     // =================================
     // 1. Alice creates a group with Bob
@@ -95,30 +171,9 @@ fn it_works() {
     let (alice_dcgka_0, alice_0) = {
         let (alice_dcgka_pre, alice_pre) =
             Dcgka::create(alice_dcgka, vec![alice, bob], &rng).unwrap();
-
         let (alice_dcgka_0, alice_0) =
             Dcgka::process_local(alice_dcgka_pre, 0, alice_pre, &rng).unwrap();
-
-        // a) Alice broadcasts a "Create" control message (seq_num = 0) to everyone.
-        assert!(matches!(alice_0.control_message, ControlMessage::Create(_)));
-
-        // b) Alice sends a direct 2SM message to each other member of the group (one for Bob).
-        assert_eq!(alice_0.direct_messages.len(), 1);
-        assert_eq!(
-            alice_0.direct_messages.get(0).unwrap().message_type(),
-            DirectMessageType::TwoParty
-        );
-        assert_eq!(alice_0.direct_messages.get(0).unwrap().recipient, bob);
-
-        // c) Alice establishes the update secret for their own message ratchet.
-        assert!(alice_0.me_update_secret.is_some());
-
-        // Check local state.
-        assert_eq!(
-            AckedTestDGM::members_view(&alice_dcgka_0.dgm, &alice).unwrap(),
-            HashSet::from([alice, bob])
-        );
-
+        test.assert_create(&alice_dcgka_0, &alice_0, alice, &[alice, bob]);
         (alice_dcgka_0, alice_0)
     };
 

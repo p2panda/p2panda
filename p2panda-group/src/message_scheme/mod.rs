@@ -8,6 +8,7 @@ mod tests;
 // TODO: Remove this later.
 #[allow(unused)]
 pub use dcgka::{
-    Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage, DirectMessageContent,
-    DirectMessageType, ProcessInput, ProcessMessage, ProcessOutput,
+    ControlMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage,
+    DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessMessage,
+    ProcessOutput, UpdateSecret,
 };
