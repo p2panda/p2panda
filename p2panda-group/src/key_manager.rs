@@ -15,6 +15,7 @@ use crate::traits::{IdentityManager, PreKeyManager};
 
 /// Key manager to maintain secret key material (like our identity key) and to generate signed
 /// public pre-key bundles.
+#[derive(Debug)]
 pub struct KeyManager;
 
 /// Serializable state of key manager (for persistance).

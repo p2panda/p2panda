@@ -22,6 +22,9 @@ pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
 #[cfg(test)]
 impl IdentityHandle for &str {}
 
+#[cfg(test)]
+impl IdentityHandle for usize {}
+
 /// Identifier for each group membership operation.
 ///
 /// Operations trigger changes of the group state and are usually sent in form of messages over the

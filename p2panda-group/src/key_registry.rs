@@ -12,6 +12,7 @@ use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry}
 use crate::{LongTermKeyBundle, OneTimeKeyBundle};
 
 /// Key registry to maintain public key material of other members we've collected.
+#[derive(Debug)]
 pub struct KeyRegistry<ID> {
     _marker: PhantomData<ID>,
 }
