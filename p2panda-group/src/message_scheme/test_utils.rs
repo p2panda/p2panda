@@ -38,12 +38,12 @@ pub fn init_dcgka_state<const N: usize>(
     // Generate a pre-key bundle for each other member of the group.
     for id in member_ids {
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let mut manager = KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap();
+        let mut manager = KeyManager::init(&identity_secret, Lifetime::default(), rng).unwrap();
 
         let mut bundle_list = Vec::with_capacity(member_ids.len());
         for _ in member_ids {
             let (manager_i, key_bundle) =
-                KeyManager::generate_onetime_bundle(manager, &rng).unwrap();
+                KeyManager::generate_onetime_bundle(manager, rng).unwrap();
             bundle_list.push(key_bundle);
             manager = manager_i;
         }
@@ -139,7 +139,7 @@ impl AssertableDcgka {
         // Creator considers all members part of the group now.
         for expected_member in expected_members {
             assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, &expected_member).unwrap(),
+                AckedTestDGM::members_view(&dcgka.dgm, expected_member).unwrap(),
                 HashSet::from_iter(expected_members.iter().cloned()),
                 "creator considers all initial members to be part of their group",
             );
@@ -187,7 +187,7 @@ impl AssertableDcgka {
         // Processor of "create" considers all members part of the group now.
         for expected_member in expected_members {
             assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, &expected_member).unwrap(),
+                AckedTestDGM::members_view(&dcgka.dgm, expected_member).unwrap(),
                 HashSet::from_iter(expected_members.iter().cloned()),
                 "processor considers all initial members to be part of their group",
             );
@@ -256,10 +256,10 @@ impl AssertableDcgka {
         // One direct message to the added is generated.
         assert_eq!(output.direct_messages.len(), 1);
         assert_eq!(
-            output.direct_messages.get(0).unwrap().message_type(),
+            output.direct_messages.first().unwrap().message_type(),
             DirectMessageType::Welcome
         );
-        assert_eq!(output.direct_messages.get(0).unwrap().recipient, added_id);
+        assert_eq!(output.direct_messages.first().unwrap().recipient, added_id);
 
         // Adder establishes a new update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
@@ -354,6 +354,7 @@ impl AssertableDcgka {
         self.assert_update_secrets(added_id, adder_id);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn assert_process_add(
         &mut self,
         dcgka: &TestDcgkaState,
@@ -380,9 +381,9 @@ impl AssertableDcgka {
         // Processor forwards a direct message to added. It is required so the added member can
         // decrypt subsequent messages of the processing member.
         assert_eq!(output.direct_messages.len(), 1);
-        assert_eq!(output.direct_messages.get(0).unwrap().recipient, added_id);
+        assert_eq!(output.direct_messages.first().unwrap().recipient, added_id);
         assert_eq!(
-            output.direct_messages.get(0).unwrap().message_type(),
+            output.direct_messages.first().unwrap().message_type(),
             DirectMessageType::Forward
         );
 
