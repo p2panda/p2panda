@@ -117,24 +117,24 @@ where
     DGM: AckedGroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
 {
-    /// Public Key Infrastructure. From here we retrieve the identity keys and one-time prekey
-    /// bundles for each member to do 2SM.
-    pki: PKI::State,
+    /// Public Key Infrastructure (PKI). From here we retrieve the identity keys and one-time
+    /// prekey bundles for each member to do 2SM.
+    pub(crate) pki: PKI::State,
 
-    /// Our own key mananger holding the secret parts for our own identity keys and published
+    /// Our own key manager state holding the secret parts for our own identity keys and published
     /// one-time prekey bundles so we can do 2SM.
-    my_keys: KMG::State,
+    pub(crate) my_keys: KMG::State,
 
-    /// Our id which is used as an unique handle.
-    my_id: ID,
+    /// Our id which is used as an unique handle inside this group.
+    pub(crate) my_id: ID,
 
     /// Randomly generated seed we keep temporarily around when creating or updating a group or
     /// removing a member.
-    next_seed: Option<NextSeed>,
+    pub(crate) next_seed: Option<NextSeed>,
 
     /// Handlers for each member to manage the "Two-Party Secure Messaging" (2SM) key-agreement
     /// protocol as specified in the paper.
-    two_party: HashMap<ID, TwoPartyState<OneTimeKeyBundle>>, // "2sm" in paper
+    pub(crate) two_party: HashMap<ID, TwoPartyState<OneTimeKeyBundle>>, // "2sm" in paper
 
     /// Member secrets are "temporary" secrets we derive after receiving a new seed or adding
     /// someone. We keep them around until we've received an acknowledgment of that member.
@@ -146,16 +146,16 @@ where
     /// The first parameter in the key tuple is the "sender" or "original creator" of the update
     /// secret. They generated the secret during the given "sequence" (second parameter) for a
     /// "member" (third parameter).
-    member_secrets: HashMap<(ID, OP, ID), ChainSecret>, // key: "(sender, seq, ID)" in paper
+    pub(crate) member_secrets: HashMap<(ID, OP, ID), ChainSecret>, // key: "(sender, seq, ID)" in paper
 
     /// Chain secrets for the "outer" key-agreement ratchet.
     ///
     /// Secrets for the "inner" message ratchet are returned to the user as part of the
     /// "sender_update_secret" and "me_update_secret" fields when invoking a group membership
     /// operation or processing a control message.
-    ratchet: HashMap<ID, ChainSecret>,
+    pub(crate) ratchet: HashMap<ID, ChainSecret>,
 
-    /// Decentralised group membership algorithm.
+    /// Decentralised group membership (DGM) state.
     pub(crate) dgm: DGM::State,
 }
 
@@ -167,6 +167,9 @@ where
     DGM: AckedGroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
 {
+    /// Returns new DCGKA state with our own identity and key managers.
+    ///
+    /// Use this when creating a new group or accepting an invitation to an existing one.
     pub fn init(
         my_id: ID,
         my_keys: KMG::State,
@@ -185,19 +188,19 @@ where
         }
     }
 
-    /// Handler for when a control message is received from the network.
+    /// Handler for when a "remote" control message is received from the network.
     ///
     /// It takes the user ID of the message sender, a control message, and a direct message (or
     /// none if there is no associated direct message).
     ///
-    /// This is called externally as soon as a control message was received, validated and causally
-    /// ordered.
+    /// Control messages are expected to be authenticated and causally ordered.
     pub fn process_remote(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         input: ProcessInput<ID, OP, DGM>,
         rng: &Rng,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         let ProcessInput { sender, seq, .. } = input;
+        assert_ne!(sender, y.my_id, "do not process own control messages");
         let (y_i, output) = match input.message {
             ProcessMessage::Create(CreateMessage { initial_members }, direct_message) => {
                 Self::process_create(y, sender, seq, initial_members, Some(direct_message), rng)?

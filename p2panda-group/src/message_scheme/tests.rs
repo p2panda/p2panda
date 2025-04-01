@@ -4,6 +4,8 @@ use crate::Rng;
 use crate::message_scheme::test_utils::{AssertableDcgka, init_dcgka_state};
 use crate::message_scheme::{Dcgka, ProcessInput};
 
+use super::test_utils::{ExpectedMembers, assert_members_view};
+
 #[test]
 fn group_operations() {
     let rng = Rng::from_seed([1; 32]);
@@ -15,6 +17,7 @@ fn group_operations() {
     // Generate key material for all members, register pre-keys and initialise DCGKA states.
     let [alice_dcgka, bob_dcgka, charlie_dcgka] = init_dcgka_state([alice, bob, charlie], &rng);
 
+    // Initialise stateful test-helper verifying DCGKA state.
     let mut test = AssertableDcgka::new();
 
     // =================================
@@ -30,6 +33,9 @@ fn group_operations() {
     //
     // [ ] Alice's Rachet (0)
     // [ ] Bob's Ratchet (0)
+    //
+    // Note: The numbers in brackets eg. "(0)" represent the update secret epoch. It starts with 0
+    // and increases by 1 on every key rotation ("group update").
 
     let (alice_dcgka_0, alice_0_seq_0) = {
         let (alice_dcgka_pre, alice_pre) =
@@ -37,7 +43,7 @@ fn group_operations() {
         let seq = 0;
         let (alice_dcgka_0, alice_0) =
             Dcgka::process_local(alice_dcgka_pre, seq, alice_pre, &rng).unwrap();
-        test.assert_create(&alice_dcgka_0, &alice_0, alice, &[alice, bob]);
+        test.assert_create(&alice_dcgka_0, &alice_0, alice, &[alice, bob], seq);
         (alice_dcgka_0, alice_0)
     };
 
@@ -65,7 +71,9 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: alice,
-                message: (&alice_0_seq_0, Some(bob)).try_into().unwrap(),
+                message: (&alice_0_seq_0, Some(bob))
+                    .try_into()
+                    .expect("direct message for bob"),
             },
             &rng,
         )
@@ -102,7 +110,14 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_ack(&alice_dcgka_1, &alice_1, alice, bob);
+        test.assert_process_ack(&alice_dcgka_1, &alice_1, alice, bob, seq);
+        assert_members_view(
+            &alice_dcgka_1,
+            &[ExpectedMembers {
+                viewer: &[alice, bob],
+                expected: &[alice, bob],
+            }],
+        );
         (alice_dcgka_1, alice_1)
     };
 
@@ -136,7 +151,20 @@ fn group_operations() {
         let (bob_dcgka_pre, bob_pre) = Dcgka::add(bob_dcgka_0, charlie, &rng).unwrap();
         let seq = 1;
         let (bob_dcgka_1, bob_1) = Dcgka::process_local(bob_dcgka_pre, seq, bob_pre, &rng).unwrap();
-        test.assert_add(&bob_dcgka_1, &bob_1, bob, charlie, &[alice, bob, charlie]);
+        test.assert_add(&bob_dcgka_1, &bob_1, bob, charlie, seq);
+        assert_members_view(
+            &bob_dcgka_1,
+            &[
+                ExpectedMembers {
+                    viewer: &[bob, charlie],
+                    expected: &[alice, bob, charlie],
+                },
+                ExpectedMembers {
+                    viewer: &[alice],
+                    expected: &[alice, bob],
+                },
+            ],
+        );
         (bob_dcgka_1, bob_1)
     };
 
@@ -227,14 +255,13 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_add(
+        test.assert_process_add(&alice_dcgka_2, &alice_2, alice, bob, charlie, seq);
+        assert_members_view(
             &alice_dcgka_2,
-            &alice_2,
-            alice,
-            bob,
-            charlie,
-            &[alice, bob, charlie],
-            seq,
+            &[ExpectedMembers {
+                viewer: &[alice, bob, charlie],
+                expected: &[alice, bob, charlie],
+            }],
         );
         (alice_dcgka_2, alice_2)
     };
@@ -277,7 +304,7 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_ack(&bob_dcgka_2, &bob_2, bob, charlie);
+        test.assert_process_ack(&bob_dcgka_2, &bob_2, bob, charlie, seq);
         (bob_dcgka_2, bob_2)
     };
 
@@ -319,7 +346,7 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_ack(&alice_dcgka_3, &alice_3, alice, charlie);
+        test.assert_process_ack(&alice_dcgka_3, &alice_3, alice, charlie, seq);
         (alice_dcgka_3, alice_3)
     };
 
@@ -437,6 +464,20 @@ fn group_operations() {
             charlie,
             alice,
             &[bob, charlie],
+            seq,
+        );
+        assert_members_view(
+            &charlie_dcgka_2,
+            &[
+                ExpectedMembers {
+                    viewer: &[charlie],
+                    expected: &[bob, charlie],
+                },
+                ExpectedMembers {
+                    viewer: &[alice, bob],
+                    expected: &[alice, bob, charlie],
+                },
+            ],
         );
         (charlie_dcgka_2, charlie_2)
     };
@@ -472,7 +513,20 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_remove(&bob_dcgka_4, &bob_4, bob, charlie, &[bob, charlie], seq);
+        test.assert_process_remove(&bob_dcgka_4, &bob_4, bob, charlie, seq);
+        assert_members_view(
+            &bob_dcgka_4,
+            &[
+                ExpectedMembers {
+                    viewer: &[bob, charlie],
+                    expected: &[bob, charlie],
+                },
+                ExpectedMembers {
+                    viewer: &[alice],
+                    expected: &[alice, bob, charlie],
+                },
+            ],
+        );
         (bob_dcgka_4, bob_4)
     };
 
@@ -507,7 +561,7 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_ack(&charlie_dcgka_3, &charlie_3, charlie, bob);
+        test.assert_process_ack(&charlie_dcgka_3, &charlie_3, charlie, bob, seq);
         (charlie_dcgka_3, charlie_3)
     };
 
@@ -538,7 +592,7 @@ fn group_operations() {
         let (bob_dcgka_pre, bob_pre) = Dcgka::update(bob_dcgka_4, &rng).unwrap();
         let seq = 3;
         let (bob_dcgka_5, bob_5) = Dcgka::process_local(bob_dcgka_pre, seq, bob_pre, &rng).unwrap();
-        test.assert_update(&bob_dcgka_5, &bob_5, bob, &[bob, charlie]);
+        test.assert_update(&bob_dcgka_5, &bob_5, bob, &[bob, charlie], seq);
         (bob_dcgka_5, bob_5)
     };
 
@@ -577,14 +631,7 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_update(
-            &charlie_dcgka_4,
-            &charlie_4,
-            charlie,
-            bob,
-            &[bob, charlie],
-            3,
-        );
+        test.assert_process_update(&charlie_dcgka_4, &charlie_4, charlie, bob, seq);
         (charlie_dcgka_4, charlie_4)
     };
 
@@ -623,7 +670,7 @@ fn group_operations() {
             &rng,
         )
         .unwrap();
-        test.assert_process_ack(&bob_dcgka_6, &bob_6, bob, charlie);
+        test.assert_process_ack(&bob_dcgka_6, &bob_6, bob, charlie, seq);
         (bob_dcgka_6, bob_6)
     };
 }

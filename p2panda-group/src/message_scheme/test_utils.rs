@@ -81,9 +81,28 @@ fn members_without(members: &[MemberId], without: &[MemberId]) -> Vec<MemberId> 
         .collect()
 }
 
-/// Test tool to assert DCGKA group operations and states.
+pub struct ExpectedMembers<'a> {
+    pub viewer: &'a [MemberId],
+    pub expected: &'a [MemberId],
+}
+
+pub fn assert_members_view(dcgka: &TestDcgkaState, assertions: &[ExpectedMembers]) {
+    for assertion in assertions {
+        for viewer in assertion.viewer {
+            assert_eq!(
+                AckedTestDGM::members_view(&dcgka.dgm, viewer).unwrap(),
+                HashSet::from_iter(assertion.expected.iter().cloned()),
+                "{} should have had members view {:?}",
+                viewer,
+                assertion.expected
+            );
+        }
+    }
+}
+
+/// Testing helper to verify DCGKA group operations and states.
 pub struct AssertableDcgka {
-    /// Update secrets for "local member -> remote member".
+    /// Update secrets the DCGKA exported for "local member -> remote member".
     update_secrets: HashMap<(MemberId, MemberId), UpdateSecret>,
 }
 
@@ -99,20 +118,26 @@ impl AssertableDcgka {
         &mut self,
         dcgka: &TestDcgkaState,
         output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        creator_id: MemberId,
-        expected_members: &[MemberId],
+        creator_id: MemberId,          // Group "creator"
+        expected_members: &[MemberId], // List of expected initial group members
+        seq: MessageId,                // Id of "create" control message
     ) {
-        // Creator broadcasts a "Create" control message to everyone.
+        // This is a local group operation and the group "creator" manages that state.
+        assert_eq!(dcgka.my_id, creator_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // Group "creator" broadcasts a "create" control message to everyone.
         let ControlMessage::Create(ref message) = output.control_message else {
             panic!("expected \"create\" control message");
         };
-        assert_eq!(
-            message.initial_members,
-            expected_members.to_vec(),
-            "create message should contain all expected initial members"
-        );
+        assert_eq!(message.initial_members, expected_members.to_vec(),);
 
-        // Creator sends direct 2SM messages to each other member of the group.
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // Group "creator" sends direct 2SM messages to each other member of the group.
         assert_eq!(output.direct_messages.len(), expected_members.len() - 1);
         for (index, expected_member) in members_without(expected_members, &[creator_id])
             .iter()
@@ -121,35 +146,57 @@ impl AssertableDcgka {
             assert_eq!(
                 output.direct_messages.get(index).unwrap().message_type(),
                 DirectMessageType::TwoParty,
-                "create operation should yield a 2SM direct message"
             );
             assert_eq!(
                 output.direct_messages.get(index).unwrap().recipient,
                 *expected_member,
-                "direct message should address expected initial member",
             );
         }
 
-        // Creator establishes the update secret for their own message ratchet.
-        assert!(
-            output.me_update_secret.is_some(),
-            "creator received a new update secret"
+        // Members view
+        // ~~~~~~~~~~~~
+
+        // Group "creator" considers that all members are part of the group now and every member
+        // has processed the "create" control message.
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: expected_members,
+                expected: expected_members,
+            }],
         );
 
-        // Creator considers all members part of the group now.
-        for expected_member in expected_members {
-            assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, expected_member).unwrap(),
-                HashSet::from_iter(expected_members.iter().cloned()),
-                "creator considers all initial members to be part of their group",
-            );
-        }
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
 
-        // Remember creator's update secret for later assertions.
+        // Group "creator" establishes the update secret for their own message ratchet.
+        assert!(output.me_update_secret.is_some());
+
+        // Remember group "creator's" update secret for later assertions.
         self.update_secrets.insert(
             (creator_id, creator_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed secret has been dropped after group got created (FS).
+        assert!(dcgka.next_seed.is_none());
+
+        // Group "creator" established member secrets for all expected members of the group.
+        assert_eq!(dcgka.member_secrets.len(), expected_members.len() - 1);
+        for member_id in members_without(expected_members, &[creator_id]) {
+            assert!(
+                dcgka
+                    .member_secrets
+                    .contains_key(&(creator_id, seq, member_id))
+            );
+        }
+
+        // Outer-Ratchet holds only the secret for the group "creator" so far.
+        assert_eq!(dcgka.ratchet.len(), 1);
+        assert!(dcgka.ratchet.contains_key(&creator_id));
     }
 
     /// Expected local state after an invited member processed a "create" control message.
@@ -157,12 +204,19 @@ impl AssertableDcgka {
         &mut self,
         dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        processor_id: MemberId,
-        creator_id: MemberId,
-        expected_members: &[MemberId],
-        expected_seq_num: MessageId,
+        processor_id: MemberId, // "Processor" who handles "create" control message
+        creator_id: MemberId,   // Group "creator"
+        expected_members: &[MemberId], // List of expected members after processing "create"
+        seq: MessageId,         // Id of "create" control message
     ) {
-        // Processor of "create" message broadcasts an "ack" control message to everyone.
+        // We're looking at the state of the "processor".
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(creator_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // "Processing" member of "create" message broadcasts an "ack" control message to everyone.
         let Some(ControlMessage::Ack(AckMessage {
             ack_sender,
             ack_seq,
@@ -171,35 +225,45 @@ impl AssertableDcgka {
             panic!("expected \"ack\" control message");
         };
 
-        // Processor acknowledges the "create" message of the creator.
+        // "Processing" member acknowledges the "create" message of the creator.
         assert_eq!(ack_sender, creator_id);
-        assert_eq!(ack_seq, expected_seq_num);
+        assert_eq!(ack_seq, seq);
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
 
         // No direct messages.
         assert!(output.direct_messages.is_empty());
 
-        // Processor establishes the update secret for their own message ratchet.
+        // Members view
+        // ~~~~~~~~~~~~
+
+        // "Processor" of "create" considers all members part of the group now and every member has
+        // processed the "create" control message.
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: expected_members,
+                expected: expected_members,
+            }],
+        );
+
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Processor" establishes the update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
         // Processor establishes the update secret for creator's message ratchet.
         assert!(output.sender_update_secret.is_some());
 
-        // Processor of "create" considers all members part of the group now.
-        for expected_member in expected_members {
-            assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, expected_member).unwrap(),
-                HashSet::from_iter(expected_members.iter().cloned()),
-                "processor considers all initial members to be part of their group",
-            );
-        }
-
-        // Remember processor's update secret for later assertions.
+        // Remember "processor's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, processor_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Remember creator's update secret for later assertions.
+        // Remember "creator's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, creator_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
@@ -207,18 +271,49 @@ impl AssertableDcgka {
 
         // Processor should be aware now of creator's update secret.
         self.assert_update_secrets(processor_id, creator_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // When joining a group freshly we can't derive any member secrets yet.
+        assert_eq!(dcgka.member_secrets.len(), 0);
+
+        // Outer-Ratchet holds only the secret for the group "creator" and ourselves ("processor") so far.
+        assert_eq!(dcgka.ratchet.len(), 2);
+        assert!(dcgka.ratchet.contains_key(&creator_id));
+        assert!(dcgka.ratchet.contains_key(&processor_id));
     }
 
+    /// Expected local state after a member processed an "ack" control message.
     pub fn assert_process_ack(
         &mut self,
-        _dcgka: &TestDcgkaState,
+        dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        processor_id: MemberId,
-        acker_id: MemberId,
+        processor_id: MemberId, // Member who "processes" the "ack" control message
+        acker_id: MemberId,     // Author of the "ack" control message,
+        seq: MessageId,         // Id of the "ack" message
     ) {
-        // No control messages or direct messages.
+        // We're looking at the state of the "processor".
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(acker_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // No control messages.
         assert!(output.control_message.is_none());
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // No direct messages.
         assert!(output.direct_messages.is_empty());
+
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
 
         // No new update secret for acking member.
         assert!(output.me_update_secret.is_none());
@@ -234,26 +329,51 @@ impl AssertableDcgka {
 
         // Processor should be aware now of acker's update secret.
         self.assert_update_secrets(processor_id, acker_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Member secrets for "acker" has to be removed (FS).
+        assert!(
+            !dcgka
+                .member_secrets
+                .contains_key(&(acker_id, seq, processor_id))
+        );
+
+        // Outer-Ratchet holds secrets for at least the "acker" and "processor" of the "ack".
+        assert!(dcgka.ratchet.contains_key(&acker_id));
+        assert!(dcgka.ratchet.contains_key(&processor_id));
     }
 
+    /// Expected local state after an member was added to the group.
     pub fn assert_add(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        adder_id: MemberId,
-        added_id: MemberId,
-        expected_members: &[MemberId],
+        adder_id: MemberId, // "Adder" who adds someone to the group
+        added_id: MemberId, // "Added" who will join the group
+        seq: MessageId,     // Id of the "add" control message
     ) {
-        // Adder broadcasts an "Add" control message to everyone.
+        // This is a local group operation, so we expect this to be the "adder".
+        assert_eq!(dcgka.my_id, adder_id);
+        assert_ne!(adder_id, added_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // "Adder" broadcasts an "add" control message to everyone.
         let ControlMessage::Add(ref message) = output.control_message else {
             panic!("expected \"add\" control message");
         };
-        assert_eq!(
-            message.added, added_id,
-            "add message should mention correct added member"
-        );
+        assert_eq!(message.added, added_id);
 
-        // One direct message to the added is generated.
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // One direct "welcome" message to "added" was generated.
         assert_eq!(output.direct_messages.len(), 1);
         assert_eq!(
             output.direct_messages.first().unwrap().message_type(),
@@ -261,32 +381,13 @@ impl AssertableDcgka {
         );
         assert_eq!(output.direct_messages.first().unwrap().recipient, added_id);
 
-        // Adder establishes a new update secret for their own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Adder" establishes a new update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
-        // From the perspective of the adder all the other's do not include the added in their
-        // member views yet.
-        for expected_member in members_without(expected_members, &[adder_id, added_id]) {
-            assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, &expected_member).unwrap(),
-                HashSet::from_iter(members_without(expected_members, &[added_id])),
-                "other members do not consider added to be part of group yet",
-            );
-        }
-
-        // Adder and added consider all members part of the group.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &adder_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-            "adder considers all members to be part of their group",
-        );
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &added_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-            "added considers all members to be part of their group",
-        );
-
-        // Remember adders's update secret for later assertions.
+        // Remember "adders's" update secret for later assertions.
         let previous = self.update_secrets.insert(
             (adder_id, adder_id),
             output.me_update_secret.as_ref().unwrap().clone(),
@@ -297,18 +398,46 @@ impl AssertableDcgka {
             previous.unwrap(),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Member secret for the "added" was established.
+        assert!(
+            dcgka
+                .member_secrets
+                .contains_key(&(adder_id, seq, added_id))
+        );
+
+        // Outer-Ratchet holds secrets for at least the "adder".
+        assert!(dcgka.ratchet.contains_key(&adder_id));
+
+        // The added doesn't have a ratchet secret yet.
+        assert!(!dcgka.ratchet.contains_key(&added_id));
     }
 
+    /// Expected local state after an invited member "added" processes the "add" message with a
+    /// direct "welcome" message addressing them.
     pub fn assert_process_welcome(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        adder_id: MemberId,
-        added_id: MemberId,
-        expected_members: &[MemberId],
-        expected_seq_num: MessageId,
+        adder_id: MemberId,            // Member who invited to the group
+        added_id: MemberId,            // Member who was added to the group
+        expected_members: &[MemberId], // List of expected members after processing "add"
+        seq: MessageId,                // Id of the "add" control message
     ) {
-        // Added broadcasts an "Ack" control message to everyone, no direct messages.
+        // This control message is processed by the member who was added.
+        assert_eq!(dcgka.my_id, added_id);
+        assert_ne!(adder_id, added_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // Added broadcasts an "ack" control message to everyone, no direct messages.
         let Some(ControlMessage::Ack(AckMessage {
             ack_sender,
             ack_seq,
@@ -317,55 +446,87 @@ impl AssertableDcgka {
             panic!("expected \"ack\" control message");
         };
 
-        // Added acknowledges the "add" message of the adder.
+        // "Added" acknowledges the "add" message of "adder".
         assert_eq!(ack_sender, adder_id);
-        assert_eq!(ack_seq, expected_seq_num);
+        assert_eq!(ack_seq, seq);
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
 
         // No direct messages.
         assert!(output.direct_messages.is_empty());
 
-        // Added considers all members part of the group now.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &added_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-            "added considers all members to be part of their group",
+        // Members view
+        // ~~~~~~~~~~~~
+
+        // "Added" considers all members as part of the group now and that "adder" has the same
+        // view as them.
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: &[added_id, adder_id],
+                expected: expected_members,
+            }],
         );
 
-        // Added considers adder to have the same members view.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &adder_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-            "adder considers all members to be part of their group",
-        );
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
 
-        // Remember added's update secret for later assertions.
+        // Remember "added's" update secret for later assertions.
         self.update_secrets.insert(
             (added_id, added_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Remember adder's update secret for later assertions.
+        // Remember "adder's" update secret for later assertions.
         self.update_secrets.insert(
             (added_id, adder_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Added should be aware now of adder's update secret.
+        // "Added" should be aware now of "adder's" update secret.
         self.assert_update_secrets(added_id, adder_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Member secret for the "added" was dropped (FS).
+        assert!(
+            !dcgka
+                .member_secrets
+                .contains_key(&(adder_id, seq, added_id))
+        );
+
+        // Outer-Ratchet holds secrets for at least the "adder" and "added".
+        assert!(dcgka.ratchet.contains_key(&adder_id));
+        assert!(dcgka.ratchet.contains_key(&added_id));
     }
 
+    /// Expected local state after a member who is _not_ invited processes an "add" control
+    /// message.
     #[allow(clippy::too_many_arguments)]
     pub fn assert_process_add(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        processor_id: MemberId,
-        adder_id: MemberId,
-        added_id: MemberId,
-        expected_members: &[MemberId],
-        expected_seq_num: MessageId,
+        processor_id: MemberId, // "Processor" of the "add" control message
+        adder_id: MemberId,     // Id of the member who invited the new member
+        added_id: MemberId,     // Id of the member which got added
+        seq: MessageId,         // Id of the "add" message which is processed
     ) {
-        // Processor broadcasts an "AddAck" control message to everyone.
+        // This control message is processed by every member who is _not_ the "added" and _not_ the
+        // adder.
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(adder_id, processor_id);
+        assert_ne!(added_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // Processor broadcasts an "add-ack" control message to everyone.
         let Some(ControlMessage::AddAck(AddAckMessage {
             ack_sender,
             ack_seq,
@@ -374,12 +535,15 @@ impl AssertableDcgka {
             panic!("expected \"add-ack\" control message");
         };
 
-        // Processor acknowledges the "add" message of the adder.
+        // "Processor" acknowledges the "add" message of the "adder".
         assert_eq!(ack_sender, adder_id);
-        assert_eq!(ack_seq, expected_seq_num);
+        assert_eq!(ack_seq, seq);
 
-        // Processor forwards a direct message to added. It is required so the added member can
-        // decrypt subsequent messages of the processing member.
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // "Processor" forwards a direct message to "added". It is required so the "added" member
+        // can decrypt subsequent messages of the "processing" member.
         assert_eq!(output.direct_messages.len(), 1);
         assert_eq!(output.direct_messages.first().unwrap().recipient, added_id);
         assert_eq!(
@@ -387,74 +551,124 @@ impl AssertableDcgka {
             DirectMessageType::Forward
         );
 
-        // Expected members view matches.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &processor_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-        );
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
 
-        // Remember processor's update secret for later assertions.
+        // Remember "processor's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, processor_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Remember adder's update secret for later assertions.
+        // Remember "adder's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, adder_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Processor should be aware now of adder's update secret.
+        // "Processor" should be aware now of "adder's" update secret.
         self.assert_update_secrets(processor_id, adder_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Member secret for the "added" was established.
+        assert!(
+            dcgka
+                .member_secrets
+                .contains_key(&(adder_id, seq, added_id))
+        );
+
+        // No ratchet secret exists yet for "added".
+        assert!(!dcgka.ratchet.contains_key(&added_id));
     }
 
+    /// Expected local state after processing an "add-ack" control message.
     pub fn assert_process_add_ack(
         &mut self,
-        _dcgka: &TestDcgkaState,
+        dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        processor_id: MemberId,
-        add_acker_id: MemberId,
+        processor_id: MemberId, // "Processor" of the "add-ack" control message
+        add_acker_id: MemberId, // Sender of the "add-ack" control message
     ) {
-        // No control messages and no direct messages.
+        // The given state is from the "processor" and not the sender of the "add-ack" message.
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(add_acker_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // No control messages.
         assert!(output.control_message.is_none());
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // No direct messages.
         assert!(output.direct_messages.is_empty());
 
-        // No new update secret for processor's own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // No new update secret for "processor's" own message ratchet.
         assert!(output.me_update_secret.is_none());
 
-        // Processor establishes the update secret for add-acking member's message ratchet.
+        // "Processor" establishes the update secret for "add-acking" member's message ratchet.
         assert!(output.sender_update_secret.is_some());
 
-        // Remember ackers's update secret for later assertions.
+        // Remember "add-ackers's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, add_acker_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Processor should be aware now of add-acker's update secret.
+        // "Processor" should be aware now of "add-acker's" update secret.
         self.assert_update_secrets(processor_id, add_acker_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Ratchet secret exists for "add-ack".
+        assert!(dcgka.ratchet.contains_key(&add_acker_id));
     }
 
+    /// Expected local state after removing a member from the group.
     pub fn assert_remove(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        remover_id: MemberId,
-        removed_id: MemberId,
-        expected_members: &[MemberId],
+        remover_id: MemberId,          // Author of the "remove" control message
+        removed_id: MemberId,          // Member which gets "removed"
+        expected_members: &[MemberId], // List of expected members after removal
+        seq: MessageId,                // Id of "remove" control message
     ) {
-        // Remover broadcasts a "Remove" control message to everyone.
+        // This is a local group operation, so we expect the state to be from the "remover".
+        assert_eq!(dcgka.my_id, remover_id);
+        assert_ne!(removed_id, remover_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // "Remover" broadcasts a "remove" control message to everyone.
         let ControlMessage::Remove(ref message) = output.control_message else {
             panic!("expected \"remove\" control message");
         };
-        assert_eq!(
-            message.removed, removed_id,
-            "remove message should mention correct removed member"
-        );
+        assert_eq!(message.removed, removed_id);
 
-        // Remover sends a direct 2SM message to each other member of the group who is left.
-        assert_eq!(output.direct_messages.len(), expected_members.len() - 1);
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
+
+        // "Remover" sends a direct 2SM message to each other member of the group who is left.
+        assert_eq!(
+            output.direct_messages.len(),
+            members_without(expected_members, &[remover_id, removed_id]).len(),
+        );
         for (index, expected_member) in members_without(expected_members, &[remover_id, removed_id])
             .iter()
             .enumerate()
@@ -471,32 +685,59 @@ impl AssertableDcgka {
             );
         }
 
-        // Remover establishes a new update secret for their own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Remover" establishes a new update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
-        // Remover has correct member view.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &remover_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-        );
-
-        // Remember remover's update secret for later assertions.
+        // Remember "remover's" update secret for later assertions.
         self.update_secrets.insert(
             (remover_id, remover_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed secret has been dropped after removal (FS).
+        assert!(dcgka.next_seed.is_none());
+
+        // "Remover" established member secrets for all expected members of the group.
+        assert_eq!(
+            dcgka.member_secrets.len(),
+            members_without(expected_members, &[remover_id, removed_id]).len()
+        );
+        for member_id in members_without(expected_members, &[remover_id, removed_id]) {
+            assert!(
+                dcgka
+                    .member_secrets
+                    .contains_key(&(remover_id, seq, member_id))
+            );
+        }
+
+        // Outer-Ratchet removed secret for the "removed".
+        // TODO
+        // assert!(dcgka.ratchet.get(&removed_id).is_none());
     }
 
+    /// Expected local state after processing a "remove" control message.
     pub fn assert_process_remove(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
         processor_id: MemberId,
         remover_id: MemberId,
-        expected_members: &[MemberId],
-        expected_seq_num: MessageId,
+        seq: MessageId,
     ) {
-        // Processor of "remove" message broadcasts an "ack" control message to everyone.
+        // We're looking at the state of the processor.
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(remover_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // "Processor" of "remove" message broadcasts an "ack" control message to everyone.
         let Some(ControlMessage::Ack(AckMessage {
             ack_sender,
             ack_seq,
@@ -505,54 +746,79 @@ impl AssertableDcgka {
             panic!("expected \"ack\" control message");
         };
 
-        // Processor acknowledges the "remove" message of the remover.
+        // "Processor" acknowledges the "remove" message of the "remover".
         assert_eq!(ack_sender, remover_id);
-        assert_eq!(ack_seq, expected_seq_num);
+        assert_eq!(ack_seq, seq);
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
 
         // No direct messages.
         assert!(output.direct_messages.is_empty());
 
-        // Processor establishes the update secret for their own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Processor" establishes the update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
-        // Processor establishes the update secret for remover's message ratchet.
+        // "Processor" establishes the update secret for "remover's" message ratchet.
         assert!(output.sender_update_secret.is_some());
 
-        // Processor of "remove" has expected members view
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &processor_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-        );
-
-        // Remember processor's update secret for later assertions.
+        // Remember "processor's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, processor_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Remember remover's update secret for later assertions.
+        // Remember "remover's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, remover_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Processor should be aware now of remover's update secret.
+        // "Processor" should be aware now of "remover's" update secret.
         self.assert_update_secrets(processor_id, remover_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Update secret of "remover" was dropped after use. (FS)
+        assert!(
+            !dcgka
+                .member_secrets
+                .contains_key(&(remover_id, seq, processor_id))
+        );
+
+        // Outer-Ratchet holds secrets for both "processor" and "remover".
+        assert!(dcgka.ratchet.contains_key(&processor_id));
+        assert!(dcgka.ratchet.contains_key(&remover_id));
     }
 
+    /// Expected local state after a member updated the group.
     pub fn assert_update(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        updater_id: MemberId,
-        expected_members: &[MemberId],
+        updater_id: MemberId,          // Member updating the group
+        expected_members: &[MemberId], // List of expected members during update
+        seq: MessageId,                // Id of the "update" control message
     ) {
-        // Updater broadcasts an "Update" control message to everyone.
+        // This is a local group operation, so we expect the state to be from the "updater".
+        assert_eq!(dcgka.my_id, updater_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
+        // "Updater" broadcasts an "update" control message to everyone.
         let ControlMessage::Update(_) = output.control_message else {
             panic!("expected \"update\" control message");
         };
 
-        // Updater sends a direct 2SM message to each other member of the group.
+        // "Updater" sends a direct 2SM message to each other member of the group.
         assert_eq!(output.direct_messages.len(), expected_members.len() - 1);
         for (index, expected_member) in members_without(expected_members, &[updater_id])
             .iter()
@@ -561,40 +827,64 @@ impl AssertableDcgka {
             assert_eq!(
                 output.direct_messages.get(index).unwrap().message_type(),
                 DirectMessageType::TwoParty,
-                "update operation should yield a 2SM direct message"
             );
             assert_eq!(
                 output.direct_messages.get(index).unwrap().recipient,
                 *expected_member,
-                "direct message should address expected member",
             );
         }
 
-        // Updater establishes a new update secret for their own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Updater" establishes a new update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
-        // Updater has correct member view.
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &updater_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-        );
-
-        // Remember updater's update secret for later assertions.
+        // Remember "updater's" update secret for later assertions.
         self.update_secrets.insert(
             (updater_id, updater_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed secret has been dropped after update (FS).
+        assert!(dcgka.next_seed.is_none());
+
+        // "Updater" established member secrets for all expected members of the group.
+        assert_eq!(
+            dcgka.member_secrets.len(),
+            members_without(expected_members, &[updater_id]).len()
+        );
+        for member_id in members_without(expected_members, &[updater_id]) {
+            assert!(
+                dcgka
+                    .member_secrets
+                    .contains_key(&(updater_id, seq, member_id))
+            );
+        }
+
+        // Outer-Ratchet contains secret from "updater".
+        assert!(dcgka.ratchet.contains_key(&updater_id));
     }
 
+    /// Expected state after processing an "update" control message.
     pub fn assert_process_update(
         &mut self,
         dcgka: &TestDcgkaState,
         output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
-        processor_id: MemberId,
-        updater_id: MemberId,
-        expected_members: &[MemberId],
-        expected_seq_num: MessageId,
+        processor_id: MemberId, // Member processing the "update" control message
+        updater_id: MemberId,   // Member who updated the group
+        seq: MessageId,         // Id of the "update" control message
     ) {
+        // We're looking at the state of the processor.
+        assert_eq!(dcgka.my_id, processor_id);
+        assert_ne!(updater_id, processor_id);
+
+        // Control messages
+        // ~~~~~~~~~~~~~~~~
+
         // Processor of "update" message broadcasts an "ack" control message to everyone.
         let Some(ControlMessage::Ack(AckMessage {
             ack_sender,
@@ -604,39 +894,56 @@ impl AssertableDcgka {
             panic!("expected \"ack\" control message");
         };
 
-        // Processor acknowledges the "update" message of the updater.
+        // "Processor" acknowledges the "update" message of the "updater".
         assert_eq!(ack_sender, updater_id);
-        assert_eq!(ack_seq, expected_seq_num);
+        assert_eq!(ack_seq, seq);
+
+        // Direct messages
+        // ~~~~~~~~~~~~~~~
 
         // No direct messages.
         assert!(output.direct_messages.is_empty());
 
-        // Processor establishes the update secret for their own message ratchet.
+        // Update Secrets
+        // ~~~~~~~~~~~~~~
+
+        // "Processor" establishes the update secret for their own message ratchet.
         assert!(output.me_update_secret.is_some());
 
-        // Processor establishes the update secret for remover's message ratchet.
+        // "Processor" establishes the update secret for "remover's" message ratchet.
         assert!(output.sender_update_secret.is_some());
 
-        // Processor of "update" has expected members view
-        assert_eq!(
-            AckedTestDGM::members_view(&dcgka.dgm, &processor_id).unwrap(),
-            HashSet::from_iter(expected_members.iter().cloned()),
-        );
-
-        // Remember processor's update secret for later assertions.
+        // Remember "processor's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, processor_id),
             output.me_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Remember updater's update secret for later assertions.
+        // Remember "updater's" update secret for later assertions.
         self.update_secrets.insert(
             (processor_id, updater_id),
             output.sender_update_secret.as_ref().unwrap().clone(),
         );
 
-        // Processor should be aware now of updater's update secret.
+        // "Processor" should be aware now of "updater's" update secret.
         self.assert_update_secrets(processor_id, updater_id);
+
+        // Key Material
+        // ~~~~~~~~~~~~
+
+        // Seed was never used and should be none.
+        assert!(dcgka.next_seed.is_none());
+
+        // Update secret of "updater" was dropped after use. (FS)
+        assert!(
+            !dcgka
+                .member_secrets
+                .contains_key(&(updater_id, seq, processor_id))
+        );
+
+        // Outer-Ratchet holds secrets for both "processor" and "updater".
+        assert!(dcgka.ratchet.contains_key(&processor_id));
+        assert!(dcgka.ratchet.contains_key(&updater_id));
     }
 
     /// Compare if member learned about the update secret from another member.

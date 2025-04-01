@@ -199,10 +199,10 @@ mod tests {
         // Secrets got removed from state.
         assert_eq!(state.onetime_secrets.len(), 0);
 
-        // Retreiving unknown one-time prekeys throws an error.
+        // Retrieving unknown one-time prekeys throws an error.
         assert!(KeyManager::use_onetime_secret(state.clone(), 42).is_err());
 
-        // Re-retreiving known one-time prekeys throws an error.
+        // Re-retrieving known one-time prekeys throws an error.
         assert!(
             KeyManager::use_onetime_secret(state.clone(), bundle_1.onetime_prekey_id().unwrap())
                 .is_err()
