@@ -18,7 +18,7 @@ use crate::traits::{IdentityManager, PreKeyManager};
 #[derive(Debug)]
 pub struct KeyManager;
 
-/// Serializable state of key manager (for persistance).
+/// Serializable state of key manager (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
 pub struct KeyManagerState {

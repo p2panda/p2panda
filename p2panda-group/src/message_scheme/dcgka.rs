@@ -106,7 +106,7 @@ pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG)>,
 }
 
-/// Serializable state of DCGKA (for persistance).
+/// Serializable state of DCGKA (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
 pub struct DcgkaState<ID, OP, PKI, DGM, KMG>

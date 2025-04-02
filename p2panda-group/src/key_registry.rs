@@ -17,7 +17,7 @@ pub struct KeyRegistry<ID> {
     _marker: PhantomData<ID>,
 }
 
-/// Serializable state of key registry (for persistance).
+/// Serializable state of key registry (for persistence).
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Clone))]
 pub struct KeyRegistryState<ID>
