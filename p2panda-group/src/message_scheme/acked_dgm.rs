@@ -14,7 +14,8 @@ pub mod test_utils {
     /// Non-optimal "Acked" Decentralised Group Membership CRDT implementation for p2panda's
     /// message encryption scheme.
     ///
-    /// This does not support removing and re-adding a member.
+    /// This does not support re-adding a member, is only used for testing and will be soon
+    /// replaced with an optimal implementation.
     #[derive(Clone, Debug)]
     pub struct AckedTestDGM<ID, OP> {
         _marker: PhantomData<(ID, OP)>,
