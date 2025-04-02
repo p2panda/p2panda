@@ -298,3 +298,209 @@ fn concurrent_operation() {
         }
     }
 }
+
+// From DCGKA paper (6.2.5):
+//
+// "Another scenario that needs to be handled is when two users are concurrently added to the
+// group."
+//
+// "For example, in a group consisting initially of {A, B}, say A adds C to the group, while
+// concurrently B adds D. User C first processes its own addition and welcome message, and then
+// processes B's addition of D. However, since C was not a group member at the time B sent its
+// "add" message, C does not yet have B's ratchet state, so C cannot derive an update secret for
+// B's "add" message. The condition on line 5 of process-add is false and so C does not derive an
+// update secret on lines 6–8. When B finds out about the fact that A has added C, B sends C its
+// ratchet state as usual (line 12 of process-add), so C can initialize its copy of B's ratchet as
+// before (lines 4–5 of process-add-ack)."
+//
+// "Similarly, when D finds out about the fact that A has added C, D sends its ratchet state to C
+// along with the "add-ack" message. The existing logic therefore handles the concurrent additions:
+// after all acks have been delivered, C and D have both initialized their copies of all four
+// ratchets, and so they are able to decrypt application messages that any group member sent after
+// processing their addition."
+#[test]
+fn concurrent_adds() {
+    let rng = Rng::from_seed([1; 32]);
+
+    let alice = 0;
+    let bob = 1;
+    let charlie = 2;
+    let dahlia = 3;
+
+    // Generate key material for all members, register pre-keys and initialise DCGKA states.
+    let [alice_dcgka, bob_dcgka, charlie_dcgka, dahlia_dcgka] =
+        init_dcgka_state([alice, bob, charlie, dahlia], &rng);
+
+    // Alice creates a group with Bob (similar to the paper's example).
+    let (alice_dcgka, alice_output) = {
+        let (alice_dcgka_pre, alice_pre) =
+            Dcgka::create(alice_dcgka, vec![alice, bob], &rng).unwrap();
+        Dcgka::process_local(alice_dcgka_pre, 0, alice_pre, &rng).unwrap()
+    };
+
+    // Bob processes the "create" message from Alice.
+    let (bob_dcgka, bob_output) = Dcgka::process_remote(
+        bob_dcgka,
+        ProcessInput {
+            seq: 0,
+            sender: alice,
+            message: (&alice_output, Some(bob))
+                .try_into()
+                .expect("direct message for bob"),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    // Bob learned about Alice's update secret.
+    assert_eq!(
+        &alice_output.me_update_secret.unwrap(),
+        bob_output.sender_update_secret.as_ref().unwrap()
+    );
+
+    // Alice processing the "ack" of Bob.
+    let (alice_dcgka, alice_output) = Dcgka::process_remote(
+        alice_dcgka,
+        ProcessInput {
+            seq: 0,
+            sender: bob,
+            message: (&bob_output, None).try_into().unwrap(),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    // Alice learned about Bob's update secret.
+    assert_eq!(
+        alice_output.sender_update_secret.unwrap(),
+        bob_output.me_update_secret.unwrap()
+    );
+
+    // Everybody should consider each other part of the group.
+    for dcgka in [&alice_dcgka, &bob_dcgka] {
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: &[alice, bob],
+                expected: &[alice, bob],
+            }],
+        );
+    }
+
+    // Alice adds Charlie to the group (as example in paper).
+    let (_alice_dcgka, alice_output) = {
+        let (alice_dcgka_pre, alice_pre) = Dcgka::add(alice_dcgka, charlie, &rng).unwrap();
+        Dcgka::process_local(alice_dcgka_pre, 1, alice_pre, &rng).unwrap()
+    };
+
+    // Bob concurrently adds Dahlia to the group (as example in paper).
+    let (bob_dcgka, bob_output) = {
+        let (bob_dcgka_pre, bob_pre) = Dcgka::add(bob_dcgka, dahlia, &rng).unwrap();
+        Dcgka::process_local(bob_dcgka_pre, 1, bob_pre, &rng).unwrap()
+    };
+
+    // Charlie processes their own addition by Alice.
+    let (charlie_dcgka, _charlie_output) = Dcgka::process_remote(
+        charlie_dcgka,
+        ProcessInput {
+            seq: 1,
+            sender: alice,
+            message: (&alice_output, Some(charlie))
+                .try_into()
+                .expect("direct message for charlie"),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    // Dahlia processes their own add by Bob.
+    let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
+        dahlia_dcgka,
+        ProcessInput {
+            seq: 1,
+            sender: bob,
+            message: (&bob_output, Some(dahlia))
+                .try_into()
+                .expect("direct message for dahlia"),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    // Dahlia processes Alice's addition of Charlie.
+    let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
+        dahlia_dcgka,
+        ProcessInput {
+            seq: 1,
+            sender: alice,
+            message: (&alice_output, None).try_into().unwrap(),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    assert_members_view(
+        &dahlia_dcgka,
+        &[ExpectedMembers {
+            viewer: &[dahlia],
+            expected: &[alice, bob, charlie, dahlia],
+        }],
+    );
+
+    // Bob processes Charlie's "add" by Alice and finally learns that this happenend concurrently
+    // to their own add of Dahlia.
+    let (bob_dcgka, bob_output) = Dcgka::process_remote(
+        bob_dcgka,
+        ProcessInput {
+            seq: 1,
+            sender: alice,
+            message: (&alice_output, None).try_into().unwrap(),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    assert_members_view(
+        &bob_dcgka,
+        &[
+            ExpectedMembers {
+                viewer: &[bob],
+                expected: &[alice, bob, charlie, dahlia],
+            },
+            ExpectedMembers {
+                viewer: &[charlie],
+                expected: &[alice, bob, charlie],
+            },
+        ],
+    );
+
+    // Bob prepares a direct "forward" message to Charlie due to the concurrent operations.
+    assert_eq!(bob_output.direct_messages.len(), 1);
+    assert_eq!(
+        bob_output.direct_messages.first().unwrap().recipient,
+        charlie
+    );
+    assert_eq!(
+        bob_output.direct_messages.first().unwrap().message_type(),
+        DirectMessageType::Forward
+    );
+
+    // Charlie processes the "add-ack" of Bob and handles the direct "forward" message.
+    let (_charlie_dcgka, charlie_output) = Dcgka::process_remote(
+        charlie_dcgka,
+        ProcessInput {
+            seq: 1,
+            sender: bob,
+            message: (&bob_output, Some(charlie))
+                .try_into()
+                .expect("direct message to charlie"),
+        },
+        &rng,
+    )
+    .unwrap();
+
+    assert_eq!(
+        bob_output.me_update_secret.unwrap(),
+        charlie_output.sender_update_secret.unwrap()
+    );
+}
