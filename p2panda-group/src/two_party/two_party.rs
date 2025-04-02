@@ -85,7 +85,7 @@ pub type LongTermTwoParty = TwoParty<KeyManager, LongTermKeyBundle>;
 ///
 /// The state is serializable and can be used to persist 2SM sessions.
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct TwoPartyState<KB: KeyBundle> {
     /// Index of key we will use during next send. The receiver can use the public key and refer to
     /// it through that index when they want to encrypt a message back to us.

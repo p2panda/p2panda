@@ -990,10 +990,10 @@ where
                 ProcessMessage::Ack(ack_message.clone(), direct_message)
             }
             ControlMessage::Update(update_message) => {
-                ProcessMessage::Update(update_message.clone(), direct_message.unwrap())
+                ProcessMessage::Update(update_message.clone(), direct_message)
             }
             ControlMessage::Remove(remove_message) => {
-                ProcessMessage::Remove(remove_message.clone(), direct_message.unwrap())
+                ProcessMessage::Remove(remove_message.clone(), direct_message)
             }
             ControlMessage::Add(add_message) => {
                 ProcessMessage::Add(add_message.clone(), direct_message)
@@ -1039,10 +1039,10 @@ where
                 ProcessMessage::Ack(ack_message.clone(), direct_message)
             }
             ControlMessage::Update(update_message) => {
-                ProcessMessage::Update(update_message.clone(), direct_message.unwrap())
+                ProcessMessage::Update(update_message.clone(), direct_message)
             }
             ControlMessage::Remove(remove_message) => {
-                ProcessMessage::Remove(remove_message.clone(), direct_message.unwrap())
+                ProcessMessage::Remove(remove_message.clone(), direct_message)
             }
             ControlMessage::Add(add_message) => {
                 ProcessMessage::Add(add_message.clone(), direct_message)

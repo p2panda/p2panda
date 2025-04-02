@@ -201,7 +201,9 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_1_seq_1, Some(charlie)).try_into().unwrap(),
+                message: (&bob_1_seq_1, Some(charlie))
+                    .try_into()
+                    .expect("direct message for charlie"),
             },
             &rng,
         )
@@ -383,7 +385,9 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: alice,
-                message: (&alice_2_seq_1, Some(charlie)).try_into().unwrap(),
+                message: (&alice_2_seq_1, Some(charlie))
+                    .try_into()
+                    .expect("direct message for charlie"),
             },
             &rng,
         )
@@ -508,7 +512,9 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: charlie,
-                message: (&charlie_2_seq_1, Some(bob)).try_into().unwrap(),
+                message: (&charlie_2_seq_1, Some(bob))
+                    .try_into()
+                    .expect("direct message for bob"),
             },
             &rng,
         )
@@ -626,7 +632,9 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_5_seq_3, Some(charlie)).try_into().unwrap(),
+                message: (&bob_5_seq_3, Some(charlie))
+                    .try_into()
+                    .expect("direct message for charlie"),
             },
             &rng,
         )

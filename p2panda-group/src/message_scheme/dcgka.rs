@@ -108,7 +108,7 @@ pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
 
 /// Serializable state of DCGKA (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct DcgkaState<ID, OP, PKI, DGM, KMG>
 where
     ID: IdentityHandle,
@@ -139,7 +139,7 @@ where
     /// Member secrets are "temporary" secrets we derive after receiving a new seed or adding
     /// someone. We keep them around until we've received an acknowledgment of that member.
     ///
-    /// We only store the member secrets, and not the seed secret, so that if the user’s private
+    /// We only store the member secrets, and not the seed secret, so that if the user's private
     /// state is compromised, the adversary obtains only those member secrets that have not yet
     /// been used.
     ///
@@ -213,10 +213,10 @@ where
                 direct_message,
             ) => Self::process_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
             ProcessMessage::Update(_, direct_message) => {
-                Self::process_update(y, sender, seq, Some(direct_message), rng)?
+                Self::process_update(y, sender, seq, direct_message, rng)?
             }
             ProcessMessage::Remove(RemoveMessage { removed }, direct_message) => {
-                Self::process_remove(y, sender, seq, &removed, Some(direct_message), rng)?
+                Self::process_remove(y, sender, seq, &removed, direct_message, rng)?
             }
             ProcessMessage::Add(AddMessage { added }, direct_message) => {
                 Self::process_add(y, sender, seq, added, direct_message, rng)?
@@ -552,12 +552,12 @@ where
     /// Another scenario that needs to be handled is when two users are concurrently added to the
     /// group. For example, in a group consisting initially of {A, B}, say A adds C to the group,
     /// while concurrently B adds D. User C first processes its own addition and welcome message,
-    /// and then processes B’s addition of D. However, since C was not a group member at the time B
-    /// sent its "add" message, C does not yet have B’s ratchet state, so C cannot derive an update
-    /// secret for B’s "add" message.
+    /// and then processes B's addition of D. However, since C was not a group member at the time B
+    /// sent its "add" message, C does not yet have B's ratchet state, so C cannot derive an update
+    /// secret for B's "add" message.
     ///
     /// When B finds out about the fact that A has added C, B sends C its ratchet state as usual,
-    /// so C can initialize its copy of B’s ratchet as before. Similarly, when D finds out about
+    /// so C can initialize its copy of B's ratchet as before. Similarly, when D finds out about
     /// the fact that A has added C, D sends its ratchet state to C along with the "add-ack"
     /// message. The existing logic therefore handles the concurrent additions: after all acks have
     /// been delivered, C and D have both initialized their copies of all four ratchets, and so
@@ -620,7 +620,7 @@ where
             // update secrets following the add operation.
 
             // 1. The value returned by the first ratchet update is stored in γ.memberSecret as the
-            //    added user’s first member secret;
+            //    added user's first member secret;
             let (mut y_i, sender_member_secret) =
                 Self::update_ratchet(y, &sender, ChainSecret::from_welcome())?;
             y_i.member_secrets.insert(
@@ -671,7 +671,7 @@ where
             content: DirectMessageContent::Forward { ciphertext },
         };
 
-        // Finally, we call process_add_ack to compute the local user’s update secret Ime, and
+        // Finally, we call process_add_ack to compute the local user's update secret Ime, and
         // return it with Isender.
         let (y_iv, output) = {
             let my_id = y_iii.my_id;
@@ -739,7 +739,7 @@ where
             // If so, we compute a new update secret I for the sender of the "add_ack" by calling
             // update_ratchet with the constant string "add". In the case of the new member, the
             // ratchet state was just previously initialized. This ratchet update allows all group
-            // members, including the new one, to derive each member’s update secret for the add
+            // members, including the new one, to derive each member's update secret for the add
             // operation, but it prevents the new group member from obtaining any update secret
             // from before they were added.
             let (y_ii, sender_update_secret) =
@@ -767,15 +767,15 @@ where
         history: DGM::State,
         ciphertext: TwoPartyMessage,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
-        // Adding user’s copy of γ.history sent in their welcome message, which is used to
-        // initialize the added user’s history.
+        // Adding user's copy of γ.history sent in their welcome message, which is used to
+        // initialize the added user's history.
         y.dgm = DGM::from_welcome(y.my_id, history).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Add ourselves.
         y.dgm =
             DGM::add(y.dgm, sender, y.my_id, seq).map_err(|err| DcgkaError::DgmOperation(err))?;
 
-        // Ciphertext of the adding user’s ratchet state, which we decrypt.
+        // Ciphertext of the adding user's ratchet state, which we decrypt.
         let y_i = {
             let (mut y_i, plaintext) = Self::decrypt_from(y, &sender, ciphertext)?;
             let chain_secret = ChainSecret::try_from_bytes(&plaintext)?;
@@ -812,8 +812,8 @@ where
         // we just generated, and passing it to update_ratchet.
         //
         // The previous ratchet state for the new member is the empty string ε, as set up by init,
-        // so this step initializes the new member’s ratchet. Every other group member, on
-        // receiving the new member’s "ack", will initialize their copy of the new member’s ratchet
+        // so this step initializes the new member's ratchet. Every other group member, on
+        // receiving the new member's "ack", will initialize their copy of the new member's ratchet
         // in the same way. By the end of process_welcome, the new group member has obtained update
         // secrets for themselves and the user who added them. They then use those secrets to
         // initialize the ratchets for application messages, allowing them to send messages and
@@ -972,7 +972,7 @@ where
             );
         }
 
-        // The sender’s member secret is used immediately to update their KDF ratchet and compute
+        // The sender's member secret is used immediately to update their KDF ratchet and compute
         // their update secret Isender, using update_ratchet.
         let (y_ii, sender_update_secret) = {
             let sender_identity_key = PKI::identity_key(&y_i.pki, sender)
@@ -991,7 +991,7 @@ where
             Self::update_ratchet(y_i, sender, ChainSecret::from_bytes(sender_member_secret))?
         };
 
-        // We only store the member secrets, and not the seed secret, so that if the user’s private
+        // We only store the member secrets, and not the seed secret, so that if the user's private
         // state is compromised, the adversary obtains only those member secrets that have not yet
         // been used.
         drop(next_seed); // FS for "next_seed".
@@ -1026,18 +1026,18 @@ where
         // For example, consider a group with members {A, B, C}, and say A performs an update while
         // concurrently C adds D to the group. When A distributes a new seed secret through
         // 2SM-encrypted direct messages, D will not be a recipient of one of those direct
-        // messages, since A did not know about D’s addition at the time of sending. D cannot
+        // messages, since A did not know about D's addition at the time of sending. D cannot
         // derive any of the member secrets for this update. When B updates its KDF ratchet using
-        // A’s seed secret, it will compute an update secret that D does not know, and D will not
-        // be able to decrypt B’s subsequent application messages.
+        // A's seed secret, it will compute an update secret that D does not know, and D will not
+        // be able to decrypt B's subsequent application messages.
         //
         // In this example, B may receive the add and the update in either order. If B processes
-        // A’s update first, the seed secret from A is already incorporated into B’s ratchet state
+        // A's update first, the seed secret from A is already incorporated into B's ratchet state
         // at time time of adding D; since B sends this ratchet state to D along with its "add-ack"
         // message, no further action is needed. On the other hand, if B processes the addition of
-        // D first, then when B subsequently processes A’s update, B must take the member secret it
-        // derives from A’s seed secret and forward it to D, so that D can compute B’s update
-        // secret for A’s update.
+        // D first, then when B subsequently processes A's update, B must take the member secret it
+        // derives from A's seed secret and forward it to D, so that D can compute B's update
+        // secret for A's update.
         //
         // Recall that first we set recipients to be the set of group members at the time the
         // update/remove was sent, except for the sender. We then compute the current set of
@@ -1050,7 +1050,7 @@ where
         // 2SM-encrypt that member secret for each of the users who need it. This set forward is
         // sent as direct messages along with the "ack".
         let (y_iii, forward_messages) = {
-            let members: Vec<ID> = Self::member_view(&y_ii, sender)?
+            let members: Vec<ID> = Self::member_view(&y_ii, &y_ii.my_id)?
                 .into_iter()
                 .filter(|member| member != sender && !recipients.contains(member))
                 .collect();
@@ -1303,15 +1303,23 @@ where
     DGM: AckedGroupMembership<ID, OP>,
 {
     Create(CreateMessage<ID>, DirectMessage<ID, OP, DGM>),
+
     Ack(AckMessage<ID, OP>, Option<DirectMessage<ID, OP, DGM>>),
-    Update(UpdateMessage, DirectMessage<ID, OP, DGM>),
-    Remove(RemoveMessage<ID>, DirectMessage<ID, OP, DGM>),
+
+    /// Direct message can be none when "update" was received concurrently.
+    Update(UpdateMessage, Option<DirectMessage<ID, OP, DGM>>),
+
+    /// Direct message can be none when "remove" was received concurrently.
+    Remove(RemoveMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
+
     Add(AddMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
+
     AddAck(AddAckMessage<ID, OP>, Option<DirectMessage<ID, OP, DGM>>),
 }
 
 /// Calling "process" returns a 4-tuple `(control, dmsgs, Is, Ir)`, where `Is` is an update secret
 /// for the sender of the message being processed, `Ir` is an update secret for the recipient.
+#[derive(Debug)]
 pub struct ProcessOutput<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -1434,7 +1442,7 @@ where
 /// Randomly generated seed we keep temporarily around when creating or updating a group or
 /// removing a member.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct NextSeed(Secret<RATCHET_KEY_SIZE>);
 
 impl NextSeed {
@@ -1462,7 +1470,7 @@ impl NextSeed {
 
 /// Chain secrets for the "outer" key-agreement ratchet.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct ChainSecret(Secret<RATCHET_KEY_SIZE>);
 
 impl ChainSecret {
