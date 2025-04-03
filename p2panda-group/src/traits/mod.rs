@@ -15,8 +15,8 @@ pub use key_registry::{IdentityRegistry, PreKeyRegistry};
 
 /// Handle to identify a group member.
 ///
-/// This needs to be unique within a group, can be a username, number or preferably a long byte
-/// string.
+/// Note that this needs to be unique within a group, can be a username, number or preferably a
+/// long byte string.
 pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
 
 #[cfg(any(test, feature = "test_utils"))]
@@ -31,6 +31,9 @@ impl IdentityHandle for usize {}
 /// network. Each operation needs to be uniquely identifiable, preferably by a collision-resistant
 /// hash.
 pub trait OperationId: Copy + Debug + PartialEq + Eq + StdHash {}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl OperationId for (usize, usize) {} // (ID, Seq)
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OperationId for usize {}
