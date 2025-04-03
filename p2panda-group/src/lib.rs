@@ -16,6 +16,10 @@ pub use key_bundle::{
 };
 pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};
 pub use key_registry::{KeyRegistry, KeyRegistryState};
+pub use message_scheme::{
+    AddMessage, ControlMessage, CreateMessage, Dcgka, DcgkaError, DcgkaState, DirectMessage,
+    ProcessInput, RemoveMessage, UpdateSecret,
+};
 pub use two_party::{
     LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError, TwoPartyMessage,
 };
@@ -23,4 +27,6 @@ pub use two_party::{
 #[cfg(feature = "test_utils")]
 pub mod test_utils {
     pub use crate::crypto::x25519::SecretKey;
+    pub use crate::message_scheme::acked_dgm::test_utils::*;
+    pub use crate::message_scheme::test_utils::*;
 }
