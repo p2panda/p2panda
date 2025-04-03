@@ -1280,6 +1280,7 @@ pub struct AddAckMessage<ID, OP> {
     pub ack_seq: OP,
 }
 
+#[derive(Clone, Debug)]
 pub struct ProcessInput<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
+
+use serde::{Deserialize, Serialize};
 
 use crate::crypto::x25519::SecretKey;
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
@@ -8,12 +11,40 @@ use crate::message_scheme::{
     AckMessage, AddAckMessage, ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType,
     OperationOutput, ProcessOutput, UpdateSecret,
 };
-use crate::traits::{AckedGroupMembership, PreKeyManager};
+use crate::traits::{AckedGroupMembership, OperationId, PreKeyManager};
 use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
 
 pub type MemberId = usize;
 
-pub type MessageId = usize;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MessageId {
+    pub sender: MemberId,
+    pub seq: usize,
+}
+
+impl MessageId {
+    pub fn new(my_id: MemberId) -> Self {
+        Self {
+            sender: my_id,
+            seq: 0,
+        }
+    }
+
+    pub fn inc(&self) -> Self {
+        Self {
+            sender: self.sender,
+            seq: self.seq + 1,
+        }
+    }
+}
+
+impl Display for MessageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[id={}, seq={}]", self.sender, self.seq)
+    }
+}
+
+impl OperationId for MessageId {}
 
 pub type TestDcgkaState = DcgkaState<
     MemberId,
