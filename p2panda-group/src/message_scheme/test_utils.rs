@@ -81,17 +81,14 @@ fn members_without(members: &[MemberId], without: &[MemberId]) -> Vec<MemberId> 
 }
 
 pub fn assert_direct_message(
-    direct_messages: &Vec<DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>>,
+    direct_messages: &[DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>],
     recipient: MemberId,
 ) -> DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>> {
     direct_messages
         .iter()
         .find(|message| message.recipient == recipient)
         .cloned()
-        .expect(&format!(
-            "could not find direct message for {:?}",
-            recipient
-        ))
+        .unwrap_or_else(|| panic!("could not find direct message for {:?}", recipient))
         .clone()
 }
 
