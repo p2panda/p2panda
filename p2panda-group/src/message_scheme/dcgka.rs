@@ -199,35 +199,32 @@ where
         input: ProcessInput<ID, OP, DGM>,
         rng: &Rng,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
-        let ProcessInput { sender, seq, .. } = input;
+        let ProcessInput {
+            sender,
+            seq,
+            direct_message,
+            control_message,
+        } = input;
         assert_ne!(sender, y.my_id, "do not process own control messages");
-        let (y_i, output) = match input.message {
-            ProcessMessage::Create(CreateMessage { initial_members }, direct_message) => {
-                Self::process_create(y, sender, seq, initial_members, Some(direct_message), rng)?
+        let (y_i, output) = match control_message {
+            ControlMessage::Create(CreateMessage { initial_members }) => {
+                Self::process_create(y, sender, seq, initial_members, direct_message, rng)?
             }
-            ProcessMessage::Ack(
-                AckMessage {
-                    ack_sender,
-                    ack_seq,
-                },
-                direct_message,
-            ) => Self::process_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
-            ProcessMessage::Update(_, direct_message) => {
-                Self::process_update(y, sender, seq, direct_message, rng)?
-            }
-            ProcessMessage::Remove(RemoveMessage { removed }, direct_message) => {
+            ControlMessage::Ack(AckMessage {
+                ack_sender,
+                ack_seq,
+            }) => Self::process_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
+            ControlMessage::Update(_) => Self::process_update(y, sender, seq, direct_message, rng)?,
+            ControlMessage::Remove(RemoveMessage { removed }) => {
                 Self::process_remove(y, sender, seq, &removed, direct_message, rng)?
             }
-            ProcessMessage::Add(AddMessage { added }, direct_message) => {
+            ControlMessage::Add(AddMessage { added }) => {
                 Self::process_add(y, sender, seq, added, direct_message, rng)?
             }
-            ProcessMessage::AddAck(
-                AddAckMessage {
-                    ack_sender,
-                    ack_seq,
-                },
-                direct_message,
-            ) => Self::process_add_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
+            ControlMessage::AddAck(AddAckMessage {
+                ack_sender,
+                ack_seq,
+            }) => Self::process_add_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
         };
         Ok((y_i, output))
     }
@@ -1295,26 +1292,13 @@ where
     pub sender: ID,
 
     /// Message received from this author.
-    pub message: ProcessMessage<ID, OP, DGM>,
-}
+    pub control_message: ControlMessage<ID, OP>,
 
-pub enum ProcessMessage<ID, OP, DGM>
-where
-    DGM: AckedGroupMembership<ID, OP>,
-{
-    Create(CreateMessage<ID>, DirectMessage<ID, OP, DGM>),
-
-    Ack(AckMessage<ID, OP>, Option<DirectMessage<ID, OP, DGM>>),
-
-    /// Direct message can be none when "update" was received concurrently.
-    Update(UpdateMessage, Option<DirectMessage<ID, OP, DGM>>),
-
-    /// Direct message can be none when "remove" was received concurrently.
-    Remove(RemoveMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
-
-    Add(AddMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
-
-    AddAck(AddAckMessage<ID, OP>, Option<DirectMessage<ID, OP, DGM>>),
+    /// Optional direct message for us.
+    ///
+    /// Applications need to filter the direct message for the correct recipient before passing it
+    /// as an input. There can always only be max. 1 direct message per recipient.
+    pub direct_message: Option<DirectMessage<ID, OP, DGM>>,
 }
 
 /// Calling "process" returns a 4-tuple `(control, dmsgs, Is, Ir)`, where `Is` is an update secret

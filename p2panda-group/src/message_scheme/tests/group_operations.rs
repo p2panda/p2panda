@@ -2,7 +2,7 @@
 
 use crate::Rng;
 use crate::message_scheme::test_utils::{
-    AssertableDcgka, ExpectedMembers, assert_members_view, init_dcgka_state,
+    AssertableDcgka, ExpectedMembers, assert_direct_message, assert_members_view, init_dcgka_state,
 };
 use crate::message_scheme::{Dcgka, ProcessInput};
 
@@ -71,9 +71,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: alice,
-                message: (&alice_0_seq_0, Some(bob))
-                    .try_into()
-                    .expect("direct message for bob"),
+                direct_message: Some(assert_direct_message(&alice_0_seq_0.direct_messages, bob)),
+                control_message: alice_0_seq_0.control_message,
             },
             &rng,
         )
@@ -105,7 +104,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_0_seq_0, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: bob_0_seq_0.control_message.unwrap(),
             },
             &rng,
         )
@@ -201,9 +201,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_1_seq_1, Some(charlie))
-                    .try_into()
-                    .expect("direct message for charlie"),
+                direct_message: Some(assert_direct_message(&bob_1_seq_1.direct_messages, charlie)),
+                control_message: bob_1_seq_1.control_message.clone(),
             },
             &rng,
         )
@@ -252,7 +251,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_1_seq_1, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: bob_1_seq_1.control_message,
             },
             &rng,
         )
@@ -301,7 +301,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: charlie,
-                message: (&charlie_0_seq_0, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: charlie_0_seq_0.control_message.as_ref().unwrap().clone(),
             },
             &rng,
         )
@@ -343,7 +344,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: charlie,
-                message: (&charlie_0_seq_0, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: charlie_0_seq_0.control_message.unwrap(),
             },
             &rng,
         )
@@ -385,9 +387,11 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: alice,
-                message: (&alice_2_seq_1, Some(charlie))
-                    .try_into()
-                    .expect("direct message for charlie"),
+                direct_message: Some(assert_direct_message(
+                    &alice_2_seq_1.direct_messages,
+                    charlie,
+                )),
+                control_message: alice_2_seq_1.control_message.as_ref().unwrap().clone(),
             },
             &rng,
         )
@@ -429,7 +433,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: alice,
-                message: (&alice_2_seq_1, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: alice_2_seq_1.control_message.as_ref().unwrap().clone(),
             },
             &rng,
         )
@@ -512,9 +517,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: charlie,
-                message: (&charlie_2_seq_1, Some(bob))
-                    .try_into()
-                    .expect("direct message for bob"),
+                direct_message: Some(assert_direct_message(&charlie_2_seq_1.direct_messages, bob)),
+                control_message: charlie_2_seq_1.control_message,
             },
             &rng,
         )
@@ -562,7 +566,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_4_seq_2, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: bob_4_seq_2.control_message.unwrap(),
             },
             &rng,
         )
@@ -632,9 +637,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: bob,
-                message: (&bob_5_seq_3, Some(charlie))
-                    .try_into()
-                    .expect("direct message for charlie"),
+                direct_message: Some(assert_direct_message(&bob_5_seq_3.direct_messages, charlie)),
+                control_message: bob_5_seq_3.control_message,
             },
             &rng,
         )
@@ -673,7 +677,8 @@ fn group_operations() {
             ProcessInput {
                 seq,
                 sender: charlie,
-                message: (&charlie_4_seq_2, None).try_into().unwrap(),
+                direct_message: None,
+                control_message: charlie_4_seq_2.control_message.unwrap(),
             },
             &rng,
         )

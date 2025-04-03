@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
 
 use crate::crypto::x25519::SecretKey;
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
 use crate::message_scheme::{
-    AckMessage, AddAckMessage, ControlMessage, Dcgka, DcgkaState, DirectMessageType,
-    OperationOutput, ProcessMessage, ProcessOutput, UpdateSecret,
+    AckMessage, AddAckMessage, ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType,
+    OperationOutput, ProcessOutput, UpdateSecret,
 };
 use crate::traits::{AckedGroupMembership, PreKeyManager};
 use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
@@ -81,6 +80,21 @@ fn members_without(members: &[MemberId], without: &[MemberId]) -> Vec<MemberId> 
         .collect()
 }
 
+pub fn assert_direct_message(
+    direct_messages: &Vec<DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>>,
+    recipient: MemberId,
+) -> DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>> {
+    direct_messages
+        .iter()
+        .find(|message| message.recipient == recipient)
+        .cloned()
+        .expect(&format!(
+            "could not find direct message for {:?}",
+            recipient
+        ))
+        .clone()
+}
+
 pub struct ExpectedMembers<'a> {
     pub viewer: &'a [MemberId],
     pub expected: &'a [MemberId],
@@ -132,7 +146,7 @@ impl AssertableDcgka {
         let ControlMessage::Create(ref message) = output.control_message else {
             panic!("expected \"create\" control message");
         };
-        assert_eq!(message.initial_members, expected_members.to_vec(),);
+        assert_eq!(message.initial_members, expected_members.to_vec());
 
         // Direct messages
         // ~~~~~~~~~~~~~~~
@@ -278,8 +292,12 @@ impl AssertableDcgka {
         // Seed was never used and should be none.
         assert!(dcgka.next_seed.is_none());
 
-        // When joining a group freshly we can't derive any member secrets yet.
-        assert_eq!(dcgka.member_secrets.len(), 0);
+        // When joining a group freshly we have member secrets for every member who is not the
+        // "creator".
+        assert_eq!(
+            dcgka.member_secrets.len(),
+            members_without(expected_members, &[creator_id, processor_id]).len()
+        );
 
         // Outer-Ratchet holds only the secret for the group "creator" and ourselves ("processor") so far.
         assert_eq!(dcgka.ratchet.len(), 2);
@@ -952,104 +970,5 @@ impl AssertableDcgka {
             self.update_secrets.get(&(from, to)).unwrap().as_bytes(),
             self.update_secrets.get(&(to, to)).unwrap().as_bytes(),
         );
-    }
-}
-
-impl<ID, OP, DGM> TryFrom<(&OperationOutput<ID, OP, DGM>, Option<ID>)>
-    for ProcessMessage<ID, OP, DGM>
-where
-    DGM: Clone + AckedGroupMembership<ID, OP>,
-    ID: Clone + Debug + PartialEq,
-    OP: Clone,
-{
-    type Error = String;
-
-    fn try_from(args: (&OperationOutput<ID, OP, DGM>, Option<ID>)) -> Result<Self, Self::Error> {
-        let (output, dm_recipient) = args;
-        let direct_message = match dm_recipient {
-            Some(ref dm) => output
-                .direct_messages
-                .iter()
-                .find(|message| &message.recipient == dm)
-                .cloned(),
-            None => None,
-        };
-
-        if dm_recipient.is_some() && direct_message.is_none() {
-            return Err(format!(
-                "expected direct message for user {:?}",
-                dm_recipient.unwrap()
-            ));
-        }
-
-        Ok(match &output.control_message {
-            ControlMessage::Create(create_message) => {
-                ProcessMessage::Create(create_message.clone(), direct_message.unwrap())
-            }
-            ControlMessage::Ack(ack_message) => {
-                ProcessMessage::Ack(ack_message.clone(), direct_message)
-            }
-            ControlMessage::Update(update_message) => {
-                ProcessMessage::Update(update_message.clone(), direct_message)
-            }
-            ControlMessage::Remove(remove_message) => {
-                ProcessMessage::Remove(remove_message.clone(), direct_message)
-            }
-            ControlMessage::Add(add_message) => {
-                ProcessMessage::Add(add_message.clone(), direct_message)
-            }
-            ControlMessage::AddAck(add_ack_message) => {
-                ProcessMessage::AddAck(add_ack_message.clone(), direct_message)
-            }
-        })
-    }
-}
-
-impl<ID, OP, DGM> TryFrom<(&ProcessOutput<ID, OP, DGM>, Option<ID>)> for ProcessMessage<ID, OP, DGM>
-where
-    DGM: Clone + AckedGroupMembership<ID, OP>,
-    ID: Clone + Debug + PartialEq,
-    OP: Clone,
-{
-    type Error = String;
-
-    fn try_from(args: (&ProcessOutput<ID, OP, DGM>, Option<ID>)) -> Result<Self, Self::Error> {
-        let (output, dm_recipient) = args;
-        let direct_message = match dm_recipient {
-            Some(ref dm) => output
-                .direct_messages
-                .iter()
-                .find(|message| &message.recipient == dm)
-                .cloned(),
-            None => None,
-        };
-
-        if dm_recipient.is_some() && direct_message.is_none() {
-            return Err(format!(
-                "expected direct message for user {:?}",
-                dm_recipient.unwrap()
-            ));
-        }
-
-        Ok(match output.control_message.as_ref().unwrap() {
-            ControlMessage::Create(create_message) => {
-                ProcessMessage::Create(create_message.clone(), direct_message.unwrap())
-            }
-            ControlMessage::Ack(ack_message) => {
-                ProcessMessage::Ack(ack_message.clone(), direct_message)
-            }
-            ControlMessage::Update(update_message) => {
-                ProcessMessage::Update(update_message.clone(), direct_message)
-            }
-            ControlMessage::Remove(remove_message) => {
-                ProcessMessage::Remove(remove_message.clone(), direct_message)
-            }
-            ControlMessage::Add(add_message) => {
-                ProcessMessage::Add(add_message.clone(), direct_message)
-            }
-            ControlMessage::AddAck(add_ack_message) => {
-                ProcessMessage::AddAck(add_ack_message.clone(), direct_message)
-            }
-        })
     }
 }

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::Rng;
-use crate::message_scheme::test_utils::{ExpectedMembers, assert_members_view, init_dcgka_state};
+use crate::message_scheme::test_utils::{
+    ExpectedMembers, assert_direct_message, assert_members_view, init_dcgka_state,
+};
 use crate::message_scheme::{Dcgka, DirectMessageType, ProcessInput};
 
 // From DCGKA paper (6.2.5):
@@ -59,9 +61,8 @@ fn concurrent_operation() {
         ProcessInput {
             seq: 0,
             sender: alice,
-            message: (&alice_output, Some(bob))
-                .try_into()
-                .expect("direct message for bob"),
+            direct_message: Some(assert_direct_message(&alice_output.direct_messages, bob)),
+            control_message: alice_output.control_message.clone(),
         },
         &rng,
     )
@@ -72,9 +73,11 @@ fn concurrent_operation() {
         ProcessInput {
             seq: 0,
             sender: alice,
-            message: (&alice_output, Some(charlie))
-                .try_into()
-                .expect("direct message for charlie"),
+            direct_message: Some(assert_direct_message(
+                &alice_output.direct_messages,
+                charlie,
+            )),
+            control_message: alice_output.control_message,
         },
         &rng,
     )
@@ -121,7 +124,8 @@ fn concurrent_operation() {
         ProcessInput {
             seq: 1,
             sender: charlie,
-            message: (&charlie_output, None).try_into().unwrap(),
+            direct_message: None,
+            control_message: charlie_output.control_message.clone(),
         },
         &rng,
     )
@@ -153,9 +157,11 @@ fn concurrent_operation() {
         ProcessInput {
             seq: 1,
             sender: charlie,
-            message: (&charlie_output, Some(dahlia))
-                .try_into()
-                .expect("direct message for dahlia"),
+            direct_message: Some(assert_direct_message(
+                &charlie_output.direct_messages,
+                dahlia,
+            )),
+            control_message: charlie_output.control_message,
         },
         &rng,
     )
@@ -181,9 +187,8 @@ fn concurrent_operation() {
         ProcessInput {
             seq: 1,
             sender: bob,
-            message: (&bob_output, Some(dahlia))
-                .try_into()
-                .expect("direct message for dahlia"),
+            direct_message: Some(assert_direct_message(&bob_output.direct_messages, dahlia)),
+            control_message: bob_output.control_message.as_ref().unwrap().clone(),
         },
         &rng,
     )
@@ -210,13 +215,12 @@ fn concurrent_operation() {
             ProcessInput {
                 seq: 1,
                 sender: alice,
-                message: {
+                control_message: alice_output.control_message.clone(),
+                direct_message: {
                     if action == "another_add" {
-                        (&alice_output, None).try_into().unwrap()
+                        None
                     } else if action == "update" || action == "remove" {
-                        (&alice_output, Some(bob))
-                            .try_into()
-                            .expect("direct message for bob")
+                        Some(assert_direct_message(&alice_output.direct_messages, bob))
                     } else {
                         unreachable!()
                     }
@@ -258,9 +262,10 @@ fn concurrent_operation() {
             ProcessInput {
                 seq: 1,
                 sender: alice,
+                control_message: alice_output.control_message,
                 // We don't expect any direct messages to Dahlia from Alice as Alice didn't know
                 // about them when they performed the group operation.
-                message: (&alice_output, None).try_into().unwrap(),
+                direct_message: None,
             },
             &rng,
         )
@@ -282,9 +287,11 @@ fn concurrent_operation() {
                 ProcessInput {
                     seq: 2,
                     sender: bob,
-                    message: (&bob_output, Some(dahlia))
-                        .try_into()
-                        .expect("direct message for dahlia"),
+                    direct_message: Some(assert_direct_message(
+                        &bob_output.direct_messages,
+                        dahlia,
+                    )),
+                    control_message: bob_output.control_message.as_ref().unwrap().clone(),
                 },
                 &rng,
             )
@@ -344,9 +351,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 0,
             sender: alice,
-            message: (&alice_output, Some(bob))
-                .try_into()
-                .expect("direct message for bob"),
+            direct_message: Some(assert_direct_message(&alice_output.direct_messages, bob)),
+            control_message: alice_output.control_message,
         },
         &rng,
     )
@@ -364,7 +370,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 0,
             sender: bob,
-            message: (&bob_output, None).try_into().unwrap(),
+            direct_message: None,
+            control_message: bob_output.control_message.unwrap(),
         },
         &rng,
     )
@@ -405,9 +412,11 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 1,
             sender: alice,
-            message: (&alice_output, Some(charlie))
-                .try_into()
-                .expect("direct message for charlie"),
+            direct_message: Some(assert_direct_message(
+                &alice_output.direct_messages,
+                charlie,
+            )),
+            control_message: alice_output.control_message.clone(),
         },
         &rng,
     )
@@ -419,9 +428,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 1,
             sender: bob,
-            message: (&bob_output, Some(dahlia))
-                .try_into()
-                .expect("direct message for dahlia"),
+            direct_message: Some(assert_direct_message(&bob_output.direct_messages, dahlia)),
+            control_message: bob_output.control_message,
         },
         &rng,
     )
@@ -433,7 +441,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 1,
             sender: alice,
-            message: (&alice_output, None).try_into().unwrap(),
+            direct_message: None,
+            control_message: alice_output.control_message.clone(),
         },
         &rng,
     )
@@ -454,7 +463,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 1,
             sender: alice,
-            message: (&alice_output, None).try_into().unwrap(),
+            direct_message: None,
+            control_message: alice_output.control_message,
         },
         &rng,
     )
@@ -491,9 +501,8 @@ fn concurrent_adds() {
         ProcessInput {
             seq: 1,
             sender: bob,
-            message: (&bob_output, Some(charlie))
-                .try_into()
-                .expect("direct message to charlie"),
+            direct_message: Some(assert_direct_message(&bob_output.direct_messages, charlie)),
+            control_message: bob_output.control_message.unwrap(),
         },
         &rng,
     )
