@@ -9,10 +9,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
-use tokio::sync::{RwLock, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tracing::{debug, error, warn};
 
-use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::engine::ToEngineActor;
@@ -20,6 +19,7 @@ use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
+use crate::TopicId;
 
 pub use crate::engine::topic_streams::receiver::{TopicReceiver, TopicReceiverStream};
 pub use crate::engine::topic_streams::sender::TopicSender;
@@ -664,18 +664,99 @@ mod tests {
         );
     }
 
-    // @TODO(glyph): Split this into several tests
-    // - Correct state after subscribe
-    // - Correct state after unsubscribe sender
-    // - Correct state after unsubscribe receiver
-    // - Correct state after unsubscribe sender and receiver
+    #[tokio::test]
+    async fn subscribe() {
+        let (engine_actor_tx, _engine_actor_rx) = mpsc::channel(128);
+        let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
+        let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
+
+        let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
+        let (topic_stream_sender_tx, _topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, _topic_stream_receiver_rx) = oneshot::channel();
+
+        let topic = TestTopic::Primary;
+        let topic_id = topic.id();
+
+        let mut address_book = AddressBook::new([1; 32]);
+
+        let peer_1 = generate_node_addr();
+        address_book.add_peer(peer_1.clone()).await;
+        address_book
+            .add_topic_id(peer_1.public_key, topic.id())
+            .await;
+
+        let mut topic_streams = TopicStreams::<TestTopic>::new(
+            address_book,
+            engine_actor_tx,
+            gossip_actor_tx,
+            Some(sync_actor_tx),
+        );
+
+        let current_stream_id = topic_streams.next_stream_id;
+
+        // Subscribe to the topic:
+
+        topic_streams
+            .subscribe(
+                topic.clone(),
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
+                gossip_ready_tx,
+            )
+            .await
+            .unwrap();
+
+        // Ensure the correct post-subscribe state:
+
+        assert_eq!(topic_streams.next_stream_id, 2);
+        assert!(topic_streams.gossip_pending.contains_key(&topic_id));
+        assert!(topic_streams
+            .active_streams
+            .contains_key(&current_stream_id));
+
+        let stream_state = topic_streams
+            .active_streams
+            .get(&current_stream_id)
+            .unwrap();
+        assert_eq!(stream_state.sender, true);
+        assert_eq!(stream_state.receiver, true);
+
+        assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
+        assert!(topic_streams
+            .topic_id_to_stream
+            .get(&topic_id)
+            .unwrap()
+            .contains(&current_stream_id));
+
+        assert!(topic_streams.topic_to_stream.contains_key(&topic));
+        assert!(topic_streams
+            .topic_to_stream
+            .get(&topic)
+            .unwrap()
+            .contains(&current_stream_id));
+
+        // Process the joining of the gossip topic:
+
+        topic_streams.on_gossip_joined(topic_id).await;
+        if let Err(_) = timeout(Duration::from_millis(10), gossip_ready_rx).await {
+            panic!("did not receive gossip ready signal within 10 ms");
+        }
+
+        // Ensure the correct post-joined state:
+
+        assert!(!topic_streams.gossip_pending.contains_key(&topic_id));
+        let gossip_joined = topic_streams.gossip_joined.read().await;
+        assert!(gossip_joined.contains_key(&topic_id));
+        assert_eq!(gossip_joined.get(&topic_id).unwrap(), &1);
+    }
+
     #[tokio::test]
     async fn unsubscribe_on_drop() {
         let (engine_actor_tx, mut engine_actor_rx) = mpsc::channel(128);
         let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
         let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
 
-        let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
+        let (gossip_ready_tx, _gossip_ready_rx) = oneshot::channel();
         let (topic_stream_sender_tx, topic_stream_sender_rx) = oneshot::channel();
         let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
 
@@ -714,57 +795,7 @@ mod tests {
         let to_network_tx = topic_stream_sender_rx.await.unwrap();
         let from_network_rx = topic_stream_receiver_rx.await.unwrap();
 
-        // Ensure the correct post-subscribe state:
-
-        assert_eq!(topic_streams.next_stream_id, 2);
-        assert!(topic_streams.gossip_pending.contains_key(&topic_id));
-        assert!(
-            topic_streams
-                .active_streams
-                .contains_key(&current_stream_id)
-        );
-
-        let stream_state = topic_streams
-            .active_streams
-            .get(&current_stream_id)
-            .unwrap();
-        assert_eq!(stream_state.sender, true);
-        assert_eq!(stream_state.receiver, true);
-
-        assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
-        assert!(
-            topic_streams
-                .topic_id_to_stream
-                .get(&topic_id)
-                .unwrap()
-                .contains(&current_stream_id)
-        );
-
-        assert!(topic_streams.topic_to_stream.contains_key(&topic));
-        assert!(
-            topic_streams
-                .topic_to_stream
-                .get(&topic)
-                .unwrap()
-                .contains(&current_stream_id)
-        );
-
-        // Process the joining of the gossip topic:
-
         topic_streams.on_gossip_joined(topic_id).await;
-        if let Err(_) = timeout(Duration::from_millis(10), gossip_ready_rx).await {
-            panic!("did not receive gossip ready signal within 10 ms");
-        }
-
-        // Ensure the correct post-joined state:
-
-        assert!(!topic_streams.gossip_pending.contains_key(&topic_id));
-        let gossip_joined = topic_streams.gossip_joined.read().await;
-        assert!(gossip_joined.contains_key(&topic_id));
-        assert_eq!(gossip_joined.get(&topic_id).unwrap(), &1);
-
-        // Drop the lock so we can later borrow `topic_streams` as mutable.
-        drop(gossip_joined);
 
         // Ensure the correct post-unsubscribe state:
 
@@ -798,22 +829,18 @@ mod tests {
         assert_eq!(stream_state.receiver, true);
 
         assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
-        assert!(
-            topic_streams
-                .topic_id_to_stream
-                .get(&topic_id)
-                .unwrap()
-                .contains(&current_stream_id)
-        );
+        assert!(topic_streams
+            .topic_id_to_stream
+            .get(&topic_id)
+            .unwrap()
+            .contains(&current_stream_id));
 
         assert!(topic_streams.topic_to_stream.contains_key(&topic));
-        assert!(
-            topic_streams
-                .topic_to_stream
-                .get(&topic)
-                .unwrap()
-                .contains(&current_stream_id)
-        );
+        assert!(topic_streams
+            .topic_to_stream
+            .get(&topic)
+            .unwrap()
+            .contains(&current_stream_id));
 
         // Drop receiver.
         drop(from_network_rx);
@@ -837,11 +864,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(
-            !topic_streams
-                .active_streams
-                .contains_key(&current_stream_id)
-        );
+        assert!(!topic_streams
+            .active_streams
+            .contains_key(&current_stream_id));
 
         assert!(!topic_streams.topic_id_to_stream.contains_key(&topic_id));
 
