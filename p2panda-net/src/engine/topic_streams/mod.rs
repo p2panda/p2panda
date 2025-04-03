@@ -9,9 +9,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{RwLock, mpsc, oneshot};
 use tracing::{debug, error, warn};
 
+use crate::TopicId;
 use crate::engine::address_book::AddressBook;
 use crate::engine::constants::JOIN_PEERS_SAMPLE_LEN;
 use crate::engine::engine::ToEngineActor;
@@ -19,7 +20,6 @@ use crate::engine::gossip::ToGossipActor;
 use crate::engine::gossip_buffer::GossipBuffer;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::sync::manager::ToSyncActor;
-use crate::TopicId;
 
 pub use crate::engine::topic_streams::receiver::{TopicReceiver, TopicReceiverStream};
 pub use crate::engine::topic_streams::sender::TopicSender;
@@ -710,9 +710,11 @@ mod tests {
 
         assert_eq!(topic_streams.next_stream_id, 2);
         assert!(topic_streams.gossip_pending.contains_key(&topic_id));
-        assert!(topic_streams
-            .active_streams
-            .contains_key(&current_stream_id));
+        assert!(
+            topic_streams
+                .active_streams
+                .contains_key(&current_stream_id)
+        );
 
         let stream_state = topic_streams
             .active_streams
@@ -722,18 +724,22 @@ mod tests {
         assert_eq!(stream_state.receiver, true);
 
         assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
-        assert!(topic_streams
-            .topic_id_to_stream
-            .get(&topic_id)
-            .unwrap()
-            .contains(&current_stream_id));
+        assert!(
+            topic_streams
+                .topic_id_to_stream
+                .get(&topic_id)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
 
         assert!(topic_streams.topic_to_stream.contains_key(&topic));
-        assert!(topic_streams
-            .topic_to_stream
-            .get(&topic)
-            .unwrap()
-            .contains(&current_stream_id));
+        assert!(
+            topic_streams
+                .topic_to_stream
+                .get(&topic)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
 
         // Process the joining of the gossip topic:
 
@@ -829,18 +835,22 @@ mod tests {
         assert_eq!(stream_state.receiver, true);
 
         assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
-        assert!(topic_streams
-            .topic_id_to_stream
-            .get(&topic_id)
-            .unwrap()
-            .contains(&current_stream_id));
+        assert!(
+            topic_streams
+                .topic_id_to_stream
+                .get(&topic_id)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
 
         assert!(topic_streams.topic_to_stream.contains_key(&topic));
-        assert!(topic_streams
-            .topic_to_stream
-            .get(&topic)
-            .unwrap()
-            .contains(&current_stream_id));
+        assert!(
+            topic_streams
+                .topic_to_stream
+                .get(&topic)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
 
         // Drop receiver.
         drop(from_network_rx);
@@ -864,9 +874,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(!topic_streams
-            .active_streams
-            .contains_key(&current_stream_id));
+        assert!(
+            !topic_streams
+                .active_streams
+                .contains_key(&current_stream_id)
+        );
 
         assert!(!topic_streams.topic_id_to_stream.contains_key(&topic_id));
 
