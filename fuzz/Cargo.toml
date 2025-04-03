@@ -8,7 +8,8 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
 p2panda-group = { path = "../p2panda-group", features = ["test_utils"] }
 
@@ -22,6 +23,13 @@ bench = false
 [[bin]]
 name = "groups_2sm"
 path = "fuzz_targets/groups_2sm.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "groups_message_dcgka"
+path = "fuzz_targets/groups_message_dcgka.rs"
 test = false
 doc = false
 bench = false
