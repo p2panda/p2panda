@@ -8,7 +8,12 @@ use crate::engine::engine::ToEngineActor;
 use crate::engine::topic_streams::TopicChannelType;
 use crate::network::ToNetwork;
 
-// @TODO(glyph): Docs.
+/// Send bytes associated with a specific topic into the network.
+///
+/// `TopicSender` acts as a thin wrapper around [`tokio::sync::mpsc::Sender`], only
+/// implementing a limited subset of methods, and invokes unsubscribe behaviour for the topic when
+/// dropped. The state of all senders and receivers for the topic is tracked internally; the topic
+/// is only fully unsubscribed from when all of them have been dropped.
 #[derive(Debug)]
 pub struct TopicSender<T> {
     topic: Option<T>,

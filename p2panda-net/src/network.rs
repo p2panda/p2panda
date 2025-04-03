@@ -787,7 +787,7 @@ where
     /// Subscribes to a topic and returns a bi-directional stream that can be read from and written
     /// to, along with a oneshot receiver to be informed when the gossip overlay has been joined.
     ///
-    /// The topic will automatically be unsubscribed from once both the sender and receiver have
+    /// Unsubscription will occur automatically once all senders and receivers for this topic have
     /// been dropped.
     pub async fn subscribe(
         &self,

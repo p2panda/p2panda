@@ -12,8 +12,12 @@ use crate::engine::engine::ToEngineActor;
 use crate::engine::topic_streams::TopicChannelType;
 use crate::network::FromNetwork;
 
-/// A wrapper around [`tokio::sync::mpsc::Receiver`] that invokes unsubscribe behaviour for the
-/// topic when dropped.
+/// Receive bytes associated with a specific topic from the network.
+///
+/// `TopicReceiver` acts as a thin wrapper around [`tokio::sync::mpsc::Receiver`], only
+/// implementing a limited subset of methods, and invokes unsubscribe behaviour for the topic when
+/// dropped. The state of all senders and receivers for the topic is tracked internally; the topic
+/// is only fully unsubscribed from when all of them have been dropped.
 #[derive(Debug)]
 pub struct TopicReceiver<T> {
     topic: Option<T>,
