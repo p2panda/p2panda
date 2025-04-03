@@ -30,13 +30,15 @@ type TopicStream<T> = (T, mpsc::Sender<FromNetwork>);
 /// Every stream has a unique identifier.
 type TopicStreamId = usize;
 
-#[derive(Debug)]
+/// Possible halves of a split channel.
+#[derive(Debug, PartialEq)]
 pub enum TopicChannelType {
     Sender,
     Receiver,
 }
 
-#[derive(Debug)]
+/// State of two halves of a topic channel.
+#[derive(Debug, PartialEq)]
 struct TopicStreamState {
     sender: bool,
     receiver: bool,
@@ -50,6 +52,7 @@ impl TopicStreamState {
         }
     }
 
+    /// The topic channel is still active if either the sender, receiver or both are active.
     fn is_active(&self) -> bool {
         self.sender || self.receiver
     }
@@ -68,6 +71,7 @@ impl TopicStreamState {
 /// 4. Applications can subscribe to topics multiple times, or to different topics but with the
 ///    same topic ids. This stream handler multiplexes messages to the right place, even when
 ///    there's duplicates.
+/// 5. Unsubscribe and clean up when all senders and receivers for a topic have been dropped.
 #[derive(Debug)]
 pub struct TopicStreams<T> {
     next_stream_id: usize,
@@ -233,7 +237,7 @@ where
     }
 
     /// Cleans up all state for the stream associated with the given topic ID once the sender and
-    /// receiver have both been dropeed.
+    /// receiver have both been dropped.
     ///
     /// A single stream can be unsubscribed from without affecting any other active streams for the
     /// same topic ID.
@@ -259,8 +263,8 @@ where
             }
         }
 
-        // Only execute clean up logic if both the sender and receiver have been dropped.
         if let Some(stream) = self.active_streams.get(&stream_id) {
+            // Only execute clean up logic if both the sender and receiver have been dropped.
             if !stream.is_active() {
                 self.active_streams.remove(&stream_id);
 
@@ -271,6 +275,12 @@ where
                 for (_topic, streams) in self.topic_id_to_stream.iter_mut() {
                     streams.retain(|&id| id != stream_id)
                 }
+                self.topic_id_to_stream
+                    .retain(|_, streams| !streams.is_empty());
+
+                // @TODO(glyph): We can't currently remove the topic-stream mapping of
+                // `self.topic_to_stream` when the topic maps to an empty vector because we don't
+                // receive the `Topic` as input to `unsubscribe()`.
 
                 let mut gossip_joined = self.gossip_joined.write().await;
                 if let Some(counter) = gossip_joined.get_mut(&topic_id) {
@@ -538,18 +548,21 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use futures_util::{FutureExt, StreamExt};
     use p2panda_core::PrivateKey;
     use p2panda_sync::TopicQuery;
     use serde::{Deserialize, Serialize};
     use tokio::sync::{mpsc, oneshot};
+    use tokio::time::timeout;
 
-    use crate::engine::AddressBook;
+    use crate::engine::{AddressBook, ToEngineActor};
 
     use crate::network::FromNetwork;
     use crate::{NodeAddress, TopicId};
 
-    use super::{TopicReceiverStream, TopicStreams};
+    use super::{TopicChannelType, TopicReceiverStream, TopicStreams};
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
     enum TestTopic {
@@ -649,5 +662,195 @@ mod tests {
                 delivered_from: peer_1.public_key,
             }
         );
+    }
+
+    // @TODO(glyph): Split this into several tests
+    // - Correct state after subscribe
+    // - Correct state after unsubscribe sender
+    // - Correct state after unsubscribe receiver
+    // - Correct state after unsubscribe sender and receiver
+    #[tokio::test]
+    async fn unsubscribe_on_drop() {
+        let (engine_actor_tx, mut engine_actor_rx) = mpsc::channel(128);
+        let (gossip_actor_tx, _gossip_actor_rx) = mpsc::channel(128);
+        let (sync_actor_tx, _sync_actor_rx) = mpsc::channel(128);
+
+        let (gossip_ready_tx, gossip_ready_rx) = oneshot::channel();
+        let (topic_stream_sender_tx, topic_stream_sender_rx) = oneshot::channel();
+        let (topic_stream_receiver_tx, topic_stream_receiver_rx) = oneshot::channel();
+
+        let topic = TestTopic::Primary;
+        let topic_id = topic.id();
+
+        let mut address_book = AddressBook::new([1; 32]);
+
+        let peer_1 = generate_node_addr();
+        address_book.add_peer(peer_1.clone()).await;
+        address_book
+            .add_topic_id(peer_1.public_key, topic.id())
+            .await;
+
+        let mut topic_streams = TopicStreams::<TestTopic>::new(
+            address_book,
+            engine_actor_tx,
+            gossip_actor_tx,
+            Some(sync_actor_tx),
+        );
+
+        let current_stream_id = topic_streams.next_stream_id;
+
+        // Subscribe to the topic:
+
+        topic_streams
+            .subscribe(
+                topic.clone(),
+                topic_stream_sender_tx,
+                topic_stream_receiver_tx,
+                gossip_ready_tx,
+            )
+            .await
+            .unwrap();
+
+        let to_network_tx = topic_stream_sender_rx.await.unwrap();
+        let from_network_rx = topic_stream_receiver_rx.await.unwrap();
+
+        // Ensure the correct post-subscribe state:
+
+        assert_eq!(topic_streams.next_stream_id, 2);
+        assert!(topic_streams.gossip_pending.contains_key(&topic_id));
+        assert!(
+            topic_streams
+                .active_streams
+                .contains_key(&current_stream_id)
+        );
+
+        let stream_state = topic_streams
+            .active_streams
+            .get(&current_stream_id)
+            .unwrap();
+        assert_eq!(stream_state.sender, true);
+        assert_eq!(stream_state.receiver, true);
+
+        assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
+        assert!(
+            topic_streams
+                .topic_id_to_stream
+                .get(&topic_id)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
+
+        assert!(topic_streams.topic_to_stream.contains_key(&topic));
+        assert!(
+            topic_streams
+                .topic_to_stream
+                .get(&topic)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
+
+        // Process the joining of the gossip topic:
+
+        topic_streams.on_gossip_joined(topic_id).await;
+        if let Err(_) = timeout(Duration::from_millis(10), gossip_ready_rx).await {
+            panic!("did not receive gossip ready signal within 10 ms");
+        }
+
+        // Ensure the correct post-joined state:
+
+        assert!(!topic_streams.gossip_pending.contains_key(&topic_id));
+        let gossip_joined = topic_streams.gossip_joined.read().await;
+        assert!(gossip_joined.contains_key(&topic_id));
+        assert_eq!(gossip_joined.get(&topic_id).unwrap(), &1);
+
+        // Drop the lock so we can later borrow `topic_streams` as mutable.
+        drop(gossip_joined);
+
+        // Ensure the correct post-unsubscribe state:
+
+        // Drop sender.
+        drop(to_network_tx);
+
+        if let Some(ToEngineActor::UnsubscribeTopic {
+            topic: received_topic,
+            stream_id,
+            channel_type,
+        }) = engine_actor_rx.recv().await
+        {
+            assert_eq!(received_topic, topic);
+            assert_eq!(stream_id, current_stream_id);
+            assert_eq!(channel_type, TopicChannelType::Sender);
+        } else {
+            panic!("expected to receive unsubscribe topic event on engine actor receiver")
+        }
+
+        // Unsubscribe the sender.
+        topic_streams
+            .unsubscribe(topic_id, current_stream_id, TopicChannelType::Sender)
+            .await
+            .unwrap();
+
+        let stream_state = topic_streams
+            .active_streams
+            .get(&current_stream_id)
+            .unwrap();
+        assert_eq!(stream_state.sender, false);
+        assert_eq!(stream_state.receiver, true);
+
+        assert!(topic_streams.topic_id_to_stream.contains_key(&topic_id));
+        assert!(
+            topic_streams
+                .topic_id_to_stream
+                .get(&topic_id)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
+
+        assert!(topic_streams.topic_to_stream.contains_key(&topic));
+        assert!(
+            topic_streams
+                .topic_to_stream
+                .get(&topic)
+                .unwrap()
+                .contains(&current_stream_id)
+        );
+
+        // Drop receiver.
+        drop(from_network_rx);
+
+        if let Some(ToEngineActor::UnsubscribeTopic {
+            topic: received_topic,
+            stream_id,
+            channel_type,
+        }) = engine_actor_rx.recv().await
+        {
+            assert_eq!(received_topic, topic);
+            assert_eq!(stream_id, current_stream_id);
+            assert_eq!(channel_type, TopicChannelType::Receiver);
+        } else {
+            panic!("expected to receive unsubscribe topic event on engine actor receiver")
+        }
+
+        // Unsubscribe the receiver.
+        topic_streams
+            .unsubscribe(topic_id, current_stream_id, TopicChannelType::Receiver)
+            .await
+            .unwrap();
+
+        assert!(
+            !topic_streams
+                .active_streams
+                .contains_key(&current_stream_id)
+        );
+
+        assert!(!topic_streams.topic_id_to_stream.contains_key(&topic_id));
+
+        // @TODO(glyph): See comment in `unsubscribe()`.
+        // We can only introduce this assertion once we are ablt to clean-up `topic_to_stream`.
+        //assert!(!topic_streams.topic_to_stream.contains_key(&topic));
+
+        assert!(!topic_streams.gossip_pending.contains_key(&topic_id));
+        let gossip_joined = topic_streams.gossip_joined.read().await;
+        assert!(!gossip_joined.contains_key(&topic_id));
     }
 }
