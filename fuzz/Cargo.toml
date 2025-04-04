@@ -12,6 +12,8 @@ arbitrary = { version = "1", features = ["derive"] }
 libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
 p2panda-group = { path = "../p2panda-group", features = ["test_utils"] }
+p2panda-stream = { path = "../p2panda-stream" }
+tokio = { version = "1.42.0", features = ["rt"] }
 
 [[bin]]
 name = "header_e2e"
