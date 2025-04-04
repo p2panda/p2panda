@@ -934,14 +934,11 @@ mod tests {
             // Await at least one message received via sync.
             loop {
                 let msg = rx.recv().await.unwrap();
-                println!("{msg:?}");
                 if let FromNetwork::SyncMessage { .. } = msg {
                     break;
                 }
             }
 
-            // Give other nodes enough time to complete sync sessions.
-            tokio::time::sleep(Duration::from_secs(3)).await;
             node.shutdown().await.unwrap();
         })
     }
@@ -1443,10 +1440,16 @@ mod tests {
         // Run all nodes. We are testing that peers gracefully handle starting a sync session while
         // not knowing the other peer's address yet. Eventually all peers complete at least one
         // sync session.
+        //
+        // We sleep briefly to give nodes enough time to complete sync sessions.
         let handle1 = run_node(node_1, topic.clone());
+        tokio::time::sleep(Duration::from_millis(500)).await;
         let handle2 = run_node(node_2, topic.clone());
+        tokio::time::sleep(Duration::from_millis(500)).await;
         let handle3 = run_node(node_3, topic.clone());
+        tokio::time::sleep(Duration::from_millis(500)).await;
         let handle4 = run_node(node_4, topic.clone());
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         let (result1, result2, result3, result4) = tokio::join!(handle1, handle2, handle3, handle4);
 
