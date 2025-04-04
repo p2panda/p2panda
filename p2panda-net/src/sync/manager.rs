@@ -243,9 +243,9 @@ where
 
     /// Remove all sessions for the given topic.
     async fn on_forget(&mut self, topic: T) {
-        self.sessions.retain(|scope, _| scope.topic == topic);
-        self.resync_queue.retain(|scope| scope.topic == topic);
-        self.retry_queue.retain(|scope| scope.topic == topic);
+        self.sessions.retain(|scope, _| scope.topic != topic);
+        self.resync_queue.retain(|scope| scope.topic != topic);
+        self.retry_queue.retain(|scope| scope.topic != topic);
     }
 
     /// Reset state for all sessions and schedule new attempts.
