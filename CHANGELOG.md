@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
+- Unsubscribe on drop for topic sender and receiver [#728](https://github.com/p2panda/p2panda/pull/728)
 
 ### Fixed
 
