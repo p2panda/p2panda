@@ -275,6 +275,8 @@ where
                 for (_topic, streams) in self.topic_id_to_stream.iter_mut() {
                     streams.retain(|&id| id != stream_id)
                 }
+                self.topic_to_stream
+                    .retain(|_, streams| !streams.is_empty());
                 self.topic_id_to_stream
                     .retain(|_, streams| !streams.is_empty());
 
@@ -822,10 +824,11 @@ mod tests {
         }
 
         // Unsubscribe the sender.
-        topic_streams
+        let unsubscribe_is_complete = topic_streams
             .unsubscribe(topic_id, current_stream_id, TopicChannelType::Sender)
             .await
             .unwrap();
+        assert!(!unsubscribe_is_complete);
 
         let stream_state = topic_streams
             .active_streams
@@ -869,10 +872,11 @@ mod tests {
         }
 
         // Unsubscribe the receiver.
-        topic_streams
+        let unsubscribe_is_complete = topic_streams
             .unsubscribe(topic_id, current_stream_id, TopicChannelType::Receiver)
             .await
             .unwrap();
+        assert!(unsubscribe_is_complete);
 
         assert!(
             !topic_streams
@@ -881,10 +885,7 @@ mod tests {
         );
 
         assert!(!topic_streams.topic_id_to_stream.contains_key(&topic_id));
-
-        // @TODO(glyph): See comment in `unsubscribe()`.
-        // We can only introduce this assertion once we are ablt to clean-up `topic_to_stream`.
-        //assert!(!topic_streams.topic_to_stream.contains_key(&topic));
+        assert!(topic_streams.topic_to_stream.is_empty());
 
         assert!(!topic_streams.gossip_pending.contains_key(&topic_id));
         let gossip_joined = topic_streams.gossip_joined.read().await;
