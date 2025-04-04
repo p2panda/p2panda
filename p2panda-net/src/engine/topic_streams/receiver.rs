@@ -14,8 +14,9 @@ use crate::network::FromNetwork;
 
 /// Receive bytes associated with a specific topic from the network.
 ///
-/// `TopicReceiver` acts as a thin wrapper around `tokio::sync::mpsc::Receiver`, only
-/// implementing a limited subset of methods.
+/// `TopicReceiver` acts as a thin wrapper around
+/// [`tokio::sync::mpsc::Receiver`](https://docs.rs/tokio/latest/tokio/sync/mpsc/struct.Receiver.html),
+/// only implementing a limited subset of methods.
 ///
 /// Unsubscribe behaviour for the topic is automatically invoked when the receiver is dropped. The
 /// state of all senders and receivers for each subscribed topic is tracked internally. A topic is

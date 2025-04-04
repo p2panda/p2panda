@@ -10,8 +10,9 @@ use crate::network::ToNetwork;
 
 /// Send bytes associated with a specific topic into the network.
 ///
-/// `TopicSender` acts as a thin wrapper around `tokio::sync::mpsc::Sender`, only
-/// implementing a limited subset of methods.
+/// `TopicSender` acts as a thin wrapper around
+/// [`tokio::sync::mpsc::Sender`](https://docs.rs/tokio/latest/tokio/sync/mpsc/struct.Sender.html),
+/// only implementing a limited subset of methods.
 ///
 /// Unsubscribe behaviour for the topic is automatically invoked when the sender is dropped. The
 /// state of all senders and receivers for each subscribed topic is tracked internally. A topic is
