@@ -10,10 +10,15 @@ use crate::network::ToNetwork;
 
 /// Send bytes associated with a specific topic into the network.
 ///
-/// `TopicSender` acts as a thin wrapper around [`tokio::sync::mpsc::Sender`], only
-/// implementing a limited subset of methods, and invokes unsubscribe behaviour for the topic when
-/// dropped. The state of all senders and receivers for the topic is tracked internally; the topic
-/// is only fully unsubscribed from when all of them have been dropped.
+/// `TopicSender` acts as a thin wrapper around `tokio::sync::mpsc::Sender`, only
+/// implementing a limited subset of methods.
+///
+/// Unsubscribe behaviour for the topic is automatically invoked when the sender is dropped. The
+/// state of all senders and receivers for each subscribed topic is tracked internally. A topic is
+/// only fully unsubscribed from when _all_ senders and receivers for that topic have been dropped.
+/// In practice, this means that you can drop a sender or receiver and continue interacting with
+/// the other half of the channel. Or you can subscribe to the same topic twice, drop one
+/// sender-receiver pair and continue to use the other pair.
 #[derive(Debug)]
 pub struct TopicSender<T> {
     topic: Option<T>,

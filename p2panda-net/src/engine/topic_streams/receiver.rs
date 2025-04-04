@@ -14,10 +14,15 @@ use crate::network::FromNetwork;
 
 /// Receive bytes associated with a specific topic from the network.
 ///
-/// `TopicReceiver` acts as a thin wrapper around [`tokio::sync::mpsc::Receiver`], only
-/// implementing a limited subset of methods, and invokes unsubscribe behaviour for the topic when
-/// dropped. The state of all senders and receivers for the topic is tracked internally; the topic
-/// is only fully unsubscribed from when all of them have been dropped.
+/// `TopicReceiver` acts as a thin wrapper around `tokio::sync::mpsc::Receiver`, only
+/// implementing a limited subset of methods.
+///
+/// Unsubscribe behaviour for the topic is automatically invoked when the receiver is dropped. The
+/// state of all senders and receivers for each subscribed topic is tracked internally. A topic is
+/// only fully unsubscribed from when _all_ senders and receivers for that topic have been dropped.
+/// In practice, this means that you can drop a sender or receiver and continue interacting with
+/// the other half of the channel. Or you can subscribe to the same topic twice, drop one
+/// sender-receiver pair and continue to use the other pair.
 #[derive(Debug)]
 pub struct TopicReceiver<T> {
     topic: Option<T>,
@@ -86,7 +91,7 @@ impl<T> Drop for TopicReceiver<T> {
 
 impl<T> Unpin for TopicReceiver<T> {}
 
-/// A wrapper around [`TopicReceiver`] that implements [`Stream`].
+/// A wrapper around [`TopicReceiver`] that implements `Stream`.
 #[derive(Debug)]
 pub struct TopicReceiverStream<T> {
     inner: TopicReceiver<T>,
@@ -107,7 +112,7 @@ impl<T> TopicReceiverStream<T> {
     ///
     /// This prevents any further messages from being sent on the channel while
     /// still enabling the receiver to drain messages that are buffered. Any
-    /// outstanding [`Permit`] values will still be able to send messages.
+    /// outstanding `Permit` values will still be able to send messages.
     ///
     /// To guarantee no messages are dropped, after calling `close()`, you must
     /// receive all items from the stream until `None` is returned.
