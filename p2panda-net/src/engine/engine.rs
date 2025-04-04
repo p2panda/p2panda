@@ -485,12 +485,21 @@ where
             .await?;
 
         if unsubscribe_is_complete {
+            // Notify the gossip actor.
+            self.gossip_actor_tx
+                .send(ToGossipActor::Leave {
+                    topic_id: topic.id(),
+                })
+                .await?;
+
+            // Notify any system events listeners.
             if let Some(system_event_tx) = &self.system_event_tx {
                 system_event_tx.send(SystemEvent::GossipLeft {
                     topic_id: topic.id(),
                 })?;
             }
 
+            // Notify the sync manager.
             if let Some(sync_actor_tx) = &self.sync_actor_tx {
                 sync_actor_tx.send(ToSyncActor::Forget { topic }).await?;
             }
