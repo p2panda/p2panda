@@ -2,7 +2,8 @@
 
 use crate::Rng;
 use crate::message_scheme::test_utils::{
-    AssertableDcgka, ExpectedMembers, assert_direct_message, assert_members_view, init_dcgka_state,
+    AssertableDcgka, ExpectedMembers, MessageId, assert_direct_message, assert_members_view,
+    init_dcgka_state,
 };
 use crate::message_scheme::{Dcgka, ProcessInput};
 
@@ -40,7 +41,10 @@ fn group_operations() {
     let (alice_dcgka_0, alice_0_seq_0) = {
         let (alice_dcgka_pre, alice_pre) =
             Dcgka::create(alice_dcgka, vec![alice, bob], &rng).unwrap();
-        let seq = 0;
+        let seq = MessageId {
+            sender: alice,
+            seq: 0,
+        };
         let (alice_dcgka_0, alice_0) =
             Dcgka::process_local(alice_dcgka_pre, seq, alice_pre, &rng).unwrap();
         test.assert_create(&alice_dcgka_0, &alice_0, alice, &[alice, bob], seq);
@@ -65,7 +69,10 @@ fn group_operations() {
     // [x] Bob's Ratchet (0) <--
 
     let (bob_dcgka_0, bob_0_seq_0) = {
-        let seq = 0;
+        let seq = MessageId {
+            sender: alice,
+            seq: 0,
+        };
         let (bob_dcgka_0, bob_0) = Dcgka::process_remote(
             bob_dcgka,
             ProcessInput {
@@ -98,7 +105,10 @@ fn group_operations() {
     // [x] Bob's Ratchet (0)
 
     let (alice_dcgka_1, _alice_1) = {
-        let seq = 0;
+        let seq = MessageId {
+            sender: bob,
+            seq: 0,
+        };
         let (alice_dcgka_1, alice_1) = Dcgka::process_remote(
             alice_dcgka_0,
             ProcessInput {
@@ -149,7 +159,10 @@ fn group_operations() {
 
     let (bob_dcgka_1, bob_1_seq_1) = {
         let (bob_dcgka_pre, bob_pre) = Dcgka::add(bob_dcgka_0, charlie, &rng).unwrap();
-        let seq = 1;
+        let seq = MessageId {
+            sender: bob,
+            seq: 1,
+        };
         let (bob_dcgka_1, bob_1) = Dcgka::process_local(bob_dcgka_pre, seq, bob_pre, &rng).unwrap();
         test.assert_add(&bob_dcgka_1, &bob_1, bob, charlie, seq);
         assert_members_view(
@@ -195,7 +208,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0) <--
 
     let (charlie_dcgka_0, charlie_0_seq_0) = {
-        let seq = 1;
+        let seq = MessageId {
+            sender: bob,
+            seq: 1,
+        };
         let (charlie_dcgka_0, charlie_0) = Dcgka::process_remote(
             charlie_dcgka,
             ProcessInput {
@@ -245,7 +261,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0)
 
     let (alice_dcgka_2, alice_2_seq_1) = {
-        let seq = 1;
+        let seq = MessageId {
+            sender: bob,
+            seq: 1,
+        };
         let (alice_dcgka_2, alice_2) = Dcgka::process_remote(
             alice_dcgka_1,
             ProcessInput {
@@ -295,7 +314,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0)
 
     let (bob_dcgka_2, _bob_2) = {
-        let seq = 0;
+        let seq = MessageId {
+            sender: charlie,
+            seq: 0,
+        };
         let (bob_dcgka_2, bob_2) = Dcgka::process_remote(
             bob_dcgka_1,
             ProcessInput {
@@ -338,7 +360,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0)
 
     let (_alice_dcgka_3, _alice_3) = {
-        let seq = 0;
+        let seq = MessageId {
+            sender: charlie,
+            seq: 0,
+        };
         let (alice_dcgka_3, alice_3) = Dcgka::process_remote(
             alice_dcgka_2,
             ProcessInput {
@@ -381,7 +406,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0)
 
     let (charlie_dcgka_1, _charlie_1) = {
-        let seq = 1;
+        let seq = MessageId {
+            sender: alice,
+            seq: 1,
+        };
         let (charlie_dcgka_1, charlie_1) = Dcgka::process_remote(
             charlie_dcgka_0,
             ProcessInput {
@@ -427,7 +455,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (0)
 
     let (bob_dcgka_3, _bob_3) = {
-        let seq = 1;
+        let seq = MessageId {
+            sender: alice,
+            seq: 1,
+        };
         let (bob_dcgka_3, bob_3) = Dcgka::process_remote(
             bob_dcgka_2,
             ProcessInput {
@@ -464,7 +495,10 @@ fn group_operations() {
 
     let (charlie_dcgka_2, charlie_2_seq_1) = {
         let (charlie_dcgka_pre, charlie_pre) = Dcgka::remove(charlie_dcgka_1, alice, &rng).unwrap();
-        let seq = 1;
+        let seq = MessageId {
+            sender: charlie,
+            seq: 1,
+        };
         let (charlie_dcgka_2, charlie_2) =
             Dcgka::process_local(charlie_dcgka_pre, seq, charlie_pre, &rng).unwrap();
         test.assert_remove(
@@ -511,7 +545,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (1)
 
     let (bob_dcgka_4, bob_4_seq_2) = {
-        let seq = 1;
+        let seq = MessageId {
+            sender: charlie,
+            seq: 1,
+        };
         let (bob_dcgka_4, bob_4) = Dcgka::process_remote(
             bob_dcgka_3,
             ProcessInput {
@@ -560,7 +597,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (1)
 
     let (charlie_dcgka_3, _charlie_3) = {
-        let seq = 2;
+        let seq = MessageId {
+            sender: bob,
+            seq: 2,
+        };
         let (charlie_dcgka_3, charlie_3) = Dcgka::process_remote(
             charlie_dcgka_2,
             ProcessInput {
@@ -601,7 +641,10 @@ fn group_operations() {
 
     let (bob_dcgka_5, bob_5_seq_3) = {
         let (bob_dcgka_pre, bob_pre) = Dcgka::update(bob_dcgka_4, &rng).unwrap();
-        let seq = 3;
+        let seq = MessageId {
+            sender: bob,
+            seq: 3,
+        };
         let (bob_dcgka_5, bob_5) = Dcgka::process_local(bob_dcgka_pre, seq, bob_pre, &rng).unwrap();
         test.assert_update(&bob_dcgka_5, &bob_5, bob, &[bob, charlie], seq);
         (bob_dcgka_5, bob_5)
@@ -631,7 +674,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (2) <--
 
     let (_charlie_dcgka_4, charlie_4_seq_2) = {
-        let seq = 3;
+        let seq = MessageId {
+            sender: bob,
+            seq: 3,
+        };
         let (charlie_dcgka_4, charlie_4) = Dcgka::process_remote(
             charlie_dcgka_3,
             ProcessInput {
@@ -671,7 +717,10 @@ fn group_operations() {
     // [x] Charlie's Ratchet (2)
 
     let (_bob_dcgka_6, _bob_6) = {
-        let seq = 2;
+        let seq = MessageId {
+            sender: charlie,
+            seq: 2,
+        };
         let (bob_dcgka_6, bob_6) = Dcgka::process_remote(
             bob_dcgka_5,
             ProcessInput {

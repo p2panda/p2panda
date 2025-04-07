@@ -2,7 +2,7 @@
 
 use crate::Rng;
 use crate::message_scheme::test_utils::{
-    ExpectedMembers, assert_direct_message, assert_members_view, init_dcgka_state,
+    ExpectedMembers, MessageId, assert_direct_message, assert_members_view, init_dcgka_state,
 };
 use crate::message_scheme::{Dcgka, DirectMessageType, ProcessInput};
 
@@ -52,14 +52,26 @@ fn concurrent_operation() {
     let (alice_dcgka, alice_output) = {
         let (alice_dcgka_pre, alice_pre) =
             Dcgka::create(alice_dcgka, vec![alice, bob, charlie], &rng).unwrap();
-        Dcgka::process_local(alice_dcgka_pre, 0, alice_pre, &rng).unwrap()
+        Dcgka::process_local(
+            alice_dcgka_pre,
+            MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            alice_pre,
+            &rng,
+        )
+        .unwrap()
     };
 
     // Bob and Charlie process the "create" message from Alice.
     let (bob_dcgka, _bob_output) = Dcgka::process_remote(
         bob_dcgka,
         ProcessInput {
-            seq: 0,
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
             sender: alice,
             direct_message: Some(assert_direct_message(&alice_output.direct_messages, bob)),
             control_message: alice_output.control_message.clone(),
@@ -71,7 +83,10 @@ fn concurrent_operation() {
     let (charlie_dcgka, _charlie_output) = Dcgka::process_remote(
         charlie_dcgka,
         ProcessInput {
-            seq: 0,
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
             sender: alice,
             direct_message: Some(assert_direct_message(
                 &alice_output.direct_messages,
@@ -97,7 +112,16 @@ fn concurrent_operation() {
     // Charlie adds Dahlia to the group (similar to paper's example).
     let (charlie_dcgka, charlie_output) = {
         let (charlie_dcgka_pre, charlie_pre) = Dcgka::add(charlie_dcgka, dahlia, &rng).unwrap();
-        Dcgka::process_local(charlie_dcgka_pre, 1, charlie_pre, &rng).unwrap()
+        Dcgka::process_local(
+            charlie_dcgka_pre,
+            MessageId {
+                sender: charlie,
+                seq: 1,
+            },
+            charlie_pre,
+            &rng,
+        )
+        .unwrap()
     };
 
     for dcgka in [&alice_dcgka, &bob_dcgka] {
@@ -122,7 +146,10 @@ fn concurrent_operation() {
     let (bob_dcgka, bob_output) = Dcgka::process_remote(
         bob_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: charlie,
+                seq: 1,
+            },
             sender: charlie,
             direct_message: None,
             control_message: charlie_output.control_message.clone(),
@@ -155,7 +182,10 @@ fn concurrent_operation() {
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
         dahlia_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: charlie,
+                seq: 1,
+            },
             sender: charlie,
             direct_message: Some(assert_direct_message(
                 &charlie_output.direct_messages,
@@ -185,7 +215,10 @@ fn concurrent_operation() {
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
         dahlia_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: bob,
+                seq: 1,
+            },
             sender: bob,
             direct_message: Some(assert_direct_message(&bob_output.direct_messages, dahlia)),
             control_message: bob_output.control_message.as_ref().unwrap().clone(),
@@ -206,14 +239,26 @@ fn concurrent_operation() {
                 "another_add" => Dcgka::add(alice_dcgka.clone(), emil, &rng).unwrap(),
                 _ => unreachable!(),
             };
-            Dcgka::process_local(alice_dcgka_pre, 1, alice_pre, &rng).unwrap()
+            Dcgka::process_local(
+                alice_dcgka_pre,
+                MessageId {
+                    sender: alice,
+                    seq: 1,
+                },
+                alice_pre,
+                &rng,
+            )
+            .unwrap()
         };
 
         // Bob processes Alice's operation _after_ they accepted Charlie's add of Dahlia.
         let (_bob_dcgka, bob_output) = Dcgka::process_remote(
             bob_dcgka.clone(),
             ProcessInput {
-                seq: 1,
+                seq: MessageId {
+                    sender: alice,
+                    seq: 1,
+                },
                 sender: alice,
                 control_message: alice_output.control_message.clone(),
                 direct_message: {
@@ -260,7 +305,10 @@ fn concurrent_operation() {
         let (dahlia_dcgka, dahlia_output) = Dcgka::process_remote(
             dahlia_dcgka.clone(),
             ProcessInput {
-                seq: 1,
+                seq: MessageId {
+                    sender: alice,
+                    seq: 1,
+                },
                 sender: alice,
                 control_message: alice_output.control_message,
                 // We don't expect any direct messages to Dahlia from Alice as Alice didn't know
@@ -285,7 +333,10 @@ fn concurrent_operation() {
             let (_dahlia_dcgka, dahlia_output) = Dcgka::process_remote(
                 dahlia_dcgka,
                 ProcessInput {
-                    seq: 2,
+                    seq: MessageId {
+                        sender: bob,
+                        seq: 2,
+                    },
                     sender: bob,
                     direct_message: Some(assert_direct_message(
                         &bob_output.direct_messages,
@@ -342,14 +393,26 @@ fn concurrent_adds() {
     let (alice_dcgka, alice_output) = {
         let (alice_dcgka_pre, alice_pre) =
             Dcgka::create(alice_dcgka, vec![alice, bob], &rng).unwrap();
-        Dcgka::process_local(alice_dcgka_pre, 0, alice_pre, &rng).unwrap()
+        Dcgka::process_local(
+            alice_dcgka_pre,
+            MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            alice_pre,
+            &rng,
+        )
+        .unwrap()
     };
 
     // Bob processes the "create" message from Alice.
     let (bob_dcgka, bob_output) = Dcgka::process_remote(
         bob_dcgka,
         ProcessInput {
-            seq: 0,
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
             sender: alice,
             direct_message: Some(assert_direct_message(&alice_output.direct_messages, bob)),
             control_message: alice_output.control_message,
@@ -368,7 +431,10 @@ fn concurrent_adds() {
     let (alice_dcgka, alice_output) = Dcgka::process_remote(
         alice_dcgka,
         ProcessInput {
-            seq: 0,
+            seq: MessageId {
+                sender: bob,
+                seq: 0,
+            },
             sender: bob,
             direct_message: None,
             control_message: bob_output.control_message.unwrap(),
@@ -397,20 +463,41 @@ fn concurrent_adds() {
     // Alice adds Charlie to the group (as example in paper).
     let (_alice_dcgka, alice_output) = {
         let (alice_dcgka_pre, alice_pre) = Dcgka::add(alice_dcgka, charlie, &rng).unwrap();
-        Dcgka::process_local(alice_dcgka_pre, 1, alice_pre, &rng).unwrap()
+        Dcgka::process_local(
+            alice_dcgka_pre,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+            alice_pre,
+            &rng,
+        )
+        .unwrap()
     };
 
     // Bob concurrently adds Dahlia to the group (as example in paper).
     let (bob_dcgka, bob_output) = {
         let (bob_dcgka_pre, bob_pre) = Dcgka::add(bob_dcgka, dahlia, &rng).unwrap();
-        Dcgka::process_local(bob_dcgka_pre, 1, bob_pre, &rng).unwrap()
+        Dcgka::process_local(
+            bob_dcgka_pre,
+            MessageId {
+                sender: bob,
+                seq: 1,
+            },
+            bob_pre,
+            &rng,
+        )
+        .unwrap()
     };
 
     // Charlie processes their own addition by Alice.
     let (charlie_dcgka, _charlie_output) = Dcgka::process_remote(
         charlie_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
             sender: alice,
             direct_message: Some(assert_direct_message(
                 &alice_output.direct_messages,
@@ -426,7 +513,10 @@ fn concurrent_adds() {
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
         dahlia_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: bob,
+                seq: 1,
+            },
             sender: bob,
             direct_message: Some(assert_direct_message(&bob_output.direct_messages, dahlia)),
             control_message: bob_output.control_message,
@@ -439,7 +529,10 @@ fn concurrent_adds() {
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
         dahlia_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
             sender: alice,
             direct_message: None,
             control_message: alice_output.control_message.clone(),
@@ -461,7 +554,10 @@ fn concurrent_adds() {
     let (bob_dcgka, bob_output) = Dcgka::process_remote(
         bob_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
             sender: alice,
             direct_message: None,
             control_message: alice_output.control_message,
@@ -499,7 +595,10 @@ fn concurrent_adds() {
     let (_charlie_dcgka, charlie_output) = Dcgka::process_remote(
         charlie_dcgka,
         ProcessInput {
-            seq: 1,
+            seq: MessageId {
+                sender: bob,
+                seq: 1,
+            },
             sender: bob,
             direct_message: Some(assert_direct_message(&bob_output.direct_messages, charlie)),
             control_message: bob_output.control_message.unwrap(),
