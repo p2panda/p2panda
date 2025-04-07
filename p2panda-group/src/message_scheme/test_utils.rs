@@ -761,6 +761,10 @@ impl AssertableDcgka {
                     .contains_key(&(remover_id, seq, member_id))
             );
         }
+
+        // Outer-Ratchet removed secret for the "removed".
+        // TODO
+        // assert!(dcgka.ratchet.get(&removed_id).is_none());
     }
 
     /// Expected local state after processing a "remove" control message.
