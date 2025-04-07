@@ -2,6 +2,7 @@
 
 pub mod acked_dgm;
 mod dcgka;
+mod ratchet;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
@@ -14,3 +15,5 @@ pub use dcgka::{
     DcgkaResult, DcgkaState, DirectMessage, DirectMessageContent, DirectMessageType,
     OperationOutput, ProcessInput, ProcessOutput, RemoveMessage, UpdateMessage, UpdateSecret,
 };
+#[allow(unused)]
+pub use ratchet::{MESSAGE_KEY_SIZE, Ratchet, RatchetCiphertext, RatchetError, RatchetState};
