@@ -129,6 +129,7 @@ pub mod test_utils {
                     added_info.remove_messages.push(*remove_message_id);
                 }
                 y.removed_members.insert(added);
+                y.infos.insert(added, added_info);
             }
 
             // If `actor` acknowledged adding or removing a member in the past, then we can be sure
