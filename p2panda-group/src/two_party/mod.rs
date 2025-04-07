@@ -24,10 +24,8 @@
 mod two_party;
 mod x3dh;
 
-// TODO: Remove this as soon as we use them.
-#[allow(unused_imports)]
 pub use two_party::{
     LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError,
-    TwoPartyMessage, TwoPartyPlaintext, TwoPartyState,
+    TwoPartyMessage, TwoPartyState,
 };
 pub use x3dh::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
