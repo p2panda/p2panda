@@ -1192,7 +1192,7 @@ where
     /// user ID. It works by filtering the set of group membership operations to contain only those
     /// seen by ID, and then invoking the Decentralized Group Membership function DGM to compute
     /// the group membership.
-    fn member_view(
+    pub fn member_view(
         y: &DcgkaState<ID, OP, PKI, DGM, KMG>,
         viewer: &ID,
     ) -> Result<HashSet<ID>, DcgkaError<ID, OP, PKI, DGM, KMG>> {
