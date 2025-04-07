@@ -547,6 +547,16 @@ pub mod test_utils {
                     .unwrap()
                     .contains(&bob)
             );
+            assert!(
+                !AckedTestDGM::members_view(&alice_y, &alice)
+                    .unwrap()
+                    .contains(&charlie)
+            );
+            assert!(
+                !AckedTestDGM::members_view(&alice_y, &alice)
+                    .unwrap()
+                    .contains(&daphne)
+            );
         }
     }
 }
