@@ -437,4 +437,116 @@ pub mod test_utils {
         #[error("message not recognized")]
         UnknownMessage(OP),
     }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::message_scheme::test_utils::MessageId;
+        use crate::traits::AckedGroupMembership;
+
+        use super::AckedTestDGM;
+
+        #[test]
+        fn concurrent_operations() {
+            let alice = 0;
+            let bob = 1;
+            let charlie = 2;
+            let daphne = 3;
+
+            // Alice creates a group.
+            let alice_y = AckedTestDGM::create(alice, &[alice]).unwrap();
+
+            // Alice adds Bob.
+            let alice_y = AckedTestDGM::add(
+                alice_y,
+                alice,
+                bob,
+                MessageId {
+                    sender: alice,
+                    seq: 0,
+                },
+            )
+            .unwrap();
+            let bob_y = AckedTestDGM::from_welcome(bob, alice_y.clone()).unwrap();
+
+            // Alice removes Bob.
+            let alice_y = AckedTestDGM::remove(
+                alice_y,
+                alice,
+                &bob,
+                MessageId {
+                    sender: alice,
+                    seq: 0,
+                },
+            )
+            .unwrap();
+
+            // Concurrently Bob adds Charlie and Daphne.
+            let bob_y = AckedTestDGM::add(
+                bob_y,
+                bob,
+                charlie,
+                MessageId {
+                    sender: bob,
+                    seq: 0,
+                },
+            )
+            .unwrap();
+
+            let bob_y = AckedTestDGM::add(
+                bob_y,
+                bob,
+                daphne,
+                MessageId {
+                    sender: bob,
+                    seq: 1,
+                },
+            )
+            .unwrap();
+
+            // Alice applies Bob's changes.
+            let alice_y = AckedTestDGM::add(
+                alice_y,
+                bob,
+                charlie,
+                MessageId {
+                    sender: bob,
+                    seq: 0,
+                },
+            )
+            .unwrap();
+
+            let alice_y = AckedTestDGM::add(
+                alice_y,
+                bob,
+                daphne,
+                MessageId {
+                    sender: bob,
+                    seq: 1,
+                },
+            )
+            .unwrap();
+
+            // Bob applies Alice's changes.
+            let bob_y = AckedTestDGM::remove(
+                bob_y,
+                alice,
+                &bob,
+                MessageId {
+                    sender: alice,
+                    seq: 1,
+                },
+            )
+            .unwrap();
+
+            assert_eq!(
+                AckedTestDGM::members_view(&alice_y, &alice).unwrap(),
+                AckedTestDGM::members_view(&bob_y, &bob).unwrap(),
+            );
+            assert!(
+                !AckedTestDGM::members_view(&alice_y, &alice)
+                    .unwrap()
+                    .contains(&bob)
+            );
+        }
+    }
 }
