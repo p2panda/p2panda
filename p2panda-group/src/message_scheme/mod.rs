@@ -2,6 +2,7 @@
 
 pub mod acked_dgm;
 mod dcgka;
+mod message;
 mod ratchet;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
@@ -16,4 +17,7 @@ pub use dcgka::{
     OperationOutput, ProcessInput, ProcessOutput, RemoveMessage, UpdateMessage, UpdateSecret,
 };
 #[allow(unused)]
-pub use ratchet::{MESSAGE_KEY_SIZE, Ratchet, RatchetCiphertext, RatchetError, RatchetState};
+pub use ratchet::{
+    DecryptionRatchet, DecryptionRatchetState, MESSAGE_KEY_SIZE, RatchetError, RatchetSecret,
+    RatchetSecretState,
+};
