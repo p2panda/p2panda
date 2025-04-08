@@ -11,7 +11,7 @@ use crate::crypto::hkdf::{HkdfError, hkdf};
 pub const MESSAGE_KEY_SIZE: usize = 32;
 
 /// Key generation of message ratchet.
-pub type Generation = u64;
+pub type Generation = u32;
 
 /// Message ratchet that can output key material either for encryption or decryption.
 #[derive(Debug)]
@@ -110,13 +110,13 @@ impl DecryptionRatchet {
     pub fn secret_for_decryption(
         mut y: DecryptionRatchetState,
         generation: Generation,
-        maximum_forward_distance: u64,
-        ooo_tolerance: u64,
+        maximum_forward_distance: u32,
+        ooo_tolerance: u32,
     ) -> Result<(DecryptionRatchetState, Secret<MESSAGE_KEY_SIZE>), RatchetError> {
         let generation_head = y.ratchet_head.generation;
 
         // If generation is too distant in the future.
-        if generation_head < u64::MAX - maximum_forward_distance
+        if generation_head < u32::MAX - maximum_forward_distance
             && generation > generation_head + maximum_forward_distance
         {
             return Err(RatchetError::TooDistantInTheFuture);
@@ -149,18 +149,18 @@ impl DecryptionRatchet {
         } else {
             // If the requested generation is within the window of past secrets, we should get a
             // positive index.
-            let window_index = (generation_head - generation) - 1;
+            let window_index = ((generation_head - generation) as i32) - 1;
             // We might not have the key material (e.g. we might have discarded it when generating
             // an encryption secret).
             let index = if window_index >= 0 {
-                window_index
+                window_index as usize
             } else {
                 return Err(RatchetError::TooDistantInThePast);
             };
             // Get the relevant secrets from the past secrets queue.
             let ratchet_secrets = y
                 .past_secrets
-                .get_mut(index as usize)
+                .get_mut(index)
                 .ok_or(RatchetError::IndexOutOfBounds)?
                 // We use take here to replace the entry in the `past_secrets` with `None`, thus
                 // achieving FS for that secret as soon as the caller of this function drops it.
@@ -189,4 +189,106 @@ pub enum RatchetError {
 
     #[error("tried to re-use secret for same generation")]
     SecretReuse,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Rng;
+    use crate::crypto::Secret;
+
+    use super::{DecryptionRatchet, MESSAGE_KEY_SIZE, RatchetError, RatchetSecret};
+
+    #[test]
+    fn ratchet_forward() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let update_secret = Secret::from_bytes(rng.random_array::<MESSAGE_KEY_SIZE>().unwrap());
+
+        let ratchet = RatchetSecret::init(update_secret);
+        let (ratchet, generation, secret_0) = RatchetSecret::ratchet_forward(ratchet).unwrap();
+        assert_eq!(generation, 0);
+        assert_eq!(ratchet.generation, 1);
+
+        let (ratchet, generation, secret_1) = RatchetSecret::ratchet_forward(ratchet).unwrap();
+        assert_eq!(generation, 1);
+        assert_eq!(ratchet.generation, 2);
+
+        // Ratchet secrets do not match across generations.
+        assert_ne!(secret_0, secret_1);
+    }
+
+    #[test]
+    fn forward_secrecy() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let update_secret = Secret::from_bytes(rng.random_array::<MESSAGE_KEY_SIZE>().unwrap());
+
+        let out_of_order_tolerance = 4;
+        let maximum_forward_distance = 100;
+
+        let ratchet = DecryptionRatchet::init(update_secret);
+
+        let (ratchet, secret) = DecryptionRatchet::secret_for_decryption(
+            ratchet,
+            0,
+            maximum_forward_distance,
+            out_of_order_tolerance,
+        )
+        .unwrap();
+
+        // Generation should have increased.
+        assert_eq!(ratchet.ratchet_head.generation, 1);
+
+        // No secrets have been kept.
+        assert_ne!(ratchet.ratchet_head.secret, secret);
+        assert!(!ratchet.past_secrets.iter().any(|secret| secret.is_some()));
+
+        // Re-trying to retreive the secret for the same generation should fail.
+        assert!(matches!(
+            DecryptionRatchet::secret_for_decryption(
+                ratchet.clone(),
+                0,
+                maximum_forward_distance,
+                out_of_order_tolerance
+            ),
+            Err(RatchetError::SecretReuse),
+        ));
+
+        // Move the ratchet forwards a few generations.
+        let jump = 10;
+        let (mut ratchet, _) = DecryptionRatchet::secret_for_decryption(
+            ratchet,
+            jump,
+            maximum_forward_distance,
+            out_of_order_tolerance,
+        )
+        .unwrap();
+
+        // Now let's get a few keys. The first time we're trying to get the key of a given
+        // generation, it should work. The second time, we should get an error.
+        for generation in jump - out_of_order_tolerance + 1..jump {
+            let (ratchet_i, _) = DecryptionRatchet::secret_for_decryption(
+                ratchet,
+                generation,
+                maximum_forward_distance,
+                out_of_order_tolerance,
+            )
+            .unwrap();
+
+            assert!(matches!(
+                DecryptionRatchet::secret_for_decryption(
+                    ratchet_i.clone(),
+                    generation,
+                    maximum_forward_distance,
+                    out_of_order_tolerance
+                ),
+                Err(RatchetError::SecretReuse),
+            ));
+
+            ratchet = ratchet_i;
+        }
+
+        // No secrets have been kept.
+        assert!(!ratchet.past_secrets.iter().any(|secret| secret.is_some()));
+    }
 }
