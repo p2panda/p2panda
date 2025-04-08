@@ -223,18 +223,14 @@ mod tests {
 
         let update_secret = Secret::from_bytes(rng.random_array::<MESSAGE_KEY_SIZE>().unwrap());
 
-        let out_of_order_tolerance = 4;
-        let maximum_forward_distance = 100;
+        let ooo_tolerance = 4;
+        let max_forward = 100;
 
         let ratchet = DecryptionRatchet::init(update_secret);
 
-        let (ratchet, secret) = DecryptionRatchet::secret_for_decryption(
-            ratchet,
-            0,
-            maximum_forward_distance,
-            out_of_order_tolerance,
-        )
-        .unwrap();
+        let (ratchet, secret) =
+            DecryptionRatchet::secret_for_decryption(ratchet, 0, max_forward, ooo_tolerance)
+                .unwrap();
 
         // Generation should have increased.
         assert_eq!(ratchet.ratchet_head.generation, 1);
@@ -248,30 +244,26 @@ mod tests {
             DecryptionRatchet::secret_for_decryption(
                 ratchet.clone(),
                 0,
-                maximum_forward_distance,
-                out_of_order_tolerance
+                max_forward,
+                ooo_tolerance
             ),
             Err(RatchetError::SecretReuse),
         ));
 
         // Move the ratchet forwards a few generations.
         let jump = 10;
-        let (mut ratchet, _) = DecryptionRatchet::secret_for_decryption(
-            ratchet,
-            jump,
-            maximum_forward_distance,
-            out_of_order_tolerance,
-        )
-        .unwrap();
+        let (mut ratchet, _) =
+            DecryptionRatchet::secret_for_decryption(ratchet, jump, max_forward, ooo_tolerance)
+                .unwrap();
 
         // Now let's get a few keys. The first time we're trying to get the key of a given
         // generation, it should work. The second time, we should get an error.
-        for generation in jump - out_of_order_tolerance + 1..jump {
+        for generation in jump - ooo_tolerance + 1..jump {
             let (ratchet_i, _) = DecryptionRatchet::secret_for_decryption(
                 ratchet,
                 generation,
-                maximum_forward_distance,
-                out_of_order_tolerance,
+                max_forward,
+                ooo_tolerance,
             )
             .unwrap();
 
@@ -279,8 +271,8 @@ mod tests {
                 DecryptionRatchet::secret_for_decryption(
                     ratchet_i.clone(),
                     generation,
-                    maximum_forward_distance,
-                    out_of_order_tolerance
+                    max_forward,
+                    ooo_tolerance
                 ),
                 Err(RatchetError::SecretReuse),
             ));
@@ -290,5 +282,61 @@ mod tests {
 
         // No secrets have been kept.
         assert!(!ratchet.past_secrets.iter().any(|secret| secret.is_some()));
+    }
+
+    #[test]
+    fn out_of_order() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let update_secret = Secret::from_bytes(rng.random_array::<MESSAGE_KEY_SIZE>().unwrap());
+
+        let max_forward = 3;
+        let ooo_tolerance = 3;
+
+        let alice = RatchetSecret::init(update_secret.clone());
+        let bob = DecryptionRatchet::init(update_secret);
+
+        let (alice, _, alice_secret_0) = RatchetSecret::ratchet_forward(alice).unwrap();
+        let (alice, _, _alice_secret_1) = RatchetSecret::ratchet_forward(alice).unwrap();
+        let (alice, _, alice_secret_2) = RatchetSecret::ratchet_forward(alice).unwrap();
+        let (alice, _, alice_secret_3) = RatchetSecret::ratchet_forward(alice).unwrap();
+        let (alice, _, alice_secret_4) = RatchetSecret::ratchet_forward(alice).unwrap();
+        assert_eq!(alice.generation, 5);
+
+        // Bob derives the first secret for Alice's first message.
+        let (bob, bob_secret_0) =
+            DecryptionRatchet::secret_for_decryption(bob, 0, max_forward, ooo_tolerance).unwrap();
+        assert_eq!(alice_secret_0, bob_secret_0);
+
+        // Alice's messages arrive out-of-order, Bob derives them still.
+        let (bob, bob_secret_4) =
+            DecryptionRatchet::secret_for_decryption(bob, 4, max_forward, ooo_tolerance).unwrap();
+        assert_eq!(alice_secret_4, bob_secret_4);
+        assert_eq!(bob.ratchet_head.generation, 5);
+        let (bob, bob_secret_3) =
+            DecryptionRatchet::secret_for_decryption(bob, 3, max_forward, ooo_tolerance).unwrap();
+        assert_eq!(alice_secret_3, bob_secret_3);
+        let (bob, bob_secret_2) =
+            DecryptionRatchet::secret_for_decryption(bob, 2, max_forward, ooo_tolerance).unwrap();
+        assert_eq!(alice_secret_2, bob_secret_2);
+
+        // Alice's message from generation 1 arrives, but it's already outside of the tolerance
+        // window, we expect an error here.
+        assert!(matches!(
+            DecryptionRatchet::secret_for_decryption(bob.clone(), 1, max_forward, ooo_tolerance),
+            Err(RatchetError::TooDistantInThePast)
+        ));
+
+        // Bob receives a message very far into the future from Alice, but this is also outside the
+        // tolerated window, we expect an error here.
+        assert!(matches!(
+            DecryptionRatchet::secret_for_decryption(
+                bob.clone(),
+                bob.ratchet_head.generation + max_forward + 1,
+                max_forward,
+                ooo_tolerance
+            ),
+            Err(RatchetError::TooDistantInTheFuture)
+        ));
     }
 }
