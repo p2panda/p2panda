@@ -6,9 +6,16 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::Secret;
+use crate::crypto::aead::AeadNonce;
 use crate::crypto::hkdf::{HkdfError, hkdf};
 
 pub const MESSAGE_KEY_SIZE: usize = 32;
+
+pub type RatchetKey = Secret<MESSAGE_KEY_SIZE>;
+
+pub type RatchetNonce = AeadNonce;
+
+pub type RatchetKeyMaterial = (RatchetKey, RatchetNonce);
 
 /// Key generation of message ratchet.
 pub type Generation = u32;
@@ -36,16 +43,18 @@ impl RatchetSecret {
     /// the next generation.
     pub fn ratchet_forward(
         mut y: RatchetSecretState,
-    ) -> Result<(RatchetSecretState, Generation, Secret<MESSAGE_KEY_SIZE>), RatchetError> {
-        // Derive key material from current secret.
+    ) -> Result<(RatchetSecretState, Generation, RatchetKeyMaterial), RatchetError> {
         let generation = y.generation;
-        let secret: [u8; MESSAGE_KEY_SIZE] = hkdf(b"key", y.secret.as_bytes(), None)?;
+
+        // Derive key material from current secret.
+        let nonce: AeadNonce = hkdf(b"nonce", y.secret.as_bytes(), None)?;
+        let key: [u8; MESSAGE_KEY_SIZE] = hkdf(b"key", y.secret.as_bytes(), None)?;
 
         // Ratchet forward.
         y.generation += 1;
         y.secret = Secret::from_bytes(hkdf(b"chain", y.secret.as_bytes(), None)?);
 
-        Ok((y, generation, Secret::from_bytes(secret)))
+        Ok((y, generation, (Secret::from_bytes(key), nonce)))
     }
 }
 
@@ -82,7 +91,7 @@ pub struct DecryptionRatchet;
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct DecryptionRatchetState {
-    past_secrets: VecDeque<Option<Secret<MESSAGE_KEY_SIZE>>>,
+    past_secrets: VecDeque<Option<RatchetKeyMaterial>>,
     ratchet_head: RatchetSecretState,
 }
 
@@ -112,7 +121,7 @@ impl DecryptionRatchet {
         generation: Generation,
         maximum_forward_distance: u32,
         ooo_tolerance: u32,
-    ) -> Result<(DecryptionRatchetState, Secret<MESSAGE_KEY_SIZE>), RatchetError> {
+    ) -> Result<(DecryptionRatchetState, RatchetKeyMaterial), RatchetError> {
         let generation_head = y.ratchet_head.generation;
 
         // If generation is too distant in the future.
@@ -236,7 +245,7 @@ mod tests {
         assert_eq!(ratchet.ratchet_head.generation, 1);
 
         // No secrets have been kept.
-        assert_ne!(ratchet.ratchet_head.secret, secret);
+        assert_ne!(ratchet.ratchet_head.secret, secret.0);
         assert!(!ratchet.past_secrets.iter().any(|secret| secret.is_some()));
 
         // Re-trying to retreive the secret for the same generation should fail.
