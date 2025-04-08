@@ -24,7 +24,7 @@ pub fn decrypt_message(
 ) -> Result<Vec<u8>, MessageError> {
     let plaintext = {
         let nonce: AeadNonce = hkdf(b"nonce", ratchet_secret.as_bytes(), None)?;
-        aead_decrypt(ratchet_secret.as_bytes(), &ciphertext, nonce, None)?
+        aead_decrypt(ratchet_secret.as_bytes(), ciphertext, nonce, None)?
     };
     Ok(plaintext)
 }
