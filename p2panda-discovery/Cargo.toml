@@ -30,8 +30,8 @@ flume = "0.11.0"
 futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 hickory-proto = { version = "0.24.1", optional = true }
-iroh = { version = "0.33.0", default-features = false }
-iroh-base = "0.33.0"
+iroh = { version = "0.34.1", default-features = false }
+iroh-base = "0.34.1"
 netwatch = "0.2.0"
 socket2 = { version = "0.5.7", optional = true }
 tokio = { version = "1.42.0", features = ["net", "sync"] }

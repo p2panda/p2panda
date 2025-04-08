@@ -26,9 +26,9 @@ bytes = "1.7.1"
 futures-buffered = "0.2.8"
 futures-lite = "2.3.0"
 futures-util = "0.3.30"
-iroh = { version = "0.33.0", default-features = false }
-iroh-base = "0.33.0"
-iroh-blobs = { version = "0.33.0", features = ["downloader", "fs-store"], default-features = false }
+iroh = { version = "0.34.1", default-features = false }
+iroh-base = "0.34.1"
+iroh-blobs = { version = "0.34.1", features = ["downloader", "fs-store"], default-features = false }
 iroh-io = "0.6.1"
 p2panda-core = { path = "../p2panda-core", version = "0.3.0" }
 p2panda-net = { path = "../p2panda-net", version = "0.3.0" }
