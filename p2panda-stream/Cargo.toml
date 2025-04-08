@@ -21,17 +21,17 @@ workspace = true
 
 [dependencies]
 ciborium = "0.2.2"
-futures-channel = "0.3.30"
-futures-util = { version = "0.3.30", features = ["sink"] }
+futures-channel = "0.3.31"
+futures-util = { version = "0.3.31", features = ["sink"] }
 p2panda-core = { path = "../p2panda-core", version = "0.3.0", features = ["prune"] }
 p2panda-store = { path = "../p2panda-store", version = "0.3.0" }
-pin-project = "1.1.5"
+pin-project = "1.1.10"
 pin-utils = "0.1.0"
-thiserror = "1.0.63"
+thiserror = "2.0.12"
 
 [dev-dependencies]
-async-stream = "0.3.5"
+async-stream = "0.3.6"
 p2panda-store = { path = "../p2panda-store", version = "0.3.0", features = ["sqlite", "test_utils"] }
-serde = { version = "1.0.215", features = ["derive"] }
-tokio = { version = "1.42.0", features = ["rt", "macros"] }
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.44.2", features = ["rt", "macros"] }
 tokio-stream = "0.1.17"
