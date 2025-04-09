@@ -29,16 +29,15 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// message using the X3DH protocol. This only takes place once and the pre-keys can be considered
 /// "used" afterwards (which is especially important for one-time pre-keys).
 ///
-/// All subsequent rounds will from now on be using HPKE and both Alice and Bob can send messages
-/// to each other. For each round the sender uses the previous keys for HPKE and generates and
-/// attaches to the payload as a new key-pair for future rounds.
+/// All subsequent messages sent between Alice and Bob are encrypted using the HPKE protocol.
+/// For each round the sender uses the previous keys for HPKE and generates and attaches to the payload a new key-pair for future rounds.
 ///
 /// To avoid reusing public keys (which would make FS impossible), whenever a party sends a
 /// message, it also updates the other party's public key. To do so, it sends a new secret key
 /// along with its message, then deletes its own copy, storing only the public key.
 ///
-/// To accommodate for messages arriving "late" the secret key is kept for until it's been used or
-/// if a newer secret was used, in this case all "previous" secret keys will be dropped.
+/// To accommodate for messages arriving "late", the secret key is kept until it or a newer secret has been used.
+/// In the case of a newer secret being used, all "previous" secret keys will be dropped.
 ///
 /// ## Forward-secrecy
 ///
@@ -47,8 +46,8 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
 /// defined by the application.
 ///
-/// For each subsequent 2SM HPKE round there's exactly only one secret key used, then dropped and
-/// a new key-pair generated. This gives the key-agreement protocol strong forward secrecy
+/// Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced by a newly-generated key-pair.
+/// This gives the key-agreement protocol strong forward secrecy
 /// guarantees for each round, independent of the used pre-keys.
 ///
 /// ## Cost of key-agreements
@@ -63,8 +62,8 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// ## Message Ordering
 ///
 /// 2SM assumes that all messages are received in the order they have been sent. The application or
-/// underlying networking protocol needs to handle ordering. The DCGKA protocol (as specified in
-/// the paper) and causally-ordered, authenticated broadcast in p2panda itself handle this for us.
+/// underlying networking protocol needs to handle ordering. This is handled for us by the DCGKA protocol (as specified in
+/// the paper) and causally-ordered, authenticated broadcast in p2panda itself.
 ///
 /// <https://eprint.iacr.org/2020/1281.pdf>
 pub struct TwoParty<KEY, KB> {
@@ -135,7 +134,7 @@ where
         }
     }
 
-    /// Securely send a message `plaintext` to the other party.
+    /// Securely send a `plaintext` message to the other party.
     pub fn send(
         y: TwoPartyState<KB>,
         y_manager: &KEY::State,
@@ -229,10 +228,10 @@ pub struct TwoPartyPlaintext {
     /// Secret message for the receiver.
     plaintext: Vec<u8>,
 
-    /// Newly generated secret for the receiver, to-be used in future 2SM rounds.
+    /// Newly generated secret for the receiver, to be used in future 2SM rounds.
     receiver_new_secret: SecretKey,
 
-    /// Newly generated public key of the sender, to-be used in future 2SM rounds.
+    /// Newly generated public key of the sender, to be used in future 2SM rounds.
     sender_new_public_key: PublicKey,
 
     /// Index of the newly generated key of the sender, the receiver refers to it when using it in
