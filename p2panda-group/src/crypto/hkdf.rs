@@ -4,21 +4,21 @@
 //! "hash-mode" with SHA256.
 //!
 //! <https://www.rfc-editor.org/rfc/rfc5869>
-use libcrux_hkdf::Algorithm;
+use hkdf::Hkdf;
+use sha2::Sha256;
 use thiserror::Error;
-
-const HKDF: Algorithm = Algorithm::Sha256;
 
 pub fn hkdf<const N: usize>(
     salt: &[u8],
     ikm: &[u8],
     info: Option<&[u8]>,
 ) -> Result<[u8; N], HkdfError> {
-    let hash = libcrux_hkdf::hkdf(HKDF, salt, ikm, info.unwrap_or_default(), N)
+    let salt = if salt.is_empty() { None } else { Some(salt) };
+    let hk = Hkdf::<Sha256>::new(salt, ikm);
+    let mut okm = [0u8; N];
+    hk.expand(info.unwrap_or_default(), &mut okm)
         .map_err(|_| HkdfError::InvalidArguments)?;
-    Ok(hash
-        .try_into()
-        .expect("matching output size from hkdf function"))
+    Ok(okm)
 }
 
 #[derive(Debug, Error)]

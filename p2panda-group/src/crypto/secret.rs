@@ -22,8 +22,6 @@ use zeroize::ZeroizeOnDrop;
 pub struct Secret<const N: usize>(#[serde(with = "serde_bytes")] [u8; N]);
 
 impl<const N: usize> Secret<N> {
-    // TODO: Remove this in later PRs.
-    #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; N]) -> Self {
         Self(bytes)
     }

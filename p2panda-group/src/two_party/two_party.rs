@@ -283,7 +283,7 @@ where
                 TwoPartyCiphertext::PreKey(ciphertext)
             }
             Some(their_public_key) => {
-                let ciphertext = hpke_seal(their_public_key, None, None, plaintext, rng)?;
+                let ciphertext = hpke_seal(their_public_key, None, None, plaintext)?;
                 TwoPartyCiphertext::Hpke(ciphertext)
             }
         };
