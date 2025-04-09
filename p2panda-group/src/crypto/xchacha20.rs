@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! XChaCha20Poly1305 is a ChaCha20 AEAD variant with an extended 192-bit (24-byte) nonce.
-// TODO: Switch to `libcrux` implementation as soon as it's ready.
 use chacha20poly1305::{AeadInPlace, Key, KeyInit, XChaCha20Poly1305, XNonce};
 use thiserror::Error;
 

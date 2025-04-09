@@ -6,6 +6,7 @@
 use std::fmt;
 
 use curve25519_dalek::scalar::clamp_integer;
+use ed25519_dalek::ed25519::signature::SignerMut;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -39,16 +40,15 @@ impl SigningKey {
 
     /// Get the [`VerifyingKey`] for this [`SigningKey`].
     pub fn verifying_key(&self) -> VerifyingKey {
-        let mut bytes = [0u8; VERIFYING_KEY_SIZE];
-        libcrux_ed25519::secret_to_public(&mut bytes, self.0.as_bytes());
-        VerifyingKey(bytes)
+        let secret_key = ed25519_dalek::SigningKey::from_bytes(self.0.as_bytes());
+        VerifyingKey(secret_key.verifying_key().to_bytes())
     }
 
     /// Sign the provided data using returning a digital signature.
     pub fn sign(&self, bytes: &[u8]) -> Result<Signature, SignatureError> {
-        let bytes = libcrux_ed25519::sign(bytes, self.0.as_bytes())
-            .map_err(|_| SignatureError::SigningFailed)?;
-        Ok(Signature(bytes))
+        let mut secret_key = ed25519_dalek::SigningKey::from_bytes(self.0.as_bytes());
+        let signature = secret_key.sign(bytes);
+        Ok(Signature(signature.to_bytes()))
     }
 }
 
@@ -75,7 +75,10 @@ impl VerifyingKey {
 
     /// Verify a signature on provided data with this signing key's public key.
     pub fn verify(&self, bytes: &[u8], signature: &Signature) -> Result<(), SignatureError> {
-        libcrux_ed25519::verify(bytes, &self.0, &signature.0)
+        let dalek_signature = ed25519_dalek::Signature::from_bytes(signature.as_bytes());
+        let dalek_verifying = ed25519_dalek::VerifyingKey::from_bytes(self.as_bytes())?;
+        dalek_verifying
+            .verify_strict(bytes, &dalek_signature)
             .map_err(|_| SignatureError::VerificationFailed)?;
         Ok(())
     }
@@ -120,8 +123,8 @@ pub enum SignatureError {
     #[error("signature does not match public key and payload")]
     VerificationFailed,
 
-    #[error("could not sign payload")]
-    SigningFailed,
+    #[error(transparent)]
+    Ed25519Dalek(#[from] ed25519_dalek::SignatureError),
 }
 
 #[cfg(test)]

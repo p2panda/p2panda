@@ -3,14 +3,14 @@
 //! ChaCha20Poly1305 authenticated encryption with additional data (AEAD).
 //!
 //! <https://www.rfc-editor.org/rfc/rfc7905>
-use libcrux_chacha20poly1305::{KEY_LEN, NONCE_LEN, TAG_LEN};
+use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, Key, KeyInit, Nonce};
 use thiserror::Error;
 
 /// 96-bit nonce.
-pub type AeadNonce = [u8; NONCE_LEN];
+pub type AeadNonce = [u8; 12];
 
 /// 256-bit secret key.
-pub type AeadKey = [u8; KEY_LEN];
+pub type AeadKey = [u8; 32];
 
 /// ChaCha20Poly1305 AEAD encryption function.
 pub fn aead_encrypt(
@@ -20,15 +20,13 @@ pub fn aead_encrypt(
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
     // Implementation attaches authenticated tag (16 bytes) automatically to the end of ciphertext.
-    let mut ciphertext_with_tag = vec![0; plaintext.len() + TAG_LEN];
-    libcrux_chacha20poly1305::encrypt(
-        key,
-        plaintext,
-        &mut ciphertext_with_tag,
-        aad.unwrap_or_default(),
-        &nonce,
-    )
-    .map_err(AeadError::Encrypt)?;
+    let key = Key::from_slice(key);
+    let nonce = Nonce::from_slice(&nonce);
+    let mut ciphertext_with_tag: Vec<u8> = Vec::from(plaintext);
+    let cipher = ChaCha20Poly1305::new(key);
+    cipher
+        .encrypt_in_place(nonce, aad.unwrap_or_default(), &mut ciphertext_with_tag)
+        .map_err(AeadError::Encrypt)?;
     Ok(ciphertext_with_tag)
 }
 
@@ -39,25 +37,23 @@ pub fn aead_decrypt(
     nonce: AeadNonce,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, AeadError> {
-    let mut buffer = vec![0; ciphertext_with_tag.len()];
-    let plaintext = libcrux_chacha20poly1305::decrypt(
-        key,
-        &mut buffer,
-        ciphertext_with_tag,
-        aad.unwrap_or_default(),
-        &nonce,
-    )
-    .map_err(AeadError::Decrypt)?;
-    Ok(plaintext.to_vec())
+    let key = Key::from_slice(key);
+    let nonce = Nonce::from_slice(&nonce);
+    let mut plaintext: Vec<u8> = Vec::from(ciphertext_with_tag);
+    let cipher = ChaCha20Poly1305::new(key);
+    cipher
+        .decrypt_in_place(nonce, aad.unwrap_or_default(), &mut plaintext)
+        .map_err(AeadError::Decrypt)?;
+    Ok(plaintext)
 }
 
 #[derive(Debug, Error)]
 pub enum AeadError {
     #[error("plaintext could not be encrypted with aead: {0}")]
-    Encrypt(libcrux_chacha20poly1305::AeadError),
+    Encrypt(chacha20poly1305::Error),
 
     #[error("ciphertext could not be decrypted with aead: {0}")]
-    Decrypt(libcrux_chacha20poly1305::AeadError),
+    Decrypt(chacha20poly1305::Error),
 }
 
 #[cfg(test)]
@@ -94,25 +90,19 @@ mod tests {
         // Invalid key.
         assert!(matches!(
             aead_decrypt(&invalid_key, &ciphertext, nonce, None),
-            Err(AeadError::Decrypt(
-                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
-            ))
+            Err(AeadError::Decrypt(chacha20poly1305::Error))
         ));
 
         // Invalid nonce.
         assert!(matches!(
             aead_decrypt(&key, &ciphertext, invalid_nonce, None),
-            Err(AeadError::Decrypt(
-                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
-            ))
+            Err(AeadError::Decrypt(chacha20poly1305::Error))
         ));
 
         // Invalid additional data.
         assert!(matches!(
             aead_decrypt(&key, &ciphertext, nonce, Some(b"invalid aad")),
-            Err(AeadError::Decrypt(
-                libcrux_chacha20poly1305::AeadError::InvalidCiphertext
-            ))
+            Err(AeadError::Decrypt(chacha20poly1305::Error))
         ));
     }
 }

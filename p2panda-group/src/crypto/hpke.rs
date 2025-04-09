@@ -4,17 +4,13 @@
 //! parameters.
 //!
 //! <https://www.rfc-editor.org/rfc/rfc9180>
-// TODO: Switch to `libcrux-hpke` as soon as it's ready.
-use libcrux::hpke::{HPKEConfig, HpkeOpen, HpkeSeal, Mode, aead, errors, kdf, kem};
+use hpke_rs::{Hpke, HpkePrivateKey, HpkePublicKey, Mode};
+use hpke_rs_crypto::types::{AeadAlgorithm, KdfAlgorithm, KemAlgorithm};
+use hpke_rs_rust_crypto::HpkeRustCrypto;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::x25519::{PublicKey, SecretKey};
-use crate::crypto::{Rng, RngError};
-
-const KEM: kem::KEM = kem::KEM::DHKEM_X25519_HKDF_SHA256;
-const KDF: kdf::KDF = kdf::KDF::HKDF_SHA256;
-const AEAD: aead::AEAD = aead::AEAD::ChaCha20Poly1305;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HpkeCiphertext {
@@ -41,22 +37,27 @@ pub fn hpke_seal(
     info: Option<&[u8]>,
     aad: Option<&[u8]>,
     plaintext: &[u8],
-    rng: &Rng,
 ) -> Result<HpkeCiphertext, HpkeError> {
-    let config = HPKEConfig(Mode::mode_base, KEM, KDF, AEAD);
-    let randomness = rng.random_vec(kem::Nsk(KEM))?;
-    let libcrux::hpke::HPKECiphertext(kem_output, ciphertext) = HpkeSeal(
-        config,
-        public_key.as_bytes(),
-        info.unwrap_or_default(),
-        aad.unwrap_or_default(),
-        plaintext,
-        None,
-        None,
-        None,
-        randomness,
-    )
-    .map_err(HpkeError::Encryption)?;
+    // Unfortunately `hpke-rs` doesn't allow us to pass in our own rng without writing a lot of
+    // boilerplate, so we hope to replace it with a different API or solution sometime.
+    let mut hpke = Hpke::<HpkeRustCrypto>::new(
+        Mode::Base,
+        KemAlgorithm::DhKem25519,
+        KdfAlgorithm::HkdfSha256,
+        AeadAlgorithm::ChaCha20Poly1305,
+    );
+    let pk_r = HpkePublicKey::new(public_key.as_bytes().to_vec());
+    let (kem_output, ciphertext) = hpke
+        .seal(
+            &pk_r,
+            info.unwrap_or_default(),
+            aad.unwrap_or_default(),
+            plaintext,
+            None,
+            None,
+            None,
+        )
+        .map_err(HpkeError::Encryption)?;
     Ok(HpkeCiphertext {
         kem_output,
         ciphertext,
@@ -74,33 +75,35 @@ pub fn hpke_open(
     info: Option<&[u8]>,
     aad: Option<&[u8]>,
 ) -> Result<Vec<u8>, HpkeError> {
-    let config = HPKEConfig(Mode::mode_base, KEM, KDF, AEAD);
-    let ciphertext =
-        libcrux::hpke::HPKECiphertext(input.kem_output.to_vec(), input.ciphertext.to_vec());
-    let plaintext = HpkeOpen(
-        config,
-        &ciphertext,
-        secret_key.as_bytes(),
-        info.unwrap_or_default(),
-        aad.unwrap_or_default(),
-        None,
-        None,
-        None,
-    )
-    .map_err(HpkeError::Decryption)?;
+    let hpke = Hpke::<HpkeRustCrypto>::new(
+        Mode::Base,
+        KemAlgorithm::DhKem25519,
+        KdfAlgorithm::HkdfSha256,
+        AeadAlgorithm::ChaCha20Poly1305,
+    );
+    let sk_r = HpkePrivateKey::new(secret_key.as_bytes().to_vec());
+    let plaintext = hpke
+        .open(
+            &input.kem_output,
+            &sk_r,
+            info.unwrap_or_default(),
+            aad.unwrap_or_default(),
+            &input.ciphertext,
+            None,
+            None,
+            None,
+        )
+        .map_err(HpkeError::Decryption)?;
     Ok(plaintext)
 }
 
 #[derive(Debug, Error)]
 pub enum HpkeError {
-    #[error(transparent)]
-    Rng(#[from] RngError),
-
     #[error("could not encrypt with hpke: {0:?}")]
-    Encryption(errors::HpkeError),
+    Encryption(hpke_rs::HpkeError),
 
     #[error("could not decrypt with hpke: {0:?}")]
-    Decryption(errors::HpkeError),
+    Decryption(hpke_rs::HpkeError),
 }
 
 #[cfg(test)]
@@ -119,8 +122,7 @@ mod tests {
 
         let info = b"some info";
         let aad = b"some aad";
-        let ciphertext =
-            hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!", &rng).unwrap();
+        let ciphertext = hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
         let plaintext = hpke_open(&ciphertext, &secret_key, Some(info), Some(aad)).unwrap();
 
         assert_eq!(plaintext, b"Hello, Panda!");
@@ -135,8 +137,7 @@ mod tests {
 
         let info = b"some info";
         let aad = b"some aad";
-        let ciphertext =
-            hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!", &rng).unwrap();
+        let ciphertext = hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
 
         // Invalid secret key.
         let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
