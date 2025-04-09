@@ -12,9 +12,8 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::crypto::Secret;
 use crate::crypto::sha2::{SHA256_DIGEST_SIZE, sha2_256};
-use crate::{Rng, RngError};
+use crate::crypto::{Rng, RngError, Secret};
 
 /// 256-bit secret group key.
 pub const GROUP_SECRET_SIZE: usize = 32;
@@ -57,6 +56,11 @@ impl GroupSecret {
     /// Return creation date (UNIX timestamp in seconds) of this secret.
     pub fn timestamp(&self) -> Timestamp {
         self.1
+    }
+
+    /// Returns secret key as bytes.
+    pub fn as_bytes(&self) -> &[u8; GROUP_SECRET_SIZE] {
+        self.0.as_bytes()
     }
 
     /// Serialize group secret into CBOR representation.
@@ -154,6 +158,8 @@ impl GroupSecretBundle {
     }
 }
 
+/// Finds the "latest" secret to use from a list by comparing timestamps. If the timestamps of two
+/// distinct secrets match the id is used as a tie-breaker.
 fn find_latest(secrets: &HashMap<GroupSecretId, GroupSecret>) -> Option<GroupSecretId> {
     let mut latest_timestamp: Timestamp = 0;
     let mut latest_secret_id: Option<GroupSecretId> = None;
