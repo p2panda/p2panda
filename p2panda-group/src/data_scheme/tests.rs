@@ -3,16 +3,18 @@
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
-use crate::data_scheme::DcgkaError;
-use crate::data_scheme::dcgka::{Dcgka, DcgkaState};
+use crate::data_scheme::dcgka::{
+    ControlMessage, Dcgka, DcgkaError, DcgkaState, GroupSecretOutput, ProcessMessage,
+};
 use crate::data_scheme::dgm::test_utils::TestDgm;
+use crate::data_scheme::group_secret::GroupSecretBundle;
+use crate::key_bundle::Lifetime;
+use crate::key_manager::KeyManager;
+use crate::key_registry::KeyRegistry;
 use crate::message_scheme::test_utils::{MemberId, MessageId};
 use crate::traits::PreKeyManager;
-use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
-
-use super::dcgka::GroupSecretOutput;
-use super::{ControlMessage, GroupSecretBundle, ProcessMessage};
 
 type TestDcgkaState = DcgkaState<
     MemberId,
