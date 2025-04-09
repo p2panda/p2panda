@@ -104,10 +104,7 @@ impl GroupSecretBundle {
     }
 
     pub fn latest(&self) -> Option<&GroupSecret> {
-        self.latest
-            .as_ref()
-            .map(|id| self.secrets.get(id))
-            .flatten()
+        self.latest.as_ref().and_then(|id| self.secrets.get(id))
     }
 
     pub fn insert(&mut self, secret: GroupSecret) {
