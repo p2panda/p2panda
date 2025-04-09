@@ -14,7 +14,7 @@ pub fn hkdf<const N: usize>(
     info: Option<&[u8]>,
 ) -> Result<[u8; N], HkdfError> {
     let salt = if salt.is_empty() { None } else { Some(salt) };
-    let hk = Hkdf::<Sha256>::new(salt, &ikm);
+    let hk = Hkdf::<Sha256>::new(salt, ikm);
     let mut okm = [0u8; N];
     hk.expand(info.unwrap_or_default(), &mut okm)
         .map_err(|_| HkdfError::InvalidArguments)?;
