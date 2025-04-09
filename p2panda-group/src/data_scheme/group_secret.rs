@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::{IntoIter, Iter, Keys, Values};
 use std::fmt;
 use std::hash::Hash as StdHash;
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use serde::de::{SeqAccess, Visitor};
@@ -20,24 +21,32 @@ pub const GROUP_SECRET_SIZE: usize = 32;
 
 pub type GroupSecretId = [u8; SHA256_DIGEST_SIZE];
 
+pub type Timestamp = u64;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GroupSecret(Secret<GROUP_SECRET_SIZE>);
+pub struct GroupSecret(Secret<GROUP_SECRET_SIZE>, Timestamp);
 
 impl GroupSecret {
+    #[cfg(any(test, feature = "test_utils"))]
+    pub(crate) fn new(bytes: [u8; GROUP_SECRET_SIZE], timestamp: Timestamp) -> Self {
+        Self(Secret::from_bytes(bytes), timestamp)
+    }
+
+    /// Create a new group secret with current timestamp from random-number generator.
     pub(crate) fn from_rng(rng: &Rng) -> Result<Self, GroupSecretError> {
         let bytes: [u8; GROUP_SECRET_SIZE] = rng.random_array()?;
-        Ok(Self(Secret::from_bytes(bytes)))
+        Self::from_bytes(bytes)
     }
 
-    pub(crate) fn from_bytes(bytes: [u8; GROUP_SECRET_SIZE]) -> Self {
-        Self(Secret::from_bytes(bytes))
+    /// Create a new group secret with current timestamp from random byte string.
+    pub(crate) fn from_bytes(bytes: [u8; GROUP_SECRET_SIZE]) -> Result<Self, GroupSecretError> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        Ok(Self(Secret::from_bytes(bytes), now))
     }
 
+    /// Deserialize group secret from CBOR representation.
     pub(crate) fn try_from_bytes(bytes: &[u8]) -> Result<Self, GroupSecretError> {
-        let bytes: [u8; GROUP_SECRET_SIZE] = bytes
-            .try_into()
-            .map_err(|_| GroupSecretError::InvalidKeySize)?;
-        Ok(Self::from_bytes(bytes))
+        Ok(decode_cbor(bytes)?)
     }
 
     /// Returns identifier (SHA256 hash) for this secret.
@@ -45,8 +54,14 @@ impl GroupSecret {
         sha2_256(&[self.0.as_bytes()])
     }
 
-    pub(crate) fn as_bytes(&self) -> &[u8; GROUP_SECRET_SIZE] {
-        self.0.as_bytes()
+    /// Return creation date (UNIX timestamp in seconds) of this secret.
+    pub fn timestamp(&self) -> Timestamp {
+        self.1
+    }
+
+    /// Serialize group secret into CBOR representation.
+    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>, GroupSecretError> {
+        Ok(encode_cbor(self)?)
     }
 }
 
@@ -57,17 +72,25 @@ impl StdHash for GroupSecret {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GroupSecretBundle(HashMap<GroupSecretId, GroupSecret>);
+pub struct GroupSecretBundle {
+    secrets: HashMap<GroupSecretId, GroupSecret>,
+    latest: Option<GroupSecretId>,
+}
 
 impl GroupSecretBundle {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self {
+            secrets: HashMap::new(),
+            latest: None,
+        }
     }
 
     pub fn from_secrets(secrets: Vec<GroupSecret>) -> Self {
-        Self(HashMap::from_iter(
-            secrets.into_iter().map(|secret| (secret.id(), secret)),
-        ))
+        let secrets = HashMap::from_iter(secrets.into_iter().map(|secret| (secret.id(), secret)));
+        Self {
+            latest: find_latest(&secrets),
+            secrets,
+        }
     }
 
     pub(crate) fn try_from_bytes(bytes: &[u8]) -> Result<Self, GroupSecretError> {
@@ -78,49 +101,76 @@ impl GroupSecretBundle {
         Ok(encode_cbor(self)?)
     }
 
+    pub fn latest(&self) -> Option<&GroupSecret> {
+        self.latest
+            .as_ref()
+            .map(|id| self.secrets.get(id))
+            .flatten()
+    }
+
     pub fn insert(&mut self, secret: GroupSecret) {
-        self.0.insert(secret.id(), secret);
+        self.secrets.insert(secret.id(), secret);
+        self.latest = find_latest(&self.secrets);
     }
 
     pub fn get(&self, id: &GroupSecretId) -> Option<&GroupSecret> {
-        self.0.get(id)
+        self.secrets.get(id)
     }
 
     pub fn remove(&mut self, id: &GroupSecretId) -> Option<GroupSecret> {
-        self.0.remove(id)
+        let result = self.secrets.remove(id);
+        self.latest = find_latest(&self.secrets);
+        result
     }
 
     pub fn extend(&mut self, bundle: GroupSecretBundle) {
-        self.0.extend(bundle.0);
+        self.secrets.extend(bundle.secrets);
+        self.latest = find_latest(&self.secrets);
     }
 
     pub fn contains(&mut self, id: &GroupSecretId) -> bool {
-        self.0.contains_key(id)
+        self.secrets.contains_key(id)
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.secrets.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.secrets.is_empty()
     }
 
     pub fn iter(&self) -> Iter<'_, GroupSecretId, GroupSecret> {
-        self.0.iter()
+        self.secrets.iter()
     }
 
     pub fn into_iter(self) -> IntoIter<GroupSecretId, GroupSecret> {
-        self.0.into_iter()
+        self.secrets.into_iter()
     }
 
     pub fn ids(&self) -> Keys<'_, GroupSecretId, GroupSecret> {
-        self.0.keys()
+        self.secrets.keys()
     }
 
     pub fn secrets(&self) -> Values<'_, GroupSecretId, GroupSecret> {
-        self.0.values()
+        self.secrets.values()
     }
+}
+
+fn find_latest(secrets: &HashMap<GroupSecretId, GroupSecret>) -> Option<GroupSecretId> {
+    let mut latest_timestamp: Timestamp = 0;
+    let mut latest_secret_id: Option<GroupSecretId> = None;
+    for (id, secret) in secrets {
+        let timestamp = secret.timestamp();
+        if latest_timestamp < timestamp
+            || (latest_timestamp == timestamp
+                && *id > latest_secret_id.unwrap_or([0; SHA256_DIGEST_SIZE]))
+        {
+            latest_timestamp = timestamp;
+            latest_secret_id = Some(id.to_owned());
+        }
+    }
+    latest_secret_id
 }
 
 impl Serialize for GroupSecretBundle {
@@ -128,8 +178,8 @@ impl Serialize for GroupSecretBundle {
     where
         S: serde::Serializer,
     {
-        let mut s = serializer.serialize_seq(Some(self.0.len()))?;
-        for secret in self.0.values() {
+        let mut s = serializer.serialize_seq(Some(self.secrets.len()))?;
+        for secret in self.secrets.values() {
             s.serialize_element(secret)?;
         }
         s.end()
@@ -181,6 +231,9 @@ pub enum GroupSecretError {
 
     #[error(transparent)]
     Decode(#[from] DecodeError),
+
+    #[error(transparent)]
+    SystemTime(#[from] SystemTimeError),
 }
 
 #[cfg(test)]
@@ -194,7 +247,6 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let secret = GroupSecret::from_rng(&rng).unwrap();
-        assert_ne!(secret.as_bytes(), &secret.id());
 
         let mut bundle_1 = GroupSecretBundle::from_secrets(vec![secret.clone()]);
         let mut bundle_2 = GroupSecretBundle::from_secrets(vec![secret.clone()]);
@@ -221,9 +273,54 @@ mod tests {
     }
 
     #[test]
+    fn latest_secret() {
+        let mut bundle = GroupSecretBundle::new();
+        assert!(bundle.latest().is_none());
+
+        let secret_1 = GroupSecret::new([1; 32], 234);
+        assert_eq!(secret_1.timestamp(), 234);
+        let secret_2 = GroupSecret::new([2; 32], 234); // same timestamp
+        assert_eq!(secret_2.timestamp(), 234);
+        let secret_3 = GroupSecret::new([3; 32], 345);
+        assert_eq!(secret_3.timestamp(), 345);
+        let secret_4 = GroupSecret::new([4; 32], 123);
+        assert_eq!(secret_4.timestamp(), 123);
+
+        // Inserted secret 1 is the latest.
+        bundle.insert(secret_1.clone());
+        assert_eq!(bundle.len(), 1);
+        assert_eq!(bundle.latest(), Some(&secret_1));
+
+        // Inserted secret 2 is the "latest" as the higher hash wins when both timestamps are the
+        // same.
+        bundle.insert(secret_2.clone());
+        assert_eq!(bundle.len(), 2);
+        assert_eq!(bundle.latest(), Some(&secret_2));
+
+        // Use a separate group to confirm that the order of insertion does not matter here.
+        {
+            let mut bundle_2 = GroupSecretBundle::new();
+            bundle_2.insert(secret_2.clone());
+            bundle_2.insert(secret_1.clone());
+            assert_eq!(bundle_2.latest(), Some(&secret_2));
+        }
+
+        // Inserted 3 is the latest.
+        bundle.insert(secret_3.clone());
+        assert_eq!(bundle.len(), 3);
+        assert_eq!(bundle.latest(), Some(&secret_3));
+
+        // Inserted 3 is still the latest.
+        bundle.insert(secret_4.clone());
+        assert_eq!(bundle.len(), 4);
+        assert_eq!(bundle.latest(), Some(&secret_3));
+    }
+
+    #[test]
     fn serde() {
         let rng = Rng::from_seed([1; 32]);
 
+        // Serialize & deserialize bundle.
         let bundle = GroupSecretBundle::from_secrets(vec![
             GroupSecret::from_rng(&rng).unwrap(),
             GroupSecret::from_rng(&rng).unwrap(),
@@ -233,5 +330,14 @@ mod tests {
 
         let bytes = bundle.to_bytes().unwrap();
         assert_eq!(bundle, GroupSecretBundle::try_from_bytes(&bytes).unwrap());
+
+        // Serialize & deserialize single secret.
+        let secret = GroupSecret::from_rng(&rng).unwrap();
+        let timestamp = secret.timestamp();
+
+        let bytes = secret.to_bytes().unwrap();
+        let secret_again = GroupSecret::try_from_bytes(&bytes).unwrap();
+        assert_eq!(secret, secret_again);
+        assert_eq!(timestamp, secret_again.timestamp());
     }
 }
