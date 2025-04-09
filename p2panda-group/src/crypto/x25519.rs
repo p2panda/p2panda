@@ -23,6 +23,7 @@ pub const SHARED_SECRET_SIZE: usize = 32;
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
+    #[cfg(not(feature = "test_utils"))]
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
     }
