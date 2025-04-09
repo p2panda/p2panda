@@ -22,12 +22,12 @@ pub fn aead_encrypt(
     // Implementation attaches authenticated tag (16 bytes) automatically to the end of ciphertext.
     let key = Key::from_slice(key);
     let nonce = Nonce::from_slice(&nonce);
-    let mut ciphertext: Vec<u8> = Vec::from(plaintext);
+    let mut ciphertext_with_tag: Vec<u8> = Vec::from(plaintext);
     let cipher = ChaCha20Poly1305::new(key);
     cipher
-        .encrypt_in_place(nonce, aad.unwrap_or_default(), &mut ciphertext)
+        .encrypt_in_place(nonce, aad.unwrap_or_default(), &mut ciphertext_with_tag)
         .map_err(AeadError::Encrypt)?;
-    Ok(ciphertext)
+    Ok(ciphertext_with_tag)
 }
 
 /// ChaCha20Poly1305 AEAD decryption function.

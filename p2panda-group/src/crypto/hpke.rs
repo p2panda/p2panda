@@ -38,6 +38,8 @@ pub fn hpke_seal(
     aad: Option<&[u8]>,
     plaintext: &[u8],
 ) -> Result<HpkeCiphertext, HpkeError> {
+    // Unfortunately `hpke-rs` doesn't allow us to pass in our own rng without writing a lot of
+    // boilerplate, so we hope to replace it with a different API or solution sometime.
     let mut hpke = Hpke::<HpkeRustCrypto>::new(
         Mode::Base,
         KemAlgorithm::DhKem25519,
