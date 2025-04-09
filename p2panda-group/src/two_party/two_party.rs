@@ -14,7 +14,7 @@ use crate::crypto::{Rng, RngError};
 use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle};
 use crate::key_manager::KeyManager;
 use crate::traits::{IdentityManager, KeyBundle, PreKeyManager};
-use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
+use crate::two_party::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
 
 /// Two-Party Secure Messaging (2SM) Key Agreement Protocol as specified in the paper "Key
 /// Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees" (2020).
@@ -29,15 +29,17 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// message using the X3DH protocol. This only takes place once and the pre-keys can be considered
 /// "used" afterwards (which is especially important for one-time pre-keys).
 ///
-/// All subsequent messages sent between Alice and Bob are encrypted using the HPKE protocol.
-/// For each round the sender uses the previous keys for HPKE and generates and attaches to the payload a new key-pair for future rounds.
+/// All subsequent messages sent between Alice and Bob are encrypted using the HPKE protocol. For
+/// each round the sender uses the previous keys for HPKE and generates and attaches to the payload
+/// a new key-pair for future rounds.
 ///
 /// To avoid reusing public keys (which would make FS impossible), whenever a party sends a
 /// message, it also updates the other party's public key. To do so, it sends a new secret key
 /// along with its message, then deletes its own copy, storing only the public key.
 ///
-/// To accommodate for messages arriving "late", the secret key is kept until it or a newer secret has been used.
-/// In the case of a newer secret being used, all "previous" secret keys will be dropped.
+/// To accommodate for messages arriving "late", the secret key is kept until it or a newer secret
+/// has been used. In the case of a newer secret being used, all "previous" secret keys will be
+/// dropped.
 ///
 /// ## Forward-secrecy
 ///
@@ -46,8 +48,8 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
 /// defined by the application.
 ///
-/// Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced by a newly-generated key-pair.
-/// This gives the key-agreement protocol strong forward secrecy
+/// Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced
+/// by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy
 /// guarantees for each round, independent of the used pre-keys.
 ///
 /// ## Cost of key-agreements
@@ -62,8 +64,9 @@ use crate::two_party::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
 /// ## Message Ordering
 ///
 /// 2SM assumes that all messages are received in the order they have been sent. The application or
-/// underlying networking protocol needs to handle ordering. This is handled for us by the DCGKA protocol (as specified in
-/// the paper) and causally-ordered, authenticated broadcast in p2panda itself.
+/// underlying networking protocol needs to handle ordering. This is handled for us by the DCGKA
+/// protocol (as specified in the paper) and causally-ordered, authenticated broadcast in p2panda
+/// itself.
 ///
 /// <https://eprint.iacr.org/2020/1281.pdf>
 pub struct TwoParty<KEY, KB> {
@@ -215,7 +218,7 @@ pub struct TwoPartyMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TwoPartyCiphertext {
     /// Message was encrypted using X3DH pre-keys (initial round).
-    PreKey(X3DHCiphertext),
+    PreKey(X3dhCiphertext),
 
     /// Message was encrypted using HPKE.
     Hpke(HpkeCiphertext),
@@ -400,7 +403,7 @@ pub enum TwoPartyError {
     Hpke(#[from] HpkeError),
 
     #[error(transparent)]
-    X3DH(#[from] X3DHError),
+    X3dh(#[from] X3dhError),
 
     #[error(transparent)]
     Rng(#[from] RngError),
@@ -726,7 +729,7 @@ mod tests {
 
         let (alice_2sm, message_1) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, Bob!", &rng).unwrap();
-        let (bob_2sm, bob_manager, receive_1) =
+        let (bob_2sm, bob_manager, _receive_1) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_1.clone()).unwrap();
 
         // Bob receives the same message again.
@@ -736,9 +739,9 @@ mod tests {
 
         // Alice sends another message to Bob.
 
-        let (alice_2sm, message_2) =
+        let (_alice_2sm, message_2) =
             OneTimeTwoParty::send(alice_2sm, &alice_manager, b"Hello, again, Bob!", &rng).unwrap();
-        let (bob_2sm, bob_manager, receive_2) =
+        let (bob_2sm, bob_manager, _receive_2) =
             OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2.clone()).unwrap();
 
         // Bob receives the same message again.

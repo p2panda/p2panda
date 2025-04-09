@@ -26,7 +26,7 @@ const KDF_INFO: &[u8; 7] = b"p2panda";
 /// Message containing encrypted payload and X3DH session-data to be delivered from sender to
 /// receiver.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct X3DHCiphertext {
+pub struct X3dhCiphertext {
     /// Identity of the sender.
     pub identity_key: PublicKey,
 
@@ -47,7 +47,7 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
     our_identity_secret: &SecretKey,
     their_prekey_bundle: &KB,
     rng: &Rng,
-) -> Result<X3DHCiphertext, X3DHError> {
+) -> Result<X3dhCiphertext, X3dhError> {
     their_prekey_bundle.verify()?;
 
     let our_identity_key = our_identity_secret.public_key()?;
@@ -105,7 +105,7 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
     let nonce: AeadNonce = hkdf(b"", &sk, None)?;
     let ciphertext = aead_encrypt(&sk, plaintext, nonce, Some(&ad))?;
 
-    Ok(X3DHCiphertext {
+    Ok(X3dhCiphertext {
         ciphertext,
         ephemeral_key: our_ephemeral_key,
         identity_key: our_identity_key,
@@ -119,11 +119,11 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
 /// Note that an application using X3DH should reject the received ciphertext when an expired
 /// pre-key or already used one-time pre-key was used by the sender.
 pub fn x3dh_decrypt(
-    their_ciphertext: &X3DHCiphertext,
+    their_ciphertext: &X3dhCiphertext,
     our_identity_secret: &SecretKey,
     our_prekey_secret: &SecretKey,
     our_onetime_secret: Option<&SecretKey>,
-) -> Result<Vec<u8>, X3DHError> {
+) -> Result<Vec<u8>, X3dhError> {
     let our_identity_key = our_identity_secret.public_key()?;
 
     let mut ikm = Vec::with_capacity(if our_onetime_secret.is_none() {
@@ -175,7 +175,7 @@ pub fn x3dh_decrypt(
 }
 
 #[derive(Debug, Error)]
-pub enum X3DHError {
+pub enum X3dhError {
     #[error(transparent)]
     Rng(#[from] RngError),
 

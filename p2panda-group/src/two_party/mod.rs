@@ -30,4 +30,4 @@ pub use two_party::{
     LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError,
     TwoPartyMessage, TwoPartyPlaintext, TwoPartyState,
 };
-pub use x3dh::{X3DHCiphertext, X3DHError, x3dh_decrypt, x3dh_encrypt};
+pub use x3dh::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
