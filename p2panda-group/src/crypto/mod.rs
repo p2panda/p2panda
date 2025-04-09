@@ -14,9 +14,6 @@
 //!
 //! Random Number Generator:
 //! - ChaCha20 stream cipher, seeded via `getrandom`
-//!
-//! Most of the implementations use the [`libcrux`](https://github.com/cryspen/libcrux) crate
-//! internally.
 pub mod aead;
 pub mod ed25519;
 pub mod hkdf;
