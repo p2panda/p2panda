@@ -59,7 +59,7 @@ impl GroupSecret {
     }
 
     /// Returns secret key as bytes.
-    pub fn as_bytes(&self) -> &[u8; GROUP_SECRET_SIZE] {
+    pub(crate) fn as_bytes(&self) -> &[u8; GROUP_SECRET_SIZE] {
         self.0.as_bytes()
     }
 
