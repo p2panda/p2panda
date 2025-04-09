@@ -25,7 +25,7 @@ const HASH_1_PREFIX: [u8; 32] = [
 ];
 
 /// XEdDSA signature.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct XSignature(#[serde(with = "serde_bytes")] [u8; SIGNATURE_SIZE]);
 
 impl XSignature {
@@ -41,7 +41,7 @@ impl XSignature {
         self.0
     }
 
-    pub fn to_hex(&self) -> String {
+    pub fn to_hex(self) -> String {
         hex::encode(self.as_bytes())
     }
 }

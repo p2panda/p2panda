@@ -88,6 +88,11 @@ mod tests {
 
     #[test]
     fn verify() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
         // Default lifetimes are correct.
         let lifetime = Lifetime::default();
         assert!(lifetime.verify().is_ok());
@@ -96,11 +101,11 @@ mod tests {
         let lifetime = Lifetime::new(60);
         assert!(lifetime.verify().is_ok());
 
+        // Test interface for lifetime is correct.
+        let lifetime = Lifetime::from_range(now - 60, now + 60);
+        assert!(lifetime.verify().is_ok());
+
         // Invalid lifetimes throw an error.
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
-            .as_secs();
         let lifetime = Lifetime::from_range(now + 60, now + 60); // too early
         assert!(lifetime.verify().is_err());
 
