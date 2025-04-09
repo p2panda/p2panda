@@ -4,13 +4,10 @@
 use std::fmt;
 
 use curve25519_dalek::scalar::clamp_integer;
-use libcrux_ecdh::Algorithm;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::Secret;
-
-const ALGORITHM: Algorithm = Algorithm::X25519;
 
 /// 256-bit secret key size.
 pub const SECRET_KEY_SIZE: usize = 32;
@@ -18,13 +15,14 @@ pub const SECRET_KEY_SIZE: usize = 32;
 /// 256-bit public key size.
 pub const PUBLIC_KEY_SIZE: usize = 32;
 
+/// 256-bit shared secret size.
+pub const SHARED_SECRET_SIZE: usize = 32;
+
 /// Secret Curve25519 key used for ECDH key agreement.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
-    // TODO: Remove this in later PRs.
-    #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
     }
@@ -34,20 +32,19 @@ impl SecretKey {
     }
 
     pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
-        let bytes = libcrux_ecdh::secret_to_public(ALGORITHM, self.0.as_bytes())
-            .map_err(|_| X25519Error::InvalidCurve)?;
-        Ok(PublicKey(
-            bytes
-                .try_into()
-                .expect("correct public key size from ecdh method"),
-        ))
+        let static_secret = x25519_dalek::StaticSecret::from(*self.0.as_bytes());
+        let public_key = x25519_dalek::PublicKey::from(&static_secret);
+        Ok(PublicKey(public_key.to_bytes()))
     }
 
-    pub fn calculate_agreement(&self, their_public: &PublicKey) -> Result<Vec<u8>, X25519Error> {
+    pub fn calculate_agreement(
+        &self,
+        their_public: &PublicKey,
+    ) -> Result<[u8; SHARED_SECRET_SIZE], X25519Error> {
+        let static_secret = x25519_dalek::StaticSecret::from(*self.0.as_bytes());
         let shared_secret =
-            libcrux_ecdh::derive(ALGORITHM, their_public.as_bytes(), self.0.as_bytes())
-                .map_err(|_| X25519Error::InvalidCurve)?;
-        Ok(shared_secret)
+            static_secret.diffie_hellman(&x25519_dalek::PublicKey::from(their_public.to_bytes()));
+        Ok(shared_secret.to_bytes())
     }
 }
 
