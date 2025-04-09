@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::Secret;
-use crate::crypto::sha2::sha2_256;
+use crate::crypto::sha2::{SHA256_DIGEST_SIZE, sha2_256};
 use crate::{Rng, RngError};
 
 /// 256-bit secret group key.
 pub const GROUP_SECRET_SIZE: usize = 32;
 
-pub type GroupSecretId = [u8; 32];
+pub type GroupSecretId = [u8; SHA256_DIGEST_SIZE];
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
@@ -54,7 +54,7 @@ pub struct GroupSecretBundle(HashMap<GroupSecretId, GroupSecret>);
 
 impl GroupSecretBundle {
     pub fn try_from_bytes(bytes: &[u8]) -> Result<Self, GroupSecretError> {
-        let bundle: Self = decode_cbor(&bytes[..])?;
+        let bundle: Self = decode_cbor(bytes)?;
         Ok(bundle)
     }
 
