@@ -21,6 +21,8 @@ pub const GROUP_SECRET_SIZE: usize = 32;
 
 pub type GroupSecretId = [u8; SHA256_DIGEST_SIZE];
 
+// TODO(adz): Replace sorting group secrets via timestamp with a hash graph instead (no dangling
+// nodes allowed) to prevent bugs / attacks where one secret always gets pushed first.
 pub type Timestamp = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
