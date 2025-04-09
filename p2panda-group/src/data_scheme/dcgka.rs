@@ -17,13 +17,13 @@ use crate::traits::{
 };
 use crate::two_party::{TwoParty, TwoPartyError, TwoPartyMessage, TwoPartyState};
 
-/// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "data
-/// encryption" scheme with strong forward-secrecy and post-compromise security.
+/// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "data encryption"
+/// scheme with strong forward-secrecy and post-compromise security.
 pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG)>,
 }
 
-/// Serializable state of DCGKA (for persistence).
+/// Serializable state of "data encryption" DCGKA (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct DcgkaState<ID, OP, PKI, DGM, KMG>
@@ -76,7 +76,7 @@ where
     pub fn process_remote(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
-        message: ProcessMessage<ID>,
+        message: ProcessMessage<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         let (y_i, output) = match message {
             ProcessMessage::Create(CreateMessage { initial_members }, direct_message) => {
@@ -96,7 +96,7 @@ where
     }
 
     pub fn create(
-        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         initial_members: Vec<ID>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
@@ -115,11 +115,12 @@ where
         }
 
         // The "create" function constructs the "create" control message.
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Create(CreateMessage {
-                initial_members: initial_members.clone(),
-            }),
-        };
+        let control_message = ControlMessage::Create(CreateMessage {
+            initial_members: initial_members.clone(),
+        });
+
+        y.dgm =
+            DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Generate the set of direct messages to send.
         let (y_ii, direct_messages, group_secret) =
@@ -139,7 +140,7 @@ where
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
         initial_members: Vec<ID>,
-        direct_message: DirectMessage<ID>,
+        direct_message: DirectMessage<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm =
             DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
@@ -150,9 +151,7 @@ where
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Update(UpdateMessage),
-        };
+        let control_message = ControlMessage::Update(UpdateMessage);
 
         let recipient_ids: Vec<ID> = Self::members(&y)?
             .into_iter()
@@ -174,19 +173,20 @@ where
     fn process_update(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
-        direct_message: DirectMessage<ID>,
+        direct_message: DirectMessage<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         Self::process_secret(y, sender, direct_message)
     }
 
     pub fn remove(
-        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         removed: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Remove(RemoveMessage { removed }),
-        };
+        let control_message = ControlMessage::Remove(RemoveMessage { removed });
+
+        y.dgm =
+            DGM::remove(y.dgm, y.my_id, &removed).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         let recipient_ids: Vec<ID> = Self::members(&y)?
             .into_iter()
@@ -209,22 +209,22 @@ where
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         removed: &ID,
-        direct_message: DirectMessage<ID>,
+        direct_message: DirectMessage<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm = DGM::remove(y.dgm, sender, removed).map_err(|err| DcgkaError::DgmOperation(err))?;
         Self::process_secret(y, &sender, direct_message)
     }
 
     pub fn add(
-        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         added: ID,
         bundle: &GroupSecretBundle,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
-        let control_message = ControlMessage {
-            message_type: ControlMessageType::Add(AddMessage { added }),
-        };
+        let control_message = ControlMessage::Add(AddMessage { added });
+
+        y.dgm = DGM::add(y.dgm, y.my_id, added).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Construct a welcome message that is sent to the new member as a direct message.
         let (y_i, ciphertext) = {
@@ -233,7 +233,10 @@ where
         };
         let direct_message = DirectMessage {
             recipient: added,
-            content: DirectMessageContent::Welcome { ciphertext },
+            content: DirectMessageContent::Welcome {
+                ciphertext,
+                history: y_i.dgm.clone(),
+            },
         };
 
         Ok((
@@ -250,14 +253,18 @@ where
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         added: ID,
-        direct_message: Option<DirectMessage<ID>>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm = DGM::add(y.dgm, sender, added).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         if added == y.my_id {
             let Some(DirectMessage {
                 recipient,
-                content: DirectMessageContent::Welcome { ciphertext },
+                content:
+                    DirectMessageContent::Welcome {
+                        ciphertext,
+                        history,
+                    },
                 ..
             }) = direct_message
             else {
@@ -274,7 +281,7 @@ where
                 return Err(DcgkaError::NotOurDirectMessage(y.my_id, recipient));
             }
 
-            return Self::process_welcome(y, sender, ciphertext);
+            return Self::process_welcome(y, sender, ciphertext, history);
         }
 
         Ok((
@@ -288,10 +295,13 @@ where
     }
 
     fn process_welcome(
-        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         ciphertext: TwoPartyMessage,
+        history: DGM::State,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
+        y.dgm = DGM::from_welcome(y.my_id, history).map_err(|err| DcgkaError::DgmOperation(err))?;
+
         let (y_i, bundle) = {
             let (y_i, plaintext) = Self::decrypt_from(y, &sender, ciphertext)?;
             let bundle = GroupSecretBundle::try_from_bytes(&plaintext)?;
@@ -313,7 +323,8 @@ where
         recipients: &[ID],
         rng: &Rng,
     ) -> GenerateSecretResult<ID, OP, PKI, DGM, KMG> {
-        let mut direct_messages: Vec<DirectMessage<ID>> = Vec::with_capacity(recipients.len());
+        let mut direct_messages: Vec<DirectMessage<ID, OP, DGM>> =
+            Vec::with_capacity(recipients.len());
 
         let group_secret = GroupSecret::from_rng(rng)?;
 
@@ -327,7 +338,7 @@ where
 
                 // Encrypt to every recipient.
                 let (y_next, ciphertext) =
-                    Self::encrypt_to(y_loop, recipient, group_secret.as_bytes(), rng)?;
+                    Self::encrypt_to(y_loop, recipient, &group_secret.to_bytes()?, rng)?;
                 y_loop = y_next;
 
                 direct_messages.push(DirectMessage {
@@ -344,7 +355,7 @@ where
     fn process_secret(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
-        direct_message: DirectMessage<ID>,
+        direct_message: DirectMessage<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         let DirectMessage {
             recipient,
@@ -430,7 +441,7 @@ where
 pub type GenerateSecretResult<ID, OP, PKI, DGM, KMG> = Result<
     (
         DcgkaState<ID, OP, PKI, DGM, KMG>,
-        Vec<DirectMessage<ID>>,
+        Vec<DirectMessage<ID, OP, DGM>>,
         GroupSecret,
     ),
     DcgkaError<ID, OP, PKI, DGM, KMG>,
@@ -440,34 +451,29 @@ pub type DcgkaResult<ID, OP, PKI, DGM, KMG, T> =
     Result<(DcgkaState<ID, OP, PKI, DGM, KMG>, T), DcgkaError<ID, OP, PKI, DGM, KMG>>;
 
 pub type DcgkaProcessResult<ID, OP, PKI, DGM, KMG> =
-    DcgkaResult<ID, OP, PKI, DGM, KMG, ProcessOutput<ID>>;
+    DcgkaResult<ID, OP, PKI, DGM, KMG, ProcessOutput<ID, OP, DGM>>;
 
 pub type DcgkaOperationResult<ID, OP, PKI, DGM, KMG> =
-    DcgkaResult<ID, OP, PKI, DGM, KMG, OperationOutput<ID>>;
+    DcgkaResult<ID, OP, PKI, DGM, KMG, OperationOutput<ID, OP, DGM>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ControlMessage<ID> {
-    pub message_type: ControlMessageType<ID>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ControlMessageType<ID> {
+pub enum ControlMessage<ID> {
     Create(CreateMessage<ID>),
     Update(UpdateMessage),
     Remove(RemoveMessage<ID>),
     Add(AddMessage<ID>),
 }
 
-impl<ID> Display for ControlMessageType<ID> {
+impl<ID> Display for ControlMessage<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                ControlMessageType::Create(_) => "create",
-                ControlMessageType::Update(_) => "update",
-                ControlMessageType::Remove(_) => "remove",
-                ControlMessageType::Add(_) => "add",
+                ControlMessage::Create(_) => "create",
+                ControlMessage::Update(_) => "update",
+                ControlMessage::Remove(_) => "remove",
+                ControlMessage::Add(_) => "add",
             }
         )
     }
@@ -492,21 +498,30 @@ pub struct AddMessage<ID> {
 }
 
 #[derive(Clone, Debug)]
-pub enum ProcessMessage<ID> {
-    Create(CreateMessage<ID>, DirectMessage<ID>),
-    Update(UpdateMessage, DirectMessage<ID>),
-    Remove(RemoveMessage<ID>, DirectMessage<ID>),
-    Add(AddMessage<ID>, Option<DirectMessage<ID>>),
+pub enum ProcessMessage<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
+    Create(CreateMessage<ID>, DirectMessage<ID, OP, DGM>),
+    Update(UpdateMessage, DirectMessage<ID, OP, DGM>),
+    Remove(RemoveMessage<ID>, DirectMessage<ID, OP, DGM>),
+    Add(AddMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
 }
 
 #[derive(Debug)]
-pub struct ProcessOutput<ID> {
+pub struct ProcessOutput<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
     pub control_message: Option<ControlMessage<ID>>,
-    pub direct_messages: Vec<DirectMessage<ID>>,
+    pub direct_messages: Vec<DirectMessage<ID, OP, DGM>>,
     pub group_secret: GroupSecretOutput,
 }
 
-impl<ID> Default for ProcessOutput<ID> {
+impl<ID, OP, DGM> Default for ProcessOutput<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
     fn default() -> Self {
         Self {
             control_message: None,
@@ -516,7 +531,7 @@ impl<ID> Default for ProcessOutput<ID> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GroupSecretOutput {
     None,
     Secret(GroupSecret),
@@ -524,16 +539,22 @@ pub enum GroupSecretOutput {
 }
 
 #[derive(Debug)]
-pub struct OperationOutput<ID> {
+pub struct OperationOutput<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
     pub control_message: ControlMessage<ID>,
-    pub direct_messages: Vec<DirectMessage<ID>>,
+    pub direct_messages: Vec<DirectMessage<ID, OP, DGM>>,
     pub group_secret: Option<GroupSecret>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DirectMessage<ID> {
+pub struct DirectMessage<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
     pub recipient: ID,
-    pub content: DirectMessageContent,
+    pub content: DirectMessageContent<ID, OP, DGM>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -555,7 +576,10 @@ impl Display for DirectMessageType {
     }
 }
 
-impl<ID> DirectMessage<ID> {
+impl<ID, OP, DGM> DirectMessage<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
     pub fn message_type(&self) -> DirectMessageType {
         match self.content {
             DirectMessageContent::Welcome { .. } => DirectMessageType::Welcome,
@@ -565,9 +589,17 @@ impl<ID> DirectMessage<ID> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum DirectMessageContent {
-    Welcome { ciphertext: TwoPartyMessage },
-    TwoParty { ciphertext: TwoPartyMessage },
+pub enum DirectMessageContent<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
+    Welcome {
+        ciphertext: TwoPartyMessage,
+        history: DGM::State,
+    },
+    TwoParty {
+        ciphertext: TwoPartyMessage,
+    },
 }
 
 #[derive(Debug, Error)]
