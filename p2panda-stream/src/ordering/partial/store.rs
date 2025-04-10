@@ -45,7 +45,7 @@ where
 }
 
 /// Memory implementation of the `PartialOrderStore` trait.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MemoryStore<K> {
     pub(crate) ready: HashSet<K>,
     pub(crate) ready_queue: VecDeque<K>,
