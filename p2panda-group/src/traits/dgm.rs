@@ -57,3 +57,34 @@ pub trait AckedGroupMembership<ID, OP> {
     /// Returns true if given group operation removed a member.
     fn is_remove(y: &Self::State, operation_id: OP) -> bool;
 }
+
+pub trait GroupMembership<ID, OP> {
+    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+
+    type Error: Error;
+
+    /// Creates a new group.
+    fn create(my_id: ID, initial_members: &[ID]) -> Result<Self::State, Self::Error>;
+
+    /// Processes the received DGM state from a welcome message.
+    fn from_welcome(my_id: ID, y: Self::State) -> Result<Self::State, Self::Error>;
+
+    /// Adds a member to the group.
+    fn add(
+        y: Self::State,
+        adder: ID,
+        added: ID,
+        operation_id: OP,
+    ) -> Result<Self::State, Self::Error>;
+
+    /// Removes a member from a group.
+    fn remove(
+        y: Self::State,
+        remover: ID,
+        removed: &ID,
+        operation_id: OP,
+    ) -> Result<Self::State, Self::Error>;
+
+    /// Returns the list of current members in the group.
+    fn members(y: &Self::State) -> Result<HashSet<ID>, Self::Error>;
+}
