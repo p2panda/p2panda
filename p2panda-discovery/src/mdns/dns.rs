@@ -179,7 +179,7 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
             };
             node_id
         };
-        let Some(RData::SRV(srv)) = answer.data() else {
+        let RData::SRV(srv) = answer.data() else {
             trace!("received mdns response with wrong data {:?}", answer.data());
             continue;
         };
@@ -206,8 +206,8 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
         }
         trace!("received mdns additional for {}", name);
         let ip: IpAddr = match additional.data() {
-            Some(RData::A(addr)) => addr.0.into(),
-            Some(RData::AAAA(addr)) => addr.0.into(),
+            RData::A(addr) => addr.0.into(),
+            RData::AAAA(addr) => addr.0.into(),
             _ => {
                 debug!(
                     "received mdns additional with wrong data {:?}",

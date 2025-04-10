@@ -25,29 +25,29 @@ log-sync = []
 mdns-discovery = ["p2panda-discovery/mdns"]
 
 [dependencies]
-anyhow = "1.0.86"
-async-trait = "0.1.82"
+anyhow = "1.0.97"
+async-trait = "0.1.88"
 ciborium = "0.2.2"
-futures-lite = "2.3.0"
-futures-util = "0.3.30"
-iroh = { version = "0.33.0", default-features = false }
-iroh-base = "0.33.0"
-iroh-gossip = "0.33.0"
+futures-lite = "2.6.0"
+futures-util = "0.3.31"
+iroh = { version = "0.34.1", default-features = false }
+iroh-base = "0.34.1"
+iroh-gossip = "0.34.1"
 iroh-quinn = { version = "0.13.0", features = ["futures-io"] }
-netwatch = "0.2.0"
+netwatch = "0.4.0"
 p2panda-core = { path = "../p2panda-core", version = "0.3.0" }
 p2panda-discovery = { path = "../p2panda-discovery", version = "0.3.0" }
 p2panda-sync = { path = "../p2panda-sync", version = "0.3.0", features = ["log-sync"] }
 rand = "0.8.5"
-serde = { version = "1.0.215", features = ["derive"] }
-thiserror = "1.0.63"
-tokio = { version = "1.42.0", features = ["rt", "sync", "time"] }
-tokio-stream = { version = "0.1.15", features = ["sync"] }
-tokio-util = { version = "0.7.11", features = ["compat", "codec", "io-util", "io"] }
-tracing = "0.1.40"
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.12"
+tokio = { version = "1.44.2", features = ["rt", "sync", "time"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-util = { version = "0.7.14", features = ["compat", "codec", "io-util", "io"] }
+tracing = "0.1.41"
 
 [dev-dependencies]
-clap = { version = "4.5.29", features = ["derive"] }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+clap = { version = "4.5.35", features = ["derive"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 p2panda-sync = { path = "../p2panda-sync", version = "0.3.0", features = ["log-sync", "test-protocols"] }
 p2panda-store = { path = "../p2panda-store", version = "0.3.0" }

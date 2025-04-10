@@ -24,16 +24,16 @@ default = []
 mdns = ["dep:hickory-proto", "dep:socket2", "dep:base32"]
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.97"
 base32 = { version = "0.5.1", optional = true }
-flume = "0.11.0"
-futures-buffered = "0.2.8"
-futures-lite = "2.3.0"
-hickory-proto = { version = "0.24.1", optional = true }
-iroh = { version = "0.33.0", default-features = false }
-iroh-base = "0.33.0"
-netwatch = "0.2.0"
-socket2 = { version = "0.5.7", optional = true }
-tokio = { version = "1.42.0", features = ["net", "sync"] }
-tokio-util = { version = "0.7.11", features = ["codec", "io-util", "io"] }
-tracing = "0.1.40"
+flume = "0.11.1"
+futures-buffered = "0.2.11"
+futures-lite = "2.6.0"
+hickory-proto = { version = "0.25.1", optional = true }
+iroh = { version = "0.34.1", default-features = false }
+iroh-base = "0.34.1"
+netwatch = "0.4.0"
+socket2 = { version = "0.5.9", optional = true }
+tokio = { version = "1.44.2", features = ["net", "sync"] }
+tokio-util = { version = "0.7.14", features = ["codec", "io-util", "io"] }
+tracing = "0.1.41"

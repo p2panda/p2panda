@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
 
+### Changed
+
+- Update dependencies (including iroh `v0.34.1`) [#738](https://github.com/p2panda/p2panda/pull/738)
+
 ### Fixed
 
 - Reset gossip state to rejoin after major interface change [#726](https://github.com/p2panda/p2panda/pull/726)

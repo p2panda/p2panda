@@ -31,10 +31,10 @@ hex = { version = "0.4.3", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.3.0" }
 rand = { version = "0.8.5", optional = true }
 sqlx = { version = "0.8.3", optional = true, features = ["sqlite", "runtime-tokio"] }
-thiserror = "2.0.11"
+thiserror = "2.0.12"
 trait-variant = "0.1.2"
 
 [dev-dependencies]
 rand = "0.8.5"
-serde = "1.0.215"
-tokio = { version = "1.42.0", features = ["rt", "macros"] }
+serde = "1.0.219"
+tokio = { version = "1.44.2", features = ["rt", "macros"] }
