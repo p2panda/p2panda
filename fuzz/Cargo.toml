@@ -10,10 +10,18 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
+p2panda-group = { path = "../p2panda-group", features = ["test_utils"] }
 
 [[bin]]
 name = "header_e2e"
 path = "fuzz_targets/header_e2e.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "groups_2sm"
+path = "fuzz_targets/groups_2sm.rs"
 test = false
 doc = false
 bench = false

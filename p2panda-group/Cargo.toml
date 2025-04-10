@@ -15,6 +15,10 @@ all-features = true
 [lints]
 workspace = true
 
+[features]
+default = []
+test_utils = []
+
 [dependencies]
 chacha20poly1305 = { version = "0.10.1", features = ["alloc"], default-features = false }
 curve25519-dalek = "4.1.3"
