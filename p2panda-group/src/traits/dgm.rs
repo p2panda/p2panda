@@ -70,10 +70,20 @@ pub trait GroupMembership<ID, OP> {
     fn from_welcome(my_id: ID, y: Self::State) -> Result<Self::State, Self::Error>;
 
     /// Adds a member to the group.
-    fn add(y: Self::State, adder: ID, added: ID) -> Result<Self::State, Self::Error>;
+    fn add(
+        y: Self::State,
+        adder: ID,
+        added: ID,
+        operation_id: OP,
+    ) -> Result<Self::State, Self::Error>;
 
     /// Removes a member from a group.
-    fn remove(y: Self::State, remover: ID, removed: &ID) -> Result<Self::State, Self::Error>;
+    fn remove(
+        y: Self::State,
+        remover: ID,
+        removed: &ID,
+        operation_id: OP,
+    ) -> Result<Self::State, Self::Error>;
 
     /// Returns the list of current members in the group.
     fn members(y: &Self::State) -> Result<HashSet<ID>, Self::Error>;

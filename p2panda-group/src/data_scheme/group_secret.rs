@@ -58,6 +58,11 @@ impl GroupSecret {
         self.1
     }
 
+    #[cfg(any(test, feature = "test_utils"))]
+    pub(crate) fn set_timestamp(&mut self, timestamp: Timestamp) {
+        self.1 = timestamp;
+    }
+
     /// Returns secret key as bytes.
     pub(crate) fn as_bytes(&self) -> &[u8; GROUP_SECRET_SIZE] {
         self.0.as_bytes()

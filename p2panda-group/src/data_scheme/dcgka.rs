@@ -67,13 +67,14 @@ where
         }
     }
 
-    /// Handler for when a "remote" control message is received from the network.
+    /// Handler for when a "remote" control message is received from the network or when we need to
+    /// process our "local" operation after calling "create", "update", "add" or "remove".
     ///
     /// It takes the user ID of the message sender, a control message, and a direct message (or
     /// none if there is no associated direct message).
     ///
     /// Control messages are expected to be authenticated and causally ordered.
-    pub fn process_remote(
+    pub fn process(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         input: ProcessInput<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
@@ -81,7 +82,7 @@ where
             sender,
             control_message,
             direct_message,
-            ..
+            seq,
         } = input;
         let (y_i, output) = match control_message {
             ControlMessage::Create { initial_members } => {
@@ -89,15 +90,17 @@ where
             }
             ControlMessage::Update => Self::process_update(y, &sender, direct_message)?,
             ControlMessage::Remove { removed } => {
-                Self::process_remove(y, sender, &removed, direct_message)?
+                Self::process_remove(y, sender, seq, &removed, direct_message)?
             }
-            ControlMessage::Add { added } => Self::process_add(y, sender, added, direct_message)?,
+            ControlMessage::Add { added } => {
+                Self::process_add(y, sender, seq, added, direct_message)?
+            }
         };
         Ok((y_i, output))
     }
 
     pub fn create(
-        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         initial_members: Vec<ID>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
@@ -119,9 +122,6 @@ where
         let control_message = ControlMessage::Create {
             initial_members: initial_members.clone(),
         };
-
-        y.dgm =
-            DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Generate the set of direct messages to send.
         let (y_ii, direct_messages, group_secret) =
@@ -180,14 +180,11 @@ where
     }
 
     pub fn remove(
-        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         removed: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let control_message = ControlMessage::Remove { removed };
-
-        y.dgm =
-            DGM::remove(y.dgm, y.my_id, &removed).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         let recipient_ids: Vec<ID> = Self::members(&y)?
             .into_iter()
@@ -209,23 +206,23 @@ where
     fn process_remove(
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
+        seq: OP,
         removed: &ID,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
-        y.dgm = DGM::remove(y.dgm, sender, removed).map_err(|err| DcgkaError::DgmOperation(err))?;
+        y.dgm = DGM::remove(y.dgm, sender, removed, seq)
+            .map_err(|err| DcgkaError::DgmOperation(err))?;
         Self::process_secret(y, &sender, direct_message)
     }
 
     pub fn add(
-        mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         added: ID,
         bundle: &GroupSecretBundle,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
         let control_message = ControlMessage::Add { added };
-
-        y.dgm = DGM::add(y.dgm, y.my_id, added).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Construct a welcome message that is sent to the new member as a direct message.
         let (y_i, ciphertext) = {
@@ -253,10 +250,11 @@ where
     fn process_add(
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
+        seq: OP,
         added: ID,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
-        y.dgm = DGM::add(y.dgm, sender, added).map_err(|err| DcgkaError::DgmOperation(err))?;
+        y.dgm = DGM::add(y.dgm, sender, added, seq).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         if added == y.my_id {
             let Some(DirectMessage {

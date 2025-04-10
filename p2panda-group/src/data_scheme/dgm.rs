@@ -63,7 +63,12 @@ pub mod test_utils {
             })
         }
 
-        fn add(mut y: Self::State, _adder: ID, added: ID) -> Result<Self::State, Self::Error> {
+        fn add(
+            mut y: Self::State,
+            _adder: ID,
+            added: ID,
+            _operation_id: OP,
+        ) -> Result<Self::State, Self::Error> {
             y.members.insert(added);
             Ok(y)
         }
@@ -72,6 +77,7 @@ pub mod test_utils {
             mut y: Self::State,
             _remover: ID,
             removed: &ID,
+            _operation_id: OP,
         ) -> Result<Self::State, Self::Error> {
             y.members.remove(removed);
             Ok(y)
