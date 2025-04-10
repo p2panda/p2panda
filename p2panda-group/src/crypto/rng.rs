@@ -18,7 +18,7 @@ impl Default for Rng {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl Rng {
     pub fn from_seed(seed: [u8; 32]) -> Self {
         Self {
