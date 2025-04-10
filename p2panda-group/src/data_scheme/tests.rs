@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
-use crate::data_scheme::dcgka::{
-    ControlMessage, Dcgka, DcgkaError, DcgkaState, GroupSecretOutput, ProcessMessage,
-};
+use crate::data_scheme::dcgka::{Dcgka, DcgkaError, DcgkaState, GroupSecretOutput, ProcessInput};
 use crate::data_scheme::dgm::test_utils::TestDgm;
 use crate::data_scheme::group_secret::GroupSecretBundle;
 use crate::key_bundle::Lifetime;
@@ -103,9 +101,7 @@ fn group_operations() {
     // Bob processes Alice's "create" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let ControlMessage::Create(create_message) = output.control_message else {
-        panic!("expected 'create' control message");
-    };
+    assert_eq!(output.control_message.to_string(), "create");
 
     let direct_message = output
         .direct_messages
@@ -115,8 +111,15 @@ fn group_operations() {
 
     let (bob_dcgka, output) = Dcgka::process_remote(
         bob_dcgka,
-        alice,
-        ProcessMessage::Create(create_message, direct_message),
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: Some(direct_message),
+        },
     )
     .unwrap();
 
@@ -135,18 +138,16 @@ fn group_operations() {
     // Bob adds Charlie
     // ~~~~~~~~~~~~~~~~
 
-    let (bob_dcgka, output) = Dcgka::add(bob_dcgka, charlie, &bob_bundle, &rng).unwrap();
-    assert!(output.group_secret.is_none());
+    let (bob_dcgka, add_output) = Dcgka::add(bob_dcgka, charlie, &bob_bundle, &rng).unwrap();
+    assert!(add_output.group_secret.is_none());
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Charlie processes Bob's "add" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let ControlMessage::Add(add_message) = output.control_message else {
-        panic!("expected 'add' control message");
-    };
+    assert_eq!(add_output.control_message.to_string(), "add");
 
-    let direct_message = output
+    let direct_message = add_output
         .direct_messages
         .into_iter()
         .find(|dm| dm.recipient == charlie)
@@ -154,8 +155,15 @@ fn group_operations() {
 
     let (charlie_dcgka, output) = Dcgka::process_remote(
         charlie_dcgka,
-        bob,
-        ProcessMessage::Add(add_message.clone(), Some(direct_message)),
+        ProcessInput {
+            seq: MessageId {
+                sender: bob,
+                seq: 0,
+            },
+            sender: bob,
+            control_message: add_output.control_message.clone(),
+            direct_message: Some(direct_message),
+        },
     )
     .unwrap();
 
@@ -174,8 +182,19 @@ fn group_operations() {
     // Alice processes Bob's "add" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let (alice_dcgka, output) =
-        Dcgka::process_remote(alice_dcgka, bob, ProcessMessage::Add(add_message, None)).unwrap();
+    let (alice_dcgka, output) = Dcgka::process_remote(
+        alice_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: bob,
+                seq: 0,
+            },
+            sender: bob,
+            control_message: add_output.control_message,
+            direct_message: None,
+        },
+    )
+    .unwrap();
     assert_eq!(output.group_secret, GroupSecretOutput::None);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~
@@ -197,9 +216,7 @@ fn group_operations() {
     // Bob processes Alice's "update" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let ControlMessage::Update(update_message) = update_output.control_message else {
-        panic!("expected 'update' control message");
-    };
+    assert_eq!(update_output.control_message.to_string(), "update");
 
     let direct_message = update_output
         .direct_messages
@@ -209,8 +226,15 @@ fn group_operations() {
 
     let (bob_dcgka, output) = Dcgka::process_remote(
         bob_dcgka,
-        alice,
-        ProcessMessage::Update(update_message.clone(), direct_message.clone()),
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
+            sender: alice,
+            control_message: update_output.control_message.clone(),
+            direct_message: Some(direct_message.clone()),
+        },
     )
     .unwrap();
 
@@ -233,8 +257,15 @@ fn group_operations() {
 
     let (charlie_dcgka, output) = Dcgka::process_remote(
         charlie_dcgka,
-        alice,
-        ProcessMessage::Update(update_message, direct_message),
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
+            sender: alice,
+            control_message: update_output.control_message.clone(),
+            direct_message: Some(direct_message.clone()),
+        },
     )
     .unwrap();
 
@@ -269,9 +300,7 @@ fn group_operations() {
     // Bob processes Charlie's "remove" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let ControlMessage::Remove(remove_message) = remove_output.control_message else {
-        panic!("expected 'remove' control message");
-    };
+    assert_eq!(remove_output.control_message.to_string(), "remove");
 
     let direct_message = remove_output
         .direct_messages
@@ -281,8 +310,15 @@ fn group_operations() {
 
     let (_bob_dcgka, output) = Dcgka::process_remote(
         bob_dcgka,
-        charlie,
-        ProcessMessage::Remove(remove_message.clone(), direct_message.clone()),
+        ProcessInput {
+            seq: MessageId {
+                sender: charlie,
+                seq: 0,
+            },
+            sender: charlie,
+            control_message: remove_output.control_message.clone(),
+            direct_message: Some(direct_message.clone()),
+        },
     )
     .unwrap();
 
@@ -300,8 +336,15 @@ fn group_operations() {
     assert!(matches!(
         Dcgka::process_remote(
             alice_dcgka,
-            charlie,
-            ProcessMessage::Remove(remove_message.clone(), direct_message),
+            ProcessInput {
+                seq: MessageId {
+                    sender: charlie,
+                    seq: 0,
+                },
+                sender: charlie,
+                control_message: remove_output.control_message,
+                direct_message: Some(direct_message),
+            },
         ),
         Err(DcgkaError::NotOurDirectMessage(_, _))
     ));

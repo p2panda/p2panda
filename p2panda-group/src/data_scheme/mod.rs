@@ -9,9 +9,8 @@ mod tests;
 
 #[allow(unused)]
 pub use dcgka::{
-    AddMessage, ControlMessage, CreateMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState,
-    DirectMessage, DirectMessageContent, DirectMessageType, OperationOutput, ProcessMessage,
-    ProcessOutput, RemoveMessage, UpdateMessage,
+    ControlMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage,
+    DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
 };
 #[allow(unused)]
 pub use group_secret::{GROUP_SECRET_SIZE, GroupSecret, GroupSecretBundle, GroupSecretError};

@@ -75,22 +75,23 @@ where
     /// Control messages are expected to be authenticated and causally ordered.
     pub fn process_remote(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
-        sender: ID,
-        message: ProcessMessage<ID, OP, DGM>,
+        input: ProcessInput<ID, OP, DGM>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
-        let (y_i, output) = match message {
-            ProcessMessage::Create(CreateMessage { initial_members }, direct_message) => {
+        let ProcessInput {
+            sender,
+            control_message,
+            direct_message,
+            ..
+        } = input;
+        let (y_i, output) = match control_message {
+            ControlMessage::Create { initial_members } => {
                 Self::process_create(y, &sender, initial_members, direct_message)?
             }
-            ProcessMessage::Update(_, direct_message) => {
-                Self::process_update(y, &sender, direct_message)?
-            }
-            ProcessMessage::Remove(RemoveMessage { removed }, direct_message) => {
+            ControlMessage::Update => Self::process_update(y, &sender, direct_message)?,
+            ControlMessage::Remove { removed } => {
                 Self::process_remove(y, sender, &removed, direct_message)?
             }
-            ProcessMessage::Add(AddMessage { added }, direct_message) => {
-                Self::process_add(y, sender, added, direct_message)?
-            }
+            ControlMessage::Add { added } => Self::process_add(y, sender, added, direct_message)?,
         };
         Ok((y_i, output))
     }
@@ -115,9 +116,9 @@ where
         }
 
         // The "create" function constructs the "create" control message.
-        let control_message = ControlMessage::Create(CreateMessage {
+        let control_message = ControlMessage::Create {
             initial_members: initial_members.clone(),
-        });
+        };
 
         y.dgm =
             DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
@@ -140,7 +141,7 @@ where
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
         initial_members: Vec<ID>,
-        direct_message: DirectMessage<ID, OP, DGM>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm =
             DGM::create(y.my_id, &initial_members).map_err(|err| DcgkaError::DgmOperation(err))?;
@@ -151,7 +152,7 @@ where
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage::Update(UpdateMessage);
+        let control_message = ControlMessage::Update;
 
         let recipient_ids: Vec<ID> = Self::members(&y)?
             .into_iter()
@@ -173,7 +174,7 @@ where
     fn process_update(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
-        direct_message: DirectMessage<ID, OP, DGM>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         Self::process_secret(y, sender, direct_message)
     }
@@ -183,7 +184,7 @@ where
         removed: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage::Remove(RemoveMessage { removed });
+        let control_message = ControlMessage::Remove { removed };
 
         y.dgm =
             DGM::remove(y.dgm, y.my_id, &removed).map_err(|err| DcgkaError::DgmOperation(err))?;
@@ -209,7 +210,7 @@ where
         mut y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: ID,
         removed: &ID,
-        direct_message: DirectMessage<ID, OP, DGM>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         y.dgm = DGM::remove(y.dgm, sender, removed).map_err(|err| DcgkaError::DgmOperation(err))?;
         Self::process_secret(y, &sender, direct_message)
@@ -222,7 +223,7 @@ where
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
-        let control_message = ControlMessage::Add(AddMessage { added });
+        let control_message = ControlMessage::Add { added };
 
         y.dgm = DGM::add(y.dgm, y.my_id, added).map_err(|err| DcgkaError::DgmOperation(err))?;
 
@@ -284,14 +285,7 @@ where
             return Self::process_welcome(y, sender, ciphertext, history);
         }
 
-        Ok((
-            y,
-            ProcessOutput {
-                control_message: None,
-                direct_messages: vec![],
-                group_secret: GroupSecretOutput::None,
-            },
-        ))
+        Ok((y, ProcessOutput::default()))
     }
 
     fn process_welcome(
@@ -355,8 +349,12 @@ where
     fn process_secret(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         sender: &ID,
-        direct_message: DirectMessage<ID, OP, DGM>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
+        let Some(direct_message) = direct_message else {
+            return Ok((y, ProcessOutput::default()));
+        };
+
         let DirectMessage {
             recipient,
             content: DirectMessageContent::TwoParty { ciphertext },
@@ -458,10 +456,10 @@ pub type DcgkaOperationResult<ID, OP, PKI, DGM, KMG> =
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlMessage<ID> {
-    Create(CreateMessage<ID>),
-    Update(UpdateMessage),
-    Remove(RemoveMessage<ID>),
-    Add(AddMessage<ID>),
+    Create { initial_members: Vec<ID> },
+    Update,
+    Remove { removed: ID },
+    Add { added: ID },
 }
 
 impl<ID> Display for ControlMessage<ID> {
@@ -470,42 +468,35 @@ impl<ID> Display for ControlMessage<ID> {
             f,
             "{}",
             match self {
-                ControlMessage::Create(_) => "create",
-                ControlMessage::Update(_) => "update",
-                ControlMessage::Remove(_) => "remove",
-                ControlMessage::Add(_) => "add",
+                ControlMessage::Create { .. } => "create",
+                ControlMessage::Update { .. } => "update",
+                ControlMessage::Remove { .. } => "remove",
+                ControlMessage::Add { .. } => "add",
             }
         )
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CreateMessage<ID> {
-    pub initial_members: Vec<ID>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdateMessage;
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RemoveMessage<ID> {
-    pub removed: ID,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AddMessage<ID> {
-    pub added: ID,
-}
-
 #[derive(Clone, Debug)]
-pub enum ProcessMessage<ID, OP, DGM>
+pub struct ProcessInput<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
 {
-    Create(CreateMessage<ID>, DirectMessage<ID, OP, DGM>),
-    Update(UpdateMessage, DirectMessage<ID, OP, DGM>),
-    Remove(RemoveMessage<ID>, DirectMessage<ID, OP, DGM>),
-    Add(AddMessage<ID>, Option<DirectMessage<ID, OP, DGM>>),
+    /// Sequence number, which consecutively numbers successive control messages from the same
+    /// sender.
+    pub seq: OP,
+
+    /// Author of this message.
+    pub sender: ID,
+
+    /// Message received from this author.
+    pub control_message: ControlMessage<ID>,
+
+    /// Optional direct message for us.
+    ///
+    /// Applications need to filter the direct message for the correct recipient before passing it
+    /// as an input. There can always only be max. 1 direct message per recipient.
+    pub direct_message: Option<DirectMessage<ID, OP, DGM>>,
 }
 
 #[derive(Debug)]
