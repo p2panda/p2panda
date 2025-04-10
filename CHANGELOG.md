@@ -15,6 +15,7 @@ Highlights are marked with a pancake 🥞
 
 ### Fixed
 
+- Reset gossip state to rejoin after major interface change [#726](https://github.com/p2panda/p2panda/pull/726)
 - Wait for relay connection initialisation and first direct address [#725](https://github.com/p2panda/p2panda/pull/725)
 - Only decrement the gossip buffer counter if it exists and is greater than zero [#722](https://github.com/p2panda/p2panda/pull/722)
 
