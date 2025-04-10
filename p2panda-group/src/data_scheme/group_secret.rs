@@ -18,10 +18,23 @@ use crate::crypto::{Rng, RngError, Secret};
 /// 256-bit secret group key.
 pub const GROUP_SECRET_SIZE: usize = 32;
 
+/// Public identifier for each secret. This is the SHA256 digest of the secret key itself.
+///
+/// Can be used to help the receiver of a ciphertext to understand which key they can use to
+/// decrypt the message.
 pub type GroupSecretId = [u8; SHA256_DIGEST_SIZE];
 
+/// UNIX timestamp indicating when the key was generated.
+///
+/// This helps peers to pick the "latest" key or remove keys on their age (for forward secrecy)
+/// depending on the application. If other ordering strategies are applied by the application they
+/// can also be used instead to reason about the "latest" group secret.
 pub type Timestamp = u64;
 
+/// Secret known by a group which is used to encrypt and decrypt data.
+///
+/// Group secrets can be used multiple times and are dropped never or manually by the application,
+/// thus providing a weaker forward-secrecy than p2panda's "message encryption" scheme.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupSecret(Secret<GROUP_SECRET_SIZE>, Timestamp);
 
@@ -80,108 +93,79 @@ impl StdHash for GroupSecret {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GroupSecretBundle {
+/// Bundle of all secrets used by a group to encrypt and decrypt it's data.
+///
+/// Peers manage all secrets they generated or learned about in this bundle. New secrets are added
+/// to the bundle when a group got updated, a member was added or removed.
+///
+/// Secrets inside the bundle can be removed if the application considers them due, otherwise
+/// a bundle will grow in size and no forward-secrecy is given.
+#[derive(Debug)]
+pub struct SecretBundle;
+
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+pub struct SecretBundleState {
     secrets: HashMap<GroupSecretId, GroupSecret>,
     latest: Option<GroupSecretId>,
 }
 
-impl GroupSecretBundle {
-    pub fn new() -> Self {
-        Self {
-            secrets: HashMap::new(),
-            latest: None,
-        }
-    }
-
-    pub fn from_secrets(secrets: Vec<GroupSecret>) -> Self {
-        let secrets = HashMap::from_iter(secrets.into_iter().map(|secret| (secret.id(), secret)));
-        Self {
-            latest: find_latest(&secrets),
-            secrets,
-        }
-    }
-
-    pub(crate) fn try_from_bytes(bytes: &[u8]) -> Result<Self, GroupSecretError> {
-        Ok(decode_cbor(bytes)?)
-    }
-
-    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>, GroupSecretError> {
-        Ok(encode_cbor(self)?)
-    }
-
+impl SecretBundleState {
+    /// Returns the latest known secret which should preferably used for encrypting new data.
     pub fn latest(&self) -> Option<&GroupSecret> {
         self.latest.as_ref().and_then(|id| self.secrets.get(id))
     }
 
-    pub fn insert(&mut self, secret: GroupSecret) {
-        self.secrets.insert(secret.id(), secret);
-        self.latest = find_latest(&self.secrets);
-    }
-
+    /// Returns a secret based on the id.
+    ///
+    /// This can be used to retreive a secret to decrypt data where we know which secret id has been
+    /// used.
     pub fn get(&self, id: &GroupSecretId) -> Option<&GroupSecret> {
         self.secrets.get(id)
     }
 
-    pub fn remove(&mut self, id: &GroupSecretId) -> Option<GroupSecret> {
-        let result = self.secrets.remove(id);
-        self.latest = find_latest(&self.secrets);
-        result
-    }
-
-    pub fn extend(&mut self, bundle: GroupSecretBundle) {
-        self.secrets.extend(bundle.secrets);
-        self.latest = find_latest(&self.secrets);
-    }
-
-    pub fn contains(&mut self, id: &GroupSecretId) -> bool {
+    /// Returns true when the bundle contains a secret with the given id.
+    pub fn contains(&self, id: &GroupSecretId) -> bool {
         self.secrets.contains_key(id)
     }
 
+    /// Returns number of all secrets in this bundle.
     pub fn len(&self) -> usize {
         self.secrets.len()
     }
 
+    /// Returns true if there's no secrets in this bundle.
     pub fn is_empty(&self) -> bool {
         self.secrets.is_empty()
     }
 
+    /// Iterator over secrets (values) and their ids (keys).
     pub fn iter(&self) -> Iter<'_, GroupSecretId, GroupSecret> {
         self.secrets.iter()
     }
 
+    /// Iterator over secrets (values) and their ids (keys).
     pub fn into_iter(self) -> IntoIter<GroupSecretId, GroupSecret> {
         self.secrets.into_iter()
     }
 
+    /// Iterator over all ids.
     pub fn ids(&self) -> Keys<'_, GroupSecretId, GroupSecret> {
         self.secrets.keys()
     }
 
+    /// Iterator over all secrets.
     pub fn secrets(&self) -> Values<'_, GroupSecretId, GroupSecret> {
         self.secrets.values()
     }
-}
 
-/// Finds the "latest" secret to use from a list by comparing timestamps. If the timestamps of two
-/// distinct secrets match the id is used as a tie-breaker.
-fn find_latest(secrets: &HashMap<GroupSecretId, GroupSecret>) -> Option<GroupSecretId> {
-    let mut latest_timestamp: Timestamp = 0;
-    let mut latest_secret_id: Option<GroupSecretId> = None;
-    for (id, secret) in secrets {
-        let timestamp = secret.timestamp();
-        if latest_timestamp < timestamp
-            || (latest_timestamp == timestamp
-                && *id > latest_secret_id.unwrap_or([0; SHA256_DIGEST_SIZE]))
-        {
-            latest_timestamp = timestamp;
-            latest_secret_id = Some(id.to_owned());
-        }
+    /// Encodes bundle in CBOR format.
+    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>, GroupSecretError> {
+        Ok(encode_cbor(self)?)
     }
-    latest_secret_id
 }
 
-impl Serialize for GroupSecretBundle {
+impl Serialize for SecretBundleState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -194,7 +178,7 @@ impl Serialize for GroupSecretBundle {
     }
 }
 
-impl<'de> Deserialize<'de> for GroupSecretBundle {
+impl<'de> Deserialize<'de> for SecretBundleState {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -222,8 +206,74 @@ impl<'de> Deserialize<'de> for GroupSecretBundle {
 
         let secrets = deserializer.deserialize_seq(SecretListVisitor)?;
 
-        Ok(GroupSecretBundle::from_secrets(secrets))
+        Ok(SecretBundle::from_secrets(secrets))
     }
+}
+
+impl SecretBundle {
+    /// Initialises empty secret bundle state.
+    pub fn init() -> SecretBundleState {
+        SecretBundleState {
+            secrets: HashMap::new(),
+            latest: None,
+        }
+    }
+
+    /// Initialises secret bundle state from a list of group secrets.
+    pub fn from_secrets(secrets: Vec<GroupSecret>) -> SecretBundleState {
+        let secrets = HashMap::from_iter(secrets.into_iter().map(|secret| (secret.id(), secret)));
+        SecretBundleState {
+            latest: find_latest(&secrets),
+            secrets,
+        }
+    }
+
+    /// Initialises secret bundle state from an encoded CBOR representation.
+    pub(crate) fn try_from_bytes(bytes: &[u8]) -> Result<SecretBundleState, GroupSecretError> {
+        Ok(decode_cbor(bytes)?)
+    }
+
+    /// Inserts secret into bundle, ignoring duplicates.
+    pub fn insert(mut y: SecretBundleState, secret: GroupSecret) -> SecretBundleState {
+        y.secrets.insert(secret.id(), secret);
+        y.latest = find_latest(&y.secrets);
+        y
+    }
+
+    /// Removes secret from bundle.
+    pub fn remove(
+        mut y: SecretBundleState,
+        id: &GroupSecretId,
+    ) -> (SecretBundleState, Option<GroupSecret>) {
+        let result = y.secrets.remove(id);
+        y.latest = find_latest(&y.secrets);
+        (y, result)
+    }
+
+    /// Merges one bundle with another, ignoring duplicates.
+    pub fn extend(mut y: SecretBundleState, other: SecretBundleState) -> SecretBundleState {
+        y.secrets.extend(other.secrets);
+        y.latest = find_latest(&y.secrets);
+        y
+    }
+}
+
+/// Finds the "latest" secret to use from a list by comparing timestamps. If the timestamps of two
+/// distinct secrets match the id is used as a tie-breaker.
+fn find_latest(secrets: &HashMap<GroupSecretId, GroupSecret>) -> Option<GroupSecretId> {
+    let mut latest_timestamp: Timestamp = 0;
+    let mut latest_secret_id: Option<GroupSecretId> = None;
+    for (id, secret) in secrets {
+        let timestamp = secret.timestamp();
+        if latest_timestamp < timestamp
+            || (latest_timestamp == timestamp
+                && *id > latest_secret_id.unwrap_or([0; SHA256_DIGEST_SIZE]))
+        {
+            latest_timestamp = timestamp;
+            latest_secret_id = Some(id.to_owned());
+        }
+    }
+    latest_secret_id
 }
 
 #[derive(Debug, Error)]
@@ -248,7 +298,7 @@ pub enum GroupSecretError {
 mod tests {
     use crate::Rng;
 
-    use super::{GroupSecret, GroupSecretBundle};
+    use super::{GroupSecret, SecretBundle};
 
     #[test]
     fn group_secret_bundle() {
@@ -256,8 +306,8 @@ mod tests {
 
         let secret = GroupSecret::from_rng(&rng).unwrap();
 
-        let mut bundle_1 = GroupSecretBundle::from_secrets(vec![secret.clone()]);
-        let mut bundle_2 = GroupSecretBundle::from_secrets(vec![secret.clone()]);
+        let bundle_1 = SecretBundle::from_secrets(vec![secret.clone()]);
+        let bundle_2 = SecretBundle::from_secrets(vec![secret.clone()]);
         assert_eq!(bundle_1.len(), 1);
         assert_eq!(bundle_2.len(), 1);
 
@@ -270,19 +320,20 @@ mod tests {
         assert!(!bundle_1.contains(&unknown_secret.id()));
 
         let secret_2 = GroupSecret::from_rng(&rng).unwrap();
-        bundle_2.insert(secret_2.clone());
+        let bundle_2 = SecretBundle::insert(bundle_2, secret_2.clone());
         assert_eq!(bundle_2.len(), 2);
 
-        bundle_1.extend(bundle_2);
+        let bundle_1 = SecretBundle::extend(bundle_1, bundle_2);
         assert_eq!(bundle_1.len(), 2);
 
-        assert!(bundle_1.remove(&secret_2.id()).is_some());
+        let (bundle_1, result) = SecretBundle::remove(bundle_1, &secret_2.id());
+        assert_eq!(result, Some(secret_2));
         assert_eq!(bundle_1.len(), 1);
     }
 
     #[test]
     fn latest_secret() {
-        let mut bundle = GroupSecretBundle::new();
+        let bundle = SecretBundle::init();
         assert!(bundle.latest().is_none());
 
         let secret_1 = GroupSecret::new([1; 32], 234);
@@ -295,31 +346,31 @@ mod tests {
         assert_eq!(secret_4.timestamp(), 123);
 
         // Inserted secret 1 is the latest.
-        bundle.insert(secret_1.clone());
+        let bundle = SecretBundle::insert(bundle, secret_1.clone());
         assert_eq!(bundle.len(), 1);
         assert_eq!(bundle.latest(), Some(&secret_1));
 
         // Inserted secret 2 is the "latest" as the higher hash wins when both timestamps are the
         // same.
-        bundle.insert(secret_2.clone());
+        let bundle = SecretBundle::insert(bundle, secret_2.clone());
         assert_eq!(bundle.len(), 2);
         assert_eq!(bundle.latest(), Some(&secret_2));
 
         // Use a separate group to confirm that the order of insertion does not matter here.
         {
-            let mut bundle_2 = GroupSecretBundle::new();
-            bundle_2.insert(secret_2.clone());
-            bundle_2.insert(secret_1.clone());
+            let bundle_2 = SecretBundle::init();
+            let bundle_2 = SecretBundle::insert(bundle_2, secret_2.clone());
+            let bundle_2 = SecretBundle::insert(bundle_2, secret_1.clone());
             assert_eq!(bundle_2.latest(), Some(&secret_2));
         }
 
         // Inserted 3 is the latest.
-        bundle.insert(secret_3.clone());
+        let bundle = SecretBundle::insert(bundle, secret_3.clone());
         assert_eq!(bundle.len(), 3);
         assert_eq!(bundle.latest(), Some(&secret_3));
 
         // Inserted 3 is still the latest.
-        bundle.insert(secret_4.clone());
+        let bundle = SecretBundle::insert(bundle, secret_4.clone());
         assert_eq!(bundle.len(), 4);
         assert_eq!(bundle.latest(), Some(&secret_3));
     }
@@ -329,7 +380,7 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         // Serialize & deserialize bundle.
-        let bundle = GroupSecretBundle::from_secrets(vec![
+        let bundle = SecretBundle::from_secrets(vec![
             GroupSecret::from_rng(&rng).unwrap(),
             GroupSecret::from_rng(&rng).unwrap(),
             GroupSecret::from_rng(&rng).unwrap(),
@@ -337,7 +388,7 @@ mod tests {
         ]);
 
         let bytes = bundle.to_bytes().unwrap();
-        assert_eq!(bundle, GroupSecretBundle::try_from_bytes(&bytes).unwrap());
+        assert_eq!(bundle, SecretBundle::try_from_bytes(&bytes).unwrap());
 
         // Serialize & deserialize single secret.
         let secret = GroupSecret::from_rng(&rng).unwrap();

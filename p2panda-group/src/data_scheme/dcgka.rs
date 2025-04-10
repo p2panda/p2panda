@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::crypto::hkdf::HkdfError;
 use crate::crypto::{Rng, RngError};
-use crate::data_scheme::{GroupSecret, GroupSecretBundle, GroupSecretError};
+use crate::data_scheme::{GroupSecret, GroupSecretError, SecretBundle, SecretBundleState};
 use crate::key_bundle::LongTermKeyBundle;
 use crate::traits::{
     GroupMembership, IdentityHandle, IdentityManager, IdentityRegistry, OperationId, PreKeyManager,
@@ -218,7 +218,7 @@ where
     pub fn add(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         added: ID,
-        bundle: &GroupSecretBundle,
+        bundle: &SecretBundleState,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // Construct a control message of type "add" to broadcast to the group
@@ -296,7 +296,7 @@ where
 
         let (y_i, bundle) = {
             let (y_i, plaintext) = Self::decrypt_from(y, &sender, ciphertext)?;
-            let bundle = GroupSecretBundle::try_from_bytes(&plaintext)?;
+            let bundle = SecretBundle::try_from_bytes(&plaintext)?;
             (y_i, bundle)
         };
 
@@ -524,7 +524,7 @@ where
 pub enum GroupSecretOutput {
     None,
     Secret(GroupSecret),
-    Bundle(GroupSecretBundle),
+    Bundle(SecretBundleState),
 }
 
 #[derive(Debug)]

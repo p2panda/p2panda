@@ -13,4 +13,6 @@ pub use dcgka::{
     DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
 };
 #[allow(unused)]
-pub use group_secret::{GROUP_SECRET_SIZE, GroupSecret, GroupSecretBundle, GroupSecretError};
+pub use group_secret::{
+    GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, SecretBundle, SecretBundleState,
+};

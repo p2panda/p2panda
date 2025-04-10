@@ -4,7 +4,7 @@ use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
 use crate::data_scheme::dcgka::{Dcgka, DcgkaError, DcgkaState, GroupSecretOutput, ProcessInput};
 use crate::data_scheme::dgm::test_utils::TestDgm;
-use crate::data_scheme::group_secret::GroupSecretBundle;
+use crate::data_scheme::group_secret::SecretBundle;
 use crate::key_bundle::Lifetime;
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
@@ -75,13 +75,13 @@ fn group_operations() {
 
     // Initialise DCGKA states.
 
-    let mut alice_bundle = GroupSecretBundle::new();
+    let alice_bundle = SecretBundle::init();
     let alice_dcgka: TestDcgkaState = Dcgka::init(alice, alice_keys, alice_pki, alice_dgm);
 
-    let mut bob_bundle = GroupSecretBundle::new();
+    let bob_bundle = SecretBundle::init();
     let bob_dcgka: TestDcgkaState = Dcgka::init(bob, bob_keys, bob_pki, bob_dgm);
 
-    let mut charlie_bundle = GroupSecretBundle::new();
+    let charlie_bundle = SecretBundle::init();
     let charlie_dcgka: TestDcgkaState =
         Dcgka::init(charlie, charlie_keys, charlie_pki, charlie_dgm);
 
@@ -103,9 +103,13 @@ fn group_operations() {
         },
     )
     .unwrap();
-    let mut alice_group_secret_0 = output.group_secret.unwrap();
-    alice_group_secret_0.set_timestamp(1);
-    alice_bundle.insert(alice_group_secret_0.clone());
+    let alice_group_secret_0 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let mut secret = output.group_secret.unwrap();
+        secret.set_timestamp(1);
+        secret
+    };
+    let alice_bundle = SecretBundle::insert(alice_bundle, alice_group_secret_0.clone());
     assert_eq!(alice_bundle.len(), 1);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -134,12 +138,15 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(mut bob_group_secret_0) = output.group_secret else {
-        panic!("expected group secret");
+    let bob_group_secret_0 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let GroupSecretOutput::Secret(mut secret) = output.group_secret else {
+            panic!("expected group secret");
+        };
+        secret.set_timestamp(1);
+        secret
     };
-
-    bob_group_secret_0.set_timestamp(1);
-    bob_bundle.insert(bob_group_secret_0.clone());
+    let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_0.clone());
     assert_eq!(bob_bundle.len(), 1);
 
     // Alice and bob share the same group secret.
@@ -196,7 +203,7 @@ fn group_operations() {
         panic!("expected group secret bundle");
     };
 
-    charlie_bundle.extend(charlie_secret_bundle_0);
+    let charlie_bundle = SecretBundle::extend(charlie_bundle, charlie_secret_bundle_0.clone());
     assert_eq!(charlie_bundle.len(), 1);
 
     // Alice, Bob and Charlie share the same secrets.
@@ -242,9 +249,13 @@ fn group_operations() {
     .unwrap();
     assert_eq!(update_output.direct_messages.len(), 2); // dm's for Bob and Charlie
 
-    let mut alice_group_secret_1 = update_output.group_secret.unwrap();
-    alice_group_secret_1.set_timestamp(2);
-    alice_bundle.insert(alice_group_secret_1.clone());
+    let alice_group_secret_1 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let mut secret = update_output.group_secret.unwrap();
+        secret.set_timestamp(2);
+        secret
+    };
+    let alice_bundle = SecretBundle::insert(alice_bundle, alice_group_secret_1.clone());
     assert_eq!(alice_bundle.len(), 2);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -273,12 +284,15 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(mut bob_group_secret_1) = output.group_secret else {
-        panic!("expected group secret");
+    let bob_group_secret_1 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let GroupSecretOutput::Secret(mut secret) = output.group_secret else {
+            panic!("expected group secret");
+        };
+        secret.set_timestamp(2);
+        secret
     };
-
-    bob_group_secret_1.set_timestamp(2);
-    bob_bundle.insert(bob_group_secret_1);
+    let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_1.clone());
     assert_eq!(bob_bundle.len(), 2);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -305,12 +319,15 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(mut charlie_group_secret_1) = output.group_secret else {
-        panic!("expected group secret");
+    let charlie_group_secret_1 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let GroupSecretOutput::Secret(mut secret) = output.group_secret else {
+            panic!("expected group secret");
+        };
+        secret.set_timestamp(2);
+        secret
     };
-
-    charlie_group_secret_1.set_timestamp(2);
-    charlie_bundle.insert(charlie_group_secret_1);
+    let charlie_bundle = SecretBundle::insert(charlie_bundle, charlie_group_secret_1.clone());
     assert_eq!(charlie_bundle.len(), 2);
 
     // Alice, Bob and Charlie share the same secrets.
@@ -340,9 +357,13 @@ fn group_operations() {
 
     assert_eq!(remove_output.direct_messages.len(), 1);
 
-    let mut charlie_group_secret_2 = remove_output.group_secret.unwrap();
-    charlie_group_secret_2.set_timestamp(3);
-    charlie_bundle.insert(charlie_group_secret_2);
+    let charlie_group_secret_2 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let mut secret = remove_output.group_secret.unwrap();
+        secret.set_timestamp(3);
+        secret
+    };
+    let charlie_bundle = SecretBundle::insert(charlie_bundle, charlie_group_secret_2.clone());
     assert_eq!(charlie_bundle.len(), 3);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -371,12 +392,15 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(mut bob_group_secret_2) = output.group_secret else {
-        panic!("expected group secret");
+    let bob_group_secret_2 = {
+        // Adjust timestamp for test as secrets might otherwise end up having the same timestamp.
+        let GroupSecretOutput::Secret(mut secret) = output.group_secret else {
+            panic!("expected group secret");
+        };
+        secret.set_timestamp(3);
+        secret
     };
-
-    bob_group_secret_2.set_timestamp(3);
-    bob_bundle.insert(bob_group_secret_2);
+    let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_2.clone());
     assert_eq!(bob_bundle.len(), 3);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
