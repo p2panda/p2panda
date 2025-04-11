@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::crypto::x25519::SecretKey;
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
 use crate::message_scheme::{
-    AckMessage, AddAckMessage, ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType,
-    OperationOutput, ProcessOutput, UpdateSecret,
+    ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType, OperationOutput,
+    ProcessOutput, UpdateSecret,
 };
 use crate::traits::{AckedGroupMembership, OperationId, PreKeyManager};
 use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
@@ -171,10 +171,13 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // Group "creator" broadcasts a "create" control message to everyone.
-        let ControlMessage::Create(ref message) = output.control_message else {
+        let ControlMessage::Create {
+            ref initial_members,
+        } = output.control_message
+        else {
             panic!("expected \"create\" control message");
         };
-        assert_eq!(message.initial_members, expected_members.to_vec());
+        assert_eq!(initial_members, expected_members);
 
         // Direct messages
         // ~~~~~~~~~~~~~~~
@@ -259,10 +262,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // "Processing" member of "create" message broadcasts an "ack" control message to everyone.
-        let Some(ControlMessage::Ack(AckMessage {
+        let Some(ControlMessage::Ack {
             ack_sender,
             ack_seq,
-        })) = output.control_message
+        }) = output.control_message
         else {
             panic!("expected \"ack\" control message");
         };
@@ -411,10 +414,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // "Adder" broadcasts an "add" control message to everyone.
-        let ControlMessage::Add(ref message) = output.control_message else {
+        let ControlMessage::Add { added } = output.control_message else {
             panic!("expected \"add\" control message");
         };
-        assert_eq!(message.added, added_id);
+        assert_eq!(added, added_id);
 
         // Direct messages
         // ~~~~~~~~~~~~~~~
@@ -484,10 +487,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // Added broadcasts an "ack" control message to everyone, no direct messages.
-        let Some(ControlMessage::Ack(AckMessage {
+        let Some(ControlMessage::Ack {
             ack_sender,
             ack_seq,
-        })) = output.control_message
+        }) = output.control_message
         else {
             panic!("expected \"ack\" control message");
         };
@@ -573,10 +576,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // Processor broadcasts an "add-ack" control message to everyone.
-        let Some(ControlMessage::AddAck(AddAckMessage {
+        let Some(ControlMessage::AddAck {
             ack_sender,
             ack_seq,
-        })) = output.control_message
+        }) = output.control_message
         else {
             panic!("expected \"add-ack\" control message");
         };
@@ -702,10 +705,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // "Remover" broadcasts a "remove" control message to everyone.
-        let ControlMessage::Remove(ref message) = output.control_message else {
+        let ControlMessage::Remove { removed } = output.control_message else {
             panic!("expected \"remove\" control message");
         };
-        assert_eq!(message.removed, removed_id);
+        assert_eq!(removed, removed_id);
 
         // Direct messages
         // ~~~~~~~~~~~~~~~
@@ -780,10 +783,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // "Processor" of "remove" message broadcasts an "ack" control message to everyone.
-        let Some(ControlMessage::Ack(AckMessage {
+        let Some(ControlMessage::Ack {
             ack_sender,
             ack_seq,
-        })) = output.control_message
+        }) = output.control_message
         else {
             panic!("expected \"ack\" control message");
         };
@@ -856,7 +859,7 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // "Updater" broadcasts an "update" control message to everyone.
-        let ControlMessage::Update(_) = output.control_message else {
+        let ControlMessage::Update = output.control_message else {
             panic!("expected \"update\" control message");
         };
 
@@ -928,10 +931,10 @@ impl AssertableDcgka {
         // ~~~~~~~~~~~~~~~~
 
         // Processor of "update" message broadcasts an "ack" control message to everyone.
-        let Some(ControlMessage::Ack(AckMessage {
+        let Some(ControlMessage::Ack {
             ack_sender,
             ack_seq,
-        })) = output.control_message
+        }) = output.control_message
         else {
             panic!("expected \"ack\" control message");
         };
