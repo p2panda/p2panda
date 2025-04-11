@@ -89,3 +89,8 @@
 //! identified that Alice's "update" happened concurrently to the "add", so they also process this
 //! message. They ignore the "create" as it took place before the "add". They ignore "Message 1"
 //! and "Message 2" of both Alice and Bob, as they would not be able to decrypt them.
+//!
+//! Note that Charlie will _not_ be able to decrypt "Message 3" and "Message 4" of Alice as they
+//! have been encrypted by Alice prior to their knowledge that Charlie was already in the group
+//! then. As soon as Alice will learn that Charlie was added they will "forward" their ratchet
+//! state to Charlie, but this will only be used for future messages.
