@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::crypto::Rng;
+use crate::crypto::aead::AeadError;
 use crate::key_bundle::OneTimeKeyBundle;
 use crate::message_scheme::dcgka::{
     ControlMessage, Dcgka, DcgkaError, DcgkaState, DirectMessage, OperationOutput,
@@ -15,6 +16,9 @@ use crate::traits::{
     AckedGroupMembership, ForwardSecureOrdering, IdentityHandle, IdentityManager, IdentityRegistry,
     MessageInfo, OperationId, PreKeyManager, PreKeyRegistry,
 };
+
+use super::RatchetError;
+use super::message::encrypt_message;
 
 pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
@@ -69,7 +73,7 @@ where
         // If we have an encryption ratchet we already established a group (either by creating or
         // processing a "welcome" message in the past).
         if y.ratchet.is_some() {
-            return Err(MessageGroupError::GroupAlreadyEstablished);
+            return Err(GroupError::GroupAlreadyEstablished);
         }
 
         // Create new group with initial members.
@@ -85,11 +89,11 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if y.ratchet.is_none() {
-            return Err(MessageGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         if y.my_id == added {
-            return Err(MessageGroupError::NotAddOurselves);
+            return Err(GroupError::NotAddOurselves);
         }
 
         // Add a new member to the group.
@@ -105,7 +109,7 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if y.ratchet.is_none() {
-            return Err(MessageGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         // Remove a member from the group.
@@ -122,7 +126,7 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if y.ratchet.is_none() {
-            return Err(MessageGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         // Update the group by generating a new seed.
@@ -144,14 +148,28 @@ where
     }
 
     pub fn send(
-        y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         plaintext: &[u8],
-    ) -> GroupResult<(), ID, OP, PKI, DGM, KMG, ORD> {
-        if y.ratchet.is_none() {
-            return Err(MessageGroupError::GroupNotYetEstablished);
-        }
+    ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
+        let Some(y_ratchet) = y.ratchet else {
+            return Err(GroupError::GroupNotYetEstablished);
+        };
 
-        todo!()
+        // Derive key material to encrypt message from our ratchet.
+        let (y_ratchet_i, generation, key_material) =
+            RatchetSecret::ratchet_forward(y_ratchet).map_err(GroupError::EncryptionRatchet)?;
+        y.ratchet = Some(y_ratchet_i);
+
+        // Encrypt message.
+        let ciphertext = encrypt_message(plaintext, key_material)?;
+
+        // Determine parameters for to-be-published application message.
+        let (y_orderer_i, message) =
+            ORD::next_application_message(y.orderer, generation, ciphertext)
+                .map_err(GroupError::Orderer)?;
+        y.orderer = y_orderer_i;
+
+        Ok((y, message))
     }
 
     fn process_local(
@@ -162,7 +180,7 @@ where
         // Determine parameters for to-be-published control message.
         let (y_orderer_i, message) =
             ORD::next_control_message(y.orderer, &output.control_message, &output.direct_messages)
-                .map_err(|err| MessageGroupError::Orderer(err))?;
+                .map_err(GroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         // Process control message locally to update our state.
@@ -181,13 +199,11 @@ where
     }
 }
 
-pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> = Result<
-    (GroupState<ID, OP, PKI, DGM, KMG, ORD>, T),
-    MessageGroupError<ID, OP, PKI, DGM, KMG, ORD>,
->;
+pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
+    Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
 
 #[derive(Debug, Error)]
-pub enum MessageGroupError<ID, OP, PKI, DGM, KMG, ORD>
+pub enum GroupError<ID, OP, PKI, DGM, KMG, ORD>
 where
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
     DGM: AckedGroupMembership<ID, OP>,
@@ -199,6 +215,12 @@ where
 
     #[error(transparent)]
     Orderer(ORD::Error),
+
+    #[error(transparent)]
+    EncryptionRatchet(RatchetError),
+
+    #[error(transparent)]
+    Aead(#[from] AeadError),
 
     #[error("creating or joining a group is not possible, state is already established")]
     GroupAlreadyEstablished,
