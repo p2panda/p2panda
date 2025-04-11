@@ -1530,6 +1530,12 @@ impl UpdateSecret {
     }
 }
 
+impl From<UpdateSecret> for Secret<RATCHET_KEY_SIZE> {
+    fn from(update_secret: UpdateSecret) -> Self {
+        update_secret.0
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum DcgkaError<ID, OP, PKI, DGM, KMG>
 where
