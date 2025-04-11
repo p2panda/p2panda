@@ -15,11 +15,12 @@ use crate::traits::{IdentityManager, PreKeyManager};
 
 /// Key manager to maintain secret key material (like our identity key) and to generate signed
 /// public pre-key bundles.
+#[derive(Clone, Debug)]
 pub struct KeyManager;
 
-/// Serializable state of key manager (for persistance).
+/// Serializable state of key manager (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct KeyManagerState {
     identity_secret: SecretKey,
     identity_key: PublicKey,
@@ -198,10 +199,10 @@ mod tests {
         // Secrets got removed from state.
         assert_eq!(state.onetime_secrets.len(), 0);
 
-        // Retreiving unknown one-time prekeys throws an error.
+        // Retrieving unknown one-time prekeys throws an error.
         assert!(KeyManager::use_onetime_secret(state.clone(), 42).is_err());
 
-        // Re-retreiving known one-time prekeys throws an error.
+        // Re-retrieving known one-time prekeys throws an error.
         assert!(
             KeyManager::use_onetime_secret(state.clone(), bundle_1.onetime_prekey_id().unwrap())
                 .is_err()
