@@ -241,6 +241,8 @@ where
                         rng,
                     )?;
 
+                    // TODO: Detect if this message removed us.
+
                     (
                         y_i,
                         output.map_or(vec![], |msg| vec![ReceiveOutput::Control(msg)]),
