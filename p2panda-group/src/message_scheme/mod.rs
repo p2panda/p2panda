@@ -2,6 +2,7 @@
 
 pub mod acked_dgm;
 mod dcgka;
+mod group;
 mod message;
 mod ordering;
 mod ratchet;
