@@ -118,7 +118,7 @@ where
 
     type Error: Error;
 
-    type Message: MessageInfo<ID, OP>;
+    type Message: MessageInfo<ID, OP, DGM>;
 
     fn next_control_message(
         y: Self::State,
