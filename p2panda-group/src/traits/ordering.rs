@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::message_scheme::{ControlMessage, DirectMessage};
+use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
 use crate::traits::{AckedGroupMembership, MessageInfo};
 
 /// Peers need to make sure that messages arrive "in order" to be processed correctly. For
@@ -112,7 +112,7 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 /// state to Charlie, but this will only be used for future messages.
 pub trait ForwardSecureOrdering<ID, OP, DGM>
 where
-    DGM: AckedGroupMembership,
+    DGM: AckedGroupMembership<ID, OP>,
 {
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
@@ -124,5 +124,11 @@ where
         y: Self::State,
         control_message: &ControlMessage<ID, OP>,
         direct_messages: &[DirectMessage<ID, OP, DGM>],
+    ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn next_application_message(
+        y: Self::State,
+        generation: Generation,
+        ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 }

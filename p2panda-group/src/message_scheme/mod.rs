@@ -20,6 +20,6 @@ pub use dcgka::{
 };
 #[allow(unused)]
 pub use ratchet::{
-    DecryptionRatchet, DecryptionRatchetState, MESSAGE_KEY_SIZE, RatchetError, RatchetSecret,
-    RatchetSecretState,
+    DecryptionRatchet, DecryptionRatchetState, Generation, MESSAGE_KEY_SIZE, RatchetError,
+    RatchetSecret, RatchetSecretState,
 };
