@@ -14,9 +14,9 @@ mod tests;
 // TODO: Remove this later.
 #[allow(unused)]
 pub use dcgka::{
-    AckMessage, AddAckMessage, AddMessage, ControlMessage, CreateMessage, Dcgka, DcgkaError,
-    DcgkaResult, DcgkaState, DirectMessage, DirectMessageContent, DirectMessageType,
-    OperationOutput, ProcessInput, ProcessOutput, RemoveMessage, UpdateMessage, UpdateSecret,
+    ControlMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage,
+    DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
+    UpdateSecret,
 };
 #[allow(unused)]
 pub use ratchet::{
