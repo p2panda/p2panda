@@ -9,16 +9,17 @@ use crate::crypto::Rng;
 use crate::crypto::aead::AeadError;
 use crate::key_bundle::OneTimeKeyBundle;
 use crate::message_scheme::dcgka::{
-    ControlMessage, Dcgka, DcgkaError, DcgkaState, DirectMessage, OperationOutput,
+    ControlMessage, Dcgka, DcgkaError, DcgkaState, DirectMessage, OperationOutput, ProcessInput,
 };
-use crate::message_scheme::ratchet::{DecryptionRatchetState, RatchetSecret, RatchetSecretState};
+use crate::message_scheme::message::{decrypt_message, encrypt_message};
+use crate::message_scheme::ratchet::{
+    DecryptionRatchet, DecryptionRatchetState, Generation, RatchetError, RatchetSecret,
+    RatchetSecretState,
+};
 use crate::traits::{
     AckedGroupMembership, ForwardSecureOrdering, IdentityHandle, IdentityManager, IdentityRegistry,
-    MessageInfo, OperationId, PreKeyManager, PreKeyRegistry,
+    MessageInfo, MessageType, OperationId, PreKeyManager, PreKeyRegistry,
 };
-
-use super::RatchetError;
-use super::message::encrypt_message;
 
 pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
@@ -38,6 +39,7 @@ where
     orderer: ORD::State,
     ratchet: Option<RatchetSecretState>,
     decryption_ratchet: HashMap<ID, DecryptionRatchetState>,
+    config: GroupConfig,
 }
 
 impl<ID, OP, PKI, DGM, KMG, ORD> MessageGroup<ID, OP, PKI, DGM, KMG, ORD>
@@ -55,6 +57,7 @@ where
         pki: PKI::State,
         dgm: DGM::State,
         orderer: ORD::State,
+        config: GroupConfig,
     ) -> GroupState<ID, OP, PKI, DGM, KMG, ORD> {
         GroupState {
             my_id,
@@ -62,6 +65,7 @@ where
             orderer,
             ratchet: None,
             decryption_ratchet: HashMap::new(),
+            config,
         }
     }
 
@@ -138,13 +142,126 @@ where
 
     pub fn receive(
         y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
-        sender: ID,
-        seq: OP,
-        dependencies: &[OP],
-        control_message: ControlMessage<ID, OP>,
-        direct_messages: Vec<DirectMessage<ID, OP, DGM>>,
-    ) -> GroupResult<(), ID, OP, PKI, DGM, KMG, ORD> {
-        todo!()
+        message: &ORD::Message,
+        rng: &Rng,
+    ) -> GroupResult<Vec<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+        let message_type = message.message_type();
+        let is_established = y.ratchet.is_some();
+        let mut is_create_or_welcome = false;
+
+        // Accept "create" control messages if we haven't established our state yet and if we are
+        // part of the initial members set.
+        if let MessageType::Control(ControlMessage::Create {
+            ref initial_members,
+        }) = message_type
+        {
+            if is_established {
+                return Err(GroupError::GroupAlreadyEstablished);
+            }
+
+            if !initial_members.contains(&y.my_id) {
+                return Err(GroupError::CreateNotForUs);
+            }
+
+            is_create_or_welcome = true;
+        }
+
+        // Accept "add" control messages if we either are being added by it or if we already have a
+        // group state established (and someone else is being added).
+        if let MessageType::Control(ControlMessage::Add { added }) = message_type {
+            if !is_established && added != y.my_id {
+                return Err(GroupError::WelcomeNotForUs);
+            }
+
+            if !is_established && added == y.my_id {
+                is_create_or_welcome = true;
+            }
+        }
+
+        // TODO: Message ordering.
+
+        let (y_i, output) = match (is_established, is_create_or_welcome) {
+            (false, false) => {
+                // 1. We're receiving control- and application-messages for this group but we
+                //    haven't joined yet. We keep these messages for later. We don't know yet when
+                //    we will join the group and which of these messages we can process afterwards.
+                // TODO
+                (y, vec![])
+            }
+            (false, true) => {
+                // 2. We've received a "create" or "add" (welcome) message for us and can join the
+                //    group now.
+                let direct_message = message
+                    .direct_messages()
+                    .into_iter()
+                    .find(|dm| dm.recipient == y.my_id);
+
+                if direct_message.is_none() {
+                    return Err(GroupError::DirectMessageMissing);
+                }
+
+                let MessageType::Control(control_message) = message_type else {
+                    unreachable!();
+                };
+
+                let (y_i, output) = Self::process_remote(
+                    y,
+                    message.id(),
+                    message.sender(),
+                    control_message,
+                    direct_message,
+                    rng,
+                )?;
+
+                // This "create" or "add" control message established the group state for us. We
+                // can now process all messages we've kept around before.
+                // TODO
+
+                (
+                    y_i,
+                    output.map_or(vec![], |msg| vec![ReceiveOutput::Control(msg)]),
+                )
+            }
+            (true, false) => match message_type {
+                // 3. We've received an "update", "add", "remove", "ack" or "add_ack" control
+                //    message and process it. This can potentially yield a new control message
+                //    ("ack" or "add_ack") we need to publish.
+                MessageType::Control(control_message) => {
+                    let direct_message = message
+                        .direct_messages()
+                        .into_iter()
+                        .find(|dm| dm.recipient == y.my_id);
+
+                    let (y_i, output) = Self::process_remote(
+                        y,
+                        message.id(),
+                        message.sender(),
+                        control_message,
+                        direct_message,
+                        rng,
+                    )?;
+
+                    (
+                        y_i,
+                        output.map_or(vec![], |msg| vec![ReceiveOutput::Control(msg)]),
+                    )
+                }
+                // 4. We've received an application message from the group to decrypt.
+                MessageType::Application {
+                    ciphertext,
+                    generation,
+                } => {
+                    let (y_i, plaintext) =
+                        Self::decrypt(y, message.sender(), ciphertext, generation)?;
+                    (y_i, vec![ReceiveOutput::Application { plaintext }])
+                }
+            },
+            (true, true) => {
+                unreachable!("we should have handled this case before");
+            }
+        };
+
+        Ok((y_i, output))
     }
 
     pub fn send(
@@ -197,10 +314,106 @@ where
 
         Ok((y, message))
     }
+
+    fn process_remote(
+        mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        seq: OP,
+        sender: ID,
+        control_message: ControlMessage<ID, OP>,
+        direct_message: Option<DirectMessage<ID, OP, DGM>>,
+        rng: &Rng,
+    ) -> GroupResult<Option<ORD::Message>, ID, OP, PKI, DGM, KMG, ORD> {
+        let (y_dcgka_i, output) = Dcgka::process_remote(
+            y.dcgka,
+            ProcessInput {
+                seq,
+                sender,
+                control_message,
+                direct_message,
+            },
+            rng,
+        )?;
+        y.dcgka = y_dcgka_i;
+
+        // Update own encryption ratchet for sending application messages.
+        if let Some(me_update_secret) = output.me_update_secret {
+            y.ratchet = Some(RatchetSecret::init(me_update_secret.into()));
+        }
+
+        // Update decryption ratchet for receiving application messages from this sender.
+        if let Some(sender_update_secret) = output.sender_update_secret {
+            y.decryption_ratchet
+                .insert(sender, DecryptionRatchet::init(sender_update_secret.into()));
+        }
+
+        if let Some(output_control_message) = output.control_message {
+            // Determine parameters for to-be-published control message.
+            let (y_orderer_i, output_message) = ORD::next_control_message(
+                y.orderer,
+                &output_control_message,
+                &output.direct_messages,
+            )
+            .map_err(GroupError::Orderer)?;
+            y.orderer = y_orderer_i;
+
+            Ok((y, Some(output_message)))
+        } else {
+            Ok((y, None))
+        }
+    }
+
+    fn decrypt(
+        mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        sender: ID,
+        ciphertext: Vec<u8>,
+        generation: Generation,
+    ) -> GroupResult<Vec<u8>, ID, OP, PKI, DGM, KMG, ORD> {
+        let Some(y_decryption_ratchet) = y.decryption_ratchet.remove(&sender) else {
+            return Err(GroupError::DecryptionRachetUnavailable(sender, generation));
+        };
+
+        // Try to derive required key material from ratchet.
+        let (y_decryption_ratchet_i, key_material) = DecryptionRatchet::secret_for_decryption(
+            y_decryption_ratchet,
+            generation,
+            y.config.maximum_forward_distance,
+            y.config.ooo_tolerance,
+        )
+        .map_err(GroupError::DecryptionRatchet)?;
+        y.decryption_ratchet.insert(sender, y_decryption_ratchet_i);
+
+        // Attempt to decrypt message.
+        let plaintext = decrypt_message(&ciphertext, key_material)?;
+
+        Ok((y, plaintext))
+    }
 }
 
 pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
     Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
+
+pub enum ReceiveOutput<ID, OP, DGM, ORD>
+where
+    DGM: AckedGroupMembership<ID, OP>,
+    ORD: ForwardSecureOrdering<ID, OP, DGM>,
+{
+    Control(ORD::Message),
+    Application { plaintext: Vec<u8> },
+}
+
+pub struct GroupConfig {
+    pub maximum_forward_distance: u32,
+    pub ooo_tolerance: u32,
+}
+
+impl Default for GroupConfig {
+    fn default() -> Self {
+        Self {
+            maximum_forward_distance: 1000,
+            ooo_tolerance: 100,
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum GroupError<ID, OP, PKI, DGM, KMG, ORD>
@@ -220,6 +433,9 @@ where
     EncryptionRatchet(RatchetError),
 
     #[error(transparent)]
+    DecryptionRatchet(RatchetError),
+
+    #[error(transparent)]
     Aead(#[from] AeadError),
 
     #[error("creating or joining a group is not possible, state is already established")]
@@ -228,6 +444,20 @@ where
     #[error("state is not ready yet, group needs to be created or joined first")]
     GroupNotYetEstablished,
 
-    #[error("can not add outselves to the group")]
+    #[error("can not add ourselves to the group")]
     NotAddOurselves,
+
+    #[error("received a \"create\" control message which is not for us")]
+    CreateNotForUs,
+
+    #[error("received an \"add\" control message (welcome) which is not for us")]
+    WelcomeNotForUs,
+
+    #[error("received \"create\" or \"add\" message addressing us but no direct message attached")]
+    DirectMessageMissing,
+
+    #[error(
+        "we do not have a decryption ratchet established yet to process the message from {0} @{1}"
+    )]
+    DecryptionRachetUnavailable(ID, Generation),
 }
