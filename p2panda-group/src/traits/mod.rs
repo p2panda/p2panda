@@ -7,11 +7,13 @@ mod dgm;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
+mod ordering;
 
 pub use dgm::{AckedGroupMembership, GroupMembership};
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
+pub use ordering::ForwardSecureOrdering;
 
 /// Handle to identify a group member.
 ///
@@ -37,3 +39,9 @@ impl OperationId for (usize, usize) {} // (ID, Seq)
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OperationId for usize {}
+
+pub trait MessageInfo<ID, OP> {
+    fn id(&self) -> OP;
+
+    fn sender(&self) -> ID;
+}
