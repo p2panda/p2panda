@@ -5,8 +5,8 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::message_scheme::ControlMessage;
-use crate::traits::MessageInfo;
+use crate::message_scheme::{ControlMessage, DirectMessage};
+use crate::traits::{AckedGroupMembership, MessageInfo};
 
 /// Peers need to make sure that messages arrive "in order" to be processed correctly. For
 /// p2panda's "message encryption" scheme extra care is required, since the strong forward-secrecy
@@ -110,7 +110,10 @@ use crate::traits::MessageInfo;
 /// have been encrypted by Alice prior to their knowledge that Charlie was already in the group
 /// then. As soon as Alice will learn that Charlie was added they will "forward" their ratchet
 /// state to Charlie, but this will only be used for future messages.
-pub trait ForwardSecureOrdering<ID, OP> {
+pub trait ForwardSecureOrdering<ID, OP, DGM>
+where
+    DGM: AckedGroupMembership,
+{
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
     type Error: Error;
@@ -120,5 +123,6 @@ pub trait ForwardSecureOrdering<ID, OP> {
     fn next_control_message(
         y: Self::State,
         control_message: &ControlMessage<ID, OP>,
+        direct_messages: &[DirectMessage<ID, OP, DGM>],
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 }
