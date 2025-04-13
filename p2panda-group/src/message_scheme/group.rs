@@ -459,3 +459,56 @@ where
     )]
     DecryptionRachetUnavailable(ID, Generation),
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::crypto::x25519::SecretKey;
+    use crate::message_scheme::acked_dgm::test_utils::{AckedTestDGM, State as AckedTestDGMState};
+    use crate::message_scheme::ordering::test_utils::TestOrderer;
+    use crate::message_scheme::test_utils::{MemberId, MessageId};
+    use crate::traits::PreKeyManager;
+    use crate::{KeyManager, KeyRegistry, KeyRegistryState, Lifetime, Rng};
+
+    use super::{GroupConfig, GroupState, MessageGroup};
+
+    #[test]
+    fn it_works() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let alice = 0;
+
+        let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let alice_keys =
+            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+        let alice_pki: KeyRegistryState<MemberId> = KeyRegistry::init();
+        let alice_dgm: AckedTestDGMState<MemberId, MessageId> = AckedTestDGM::init(alice);
+        let alice_orderer = TestOrderer::<AckedTestDGM<MemberId, MessageId>>::init(alice);
+        let alice_config = GroupConfig::default();
+
+        let (alice_keys, alice_bundle_1) =
+            KeyManager::generate_onetime_bundle(alice_keys, &rng).unwrap();
+        let alice_pki = KeyRegistry::add_onetime_bundle(alice_pki, alice, alice_bundle_1);
+
+        type TestGroupState = GroupState<
+            MemberId,
+            MessageId,
+            KeyRegistry<MemberId>,
+            AckedTestDGM<MemberId, MessageId>,
+            KeyManager,
+            TestOrderer<AckedTestDGM<MemberId, MessageId>>,
+        >;
+
+        let alice_group: TestGroupState = MessageGroup::init(
+            alice,
+            alice_keys,
+            alice_pki,
+            alice_dgm,
+            alice_orderer,
+            alice_config,
+        );
+
+        let (alice_group, message) = MessageGroup::create(alice_group, vec![], &rng).unwrap();
+
+        println!("{:?}", message);
+    }
+}
