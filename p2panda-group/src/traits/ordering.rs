@@ -86,6 +86,8 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 ///         └───┘                   └───┘                   └───┘
 /// ```
 ///
+/// // TODO: Add arrow from Alice's ACK to UPDATE and Bob's ACK to ADD?
+///
 /// When a peer processes a "welcome" message (they got added to a group, like "Charlie" in our
 /// example), then the following steps take place:
 ///
