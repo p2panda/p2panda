@@ -131,4 +131,12 @@ where
         generation: Generation,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    fn set_welcome(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    fn next_ready_message(
+        y: Self::State,
+    ) -> Result<(Self::State, Option<Self::Message>), Self::Error>;
 }

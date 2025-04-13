@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::Rng;
@@ -25,6 +26,8 @@ pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+// TODO: Derive Clone here for testing
 pub struct GroupState<ID, OP, PKI, DGM, KMG, ORD>
 where
     ID: IdentityHandle,
@@ -84,6 +87,8 @@ where
         let (y_dcgka_i, pre) = Dcgka::create(y.dcgka, initial_members, rng)?;
         y.dcgka = y_dcgka_i;
 
+        // TODO: Set welcome info in orderer.
+
         Ok(Self::process_local(y, pre, rng)?)
     }
 
@@ -141,7 +146,7 @@ where
     }
 
     pub fn receive(
-        y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
         rng: &Rng,
     ) -> GroupResult<Vec<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
@@ -159,111 +164,53 @@ where
                 return Err(GroupError::GroupAlreadyEstablished);
             }
 
-            if !initial_members.contains(&y.my_id) {
-                return Err(GroupError::CreateNotForUs);
+            if initial_members.contains(&y.my_id) {
+                is_create_or_welcome = true;
             }
-
-            is_create_or_welcome = true;
         }
 
-        // Accept "add" control messages if we either are being added by it or if we already have a
-        // group state established (and someone else is being added).
+        // Accept "add" control messages if we are being added by it.
         if let MessageType::Control(ControlMessage::Add { added }) = message_type {
-            if !is_established && added != y.my_id {
-                return Err(GroupError::WelcomeNotForUs);
-            }
-
             if !is_established && added == y.my_id {
                 is_create_or_welcome = true;
             }
         }
 
-        // TODO: Message ordering.
+        let y_orderer_i = ORD::queue(y.orderer, message).map_err(GroupError::Orderer)?;
+        y.orderer = y_orderer_i;
 
-        let (y_i, output) = match (is_established, is_create_or_welcome) {
-            (false, false) => {
-                // 1. We're receiving control- and application-messages for this group but we
-                //    haven't joined yet. We keep these messages for later. We don't know yet when
-                //    we will join the group and which of these messages we can process afterwards.
-                // TODO
-                (y, vec![])
+        if !is_established && !is_create_or_welcome {
+            // We're receiving control- and application messages for this group but we haven't
+            // joined yet. We keep these messages for later. We don't know yet when we will join
+            // the group and which of these messages we can process afterwards.
+            return Ok((y, vec![]));
+        }
+
+        if !is_established && is_create_or_welcome {
+            // We've received a "create" or "add" (welcome) message for us and can join the group
+            // now.
+            let y_orderer_i = ORD::set_welcome(y.orderer, message).map_err(GroupError::Orderer)?;
+            y.orderer = y_orderer_i;
+        }
+
+        // Check if there's any correctly ordered messages ready to-be processed.
+        let mut results = Vec::new();
+        let mut y_loop = y;
+        loop {
+            let (y_orderer_next, result) =
+                ORD::next_ready_message(y_loop.orderer).map_err(GroupError::Orderer)?;
+            y_loop.orderer = y_orderer_next;
+            let Some(message) = result else {
+                break;
+            };
+
+            let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
+            y_loop = y_next;
+            if let Some(message) = result {
+                results.push(message);
             }
-            (false, true) => {
-                // 2. We've received a "create" or "add" (welcome) message for us and can join the
-                //    group now.
-                let direct_message = message
-                    .direct_messages()
-                    .into_iter()
-                    .find(|dm| dm.recipient == y.my_id);
-
-                if direct_message.is_none() {
-                    return Err(GroupError::DirectMessageMissing);
-                }
-
-                let MessageType::Control(control_message) = message_type else {
-                    unreachable!();
-                };
-
-                let (y_i, output) = Self::process_remote(
-                    y,
-                    message.id(),
-                    message.sender(),
-                    control_message,
-                    direct_message,
-                    rng,
-                )?;
-
-                // This "create" or "add" control message established the group state for us. We
-                // can now process all messages we've kept around before.
-                // TODO
-
-                (
-                    y_i,
-                    output.map_or(vec![], |msg| vec![ReceiveOutput::Control(msg)]),
-                )
-            }
-            (true, false) => match message_type {
-                // 3. We've received an "update", "add", "remove", "ack" or "add_ack" control
-                //    message and process it. This can potentially yield a new control message
-                //    ("ack" or "add_ack") we need to publish.
-                MessageType::Control(control_message) => {
-                    let direct_message = message
-                        .direct_messages()
-                        .into_iter()
-                        .find(|dm| dm.recipient == y.my_id);
-
-                    let (y_i, output) = Self::process_remote(
-                        y,
-                        message.id(),
-                        message.sender(),
-                        control_message,
-                        direct_message,
-                        rng,
-                    )?;
-
-                    // TODO: Detect if this message removed us.
-
-                    (
-                        y_i,
-                        output.map_or(vec![], |msg| vec![ReceiveOutput::Control(msg)]),
-                    )
-                }
-                // 4. We've received an application message from the group to decrypt.
-                MessageType::Application {
-                    ciphertext,
-                    generation,
-                } => {
-                    let (y_i, plaintext) =
-                        Self::decrypt(y, message.sender(), ciphertext, generation)?;
-                    (y_i, vec![ReceiveOutput::Application { plaintext }])
-                }
-            },
-            (true, true) => {
-                unreachable!("we should have handled this case before");
-            }
-        };
-
-        Ok((y_i, output))
+        }
+        Ok((y_loop, results))
     }
 
     pub fn send(
@@ -274,13 +221,9 @@ where
             return Err(GroupError::GroupNotYetEstablished);
         };
 
-        // Derive key material to encrypt message from our ratchet.
-        let (y_ratchet_i, generation, key_material) =
-            RatchetSecret::ratchet_forward(y_ratchet).map_err(GroupError::EncryptionRatchet)?;
+        // Encrypt application message.
+        let (y_ratchet_i, generation, ciphertext) = Self::encrypt(y_ratchet, plaintext)?;
         y.ratchet = Some(y_ratchet_i);
-
-        // Encrypt message.
-        let ciphertext = encrypt_message(plaintext, key_material)?;
 
         // Determine parameters for to-be-published application message.
         let (y_orderer_i, message) =
@@ -314,7 +257,44 @@ where
                 .into(),
         ));
 
+        // TODO: Add message to orderer?;
+
         Ok((y, message))
+    }
+
+    fn process_ready(
+        y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        message: &ORD::Message,
+        rng: &Rng,
+    ) -> GroupResult<Option<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+        match message.message_type() {
+            MessageType::Control(control_message) => {
+                let direct_message = message
+                    .direct_messages()
+                    .into_iter()
+                    .find(|dm| dm.recipient == y.my_id);
+
+                let (y_i, output) = Self::process_remote(
+                    y,
+                    message.id(),
+                    message.sender(),
+                    control_message,
+                    direct_message,
+                    rng,
+                )?;
+
+                // TODO: Detect if this message removed us.
+
+                Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
+            }
+            MessageType::Application {
+                ciphertext,
+                generation,
+            } => {
+                let (y_i, plaintext) = Self::decrypt(y, message.sender(), ciphertext, generation)?;
+                Ok((y_i, Some(ReceiveOutput::Application { plaintext })))
+            }
+        }
     }
 
     fn process_remote(
@@ -357,11 +337,25 @@ where
             )
             .map_err(GroupError::Orderer)?;
             y.orderer = y_orderer_i;
-
             Ok((y, Some(output_message)))
         } else {
             Ok((y, None))
         }
+    }
+
+    fn encrypt(
+        y_ratchet: RatchetSecretState,
+        plaintext: &[u8],
+    ) -> Result<(RatchetSecretState, Generation, Vec<u8>), GroupError<ID, OP, PKI, DGM, KMG, ORD>>
+    {
+        // Derive key material to encrypt message from our ratchet.
+        let (y_ratchet_i, generation, key_material) =
+            RatchetSecret::ratchet_forward(y_ratchet).map_err(GroupError::EncryptionRatchet)?;
+
+        // Encrypt message.
+        let ciphertext = encrypt_message(plaintext, key_material)?;
+
+        Ok((y_ratchet_i, generation, ciphertext))
     }
 
     fn decrypt(
@@ -394,6 +388,7 @@ where
 pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
     Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReceiveOutput<ID, OP, DGM, ORD>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -403,6 +398,7 @@ where
     Application { plaintext: Vec<u8> },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupConfig {
     pub maximum_forward_distance: u32,
     pub ooo_tolerance: u32,
