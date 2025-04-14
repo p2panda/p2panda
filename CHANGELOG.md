@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.3.1] - 14/04/2025
+
 ### Added
 
 - Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
@@ -66,11 +68,12 @@ Highlights are marked with a pancake 🥞
 
 - Fix re-attempt logic for out-of-order buffer in `Ingest` stream [#666](https://github.com/p2panda/p2panda/pull/666)
 
-## [0.1.0] - 06/12/2025
+## [0.1.0] - 06/12/2024
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/p2panda/p2panda/releases/tag/v0.3.1
 [0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
 [0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
