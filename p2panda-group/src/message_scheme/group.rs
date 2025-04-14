@@ -552,7 +552,7 @@ mod tests {
             self.set_y(y_i);
         }
 
-        pub fn process(&mut self) -> Vec<(MessageId, Vec<u8>)> {
+        pub fn process(&mut self) -> Vec<(MemberId, MemberId, Vec<u8>)> {
             if self.queue.is_empty() {
                 return Vec::new();
             }
@@ -567,6 +567,7 @@ mod tests {
                         continue;
                     }
 
+                    // Member processes each message broadcast to the group.
                     let y = self.get_y(id);
                     let (y_i, result) = MessageGroup::receive(y, &message, &self.rng).unwrap();
                     self.set_y(y_i);
@@ -574,11 +575,14 @@ mod tests {
                     for output in result {
                         match output {
                             ReceiveOutput::Control(control_message) => {
+                                // Processing messages might yield new ones, process these as well.
                                 self.queue.push_back(control_message);
                             }
-                            ReceiveOutput::Application { plaintext } => {
-                                decrypted_messages.push((message.id(), plaintext))
-                            }
+                            ReceiveOutput::Application { plaintext } => decrypted_messages.push((
+                                message.sender(), // Sender
+                                *id,              // Receiver
+                                plaintext,        // Decrypted content
+                            )),
                         }
                     }
                 }
@@ -607,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn simple_group() {
         let rng = Rng::from_seed([1; 32]);
 
         let alice = 0;
@@ -631,5 +635,14 @@ mod tests {
             assert_eq!(network.members(&member), vec![alice, bob]);
         }
         assert_eq!(network.members(&charlie), vec![]);
+
+        // Alice sends a message to the group and Bob can decrypt it.
+        network.send(alice, b"Hello everyone!");
+        let mut results = network.process();
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results.pop().unwrap(),
+            (alice, bob, b"Hello everyone!".to_vec())
+        );
     }
 }
