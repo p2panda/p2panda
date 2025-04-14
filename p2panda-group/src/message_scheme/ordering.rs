@@ -12,6 +12,14 @@ pub mod test_utils {
     use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
     use crate::traits::{AckedGroupMembership, ForwardSecureOrdering, MessageInfo, MessageType};
 
+    /// Simplified orderer for tests.
+    ///
+    /// This orderer does _not_ fullfill the required specification for correct ordering of
+    /// concurrent operations. It's assuming that peers process all messages after each member has
+    /// published max. one control or application message.
+    ///
+    /// This is sufficient for the current testing setup but for anything "production ready" a more
+    /// sophisticated solution will be required.
     #[derive(Debug)]
     pub struct TestOrderer<DGM> {
         _marker: PhantomData<DGM>,
@@ -24,8 +32,7 @@ pub mod test_utils {
         pub fn init(my_id: MemberId) -> TestOrdererState<DGM> {
             TestOrdererState {
                 next_message_seq: 0,
-                last_control_messages: HashMap::new(),
-                last_application_message: None,
+                previous: HashMap::new(),
                 my_id,
                 ready: HashSet::new(),
                 ready_queue: VecDeque::new(),
@@ -43,13 +50,12 @@ pub mod test_utils {
     {
         next_message_seq: usize,
         my_id: MemberId,
-        last_application_message: Option<MessageId>,
-        last_control_messages: HashMap<MemberId, MessageId>,
+        previous: HashMap<MemberId, MessageId>,
         ready: HashSet<MessageId>,
         ready_queue: VecDeque<MessageId>,
         pending: HashMap<MessageId, HashSet<(MessageId, Vec<MessageId>)>>,
         messages: HashMap<MessageId, TestMessage<DGM>>,
-        welcome_message: Option<MessageId>,
+        welcome_message: Option<TestMessage<DGM>>,
     }
 
     impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for TestOrderer<DGM>
@@ -73,7 +79,7 @@ pub mod test_utils {
         ) -> Result<(Self::State, Self::Message), Self::Error> {
             let seq = y.next_message_seq;
             let sender = y.my_id;
-            let previous = y.last_control_messages.values().cloned().collect();
+            let previous = y.previous.values().cloned().collect();
 
             let message = TestMessage {
                 seq,
@@ -86,8 +92,7 @@ pub mod test_utils {
             };
 
             y.next_message_seq += 1;
-            y.last_application_message = None;
-            y.last_control_messages.insert(y.my_id, message.id());
+            y.previous.insert(y.my_id, message.id());
 
             Ok((y, message))
         }
@@ -99,12 +104,7 @@ pub mod test_utils {
         ) -> Result<(Self::State, Self::Message), Self::Error> {
             let seq = y.next_message_seq;
             let sender = y.my_id;
-
-            let previous = if let Some(last_id) = y.last_application_message {
-                vec![last_id]
-            } else {
-                y.last_control_messages.values().cloned().collect()
-            };
+            let previous = y.previous.values().cloned().collect();
 
             let message = TestMessage {
                 seq,
@@ -116,6 +116,7 @@ pub mod test_utils {
                 },
             };
 
+            y.previous.insert(y.my_id, message.id());
             y.next_message_seq += 1;
 
             Ok((y, message))
@@ -126,8 +127,15 @@ pub mod test_utils {
 
             y.messages.insert(id, message.clone());
 
-            if !Self::ready(&y, &message.previous)? {
-                let (y_i, _) = Self::mark_pending(y, id, message.previous.clone())?;
+            let previous: Vec<MessageId> = message
+                .previous
+                .iter()
+                .filter(|id| id.sender != y.my_id)
+                .cloned()
+                .collect();
+
+            if !Self::ready(&y, &previous)? {
+                let (y_i, _) = Self::mark_pending(y, id, previous)?;
                 return Ok(y_i);
             }
 
@@ -141,31 +149,57 @@ pub mod test_utils {
             mut y: Self::State,
             message: &Self::Message,
         ) -> Result<Self::State, Self::Error> {
-            y.welcome_message = Some(message.id());
+            y.welcome_message = Some(message.clone());
             Ok(y)
         }
 
         fn next_ready_message(
             y: Self::State,
         ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-            let (mut y_i, next_ready) = Self::take_next_ready(y)?;
-            let message = next_ready.map(|id| {
-                y_i.messages
-                    .get(&id)
-                    .expect("ids map consistently to messages")
-                    .to_owned()
-            });
+            // We have not joined the group yet, don't process any messages yet.
+            let Some(welcome) = y.welcome_message.clone() else {
+                return Ok((y, None));
+            };
 
-            {
-                if let Some(ref message) = message {
-                    if let MessageType::Control(_) = message.message_type() {
-                        y_i.last_control_messages
-                            .insert(message.sender(), message.id());
+            let mut y_loop = y;
+            loop {
+                let (y_next, next_ready) = Self::take_next_ready(y_loop)?;
+                y_loop = y_next;
+
+                let message = next_ready.map(|id| {
+                    y_loop
+                        .messages
+                        .get(&id)
+                        .expect("ids map consistently to messages")
+                        .to_owned()
+                });
+
+                if let Some(message) = message {
+                    let last_seq = welcome
+                        .previous
+                        .iter()
+                        .find(|msg| msg.sender == message.sender())
+                        .map(|msg| msg.seq);
+
+                    // Is this message before our welcome?
+                    if let Some(last_seq) = last_seq {
+                        if message.id().seq < last_seq + 1 {
+                            continue;
+                        }
                     }
+
+                    // Mark messages as "last seen" so we can mention the "previous" ones as soon
+                    // as we publish a message ourselves.
+                    //
+                    // In a correct implementation we would _only_ track control messages here (and
+                    // not also application messages).
+                    y_loop.previous.insert(message.sender(), message.id());
+
+                    return Ok((y_loop, Some(message)));
+                } else {
+                    return Ok((y_loop, None));
                 }
             }
-
-            Ok((y_i, message))
         }
     }
 

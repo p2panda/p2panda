@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+#![allow(clippy::type_complexity)]
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
@@ -87,9 +88,13 @@ where
         let (y_dcgka_i, pre) = Dcgka::create(y.dcgka, initial_members, rng)?;
         y.dcgka = y_dcgka_i;
 
-        // TODO: Set welcome info in orderer.
+        let (mut y_i, message) = Self::process_local(y, pre, rng)?;
 
-        Self::process_local(y, pre, rng)
+        // Set our own "create" as the "welcome" message.
+        let y_orderer_i = ORD::set_welcome(y_i.orderer, &message).map_err(GroupError::Orderer)?;
+        y_i.orderer = y_orderer_i;
+
+        Ok((y_i, message))
     }
 
     pub fn add(
@@ -193,23 +198,50 @@ where
             y.orderer = y_orderer_i;
         }
 
-        // Check if there's any correctly ordered messages ready to-be processed.
         let mut results = Vec::new();
         let mut y_loop = y;
+
+        let mut control_messages = VecDeque::new();
+        let mut application_messages = VecDeque::new();
+
+        // Check if there's any correctly ordered messages ready to-be processed.
         loop {
             let (y_orderer_next, result) =
                 ORD::next_ready_message(y_loop.orderer).map_err(GroupError::Orderer)?;
             y_loop.orderer = y_orderer_next;
+
             let Some(message) = result else {
                 break;
             };
 
+            match message.message_type() {
+                MessageType::Control(_) => {
+                    control_messages.push_back(message);
+                }
+                MessageType::Application { .. } => {
+                    application_messages.push_back(message);
+                }
+            }
+        }
+
+        // Process all control messages first.
+        while let Some(message) = control_messages.pop_front() {
             let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
             y_loop = y_next;
             if let Some(message) = result {
                 results.push(message);
             }
         }
+
+        // .. then process all application messages.
+        while let Some(message) = application_messages.pop_front() {
+            let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
+            y_loop = y_next;
+            if let Some(message) = result {
+                results.push(message);
+            }
+        }
+
         Ok((y_loop, results))
     }
 
@@ -263,8 +295,6 @@ where
                 .expect("local operation always yields an update secret for us")
                 .into(),
         ));
-
-        // TODO: Add message to orderer?;
 
         Ok((y, message))
     }
@@ -496,11 +526,72 @@ mod tests {
 
         // Alice sends a message to the group and Bob can decrypt it.
         network.send(alice, b"Hello everyone!");
-        let mut results = network.process();
-        assert_eq!(results.len(), 1);
         assert_eq!(
-            results.pop().unwrap(),
-            (alice, bob, b"Hello everyone!".to_vec())
+            network.process(),
+            vec![(alice, bob, b"Hello everyone!".to_vec())],
+        );
+    }
+
+    #[test]
+    fn welcome() {
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let mut network = Network::new([alice, bob, charlie], Rng::from_seed([1; 32]));
+
+        // Alice creates a group with Bob.
+        network.create(alice, vec![bob]);
+        network.process();
+
+        // Bob updates the group.
+        network.update(bob);
+        network.process();
+
+        // Bob sends a message to the group and Alice can decrypt it.
+        network.send(bob, b"Huhu");
+        assert_eq!(network.process(), vec![(bob, alice, b"Huhu".to_vec())],);
+
+        // Bob adds Charlie. Charlie will process their "welcome" message now to join.
+        network.add(bob, charlie);
+        network.process();
+
+        // Alice sends a message to the group and Bob and Charlie can decrypt it.
+        network.send(alice, b"Hello everyone!");
+        assert_eq!(
+            network.process(),
+            vec![
+                (alice, bob, b"Hello everyone!".to_vec()),
+                (alice, charlie, b"Hello everyone!".to_vec()),
+            ],
+        );
+    }
+
+    #[test]
+    fn concurrency() {
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let mut network = Network::new([alice, bob, charlie], Rng::from_seed([1; 32]));
+
+        // Alice creates a group with Bob.
+        network.create(alice, vec![bob]);
+        network.process();
+
+        // Bob updates the group and concurrently Alice adds Charlie.
+        network.update(bob);
+        network.add(alice, charlie);
+        network.process();
+
+        // Bob sends a message to the group and Alice and Charlie can decrypt it.
+        network.send(bob, b"Hello everyone!");
+        assert_eq!(
+            network.process(),
+            vec![
+                (bob, alice, b"Hello everyone!".to_vec()),
+                (bob, charlie, b"Hello everyone!".to_vec()),
+            ],
         );
     }
 }
