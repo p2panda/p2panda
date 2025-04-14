@@ -236,6 +236,7 @@ pub mod test_utils {
             Ok((y, insert_occured))
         }
 
+        #[allow(clippy::type_complexity)]
         fn get_next_pending(
             y: &TestOrdererState<DGM>,
             key: MessageId,
