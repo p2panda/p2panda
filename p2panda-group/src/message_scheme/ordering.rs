@@ -31,6 +31,7 @@ pub mod test_utils {
                 ready_queue: VecDeque::new(),
                 pending: HashMap::new(),
                 messages: HashMap::new(),
+                welcome_message: None,
             }
         }
     }
@@ -48,6 +49,7 @@ pub mod test_utils {
         ready_queue: VecDeque<MessageId>,
         pending: HashMap<MessageId, HashSet<(MessageId, Vec<MessageId>)>>,
         messages: HashMap<MessageId, TestMessage<DGM>>,
+        welcome_message: Option<MessageId>,
     }
 
     impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for TestOrderer<DGM>
@@ -136,10 +138,11 @@ pub mod test_utils {
         }
 
         fn set_welcome(
-            y: Self::State,
+            mut y: Self::State,
             message: &Self::Message,
         ) -> Result<Self::State, Self::Error> {
-            todo!()
+            y.welcome_message = Some(message.id());
+            Ok(y)
         }
 
         fn next_ready_message(
@@ -155,12 +158,9 @@ pub mod test_utils {
 
             {
                 if let Some(ref message) = message {
-                    match message.message_type() {
-                        MessageType::Control(_) => {
-                            y_i.last_control_messages
-                                .insert(message.sender(), message.id());
-                        }
-                        _ => (),
+                    if let MessageType::Control(_) = message.message_type() {
+                        y_i.last_control_messages
+                            .insert(message.sender(), message.id());
                     }
                 }
             }
