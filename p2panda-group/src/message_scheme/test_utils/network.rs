@@ -119,6 +119,7 @@ impl Network {
             }
         }
 
+        decrypted_messages.sort();
         decrypted_messages
     }
 

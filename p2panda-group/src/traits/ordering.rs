@@ -138,6 +138,7 @@ where
 
     fn set_welcome(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
 
+    #[allow(clippy::type_complexity)]
     fn next_ready_message(
         y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error>;
