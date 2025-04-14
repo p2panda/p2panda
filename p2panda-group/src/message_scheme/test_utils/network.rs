@@ -7,7 +7,7 @@ use crate::message_scheme::group::{GroupConfig, GroupState, MessageGroup, Receiv
 use crate::message_scheme::ordering::test_utils::{TestMessage, TestOrderer};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
 use crate::message_scheme::test_utils::{MemberId, MessageId};
-use crate::traits::MessageInfo;
+use crate::traits::ForwardSecureMessage;
 use crate::{KeyManager, KeyRegistry, Rng};
 
 pub type TestGroupState = GroupState<
@@ -67,6 +67,7 @@ impl Network {
         let (y_i, message) = MessageGroup::remove(y, removed, &self.rng).unwrap();
         self.queue.push_back(message);
         self.set_y(y_i);
+        self.get_y(&removed);
     }
 
     pub fn update(&mut self, updater: MemberId) {
@@ -114,6 +115,7 @@ impl Network {
                             *id,              // Receiver
                             plaintext,        // Decrypted content
                         )),
+                        ReceiveOutput::Removed => (),
                     }
                 }
             }

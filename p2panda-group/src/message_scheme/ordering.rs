@@ -10,16 +10,18 @@ pub mod test_utils {
 
     use crate::message_scheme::test_utils::{MemberId, MessageId};
     use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
-    use crate::traits::{AckedGroupMembership, ForwardSecureOrdering, MessageInfo, MessageType};
+    use crate::traits::{
+        AckedGroupMembership, ForwardSecureMessage, ForwardSecureMessageType, ForwardSecureOrdering,
+    };
 
     /// Simplified orderer for tests.
     ///
-    /// This orderer does _not_ fullfill the required specification for correct ordering of
-    /// concurrent operations. It's assuming that peers process all messages after each member has
-    /// published max. one control or application message.
+    /// This orderer does _not_ fullfill the full specification for correct ordering. It's assuming
+    /// that peers process all messages after each member has published max. one control or
+    /// application message.
     ///
-    /// This is sufficient for the current testing setup but for anything "production ready" a more
-    /// sophisticated solution will be required.
+    /// This is sufficient for the current testing setup but for anything "production ready" and
+    /// more robust for all concurrency scenarios, a more sophisticated solution will be required.
     #[derive(Debug)]
     pub struct TestOrderer<DGM> {
         _marker: PhantomData<DGM>,
@@ -327,7 +329,7 @@ pub mod test_utils {
         },
     }
 
-    impl<DGM> MessageInfo<MemberId, MessageId, DGM> for TestMessage<DGM>
+    impl<DGM> ForwardSecureMessage<MemberId, MessageId, DGM> for TestMessage<DGM>
     where
         DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
     {
@@ -342,23 +344,21 @@ pub mod test_utils {
             self.sender
         }
 
-        // TODO: Should this be better returning a borrowed type?
-        fn message_type(&self) -> MessageType<MemberId, MessageId> {
+        fn message_type(&self) -> ForwardSecureMessageType<MemberId, MessageId> {
             match &self.content {
                 TestMessageContent::Application {
                     ciphertext,
                     generation,
-                } => MessageType::Application {
+                } => ForwardSecureMessageType::Application {
                     ciphertext: ciphertext.to_owned(),
                     generation: *generation,
                 },
                 TestMessageContent::System {
                     control_message, ..
-                } => MessageType::Control(control_message.to_owned()),
+                } => ForwardSecureMessageType::Control(control_message.to_owned()),
             }
         }
 
-        // TODO: Should this be better returning a borrowed type?
         fn direct_messages(&self) -> Vec<DirectMessage<MemberId, MessageId, DGM>> {
             match &self.content {
                 TestMessageContent::Application { .. } => Vec::new(),
