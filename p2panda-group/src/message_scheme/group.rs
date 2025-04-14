@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
@@ -89,7 +89,7 @@ where
 
         // TODO: Set welcome info in orderer.
 
-        Ok(Self::process_local(y, pre, rng)?)
+        Self::process_local(y, pre, rng)
     }
 
     pub fn add(
@@ -109,7 +109,7 @@ where
         let (y_dcgka_i, pre) = Dcgka::add(y.dcgka, added, rng)?;
         y.dcgka = y_dcgka_i;
 
-        Ok(Self::process_local(y, pre, rng)?)
+        Self::process_local(y, pre, rng)
     }
 
     pub fn remove(
@@ -127,7 +127,7 @@ where
 
         // TODO: Handle removing ourselves.
 
-        Ok(Self::process_local(y, pre, rng)?)
+        Self::process_local(y, pre, rng)
     }
 
     pub fn update(
@@ -142,7 +142,7 @@ where
         let (y_dcgka_i, pre) = Dcgka::update(y.dcgka, rng)?;
         y.dcgka = y_dcgka_i;
 
-        Ok(Self::process_local(y, pre, rng)?)
+        Self::process_local(y, pre, rng)
     }
 
     pub fn receive(
@@ -232,6 +232,13 @@ where
         y.orderer = y_orderer_i;
 
         Ok((y, message))
+    }
+
+    pub fn members(
+        y: &GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+    ) -> Result<HashSet<ID>, GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
+        let members = Dcgka::member_view(&y.dcgka, &y.my_id)?;
+        Ok(members)
     }
 
     fn process_local(
@@ -462,53 +469,167 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::x25519::SecretKey;
-    use crate::message_scheme::acked_dgm::test_utils::{AckedTestDGM, State as AckedTestDGMState};
-    use crate::message_scheme::ordering::test_utils::TestOrderer;
-    use crate::message_scheme::test_utils::{MemberId, MessageId};
-    use crate::traits::PreKeyManager;
-    use crate::{KeyManager, KeyRegistry, KeyRegistryState, Lifetime, Rng};
+    use std::collections::{HashMap, VecDeque};
 
-    use super::{GroupConfig, GroupState, MessageGroup};
+    use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
+    use crate::message_scheme::ordering::test_utils::{TestMessage, TestOrderer};
+    use crate::message_scheme::test_utils::{MemberId, MessageId, init_dcgka_state};
+    use crate::traits::MessageInfo;
+    use crate::{KeyManager, KeyRegistry, Rng};
+
+    use super::{GroupConfig, GroupState, MessageGroup, ReceiveOutput};
+
+    type TestGroupState = GroupState<
+        MemberId,
+        MessageId,
+        KeyRegistry<MemberId>,
+        AckedTestDGM<MemberId, MessageId>,
+        KeyManager,
+        TestOrderer<AckedTestDGM<MemberId, MessageId>>,
+    >;
+
+    struct Network {
+        rng: Rng,
+        members: HashMap<MemberId, TestGroupState>,
+        queue: VecDeque<TestMessage<AckedTestDGM<MemberId, MessageId>>>,
+    }
+
+    impl Network {
+        pub fn new<const N: usize>(members: [MemberId; N], rng: Rng) -> Self {
+            let members = init_dcgka_state(members, &rng);
+            Self {
+                members: HashMap::from_iter(members.into_iter().map(|dcgka| {
+                    (dcgka.my_id, {
+                        let orderer =
+                            TestOrderer::<AckedTestDGM<MemberId, MessageId>>::init(dcgka.my_id);
+                        TestGroupState {
+                            my_id: dcgka.my_id,
+                            dcgka,
+                            orderer,
+                            ratchet: None,
+                            decryption_ratchet: HashMap::new(),
+                            config: GroupConfig::default(),
+                        }
+                    })
+                })),
+                rng,
+                queue: VecDeque::new(),
+            }
+        }
+
+        pub fn create(&mut self, creator: MemberId, initial_members: Vec<MemberId>) {
+            let y = self.get_y(&creator);
+            let (y_i, message) = MessageGroup::create(y, initial_members, &self.rng).unwrap();
+            self.queue.push_back(message);
+            self.set_y(y_i);
+        }
+
+        pub fn add(&mut self, adder: MemberId, added: MemberId) {
+            let y = self.get_y(&adder);
+            let (y_i, message) = MessageGroup::add(y, added, &self.rng).unwrap();
+            self.queue.push_back(message);
+            self.set_y(y_i);
+        }
+
+        pub fn remove(&mut self, remover: MemberId, removed: MemberId) {
+            let y = self.get_y(&remover);
+            let (y_i, message) = MessageGroup::remove(y, removed, &self.rng).unwrap();
+            self.queue.push_back(message);
+            self.set_y(y_i);
+        }
+
+        pub fn update(&mut self, updater: MemberId) {
+            let y = self.get_y(&updater);
+            let (y_i, message) = MessageGroup::update(y, &self.rng).unwrap();
+            self.queue.push_back(message);
+            self.set_y(y_i);
+        }
+
+        pub fn send(&mut self, sender: MemberId, plaintext: &[u8]) {
+            let y = self.get_y(&sender);
+            let (y_i, message) = MessageGroup::send(y, plaintext).unwrap();
+            self.queue.push_back(message);
+            self.set_y(y_i);
+        }
+
+        pub fn process(&mut self) -> Vec<(MessageId, Vec<u8>)> {
+            if self.queue.is_empty() {
+                return Vec::new();
+            }
+
+            let mut decrypted_messages = Vec::new();
+            let member_ids: Vec<MemberId> = self.members.keys().cloned().collect();
+
+            while let Some(message) = self.queue.pop_front() {
+                for id in &member_ids {
+                    // Do not process our own messages.
+                    if &message.sender() == id {
+                        continue;
+                    }
+
+                    let y = self.get_y(id);
+                    let (y_i, result) = MessageGroup::receive(y, &message, &self.rng).unwrap();
+                    self.set_y(y_i);
+
+                    for output in result {
+                        match output {
+                            ReceiveOutput::Control(control_message) => {
+                                self.queue.push_back(control_message);
+                            }
+                            ReceiveOutput::Application { plaintext } => {
+                                decrypted_messages.push((message.id(), plaintext))
+                            }
+                        }
+                    }
+                }
+            }
+
+            decrypted_messages
+        }
+
+        pub fn members(&self, member: &MemberId) -> Vec<MemberId> {
+            let y = self.members.get(member).expect("member exists");
+            let mut members = Vec::from_iter(MessageGroup::members(y).unwrap());
+            members.sort();
+            members
+        }
+
+        fn get_y(&mut self, member: &MemberId) -> TestGroupState {
+            self.members.remove(member).expect("member exists")
+        }
+
+        fn set_y(&mut self, y: TestGroupState) {
+            assert!(
+                self.members.insert(y.my_id, y).is_none(),
+                "state was removed before insertion"
+            );
+        }
+    }
 
     #[test]
     fn it_works() {
         let rng = Rng::from_seed([1; 32]);
 
         let alice = 0;
+        let bob = 1;
+        let charlie = 2;
 
-        let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let alice_keys =
-            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
-        let alice_pki: KeyRegistryState<MemberId> = KeyRegistry::init();
-        let alice_dgm: AckedTestDGMState<MemberId, MessageId> = AckedTestDGM::init(alice);
-        let alice_orderer = TestOrderer::<AckedTestDGM<MemberId, MessageId>>::init(alice);
-        let alice_config = GroupConfig::default();
+        let mut network = Network::new([alice, bob, charlie], rng);
 
-        let (alice_keys, alice_bundle_1) =
-            KeyManager::generate_onetime_bundle(alice_keys, &rng).unwrap();
-        let alice_pki = KeyRegistry::add_onetime_bundle(alice_pki, alice, alice_bundle_1);
+        // Alice creates a group with Bob.
+        network.create(alice, vec![bob]);
 
-        type TestGroupState = GroupState<
-            MemberId,
-            MessageId,
-            KeyRegistry<MemberId>,
-            AckedTestDGM<MemberId, MessageId>,
-            KeyManager,
-            TestOrderer<AckedTestDGM<MemberId, MessageId>>,
-        >;
-
-        let alice_group: TestGroupState = MessageGroup::init(
-            alice,
-            alice_keys,
-            alice_pki,
-            alice_dgm,
-            alice_orderer,
-            alice_config,
+        // Everyone processes each other's messages.
+        let results = network.process();
+        assert!(
+            results.is_empty(),
+            "no decrypted application messages expected"
         );
 
-        let (alice_group, message) = MessageGroup::create(alice_group, vec![], &rng).unwrap();
-
-        println!("{:?}", message);
+        // Alice and Bob share the same members view, Charlie is not member yet.
+        for member in [alice, bob] {
+            assert_eq!(network.members(&member), vec![alice, bob]);
+        }
+        assert_eq!(network.members(&charlie), vec![]);
     }
 }

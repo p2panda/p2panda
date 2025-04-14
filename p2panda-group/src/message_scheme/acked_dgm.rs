@@ -16,7 +16,7 @@ pub mod test_utils {
     ///
     /// This does not support re-adding a member, is only used for testing and will be soon
     /// replaced with an optimal implementation.
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct AckedTestDGM<ID, OP> {
         _marker: PhantomData<(ID, OP)>,
     }
