@@ -24,7 +24,7 @@ pub mod test_utils {
         pub fn init(my_id: MemberId) -> TestOrdererState<DGM> {
             TestOrdererState {
                 next_message_seq: 0,
-                last_control_messages: Vec::new(),
+                last_control_messages: HashMap::new(),
                 last_application_message: None,
                 my_id,
                 ready: HashSet::new(),
@@ -43,7 +43,7 @@ pub mod test_utils {
         next_message_seq: usize,
         my_id: MemberId,
         last_application_message: Option<MessageId>,
-        last_control_messages: Vec<MessageId>,
+        last_control_messages: HashMap<MemberId, MessageId>,
         ready: HashSet<MessageId>,
         ready_queue: VecDeque<MessageId>,
         pending: HashMap<MessageId, HashSet<(MessageId, Vec<MessageId>)>>,
@@ -71,7 +71,7 @@ pub mod test_utils {
         ) -> Result<(Self::State, Self::Message), Self::Error> {
             let seq = y.next_message_seq;
             let sender = y.my_id;
-            let previous = y.last_control_messages.clone();
+            let previous = y.last_control_messages.values().cloned().collect();
 
             let message = TestMessage {
                 seq,
@@ -85,7 +85,7 @@ pub mod test_utils {
 
             y.next_message_seq += 1;
             y.last_application_message = None;
-            y.last_control_messages = vec![message.id()];
+            y.last_control_messages.insert(y.my_id, message.id());
 
             Ok((y, message))
         }
@@ -101,7 +101,7 @@ pub mod test_utils {
             let previous = if let Some(last_id) = y.last_application_message {
                 vec![last_id]
             } else {
-                y.last_control_messages.clone()
+                y.last_control_messages.values().cloned().collect()
             };
 
             let message = TestMessage {
@@ -145,13 +145,26 @@ pub mod test_utils {
         fn next_ready_message(
             y: Self::State,
         ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-            let (y_i, next_ready) = Self::take_next_ready(y)?;
+            let (mut y_i, next_ready) = Self::take_next_ready(y)?;
             let message = next_ready.map(|id| {
                 y_i.messages
                     .get(&id)
                     .expect("ids map consistently to messages")
                     .to_owned()
             });
+
+            {
+                if let Some(ref message) = message {
+                    match message.message_type() {
+                        MessageType::Control(_) => {
+                            y_i.last_control_messages
+                                .insert(message.sender(), message.id());
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
             Ok((y_i, message))
         }
     }
@@ -313,10 +326,7 @@ pub mod test_utils {
         // TODO: Should this be better returning a borrowed type?
         fn direct_messages(&self) -> Vec<DirectMessage<MemberId, MessageId, DGM>> {
             match &self.content {
-                TestMessageContent::Application {
-                    ciphertext,
-                    generation,
-                } => Vec::new(),
+                TestMessageContent::Application { .. } => Vec::new(),
                 TestMessageContent::System {
                     direct_messages, ..
                 } => direct_messages.clone(),
