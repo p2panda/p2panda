@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
-use crate::traits::{AckedGroupMembership, MessageInfo};
+use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
 
 /// Peers need to make sure that messages arrive "in order" to be processed correctly. For
 /// p2panda's "message encryption" scheme extra care is required, since the strong forward-secrecy
@@ -48,7 +48,6 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 /// dependencies Alice and Bob will be able to read all sent messages by each other.
 ///
 /// ```text
-///
 ///        Alice
 ///       ────────
 ///       ┌──────┐
@@ -57,25 +56,25 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 ///         ▲ ▲ ▲                   ─────
 ///         │ │ │                   ┌───┐
 ///         │ │ └───────────────────┤ACK│
-///         │ │                     └───┘
-///         │ │                      ▲ ▲
-///           │                      │ │
-/// Message 1 │                      │
-///         ▲ │                      │ Message 1
-///         │ │                      │ ▲
-///           │                      │ │
-/// Message 2 │                      │
-///         ▲ │                      │ Message 2
-///         │ │                      │ ▲
-///         │ │                      │ │
-///        ┌┴─┴───┐                 ┌┴─┴┐
+///         │ │                   ┌►└───┘
+///         │ │                   │  ▲ ▲
+///           │                   │  │ │
+/// Message 1 │ ┌─────────────────┘  │
+///         ▲ │ │                    │ Message 1
+///         │ │ │                    │ ▲
+///           │ │                    │ │
+/// Message 2 │ │                    │
+///         ▲ │ │                    │ Message 2
+///         │ │ │                    │ ▲
+///         │ │ │                    │ │
+///        ┌┴─┴─┴─┐                 ┌┴─┴┐
 ///        │UPDATE│   Concurrent!   │ADD│
-///        └──────┘                 └───┘
-///         ▲    ▲                   ▲ ▲                   Charlie
-///         │    │                   │ │                  ─────────
-///         │ ┌──┼───────────────────┘ ├──────────────────────┐
-///           │  │                     │                      │
-/// Message 3 │  └───────────────────┐ │                      │
+///        └──────┘               ┌►└───┘
+///         ▲ ▲ ▲                 │  ▲ ▲                   Charlie
+///         │ │ │                 │  │ │                  ─────────
+///         │ ├─┼─────────────────┘  │ ├──────────────────────┐
+///           │ │                    │ │                      │
+/// Message 3 │ └────────────────────┤ │                      │
 ///         ▲ │                      │                        │
 ///         │ │                      │ Message 3              │
 ///           │                      │ ▲                      │
@@ -86,16 +85,15 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 ///         └───┘                   └───┘                   └───┘
 /// ```
 ///
-/// // TODO: Add arrow from Alice's ACK to UPDATE and Bob's ACK to ADD?
-///
 /// When a peer processes a "welcome" message (they got added to a group, like "Charlie" in our
 /// example), then the following steps take place:
 ///
-/// 1. All messages prior to the "welcome" message (the "add" which added us) can be ignored.
-/// 2. All messages after or concurrent to the "welcome" message need to be processed regularily
-///    like all other messages.
-/// 3. All application messages concurrent to the "welcome" message can be ignored (as they can not
-///    be decrypted).
+/// 1. Control and application messages before the "welcome" message (the "add" which added us) can
+///    be ignored.
+/// 2. Control messages after or concurrent to the "welcome" message need to be processed
+///    regularily like all other messages.
+/// 3. Application messages concurrent to the "welcome" message can be ignored (as they can not be
+///    decrypted).
 ///
 /// All of this "welcome" processing needs to be done before we can move on processing future
 /// messages.
@@ -108,10 +106,10 @@ use crate::traits::{AckedGroupMembership, MessageInfo};
 /// of Bob, as they would not be able to decrypt them. Afterwards they would be able to decrypt
 /// "Message 3" of Bob as this message was created with Charlie in mind.
 ///
-/// Note that Charlie will _not_ be able to decrypt "Message 3" and "Message 4" of Alice as they
-/// have been encrypted by Alice prior to their knowledge that Charlie was already in the group
-/// then. As soon as Alice will learn that Charlie was added they will "forward" their ratchet
-/// state to Charlie, but this will only be used for future messages.
+/// Note that Charlie will _not_ be able to decrypt older messages of Alice and Bob as they have
+/// been encrypted by Alice prior to their knowledge that Charlie was already in the group then. As
+/// soon as Alice will learn that Charlie was added they will "forward" their ratchet state to
+/// Charlie, but this will only be used for future messages.
 pub trait ForwardSecureOrdering<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -120,7 +118,7 @@ where
 
     type Error: Error;
 
-    type Message: MessageInfo<ID, OP, DGM>;
+    type Message: ForwardSecureMessage<ID, OP, DGM>;
 
     fn next_control_message(
         y: Self::State,

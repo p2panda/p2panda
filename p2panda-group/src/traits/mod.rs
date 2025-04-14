@@ -14,7 +14,7 @@ pub use dgm::{AckedGroupMembership, GroupMembership};
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
-pub use message::{MessageInfo, MessageType};
+pub use message::{ForwardSecureMessage, ForwardSecureMessageType};
 pub use ordering::ForwardSecureOrdering;
 
 /// Handle to identify a group member.

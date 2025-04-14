@@ -19,16 +19,24 @@ use crate::message_scheme::ratchet::{
     RatchetSecretState,
 };
 use crate::traits::{
-    AckedGroupMembership, ForwardSecureOrdering, IdentityHandle, IdentityManager, IdentityRegistry,
-    MessageInfo, MessageType, OperationId, PreKeyManager, PreKeyRegistry,
+    AckedGroupMembership, ForwardSecureMessage, ForwardSecureMessageType, ForwardSecureOrdering,
+    IdentityHandle, IdentityManager, IdentityRegistry, OperationId, PreKeyManager, PreKeyRegistry,
 };
 
+/// Group encryption scheme for messaging with strong security guarantees.
+// NOTE: This implementation is not complete yet and will be finalized in sub-sequent "integration"
+// PRs along work on our access control crate to make it "production ready":
+//
+// 1. DGM with access control is missing
+// 2. Orderer is missing supporting more complex concurrency scenarios
+// 3. Re-adding members is currently not possible
+// 4. Memory-bound state handling (especially required in orderer)
 pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
 
+/// Group state for "message encryption" scheme. Serializable for persistence.
 #[derive(Debug, Serialize, Deserialize)]
-// TODO: Derive Clone here for testing
 pub struct GroupState<ID, OP, PKI, DGM, KMG, ORD>
 where
     ID: IdentityHandle,
@@ -55,6 +63,9 @@ where
     KMG: IdentityManager<KMG::State> + PreKeyManager,
     ORD: ForwardSecureOrdering<ID, OP, DGM>,
 {
+    /// Returns initial state for messaging group.
+    ///
+    /// This needs to be called before creating or being added to a group.
     pub fn init(
         my_id: ID,
         my_keys: KMG::State,
@@ -73,6 +84,7 @@ where
         }
     }
 
+    /// Creates new group with initial set of members.
     pub fn create(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         initial_members: Vec<ID>,
@@ -97,6 +109,7 @@ where
         Ok((y_i, message))
     }
 
+    /// Adds new member to group.
     pub fn add(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         added: ID,
@@ -117,6 +130,7 @@ where
         Self::process_local(y, pre, rng)
     }
 
+    /// Removes member from group. It is possible to remove ourselves.
     pub fn remove(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         removed: ID,
@@ -130,11 +144,10 @@ where
         let (y_dcgka_i, pre) = Dcgka::remove(y.dcgka, removed, rng)?;
         y.dcgka = y_dcgka_i;
 
-        // TODO: Handle removing ourselves.
-
         Self::process_local(y, pre, rng)
     }
 
+    /// Updates group secret and provides all members with fresh entropy.
     pub fn update(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         rng: &Rng,
@@ -150,6 +163,13 @@ where
         Self::process_local(y, pre, rng)
     }
 
+    /// Handler for incoming, remote messages.
+    ///
+    /// This yields a list of "outputs" which can be either control messages which need to be
+    /// broadcast to all members in the group or decrypted application message payloads.
+    ///
+    /// If we got removed after processing a control message we will receive an "removed" output
+    /// signal.
     pub fn receive(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
@@ -161,7 +181,7 @@ where
 
         // Accept "create" control messages if we haven't established our state yet and if we are
         // part of the initial members set.
-        if let MessageType::Control(ControlMessage::Create {
+        if let ForwardSecureMessageType::Control(ControlMessage::Create {
             ref initial_members,
         }) = message_type
         {
@@ -175,7 +195,7 @@ where
         }
 
         // Accept "add" control messages if we are being added by it.
-        if let MessageType::Control(ControlMessage::Add { added }) = message_type {
+        if let ForwardSecureMessageType::Control(ControlMessage::Add { added }) = message_type {
             if !is_established && added == y.my_id {
                 is_create_or_welcome = true;
             }
@@ -215,10 +235,10 @@ where
             };
 
             match message.message_type() {
-                MessageType::Control(_) => {
+                ForwardSecureMessageType::Control(_) => {
                     control_messages.push_back(message);
                 }
-                MessageType::Application { .. } => {
+                ForwardSecureMessageType::Application { .. } => {
                     application_messages.push_back(message);
                 }
             }
@@ -245,6 +265,10 @@ where
         Ok((y_loop, results))
     }
 
+    /// Encrypts application message towards the current group.
+    ///
+    /// The returned message can then be broadcast to all members in the group. The underlying
+    /// protocol makes sure that all members will be able to decrypt this message.
     pub fn send(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         plaintext: &[u8],
@@ -266,6 +290,7 @@ where
         Ok((y, message))
     }
 
+    /// Returns a list of all current members in this group from our perspective.
     pub fn members(
         y: &GroupState<ID, OP, PKI, DGM, KMG, ORD>,
     ) -> Result<HashSet<ID>, GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
@@ -273,6 +298,7 @@ where
         Ok(members)
     }
 
+    /// Processes our own locally created control messages.
     fn process_local(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         output: OperationOutput<ID, OP, DGM>,
@@ -299,13 +325,14 @@ where
         Ok((y, message))
     }
 
+    /// Processes remote messages which have been marked as "ready" by the orderer.
     fn process_ready(
         y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
         rng: &Rng,
     ) -> GroupResult<Option<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         match message.message_type() {
-            MessageType::Control(control_message) => {
+            ForwardSecureMessageType::Control(control_message) => {
                 let direct_message = message
                     .direct_messages()
                     .into_iter()
@@ -320,11 +347,15 @@ where
                     rng,
                 )?;
 
-                // TODO: Detect if this message removed us.
-
-                Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
+                // Check if processing this message removed us from the group.
+                let is_removed = !Self::members(&y_i)?.contains(&y_i.my_id);
+                if is_removed {
+                    Ok((y_i, Some(ReceiveOutput::Removed)))
+                } else {
+                    Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
+                }
             }
-            MessageType::Application {
+            ForwardSecureMessageType::Application {
                 ciphertext,
                 generation,
             } => {
@@ -334,6 +365,7 @@ where
         }
     }
 
+    /// Internal method to process remote control message.
     fn process_remote(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         seq: OP,
@@ -380,6 +412,7 @@ where
         }
     }
 
+    /// Encrypt message by using our ratchet.
     fn encrypt(
         y_ratchet: RatchetSecretState,
         plaintext: &[u8],
@@ -395,6 +428,7 @@ where
         Ok((y_ratchet_i, generation, ciphertext))
     }
 
+    /// Decrypt message by using the sender's ratchet.
     fn decrypt(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         sender: ID,
@@ -410,7 +444,7 @@ where
             y_decryption_ratchet,
             generation,
             y.config.maximum_forward_distance,
-            y.config.ooo_tolerance,
+            y.config.out_of_order_tolerance,
         )
         .map_err(GroupError::DecryptionRatchet)?;
         y.decryption_ratchet.insert(sender, y_decryption_ratchet_i);
@@ -431,21 +465,34 @@ where
     DGM: AckedGroupMembership<ID, OP>,
     ORD: ForwardSecureOrdering<ID, OP, DGM>,
 {
+    /// Control message for group encryption which should be broadcast to all members of the group.
     Control(ORD::Message),
+
+    /// Decrypted payload of message.
     Application { plaintext: Vec<u8> },
+
+    /// Signal that we've been removed from the group.
+    Removed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupConfig {
+    /// This parameter defines how many incoming messages can be skipped. This is useful if the
+    /// application drops messages.
     pub maximum_forward_distance: u32,
-    pub ooo_tolerance: u32,
+
+    /// This parameter defines a window for which decryption secrets are kept. This is useful in
+    /// case the ratchet cannot guarantee that all application messages have total order within an
+    /// epoch. Use this carefully, since keeping decryption secrets affects forward secrecy within
+    /// an epoch.
+    pub out_of_order_tolerance: u32,
 }
 
 impl Default for GroupConfig {
     fn default() -> Self {
         Self {
             maximum_forward_distance: 1000,
-            ooo_tolerance: 100,
+            out_of_order_tolerance: 100,
         }
     }
 }
@@ -491,9 +538,7 @@ where
     #[error("received \"create\" or \"add\" message addressing us but no direct message attached")]
     DirectMessageMissing,
 
-    #[error(
-        "we do not have a decryption ratchet established yet to process the message from {0} @{1}"
-    )]
+    #[error("decryption ratchet not established yet to process the message from {0} @{1}")]
     DecryptionRachetUnavailable(ID, Generation),
 }
 
@@ -593,5 +638,25 @@ mod tests {
                 (bob, charlie, b"Hello everyone!".to_vec()),
             ],
         );
+    }
+
+    #[test]
+    fn removal() {
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let mut network = Network::new([alice, bob, charlie], Rng::from_seed([1; 32]));
+
+        network.create(alice, vec![alice, bob, charlie]);
+        network.process();
+
+        // Alice removes Bob.
+        network.remove(alice, bob);
+        network.process();
+
+        // Charlie removes themselves.
+        network.remove(charlie, charlie);
+        network.process();
     }
 }
