@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::crypto::Rng;
+use crate::data_scheme::ControlMessage;
 use crate::data_scheme::dgm::test_utils::TestDgm;
 use crate::data_scheme::group::{EncryptionGroup, GroupState, ReceiveOutput};
 use crate::data_scheme::group_secret::SecretBundle;
@@ -11,7 +12,7 @@ use crate::data_scheme::test_utils::ordering::{MessageOrderer, TestMessage};
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
 use crate::test_utils::{MemberId, MessageId};
-use crate::traits::GroupMessage;
+use crate::traits::{GroupMessage, GroupMessageType};
 
 pub type TestGroupState = GroupState<
     MemberId,
@@ -24,14 +25,16 @@ pub type TestGroupState = GroupState<
 
 pub struct Network {
     rng: Rng,
-    members: HashMap<MemberId, TestGroupState>,
-    queue: VecDeque<TestMessage<TestDgm<MemberId, MessageId>>>,
+    pub members: HashMap<MemberId, TestGroupState>,
+    pub removed_members: HashSet<MemberId>,
+    pub queue: VecDeque<TestMessage<TestDgm<MemberId, MessageId>>>,
 }
 
 impl Network {
     pub fn new<const N: usize>(members: [MemberId; N], rng: Rng) -> Self {
         let members = init_dcgka_state(members, &rng);
         Self {
+            rng,
             members: HashMap::from_iter(members.into_iter().map(|dcgka| {
                 (dcgka.my_id, {
                     let orderer = MessageOrderer::<TestDgm<MemberId, MessageId>>::init(dcgka.my_id);
@@ -44,7 +47,7 @@ impl Network {
                     }
                 })
             })),
-            rng,
+            removed_members: HashSet::new(),
             queue: VecDeque::new(),
         }
     }
@@ -68,7 +71,7 @@ impl Network {
         let (y_i, message) = EncryptionGroup::remove(y, removed, &self.rng).unwrap();
         self.queue.push_back(message);
         self.set_y(y_i);
-        self.get_y(&removed);
+        self.removed_members.insert(removed);
     }
 
     pub fn update(&mut self, updater: MemberId) {
@@ -91,7 +94,12 @@ impl Network {
         }
 
         let mut decrypted_messages = Vec::new();
-        let member_ids: Vec<MemberId> = self.members.keys().cloned().collect();
+        let member_ids: Vec<MemberId> = self
+            .members
+            .keys()
+            .cloned()
+            .filter(|id| !self.removed_members.contains(id))
+            .collect();
 
         while let Some(message) = self.queue.pop_front() {
             for id in &member_ids {
@@ -118,6 +126,13 @@ impl Network {
                         )),
                         ReceiveOutput::Removed => (),
                     }
+                }
+
+                // Update set of removed members if any.
+                if let GroupMessageType::Control(ControlMessage::Remove { removed }) =
+                    message.message_type()
+                {
+                    self.removed_members.insert(removed);
                 }
             }
         }
