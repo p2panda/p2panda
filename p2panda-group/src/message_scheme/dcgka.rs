@@ -95,7 +95,7 @@ const RATCHET_KEY_SIZE: usize = 32;
 /// * `seq` is taken care of _outside_ of this implementation. Methods return control messages
 ///   which need to be manually assigned a "seq", that is a vector clock, hash, seq_num or similar.
 /// * After calling a group operation "create", "add", "remove" or "update" the user needs to process
-///   the output themselves by calling `process_local`. This allows an user of the API to correctly
+///   the output themselves by calling `process_local`. This allows a user of the API to correctly
 ///   craft a `seq` for their control messages (see point above).
 /// * Instead of sending the history of control messages in "welcome" messages we send the
 ///   "processed" and potentially garbage-collected CRDT state of DGM. This also allows
