@@ -10,7 +10,7 @@ pub mod test_utils {
 
     use crate::traits::{GroupMembership, IdentityHandle, OperationId};
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     pub struct TestDgm<ID, OP> {
         _marker: PhantomData<(ID, OP)>,
     }
@@ -28,7 +28,7 @@ pub mod test_utils {
         }
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     pub struct TestDgmState<ID, OP>
     where
         ID: IdentityHandle,

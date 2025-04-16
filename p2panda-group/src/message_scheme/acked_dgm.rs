@@ -17,11 +17,11 @@ pub mod test_utils {
     /// This does not support re-adding a member, is only used for testing and will be soon
     /// replaced with an optimal implementation.
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct AckedTestDGM<ID, OP> {
+    pub struct AckedTestDgm<ID, OP> {
         _marker: PhantomData<(ID, OP)>,
     }
 
-    impl<ID, OP> AckedTestDGM<ID, OP>
+    impl<ID, OP> AckedTestDgm<ID, OP>
     where
         ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
         OP: OperationId + Serialize + for<'a> Deserialize<'a>,
@@ -54,7 +54,7 @@ pub mod test_utils {
         removes_by_msg: HashSet<OP>,
     }
 
-    impl<ID, OP> AckedGroupMembership<ID, OP> for AckedTestDGM<ID, OP>
+    impl<ID, OP> AckedGroupMembership<ID, OP> for AckedTestDgm<ID, OP>
     where
         ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
         OP: OperationId + Serialize + for<'a> Deserialize<'a>,
@@ -440,10 +440,10 @@ pub mod test_utils {
 
     #[cfg(test)]
     mod tests {
-        use crate::message_scheme::test_utils::MessageId;
+        use crate::test_utils::MessageId;
         use crate::traits::AckedGroupMembership;
 
-        use super::AckedTestDGM;
+        use super::AckedTestDgm;
 
         #[test]
         fn concurrent_operations() {
@@ -453,10 +453,10 @@ pub mod test_utils {
             let daphne = 3;
 
             // Alice creates a group.
-            let alice_y = AckedTestDGM::create(alice, &[alice]).unwrap();
+            let alice_y = AckedTestDgm::create(alice, &[alice]).unwrap();
 
             // Alice adds Bob.
-            let alice_y = AckedTestDGM::add(
+            let alice_y = AckedTestDgm::add(
                 alice_y,
                 alice,
                 bob,
@@ -466,10 +466,10 @@ pub mod test_utils {
                 },
             )
             .unwrap();
-            let bob_y = AckedTestDGM::from_welcome(bob, alice_y.clone()).unwrap();
+            let bob_y = AckedTestDgm::from_welcome(bob, alice_y.clone()).unwrap();
 
             // Alice removes Bob.
-            let alice_y = AckedTestDGM::remove(
+            let alice_y = AckedTestDgm::remove(
                 alice_y,
                 alice,
                 &bob,
@@ -481,7 +481,7 @@ pub mod test_utils {
             .unwrap();
 
             // Concurrently Bob adds Charlie and Daphne.
-            let bob_y = AckedTestDGM::add(
+            let bob_y = AckedTestDgm::add(
                 bob_y,
                 bob,
                 charlie,
@@ -492,7 +492,7 @@ pub mod test_utils {
             )
             .unwrap();
 
-            let bob_y = AckedTestDGM::add(
+            let bob_y = AckedTestDgm::add(
                 bob_y,
                 bob,
                 daphne,
@@ -504,7 +504,7 @@ pub mod test_utils {
             .unwrap();
 
             // Alice applies Bob's changes.
-            let alice_y = AckedTestDGM::add(
+            let alice_y = AckedTestDgm::add(
                 alice_y,
                 bob,
                 charlie,
@@ -515,7 +515,7 @@ pub mod test_utils {
             )
             .unwrap();
 
-            let alice_y = AckedTestDGM::add(
+            let alice_y = AckedTestDgm::add(
                 alice_y,
                 bob,
                 daphne,
@@ -527,7 +527,7 @@ pub mod test_utils {
             .unwrap();
 
             // Bob applies Alice's changes.
-            let bob_y = AckedTestDGM::remove(
+            let bob_y = AckedTestDgm::remove(
                 bob_y,
                 alice,
                 &bob,
@@ -539,21 +539,21 @@ pub mod test_utils {
             .unwrap();
 
             assert_eq!(
-                AckedTestDGM::members_view(&alice_y, &alice).unwrap(),
-                AckedTestDGM::members_view(&bob_y, &bob).unwrap(),
+                AckedTestDgm::members_view(&alice_y, &alice).unwrap(),
+                AckedTestDgm::members_view(&bob_y, &bob).unwrap(),
             );
             assert!(
-                !AckedTestDGM::members_view(&alice_y, &alice)
+                !AckedTestDgm::members_view(&alice_y, &alice)
                     .unwrap()
                     .contains(&bob)
             );
             assert!(
-                !AckedTestDGM::members_view(&alice_y, &alice)
+                !AckedTestDgm::members_view(&alice_y, &alice)
                     .unwrap()
                     .contains(&charlie)
             );
             assert!(
-                !AckedTestDGM::members_view(&alice_y, &alice)
+                !AckedTestDgm::members_view(&alice_y, &alice)
                     .unwrap()
                     .contains(&daphne)
             );
