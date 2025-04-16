@@ -426,7 +426,7 @@ where
         Ok((y, plaintext))
     }
 
-    fn members(
+    pub fn members(
         y: &DcgkaState<ID, OP, PKI, DGM, KMG>,
     ) -> Result<HashSet<ID>, DcgkaError<ID, OP, PKI, DGM, KMG>> {
         let members = DGM::members(&y.dgm).map_err(|err| DcgkaError::GroupMembership(err))?;

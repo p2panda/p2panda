@@ -5,8 +5,45 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
-use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
+use crate::crypto::xchacha20::XAeadNonce;
+use crate::data_scheme::{self, GroupSecretId};
+use crate::message_scheme::{self, Generation};
+use crate::traits::{
+    AckedGroupMembership, EncryptedDataMessage, ForwardSecureMessage, GroupMembership,
+};
+
+pub trait Ordering<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
+    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+
+    type Error: Error;
+
+    type Message: EncryptedDataMessage<ID, OP, DGM>;
+
+    fn next_control_message(
+        y: Self::State,
+        control_message: &data_scheme::ControlMessage<ID>,
+        direct_messages: &[data_scheme::DirectMessage<ID, OP, DGM>],
+    ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn next_application_message(
+        y: Self::State,
+        secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+        ciphertext: Vec<u8>,
+    ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    fn set_welcome(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    #[allow(clippy::type_complexity)]
+    fn next_ready_message(
+        y: Self::State,
+    ) -> Result<(Self::State, Option<Self::Message>), Self::Error>;
+}
 
 /// Peers need to make sure that messages arrive "in order" to be processed correctly. For
 /// p2panda's "message encryption" scheme extra care is required, since the strong forward-secrecy
@@ -122,8 +159,8 @@ where
 
     fn next_control_message(
         y: Self::State,
-        control_message: &ControlMessage<ID, OP>,
-        direct_messages: &[DirectMessage<ID, OP, DGM>],
+        control_message: &message_scheme::ControlMessage<ID, OP>,
+        direct_messages: &[message_scheme::DirectMessage<ID, OP, DGM>],
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 
     fn next_application_message(
