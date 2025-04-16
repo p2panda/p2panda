@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::crypto::x25519::SecretKey;
-use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
+use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
 use crate::message_scheme::{
     ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType, OperationOutput,
     ProcessOutput, UpdateSecret,
@@ -16,7 +16,7 @@ pub type TestDcgkaState = DcgkaState<
     MemberId,
     MessageId,
     KeyRegistry<MemberId>,
-    AckedTestDGM<MemberId, MessageId>,
+    AckedTestDgm<MemberId, MessageId>,
     KeyManager,
 >;
 
@@ -51,7 +51,7 @@ pub fn init_dcgka_state<const N: usize>(
     // Register each other's pre-key bundles and initialise DCGKA state.
     let mut result = Vec::with_capacity(member_ids.len());
     for id in member_ids {
-        let dgm = AckedTestDGM::init(id);
+        let dgm = AckedTestDgm::init(id);
         let registry = {
             let mut state = KeyRegistry::init();
             for bundle_id in member_ids {
@@ -78,9 +78,9 @@ fn members_without(members: &[MemberId], without: &[MemberId]) -> Vec<MemberId> 
 }
 
 pub fn assert_direct_message(
-    direct_messages: &[DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>],
+    direct_messages: &[DirectMessage<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>],
     recipient: MemberId,
-) -> DirectMessage<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>> {
+) -> DirectMessage<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>> {
     direct_messages
         .iter()
         .find(|message| message.recipient == recipient)
@@ -98,7 +98,7 @@ pub fn assert_members_view(dcgka: &TestDcgkaState, assertions: &[ExpectedMembers
     for assertion in assertions {
         for viewer in assertion.viewer {
             assert_eq!(
-                AckedTestDGM::members_view(&dcgka.dgm, viewer).unwrap(),
+                AckedTestDgm::members_view(&dcgka.dgm, viewer).unwrap(),
                 HashSet::from_iter(assertion.expected.iter().cloned()),
                 "{} should have had members view {:?}",
                 viewer,
@@ -125,7 +125,7 @@ impl AssertableDcgka {
     pub fn assert_create(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &OperationOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         creator_id: MemberId,          // Group "creator"
         expected_members: &[MemberId], // List of expected initial group members
         seq: MessageId,                // Id of "create" control message
@@ -214,7 +214,7 @@ impl AssertableDcgka {
     pub fn assert_process_create(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId, // "Processor" who handles "create" control message
         creator_id: MemberId,   // Group "creator"
         expected_members: &[MemberId], // List of expected members after processing "create"
@@ -306,7 +306,7 @@ impl AssertableDcgka {
     pub fn assert_process_ack(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId, // Member who "processes" the "ack" control message
         acker_id: MemberId,     // Author of the "ack" control message,
         seq: MessageId,         // Id of the "ack" message
@@ -367,7 +367,7 @@ impl AssertableDcgka {
     pub fn assert_add(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &OperationOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         adder_id: MemberId, // "Adder" who adds someone to the group
         added_id: MemberId, // "Added" who will join the group
         seq: MessageId,     // Id of the "add" control message
@@ -439,7 +439,7 @@ impl AssertableDcgka {
     pub fn assert_process_welcome(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         adder_id: MemberId,            // Member who invited to the group
         added_id: MemberId,            // Member who was added to the group
         expected_members: &[MemberId], // List of expected members after processing "add"
@@ -526,7 +526,7 @@ impl AssertableDcgka {
     pub fn assert_process_add(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId, // "Processor" of the "add" control message
         adder_id: MemberId,     // Id of the member who invited the new member
         added_id: MemberId,     // Id of the member which got added
@@ -605,7 +605,7 @@ impl AssertableDcgka {
     pub fn assert_process_add_ack(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId, // "Processor" of the "add-ack" control message
         add_acker_id: MemberId, // Sender of the "add-ack" control message
     ) {
@@ -657,7 +657,7 @@ impl AssertableDcgka {
     pub fn assert_remove(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &OperationOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         remover_id: MemberId,          // Author of the "remove" control message
         removed_id: MemberId,          // Member which gets "removed"
         expected_members: &[MemberId], // List of expected members after removal
@@ -736,7 +736,7 @@ impl AssertableDcgka {
     pub fn assert_process_remove(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId,
         remover_id: MemberId,
         seq: MessageId,
@@ -813,7 +813,7 @@ impl AssertableDcgka {
     pub fn assert_update(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &OperationOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &OperationOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         updater_id: MemberId,          // Member updating the group
         expected_members: &[MemberId], // List of expected members during update
         seq: MessageId,                // Id of the "update" control message
@@ -884,7 +884,7 @@ impl AssertableDcgka {
     pub fn assert_process_update(
         &mut self,
         dcgka: &TestDcgkaState,
-        output: &ProcessOutput<MemberId, MessageId, AckedTestDGM<MemberId, MessageId>>,
+        output: &ProcessOutput<MemberId, MessageId, AckedTestDgm<MemberId, MessageId>>,
         processor_id: MemberId, // Member processing the "update" control message
         updater_id: MemberId,   // Member who updated the group
         seq: MessageId,         // Id of the "update" control message
