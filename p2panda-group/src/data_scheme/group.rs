@@ -23,7 +23,23 @@ use crate::traits::{
     IdentityRegistry, OperationId, Ordering, PreKeyManager, PreKeyRegistry,
 };
 
-/// Encryption for groups with post-compromise security.
+/// Data encryption for groups.
+///
+/// This "Data Encryption" scheme allows peers to encrypt any data with a secret, symmetric key for
+/// a group. This will be useful for building applications where users who enter a group late will
+/// still have access to previously created content, for example private knowledge or wiki
+/// applications or a booking tool for rehearsal rooms.
+///
+/// A member will not learn about any newly created data after removing them from the group since
+/// the key gets rotated on member removal or manual key update. This should accommodate for many
+/// use-cases in p2p applications which rely on basic group encryption with post-compromise
+/// security (PCS) and forward secrecy (FS) during key agreement.
+///
+/// Implementors need to bring their own data types and
+/// [ordering](crate::traits::ordering::MessageOrdering) implementations.
+///
+/// Applications can remove group secrets for forward secrecy based on their own logic. For
+/// removing group secrets implementors can use the [`EncryptionGro::update_secrets`] method.
 pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
@@ -136,7 +152,7 @@ where
         Self::process_local(y, pre)
     }
 
-    /// Updates group secret and provides all members with fresh entropy.
+    /// Updates group by providing all current members with new group secret.
     pub fn update(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         rng: &Rng,
@@ -288,6 +304,21 @@ where
     ) -> Result<HashSet<ID>, GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
         let members = Dcgka::members(&y.dcgka)?;
         Ok(members)
+    }
+
+    /// Applications can remove group secrets for forward secrecy based on their own logic.
+    ///
+    /// Make sure that the ordering implementation and higher-level application logic accounts for
+    /// error cases where past secrets might not exist anymore.
+    pub fn update_secrets<F>(
+        mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
+        update_fn: F,
+    ) -> GroupState<ID, OP, PKI, DGM, KMG, ORD>
+    where
+        F: FnOnce(SecretBundleState) -> SecretBundleState,
+    {
+        y.secrets = update_fn(y.secrets);
+        y
     }
 
     /// Processes our own locally created control messages.
