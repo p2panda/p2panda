@@ -440,7 +440,7 @@ pub mod test_utils {
 
     #[cfg(test)]
     mod tests {
-        use crate::message_scheme::test_utils::MessageId;
+        use crate::test_utils::MessageId;
         use crate::traits::AckedGroupMembership;
 
         use super::AckedTestDGM;

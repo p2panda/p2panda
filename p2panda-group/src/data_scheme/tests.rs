@@ -8,7 +8,7 @@ use crate::data_scheme::group_secret::SecretBundle;
 use crate::key_bundle::Lifetime;
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
-use crate::message_scheme::test_utils::{MemberId, MessageId};
+use crate::test_utils::{MemberId, MessageId};
 use crate::traits::PreKeyManager;
 
 type TestDcgkaState = DcgkaState<

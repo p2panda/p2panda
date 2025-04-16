@@ -65,7 +65,7 @@ where
 
     fn next_application_message(
         y: Self::State,
-        secret_id: GroupSecretId,
+        group_secret_id: GroupSecretId,
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error>;

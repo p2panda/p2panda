@@ -5,6 +5,8 @@ mod dcgka;
 mod dgm;
 mod group;
 mod group_secret;
+#[cfg(any(test, feature = "test_utils"))]
+mod test_utils;
 #[cfg(test)]
 mod tests;
 

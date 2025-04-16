@@ -4,9 +4,9 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
 use crate::message_scheme::group::{GroupConfig, GroupState, MessageGroup, ReceiveOutput};
-use crate::message_scheme::ordering::test_utils::{ForwardSecureOrderer, TestMessage};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
-use crate::message_scheme::test_utils::{MemberId, MessageId};
+use crate::message_scheme::test_utils::ordering::{ForwardSecureOrderer, TestMessage};
+use crate::test_utils::{MemberId, MessageId};
 use crate::traits::ForwardSecureGroupMessage;
 use crate::{KeyManager, KeyRegistry, Rng};
 
