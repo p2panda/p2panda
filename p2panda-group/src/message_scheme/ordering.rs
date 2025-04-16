@@ -11,7 +11,8 @@ pub mod test_utils {
     use crate::message_scheme::test_utils::{MemberId, MessageId};
     use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
     use crate::traits::{
-        AckedGroupMembership, ForwardSecureMessage, ForwardSecureMessageType, ForwardSecureOrdering,
+        AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
+        ForwardSecureOrdering,
     };
 
     /// Simplified orderer for tests.
@@ -329,7 +330,7 @@ pub mod test_utils {
         },
     }
 
-    impl<DGM> ForwardSecureMessage<MemberId, MessageId, DGM> for TestMessage<DGM>
+    impl<DGM> ForwardSecureGroupMessage<MemberId, MessageId, DGM> for TestMessage<DGM>
     where
         DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
     {

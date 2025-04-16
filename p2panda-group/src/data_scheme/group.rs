@@ -19,11 +19,12 @@ use crate::data_scheme::group_secret::{
 };
 use crate::key_bundle::LongTermKeyBundle;
 use crate::traits::{
-    DataMessageType, EncryptedDataMessage, GroupMembership, IdentityHandle, IdentityManager,
+    GroupMembership, GroupMessage, GroupMessageType, IdentityHandle, IdentityManager,
     IdentityRegistry, OperationId, Ordering, PreKeyManager, PreKeyRegistry,
 };
 
-pub struct DataGroup<ID, OP, PKI, DGM, KMG, ORD> {
+/// Encryption for groups with post-compromise security.
+pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
 
@@ -45,7 +46,7 @@ where
     pub(crate) is_welcomed: bool,
 }
 
-impl<ID, OP, PKI, DGM, KMG, ORD> DataGroup<ID, OP, PKI, DGM, KMG, ORD>
+impl<ID, OP, PKI, DGM, KMG, ORD> EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
@@ -54,7 +55,7 @@ where
     KMG: IdentityManager<KMG::State> + PreKeyManager,
     ORD: Ordering<ID, OP, DGM>,
 {
-    /// Returns initial state for messaging group.
+    /// Returns initial state for group.
     ///
     /// This needs to be called before creating or being added to a group.
     pub fn init(
@@ -167,7 +168,7 @@ where
 
         // Accept "create" control messages if we haven't established our state yet and if we are
         // part of the initial members set.
-        if let DataMessageType::Control(ControlMessage::Create {
+        if let GroupMessageType::Control(ControlMessage::Create {
             ref initial_members,
         }) = message_type
         {
@@ -181,7 +182,7 @@ where
         }
 
         // Accept "add" control messages if we are being added by it.
-        if let DataMessageType::Control(ControlMessage::Add { added }) = message_type {
+        if let GroupMessageType::Control(ControlMessage::Add { added }) = message_type {
             if !y.is_welcomed && added == y.my_id {
                 is_create_or_welcome = true;
             }
@@ -221,10 +222,10 @@ where
             };
 
             match message.message_type() {
-                DataMessageType::Control(_) => {
+                GroupMessageType::Control(_) => {
                     control_messages.push_back(message);
                 }
-                DataMessageType::Application { .. } => {
+                GroupMessageType::Application { .. } => {
                     application_messages.push_back(message);
                 }
             }
@@ -329,7 +330,7 @@ where
         message: &ORD::Message,
     ) -> GroupResult<Option<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         match message.message_type() {
-            DataMessageType::Control(control_message) => {
+            GroupMessageType::Control(control_message) => {
                 let direct_message = message
                     .direct_messages()
                     .into_iter()
@@ -357,7 +358,7 @@ where
                     Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
                 }
             }
-            DataMessageType::Application {
+            GroupMessageType::Application {
                 group_secret_id,
                 ciphertext,
                 nonce,

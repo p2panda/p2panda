@@ -9,7 +9,7 @@ use crate::crypto::xchacha20::XAeadNonce;
 use crate::data_scheme::{self, GroupSecretId};
 use crate::message_scheme::{self, Generation};
 use crate::traits::{
-    AckedGroupMembership, EncryptedDataMessage, ForwardSecureMessage, GroupMembership,
+    AckedGroupMembership, ForwardSecureGroupMessage, GroupMembership, GroupMessage,
 };
 
 pub trait Ordering<ID, OP, DGM>
@@ -20,7 +20,7 @@ where
 
     type Error: Error;
 
-    type Message: EncryptedDataMessage<ID, OP, DGM>;
+    type Message: GroupMessage<ID, OP, DGM>;
 
     fn next_control_message(
         y: Self::State,
@@ -155,7 +155,7 @@ where
 
     type Error: Error;
 
-    type Message: ForwardSecureMessage<ID, OP, DGM>;
+    type Message: ForwardSecureGroupMessage<ID, OP, DGM>;
 
     fn next_control_message(
         y: Self::State,
