@@ -69,8 +69,8 @@ use crate::two_party::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
 /// itself.
 ///
 /// <https://eprint.iacr.org/2020/1281.pdf>
-pub struct TwoParty<KEY, KB> {
-    _marker: PhantomData<(KEY, KB)>,
+pub struct TwoParty<KMG, KB> {
+    _marker: PhantomData<(KMG, KB)>,
 }
 
 pub type OneTimeTwoParty = TwoParty<KeyManager, OneTimeKeyBundle>;
@@ -85,7 +85,7 @@ pub type LongTermTwoParty = TwoParty<KeyManager, LongTermKeyBundle>;
 ///
 /// The state is serializable and can be used to persist 2SM sessions.
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct TwoPartyState<KB: KeyBundle> {
     /// Index of key we will use during next send. The receiver can use the public key and refer to
     /// it through that index when they want to encrypt a message back to us.
@@ -118,9 +118,9 @@ pub struct TwoPartyState<KB: KeyBundle> {
 
 // Public methods.
 
-impl<KEY, KB> TwoParty<KEY, KB>
+impl<KMG, KB> TwoParty<KMG, KB>
 where
-    KEY: IdentityManager<KEY::State> + PreKeyManager,
+    KMG: IdentityManager<KMG::State> + PreKeyManager,
     KB: KeyBundle,
 {
     /// Initialise new 2SM state using the other party's pre-key bundle.
@@ -140,7 +140,7 @@ where
     /// Securely send a `plaintext` message to the other party.
     pub fn send(
         y: TwoPartyState<KB>,
-        y_manager: &KEY::State,
+        y_manager: &KMG::State,
         plaintext: &[u8],
         rng: &Rng,
     ) -> TwoPartyResult<(TwoPartyState<KB>, TwoPartyMessage)> {
@@ -175,9 +175,9 @@ where
     /// Handle receiving a secure message from the other party.
     pub fn receive(
         y: TwoPartyState<KB>,
-        y_manager: KEY::State,
+        y_manager: KMG::State,
         message: TwoPartyMessage,
-    ) -> TwoPartyResult<(TwoPartyState<KB>, KEY::State, Vec<u8>)> {
+    ) -> TwoPartyResult<(TwoPartyState<KB>, KMG::State, Vec<u8>)> {
         let (mut y_i, y_manager_i, plaintext_bytes) =
             Self::decrypt(y, y_manager, message.ciphertext, message.key_used)?;
         let plaintext_message = TwoPartyPlaintext::from_bytes(&plaintext_bytes)?;
@@ -254,16 +254,16 @@ impl TwoPartyPlaintext {
 
 // Private methods.
 
-impl<KEY, KB> TwoParty<KEY, KB>
+impl<KMG, KB> TwoParty<KMG, KB>
 where
-    KEY: IdentityManager<KEY::State> + PreKeyManager,
+    KMG: IdentityManager<KMG::State> + PreKeyManager,
     KB: KeyBundle,
 {
     /// Encrypt a message toward the other party using X3DH when it is the first round or HPKE for
     /// subsequent rounds.
     fn encrypt(
         mut y: TwoPartyState<KB>,
-        y_manager: &KEY::State,
+        y_manager: &KMG::State,
         plaintext: &[u8],
         rng: &Rng,
     ) -> TwoPartyResult<(TwoPartyState<KB>, TwoPartyCiphertext)> {
@@ -276,7 +276,7 @@ where
                     .ok_or(TwoPartyError::PreKeyReuse)?;
                 let ciphertext = x3dh_encrypt(
                     plaintext,
-                    KEY::identity_secret(y_manager),
+                    KMG::identity_secret(y_manager),
                     &their_prekey_bundle,
                     rng,
                 )?;
@@ -295,10 +295,10 @@ where
     /// subsequent rounds.
     fn decrypt(
         mut y: TwoPartyState<KB>,
-        y_manager: KEY::State,
+        y_manager: KMG::State,
         ciphertext: TwoPartyCiphertext,
         key_used: KeyUsed,
-    ) -> TwoPartyResult<(TwoPartyState<KB>, KEY::State, Vec<u8>)> {
+    ) -> TwoPartyResult<(TwoPartyState<KB>, KMG::State, Vec<u8>)> {
         let (y_manager_i, plaintext) = match key_used {
             KeyUsed::PreKey => {
                 let TwoPartyCiphertext::PreKey(ciphertext) = ciphertext else {
@@ -309,7 +309,7 @@ where
                 let (y_manager_i, onetime_secret) = match ciphertext.onetime_prekey_id {
                     Some(onetime_prekey_id) => {
                         let (y_manager_i, onetime_secret) =
-                            KEY::use_onetime_secret(y_manager, onetime_prekey_id)
+                            KMG::use_onetime_secret(y_manager, onetime_prekey_id)
                                 .map_err(|_| TwoPartyError::PreKeyReuse)?;
                         (y_manager_i, onetime_secret)
                     }
@@ -318,8 +318,8 @@ where
 
                 let plaintext = x3dh_decrypt(
                     &ciphertext,
-                    KEY::identity_secret(&y_manager_i),
-                    KEY::prekey_secret(&y_manager_i),
+                    KMG::identity_secret(&y_manager_i),
+                    KMG::prekey_secret(&y_manager_i),
                     onetime_secret.as_ref(),
                 )?;
 
@@ -360,7 +360,7 @@ where
     }
 }
 
-impl<KEY, KB> TwoParty<KEY, KB> {
+impl<KMG, KB> TwoParty<KMG, KB> {
     /// Generate fresh key material for us and the other party for future 2SM rounds.
     ///
     /// This material is sent as part of the encrypted ciphertext, attached next to the actual

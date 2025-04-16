@@ -26,14 +26,10 @@ pub const SIGNATURE_SIZE: usize = 64;
 pub struct SigningKey(Secret<SIGNING_KEY_SIZE>);
 
 impl SigningKey {
-    // TODO: Remove this in later PRs.
-    #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: [u8; SIGNING_KEY_SIZE]) -> Self {
         SigningKey(Secret::from_bytes(clamp_integer(bytes)))
     }
 
-    // TODO: Remove this in later PRs.
-    #[allow(dead_code)]
     pub(crate) fn as_bytes(&self) -> &[u8; SIGNING_KEY_SIZE] {
         self.0.as_bytes()
     }
