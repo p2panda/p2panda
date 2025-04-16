@@ -19,8 +19,9 @@ use crate::message_scheme::ratchet::{
     RatchetSecretState,
 };
 use crate::traits::{
-    AckedGroupMembership, ForwardSecureMessage, ForwardSecureMessageType, ForwardSecureOrdering,
-    IdentityHandle, IdentityManager, IdentityRegistry, OperationId, PreKeyManager, PreKeyRegistry,
+    AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
+    ForwardSecureOrdering, IdentityHandle, IdentityManager, IdentityRegistry, OperationId,
+    PreKeyManager, PreKeyRegistry,
 };
 
 /// Group encryption scheme for messaging with strong security guarantees.

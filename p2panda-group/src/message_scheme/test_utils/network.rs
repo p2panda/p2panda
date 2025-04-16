@@ -7,7 +7,7 @@ use crate::message_scheme::group::{GroupConfig, GroupState, MessageGroup, Receiv
 use crate::message_scheme::ordering::test_utils::{TestMessage, TestOrderer};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
 use crate::message_scheme::test_utils::{MemberId, MessageId};
-use crate::traits::ForwardSecureMessage;
+use crate::traits::ForwardSecureGroupMessage;
 use crate::{KeyManager, KeyRegistry, Rng};
 
 pub type TestGroupState = GroupState<

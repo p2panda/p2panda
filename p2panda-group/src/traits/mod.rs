@@ -15,7 +15,7 @@ pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
 pub use message::{
-    DataMessageType, EncryptedDataMessage, ForwardSecureMessage, ForwardSecureMessageType,
+    ForwardSecureGroupMessage, ForwardSecureMessageType, GroupMessage, GroupMessageType,
 };
 pub use ordering::{ForwardSecureOrdering, Ordering};
 
