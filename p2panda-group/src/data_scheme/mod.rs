@@ -3,6 +3,7 @@
 mod data;
 mod dcgka;
 mod dgm;
+mod group;
 mod group_secret;
 #[cfg(test)]
 mod tests;
@@ -14,5 +15,6 @@ pub use dcgka::{
 };
 #[allow(unused)]
 pub use group_secret::{
-    GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, SecretBundle, SecretBundleState,
+    GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, GroupSecretId, SecretBundle,
+    SecretBundleState,
 };
