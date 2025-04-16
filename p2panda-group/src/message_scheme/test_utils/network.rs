@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDGM;
 use crate::message_scheme::group::{GroupConfig, GroupState, MessageGroup, ReceiveOutput};
-use crate::message_scheme::ordering::test_utils::{TestMessage, TestOrderer};
+use crate::message_scheme::ordering::test_utils::{ForwardSecureOrderer, TestMessage};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
 use crate::message_scheme::test_utils::{MemberId, MessageId};
 use crate::traits::ForwardSecureGroupMessage;
@@ -16,7 +16,7 @@ pub type TestGroupState = GroupState<
     KeyRegistry<MemberId>,
     AckedTestDGM<MemberId, MessageId>,
     KeyManager,
-    TestOrderer<AckedTestDGM<MemberId, MessageId>>,
+    ForwardSecureOrderer<AckedTestDGM<MemberId, MessageId>>,
 >;
 
 pub struct Network {
@@ -31,8 +31,9 @@ impl Network {
         Self {
             members: HashMap::from_iter(members.into_iter().map(|dcgka| {
                 (dcgka.my_id, {
-                    let orderer =
-                        TestOrderer::<AckedTestDGM<MemberId, MessageId>>::init(dcgka.my_id);
+                    let orderer = ForwardSecureOrderer::<AckedTestDGM<MemberId, MessageId>>::init(
+                        dcgka.my_id,
+                    );
                     TestGroupState {
                         my_id: dcgka.my_id,
                         dcgka,

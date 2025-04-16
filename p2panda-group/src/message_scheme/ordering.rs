@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// TODO: A complete ordering solution for the "message encryption" scheme will be provided as soon
+// as "access control" work has been finished.
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils {
-    use std::collections::{HashMap, HashSet, VecDeque};
+    use std::collections::HashMap;
     use std::marker::PhantomData;
 
     use serde::{Deserialize, Serialize};
@@ -10,36 +12,35 @@ pub mod test_utils {
 
     use crate::message_scheme::test_utils::{MemberId, MessageId};
     use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
+    use crate::ordering::{Orderer, OrdererError, OrdererState};
     use crate::traits::{
         AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
         ForwardSecureOrdering,
     };
 
-    /// Simplified orderer for tests.
+    /// Simplified orderer for testing the "message encryption" group APIs.
     ///
-    /// This orderer does _not_ fullfill the full specification for correct ordering. It's assuming
-    /// that peers process all messages after each member has published max. one control or
-    /// application message.
+    /// NOTE: This orderer does _not_ fullfill the full specification for correct ordering. It's
+    /// assuming that peers process all messages after each member has published max. one control
+    /// or application message.
     ///
     /// This is sufficient for the current testing setup but for anything "production ready" and
     /// more robust for all concurrency scenarios, a more sophisticated solution will be required.
     #[derive(Debug)]
-    pub struct TestOrderer<DGM> {
+    pub struct ForwardSecureOrderer<DGM> {
         _marker: PhantomData<DGM>,
     }
 
-    impl<DGM> TestOrderer<DGM>
+    impl<DGM> ForwardSecureOrderer<DGM>
     where
         DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
     {
-        pub fn init(my_id: MemberId) -> TestOrdererState<DGM> {
-            TestOrdererState {
+        pub fn init(my_id: MemberId) -> ForwardSecureOrdererState<DGM> {
+            ForwardSecureOrdererState {
                 next_message_seq: 0,
                 previous: HashMap::new(),
+                orderer: Orderer::init(),
                 my_id,
-                ready: HashSet::new(),
-                ready_queue: VecDeque::new(),
-                pending: HashMap::new(),
                 messages: HashMap::new(),
                 welcome_message: None,
             }
@@ -47,21 +48,30 @@ pub mod test_utils {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct TestOrdererState<DGM>
+    pub struct ForwardSecureOrdererState<DGM>
     where
         DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
     {
+        /// Sequence number of the next, message to-be published.
         next_message_seq: usize,
+
+        /// Our own member id.
         my_id: MemberId,
+
+        /// Internal helper to order messages based on their "previous" dependencies.
+        orderer: OrdererState<MessageId>,
+
+        /// Latest known message id's from each group member. This is the "head" of the DAG.
         previous: HashMap<MemberId, MessageId>,
-        ready: HashSet<MessageId>,
-        ready_queue: VecDeque<MessageId>,
-        pending: HashMap<MessageId, HashSet<(MessageId, Vec<MessageId>)>>,
+
+        /// In-memory store of all messages.
         messages: HashMap<MessageId, TestMessage<DGM>>,
+
+        /// "Create" or "Add" message which got us into the group.
         welcome_message: Option<TestMessage<DGM>>,
     }
 
-    impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for TestOrderer<DGM>
+    impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for ForwardSecureOrderer<DGM>
     where
         DGM: std::fmt::Debug
             + Clone
@@ -69,9 +79,9 @@ pub mod test_utils {
             + Serialize
             + for<'a> Deserialize<'a>,
     {
-        type State = TestOrdererState<DGM>;
+        type State = ForwardSecureOrdererState<DGM>;
 
-        type Error = TestOrdererError;
+        type Error = ForwardSecureOrdererError;
 
         type Message = TestMessage<DGM>;
 
@@ -137,15 +147,17 @@ pub mod test_utils {
                 .cloned()
                 .collect();
 
-            if !Self::ready(&y, &previous)? {
-                let (y_i, _) = Self::mark_pending(y, id, previous)?;
-                return Ok(y_i);
+            if !Orderer::ready(&y.orderer, &previous)? {
+                let (y_orderer_i, _) = Orderer::mark_pending(y.orderer, id, previous)?;
+                y.orderer = y_orderer_i;
+                return Ok(y);
             }
 
-            let (y_i, _) = Self::mark_ready(y, id)?;
-            let y_ii = Self::process_pending(y_i, id)?;
+            let (y_orderer_i, _) = Orderer::mark_ready(y.orderer, id)?;
+            let y_orderer_ii = Orderer::process_pending(y_orderer_i, id)?;
+            y.orderer = y_orderer_ii;
 
-            Ok(y_ii)
+            Ok(y)
         }
 
         fn set_welcome(
@@ -166,8 +178,8 @@ pub mod test_utils {
 
             let mut y_loop = y;
             loop {
-                let (y_next, next_ready) = Self::take_next_ready(y_loop)?;
-                y_loop = y_next;
+                let (y_next, next_ready) = Orderer::take_next_ready(y_loop.orderer)?;
+                y_loop.orderer = y_next;
 
                 let message = next_ready.map(|id| {
                     y_loop
@@ -185,6 +197,9 @@ pub mod test_utils {
                         .map(|msg| msg.seq);
 
                     // Is this message before our welcome?
+                    //
+                    // This is a naive implementation where we assume that every member processed
+                    // every control message after one round.
                     if let Some(last_seq) = last_seq {
                         if message.id().seq < last_seq + 1 {
                             continue;
@@ -203,104 +218,6 @@ pub mod test_utils {
                     return Ok((y_loop, None));
                 }
             }
-        }
-    }
-
-    impl<DGM> TestOrderer<DGM>
-    where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
-    {
-        fn mark_ready(
-            mut y: TestOrdererState<DGM>,
-            key: MessageId,
-        ) -> Result<(TestOrdererState<DGM>, bool), TestOrdererError> {
-            let result = y.ready.insert(key);
-            if result {
-                y.ready_queue.push_back(key);
-            }
-            Ok((y, result))
-        }
-
-        fn mark_pending(
-            mut y: TestOrdererState<DGM>,
-            key: MessageId,
-            dependencies: Vec<MessageId>,
-        ) -> Result<(TestOrdererState<DGM>, bool), TestOrdererError> {
-            let insert_occured = false;
-            for dep_key in &dependencies {
-                if y.ready.contains(dep_key) {
-                    continue;
-                }
-
-                let dependents = y.pending.entry(*dep_key).or_default();
-                dependents.insert((key, dependencies.clone()));
-            }
-
-            Ok((y, insert_occured))
-        }
-
-        #[allow(clippy::type_complexity)]
-        fn get_next_pending(
-            y: &TestOrdererState<DGM>,
-            key: MessageId,
-        ) -> Result<Option<HashSet<(MessageId, Vec<MessageId>)>>, TestOrdererError> {
-            Ok(y.pending.get(&key).cloned())
-        }
-
-        fn take_next_ready(
-            mut y: TestOrdererState<DGM>,
-        ) -> Result<(TestOrdererState<DGM>, Option<MessageId>), TestOrdererError> {
-            let result = y.ready_queue.pop_front();
-            Ok((y, result))
-        }
-
-        fn remove_pending(
-            mut y: TestOrdererState<DGM>,
-            key: MessageId,
-        ) -> Result<(TestOrdererState<DGM>, bool), TestOrdererError> {
-            let result = y.pending.remove(&key).is_some();
-            Ok((y, result))
-        }
-
-        fn ready(
-            y: &TestOrdererState<DGM>,
-            dependencies: &[MessageId],
-        ) -> Result<bool, TestOrdererError> {
-            let deps_set = HashSet::from_iter(dependencies.iter().cloned());
-            let result = y.ready.is_superset(&deps_set);
-            Ok(result)
-        }
-
-        fn process_pending(
-            y: TestOrdererState<DGM>,
-            key: MessageId,
-        ) -> Result<TestOrdererState<DGM>, TestOrdererError> {
-            // Get all items which depend on the passed key.
-            let Some(dependents) = Self::get_next_pending(&y, key)? else {
-                return Ok(y);
-            };
-
-            // For each dependent check if it has all it's dependencies met, if not then we do nothing
-            // as it is still in a pending state.
-            let mut y_loop = y;
-            for (next_key, next_deps) in dependents {
-                if !Self::ready(&y_loop, &next_deps)? {
-                    continue;
-                }
-
-                let (y_next, _) = Self::mark_ready(y_loop, next_key)?;
-                y_loop = y_next;
-
-                // Recurse down the dependency graph by now checking any pending items which depend on
-                // the current item.
-                let y_next = Self::process_pending(y_loop, next_key)?;
-                y_loop = y_next;
-            }
-
-            // Finally remove this item from the pending items queue.
-            let (y_i, _) = Self::remove_pending(y_loop, key)?;
-
-            Ok(y_i)
         }
     }
 
@@ -371,5 +288,8 @@ pub mod test_utils {
     }
 
     #[derive(Debug, Error)]
-    pub enum TestOrdererError {}
+    pub enum ForwardSecureOrdererError {
+        #[error(transparent)]
+        Orderer(#[from] OrdererError),
+    }
 }
