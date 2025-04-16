@@ -8,6 +8,7 @@ mod key_bundle;
 mod key_manager;
 mod key_registry;
 mod message_scheme;
+mod ordering;
 pub mod traits;
 mod two_party;
 
