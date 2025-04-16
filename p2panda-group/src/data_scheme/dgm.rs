@@ -10,7 +10,7 @@ pub mod test_utils {
 
     use crate::traits::{GroupMembership, IdentityHandle, OperationId};
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct TestDgm<ID, OP> {
         _marker: PhantomData<(ID, OP)>,
     }
