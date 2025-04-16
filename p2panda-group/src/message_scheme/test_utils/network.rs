@@ -3,7 +3,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
-use crate::message_scheme::group::{GroupConfig, GroupState, MessageGroup, ReceiveOutput};
+use crate::message_scheme::group::{GroupConfig, GroupOutput, GroupState, MessageGroup};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
 use crate::message_scheme::test_utils::ordering::{ForwardSecureOrderer, TestMessage};
 use crate::test_utils::{MemberId, MessageId};
@@ -107,16 +107,16 @@ impl Network {
 
                 for output in result {
                     match output {
-                        ReceiveOutput::Control(control_message) => {
+                        GroupOutput::Control(control_message) => {
                             // Processing messages might yield new ones, process these as well.
                             self.queue.push_back(control_message);
                         }
-                        ReceiveOutput::Application { plaintext } => decrypted_messages.push((
+                        GroupOutput::Application { plaintext } => decrypted_messages.push((
                             message.sender(), // Sender
                             *id,              // Receiver
                             plaintext,        // Decrypted content
                         )),
-                        ReceiveOutput::Removed => (),
+                        GroupOutput::Removed => (),
                     }
                 }
             }

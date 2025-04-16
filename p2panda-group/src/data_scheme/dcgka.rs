@@ -102,6 +102,7 @@ where
     pub fn create(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         initial_members: Vec<ID>,
+        group_secret: &GroupSecret,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         // De-duplicate members.
@@ -124,15 +125,14 @@ where
         };
 
         // Generate the set of direct messages to send.
-        let (y_ii, direct_messages, group_secret) =
-            Self::generate_secret(y, &initial_members, rng)?;
+        let (y_ii, direct_messages) =
+            Self::send_group_secret(y, &initial_members, group_secret, rng)?;
 
         Ok((
             y_ii,
             OperationOutput {
                 control_message,
                 direct_messages,
-                group_secret: Some(group_secret),
             },
         ))
     }
@@ -150,6 +150,7 @@ where
 
     pub fn update(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
+        group_secret: &GroupSecret,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let control_message = ControlMessage::Update;
@@ -159,14 +160,13 @@ where
             .filter(|member| member != &y.my_id)
             .collect();
 
-        let (y_i, direct_messages, group_secret) = Self::generate_secret(y, &recipient_ids, rng)?;
+        let (y_i, direct_messages) = Self::send_group_secret(y, &recipient_ids, group_secret, rng)?;
 
         Ok((
             y_i,
             OperationOutput {
                 control_message,
                 direct_messages,
-                group_secret: Some(group_secret),
             },
         ))
     }
@@ -182,6 +182,7 @@ where
     pub fn remove(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         removed: ID,
+        group_secret: &GroupSecret,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let control_message = ControlMessage::Remove { removed };
@@ -191,14 +192,13 @@ where
             .filter(|member| member != &y.my_id && member != &removed)
             .collect();
 
-        let (y_i, direct_messages, group_secret) = Self::generate_secret(y, &recipient_ids, rng)?;
+        let (y_i, direct_messages) = Self::send_group_secret(y, &recipient_ids, group_secret, rng)?;
 
         Ok((
             y_i,
             OperationOutput {
                 control_message,
                 direct_messages,
-                group_secret: Some(group_secret),
             },
         ))
     }
@@ -242,7 +242,6 @@ where
             OperationOutput {
                 control_message,
                 direct_messages: vec![direct_message],
-                group_secret: None,
             },
         ))
     }
@@ -310,15 +309,14 @@ where
         ))
     }
 
-    fn generate_secret(
+    fn send_group_secret(
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         recipients: &[ID],
+        group_secret: &GroupSecret,
         rng: &Rng,
-    ) -> GenerateSecretResult<ID, OP, PKI, DGM, KMG> {
+    ) -> SendSecretResult<ID, OP, PKI, DGM, KMG> {
         let mut direct_messages: Vec<DirectMessage<ID, OP, DGM>> =
             Vec::with_capacity(recipients.len());
-
-        let group_secret = GroupSecret::from_rng(rng)?;
 
         let y_i = {
             let mut y_loop = y;
@@ -341,7 +339,7 @@ where
             y_loop
         };
 
-        Ok((y_i, direct_messages, group_secret))
+        Ok((y_i, direct_messages))
     }
 
     fn process_secret(
@@ -434,11 +432,10 @@ where
     }
 }
 
-pub type GenerateSecretResult<ID, OP, PKI, DGM, KMG> = Result<
+pub type SendSecretResult<ID, OP, PKI, DGM, KMG> = Result<
     (
         DcgkaState<ID, OP, PKI, DGM, KMG>,
         Vec<DirectMessage<ID, OP, DGM>>,
-        GroupSecret,
     ),
     DcgkaError<ID, OP, PKI, DGM, KMG>,
 >;
@@ -534,7 +531,6 @@ where
 {
     pub control_message: ControlMessage<ID>,
     pub direct_messages: Vec<DirectMessage<ID, OP, DGM>>,
-    pub group_secret: Option<GroupSecret>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

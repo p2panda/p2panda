@@ -71,7 +71,7 @@ impl GroupSecret {
         self.1
     }
 
-    #[cfg(any(test, feature = "test_utils"))]
+    /// Adjust the timestamp.
     pub(crate) fn set_timestamp(&mut self, timestamp: Timestamp) {
         self.1 = timestamp;
     }
@@ -231,6 +231,23 @@ impl SecretBundle {
     /// Initialises secret bundle state from an encoded CBOR representation.
     pub(crate) fn try_from_bytes(bytes: &[u8]) -> Result<SecretBundleState, GroupSecretError> {
         Ok(decode_cbor(bytes)?)
+    }
+
+    /// Generates and returns a new secret.
+    ///
+    /// To prevent issues with invalid timestamps (too far in the future) of previous secrets, we
+    /// force our newly generated secret to be the "latest" when needed.
+    ///
+    /// The secret is not yet inserted into the bundle, this needs to be done manually.
+    pub fn generate(y: &SecretBundleState, rng: &Rng) -> Result<GroupSecret, GroupSecretError> {
+        let mut secret = GroupSecret::from_rng(rng)?;
+
+        let latest_timestamp = y.latest().map(|latest| latest.timestamp()).unwrap_or(0);
+        if secret.timestamp() <= latest_timestamp {
+            secret.set_timestamp(latest_timestamp + 1);
+        }
+
+        Ok(secret)
     }
 
     /// Inserts secret into bundle, ignoring duplicates.
@@ -398,5 +415,24 @@ mod tests {
         let secret_again = GroupSecret::try_from_bytes(&bytes).unwrap();
         assert_eq!(secret, secret_again);
         assert_eq!(timestamp, secret_again.timestamp());
+    }
+
+    #[test]
+    fn generated_always_latest() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let bundle = SecretBundle::init();
+
+        let secret_0 = SecretBundle::generate(&bundle, &rng).unwrap();
+        let bundle = SecretBundle::insert(bundle, secret_0.clone());
+        assert_eq!(bundle.latest(), Some(&secret_0));
+
+        let secret_1 = SecretBundle::generate(&bundle, &rng).unwrap();
+        let bundle = SecretBundle::insert(bundle, secret_1.clone());
+        assert_eq!(bundle.latest(), Some(&secret_1));
+
+        let secret_2 = SecretBundle::generate(&bundle, &rng).unwrap();
+        let bundle = SecretBundle::insert(bundle, secret_2.clone());
+        assert_eq!(bundle.latest(), Some(&secret_2));
     }
 }

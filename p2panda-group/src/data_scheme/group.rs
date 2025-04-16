@@ -97,17 +97,21 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if y.is_welcomed {
-            return Err(GroupError::GroupAlreadyEstablished);
+            return Err(EncryptionGroupError::GroupAlreadyEstablished);
         }
 
+        // Generate new group secret.
+        let group_secret = SecretBundle::generate(&y.secrets, rng)?;
+
         // Create new group with initial members.
-        let (y_dcgka_i, pre) = Dcgka::create(y.dcgka, initial_members, rng)?;
+        let (y_dcgka_i, pre) = Dcgka::create(y.dcgka, initial_members, &group_secret, rng)?;
         y.dcgka = y_dcgka_i;
 
-        let (mut y_i, message) = Self::process_local(y, pre)?;
+        let (mut y_i, message) = Self::process_local(y, pre, Some(group_secret))?;
 
         // Set our own "create" as the "welcome" message.
-        let y_orderer_i = ORD::set_welcome(y_i.orderer, &message).map_err(GroupError::Orderer)?;
+        let y_orderer_i =
+            ORD::set_welcome(y_i.orderer, &message).map_err(EncryptionGroupError::Orderer)?;
         y_i.orderer = y_orderer_i;
         y_i.is_welcomed = true;
 
@@ -121,18 +125,18 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(GroupError::GroupNotYetEstablished);
+            return Err(EncryptionGroupError::GroupNotYetEstablished);
         }
 
         if y.my_id == added {
-            return Err(GroupError::NotAddOurselves);
+            return Err(EncryptionGroupError::NotAddOurselves);
         }
 
         // Add a new member to the group.
         let (y_dcgka_i, pre) = Dcgka::add(y.dcgka, added, &y.secrets, rng)?;
         y.dcgka = y_dcgka_i;
 
-        Self::process_local(y, pre)
+        Self::process_local(y, pre, None)
     }
 
     /// Removes member from group. It is possible to remove ourselves.
@@ -142,14 +146,17 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(GroupError::GroupNotYetEstablished);
+            return Err(EncryptionGroupError::GroupNotYetEstablished);
         }
 
+        // Generate new group secret.
+        let group_secret = SecretBundle::generate(&y.secrets, rng)?;
+
         // Remove a member from the group.
-        let (y_dcgka_i, pre) = Dcgka::remove(y.dcgka, removed, rng)?;
+        let (y_dcgka_i, pre) = Dcgka::remove(y.dcgka, removed, &group_secret, rng)?;
         y.dcgka = y_dcgka_i;
 
-        Self::process_local(y, pre)
+        Self::process_local(y, pre, Some(group_secret))
     }
 
     /// Updates group by providing all current members with new group secret.
@@ -158,14 +165,17 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(GroupError::GroupNotYetEstablished);
+            return Err(EncryptionGroupError::GroupNotYetEstablished);
         }
 
+        // Generate new group secret.
+        let group_secret = SecretBundle::generate(&y.secrets, rng)?;
+
         // Update the group by generating a new seed.
-        let (y_dcgka_i, pre) = Dcgka::update(y.dcgka, rng)?;
+        let (y_dcgka_i, pre) = Dcgka::update(y.dcgka, &group_secret, rng)?;
         y.dcgka = y_dcgka_i;
 
-        Self::process_local(y, pre)
+        Self::process_local(y, pre, Some(group_secret))
     }
 
     /// Handler for incoming, remote messages.
@@ -178,7 +188,7 @@ where
     pub fn receive(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
-    ) -> GroupResult<Vec<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+    ) -> GroupResult<Vec<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         let message_type = message.message_type();
         let mut is_create_or_welcome = false;
 
@@ -189,7 +199,7 @@ where
         }) = message_type
         {
             if y.is_welcomed {
-                return Err(GroupError::GroupAlreadyEstablished);
+                return Err(EncryptionGroupError::GroupAlreadyEstablished);
             }
 
             if initial_members.contains(&y.my_id) {
@@ -204,7 +214,7 @@ where
             }
         }
 
-        let y_orderer_i = ORD::queue(y.orderer, message).map_err(GroupError::Orderer)?;
+        let y_orderer_i = ORD::queue(y.orderer, message).map_err(EncryptionGroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         if !y.is_welcomed && !is_create_or_welcome {
@@ -217,7 +227,8 @@ where
         if !y.is_welcomed && is_create_or_welcome {
             // We've received a "create" or "add" (welcome) message for us and can join the group
             // now.
-            let y_orderer_i = ORD::set_welcome(y.orderer, message).map_err(GroupError::Orderer)?;
+            let y_orderer_i =
+                ORD::set_welcome(y.orderer, message).map_err(EncryptionGroupError::Orderer)?;
             y.orderer = y_orderer_i;
         }
 
@@ -230,7 +241,7 @@ where
         // Check if there's any correctly ordered messages ready to-be processed.
         loop {
             let (y_orderer_next, result) =
-                ORD::next_ready_message(y_loop.orderer).map_err(GroupError::Orderer)?;
+                ORD::next_ready_message(y_loop.orderer).map_err(EncryptionGroupError::Orderer)?;
             y_loop.orderer = y_orderer_next;
 
             let Some(message) = result else {
@@ -278,11 +289,11 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(GroupError::GroupNotYetEstablished);
+            return Err(EncryptionGroupError::GroupNotYetEstablished);
         }
 
         let Some(group_secret) = y.secrets.latest() else {
-            return Err(GroupError::NoGroupSecretAvailable);
+            return Err(EncryptionGroupError::NoGroupSecretAvailable);
         };
 
         // Encrypt application data.
@@ -292,7 +303,7 @@ where
         // Determine parameters for to-be-published application message.
         let (y_orderer_i, message) =
             ORD::next_application_message(y.orderer, secret_id, nonce, ciphertext)
-                .map_err(GroupError::Orderer)?;
+                .map_err(EncryptionGroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         Ok((y, message))
@@ -301,7 +312,7 @@ where
     /// Returns a list of all current members in this group from our perspective.
     pub fn members(
         y: &GroupState<ID, OP, PKI, DGM, KMG, ORD>,
-    ) -> Result<HashSet<ID>, GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
+    ) -> Result<HashSet<ID>, EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>> {
         let members = Dcgka::members(&y.dcgka)?;
         Ok(members)
     }
@@ -325,11 +336,12 @@ where
     fn process_local(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         output: OperationOutput<ID, OP, DGM>,
+        group_secret: Option<GroupSecret>,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         // Determine parameters for to-be-published control message.
         let (y_orderer_i, message) =
             ORD::next_control_message(y.orderer, &output.control_message, &output.direct_messages)
-                .map_err(GroupError::Orderer)?;
+                .map_err(EncryptionGroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         // Process control message locally to update our state.
@@ -344,13 +356,10 @@ where
         )?;
         y.dcgka = y_dcgka_i;
 
-        // Add new generated secret to bundle.
-        y.secrets = SecretBundle::insert(
-            y.secrets,
-            output
-                .group_secret
-                .expect("local operations always yield a group secret"),
-        );
+        // Add new generated secret to bundle when given.
+        if let Some(group_secret) = group_secret {
+            y.secrets = SecretBundle::insert(y.secrets, group_secret);
+        }
 
         Ok((y, message))
     }
@@ -359,7 +368,7 @@ where
     fn process_ready(
         y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
-    ) -> GroupResult<Option<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+    ) -> GroupResult<Option<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         match message.message_type() {
             GroupMessageType::Control(control_message) => {
                 let direct_message = message
@@ -375,6 +384,8 @@ where
                     direct_message,
                 )?;
 
+                // y.secrets = SecretBundle::insert(y.secrets, new_group_secret);
+
                 // Check if processing this message added us to the group.
                 let we_are_members = Self::members(&y_i)?.contains(&y_i.my_id);
                 if !y_i.is_welcomed && we_are_members {
@@ -384,9 +395,9 @@ where
                 // Check if processing this message removed us from the group.
                 let is_removed = y_i.is_welcomed && !we_are_members;
                 if is_removed {
-                    Ok((y_i, Some(ReceiveOutput::Removed)))
+                    Ok((y_i, Some(GroupOutput::Removed)))
                 } else {
-                    Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
+                    Ok((y_i, output.map(|msg| GroupOutput::Control(msg))))
                 }
             }
             GroupMessageType::Application {
@@ -395,7 +406,7 @@ where
                 nonce,
             } => {
                 let (y_i, plaintext) = Self::decrypt(y, nonce, group_secret_id, ciphertext)?;
-                Ok((y_i, Some(ReceiveOutput::Application { plaintext })))
+                Ok((y_i, Some(GroupOutput::Application { plaintext })))
             }
         }
     }
@@ -437,7 +448,7 @@ where
                 &output_control_message,
                 &output.direct_messages,
             )
-            .map_err(GroupError::Orderer)?;
+            .map_err(EncryptionGroupError::Orderer)?;
             y.orderer = y_orderer_i;
             Ok((y, Some(output_message)))
         } else {
@@ -450,7 +461,7 @@ where
         group_secret: &GroupSecret,
         plaintext: &[u8],
         rng: &Rng,
-    ) -> Result<(XAeadNonce, Vec<u8>), GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
+    ) -> Result<(XAeadNonce, Vec<u8>), EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>> {
         let nonce: XAeadNonce = rng.random_array()?;
         let ciphertext = encrypt_data(plaintext, group_secret, nonce)?;
         Ok((nonce, ciphertext))
@@ -464,18 +475,22 @@ where
         ciphertext: Vec<u8>,
     ) -> GroupResult<Vec<u8>, ID, OP, PKI, DGM, KMG, ORD> {
         let Some(group_secret) = y.secrets.get(&group_secret_id) else {
-            return Err(GroupError::UnknownGroupSecret(hex::encode(group_secret_id)));
+            return Err(EncryptionGroupError::UnknownGroupSecret(hex::encode(
+                group_secret_id,
+            )));
         };
         let plaintext = decrypt_data(&ciphertext, group_secret, nonce)?;
         Ok((y, plaintext))
     }
 }
 
-pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
-    Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
+pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> = Result<
+    (GroupState<ID, OP, PKI, DGM, KMG, ORD>, T),
+    EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>,
+>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReceiveOutput<ID, OP, DGM, ORD>
+pub enum GroupOutput<ID, OP, DGM, ORD>
 where
     DGM: GroupMembership<ID, OP>,
     ORD: Ordering<ID, OP, DGM>,
@@ -491,7 +506,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum GroupError<ID, OP, PKI, DGM, KMG, ORD>
+pub enum EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>
 where
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, LongTermKeyBundle>,
     DGM: GroupMembership<ID, OP>,
@@ -538,35 +553,87 @@ where
 #[cfg(test)]
 mod tests {
     use crate::crypto::Rng;
-    use crate::data_scheme::test_utils::network::Network;
+    use crate::data_scheme::group::GroupOutput;
+    use crate::data_scheme::test_utils::network::init_group_state;
+    use crate::traits::{GroupMembership, Ordering};
+
+    use super::{EncryptionGroup, EncryptionGroupError};
+
+    pub fn assert_payload<ID, OP, DGM, ORD>(
+        messages: &[GroupOutput<ID, OP, DGM, ORD>],
+        expected_payload: &[u8],
+    ) where
+        DGM: GroupMembership<ID, OP>,
+        ORD: Ordering<ID, OP, DGM>,
+    {
+        let message = messages.first().expect("expected at least one message");
+        if let GroupOutput::Application { plaintext } = message {
+            assert_eq!(
+                plaintext, expected_payload,
+                "expected payload does not match"
+            );
+        } else {
+            panic!("expected application message");
+        }
+    }
 
     #[test]
-    fn simple_group() {
+    fn post_compromise_security() {
+        let rng = Rng::from_seed([1; 32]);
+
         let alice = 0;
         let bob = 1;
+        let charlie = 2;
 
-        let mut network = Network::new([alice, bob], Rng::from_seed([1; 32]));
+        let [y_alice, y_bob, y_charlie] = init_group_state([alice, bob, charlie], &rng);
 
-        // Alice creates a group with Bob.
-        network.create(alice, vec![bob]);
+        // Alice creates a group with Bob and Charlie.
+        let (y_alice, alice_message_0) =
+            EncryptionGroup::create(y_alice, vec![alice, bob, charlie], &rng).unwrap();
+        let (y_bob, _) = EncryptionGroup::receive(y_bob, &alice_message_0).unwrap();
+        let (y_charlie, _) = EncryptionGroup::receive(y_charlie, &alice_message_0).unwrap();
 
-        // Everyone processes each other's messages.
-        let results = network.process();
-        assert!(
-            results.is_empty(),
-            "no decrypted application messages expected"
-        );
+        // Alice encrypts data for Bob and Charlie.
+        let (y_alice, alice_message_1) = EncryptionGroup::send(y_alice, b"Da Da Da", &rng).unwrap();
 
-        // Alice and Bob share the same members view.
-        for member in [alice, bob] {
-            assert_eq!(network.members(&member), vec![alice, bob]);
-        }
+        // Both Bob and Charlie can decrypt the payload.
+        let (y_bob, bob_output) = EncryptionGroup::receive(y_bob, &alice_message_1).unwrap();
+        assert_payload(&bob_output, b"Da Da Da");
+        let (y_charlie, charlie_output) =
+            EncryptionGroup::receive(y_charlie, &alice_message_1).unwrap();
+        assert_payload(&charlie_output, b"Da Da Da");
 
-        // Alice sends a message to the group and Bob can decrypt it.
-        network.send(alice, b"Hello everyone!");
+        // Bob removes Charlie.
+        let (y_bob, bob_message_0) = EncryptionGroup::remove(y_bob, charlie, &rng).unwrap();
+        let (y_alice, alice_output) = EncryptionGroup::receive(y_alice, &bob_message_0).unwrap();
+        assert!(alice_output.is_empty());
+
+        // Alice and Bob should have both the same "latest" secret.
         assert_eq!(
-            network.process(),
-            vec![(alice, bob, b"Hello everyone!".to_vec())],
+            y_alice.secrets.latest().unwrap().id(),
+            y_bob.secrets.latest().unwrap().id()
         );
+
+        // Charlie receives the signal that they got removed by this message.
+        let (y_charlie, charlie_output) =
+            EncryptionGroup::receive(y_charlie, &bob_message_0).unwrap();
+        let GroupOutput::Removed = charlie_output.first().unwrap() else {
+            panic!("expected removed output");
+        };
+
+        // Alice encrypts data for Bob.
+        let (_y_alice, alice_message_2) =
+            EncryptionGroup::send(y_alice, b"Ich lieb dich nicht / Du liebst mich nicht", &rng)
+                .unwrap();
+
+        // Bob can still decrypt this message from Alice.
+        let (_y_bob, bob_output) = EncryptionGroup::receive(y_bob, &alice_message_2).unwrap();
+        assert_payload(&bob_output, b"Ich lieb dich nicht / Du liebst mich nicht");
+
+        // Charlie can not decrypt the latest message anymore.
+        assert!(matches!(
+            EncryptionGroup::receive(y_charlie, &alice_message_2),
+            Err(EncryptionGroupError::UnknownGroupSecret(_))
+        ));
     }
 }
