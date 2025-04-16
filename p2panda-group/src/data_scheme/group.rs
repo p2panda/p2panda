@@ -503,3 +503,39 @@ where
     #[error("tried to decrypt message with an unknown group secret: {0}")]
     UnknownGroupSecret(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::crypto::Rng;
+    use crate::data_scheme::test_utils::network::Network;
+
+    #[test]
+    fn simple_group() {
+        let alice = 0;
+        let bob = 1;
+
+        let mut network = Network::new([alice, bob], Rng::from_seed([1; 32]));
+
+        // Alice creates a group with Bob.
+        network.create(alice, vec![bob]);
+
+        // Everyone processes each other's messages.
+        let results = network.process();
+        assert!(
+            results.is_empty(),
+            "no decrypted application messages expected"
+        );
+
+        // Alice and Bob share the same members view.
+        for member in [alice, bob] {
+            assert_eq!(network.members(&member), vec![alice, bob]);
+        }
+
+        // Alice sends a message to the group and Bob can decrypt it.
+        network.send(alice, b"Hello everyone!");
+        assert_eq!(
+            network.process(),
+            vec![(alice, bob, b"Hello everyone!".to_vec())],
+        );
+    }
+}
