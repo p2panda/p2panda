@@ -1143,7 +1143,7 @@ where
     }
 
     /// Generates the next update secret for group member ID. It implements the outer KDF of the
-    /// ratchet. The ratchet state is stored in γ.ratchet[ID]; we use a HMAC-based key derivation
+    /// ratchet. The ratchet state is stored in γ.ratchet[ID]; we use an HMAC-based key derivation
     /// function HKDF to combine the ratchet state with an input, producing an update secret and a
     /// new ratchet state.
     fn update_ratchet(
