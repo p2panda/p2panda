@@ -125,7 +125,7 @@ where
     /// one-time prekey bundles so we can do 2SM.
     pub(crate) my_keys: KMG::State,
 
-    /// Our id which is used as an unique handle inside this group.
+    /// Our id which is used as a unique handle inside this group.
     pub(crate) my_id: ID,
 
     /// Randomly generated seed we keep temporarily around when creating or updating a group or
@@ -229,7 +229,7 @@ where
         Ok((y_i, output))
     }
 
-    /// Handler which is _always_ be called _after_ every local group membership operation
+    /// Handler which is _always_ called _after_ every local group membership operation
     /// ("create", "update", "remove" or "add") which was applied by us.
     ///
     /// Invoking a membership operation always returns a "control message" which needs to be
@@ -500,7 +500,7 @@ where
         added: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        // Construct a control message of type "add" to broadcast to the group
+        // Construct a control message of type "add" to broadcast to the group.
         let control_message = ControlMessage::Add(AddMessage { added });
 
         // Construct a welcome message that is sent to the new member as a direct message.
@@ -1030,7 +1030,7 @@ where
         //
         // In this example, B may receive the add and the update in either order. If B processes
         // A's update first, the seed secret from A is already incorporated into B's ratchet state
-        // at time time of adding D; since B sends this ratchet state to D along with its "add-ack"
+        // at the time of adding D; since B sends this ratchet state to D along with its "add-ack"
         // message, no further action is needed. On the other hand, if B processes the addition of
         // D first, then when B subsequently processes A's update, B must take the member secret it
         // derives from A's seed secret and forward it to D, so that D can compute B's update
@@ -1040,7 +1040,7 @@ where
         // update/remove was sent, except for the sender. We then compute the current set of
         // members according to the local node. The set difference thus computes the set of users
         // whose additions have been processed by the local user, but who were not yet known to
-        // sender of the update.
+        // the sender of the update.
         //
         // If there are any such users, we construct a direct message to each of them. One of the
         // member secrets we computed before is the member secret for the local user. We
