@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::Rng;
-use crate::message_scheme::test_utils::MessageId;
+use crate::crypto::Rng;
 use crate::message_scheme::test_utils::dcgka::{
     ExpectedMembers, assert_direct_message, assert_members_view, init_dcgka_state,
 };
 use crate::message_scheme::{Dcgka, DirectMessageType, ProcessInput};
+use crate::test_utils::MessageId;
 
 // From DCGKA paper (6.2.5):
 //

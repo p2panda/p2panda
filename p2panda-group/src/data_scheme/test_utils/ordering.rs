@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO: A complete ordering solution for the "message encryption" scheme will be provided as soon
-// as "access control" work has been finished.
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils {
     use std::collections::HashMap;
@@ -10,33 +8,27 @@ pub mod test_utils {
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
 
-    use crate::message_scheme::test_utils::{MemberId, MessageId};
-    use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
+    use crate::crypto::xchacha20::XAeadNonce;
+    use crate::data_scheme::{ControlMessage, DirectMessage, GroupSecretId};
     use crate::ordering::{Orderer, OrdererError, OrdererState};
-    use crate::traits::{
-        AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
-        ForwardSecureOrdering,
-    };
+    use crate::test_utils::{MemberId, MessageId};
+    use crate::traits::{GroupMembership, GroupMessage, GroupMessageType, Ordering};
 
-    /// Simplified orderer for testing the "message encryption" group APIs.
+    /// Orderer for testing the "data encryption" group APIs.
     ///
-    /// NOTE: This orderer does _not_ fullfill the full specification for correct ordering. It's
-    /// assuming that peers process all messages after each member has published max. one control
-    /// or application message.
-    ///
-    /// This is sufficient for the current testing setup but for anything "production ready" and
-    /// more robust for all concurrency scenarios, a more sophisticated solution will be required.
+    /// This is sufficient for the current testing setup but for anything "production ready" a more
+    /// sophisticated solution will be required as all messages are kept in memory.
     #[derive(Debug)]
-    pub struct ForwardSecureOrderer<DGM> {
+    pub struct MessageOrderer<DGM> {
         _marker: PhantomData<DGM>,
     }
 
-    impl<DGM> ForwardSecureOrderer<DGM>
+    impl<DGM> MessageOrderer<DGM>
     where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
+        DGM: Clone + GroupMembership<MemberId, MessageId>,
     {
-        pub fn init(my_id: MemberId) -> ForwardSecureOrdererState<DGM> {
-            ForwardSecureOrdererState {
+        pub fn init(my_id: MemberId) -> MessageOrdererState<DGM> {
+            MessageOrdererState {
                 next_message_seq: 0,
                 previous: HashMap::new(),
                 orderer: Orderer::init(),
@@ -48,9 +40,9 @@ pub mod test_utils {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct ForwardSecureOrdererState<DGM>
+    pub struct MessageOrdererState<DGM>
     where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
+        DGM: Clone + GroupMembership<MemberId, MessageId>,
     {
         /// Sequence number of the next, message to-be published.
         next_message_seq: usize,
@@ -71,23 +63,23 @@ pub mod test_utils {
         welcome_message: Option<TestMessage<DGM>>,
     }
 
-    impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for ForwardSecureOrderer<DGM>
+    impl<DGM> Ordering<MemberId, MessageId, DGM> for MessageOrderer<DGM>
     where
         DGM: std::fmt::Debug
             + Clone
-            + AckedGroupMembership<MemberId, MessageId>
+            + GroupMembership<MemberId, MessageId>
             + Serialize
             + for<'a> Deserialize<'a>,
     {
-        type State = ForwardSecureOrdererState<DGM>;
+        type State = MessageOrdererState<DGM>;
 
-        type Error = ForwardSecureOrdererError;
+        type Error = MessageOrdererError;
 
         type Message = TestMessage<DGM>;
 
         fn next_control_message(
             mut y: Self::State,
-            control_message: &ControlMessage<MemberId, MessageId>,
+            control_message: &ControlMessage<MemberId>,
             direct_messages: &[DirectMessage<MemberId, MessageId, DGM>],
         ) -> Result<(Self::State, Self::Message), Self::Error> {
             let seq = y.next_message_seq;
@@ -112,7 +104,8 @@ pub mod test_utils {
 
         fn next_application_message(
             mut y: Self::State,
-            generation: Generation,
+            group_secret_id: GroupSecretId,
+            nonce: XAeadNonce,
             ciphertext: Vec<u8>,
         ) -> Result<(Self::State, Self::Message), Self::Error> {
             let seq = y.next_message_seq;
@@ -125,11 +118,11 @@ pub mod test_utils {
                 previous,
                 content: TestMessageContent::Application {
                     ciphertext,
-                    generation,
+                    group_secret_id,
+                    nonce,
                 },
             };
 
-            y.previous.insert(y.my_id, message.id());
             y.next_message_seq += 1;
 
             Ok((y, message))
@@ -138,6 +131,9 @@ pub mod test_utils {
         fn queue(mut y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
             let id = message.id();
 
+            // TODO: We keep all messages in memory currently which is bad. This needs a persistence
+            // layer as soon as we've looked into how it all plays together with our access control and
+            // stream APIs.
             y.messages.insert(id, message.clone());
 
             let previous: Vec<MessageId> = message
@@ -169,62 +165,39 @@ pub mod test_utils {
         }
 
         fn next_ready_message(
-            y: Self::State,
+            mut y: Self::State,
         ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
             // We have not joined the group yet, don't process any messages yet.
-            let Some(welcome) = y.welcome_message.clone() else {
+            if y.welcome_message.is_none() {
                 return Ok((y, None));
             };
 
-            let mut y_loop = y;
-            loop {
-                let (y_next, next_ready) = Orderer::take_next_ready(y_loop.orderer)?;
-                y_loop.orderer = y_next;
+            let (y_orderer_i, next_ready) = Orderer::take_next_ready(y.orderer)?;
+            y.orderer = y_orderer_i;
 
-                let message = next_ready.map(|id| {
-                    y_loop
-                        .messages
-                        .get(&id)
-                        .expect("ids map consistently to messages")
-                        .to_owned()
-                });
+            let message = next_ready.map(|id| {
+                y.messages
+                    .get(&id)
+                    .expect("ids map consistently to messages")
+                    .to_owned()
+            });
 
-                if let Some(message) = message {
-                    let last_seq = welcome
-                        .previous
-                        .iter()
-                        .find(|msg| msg.sender == message.sender())
-                        .map(|msg| msg.seq);
-
-                    // Is this message before our welcome?
-                    //
-                    // This is a naive implementation where we assume that every member processed
-                    // every control message after one round.
-                    if let Some(last_seq) = last_seq {
-                        if message.id().seq < last_seq + 1 {
-                            continue;
-                        }
-                    }
-
+            if let Some(ref message) = message {
+                if let GroupMessageType::Control(_) = message.message_type() {
                     // Mark messages as "last seen" so we can mention the "previous" ones as soon
                     // as we publish a message ourselves.
-                    //
-                    // In a correct implementation we would _only_ track control messages here (and
-                    // not also application messages).
-                    y_loop.previous.insert(message.sender(), message.id());
-
-                    return Ok((y_loop, Some(message)));
-                } else {
-                    return Ok((y_loop, None));
+                    y.previous.insert(message.sender(), message.id());
                 }
             }
+
+            Ok((y, message))
         }
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct TestMessage<DGM>
     where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
+        DGM: Clone + GroupMembership<MemberId, MessageId>,
     {
         seq: usize,
         sender: usize,
@@ -235,21 +208,22 @@ pub mod test_utils {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub enum TestMessageContent<DGM>
     where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
+        DGM: Clone + GroupMembership<MemberId, MessageId>,
     {
         Application {
             ciphertext: Vec<u8>,
-            generation: Generation,
+            group_secret_id: GroupSecretId,
+            nonce: XAeadNonce,
         },
         System {
-            control_message: ControlMessage<MemberId, MessageId>,
+            control_message: ControlMessage<MemberId>,
             direct_messages: Vec<DirectMessage<MemberId, MessageId, DGM>>,
         },
     }
 
-    impl<DGM> ForwardSecureGroupMessage<MemberId, MessageId, DGM> for TestMessage<DGM>
+    impl<DGM> GroupMessage<MemberId, MessageId, DGM> for TestMessage<DGM>
     where
-        DGM: Clone + AckedGroupMembership<MemberId, MessageId>,
+        DGM: Clone + GroupMembership<MemberId, MessageId>,
     {
         fn id(&self) -> MessageId {
             MessageId {
@@ -262,18 +236,20 @@ pub mod test_utils {
             self.sender
         }
 
-        fn message_type(&self) -> ForwardSecureMessageType<MemberId, MessageId> {
+        fn message_type(&self) -> GroupMessageType<MemberId> {
             match &self.content {
                 TestMessageContent::Application {
                     ciphertext,
-                    generation,
-                } => ForwardSecureMessageType::Application {
-                    ciphertext: ciphertext.to_owned(),
-                    generation: *generation,
+                    group_secret_id,
+                    nonce,
+                } => GroupMessageType::Application {
+                    group_secret_id: *group_secret_id,
+                    nonce: *nonce,
+                    ciphertext: ciphertext.to_vec(),
                 },
                 TestMessageContent::System {
                     control_message, ..
-                } => ForwardSecureMessageType::Control(control_message.to_owned()),
+                } => GroupMessageType::Control(control_message.clone()),
             }
         }
 
@@ -288,7 +264,7 @@ pub mod test_utils {
     }
 
     #[derive(Debug, Error)]
-    pub enum ForwardSecureOrdererError {
+    pub enum MessageOrdererError {
         #[error(transparent)]
         Orderer(#[from] OrdererError),
     }

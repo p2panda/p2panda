@@ -9,6 +9,8 @@ mod key_manager;
 mod key_registry;
 mod message_scheme;
 mod ordering;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
 pub mod traits;
 mod two_party;
 
@@ -21,8 +23,3 @@ pub use key_registry::{KeyRegistry, KeyRegistryState};
 pub use two_party::{
     LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError, TwoPartyMessage,
 };
-
-#[cfg(feature = "test_utils")]
-pub mod test_utils {
-    pub use crate::crypto::x25519::SecretKey;
-}
