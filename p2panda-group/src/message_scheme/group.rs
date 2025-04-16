@@ -175,7 +175,7 @@ where
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
         rng: &Rng,
-    ) -> GroupResult<Vec<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+    ) -> GroupResult<Vec<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         let message_type = message.message_type();
         let is_established = y.ratchet.is_some();
         let mut is_create_or_welcome = false;
@@ -331,7 +331,7 @@ where
         y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
         rng: &Rng,
-    ) -> GroupResult<Option<ReceiveOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
+    ) -> GroupResult<Option<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
         match message.message_type() {
             ForwardSecureMessageType::Control(control_message) => {
                 let direct_message = message
@@ -351,9 +351,9 @@ where
                 // Check if processing this message removed us from the group.
                 let is_removed = !Self::members(&y_i)?.contains(&y_i.my_id);
                 if is_removed {
-                    Ok((y_i, Some(ReceiveOutput::Removed)))
+                    Ok((y_i, Some(GroupOutput::Removed)))
                 } else {
-                    Ok((y_i, output.map(|msg| ReceiveOutput::Control(msg))))
+                    Ok((y_i, output.map(|msg| GroupOutput::Control(msg))))
                 }
             }
             ForwardSecureMessageType::Application {
@@ -361,7 +361,7 @@ where
                 generation,
             } => {
                 let (y_i, plaintext) = Self::decrypt(y, message.sender(), ciphertext, generation)?;
-                Ok((y_i, Some(ReceiveOutput::Application { plaintext })))
+                Ok((y_i, Some(GroupOutput::Application { plaintext })))
             }
         }
     }
@@ -461,7 +461,7 @@ pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
     Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReceiveOutput<ID, OP, DGM, ORD>
+pub enum GroupOutput<ID, OP, DGM, ORD>
 where
     DGM: AckedGroupMembership<ID, OP>,
     ORD: ForwardSecureOrdering<ID, OP, DGM>,

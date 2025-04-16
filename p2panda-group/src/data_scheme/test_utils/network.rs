@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::crypto::Rng;
 use crate::data_scheme::ControlMessage;
 use crate::data_scheme::dgm::test_utils::TestDgm;
-use crate::data_scheme::group::{EncryptionGroup, GroupState, ReceiveOutput};
+use crate::data_scheme::group::{EncryptionGroup, GroupOutput, GroupState};
 use crate::data_scheme::group_secret::SecretBundle;
 use crate::data_scheme::test_utils::dcgka::init_dcgka_state;
 use crate::data_scheme::test_utils::ordering::{MessageOrderer, TestMessage};
@@ -23,6 +23,27 @@ pub type TestGroupState = GroupState<
     MessageOrderer<TestDgm<MemberId, MessageId>>,
 >;
 
+pub fn init_group_state<const N: usize>(
+    member_ids: [MemberId; N],
+    rng: &Rng,
+) -> [TestGroupState; N] {
+    init_dcgka_state(member_ids, rng)
+        .into_iter()
+        .map(|dcgka| {
+            let orderer = MessageOrderer::<TestDgm<MemberId, MessageId>>::init(dcgka.my_id);
+            TestGroupState {
+                my_id: dcgka.my_id,
+                dcgka,
+                orderer,
+                secrets: SecretBundle::init(),
+                is_welcomed: false,
+            }
+        })
+        .collect::<Vec<TestGroupState>>()
+        .try_into()
+        .unwrap()
+}
+
 pub struct Network {
     rng: Rng,
     pub members: HashMap<MemberId, TestGroupState>,
@@ -32,21 +53,10 @@ pub struct Network {
 
 impl Network {
     pub fn new<const N: usize>(members: [MemberId; N], rng: Rng) -> Self {
-        let members = init_dcgka_state(members, &rng);
+        let members = init_group_state(members, &rng);
         Self {
             rng,
-            members: HashMap::from_iter(members.into_iter().map(|dcgka| {
-                (dcgka.my_id, {
-                    let orderer = MessageOrderer::<TestDgm<MemberId, MessageId>>::init(dcgka.my_id);
-                    TestGroupState {
-                        my_id: dcgka.my_id,
-                        dcgka,
-                        orderer,
-                        secrets: SecretBundle::init(),
-                        is_welcomed: false,
-                    }
-                })
-            })),
+            members: HashMap::from_iter(members.into_iter().map(|state| (state.my_id, state))),
             removed_members: HashSet::new(),
             queue: VecDeque::new(),
         }
@@ -115,16 +125,16 @@ impl Network {
 
                 for output in result {
                     match output {
-                        ReceiveOutput::Control(control_message) => {
+                        GroupOutput::Control(control_message) => {
                             // Processing messages might yield new ones, process these as well.
                             self.queue.push_back(control_message);
                         }
-                        ReceiveOutput::Application { plaintext } => decrypted_messages.push((
+                        GroupOutput::Application { plaintext } => decrypted_messages.push((
                             message.sender(), // Sender
                             *id,              // Receiver
                             plaintext,        // Decrypted content
                         )),
-                        ReceiveOutput::Removed => (),
+                        GroupOutput::Removed => (),
                     }
                 }
 
