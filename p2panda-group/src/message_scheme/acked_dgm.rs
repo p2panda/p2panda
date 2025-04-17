@@ -65,6 +65,7 @@ pub mod test_utils {
 
         fn from_welcome(my_id: ID, mut y: Self::State) -> Result<Self::State, Self::Error> {
             y.my_id = my_id;
+            println!("{:?}", y);
             Ok(y)
         }
 
@@ -101,6 +102,7 @@ pub mod test_utils {
             added: ID,
             message_id: OP,
         ) -> Result<Self::State, Self::Error> {
+            println!("{:?} add {:?}", y.my_id, added);
             let mut added_info = MemberInfo::new(added, Some(adder), &[]);
             added_info.acks.insert(adder);
             added_info.acks.insert(added);

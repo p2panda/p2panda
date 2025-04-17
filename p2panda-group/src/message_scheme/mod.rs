@@ -17,6 +17,7 @@ pub use dcgka::{
     DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
     UpdateSecret,
 };
+pub use group::{GroupError, GroupOutput, GroupState, MessageGroup};
 #[allow(unused)]
 pub use ratchet::{
     DecryptionRatchet, DecryptionRatchetState, Generation, MESSAGE_KEY_SIZE, RatchetError,

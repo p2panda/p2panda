@@ -24,7 +24,7 @@ use crate::traits::{
 ///
 /// This is sufficient for the current testing setup but for anything "production ready" and
 /// more robust for all concurrency scenarios, a more sophisticated solution will be required.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ForwardSecureOrderer<DGM> {
     _marker: PhantomData<DGM>,
 }
@@ -41,6 +41,7 @@ where
             my_id,
             messages: HashMap::new(),
             welcome_message: None,
+            processed_welcome: false,
         }
     }
 }
@@ -67,6 +68,8 @@ where
 
     /// "Create" or "Add" message which got us into the group.
     welcome_message: Option<TestMessage<DGM>>,
+
+    processed_welcome: bool,
 }
 
 impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for ForwardSecureOrderer<DGM>
@@ -102,6 +105,7 @@ where
             },
         };
 
+        y.messages.insert(message.id(), message.clone());
         y.next_message_seq += 1;
         y.previous.insert(y.my_id, message.id());
 
@@ -127,6 +131,7 @@ where
             },
         };
 
+        y.messages.insert(message.id(), message.clone());
         y.previous.insert(y.my_id, message.id());
         y.next_message_seq += 1;
 
@@ -167,12 +172,18 @@ where
     }
 
     fn next_ready_message(
-        y: Self::State,
+        mut y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
         // We have not joined the group yet, don't process any messages yet.
         let Some(welcome) = y.welcome_message.clone() else {
             return Ok((y, None));
         };
+
+        // TODO: Feels hacky
+        if !y.processed_welcome && welcome.sender() != y.my_id {
+            y.processed_welcome = true;
+            return Ok((y, Some(welcome)));
+        }
 
         let mut y_loop = y;
         loop {
@@ -188,6 +199,10 @@ where
             });
 
             if let Some(message) = message {
+                if message.id() == welcome.id() {
+                    continue;
+                }
+
                 let last_seq = welcome
                     .previous
                     .iter()
@@ -200,6 +215,25 @@ where
                 // every control message after one round.
                 if let Some(last_seq) = last_seq {
                     if message.id().seq < last_seq + 1 {
+                        continue;
+                    }
+                }
+
+                if let ForwardSecureMessageType::Application { .. } = message.message_type() {
+                    let last_seq = y_loop
+                        .previous
+                        .values()
+                        .find_map(|id| {
+                            let msg = y_loop.messages.get(id).unwrap();
+                            if msg.sender == message.sender() {
+                                Some(msg)
+                            } else {
+                                None
+                            }
+                        })
+                        .map(|msg| msg.seq)
+                        .unwrap_or(0);
+                    if message.id().seq > last_seq {
                         continue;
                     }
                 }
