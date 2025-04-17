@@ -16,7 +16,7 @@ use crate::traits::{GroupMembership, GroupMessage, GroupMessageType, Ordering};
 ///
 /// This is sufficient for the current testing setup but for anything "production ready" a more
 /// sophisticated solution will be required as all messages are kept in memory.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MessageOrderer<DGM> {
     _marker: PhantomData<DGM>,
 }

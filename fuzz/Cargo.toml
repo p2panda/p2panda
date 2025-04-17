@@ -25,3 +25,10 @@ path = "fuzz_targets/groups_2sm.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "groups_message"
+path = "fuzz_targets/groups_message.rs"
+test = false
+doc = false
+bench = false

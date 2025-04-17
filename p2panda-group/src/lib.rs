@@ -7,7 +7,7 @@ mod data_scheme;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
-mod message_scheme;
+pub mod message_scheme;
 mod ordering;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
