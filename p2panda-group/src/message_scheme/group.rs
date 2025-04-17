@@ -38,13 +38,16 @@ pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
 
 /// Group state for "message encryption" scheme. Serializable for persistence.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupState<ID, OP, PKI, DGM, KMG, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
+    PKI::State: Clone,
     DGM: AckedGroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
+    KMG::State: Clone,
     ORD: ForwardSecureOrdering<ID, OP, DGM>,
 {
     pub(crate) my_id: ID,
@@ -60,8 +63,10 @@ where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, OneTimeKeyBundle>,
+    PKI::State: Clone,
     DGM: AckedGroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
+    KMG::State: Clone,
     ORD: ForwardSecureOrdering<ID, OP, DGM>,
 {
     /// Returns initial state for messaging group.

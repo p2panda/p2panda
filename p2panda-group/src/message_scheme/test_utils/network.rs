@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use crate::message_scheme::GroupError;
 use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
 use crate::message_scheme::group::{GroupConfig, GroupOutput, GroupState, MessageGroup};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
@@ -19,6 +20,38 @@ pub type TestGroupState = GroupState<
     ForwardSecureOrderer<AckedTestDgm<MemberId, MessageId>>,
 >;
 
+pub type TestGroupError = GroupError<
+    MemberId,
+    MessageId,
+    KeyRegistry<MemberId>,
+    AckedTestDgm<MemberId, MessageId>,
+    KeyManager,
+    ForwardSecureOrderer<AckedTestDgm<MemberId, MessageId>>,
+>;
+
+pub fn init_group_state<const N: usize>(
+    member_ids: [MemberId; N],
+    rng: &Rng,
+) -> [TestGroupState; N] {
+    init_dcgka_state(member_ids, rng)
+        .into_iter()
+        .map(|dcgka| {
+            let orderer =
+                ForwardSecureOrderer::<AckedTestDgm<MemberId, MessageId>>::init(dcgka.my_id);
+            TestGroupState {
+                my_id: dcgka.my_id,
+                dcgka,
+                orderer,
+                ratchet: None,
+                decryption_ratchet: HashMap::new(),
+                config: GroupConfig::default(),
+            }
+        })
+        .collect::<Vec<TestGroupState>>()
+        .try_into()
+        .unwrap()
+}
+
 pub struct Network {
     rng: Rng,
     members: HashMap<MemberId, TestGroupState>,
@@ -27,23 +60,9 @@ pub struct Network {
 
 impl Network {
     pub fn new<const N: usize>(members: [MemberId; N], rng: Rng) -> Self {
-        let members = init_dcgka_state(members, &rng);
+        let members = init_group_state(members, &rng);
         Self {
-            members: HashMap::from_iter(members.into_iter().map(|dcgka| {
-                (dcgka.my_id, {
-                    let orderer = ForwardSecureOrderer::<AckedTestDgm<MemberId, MessageId>>::init(
-                        dcgka.my_id,
-                    );
-                    TestGroupState {
-                        my_id: dcgka.my_id,
-                        dcgka,
-                        orderer,
-                        ratchet: None,
-                        decryption_ratchet: HashMap::new(),
-                        config: GroupConfig::default(),
-                    }
-                })
-            })),
+            members: HashMap::from_iter(members.into_iter().map(|state| (state.my_id, state))),
             rng,
             queue: VecDeque::new(),
         }
