@@ -168,7 +168,7 @@ where
     /// This yields a list of "outputs" which can be either control messages which need to be
     /// broadcast to all members in the group or decrypted application message payloads.
     ///
-    /// If we got removed after processing a control message we will receive an "removed" output
+    /// If we got removed after processing a control message we will receive a "removed" output
     /// signal.
     pub fn receive(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,

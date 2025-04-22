@@ -11,7 +11,7 @@ use crate::traits::AckedGroupMembership;
 /// Applications implementing these traits should take additional care to authenticate the original
 /// sender of each message.
 ///
-/// Messages, except of the direct ones, need to be broadcast to the whole group.
+/// Messages, except for the direct ones, need to be broadcast to the whole group.
 pub trait ForwardSecureMessage<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -27,7 +27,7 @@ where
 
     /// Returns optional list of direct messages.
     ///
-    /// Direct messages to not need to be encoded as part of one broadcast message. Applications
+    /// Direct messages do not need to be encoded as part of one broadcast message. Applications
     /// can also decide to keep control messages and direct messages detached and use
     /// `ForwardSecureMessage` as a way to express which control message belonged to this set of
     /// direct messages.

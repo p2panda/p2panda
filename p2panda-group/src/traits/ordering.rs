@@ -25,7 +25,7 @@ use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
 ///    messages: What information do they need to mention for other peers to correctly order and
 ///    process messages from us?
 ///
-/// When publishing a message peers need to make sure to provide the following informations:
+/// When publishing a message peers need to make sure to provide the following information:
 ///
 /// 1. "create" control messages do not have any dependencies as they are the first messages in a
 ///    group.
@@ -33,13 +33,13 @@ use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
 ///    point at a) the last known, previously processed control messages (by us and others), b) if
 ///    any application messages were sent by us, the last sent message. The latter helps with peers
 ///    understanding that they might miss a message when they switch to a new ratchet, they can
-///    decide to ignore this message "dependency", but will also then potentially loose it. This
+///    decide to ignore this message "dependency", but will also then potentially lose it. This
 ///    can be useful to do if messages get lost and peers otherwise get "stuck".
 /// 3. "ack" control messages need to point at the regarding "create", "add", "update" or "remove"
 ///    control message they are acknowledging.
 /// 4. The first application message written during a new "ratchet epoch" needs to point at the
 ///    "ack" or "create", "add", "update" or "remove" message which initiated that epoch.
-/// 5. Every sub-sequent application message needs to point at the previous application message.
+/// 5. Every subsequent application message needs to point at the previous application message.
 ///
 /// In this example a user "Alice" creates a group with Bob. Both of them send messages into the
 /// group ("Message 1", "Messsage 2" etc.) based on the established ratchet secrets. At some point
@@ -91,7 +91,7 @@ use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
 /// 1. Control and application messages before the "welcome" message (the "add" which added us) can
 ///    be ignored.
 /// 2. Control messages after or concurrent to the "welcome" message need to be processed
-///    regularily like all other messages.
+///    regularly like all other messages.
 /// 3. Application messages concurrent to the "welcome" message can be ignored (as they can not be
 ///    decrypted).
 ///
