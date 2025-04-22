@@ -26,7 +26,7 @@ pub type GroupSecretId = [u8; SHA256_DIGEST_SIZE];
 
 /// UNIX timestamp indicating when the key was generated.
 ///
-/// This helps peers to pick the "latest" key or remove keys on their age (for forward secrecy)
+/// This helps peers to pick the "latest" key or remove keys based on their age (for forward secrecy)
 /// depending on the application. If other ordering strategies are applied by the application they
 /// can also be used instead to reason about the "latest" group secret.
 pub type Timestamp = u64;
@@ -118,7 +118,7 @@ impl SecretBundleState {
 
     /// Returns a secret based on the id.
     ///
-    /// This can be used to retreive a secret to decrypt data where we know which secret id has been
+    /// This can be used to retrieve a secret to decrypt data where we know which secret id has been
     /// used.
     pub fn get(&self, id: &GroupSecretId) -> Option<&GroupSecret> {
         self.secrets.get(id)

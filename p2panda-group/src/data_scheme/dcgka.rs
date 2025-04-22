@@ -221,7 +221,7 @@ where
         bundle: &SecretBundleState,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        // Construct a control message of type "add" to broadcast to the group
+        // Construct a control message of type "add" to broadcast to the group.
         let control_message = ControlMessage::Add { added };
 
         // Construct a welcome message that is sent to the new member as a direct message.
