@@ -7,11 +7,15 @@ mod dgm;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
+mod message;
+mod ordering;
 
 pub use dgm::{AckedGroupMembership, GroupMembership};
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
+pub use message::{ForwardSecureMessage, ForwardSecureMessageType};
+pub use ordering::ForwardSecureOrdering;
 
 /// Handle to identify a group member.
 ///

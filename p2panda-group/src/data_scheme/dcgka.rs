@@ -467,7 +467,7 @@ impl<ID> Display for ControlMessage<ID> {
             "{}",
             match self {
                 ControlMessage::Create { .. } => "create",
-                ControlMessage::Update { .. } => "update",
+                ControlMessage::Update => "update",
                 ControlMessage::Remove { .. } => "remove",
                 ControlMessage::Add { .. } => "add",
             }
