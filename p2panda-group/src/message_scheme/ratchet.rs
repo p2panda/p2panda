@@ -115,7 +115,7 @@ impl DecryptionRatchet {
     ///   within an epoch.
     /// - Maximum forward distance:
     ///   This parameter defines how many incoming messages can be skipped. This is useful if the
-    ///   DS drops application messages.
+    ///   application drops messages.
     pub fn secret_for_decryption(
         mut y: DecryptionRatchetState,
         generation: Generation,
