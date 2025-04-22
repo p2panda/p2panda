@@ -3,6 +3,7 @@
 // TODO: To be removed.
 #![allow(dead_code)]
 mod crypto;
+mod data_scheme;
 mod key_bundle;
 mod key_manager;
 mod key_registry;

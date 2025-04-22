@@ -169,7 +169,7 @@ where
 {
     /// Returns new DCGKA state with our own identity and key managers.
     ///
-    /// Use this when creating a new group or accepting an invitation to an existing one.
+    /// Use this when creating a new group or before accepting an invitation to an existing one.
     pub fn init(
         my_id: ID,
         my_keys: KMG::State,
