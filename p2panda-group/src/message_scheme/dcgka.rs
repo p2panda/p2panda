@@ -207,24 +207,24 @@ where
         } = input;
         assert_ne!(sender, y.my_id, "do not process own control messages");
         let (y_i, output) = match control_message {
-            ControlMessage::Create(CreateMessage { initial_members }) => {
+            ControlMessage::Create { initial_members } => {
                 Self::process_create(y, sender, seq, initial_members, direct_message, rng)?
             }
-            ControlMessage::Ack(AckMessage {
+            ControlMessage::Ack {
                 ack_sender,
                 ack_seq,
-            }) => Self::process_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
-            ControlMessage::Update(_) => Self::process_update(y, sender, seq, direct_message, rng)?,
-            ControlMessage::Remove(RemoveMessage { removed }) => {
+            } => Self::process_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
+            ControlMessage::Update => Self::process_update(y, sender, seq, direct_message, rng)?,
+            ControlMessage::Remove { removed } => {
                 Self::process_remove(y, sender, seq, &removed, direct_message, rng)?
             }
-            ControlMessage::Add(AddMessage { added }) => {
+            ControlMessage::Add { added } => {
                 Self::process_add(y, sender, seq, added, direct_message, rng)?
             }
-            ControlMessage::AddAck(AddAckMessage {
+            ControlMessage::AddAck {
                 ack_sender,
                 ack_seq,
-            }) => Self::process_add_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
+            } => Self::process_add_ack(y, sender, (&ack_sender, ack_seq), direct_message)?,
         };
         Ok((y_i, output))
     }
@@ -248,16 +248,14 @@ where
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
         let my_id = y.my_id;
         let (y_i, output) = match input.control_message {
-            ControlMessage::Create(ref message) => {
-                Self::process_create(y, my_id, seq, message.initial_members.clone(), None, rng)?
+            ControlMessage::Create {
+                ref initial_members,
+            } => Self::process_create(y, my_id, seq, initial_members.clone(), None, rng)?,
+            ControlMessage::Update => Self::process_update(y, my_id, seq, None, rng)?,
+            ControlMessage::Remove { removed } => {
+                Self::process_remove(y, my_id, seq, &removed, None, rng)?
             }
-            ControlMessage::Update(_) => Self::process_update(y, my_id, seq, None, rng)?,
-            ControlMessage::Remove(ref message) => {
-                Self::process_remove(y, my_id, seq, &message.removed, None, rng)?
-            }
-            ControlMessage::Add(ref message) => {
-                Self::process_add(y, my_id, seq, message.added, None, rng)?
-            }
+            ControlMessage::Add { added } => Self::process_add(y, my_id, seq, added, None, rng)?,
             _ => panic!(
                 "only call process_local after local create, update, remove or add operations"
             ),
@@ -305,9 +303,9 @@ where
         }
 
         // The "create" function constructs the "create" control message.
-        let control_message = ControlMessage::Create(CreateMessage {
+        let control_message = ControlMessage::Create {
             initial_members: initial_members.clone(),
-        });
+        };
 
         // Generate the set of direct messages to send.
         let (y_ii, direct_messages) = Self::generate_seed(y, &initial_members, rng)?;
@@ -420,7 +418,7 @@ where
         y: DcgkaState<ID, OP, PKI, DGM, KMG>,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage::Update(UpdateMessage);
+        let control_message = ControlMessage::Update;
 
         let recipient_ids: Vec<ID> = Self::member_view(&y, &y.my_id)?
             .into_iter()
@@ -458,7 +456,7 @@ where
         removed: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        let control_message = ControlMessage::Remove(RemoveMessage { removed });
+        let control_message = ControlMessage::Remove { removed };
 
         let recipient_ids: Vec<ID> = Self::member_view(&y, &y.my_id)?
             .into_iter()
@@ -500,8 +498,8 @@ where
         added: ID,
         rng: &Rng,
     ) -> DcgkaOperationResult<ID, OP, PKI, DGM, KMG> {
-        // Construct a control message of type "add" to broadcast to the group.
-        let control_message = ControlMessage::Add(AddMessage { added });
+        // Construct a control message of type "add" to broadcast to the group
+        let control_message = ControlMessage::Add { added };
 
         // Construct a welcome message that is sent to the new member as a direct message.
         //
@@ -647,10 +645,10 @@ where
         // Otherwise, we need to acknowledge the "add" message, so we construct a control message
         // of type "add-ack" to broadcast (note that add has its own acknowledgment type, whereas
         // create, update and remove all use "ack").
-        let control = ControlMessage::AddAck(AddAckMessage {
+        let control = ControlMessage::AddAck {
             ack_sender: sender,
             ack_seq: seq,
-        });
+        };
 
         // We then use 2SM to encrypt our current ratchet state to send as a direct message to the
         // added user, so that they can decrypt subsequent messages we send.
@@ -800,10 +798,10 @@ where
 
         // Finally, the new group member constructs an "ack" control message (not "add_ack") to
         // broadcast and calls process_ack to compute their first update secret Ime.
-        let control = ControlMessage::Ack(AckMessage {
+        let control = ControlMessage::Ack {
             ack_sender: sender,
             ack_seq: seq,
-        });
+        };
 
         // process_ack works as described previously, reading from γ.memberSecret the member secret
         // we just generated, and passing it to update_ratchet.
@@ -930,10 +928,10 @@ where
         } else {
             // 3. Otherwise we return an "ack" message without deriving an update secret. Case 3
             //    may occur when a group member is added concurrently to other messages.
-            let control = ControlMessage::Ack(AckMessage {
+            let control = ControlMessage::Ack {
                 ack_sender: *sender,
                 ack_seq: seq,
-            });
+            };
             return Ok((
                 y,
                 ProcessOutput {
@@ -1010,10 +1008,10 @@ where
         // If we received the seed secret from another user, we construct an "ack" control message
         // to broadcast, including the sender ID and sequence number of the message we are
         // acknowledging.
-        let control = ControlMessage::Ack(AckMessage {
+        let control = ControlMessage::Ack {
             ack_sender: *sender,
             ack_seq: seq,
-        });
+        };
 
         // Care is required when an add operation occurs concurrently with an update, remove, or
         // another add operation. We want all intended recipients to learn every update secret,
@@ -1192,7 +1190,7 @@ where
     /// user ID. It works by filtering the set of group membership operations to contain only those
     /// seen by ID, and then invoking the Decentralized Group Membership function DGM to compute
     /// the group membership.
-    fn member_view(
+    pub fn member_view(
         y: &DcgkaState<ID, OP, PKI, DGM, KMG>,
         viewer: &ID,
     ) -> Result<HashSet<ID>, DcgkaError<ID, OP, PKI, DGM, KMG>> {
@@ -1225,12 +1223,12 @@ pub type DcgkaOperationResult<ID, OP, PKI, DGM, KMG> =
 /// Broadcast, calling the process function on the recipient when they are delivered.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlMessage<ID, OP> {
-    Create(CreateMessage<ID>),
-    Ack(AckMessage<ID, OP>),
-    Update(UpdateMessage),
-    Remove(RemoveMessage<ID>),
-    Add(AddMessage<ID>),
-    AddAck(AddAckMessage<ID, OP>),
+    Create { initial_members: Vec<ID> },
+    Ack { ack_sender: ID, ack_seq: OP },
+    Update,
+    Remove { removed: ID },
+    Add { added: ID },
+    AddAck { ack_sender: ID, ack_seq: OP },
 }
 
 impl<ID, OP> Display for ControlMessage<ID, OP> {
@@ -1239,45 +1237,15 @@ impl<ID, OP> Display for ControlMessage<ID, OP> {
             f,
             "{}",
             match self {
-                ControlMessage::Create(_) => "create",
-                ControlMessage::Ack(_) => "ack",
-                ControlMessage::Update(_) => "update",
-                ControlMessage::Remove(_) => "remove",
-                ControlMessage::Add(_) => "add",
-                ControlMessage::AddAck(_) => "add_ack",
+                ControlMessage::Create { .. } => "create",
+                ControlMessage::Ack { .. } => "ack",
+                ControlMessage::Update => "update",
+                ControlMessage::Remove { .. } => "remove",
+                ControlMessage::Add { .. } => "add",
+                ControlMessage::AddAck { .. } => "add_ack",
             }
         )
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CreateMessage<ID> {
-    pub initial_members: Vec<ID>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AckMessage<ID, OP> {
-    pub ack_sender: ID,
-    pub ack_seq: OP,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdateMessage;
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RemoveMessage<ID> {
-    pub removed: ID,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AddMessage<ID> {
-    pub added: ID,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AddAckMessage<ID, OP> {
-    pub ack_sender: ID,
-    pub ack_seq: OP,
 }
 
 #[derive(Clone, Debug)]
@@ -1527,6 +1495,12 @@ impl UpdateSecret {
 
     pub(crate) fn as_bytes(&self) -> &[u8; RATCHET_KEY_SIZE] {
         self.0.as_bytes()
+    }
+}
+
+impl From<UpdateSecret> for Secret<RATCHET_KEY_SIZE> {
+    fn from(update_secret: UpdateSecret) -> Self {
+        update_secret.0
     }
 }
 
