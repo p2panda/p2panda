@@ -65,9 +65,9 @@ impl RatchetSecret {
 /// Out-of-order messages cause the ratchet to "jump" ahead and keep "unused" keys persisted until
 /// they're used eventually.
 ///
-/// In this example our chain has a length of 2 in the moment an message for generation 4 arrives
+/// In this example our chain has a length of 2 at the moment a message for generation 4 arrives
 /// out of order (we've expected generation 2). Now we pre-generate the keys for the "jumped"
-/// messages (generation 2 and 3), keep them persisted for later. We decrypt the new message for
+/// messages (generation 2 and 3) and keep them persisted for later. We decrypt the new message for
 /// generation 4 with the regular, now "latest", chain state.
 ///
 /// ```text
@@ -103,7 +103,7 @@ impl DecryptionRatchet {
         }
     }
 
-    /// Returns a secret from the ratchet for decryption. Throws an error of requested secret is
+    /// Returns a secret from the ratchet for decryption. Throws an error if requested secret is
     /// out of bounds.
     ///
     /// ## Limits Configuration
@@ -131,7 +131,7 @@ impl DecryptionRatchet {
             return Err(RatchetError::TooDistantInTheFuture);
         }
 
-        // If generation id too distant in the past.
+        // If generation is too distant in the past.
         if generation < generation_head && (generation_head - generation) > ooo_tolerance {
             return Err(RatchetError::TooDistantInThePast);
         }
