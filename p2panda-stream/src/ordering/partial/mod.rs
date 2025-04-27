@@ -12,7 +12,7 @@ use thiserror::Error;
 pub use crate::partial::store::{MemoryStore, PartialOrderStore};
 
 /// Error types which may be returned from `PartialOrder` methods.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum PartialOrderError {
     #[error("store error: {0}")]
     StoreError(String),
