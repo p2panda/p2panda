@@ -16,7 +16,7 @@ use crate::ordering::partial::{
 /// This struct is a thin wrapper around ordering::PartialOrder struct which takes care of sorting
 /// the operation dependency graph into a partial order. Here we have the addition of a `LogStore`
 /// and `OperationStore` implementation (traits from `p2panda-store`).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PartialOrder<L, E, OS, POS> {
     /// A store containing p2panda operations.
     ///
