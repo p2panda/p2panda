@@ -25,29 +25,32 @@ where
     type Error = GroupResolverError;
 
     fn rebuild_required(y: &GroupState<ID, OP, ORD>, message: &ORD::Message) -> bool {
-        // Get all current tip operations.
-        let heads = y.heads();
+        // TODO: account for nested groups!
+        todo!();
 
-        // Detect concurrent operations by comparing the current heads with the new operations
-        // dependencies.
-        let is_concurrent = &heads != message.dependencies();
-
-        match message.payload() {
-            GroupControlMessage::Revoke { .. } => {
-                // Any revoke message requires a re-build.
-                true
-            }
-            GroupControlMessage::GroupAction(action) => {
-                if is_concurrent {
-                    match action {
-                        // TODO: Decide which (if any) concurrent actions cause a rebuild.
-                        _ => false,
-                    }
-                } else {
-                    false
-                }
-            }
-        }
+        //         // Get all current tip operations.
+        //         let heads = y.heads();
+        //
+        //         // Detect concurrent operations by comparing the current heads with the new operations
+        //         // dependencies.
+        //         let is_concurrent = &heads != message.dependencies();
+        //
+        //         match message.payload() {
+        //             GroupControlMessage::Revoke { .. } => {
+        //                 // Any revoke message requires a re-build.
+        //                 true
+        //             }
+        //             GroupControlMessage::GroupAction { group_id, action } => {
+        //                 if is_concurrent {
+        //                     match action {
+        //                         // TODO: Decide which (if any) concurrent actions cause a rebuild.
+        //                         _ => false,
+        //                     }
+        //                 } else {
+        //                     false
+        //                 }
+        //             }
+        //         }
     }
 
     fn process(y: GroupState<ID, OP, ORD>) -> Result<GroupState<ID, OP, ORD>, Self::Error> {

@@ -31,12 +31,12 @@ where
     /// and an operation is returned which can be processed locally or sent to a remote peer.
     fn prepare(
         y: Self::State,
-        action: Self::Action,
+        action: &Self::Action,
     ) -> Result<(Self::State, ORD::Message), Self::Error>;
 
     /// Process a prepared operation.
     ///
     /// Both locally created and operations received from the network should be processed with this
     /// method.
-    fn process(y: Self::State, operation: ORD::Message) -> Result<Self::State, Self::Error>;
+    fn process(y: Self::State, operation: &ORD::Message) -> Result<Self::State, Self::Error>;
 }
