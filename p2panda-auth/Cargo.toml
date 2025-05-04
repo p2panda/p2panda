@@ -1,0 +1,21 @@
+[package]
+name = "p2panda-auth"
+version = "0.1.0"
+edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
+]
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["sync", "synchronisation", "replication"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+
+[lints]
+workspace = true
