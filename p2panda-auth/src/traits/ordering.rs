@@ -19,6 +19,7 @@ pub trait Ordering<ID, OP, P> {
     /// meta-data is attached to the message.
     fn next_message(
         y: Self::State,
+        dependencies: Vec<OP>,
         payload: &P,
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 
