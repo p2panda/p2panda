@@ -10,7 +10,7 @@ authors = [
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["sync", "synchronisation", "replication"]
+keywords = ["auth", "access-control", "groups"]
 
 [package.metadata.docs.rs]
 all-features = true
