@@ -11,7 +11,7 @@ use super::Operation;
 pub trait Ordering<ID, OP, P> {
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
-    type Message: Operation<ID, OP, P>;
+    type Message: Clone + Debug + Operation<ID, OP, P> + Serialize + for<'a> Deserialize<'a>;
 
     type Error: Error;
 

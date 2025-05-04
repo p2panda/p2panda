@@ -2,9 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::hash::Hash;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::traits::IdentityHandle;
 
 use super::access::Access;
 
@@ -12,7 +14,7 @@ use super::access::Access;
 #[derive(Debug, Error)]
 pub enum GroupMembershipError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MemberState<ID> {
     pub member: ID,
     pub member_counter: usize,
@@ -30,14 +32,17 @@ impl<ID> MemberState<ID> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct GroupMembersState<ID> {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GroupMembersState<ID>
+where
+    ID: IdentityHandle,
+{
     pub members: HashMap<ID, MemberState<ID>>,
 }
 
 impl<ID> GroupMembersState<ID>
 where
-    ID: Clone + Hash + Eq,
+    ID: IdentityHandle,
 {
     pub fn members(&self) -> HashSet<ID> {
         self.members
@@ -66,7 +71,10 @@ where
     }
 }
 
-impl<ID> Default for GroupMembersState<ID> {
+impl<ID> Default for GroupMembersState<ID>
+where
+    ID: IdentityHandle,
+{
     fn default() -> Self {
         Self {
             members: Default::default(),
@@ -74,7 +82,7 @@ impl<ID> Default for GroupMembersState<ID> {
     }
 }
 
-pub fn create_group<ID: Clone + Eq + Hash>(
+pub fn create_group<ID: IdentityHandle>(
     initial_members: &[(ID, Access)],
 ) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     let mut members = HashMap::new();
@@ -93,7 +101,7 @@ pub fn create_group<ID: Clone + Eq + Hash>(
     Ok(state)
 }
 
-pub fn add_member<ID: Clone + Eq + Hash>(
+pub fn add_member<ID: IdentityHandle>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
@@ -137,7 +145,7 @@ pub fn add_member<ID: Clone + Eq + Hash>(
     Ok(state)
 }
 
-pub fn remove_member<ID: Eq + Hash>(
+pub fn remove_member<ID: IdentityHandle>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
@@ -170,7 +178,7 @@ pub fn remove_member<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn promote<ID: Eq + Hash>(
+pub fn promote<ID: IdentityHandle>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
@@ -204,7 +212,7 @@ pub fn promote<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn demote<ID: Eq + Hash>(
+pub fn demote<ID: IdentityHandle>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
@@ -238,7 +246,7 @@ pub fn demote<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn merge<ID: Clone + Eq + Hash>(
+pub fn merge<ID: IdentityHandle>(
     state_1: GroupMembersState<ID>,
     state_2: GroupMembersState<ID>,
 ) -> Result<GroupMembersState<ID>, GroupMembershipError> {
