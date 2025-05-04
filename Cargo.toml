@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "fuzz",
+    "fuzz", "p2panda-auth",
     "p2panda-blobs",
     "p2panda-core",
     "p2panda-discovery",
