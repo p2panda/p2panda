@@ -17,6 +17,7 @@ all-features = true
 
 [dependencies]
 thiserror = "2.0.12"
+anyhow = "1.0.98"
 serde = "1.0.219"
 
 [lints]
