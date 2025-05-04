@@ -4,7 +4,13 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use anyhow::Error;
+use thiserror::Error;
+
+use super::access::Access;
+
+// TODO: introduce all error types.
+#[derive(Debug, Error)]
+pub enum GroupMembershipError {}
 
 #[derive(Clone, Debug)]
 pub struct MemberState<ID> {
@@ -70,7 +76,7 @@ impl<ID> Default for GroupMembersState<ID> {
 
 pub fn create_group<ID: Clone + Eq + Hash>(
     initial_members: &[(ID, Access)],
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
@@ -92,7 +98,7 @@ pub fn add_member<ID: Clone + Eq + Hash>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     // TODO: Consider whether we want to return Error rather than the unchanged state...
     // The error would communicate why there was an early return.
 
@@ -135,7 +141,7 @@ pub fn remove_member<ID: Eq + Hash>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         return Ok(state);
@@ -169,7 +175,7 @@ pub fn promote<ID: Eq + Hash>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -203,7 +209,7 @@ pub fn demote<ID: Eq + Hash>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -235,7 +241,7 @@ pub fn demote<ID: Eq + Hash>(
 pub fn merge<ID: Clone + Eq + Hash>(
     state_1: GroupMembersState<ID>,
     state_2: GroupMembersState<ID>,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
