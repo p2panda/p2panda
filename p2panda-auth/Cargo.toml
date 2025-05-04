@@ -16,6 +16,7 @@ keywords = ["auth", "access-control", "groups"]
 all-features = true
 
 [dependencies]
+anyhow = "1.0.98"
 serde = "1.0.219"
 
 [lints]
