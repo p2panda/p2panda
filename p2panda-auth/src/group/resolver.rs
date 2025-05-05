@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
 use thiserror::Error;
@@ -18,39 +19,49 @@ pub struct GroupResolver<ID, OP, MSG> {
 impl<ID, OP, ORD> Resolver<GroupState<ID, OP, ORD>, ORD::Message>
     for GroupResolver<ID, OP, ORD::Message>
 where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
 {
     type Error = GroupResolverError;
 
-    fn rebuild_required(y: &GroupState<ID, OP, ORD>, message: &ORD::Message) -> bool {
-        // TODO: account for nested groups!
-        todo!();
+    fn rebuild_required(y: &GroupState<ID, OP, ORD>, operation: &ORD::Message) -> bool {
+        let control_message = operation.payload();
 
-        //         // Get all current tip operations.
-        //         let heads = y.heads();
-        //
-        //         // Detect concurrent operations by comparing the current heads with the new operations
-        //         // dependencies.
-        //         let is_concurrent = &heads != message.dependencies();
-        //
-        //         match message.payload() {
-        //             GroupControlMessage::Revoke { .. } => {
-        //                 // Any revoke message requires a re-build.
-        //                 true
-        //             }
-        //             GroupControlMessage::GroupAction { group_id, action } => {
-        //                 if is_concurrent {
-        //                     match action {
-        //                         // TODO: Decide which (if any) concurrent actions cause a rebuild.
-        //                         _ => false,
-        //                     }
-        //                 } else {
-        //                     false
-        //                 }
-        //             }
-        //         }
+        // Get the group id from the control message.
+        let group_id = match control_message {
+            GroupControlMessage::GroupAction { group_id, .. } => group_id,
+            GroupControlMessage::Revoke { group_id, .. } => group_id,
+        };
+
+        // Sanity check.
+        if *group_id != y.group_id {
+            panic!();
+        }
+
+        // Get all current tip operations.
+        let heads = y.heads();
+
+        // Detect concurrent operations by comparing the current heads with the new operations
+        // dependencies.
+        let is_concurrent = &heads != operation.dependencies();
+
+        match operation.payload() {
+            GroupControlMessage::Revoke { .. } => {
+                // Any revoke message requires a re-build.
+                true
+            }
+            GroupControlMessage::GroupAction { group_id, action } => {
+                if is_concurrent {
+                    match action {
+                        // TODO: Decide which (if any) concurrent actions cause a rebuild.
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+        }
     }
 
     fn process(y: GroupState<ID, OP, ORD>) -> Result<GroupState<ID, OP, ORD>, Self::Error> {
