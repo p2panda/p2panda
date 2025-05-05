@@ -128,13 +128,10 @@ where
         let (y_ii, direct_messages) =
             Self::send_group_secret(y, &initial_members, group_secret, rng)?;
 
-        Ok((
-            y_ii,
-            OperationOutput {
-                control_message,
-                direct_messages,
-            },
-        ))
+        Ok((y_ii, OperationOutput {
+            control_message,
+            direct_messages,
+        }))
     }
 
     fn process_create(
@@ -162,13 +159,10 @@ where
 
         let (y_i, direct_messages) = Self::send_group_secret(y, &recipient_ids, group_secret, rng)?;
 
-        Ok((
-            y_i,
-            OperationOutput {
-                control_message,
-                direct_messages,
-            },
-        ))
+        Ok((y_i, OperationOutput {
+            control_message,
+            direct_messages,
+        }))
     }
 
     fn process_update(
@@ -194,13 +188,10 @@ where
 
         let (y_i, direct_messages) = Self::send_group_secret(y, &recipient_ids, group_secret, rng)?;
 
-        Ok((
-            y_i,
-            OperationOutput {
-                control_message,
-                direct_messages,
-            },
-        ))
+        Ok((y_i, OperationOutput {
+            control_message,
+            direct_messages,
+        }))
     }
 
     fn process_remove(
@@ -237,13 +228,10 @@ where
             },
         };
 
-        Ok((
-            y_i,
-            OperationOutput {
-                control_message,
-                direct_messages: vec![direct_message],
-            },
-        ))
+        Ok((y_i, OperationOutput {
+            control_message,
+            direct_messages: vec![direct_message],
+        }))
     }
 
     fn process_add(
@@ -299,14 +287,11 @@ where
             (y_i, bundle)
         };
 
-        Ok((
-            y_i,
-            ProcessOutput {
-                control_message: None,
-                direct_messages: vec![],
-                group_secret: GroupSecretOutput::Bundle(bundle),
-            },
-        ))
+        Ok((y_i, ProcessOutput {
+            control_message: None,
+            direct_messages: vec![],
+            group_secret: GroupSecretOutput::Bundle(bundle),
+        }))
     }
 
     fn send_group_secret(
@@ -370,14 +355,11 @@ where
         let (y_i, plaintext) = Self::decrypt_from(y, sender, ciphertext)?;
         let group_secret = GroupSecret::try_from_bytes(&plaintext)?;
 
-        Ok((
-            y_i,
-            ProcessOutput {
-                control_message: None,
-                direct_messages: vec![],
-                group_secret: GroupSecretOutput::Secret(group_secret),
-            },
-        ))
+        Ok((y_i, ProcessOutput {
+            control_message: None,
+            direct_messages: vec![],
+            group_secret: GroupSecretOutput::Secret(group_secret),
+        }))
     }
 
     fn encrypt_to(
@@ -459,16 +441,12 @@ pub enum ControlMessage<ID> {
 
 impl<ID> Display for ControlMessage<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ControlMessage::Create { .. } => "create",
-                ControlMessage::Update => "update",
-                ControlMessage::Remove { .. } => "remove",
-                ControlMessage::Add { .. } => "add",
-            }
-        )
+        write!(f, "{}", match self {
+            ControlMessage::Create { .. } => "create",
+            ControlMessage::Update => "update",
+            ControlMessage::Remove { .. } => "remove",
+            ControlMessage::Add { .. } => "add",
+        })
     }
 }
 
@@ -550,14 +528,10 @@ pub enum DirectMessageType {
 
 impl Display for DirectMessageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                DirectMessageType::Welcome => "welcome",
-                DirectMessageType::TwoParty => "2sm",
-            }
-        )
+        write!(f, "{}", match self {
+            DirectMessageType::Welcome => "welcome",
+            DirectMessageType::TwoParty => "2sm",
+        })
     }
 }
 

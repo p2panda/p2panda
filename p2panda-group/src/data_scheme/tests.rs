@@ -92,18 +92,15 @@ fn group_operations() {
     let alice_group_secret_0 = SecretBundle::generate(&alice_bundle, &rng).unwrap();
     let (alice_dcgka, output) =
         Dcgka::create(alice_dcgka, vec![alice, bob], &alice_group_secret_0, &rng).unwrap();
-    let (alice_dcgka, _) = Dcgka::process(
-        alice_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: alice,
-                seq: 0,
-            },
+    let (alice_dcgka, _) = Dcgka::process(alice_dcgka, ProcessInput {
+        seq: MessageId {
             sender: alice,
-            control_message: output.control_message.clone(),
-            direct_message: None,
+            seq: 0,
         },
-    )
+        sender: alice,
+        control_message: output.control_message.clone(),
+        direct_message: None,
+    })
     .unwrap();
     let alice_bundle = SecretBundle::insert(alice_bundle, alice_group_secret_0.clone());
     assert_eq!(alice_bundle.len(), 1);
@@ -120,18 +117,15 @@ fn group_operations() {
         .find(|dm| dm.recipient == bob)
         .expect("direct message for bob");
 
-    let (bob_dcgka, output) = Dcgka::process(
-        bob_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: alice,
-                seq: 0,
-            },
+    let (bob_dcgka, output) = Dcgka::process(bob_dcgka, ProcessInput {
+        seq: MessageId {
             sender: alice,
-            control_message: output.control_message.clone(),
-            direct_message: Some(direct_message),
+            seq: 0,
         },
-    )
+        sender: alice,
+        control_message: output.control_message.clone(),
+        direct_message: Some(direct_message),
+    })
     .unwrap();
 
     let GroupSecretOutput::Secret(bob_group_secret_0) = output.group_secret else {
@@ -149,18 +143,15 @@ fn group_operations() {
     // ~~~~~~~~~~~~~~~~
 
     let (bob_dcgka, add_output) = Dcgka::add(bob_dcgka, charlie, &bob_bundle, &rng).unwrap();
-    let (bob_dcgka, _) = Dcgka::process(
-        bob_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: bob,
-                seq: 0,
-            },
+    let (bob_dcgka, _) = Dcgka::process(bob_dcgka, ProcessInput {
+        seq: MessageId {
             sender: bob,
-            control_message: add_output.control_message.clone(),
-            direct_message: None,
+            seq: 0,
         },
-    )
+        sender: bob,
+        control_message: add_output.control_message.clone(),
+        direct_message: None,
+    })
     .unwrap();
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -175,18 +166,15 @@ fn group_operations() {
         .find(|dm| dm.recipient == charlie)
         .expect("direct message for charlie");
 
-    let (charlie_dcgka, output) = Dcgka::process(
-        charlie_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: bob,
-                seq: 0,
-            },
+    let (charlie_dcgka, output) = Dcgka::process(charlie_dcgka, ProcessInput {
+        seq: MessageId {
             sender: bob,
-            control_message: add_output.control_message.clone(),
-            direct_message: Some(direct_message),
+            seq: 0,
         },
-    )
+        sender: bob,
+        control_message: add_output.control_message.clone(),
+        direct_message: Some(direct_message),
+    })
     .unwrap();
 
     let GroupSecretOutput::Bundle(charlie_secret_bundle_0) = output.group_secret else {
@@ -203,18 +191,15 @@ fn group_operations() {
     // Alice processes Bob's "add" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    let (alice_dcgka, output) = Dcgka::process(
-        alice_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: bob,
-                seq: 0,
-            },
+    let (alice_dcgka, output) = Dcgka::process(alice_dcgka, ProcessInput {
+        seq: MessageId {
             sender: bob,
-            control_message: add_output.control_message,
-            direct_message: None,
+            seq: 0,
         },
-    )
+        sender: bob,
+        control_message: add_output.control_message,
+        direct_message: None,
+    })
     .unwrap();
     assert_eq!(output.group_secret, GroupSecretOutput::None);
 
@@ -225,18 +210,15 @@ fn group_operations() {
     let alice_group_secret_1 = SecretBundle::generate(&alice_bundle, &rng).unwrap();
     let (alice_dcgka, update_output) =
         Dcgka::update(alice_dcgka, &alice_group_secret_1, &rng).unwrap();
-    let (alice_dcgka, _) = Dcgka::process(
-        alice_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: alice,
-                seq: 1,
-            },
+    let (alice_dcgka, _) = Dcgka::process(alice_dcgka, ProcessInput {
+        seq: MessageId {
             sender: alice,
-            control_message: update_output.control_message.clone(),
-            direct_message: None,
+            seq: 1,
         },
-    )
+        sender: alice,
+        control_message: update_output.control_message.clone(),
+        direct_message: None,
+    })
     .unwrap();
     assert_eq!(update_output.direct_messages.len(), 2); // dm's for Bob and Charlie
 
@@ -255,18 +237,15 @@ fn group_operations() {
         .find(|dm| dm.recipient == bob)
         .expect("direct message for bob");
 
-    let (bob_dcgka, output) = Dcgka::process(
-        bob_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: alice,
-                seq: 1,
-            },
+    let (bob_dcgka, output) = Dcgka::process(bob_dcgka, ProcessInput {
+        seq: MessageId {
             sender: alice,
-            control_message: update_output.control_message.clone(),
-            direct_message: Some(direct_message.clone()),
+            seq: 1,
         },
-    )
+        sender: alice,
+        control_message: update_output.control_message.clone(),
+        direct_message: Some(direct_message.clone()),
+    })
     .unwrap();
 
     let GroupSecretOutput::Secret(bob_group_secret_1) = output.group_secret else {
@@ -285,18 +264,15 @@ fn group_operations() {
         .find(|dm| dm.recipient == charlie)
         .expect("direct message for charlie");
 
-    let (charlie_dcgka, output) = Dcgka::process(
-        charlie_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: alice,
-                seq: 1,
-            },
+    let (charlie_dcgka, output) = Dcgka::process(charlie_dcgka, ProcessInput {
+        seq: MessageId {
             sender: alice,
-            control_message: update_output.control_message.clone(),
-            direct_message: Some(direct_message.clone()),
+            seq: 1,
         },
-    )
+        sender: alice,
+        control_message: update_output.control_message.clone(),
+        direct_message: Some(direct_message.clone()),
+    })
     .unwrap();
 
     let GroupSecretOutput::Secret(charlie_group_secret_1) = output.group_secret else {
@@ -318,18 +294,15 @@ fn group_operations() {
     let charlie_group_secret_2 = SecretBundle::generate(&charlie_bundle, &rng).unwrap();
     let (charlie_dcgka, remove_output) =
         Dcgka::remove(charlie_dcgka, alice, &charlie_group_secret_2, &rng).unwrap();
-    let (_charlie_dcgka, _) = Dcgka::process(
-        charlie_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: charlie,
-                seq: 0,
-            },
+    let (_charlie_dcgka, _) = Dcgka::process(charlie_dcgka, ProcessInput {
+        seq: MessageId {
             sender: charlie,
-            control_message: remove_output.control_message.clone(),
-            direct_message: None,
+            seq: 0,
         },
-    )
+        sender: charlie,
+        control_message: remove_output.control_message.clone(),
+        direct_message: None,
+    })
     .unwrap();
 
     assert_eq!(remove_output.direct_messages.len(), 1);
@@ -349,18 +322,15 @@ fn group_operations() {
         .find(|dm| dm.recipient == bob)
         .expect("direct message for bob");
 
-    let (_bob_dcgka, output) = Dcgka::process(
-        bob_dcgka,
-        ProcessInput {
-            seq: MessageId {
-                sender: charlie,
-                seq: 0,
-            },
+    let (_bob_dcgka, output) = Dcgka::process(bob_dcgka, ProcessInput {
+        seq: MessageId {
             sender: charlie,
-            control_message: remove_output.control_message.clone(),
-            direct_message: Some(direct_message.clone()),
+            seq: 0,
         },
-    )
+        sender: charlie,
+        control_message: remove_output.control_message.clone(),
+        direct_message: Some(direct_message.clone()),
+    })
     .unwrap();
 
     let GroupSecretOutput::Secret(bob_group_secret_2) = output.group_secret else {
@@ -374,18 +344,15 @@ fn group_operations() {
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     assert!(matches!(
-        Dcgka::process(
-            alice_dcgka,
-            ProcessInput {
-                seq: MessageId {
-                    sender: charlie,
-                    seq: 0,
-                },
+        Dcgka::process(alice_dcgka, ProcessInput {
+            seq: MessageId {
                 sender: charlie,
-                control_message: remove_output.control_message,
-                direct_message: Some(direct_message),
+                seq: 0,
             },
-        ),
+            sender: charlie,
+            control_message: remove_output.control_message,
+            direct_message: Some(direct_message),
+        },),
         Err(DcgkaError::NotOurDirectMessage(_, _))
     ));
 

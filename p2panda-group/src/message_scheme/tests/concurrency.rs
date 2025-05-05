@@ -101,13 +101,10 @@ fn concurrent_operation() {
 
     // Everybody should consider each other part of the group.
     for dcgka in [&alice_dcgka, &bob_dcgka, &charlie_dcgka] {
-        assert_members_view(
-            dcgka,
-            &[ExpectedMembers {
-                viewer: &[alice, bob, charlie],
-                expected: &[alice, bob, charlie],
-            }],
-        );
+        assert_members_view(dcgka, &[ExpectedMembers {
+            viewer: &[alice, bob, charlie],
+            expected: &[alice, bob, charlie],
+        }]);
     }
 
     // Charlie adds Dahlia to the group (similar to paper's example).
@@ -126,22 +123,16 @@ fn concurrent_operation() {
     };
 
     for dcgka in [&alice_dcgka, &bob_dcgka] {
-        assert_members_view(
-            dcgka,
-            &[ExpectedMembers {
-                viewer: &[alice, bob, charlie],
-                expected: &[alice, bob, charlie],
-            }],
-        );
+        assert_members_view(dcgka, &[ExpectedMembers {
+            viewer: &[alice, bob, charlie],
+            expected: &[alice, bob, charlie],
+        }]);
     }
 
-    assert_members_view(
-        &charlie_dcgka,
-        &[ExpectedMembers {
-            viewer: &[charlie, dahlia],
-            expected: &[alice, bob, charlie, dahlia],
-        }],
-    );
+    assert_members_view(&charlie_dcgka, &[ExpectedMembers {
+        viewer: &[charlie, dahlia],
+        expected: &[alice, bob, charlie, dahlia],
+    }]);
 
     // Bob processes Dahlia's addition by Charlie.
     let (bob_dcgka, bob_output) = Dcgka::process_remote(
@@ -165,19 +156,16 @@ fn concurrent_operation() {
         dahlia
     );
 
-    assert_members_view(
-        &bob_dcgka,
-        &[
-            ExpectedMembers {
-                viewer: &[bob, charlie, dahlia],
-                expected: &[alice, bob, charlie, dahlia],
-            },
-            ExpectedMembers {
-                viewer: &[alice],
-                expected: &[alice, bob, charlie],
-            },
-        ],
-    );
+    assert_members_view(&bob_dcgka, &[
+        ExpectedMembers {
+            viewer: &[bob, charlie, dahlia],
+            expected: &[alice, bob, charlie, dahlia],
+        },
+        ExpectedMembers {
+            viewer: &[alice],
+            expected: &[alice, bob, charlie],
+        },
+    ]);
 
     // Dahlia processes their addition by Charlie.
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
@@ -198,19 +186,16 @@ fn concurrent_operation() {
     )
     .unwrap();
 
-    assert_members_view(
-        &dahlia_dcgka,
-        &[
-            ExpectedMembers {
-                viewer: &[charlie, dahlia],
-                expected: &[alice, bob, charlie, dahlia],
-            },
-            ExpectedMembers {
-                viewer: &[alice, bob],
-                expected: &[alice, bob, charlie],
-            },
-        ],
-    );
+    assert_members_view(&dahlia_dcgka, &[
+        ExpectedMembers {
+            viewer: &[charlie, dahlia],
+            expected: &[alice, bob, charlie, dahlia],
+        },
+        ExpectedMembers {
+            viewer: &[alice, bob],
+            expected: &[alice, bob, charlie],
+        },
+    ]);
 
     // Dahlia processes the "ack" of Bob adding them and the direct message.
     let (dahlia_dcgka, _dahlia_output) = Dcgka::process_remote(
@@ -452,13 +437,10 @@ fn concurrent_adds() {
 
     // Everybody should consider each other part of the group.
     for dcgka in [&alice_dcgka, &bob_dcgka] {
-        assert_members_view(
-            dcgka,
-            &[ExpectedMembers {
-                viewer: &[alice, bob],
-                expected: &[alice, bob],
-            }],
-        );
+        assert_members_view(dcgka, &[ExpectedMembers {
+            viewer: &[alice, bob],
+            expected: &[alice, bob],
+        }]);
     }
 
     // Alice adds Charlie to the group (as example in paper).
@@ -542,13 +524,10 @@ fn concurrent_adds() {
     )
     .unwrap();
 
-    assert_members_view(
-        &dahlia_dcgka,
-        &[ExpectedMembers {
-            viewer: &[dahlia],
-            expected: &[alice, bob, charlie, dahlia],
-        }],
-    );
+    assert_members_view(&dahlia_dcgka, &[ExpectedMembers {
+        viewer: &[dahlia],
+        expected: &[alice, bob, charlie, dahlia],
+    }]);
 
     // Bob processes Charlie's "add" by Alice and finally learns that this happenend concurrently
     // to their own add of Dahlia.
@@ -567,19 +546,16 @@ fn concurrent_adds() {
     )
     .unwrap();
 
-    assert_members_view(
-        &bob_dcgka,
-        &[
-            ExpectedMembers {
-                viewer: &[bob],
-                expected: &[alice, bob, charlie, dahlia],
-            },
-            ExpectedMembers {
-                viewer: &[charlie],
-                expected: &[alice, bob, charlie],
-            },
-        ],
-    );
+    assert_members_view(&bob_dcgka, &[
+        ExpectedMembers {
+            viewer: &[bob],
+            expected: &[alice, bob, charlie, dahlia],
+        },
+        ExpectedMembers {
+            viewer: &[charlie],
+            expected: &[alice, bob, charlie],
+        },
+    ]);
 
     // Bob prepares a direct "forward" message to Charlie due to the concurrent operations.
     assert_eq!(bob_output.direct_messages.len(), 1);

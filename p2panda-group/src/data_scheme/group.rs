@@ -350,15 +350,12 @@ where
         y.orderer = y_orderer_i;
 
         // Process control message locally to update our state.
-        let (y_dcgka_i, _) = Dcgka::process(
-            y.dcgka,
-            ProcessInput {
-                seq: message.id(),
-                sender: message.sender(),
-                control_message: output.control_message,
-                direct_message: None,
-            },
-        )?;
+        let (y_dcgka_i, _) = Dcgka::process(y.dcgka, ProcessInput {
+            seq: message.id(),
+            sender: message.sender(),
+            control_message: output.control_message,
+            direct_message: None,
+        })?;
         y.dcgka = y_dcgka_i;
 
         // Add new generated secret to bundle when given.
@@ -424,15 +421,12 @@ where
         control_message: ControlMessage<ID>,
         direct_message: Option<DirectMessage<ID, OP, DGM>>,
     ) -> GroupResult<Option<ORD::Message>, ID, OP, PKI, DGM, KMG, ORD> {
-        let (y_dcgka_i, output) = Dcgka::process(
-            y.dcgka,
-            ProcessInput {
-                seq,
-                sender,
-                control_message,
-                direct_message,
-            },
-        )?;
+        let (y_dcgka_i, output) = Dcgka::process(y.dcgka, ProcessInput {
+            seq,
+            sender,
+            control_message,
+            direct_message,
+        })?;
         y.dcgka = y_dcgka_i;
 
         // Add newly learned group secrets to our bundle.

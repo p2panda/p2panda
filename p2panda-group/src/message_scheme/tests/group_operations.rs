@@ -121,13 +121,10 @@ fn group_operations() {
         )
         .unwrap();
         test.assert_process_ack(&alice_dcgka_1, &alice_1, alice, bob, seq);
-        assert_members_view(
-            &alice_dcgka_1,
-            &[ExpectedMembers {
-                viewer: &[alice, bob],
-                expected: &[alice, bob],
-            }],
-        );
+        assert_members_view(&alice_dcgka_1, &[ExpectedMembers {
+            viewer: &[alice, bob],
+            expected: &[alice, bob],
+        }]);
         (alice_dcgka_1, alice_1)
     };
 
@@ -165,19 +162,16 @@ fn group_operations() {
         };
         let (bob_dcgka_1, bob_1) = Dcgka::process_local(bob_dcgka_pre, seq, bob_pre, &rng).unwrap();
         test.assert_add(&bob_dcgka_1, &bob_1, bob, charlie, seq);
-        assert_members_view(
-            &bob_dcgka_1,
-            &[
-                ExpectedMembers {
-                    viewer: &[bob, charlie],
-                    expected: &[alice, bob, charlie],
-                },
-                ExpectedMembers {
-                    viewer: &[alice],
-                    expected: &[alice, bob],
-                },
-            ],
-        );
+        assert_members_view(&bob_dcgka_1, &[
+            ExpectedMembers {
+                viewer: &[bob, charlie],
+                expected: &[alice, bob, charlie],
+            },
+            ExpectedMembers {
+                viewer: &[alice],
+                expected: &[alice, bob],
+            },
+        ]);
         (bob_dcgka_1, bob_1)
     };
 
@@ -277,13 +271,10 @@ fn group_operations() {
         )
         .unwrap();
         test.assert_process_add(&alice_dcgka_2, &alice_2, alice, bob, charlie, seq);
-        assert_members_view(
-            &alice_dcgka_2,
-            &[ExpectedMembers {
-                viewer: &[alice, bob, charlie],
-                expected: &[alice, bob, charlie],
-            }],
-        );
+        assert_members_view(&alice_dcgka_2, &[ExpectedMembers {
+            viewer: &[alice, bob, charlie],
+            expected: &[alice, bob, charlie],
+        }]);
         (alice_dcgka_2, alice_2)
     };
 
@@ -509,19 +500,16 @@ fn group_operations() {
             &[bob, charlie],
             seq,
         );
-        assert_members_view(
-            &charlie_dcgka_2,
-            &[
-                ExpectedMembers {
-                    viewer: &[charlie],
-                    expected: &[bob, charlie],
-                },
-                ExpectedMembers {
-                    viewer: &[alice, bob],
-                    expected: &[alice, bob, charlie],
-                },
-            ],
-        );
+        assert_members_view(&charlie_dcgka_2, &[
+            ExpectedMembers {
+                viewer: &[charlie],
+                expected: &[bob, charlie],
+            },
+            ExpectedMembers {
+                viewer: &[alice, bob],
+                expected: &[alice, bob, charlie],
+            },
+        ]);
         (charlie_dcgka_2, charlie_2)
     };
 
@@ -561,19 +549,16 @@ fn group_operations() {
         )
         .unwrap();
         test.assert_process_remove(&bob_dcgka_4, &bob_4, bob, charlie, seq);
-        assert_members_view(
-            &bob_dcgka_4,
-            &[
-                ExpectedMembers {
-                    viewer: &[bob, charlie],
-                    expected: &[bob, charlie],
-                },
-                ExpectedMembers {
-                    viewer: &[alice],
-                    expected: &[alice, bob, charlie],
-                },
-            ],
-        );
+        assert_members_view(&bob_dcgka_4, &[
+            ExpectedMembers {
+                viewer: &[bob, charlie],
+                expected: &[bob, charlie],
+            },
+            ExpectedMembers {
+                viewer: &[alice],
+                expected: &[alice, bob, charlie],
+            },
+        ]);
         (bob_dcgka_4, bob_4)
     };
 
