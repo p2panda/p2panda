@@ -1,6 +1,6 @@
 use crate::group::test_utils::{TestOrderer, TestOrdererState};
 use crate::group::{Group, GroupState};
-use crate::traits::{AuthGraph, IdentityHandle, OperationId, Ordering};
+use crate::traits::{AuthGraph, IdentityHandle, OperationId};
 
 use super::access::Access;
 use super::resolver::GroupResolver;
