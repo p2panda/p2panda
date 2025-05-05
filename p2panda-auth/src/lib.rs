@@ -2,5 +2,4 @@
 
 pub mod group_crdt;
 mod traits;
-mod traits;
 mod group;
