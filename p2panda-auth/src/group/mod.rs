@@ -1,9 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use group_state::MemberState;
+use group_state::{GroupStateError, MemberState};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
+use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -17,7 +19,25 @@ mod resolver;
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
-pub enum GroupError {}
+pub enum GroupError<ID, OP, RS, ORD>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+{
+    #[error("error occurred applying state change action")]
+    StateChangeError(#[from] GroupStateError),
+
+    #[error("resolver error: {0}")]
+    ResolverError(RS::Error),
+
+    #[error("ordering error: {0}")]
+    OrderingError(ORD::Error),
+
+    #[error("state {0} not found in group {1}")]
+    StateNotFound(OP, ID),
+}
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GroupMember<ID> {
@@ -107,6 +127,8 @@ where
 
     /// State for the orderer.
     pub orderer_state: ORD::State,
+    //
+    //     pub _phantom: PhantomData<RS>,
 }
 
 impl<ID, OP, ORD> GroupState<ID, OP, ORD>
@@ -125,6 +147,7 @@ where
             graph: Default::default(),
             sub_groups: Default::default(),
             orderer_state,
+            // _phantom: PhantomData,
         }
     }
 
@@ -158,27 +181,31 @@ where
     fn current_state(&self) -> GroupMembersState<GroupMember<ID>> {
         let mut current_state = GroupMembersState::default();
         for state in self.heads() {
+            // Unwrap as all "head" states should exist.
             let state = self.states.get(&state).unwrap();
-            current_state = group_state::merge(state.clone(), current_state).unwrap();
+
+            // Unwrap as no state merges should error.
+            current_state = group_state::merge(state.clone(), current_state);
         }
         current_state
     }
 
-    fn state_at(&self, operations: &Vec<OP>) -> GroupMembersState<GroupMember<ID>> {
-        let states: Vec<_> = operations
-            .iter()
-            .map(|id| self.states.get(id).unwrap()) // TODO: Error here.
-            .cloned()
-            .collect();
-
-        // Merge all "previous states" into one.
+    fn state_at<RS>(
+        &self,
+        operations: &Vec<OP>,
+    ) -> Result<GroupMembersState<GroupMember<ID>>, GroupError<ID, OP, RS, ORD>>
+    where
+        RS: Clone + Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
+    {
         let mut y = GroupMembersState::default();
-        for previous_y in states {
-            // TODO: Decide what to do with errors here.
-            y = group_state::merge(previous_y, y).unwrap();
+        for id in operations {
+            let Some(previous_y) = self.states.get(id) else {
+                return Err(GroupError::StateNotFound(*id, self.group_id));
+            };
+            y = group_state::merge(previous_y.clone(), y);
         }
 
-        y
+        Ok(y)
     }
 
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
@@ -203,9 +230,8 @@ where
                     members.insert(id, root_access);
                 }
                 GroupMember::Group { id } => {
-                    let Some(sub_group) = self.sub_groups.get(&id) else {
-                        panic!();
-                    };
+                    // Unwrap as all known sub groups should exist.
+                    let sub_group = self.sub_groups.get(&id).unwrap();
                     let transitive_members = sub_group.transitive_members();
                     for (transitive_member, transitive_access) in transitive_members {
                         members
@@ -233,9 +259,8 @@ where
         let mut sub_groups: Vec<(ID, Access)> = Vec::new();
         for (member, access) in self.members() {
             if let GroupMember::Group { id } = member {
-                let Some(sub_group) = self.sub_groups.get(&id) else {
-                    panic!();
-                };
+                // Unwrap as all known sub groups should exist.
+                let sub_group = self.sub_groups.get(&id).unwrap();
                 let transitive_sub_groups = sub_group.transitive_sub_groups();
                 sub_groups = vec![transitive_sub_groups, sub_groups, vec![(id, access)]].concat();
             }
@@ -251,23 +276,23 @@ pub struct Group<ID, OP, RS, ORD> {
 
 impl<ID, OP, RS, ORD> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD>
 where
-    ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
-    OP: OperationId + Ord + Serialize + for<'a> Deserialize<'a>,
-    RS: Clone + Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
+    ID: IdentityHandle + Display + Serialize + for<'a> Deserialize<'a>,
+    OP: OperationId + Display + Ord + Serialize + for<'a> Deserialize<'a>,
+    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message> + Clone + Debug,
     ORD: Clone
-        + std::fmt::Debug
+        + Debug
         + Ordering<ID, OP, GroupControlMessage<ID, OP>>
         + Serialize
         + for<'a> Deserialize<'a>,
 {
     type State = GroupState<ID, OP, ORD>;
     type Action = GroupControlMessage<ID, OP>;
-    type Error = GroupError;
+    type Error = GroupError<ID, OP, RS, ORD>;
 
     fn prepare(
         mut y: Self::State,
         operation: &Self::Action,
-    ) -> Result<(GroupState<ID, OP, ORD>, ORD::Message), GroupError> {
+    ) -> Result<(GroupState<ID, OP, ORD>, ORD::Message), GroupError<ID, OP, RS, ORD>> {
         let dependencies = y.transitive_heads();
         let ordering_y = y.orderer_state.clone();
         let (ordering_y, message) = match ORD::next_message(ordering_y, dependencies, &operation) {
@@ -276,12 +301,16 @@ where
         };
 
         // Queue the message in the orderer.
-        let ordering_y = ORD::queue(ordering_y, &message).unwrap();
+        let ordering_y =
+            ORD::queue(ordering_y, &message).map_err(|error| GroupError::OrderingError(error))?;
         y.orderer_state = ordering_y;
         Ok((y, message))
     }
 
-    fn process(mut y: Self::State, operation: &ORD::Message) -> Result<Self::State, GroupError> {
+    fn process(
+        mut y: Self::State,
+        operation: &ORD::Message,
+    ) -> Result<Self::State, GroupError<ID, OP, RS, ORD>> {
         let id = operation.id();
         let actor: ID = operation.sender();
         let control_message = operation.payload();
@@ -359,8 +388,8 @@ impl<ID, OP, RS, ORD> Group<ID, OP, RS, ORD>
 where
     ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
     OP: OperationId + Ord + Serialize + for<'a> Deserialize<'a>,
-    RS: Clone + Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
-    ORD: Clone + std::fmt::Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message> + Clone + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
 {
     fn apply_action(
         mut y: GroupState<ID, OP, ORD>,
@@ -369,18 +398,17 @@ where
         actor: GroupMember<ID>,
         previous: &Vec<OP>,
         action: &GroupAction<GroupMember<ID>>,
-    ) -> Result<GroupState<ID, OP, ORD>, GroupError> {
-        if y.group_id != group_id {
-            // We should any try to apply an action to the group with the passed id.
-            panic!();
-        }
+    ) -> Result<GroupState<ID, OP, ORD>, GroupError<ID, OP, RS, ORD>> {
+        // Sanity check, we should never call this method on the incorrect group.
+        assert_eq!(y.group_id, group_id);
 
         // Compute the members state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
         } else {
-            y.state_at(previous)
+            // Unwrap as all previous states should exist.
+            y.state_at::<RS>(previous).unwrap()
         };
 
         let members_y_copy = members_y.clone();
@@ -414,8 +442,7 @@ where
                     .collect::<HashMap<_, _>>();
                 Ok(GroupMembersState { members })
             }
-        }
-        .unwrap(); // TODO: Handle these errors.
+        }?;
 
         // Only add the resulting members state to the states map if the operation isn't
         // flagged to be ignored.
@@ -430,7 +457,7 @@ where
     fn add_with_rebuild(
         mut y: GroupState<ID, OP, ORD>,
         operation: ORD::Message,
-    ) -> Result<GroupState<ID, OP, ORD>, GroupError> {
+    ) -> Result<GroupState<ID, OP, ORD>, GroupError<ID, OP, RS, ORD>> {
         // Add all new operations to the graph and operations vec.
         y.graph.add_node(operation.id());
         for previous in operation.dependencies() {
@@ -439,10 +466,7 @@ where
         y.operations.push(operation);
 
         // Use the resolver to construct a filter for this group membership graph.
-        y = match RS::process(y) {
-            Ok(result) => result,
-            Err(_) => panic!(), // Handle possible errors here.
-        };
+        y = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
         let mut y_i = GroupState::new(y.my_id, y.group_id, y.orderer_state.clone());
         y_i.ignore = y.ignore;
@@ -463,15 +487,10 @@ where
             };
 
             // Sanity check: we should only apply operations for this group.
-            if y_i.group_id != *group_id {
-                panic!();
-            }
+            assert_eq!(y.group_id, *group_id);
 
             // Sanity check: the first operation must be a create.
-            if !create_found && !control_message.is_create() {
-                panic!();
-            };
-
+            assert!(!create_found && !control_message.is_create());
             create_found = true;
 
             y_i = match control_message {

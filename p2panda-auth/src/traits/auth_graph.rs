@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::traits::{Ordering, Resolver};
 
-use super::{IdentityHandle, OperationId};
-
 /// Interface for implementing an "auth graph".
 ///
 /// Auth graph is an operation-based CRDT with a "prepare" method which takes an operation and

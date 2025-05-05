@@ -12,7 +12,7 @@ use super::access::Access;
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
-pub enum GroupMembershipError {}
+pub enum GroupStateError {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MemberState<ID> {
@@ -84,7 +84,7 @@ where
 
 pub fn create_group<ID: IdentityHandle>(
     initial_members: &[(ID, Access)],
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID>, GroupStateError> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
@@ -106,7 +106,7 @@ pub fn add_member<ID: IdentityHandle>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID>, GroupStateError> {
     // TODO: Consider whether we want to return Error rather than the unchanged state...
     // The error would communicate why there was an early return.
 
@@ -149,7 +149,7 @@ pub fn remove_member<ID: IdentityHandle>(
     state: GroupMembersState<ID>,
     actor: ID,
     member: ID,
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID>, GroupStateError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         return Ok(state);
@@ -183,7 +183,7 @@ pub fn promote<ID: IdentityHandle>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID>, GroupStateError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -217,7 +217,7 @@ pub fn demote<ID: IdentityHandle>(
     actor: ID,
     member: ID,
     access: Access,
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID>, GroupStateError> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -246,10 +246,11 @@ pub fn demote<ID: IdentityHandle>(
     Ok(state)
 }
 
+// NOTE: I don't think this method should ever error.
 pub fn merge<ID: IdentityHandle>(
     state_1: GroupMembersState<ID>,
     state_2: GroupMembersState<ID>,
-) -> Result<GroupMembersState<ID>, GroupMembershipError> {
+) -> GroupMembersState<ID> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
@@ -284,5 +285,5 @@ pub fn merge<ID: IdentityHandle>(
         }
     }
 
-    Ok(next_state)
+    next_state
 }
