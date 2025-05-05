@@ -86,9 +86,14 @@ pub async fn connection_pool(url: &str, max_connections: u32) -> Result<Pool, Sq
     Ok(pool)
 }
 
+/// Get migrations without running them
+pub fn migrations() -> migrate::Migrator {
+    migrate!()
+}
+
 /// Run any pending database migrations from inside the application.
 pub async fn run_pending_migrations(pool: &Pool) -> Result<(), SqliteStoreError> {
-    migrate!().run(pool).await?;
+    migrations().run(pool).await?;
 
     Ok(())
 }
