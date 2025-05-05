@@ -12,7 +12,7 @@ use thiserror::Error;
 pub use crate::partial::store::{MemoryStore, PartialOrderStore};
 
 /// Error types which may be returned from `PartialOrder` methods.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum PartialOrderError {
     #[error("store error: {0}")]
     StoreError(String),
@@ -79,7 +79,7 @@ pub enum PartialOrderError {
 ///
 /// Note that no checks are made for cycles occurring in the graph, this should be validated on
 /// another layer.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PartialOrder<K, S> {
     /// Store for managing "ready" and "pending" items.
     store: S,
