@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use group_state::{GroupStateError, MemberState};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
-use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -16,6 +15,10 @@ use crate::traits::{AuthGraph, IdentityHandle, Operation, OperationId, Ordering,
 mod access;
 mod group_state;
 mod resolver;
+#[cfg(test)]
+mod test_utils;
+#[cfg(test)]
+mod tests;
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
@@ -39,7 +42,7 @@ where
     StateNotFound(OP, ID),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GroupMember<ID> {
     Individual(ID),
     Group { id: ID },
@@ -48,7 +51,7 @@ pub enum GroupMember<ID> {
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be performed by group members.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GroupAction<ID> {
     Create { initial_members: Vec<(ID, Access)> },
     Add { member: ID, access: Access },
@@ -68,7 +71,7 @@ impl<ID> GroupAction<ID> {
 }
 
 /// Control messages which are processed by a group.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GroupControlMessage<ID, OP> {
     Revoke {
         group_id: ID,
@@ -123,7 +126,7 @@ where
     pub graph: DiGraphMap<OP, ()>,
 
     /// All sub-groups which are direct members of this group.
-    pub sub_groups: HashMap<ID, GroupState<ID, OP, ORD>>,
+    pub sub_groups: HashMap<ID, Self>,
 
     /// State for the orderer.
     pub orderer_state: ORD::State,
@@ -151,7 +154,7 @@ where
         }
     }
 
-    fn heads(&self) -> Vec<OP> {
+    pub fn heads(&self) -> Vec<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
             // because the GraphMap api does not include the "externals" method, where as the
@@ -162,7 +165,7 @@ where
             // investigation required.
             .clone()
             .into_graph::<usize>()
-            .externals(petgraph::Direction::Incoming)
+            .externals(petgraph::Direction::Outgoing)
             .map(|idx| self.graph.from_index(idx.index()))
             .collect::<Vec<_>>()
     }
@@ -200,7 +203,12 @@ where
         let mut y = GroupMembersState::default();
         for id in operations {
             let Some(previous_y) = self.states.get(id) else {
-                return Err(GroupError::StateNotFound(*id, self.group_id));
+                // TODO: as dependencies contain _all_ dependencies, not only the "previous"
+                // states from this group, then we have to just ignore not found states here for
+                // now. Need to consider the best way to separate "dependencies" from "previous"
+                // operations.
+                continue;
+                // return Err(GroupError::StateNotFound(*id, self.group_id));
             };
             y = group_state::merge(previous_y.clone(), y);
         }
@@ -321,9 +329,21 @@ where
             GroupControlMessage::Revoke { group_id, .. } => group_id,
         };
 
-        // If the control message is a create and the group id is _not_ equal to the current group
-        // id, then instantiate a new sub-group.
-        if control_message.is_create() && *group_id != y.group_id {
+        // // If this is an add message adding a group, then add a new sub_group to the state.
+        // if let GroupControlMessage::GroupAction {
+        //     action:
+        //         GroupAction::Add {
+        //             member: GroupMember::Group { id },
+        //             ..
+        //         },
+        //     ..
+        // } = control_message
+        // {
+        //     y.sub_groups
+        //         .insert(*id, GroupState::new(y.my_id, *id, y.orderer_state.clone()));
+        // }
+
+        if y.group_id != *group_id && control_message.is_create() {
             y.sub_groups.insert(
                 *group_id,
                 GroupState::new(y.my_id, *group_id, y.orderer_state.clone()),

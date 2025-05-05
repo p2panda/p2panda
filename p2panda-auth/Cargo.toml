@@ -18,9 +18,10 @@ all-features = true
 [dependencies]
 thiserror = "2.0.12"
 anyhow = "1.0.98"
-serde = "1.0.219"
+serde = {version = "1.0.219", features = ["derive"]}
 petgraph = { version = "0.8.1", features = ["serde-1"] }
 thiserror = "2.0.12"
+rand = "0.9.1"
 
 [lints]
 workspace = true
