@@ -1,7 +1,4 @@
 use std::error::Error;
-use std::fmt::Debug;
-
-use serde::{Deserialize, Serialize};
 
 /// Resolver trait used in op-based CRDT for producing operation filters when concurrent
 /// operations cause conflicts which require special handling.
