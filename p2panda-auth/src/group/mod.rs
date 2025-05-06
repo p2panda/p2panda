@@ -194,10 +194,10 @@ where
     pub inner: GroupStateInner<ID, OP, ORD::Message>,
 
     /// All groups known to this instance.
-    pub group_store_state: GS::State,
+    pub group_store_y: GS::State,
 
     /// State for the orderer.
-    pub orderer_state: ORD::State,
+    pub orderer_y: ORD::State,
 
     _phantom: PhantomData<RS>,
 }
@@ -210,12 +210,7 @@ where
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
-    fn new(
-        my_id: ID,
-        group_id: ID,
-        group_store_state: GS::State,
-        orderer_state: ORD::State,
-    ) -> Self {
+    fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
             inner: GroupStateInner {
@@ -225,8 +220,8 @@ where
                 ignore: Default::default(),
                 graph: Default::default(),
             },
-            group_store_state,
-            orderer_state,
+            group_store_y,
+            orderer_y,
             _phantom: PhantomData,
         }
     }
@@ -275,8 +270,6 @@ where
         for state in self.heads() {
             // Unwrap as all "head" states should exist.
             let state = self.inner.states.get(&state).unwrap();
-
-            // Unwrap as no state merges should error.
             current_state = group_state::merge(state.clone(), current_state);
         }
         current_state
@@ -363,7 +356,7 @@ where
         &self,
         id: ID,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        let inner = GS::get(&self.group_store_state, &id)
+        let inner = GS::get(&self.group_store_y, &id)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
         // We expect that groups are created and correctly present in the store before we process
@@ -400,16 +393,18 @@ where
     ) -> Result<(GroupState<ID, OP, RS, ORD, GS>, ORD::Message), GroupError<ID, OP, RS, ORD, GS>>
     {
         let dependencies = y.transitive_heads()?;
-        let ordering_y = y.orderer_state.clone();
-        let (ordering_y, message) = match ORD::next_message(ordering_y, dependencies, &operation) {
-            Ok(message) => message,
-            Err(_) => panic!(),
-        };
+        let previous = y.heads();
+        let ordering_y = y.orderer_y.clone();
+        let (ordering_y, message) =
+            match ORD::next_message(ordering_y, dependencies, previous, &operation) {
+                Ok(message) => message,
+                Err(_) => panic!(),
+            };
 
         // Queue the message in the orderer.
         let ordering_y =
             ORD::queue(ordering_y, &message).map_err(|error| GroupError::OrderingError(error))?;
-        y.orderer_state = ordering_y;
+        y.orderer_y = ordering_y;
         Ok((y, message))
     }
 
@@ -420,6 +415,7 @@ where
         let operation_id = operation.id();
         let actor = operation.sender();
         let control_message = operation.payload();
+        let previous = operation.previous();
         let group_id = control_message.group_id();
 
         if y.inner.group_id != group_id {
@@ -446,7 +442,7 @@ where
                     y,
                     operation_id,
                     GroupMember::Individual(actor),
-                    operation.dependencies(),
+                    previous,
                     action,
                 )?;
             }
@@ -456,11 +452,11 @@ where
 
         // Add the new operation to the group states' graph and operations vec.
         y.inner.graph.add_node(operation_id);
-        for previous in operation.dependencies() {
+        for previous in previous {
             y.inner.graph.add_edge(*previous, operation_id, ());
         }
         y.inner.operations.push(operation.clone());
-        y.group_store_state = GS::insert(y.group_store_state, &group_id, &y.inner)
+        y.group_store_y = GS::insert(y.group_store_y, &group_id, &y.inner)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
         Ok(y)
@@ -539,7 +535,7 @@ where
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
         // Add all new operations to the graph and operations vec.
         y.inner.graph.add_node(operation.id());
-        for previous in operation.dependencies() {
+        for previous in operation.previous() {
             y.inner.graph.add_edge(*previous, operation.id(), ());
         }
         y.inner.operations.push(operation);
@@ -550,8 +546,8 @@ where
         let mut y_i = GroupState::new(
             y.my_id,
             y.inner.group_id,
-            y.group_store_state.clone(),
-            y.orderer_state.clone(),
+            y.group_store_y.clone(),
+            y.orderer_y.clone(),
         );
         y_i.inner.ignore = y.inner.ignore;
         y_i.inner.graph = y.inner.graph;
@@ -562,7 +558,7 @@ where
             let actor = operation.sender();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
-            let dependencies = operation.dependencies();
+            let previous = operation.previous();
 
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y.inner.group_id, group_id);
@@ -572,13 +568,9 @@ where
             create_found = true;
 
             y_i = match control_message {
-                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
-                    y_i,
-                    id,
-                    GroupMember::Individual(actor),
-                    dependencies,
-                    action,
-                )?,
+                GroupControlMessage::GroupAction { action, .. } => {
+                    Self::apply_action(y_i, id, GroupMember::Individual(actor), previous, action)?
+                }
                 // No action required as revokes were already processed when we resolved a filter.
                 GroupControlMessage::Revoke { .. } => y_i,
             };
