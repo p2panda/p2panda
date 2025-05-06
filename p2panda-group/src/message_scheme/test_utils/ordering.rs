@@ -41,7 +41,6 @@ where
             my_id,
             messages: HashMap::new(),
             welcome_message: None,
-            processed_welcome: false,
         }
     }
 }
@@ -68,8 +67,6 @@ where
 
     /// "Create" or "Add" message which got us into the group.
     welcome_message: Option<TestMessage<DGM>>,
-
-    processed_welcome: bool,
 }
 
 impl<DGM> ForwardSecureOrdering<MemberId, MessageId, DGM> for ForwardSecureOrderer<DGM>
@@ -106,8 +103,8 @@ where
         };
 
         y.messages.insert(message.id(), message.clone());
-        y.next_message_seq += 1;
         y.previous.insert(y.my_id, message.id());
+        y.next_message_seq += 1;
 
         Ok((y, message))
     }
@@ -172,18 +169,12 @@ where
     }
 
     fn next_ready_message(
-        mut y: Self::State,
+        y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
         // We have not joined the group yet, don't process any messages yet.
         let Some(welcome) = y.welcome_message.clone() else {
             return Ok((y, None));
         };
-
-        // TODO: Feels hacky
-        if !y.processed_welcome && welcome.sender() != y.my_id {
-            y.processed_welcome = true;
-            return Ok((y, Some(welcome)));
-        }
 
         let mut y_loop = y;
         loop {

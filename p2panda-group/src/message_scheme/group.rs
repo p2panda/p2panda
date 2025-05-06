@@ -53,6 +53,7 @@ where
     pub(crate) my_id: ID,
     pub(crate) dcgka: DcgkaState<ID, OP, PKI, DGM, KMG>,
     pub(crate) orderer: ORD::State,
+    pub(crate) welcome: Option<ORD::Message>,
     pub(crate) ratchet: Option<RatchetSecretState>,
     pub(crate) decryption_ratchet: HashMap<ID, DecryptionRatchetState>,
     pub(crate) config: GroupConfig,
@@ -84,6 +85,7 @@ where
             my_id,
             dcgka: Dcgka::init(my_id, my_keys, pki, dgm),
             orderer,
+            welcome: None,
             ratchet: None,
             decryption_ratchet: HashMap::new(),
             config,
@@ -222,6 +224,14 @@ where
             // now.
             let y_orderer_i = ORD::set_welcome(y.orderer, message).map_err(GroupError::Orderer)?;
             y.orderer = y_orderer_i;
+
+            // Remember welcome message for later.
+            y.welcome = Some(message.clone());
+
+            // Always process welcome message first before anything else.
+            let (y_i, result) = Self::process_ready(y, &message, rng)?;
+
+            return Ok((y_i, result.map_or(vec![], |output| vec![output])));
         }
 
         let mut results = Vec::new();
@@ -237,8 +247,17 @@ where
             y_loop.orderer = y_orderer_next;
 
             let Some(message) = result else {
+                // Orderer is done yielding "ready" messages, stop here and try again later when we
+                // receive new messages.
                 break;
             };
+
+            if let Some(welcome) = &y_loop.welcome {
+                // Skip processing welcome again, we've already done that after receiving it.
+                if welcome.id() == message.id() {
+                    continue;
+                }
+            }
 
             match message.message_type() {
                 ForwardSecureMessageType::Control(_) => {

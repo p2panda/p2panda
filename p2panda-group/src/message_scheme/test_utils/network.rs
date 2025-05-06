@@ -42,6 +42,7 @@ pub fn init_group_state<const N: usize>(
                 my_id: dcgka.my_id,
                 dcgka,
                 orderer,
+                welcome: None,
                 ratchet: None,
                 decryption_ratchet: HashMap::new(),
                 config: GroupConfig::default(),
