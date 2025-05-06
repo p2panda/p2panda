@@ -5,12 +5,13 @@ use std::marker::PhantomData;
 use group_state::{GroupStateError, MemberState};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::group::access::Access;
 use crate::group::group_state::GroupMembersState;
-use crate::traits::{AuthGraph, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::traits::{
+    AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
+};
 
 mod access;
 mod group_state;
@@ -22,12 +23,13 @@ mod tests;
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
-pub enum GroupError<ID, OP, RS, ORD>
+pub enum GroupError<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
+    RS: Resolver<GroupState<ID, OP, ORD, GS>, ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: GroupStore<ID, OP, ORD::Message>,
 {
     #[error("error occurred applying state change action")]
     StateChangeError(#[from] GroupStateError),
@@ -42,7 +44,7 @@ where
     StateNotFound(OP, ID),
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum GroupMember<ID> {
     Individual(ID),
     Group { id: ID },
@@ -51,16 +53,36 @@ pub enum GroupMember<ID> {
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be performed by group members.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum GroupAction<ID> {
-    Create { initial_members: Vec<(ID, Access)> },
-    Add { member: ID, access: Access },
-    Remove { member: ID },
-    Promote { member: ID, access: Access },
-    Demote { member: ID, access: Access },
+    Create {
+        initial_members: Vec<(GroupMember<ID>, Access)>,
+    },
+    Add {
+        group_id: ID,
+        member: GroupMember<ID>,
+        access: Access,
+    },
+    Remove {
+        group_id: ID,
+        member: GroupMember<ID>,
+    },
+    Promote {
+        group_id: ID,
+        member: GroupMember<ID>,
+        access: Access,
+    },
+    Demote {
+        group_id: ID,
+        member: GroupMember<ID>,
+        access: Access,
+    },
 }
 
-impl<ID> GroupAction<ID> {
+impl<ID> GroupAction<ID>
+where
+    ID: Copy,
+{
     pub fn is_create(&self) -> bool {
         if let GroupAction::Create { .. } = self {
             true
@@ -68,22 +90,30 @@ impl<ID> GroupAction<ID> {
             false
         }
     }
+
+    pub fn group_id(&self) -> Option<ID> {
+        let group_id = match self {
+            GroupAction::Create { .. } => return None,
+            GroupAction::Add { group_id, .. } => group_id,
+            GroupAction::Remove { group_id, .. } => group_id,
+            GroupAction::Promote { group_id, .. } => group_id,
+            GroupAction::Demote { group_id, .. } => group_id,
+        };
+        Some(*group_id)
+    }
 }
 
 /// Control messages which are processed by a group.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum GroupControlMessage<ID, OP> {
-    Revoke {
-        group_id: ID,
-        id: OP,
-    },
-    GroupAction {
-        group_id: ID,
-        action: GroupAction<GroupMember<ID>>,
-    },
+    Revoke { group_id: ID, id: OP },
+    GroupAction { action: GroupAction<ID> },
 }
 
-impl<ID, OP> GroupControlMessage<ID, OP> {
+impl<ID, OP> GroupControlMessage<ID, OP>
+where
+    ID: Copy,
+{
     pub fn is_create(&self) -> bool {
         if let GroupControlMessage::GroupAction {
             action: GroupAction::Create { .. },
@@ -95,19 +125,22 @@ impl<ID, OP> GroupControlMessage<ID, OP> {
             false
         }
     }
+
+    pub fn group_id(&self) -> Option<ID> {
+        match self {
+            GroupControlMessage::Revoke { group_id, .. } => Some(*group_id),
+            GroupControlMessage::GroupAction { action } => action.group_id(),
+        }
+    }
 }
 
-/// The internal state of a group.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GroupState<ID, OP, ORD>
+#[derive(Clone, Debug)]
+pub struct GroupStateInner<ID, OP, MSG>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    MSG: Clone,
 {
-    // ID of the local actor.
-    pub my_id: ID,
-
     // ID of the group.
     pub group_id: ID,
 
@@ -117,43 +150,30 @@ where
     /// All operations processed by this group.
     ///
     /// Operations _must_ be kept in their partial-order (the order in which they were processed).
-    pub operations: Vec<ORD::Message>,
+    pub operations: Vec<MSG>,
 
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
 
     /// Operation graph.
     pub graph: DiGraphMap<OP, ()>,
-
-    /// All sub-groups which are direct members of this group.
-    pub sub_groups: HashMap<ID, Self>,
-
-    /// State for the orderer.
-    pub orderer_state: ORD::State,
-    //
-    //     pub _phantom: PhantomData<RS>,
 }
 
-impl<ID, OP, ORD> GroupState<ID, OP, ORD>
+impl<ID, OP, MSG> GroupStateInner<ID, OP, MSG>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    MSG: Clone,
 {
-    fn new(my_id: ID, group_id: ID, orderer_state: ORD::State) -> Self {
-        Self {
-            my_id,
+    pub fn new(group_id: ID) -> Self {
+        GroupStateInner {
             group_id,
             states: Default::default(),
             operations: Default::default(),
             ignore: Default::default(),
             graph: Default::default(),
-            sub_groups: Default::default(),
-            orderer_state,
-            // _phantom: PhantomData,
         }
     }
-
     pub fn heads(&self) -> Vec<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
@@ -170,12 +190,21 @@ where
             .collect::<Vec<_>>()
     }
 
-    fn transitive_heads(&self) -> Vec<OP> {
-        let mut transitive_heads = Vec::new();
-
-        transitive_heads = vec![transitive_heads, self.heads()].concat();
-        for (_, group_state) in &self.sub_groups {
-            transitive_heads = vec![transitive_heads, group_state.transitive_heads()].concat();
+    fn transitive_heads<GS>(&self, group_store: &GS) -> Vec<OP>
+    where
+        GS: GroupStore<ID, OP, MSG>,
+    {
+        let mut transitive_heads = self.heads();
+        for (member, ..) in self.members() {
+            if let GroupMember::Group { id } = member {
+                // All sub-groups should exist.
+                let sub_group_inner = group_store.get(&id).unwrap();
+                transitive_heads = vec![
+                    transitive_heads,
+                    sub_group_inner.transitive_heads(group_store),
+                ]
+                .concat();
+            }
         }
 
         transitive_heads
@@ -193,13 +222,7 @@ where
         current_state
     }
 
-    fn state_at<RS>(
-        &self,
-        operations: &Vec<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>>, GroupError<ID, OP, RS, ORD>>
-    where
-        RS: Clone + Resolver<GroupState<ID, OP, ORD>, ORD::Message>,
-    {
+    fn state_at(&self, operations: &Vec<OP>) -> GroupMembersState<GroupMember<ID>> {
         let mut y = GroupMembersState::default();
         for id in operations {
             let Some(previous_y) = self.states.get(id) else {
@@ -213,7 +236,7 @@ where
             y = group_state::merge(previous_y.clone(), y);
         }
 
-        Ok(y)
+        y
     }
 
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
@@ -230,7 +253,10 @@ where
             .collect::<Vec<_>>()
     }
 
-    pub fn transitive_members(&self) -> Vec<(ID, Access)> {
+    pub fn transitive_members<GS>(&self, group_store: &GS) -> Vec<(ID, Access)>
+    where
+        GS: GroupStore<ID, OP, MSG>,
+    {
         let mut members: HashMap<ID, Access> = HashMap::new();
         for (member, root_access) in self.members() {
             match member {
@@ -239,8 +265,8 @@ where
                 }
                 GroupMember::Group { id } => {
                     // Unwrap as all known sub groups should exist.
-                    let sub_group = self.sub_groups.get(&id).unwrap();
-                    let transitive_members = sub_group.transitive_members();
+                    let sub_group = group_store.get(&id).unwrap();
+                    let transitive_members = sub_group.transitive_members(group_store);
                     for (transitive_member, transitive_access) in transitive_members {
                         members
                             .entry(transitive_member)
@@ -263,13 +289,16 @@ where
         members.into_iter().collect()
     }
 
-    pub fn transitive_sub_groups(&self) -> Vec<(ID, Access)> {
+    pub fn transitive_sub_groups<GS>(&self, group_store: &GS) -> Vec<(ID, Access)>
+    where
+        GS: GroupStore<ID, OP, MSG>,
+    {
         let mut sub_groups: Vec<(ID, Access)> = Vec::new();
         for (member, access) in self.members() {
             if let GroupMember::Group { id } = member {
                 // Unwrap as all known sub groups should exist.
-                let sub_group = self.sub_groups.get(&id).unwrap();
-                let transitive_sub_groups = sub_group.transitive_sub_groups();
+                let sub_group = group_store.get(&id).unwrap();
+                let transitive_sub_groups = sub_group.transitive_sub_groups(group_store);
                 sub_groups = vec![transitive_sub_groups, sub_groups, vec![(id, access)]].concat();
             }
         }
@@ -277,30 +306,105 @@ where
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Group<ID, OP, RS, ORD> {
-    _phantom: PhantomData<(ID, OP, RS, ORD)>,
+/// The internal state of a group.
+///
+/// TODO: We want to be able to serialize and deserialize group state, but this doesn't play well
+/// with "shared state" like the group store abstraction. In this state object the "inner" state
+/// can be serialized and deserialized.
+#[derive(Clone, Debug)]
+pub struct GroupState<ID, OP, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: GroupStore<ID, OP, ORD::Message>,
+{
+    // ID of the local actor.
+    pub my_id: ID,
+
+    // The inner group state.
+    pub inner: GroupStateInner<ID, OP, ORD::Message>,
+
+    /// All groups known to this instance.
+    pub group_store: GS,
+
+    /// State for the orderer.
+    pub orderer_state: ORD::State,
 }
 
-impl<ID, OP, RS, ORD> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD>
+impl<ID, OP, ORD, GS> GroupState<ID, OP, ORD, GS>
 where
-    ID: IdentityHandle + Display + Serialize + for<'a> Deserialize<'a>,
-    OP: OperationId + Display + Ord + Serialize + for<'a> Deserialize<'a>,
-    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message> + Clone + Debug,
-    ORD: Clone
-        + Debug
-        + Ordering<ID, OP, GroupControlMessage<ID, OP>>
-        + Serialize
-        + for<'a> Deserialize<'a>,
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: GroupStore<ID, OP, ORD::Message>,
 {
-    type State = GroupState<ID, OP, ORD>;
+    fn new(my_id: ID, group_id: ID, group_store: GS, orderer_state: ORD::State) -> Self {
+        Self {
+            my_id,
+            inner: GroupStateInner {
+                group_id,
+                states: Default::default(),
+                operations: Default::default(),
+                ignore: Default::default(),
+                graph: Default::default(),
+            },
+            group_store,
+            orderer_state,
+            // _phantom: PhantomData,
+        }
+    }
+
+    pub fn heads(&self) -> Vec<OP> {
+        self.inner.heads()
+    }
+
+    fn transitive_heads(&self) -> Vec<OP> {
+        self.inner.transitive_heads(&self.group_store)
+    }
+
+    fn current_state(&self) -> GroupMembersState<GroupMember<ID>> {
+        self.inner.current_state()
+    }
+
+    fn state_at<RS>(&self, operations: &Vec<OP>) -> GroupMembersState<GroupMember<ID>> {
+        self.inner.state_at(operations)
+    }
+
+    pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
+        self.inner.members()
+    }
+
+    pub fn transitive_members(&self) -> Vec<(ID, Access)> {
+        self.inner.transitive_members(&self.group_store)
+    }
+
+    pub fn transitive_sub_groups(&self) -> Vec<(ID, Access)> {
+        self.inner.transitive_sub_groups(&self.group_store)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Group<ID, OP, RS, ORD, GS> {
+    _phantom: PhantomData<(ID, OP, RS, ORD, GS)>,
+}
+
+impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Display + Ord,
+    RS: Resolver<GroupState<ID, OP, ORD, GS>, ORD::Message> + Clone + Debug,
+    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: Clone + Debug + GroupStore<ID, OP, ORD::Message>,
+{
+    type State = GroupState<ID, OP, ORD, GS>;
     type Action = GroupControlMessage<ID, OP>;
-    type Error = GroupError<ID, OP, RS, ORD>;
+    type Error = GroupError<ID, OP, RS, ORD, GS>;
 
     fn prepare(
         mut y: Self::State,
         operation: &Self::Action,
-    ) -> Result<(GroupState<ID, OP, ORD>, ORD::Message), GroupError<ID, OP, RS, ORD>> {
+    ) -> Result<(GroupState<ID, OP, ORD, GS>, ORD::Message), GroupError<ID, OP, RS, ORD, GS>> {
         let dependencies = y.transitive_heads();
         let ordering_y = y.orderer_state.clone();
         let (ordering_y, message) = match ORD::next_message(ordering_y, dependencies, &operation) {
@@ -318,48 +422,55 @@ where
     fn process(
         mut y: Self::State,
         operation: &ORD::Message,
-    ) -> Result<Self::State, GroupError<ID, OP, RS, ORD>> {
+    ) -> Result<Self::State, GroupError<ID, OP, RS, ORD, GS>> {
         let id = operation.id();
         let actor: ID = operation.sender();
         let control_message = operation.payload();
 
         // Get the group id from the control message.
-        let group_id = match control_message {
-            GroupControlMessage::GroupAction { group_id, .. } => group_id,
-            GroupControlMessage::Revoke { group_id, .. } => group_id,
+        let group_id = match control_message.group_id() {
+            Some(id) => id,
+            None => {
+                // Sanity check: operations without group id must be create.
+                assert!(control_message.is_create());
+
+                // The group takes the id of the sender (signing actor).
+                actor
+            }
         };
 
-        // // If this is an add message adding a group, then add a new sub_group to the state.
-        // if let GroupControlMessage::GroupAction {
-        //     action:
-        //         GroupAction::Add {
-        //             member: GroupMember::Group { id },
-        //             ..
-        //         },
-        //     ..
-        // } = control_message
-        // {
-        //     y.sub_groups
-        //         .insert(*id, GroupState::new(y.my_id, *id, y.orderer_state.clone()));
-        // }
-
-        if y.group_id != *group_id && control_message.is_create() {
-            y.sub_groups.insert(
-                *group_id,
-                GroupState::new(y.my_id, *group_id, y.orderer_state.clone()),
-            );
+        if y.inner.group_id != group_id && control_message.is_create() {
+            {
+                let mut group_y = GroupState::new(
+                    y.my_id,
+                    group_id,
+                    y.group_store.clone(),
+                    y.orderer_state.clone(),
+                );
+                group_y = Self::process(group_y, operation)?;
+                group_y.group_store.insert(&group_id, group_y.inner);
+            }
+            // Return the new group state.
+            return Ok(y);
         }
 
         // If the group id is _not_ equal to the current group id then it must be from a
         // (possibly transitive) sub-group. Now we should recurse into all sub-groups trying to
         // find exactly where this operation should be processed.
-        if y.group_id != *group_id {
-            let mut sub_groups = HashMap::new();
-            for (group_id, group_y) in y.sub_groups.drain() {
-                let group_y_i = Self::process(group_y, operation)?;
-                sub_groups.insert(group_id, group_y_i);
+        if y.inner.group_id != group_id {
+            for (sub_group_id, _) in y.transitive_sub_groups() {
+                if sub_group_id == group_id {
+                    let inner = y.group_store.remove(&sub_group_id).unwrap();
+                    let sub_group_y = GroupState {
+                        my_id: y.my_id,
+                        inner,
+                        group_store: y.group_store.clone(),
+                        orderer_state: y.orderer_state.clone(),
+                    };
+                    let sub_group_y_i = Self::process(sub_group_y, operation)?;
+                    y.group_store.insert(&sub_group_id, sub_group_y_i.inner);
+                }
             }
-            y.sub_groups = sub_groups;
 
             // Return the new group state.
             return Ok(y);
@@ -379,10 +490,10 @@ where
         //
         // This method validates that the actor has permission perform the action.
         match control_message {
-            GroupControlMessage::GroupAction { group_id, action } => {
+            GroupControlMessage::GroupAction { action } => {
                 y = Self::apply_action(
                     y,
-                    *group_id,
+                    group_id,
                     id,
                     GroupMember::Individual(actor),
                     operation.dependencies(),
@@ -394,55 +505,55 @@ where
         }
 
         // In all cases we add the new operation to the group states' graph and operations map.
-        y.graph.add_node(id);
+        y.inner.graph.add_node(id);
         for previous in operation.dependencies() {
-            y.graph.add_edge(*previous, id, ());
+            y.inner.graph.add_edge(*previous, id, ());
         }
-        y.operations.push(operation.clone());
+        y.inner.operations.push(operation.clone());
 
         Ok(y)
     }
 }
 
-impl<ID, OP, RS, ORD> Group<ID, OP, RS, ORD>
+impl<ID, OP, RS, ORD, GS> Group<ID, OP, RS, ORD, GS>
 where
-    ID: IdentityHandle + Serialize + for<'a> Deserialize<'a>,
-    OP: OperationId + Ord + Serialize + for<'a> Deserialize<'a>,
-    RS: Resolver<GroupState<ID, OP, ORD>, ORD::Message> + Clone + Debug,
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<GroupState<ID, OP, ORD, GS>, ORD::Message> + Clone + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
+    GS: Clone + Debug + GroupStore<ID, OP, ORD::Message>,
 {
     fn apply_action(
-        mut y: GroupState<ID, OP, ORD>,
+        mut y: GroupState<ID, OP, ORD, GS>,
         group_id: ID,
         id: OP,
         actor: GroupMember<ID>,
         previous: &Vec<OP>,
-        action: &GroupAction<GroupMember<ID>>,
-    ) -> Result<GroupState<ID, OP, ORD>, GroupError<ID, OP, RS, ORD>> {
+        action: &GroupAction<ID>,
+    ) -> Result<GroupState<ID, OP, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
         // Sanity check, we should never call this method on the incorrect group.
-        assert_eq!(y.group_id, group_id);
+        assert_eq!(y.inner.group_id, group_id);
 
         // Compute the members state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
         } else {
-            // Unwrap as all previous states should exist.
-            y.state_at::<RS>(previous).unwrap()
+            y.state_at::<RS>(previous)
         };
 
         let members_y_copy = members_y.clone();
         let members_y_i = match action.clone() {
-            GroupAction::Add { member, access } => {
+            GroupAction::Add { member, access, .. } => {
                 group_state::add_member(members_y_copy, actor, member, access)
             }
-            GroupAction::Remove { member } => {
+            GroupAction::Remove { member, .. } => {
                 group_state::remove_member(members_y_copy, actor, member)
             }
-            GroupAction::Promote { member, access } => {
+            GroupAction::Promote { member, access, .. } => {
                 group_state::promote(members_y_copy, actor, member, access)
             }
-            GroupAction::Demote { member, access } => {
+            GroupAction::Demote { member, access, .. } => {
                 group_state::demote(members_y_copy, actor, member, access)
             }
             GroupAction::Create { initial_members } => {
@@ -466,57 +577,67 @@ where
 
         // Only add the resulting members state to the states map if the operation isn't
         // flagged to be ignored.
-        if !y.ignore.contains(&id) {
-            y.states.insert(id, members_y_i);
+        if !y.inner.ignore.contains(&id) {
+            y.inner.states.insert(id, members_y_i);
         } else {
-            y.states.insert(id, members_y);
+            y.inner.states.insert(id, members_y);
         }
         Ok(y)
     }
 
     fn add_with_rebuild(
-        mut y: GroupState<ID, OP, ORD>,
+        mut y: GroupState<ID, OP, ORD, GS>,
         operation: ORD::Message,
-    ) -> Result<GroupState<ID, OP, ORD>, GroupError<ID, OP, RS, ORD>> {
+    ) -> Result<GroupState<ID, OP, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
         // Add all new operations to the graph and operations vec.
-        y.graph.add_node(operation.id());
+        y.inner.graph.add_node(operation.id());
         for previous in operation.dependencies() {
-            y.graph.add_edge(*previous, operation.id(), ());
+            y.inner.graph.add_edge(*previous, operation.id(), ());
         }
-        y.operations.push(operation);
+        y.inner.operations.push(operation);
 
         // Use the resolver to construct a filter for this group membership graph.
         y = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
-        let mut y_i = GroupState::new(y.my_id, y.group_id, y.orderer_state.clone());
-        y_i.ignore = y.ignore;
-        y_i.graph = y.graph;
-        y_i.sub_groups = y.sub_groups;
+        let mut y_i = GroupState::new(
+            y.my_id,
+            y.inner.group_id,
+            y.group_store.clone(),
+            y.orderer_state.clone(),
+        );
+        y_i.inner.ignore = y.inner.ignore;
+        y_i.inner.graph = y.inner.graph;
 
         let mut create_found = false;
-        for operation in y.operations {
+        for operation in y.inner.operations {
             let id = operation.id();
             let control_message = operation.payload();
             let actor = operation.sender();
             let dependencies = operation.dependencies();
 
             // Get the group id from the control message.
-            let group_id = match control_message {
-                GroupControlMessage::GroupAction { group_id, .. } => group_id,
-                GroupControlMessage::Revoke { group_id, .. } => group_id,
+            let group_id = match control_message.group_id() {
+                Some(id) => id,
+                None => {
+                    // Sanity check: operations without group id must be create.
+                    assert!(control_message.is_create());
+
+                    // The group takes the id of the sender (signing actor).
+                    actor
+                }
             };
 
             // Sanity check: we should only apply operations for this group.
-            assert_eq!(y.group_id, *group_id);
+            assert_eq!(y.inner.group_id, group_id);
 
             // Sanity check: the first operation must be a create.
             assert!(!create_found && !control_message.is_create());
             create_found = true;
 
             y_i = match control_message {
-                GroupControlMessage::GroupAction { group_id, action } => Self::apply_action(
+                GroupControlMessage::GroupAction { action } => Self::apply_action(
                     y_i,
-                    *group_id,
+                    group_id,
                     id,
                     GroupMember::Individual(actor),
                     dependencies,
@@ -527,7 +648,7 @@ where
             };
 
             // Push the operation into the new states' operation vec.
-            y_i.operations.push(operation);
+            y_i.inner.operations.push(operation);
         }
 
         Ok(y_i)
