@@ -4,7 +4,7 @@ use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
 use crate::group::{GroupControlMessage, GroupState};
-use crate::traits::{IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
@@ -16,26 +16,33 @@ pub struct GroupResolver<ID, OP, MSG> {
     _phantom: PhantomData<(ID, OP, MSG)>,
 }
 
-impl<ID, OP, ORD> Resolver<GroupState<ID, OP, ORD>, ORD::Message>
+impl<ID, OP, ORD, GS> Resolver<GroupState<ID, OP, ORD, GS>, ORD::Message>
     for GroupResolver<ID, OP, ORD::Message>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: Clone + Debug + GroupStore<ID, OP, ORD::Message>,
 {
     type Error = GroupResolverError;
 
-    fn rebuild_required(y: &GroupState<ID, OP, ORD>, operation: &ORD::Message) -> bool {
+    fn rebuild_required(y: &GroupState<ID, OP, ORD, GS>, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
 
         // Get the group id from the control message.
-        let group_id = match control_message {
-            GroupControlMessage::GroupAction { group_id, .. } => group_id,
-            GroupControlMessage::Revoke { group_id, .. } => group_id,
+        let group_id = match control_message.group_id() {
+            Some(id) => id,
+            None => {
+                // Sanity check: operations without group id must be create.
+                assert!(control_message.is_create());
+
+                // The group takes the id of the sender (signing actor).
+                operation.sender()
+            }
         };
 
         // Sanity check.
-        if *group_id != y.group_id {
+        if group_id != y.inner.group_id {
             panic!();
         }
 
@@ -51,7 +58,7 @@ where
                 // Any revoke message requires a re-build.
                 true
             }
-            GroupControlMessage::GroupAction { group_id, action } => {
+            GroupControlMessage::GroupAction { action } => {
                 if is_concurrent {
                     match action {
                         // TODO: Decide which (if any) concurrent actions cause a rebuild.
@@ -64,7 +71,7 @@ where
         }
     }
 
-    fn process(y: GroupState<ID, OP, ORD>) -> Result<GroupState<ID, OP, ORD>, Self::Error> {
+    fn process(y: GroupState<ID, OP, ORD, GS>) -> Result<GroupState<ID, OP, ORD, GS>, Self::Error> {
         // TODO: We don't construct any filter, this is where that logic should be implemented.
         Ok(y)
     }
