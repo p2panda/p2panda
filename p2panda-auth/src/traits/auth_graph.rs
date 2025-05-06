@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::fmt::Debug;
 
-use serde::{Deserialize, Serialize};
-
 use crate::traits::{Ordering, Resolver};
+
+use super::{IdentityHandle, OperationId};
 
 /// Interface for implementing an "auth graph".
 ///
@@ -16,10 +16,12 @@ use crate::traits::{Ordering, Resolver};
 /// concurrent operations which would cause conflicting state changes.
 pub trait AuthGraph<ID, OP, RS, ORD>
 where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
     RS: Clone + Resolver<Self::State, ORD::Message>,
     ORD: Clone + Ordering<ID, OP, Self::Action>,
 {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + Debug;
     type Action;
     type Error: Error;
 
