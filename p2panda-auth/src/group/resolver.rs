@@ -6,6 +6,8 @@ use thiserror::Error;
 use crate::group::{GroupControlMessage, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
+use super::GroupStateInner;
+
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
 pub enum GroupResolverError {}
@@ -16,17 +18,17 @@ pub struct GroupResolver<ID, OP, MSG> {
     _phantom: PhantomData<(ID, OP, MSG)>,
 }
 
-impl<ID, OP, ORD, GS> Resolver<GroupState<ID, OP, ORD, GS>, ORD::Message>
+impl<ID, OP, ORD, GS> Resolver<GroupState<ID, OP, Self, ORD, GS>, ORD::Message>
     for GroupResolver<ID, OP, ORD::Message>
 where
     ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, OP, ORD::Message>,
+    OP: OperationId + Display + Ord,
+    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
     type Error = GroupResolverError;
 
-    fn rebuild_required(y: &GroupState<ID, OP, ORD, GS>, operation: &ORD::Message) -> bool {
+    fn rebuild_required(y: &GroupState<ID, OP, Self, ORD, GS>, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
 
         // Get the group id from the control message.
@@ -71,7 +73,9 @@ where
         }
     }
 
-    fn process(y: GroupState<ID, OP, ORD, GS>) -> Result<GroupState<ID, OP, ORD, GS>, Self::Error> {
+    fn process(
+        y: GroupState<ID, OP, Self, ORD, GS>,
+    ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
         // TODO: We don't construct any filter, this is where that logic should be implemented.
         Ok(y)
     }
