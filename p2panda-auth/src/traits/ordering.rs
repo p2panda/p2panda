@@ -18,6 +18,7 @@ pub trait Ordering<ID, OP, P> {
     fn next_message(
         y: Self::State,
         dependencies: Vec<OP>,
+        previous: Vec<OP>,
         payload: &P,
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 

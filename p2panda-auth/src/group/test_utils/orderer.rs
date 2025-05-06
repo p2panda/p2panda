@@ -42,12 +42,14 @@ where
     fn next_message(
         y: Self::State,
         dependencies: Vec<TestOperationID>,
+        previous: Vec<TestOperationID>,
         payload: &GroupControlMessage<ID, TestOperationID>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
         let next_operation = TestOperation {
             id: rand::random(),
             sender: y.my_id,
             dependencies,
+            previous,
             payload: payload.clone(),
         };
         Ok((y, next_operation))
@@ -71,6 +73,7 @@ pub struct TestOperation<ID, OP> {
     pub id: OP,
     pub sender: ID,
     pub dependencies: Vec<OP>,
+    pub previous: Vec<OP>,
     pub payload: GroupControlMessage<ID, OP>,
 }
 
@@ -89,6 +92,10 @@ where
 
     fn dependencies(&self) -> &Vec<OP> {
         &self.dependencies
+    }
+
+    fn previous(&self) -> &Vec<OP> {
+        &self.previous
     }
 
     fn payload(&self) -> &GroupControlMessage<ID, OP> {
