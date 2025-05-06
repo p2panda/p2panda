@@ -275,21 +275,19 @@ where
         current_state
     }
 
-    fn state_at(&self, operations: &Vec<OP>) -> GroupMembersState<GroupMember<ID>> {
+    fn state_at(
+        &self,
+        operations: &Vec<OP>,
+    ) -> Result<GroupMembersState<GroupMember<ID>>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut y = GroupMembersState::default();
         for id in operations {
             let Some(previous_y) = self.inner.states.get(id) else {
-                // TODO: as dependencies contain _all_ dependencies, not only the "previous"
-                // states from this group, then we have to just ignore not found states here for
-                // now. Need to consider the best way to separate "dependencies" from "previous"
-                // operations.
-                continue;
-                // return Err(GroupError::StateNotFound(*id, self.group_id));
+                return Err(GroupError::StateNotFound(*id, self.id()));
             };
             y = group_state::merge(previous_y.clone(), y);
         }
 
-        y
+        Ok(y)
     }
 
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
@@ -483,7 +481,7 @@ where
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
         } else {
-            y.state_at(previous)
+            y.state_at(previous)?
         };
 
         let members_y_copy = members_y.clone();
