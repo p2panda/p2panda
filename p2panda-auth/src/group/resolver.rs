@@ -31,20 +31,8 @@ where
     fn rebuild_required(y: &GroupState<ID, OP, Self, ORD, GS>, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
 
-        // Get the group id from the control message.
-        let group_id = match control_message.group_id() {
-            Some(id) => id,
-            None => {
-                // Sanity check: operations without group id must be create.
-                assert!(control_message.is_create());
-
-                // The group takes the id of the sender (signing actor).
-                operation.sender()
-            }
-        };
-
         // Sanity check.
-        if group_id != y.inner.group_id {
+        if control_message.group_id() != y.inner.group_id {
             panic!();
         }
 
@@ -60,7 +48,7 @@ where
                 // Any revoke message requires a re-build.
                 true
             }
-            GroupControlMessage::GroupAction { action } => {
+            GroupControlMessage::GroupAction { action, .. } => {
                 if is_concurrent {
                     match action {
                         // TODO: Decide which (if any) concurrent actions cause a rebuild.

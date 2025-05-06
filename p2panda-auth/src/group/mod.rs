@@ -34,6 +34,9 @@ where
     #[error("error occurred applying state change action")]
     StateChangeError(#[from] GroupStateError),
 
+    #[error("expected sub-group {0} to exist in the store")]
+    MissingSubGroup(ID),
+
     #[error("resolver error: {0}")]
     ResolverError(RS::Error),
 
@@ -62,21 +65,17 @@ pub enum GroupAction<ID> {
         initial_members: Vec<(GroupMember<ID>, Access)>,
     },
     Add {
-        group_id: ID,
         member: GroupMember<ID>,
         access: Access,
     },
     Remove {
-        group_id: ID,
         member: GroupMember<ID>,
     },
     Promote {
-        group_id: ID,
         member: GroupMember<ID>,
         access: Access,
     },
     Demote {
-        group_id: ID,
         member: GroupMember<ID>,
         access: Access,
     },
@@ -93,24 +92,19 @@ where
             false
         }
     }
-
-    pub fn group_id(&self) -> Option<ID> {
-        let group_id = match self {
-            GroupAction::Create { .. } => return None,
-            GroupAction::Add { group_id, .. } => group_id,
-            GroupAction::Remove { group_id, .. } => group_id,
-            GroupAction::Promote { group_id, .. } => group_id,
-            GroupAction::Demote { group_id, .. } => group_id,
-        };
-        Some(*group_id)
-    }
 }
 
 /// Control messages which are processed by a group.
 #[derive(Clone, Debug)]
 pub enum GroupControlMessage<ID, OP> {
-    Revoke { group_id: ID, id: OP },
-    GroupAction { action: GroupAction<ID> },
+    Revoke {
+        group_id: ID,
+        id: OP,
+    },
+    GroupAction {
+        group_id: ID,
+        action: GroupAction<ID>,
+    },
 }
 
 impl<ID, OP> GroupControlMessage<ID, OP>
@@ -129,10 +123,10 @@ where
         }
     }
 
-    pub fn group_id(&self) -> Option<ID> {
+    pub fn group_id(&self) -> ID {
         match self {
-            GroupControlMessage::Revoke { group_id, .. } => Some(*group_id),
-            GroupControlMessage::GroupAction { action } => action.group_id(),
+            GroupControlMessage::Revoke { group_id, .. } => *group_id,
+            GroupControlMessage::GroupAction { group_id, .. } => *group_id,
         }
     }
 }
@@ -237,6 +231,10 @@ where
         }
     }
 
+    pub fn id(&self) -> ID {
+        self.inner.group_id
+    }
+
     fn new_from_inner(&self, inner: GroupStateInner<ID, OP, ORD::Message>) -> Self {
         let mut state = self.clone();
         state.inner = inner;
@@ -264,11 +262,7 @@ where
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
             if let GroupMember::Group { id } = member {
-                // All sub-groups should exist.
-                let inner = GS::get(&self.group_store_state, &id)
-                    .map_err(|error| GroupError::GroupStoreError(error))?
-                    .unwrap();
-                let sub_group = self.new_from_inner(inner);
+                let sub_group = self.get_sub_group(id)?;
                 transitive_heads = vec![transitive_heads, sub_group.transitive_heads()?].concat();
             }
         }
@@ -327,11 +321,7 @@ where
                     members.insert(id, root_access);
                 }
                 GroupMember::Group { id } => {
-                    // Unwrap as all known sub groups should exist.
-                    let inner = GS::get(&self.group_store_state, &id)
-                        .map_err(|error| GroupError::GroupStoreError(error))?
-                        .unwrap();
-                    let sub_group = self.new_from_inner(inner);
+                    let sub_group = self.get_sub_group(id)?;
                     let transitive_members = sub_group.transitive_members()?;
                     for (transitive_member, transitive_access) in transitive_members {
                         members
@@ -361,16 +351,29 @@ where
         let mut sub_groups: Vec<(ID, Access)> = Vec::new();
         for (member, access) in self.members() {
             if let GroupMember::Group { id } = member {
-                // Unwrap as all known sub groups should exist.
-                let inner = GS::get(&self.group_store_state, &id)
-                    .map_err(|error| GroupError::GroupStoreError(error))?
-                    .unwrap();
-                let sub_group = self.new_from_inner(inner);
+                let sub_group = self.get_sub_group(id)?;
                 let transitive_sub_groups = sub_group.transitive_sub_groups()?;
                 sub_groups = vec![transitive_sub_groups, sub_groups, vec![(id, access)]].concat();
             }
         }
         Ok(sub_groups.into_iter().collect())
+    }
+
+    pub fn get_sub_group(
+        &self,
+        id: ID,
+    ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
+        let inner = GS::get(&self.group_store_state, &id)
+            .map_err(|error| GroupError::GroupStoreError(error))?;
+
+        // We expect that groups are created and correctly present in the store before we process
+        // any messages requiring us to query them, so this error can only occur if there is an
+        // error in any higher orchestration system.
+        let Some(inner) = inner else {
+            return Err(GroupError::MissingSubGroup(id));
+        };
+
+        Ok(self.new_from_inner(inner))
     }
 }
 
@@ -414,61 +417,17 @@ where
         mut y: Self::State,
         operation: &ORD::Message,
     ) -> Result<Self::State, GroupError<ID, OP, RS, ORD, GS>> {
-        let id = operation.id();
-        let actor: ID = operation.sender();
+        let operation_id = operation.id();
+        let actor = operation.sender();
         let control_message = operation.payload();
+        let group_id = control_message.group_id();
 
-        // Get the group id from the control message.
-        let group_id = match control_message.group_id() {
-            Some(id) => id,
-            None => {
-                // Sanity check: operations without group id must be create.
-                assert!(control_message.is_create());
-
-                // The group takes the id of the sender (signing actor).
-                actor
-            }
-        };
-
-        if y.inner.group_id != group_id && control_message.is_create() {
-            {
-                let mut group_y = GroupState::new(
-                    y.my_id,
-                    group_id,
-                    y.group_store_state.clone(),
-                    y.orderer_state.clone(),
-                );
-                group_y = Self::process(group_y, operation)?;
-                group_y.group_store_state =
-                    GS::insert(group_y.group_store_state.clone(), &group_id, &group_y.inner)
-                        .map_err(|error| GroupError::GroupStoreError(error))?;
-            }
-            // Return the new group state.
-            return Ok(y);
-        }
-
-        // If the group id is _not_ equal to the current group id then it must be from a
-        // (possibly transitive) sub-group. Now we should recurse into all sub-groups trying to
-        // find exactly where this operation should be processed.
         if y.inner.group_id != group_id {
-            for (sub_group_id, _) in y.transitive_sub_groups()? {
-                if sub_group_id == group_id {
-                    let inner = GS::get(&y.group_store_state, &sub_group_id)
-                        .map_err(|error| GroupError::GroupStoreError(error))?
-                        .unwrap();
-                    let sub_group_y = y.new_from_inner(inner);
-                    let sub_group_y_i = Self::process(sub_group_y, operation)?;
-                    y.group_store_state =
-                        GS::insert(y.group_store_state, &sub_group_id, &sub_group_y_i.inner)
-                            .map_err(|error| GroupError::GroupStoreError(error))?;
-                }
-            }
-
-            // Return the new group state.
+            // This operation is not intended for this group.
+            //
+            // TODO: Throw error here.
             return Ok(y);
         }
-
-        // The operation concerns this group, so we can actually process it now.
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required, likely due to concurrent operations arriving which should trigger a new filter
@@ -482,11 +441,10 @@ where
         //
         // This method validates that the actor has permission perform the action.
         match control_message {
-            GroupControlMessage::GroupAction { action } => {
+            GroupControlMessage::GroupAction { action, .. } => {
                 y = Self::apply_action(
                     y,
-                    group_id,
-                    id,
+                    operation_id,
                     GroupMember::Individual(actor),
                     operation.dependencies(),
                     action,
@@ -496,12 +454,14 @@ where
             GroupControlMessage::Revoke { .. } => (),
         }
 
-        // In all cases we add the new operation to the group states' graph and operations map.
-        y.inner.graph.add_node(id);
+        // Add the new operation to the group states' graph and operations vec.
+        y.inner.graph.add_node(operation_id);
         for previous in operation.dependencies() {
-            y.inner.graph.add_edge(*previous, id, ());
+            y.inner.graph.add_edge(*previous, operation_id, ());
         }
         y.inner.operations.push(operation.clone());
+        y.group_store_state = GS::insert(y.group_store_state, &group_id, &y.inner)
+            .map_err(|error| GroupError::GroupStoreError(error))?;
 
         Ok(y)
     }
@@ -517,15 +477,11 @@ where
 {
     fn apply_action(
         mut y: GroupState<ID, OP, RS, ORD, GS>,
-        group_id: ID,
         id: OP,
         actor: GroupMember<ID>,
         previous: &Vec<OP>,
         action: &GroupAction<ID>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        // Sanity check, we should never call this method on the incorrect group.
-        assert_eq!(y.inner.group_id, group_id);
-
         // Compute the members state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
@@ -603,21 +559,10 @@ where
         let mut create_found = false;
         for operation in y.inner.operations {
             let id = operation.id();
-            let control_message = operation.payload();
             let actor = operation.sender();
+            let control_message = operation.payload();
+            let group_id = control_message.group_id();
             let dependencies = operation.dependencies();
-
-            // Get the group id from the control message.
-            let group_id = match control_message.group_id() {
-                Some(id) => id,
-                None => {
-                    // Sanity check: operations without group id must be create.
-                    assert!(control_message.is_create());
-
-                    // The group takes the id of the sender (signing actor).
-                    actor
-                }
-            };
 
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y.inner.group_id, group_id);
@@ -627,9 +572,8 @@ where
             create_found = true;
 
             y_i = match control_message {
-                GroupControlMessage::GroupAction { action } => Self::apply_action(
+                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
                     y_i,
-                    group_id,
                     id,
                     GroupMember::Individual(actor),
                     dependencies,
