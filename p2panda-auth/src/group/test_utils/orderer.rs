@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::group::GroupControlMessage;
@@ -9,21 +8,30 @@ use crate::traits::{IdentityHandle, Operation, Ordering};
 
 pub type TestOperationID = u32;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TestOrderer {}
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TestOrdererState<ID> {
     pub my_id: ID,
     pub operations: VecDeque<TestOperation<ID, TestOperationID>>,
 }
 
+impl<ID> TestOrdererState<ID> {
+    pub fn new(my_id: ID) -> Self {
+        TestOrdererState {
+            my_id,
+            operations: Default::default(),
+        }
+    }
+}
+
 impl<ID> Ordering<ID, TestOperationID, GroupControlMessage<ID, TestOperationID>> for TestOrderer
 where
-    ID: IdentityHandle + Display + Serialize + for<'a> Deserialize<'a>,
+    ID: IdentityHandle + Display,
 {
     type State = TestOrdererState<ID>;
 
@@ -58,7 +66,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TestOperation<ID, OP> {
     pub id: OP,
     pub sender: ID,
