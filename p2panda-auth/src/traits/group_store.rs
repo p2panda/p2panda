@@ -1,18 +1,17 @@
-use crate::group::GroupStateInner;
+use std::error::Error;
+use std::fmt::Debug;
 
-use super::{IdentityHandle, OperationId};
+use super::IdentityHandle;
 
-pub trait GroupStore<ID, OP, MSG>
+pub trait GroupStore<ID, G>
 where
     ID: IdentityHandle,
-    OP: OperationId + Ord,
-    MSG: Clone,
 {
-    fn get(&self, id: &ID) -> Option<GroupStateInner<ID, OP, MSG>>;
-    fn insert(
-        &self,
-        id: &ID,
-        group: GroupStateInner<ID, OP, MSG>,
-    ) -> Option<GroupStateInner<ID, OP, MSG>>;
-    fn remove(&self, id: &ID) -> Option<GroupStateInner<ID, OP, MSG>>;
+    type State: Clone + Debug;
+
+    type Error: Error;
+
+    fn insert(y: Self::State, id: &ID, group: &G) -> Result<Self::State, Self::Error>;
+
+    fn get(y: &Self::State, id: &ID) -> Result<Option<G>, Self::Error>;
 }
