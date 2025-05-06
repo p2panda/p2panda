@@ -1,22 +1,9 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-
-use crate::group::test_utils::{TestOrderer, TestOrdererState};
-use crate::group::{Group, GroupState};
-use crate::traits::{AuthGraph, IdentityHandle, OperationId};
+use crate::group::GroupState;
+use crate::group::test_utils::{TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState};
+use crate::traits::AuthGraph;
 
 use super::access::Access;
-use super::resolver::GroupResolver;
-use super::test_utils::{MemoryStore as GroupMemoryStore, TestOperation};
 use super::{GroupAction, GroupControlMessage, GroupMember};
-
-impl IdentityHandle for char {}
-impl OperationId for u32 {}
-
-type TestMemoryStore = GroupMemoryStore<char, u32, TestOperation<char, u32>>;
-type TestResolver = GroupResolver<char, u32, TestOperation<char, u32>>;
-type TestGroup = Group<char, u32, TestResolver, TestOrderer, TestMemoryStore>;
 
 #[test]
 fn basic_group() {
@@ -25,8 +12,8 @@ fn basic_group() {
         my_id: alice,
         operations: Default::default(),
     };
-    let group_store = TestMemoryStore::default();
-    let group_y = GroupState::new(alice, alice, group_store, orderer_y);
+    let group_store_y = TestGroupStoreState::default();
+    let group_y = TestGroupState::new(alice, alice, group_store_y, orderer_y);
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
@@ -162,8 +149,8 @@ fn nested_groups() {
     let bob_laptop = 'L';
     let alice_orderer_y = TestOrdererState::new(alice);
     let bob_orderer_y = TestOrdererState::new(bob);
-    let alice_groups = TestMemoryStore::default();
-    let bob_groups = TestMemoryStore::default();
+    let alice_groups = TestGroupStoreState::default();
+    let bob_groups = TestGroupStoreState::default();
     let alice_group_y = GroupState::new(alice, alice, alice_groups, alice_orderer_y);
     let bob_group_y = GroupState::new(bob, alice, bob_groups, bob_orderer_y);
 
@@ -218,7 +205,7 @@ fn nested_groups() {
             members,
             vec![(GroupMember::Individual(alice), Access::Manage),]
         );
-        let mut transitive_members = y.transitive_members();
+        let mut transitive_members = y.transitive_members().unwrap();
         transitive_members.sort();
         assert_eq!(transitive_members, vec![(alice, Access::Manage)]);
     }
@@ -250,7 +237,7 @@ fn nested_groups() {
 
         // Bob's laptop and mobile are transitive members with read access (even though they have
         // higher access levels in bob's device group).
-        let mut transitive_members = y.transitive_members();
+        let mut transitive_members = y.transitive_members().unwrap();
         transitive_members.sort();
         assert_eq!(
             transitive_members,
