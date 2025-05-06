@@ -17,6 +17,7 @@ fn basic_group() {
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Create {
             initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
         },
@@ -34,8 +35,8 @@ fn basic_group() {
     // Add bob with read access.
     let bob = 'B';
     let control_message_002 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Add {
-            group_id: alice,
             member: GroupMember::Individual(bob),
             access: Access::Read,
         },
@@ -56,8 +57,8 @@ fn basic_group() {
     // Add claire with write access.
     let claire = 'C';
     let control_message_003 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Add {
-            group_id: alice,
             member: GroupMember::Individual(claire),
             access: Access::Write,
         },
@@ -78,8 +79,8 @@ fn basic_group() {
 
     // Promote claire to admin.
     let control_message_004 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Promote {
-            group_id: alice,
             member: GroupMember::Individual(claire),
             access: Access::Manage,
         },
@@ -100,8 +101,8 @@ fn basic_group() {
 
     // Demote bob to poll access.
     let control_message_005 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Demote {
-            group_id: alice,
             member: GroupMember::Individual(bob),
             access: Access::Pull,
         },
@@ -122,8 +123,8 @@ fn basic_group() {
 
     // Remove bob.
     let control_message_006 = GroupControlMessage::GroupAction {
+        group_id: alice,
         action: GroupAction::Remove {
-            group_id: alice,
             member: GroupMember::Individual(bob),
         },
     };
@@ -144,108 +145,118 @@ fn basic_group() {
 #[test]
 fn nested_groups() {
     let alice = 'A';
-    let bob = 'B';
-    let bob_mobile = 'M';
-    let bob_laptop = 'L';
-    let alice_orderer_y = TestOrdererState::new(alice);
-    let bob_orderer_y = TestOrdererState::new(bob);
-    let alice_groups = TestGroupStoreState::default();
-    let bob_groups = TestGroupStoreState::default();
-    let alice_group_y = GroupState::new(alice, alice, alice_groups, alice_orderer_y);
-    let bob_group_y = GroupState::new(bob, alice, bob_groups, bob_orderer_y);
+    let alice_mobile = 'M';
+    let alice_laptop = 'L';
 
-    // Create group with alice as initial admin member.
+    let alice_devices_group = 'D';
+    let alice_team_group = 'T';
+
+    let alice_orderer_y = TestOrdererState::new(alice);
+    // The group store is shared state across all group instances.
+    let group_store_y = TestGroupStoreState::default();
+
+    // One devices group instance.
+    let devices_group_y = GroupState::new(
+        alice,
+        alice_devices_group,
+        group_store_y.clone(),
+        alice_orderer_y.clone(),
+    );
+
+    // One team group instance.
+    let team_group_y = GroupState::new(
+        alice,
+        alice_team_group,
+        group_store_y.clone(),
+        alice_orderer_y,
+    );
+
+    // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
     let control_message_001 = GroupControlMessage::GroupAction {
+        group_id: devices_group_y.id(),
+        action: GroupAction::Create {
+            initial_members: vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(alice_laptop), Access::Manage),
+                (GroupMember::Individual(alice_mobile), Access::Write),
+            ],
+        },
+    };
+
+    // Prepare the operation.
+    let (devices_group_y, operation_001) =
+        TestGroup::prepare(devices_group_y, &control_message_001).unwrap();
+
+    // Process the operation.
+    let devices_group_y = TestGroup::process(devices_group_y, &operation_001).unwrap();
+
+    // alice, alice_laptop and alice_mobile are all members of the group.
+    let mut members = devices_group_y.members();
+    members.sort();
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (GroupMember::Individual(alice_laptop), Access::Manage),
+            (GroupMember::Individual(alice_mobile), Access::Write),
+        ],
+    );
+
+    // Create alice's team group, with alice as the only member.
+    let control_message_002 = GroupControlMessage::GroupAction {
+        group_id: team_group_y.id(),
         action: GroupAction::Create {
             initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
         },
     };
 
-    // Prepare the operation on alice's instance.
-    let (alice_group_y, operation_001) =
-        TestGroup::prepare(alice_group_y, &control_message_001).unwrap();
+    // Prepare the operation.
+    let (team_group_y, operation_002) =
+        TestGroup::prepare(team_group_y, &control_message_002).unwrap();
 
-    // Process it on both alice and bob's instances.
-    let alice_group_y = TestGroup::process(alice_group_y, &operation_001).unwrap();
-    let bob_group_y = TestGroup::process(bob_group_y, &operation_001).unwrap();
+    // Process it.
+    let team_group_y = TestGroup::process(team_group_y, &operation_002).unwrap();
 
-    // Both alice and bob's group instances contain alice as the only (admin) member.
-    for y in [&alice_group_y, &bob_group_y] {
-        let mut members = y.members();
-        members.sort();
-        assert_eq!(
-            members,
-            vec![(GroupMember::Individual(alice), Access::Manage)]
-        );
-    }
-
-    // Create bobs devices sub-group.
-    let control_message_002 = GroupControlMessage::GroupAction {
-        action: GroupAction::Create {
-            initial_members: vec![
-                (GroupMember::Individual(bob_laptop), Access::Manage),
-                (GroupMember::Individual(bob_mobile), Access::Write),
-            ],
-        },
-    };
-
-    // Prepare it on bob's instance.
-    let (bob_group_y, operation_002) =
-        TestGroup::prepare(bob_group_y, &control_message_002).unwrap();
-
-    // Process it on both alice and bob's instances.
-    let alice_group_y = TestGroup::process(alice_group_y, &operation_002).unwrap();
-    let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
-
-    // For both alice and bob's instance it doesn't show up in direct or transitive members yet.
-    for y in [&alice_group_y, &bob_group_y] {
-        let mut members = y.members();
-        members.sort();
-        assert_eq!(
-            members,
-            vec![(GroupMember::Individual(alice), Access::Manage),]
-        );
-        let mut transitive_members = y.transitive_members().unwrap();
-        transitive_members.sort();
-        assert_eq!(transitive_members, vec![(alice, Access::Manage)]);
-    }
-
-    // Add bobs devices sub-group as a member with read access.
+    // Add alice's devices group as a member of her teams group with read access.
     let control_message_003 = GroupControlMessage::GroupAction {
+        group_id: team_group_y.id(),
         action: GroupAction::Add {
-            group_id: alice,
-            member: GroupMember::Group { id: bob },
+            member: GroupMember::Group {
+                id: devices_group_y.id(),
+            },
             access: Access::Read,
         },
     };
-    let (alice_group_y, operation_003) =
-        TestGroup::prepare(alice_group_y, &control_message_003).unwrap();
-    let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
-    let bob_group_y = TestGroup::process(bob_group_y, &operation_003).unwrap();
+    let (team_group_y, operation_003) =
+        TestGroup::prepare(team_group_y, &control_message_003).unwrap();
+    let team_group_y = TestGroup::process(team_group_y, &operation_003).unwrap();
 
-    for y in [&alice_group_y, &bob_group_y] {
-        // Bob's group is a direct member with read access.
-        let mut members = y.members();
-        members.sort();
-        assert_eq!(
-            members,
-            vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Group { id: bob }, Access::Read)
-            ]
-        );
+    // Alice and the devices group are direct members of the team group.
+    let mut members = team_group_y.members();
+    members.sort();
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (
+                GroupMember::Group {
+                    id: alice_devices_group
+                },
+                Access::Read
+            )
+        ]
+    );
 
-        // Bob's laptop and mobile are transitive members with read access (even though they have
-        // higher access levels in bob's device group).
-        let mut transitive_members = y.transitive_members().unwrap();
-        transitive_members.sort();
-        assert_eq!(
-            transitive_members,
-            vec![
-                (alice, Access::Manage),
-                (bob_laptop, Access::Read),
-                (bob_mobile, Access::Read)
-            ]
-        );
-    }
+    // alice, alice_laptop and alice_mobile are transitive members, only alice has Manage access
+    // (even though alice_laptop has Manage access to the devices sub-group).
+    let mut transitive_members = team_group_y.transitive_members().unwrap();
+    transitive_members.sort();
+    assert_eq!(
+        transitive_members,
+        vec![
+            (alice, Access::Manage),
+            (alice_laptop, Access::Read),
+            (alice_mobile, Access::Read),
+        ]
+    );
 }
