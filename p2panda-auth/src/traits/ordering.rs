@@ -1,17 +1,15 @@
 use std::error::Error;
 use std::fmt::Debug;
 
-use serde::{Deserialize, Serialize};
-
 use super::Operation;
 
 /// Interface for processing messages which have particular ordering requirements.
 ///
 /// Messages have a sender id, a unique identifier and a generic payload.
 pub trait Ordering<ID, OP, P> {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + Debug;
 
-    type Message: Clone + Debug + Operation<ID, OP, P> + Serialize + for<'a> Deserialize<'a>;
+    type Message: Clone + Debug + Operation<ID, OP, P>;
 
     type Error: Error;
 
