@@ -49,15 +49,13 @@ pub enum Access<C> {
 }
 
 #[derive(Clone, Debug)]
-pub struct MemberState<ID, C> {
-    // TODO: Do we need to include ID here if it's always tracked in `GroupMembersState`?
-    pub member: ID,
+pub struct MemberState<C> {
     pub member_counter: usize,
     pub access: Access<C>,
     pub access_counter: usize,
 }
 
-impl<ID, C> MemberState<ID, C>
+impl<C> MemberState<C>
 where
     C: Clone + Debug + PartialEq,
 {
@@ -72,7 +70,7 @@ where
 
 #[derive(Clone, Debug)]
 pub struct GroupMembersState<ID, C> {
-    pub members: HashMap<ID, MemberState<ID, C>>,
+    pub members: HashMap<ID, MemberState<C>>,
 }
 
 impl<ID, C> GroupMembersState<ID, C>
@@ -82,23 +80,23 @@ where
 {
     pub fn members(&self) -> HashSet<ID> {
         self.members
-            .values()
-            .filter_map(|state| {
+            .iter()
+            .filter_map(|(id, state)| {
                 if state.is_member() {
-                    Some(state.member.clone())
+                    Some(id.to_owned())
                 } else {
                     None
                 }
             })
-            .collect::<HashSet<_>>()
+            .collect::<HashSet<ID>>()
     }
 
     pub fn managers(&self) -> HashSet<ID> {
         self.members
-            .values()
-            .filter_map(|state| {
+            .iter()
+            .filter_map(|(id, state)| {
                 if state.is_member() && state.is_manager() {
-                    Some(state.member.clone())
+                    Some(id.to_owned())
                 } else {
                     None
                 }
@@ -124,7 +122,6 @@ pub fn create_group<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
-            member: id.clone(),
             member_counter: 1,
             access: access.clone(),
             access_counter: 0,
@@ -176,7 +173,6 @@ pub fn add_member<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
             }
         })
         .or_insert(MemberState {
-            member: added,
             member_counter: 1,
             access,
             access_counter: 0,
