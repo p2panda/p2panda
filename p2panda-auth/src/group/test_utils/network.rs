@@ -6,13 +6,9 @@ use crate::group::{GroupAction, GroupControlMessage, GroupMember, access::Access
 use crate::traits::{AuthGraph, Operation, Ordering};
 
 use super::{
-    TestGroup, TestGroupState, TestGroupStateInner, TestGroupStoreState, TestOperation,
-    TestOrderer, TestOrdererState,
+    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStateInner,
+    TestGroupStoreState, TestOperation, TestOrderer, TestOrdererState,
 };
-
-type MemberId = char;
-type GroupId = char;
-type MessageId = u32;
 
 pub struct Network {
     group_store_y: TestGroupStoreState<MemberId, TestGroupStateInner>,
@@ -43,7 +39,7 @@ impl Network {
             creator,
             group_id,
             self.group_store_y.clone(),
-            TestOrdererState::new(creator),
+            TestOrdererState::new(creator, self.group_store_y.clone()),
         );
         let control_message = GroupControlMessage::GroupAction {
             group_id,
@@ -154,7 +150,7 @@ impl Network {
                 *member,
                 *group_id,
                 self.group_store_y.clone(),
-                TestOrdererState::new(*member),
+                TestOrdererState::new(*member, self.group_store_y.clone()),
             ),
         }
     }
