@@ -4,7 +4,6 @@ pub mod acked_dgm;
 mod dcgka;
 mod group;
 mod message;
-mod ordering;
 mod ratchet;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
