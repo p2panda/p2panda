@@ -8,11 +8,8 @@ use super::{GroupAction, GroupControlMessage, GroupMember};
 #[test]
 fn basic_group() {
     let alice = 'A';
-    let orderer_y = TestOrdererState {
-        my_id: alice,
-        operations: Default::default(),
-    };
     let group_store_y = TestGroupStoreState::default();
+    let orderer_y = TestOrdererState::new(alice, group_store_y.clone());
     let group_y = TestGroupState::new(alice, alice, group_store_y, orderer_y);
 
     // Create group with alice as initial admin member.
@@ -151,9 +148,9 @@ fn nested_groups() {
     let alice_devices_group = 'D';
     let alice_team_group = 'T';
 
-    let alice_orderer_y = TestOrdererState::new(alice);
     // The group store is shared state across all group instances.
     let group_store_y = TestGroupStoreState::default();
+    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone());
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
