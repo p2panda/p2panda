@@ -16,7 +16,6 @@ keywords = ["auth", "access-control", "groups"]
 all-features = true
 
 [dependencies]
-anyhow = "1.0.98"
 thiserror = "2.0.12"
 
 [lints]

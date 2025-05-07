@@ -12,8 +12,16 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-// TODO: Remove this and replace with custom error type using `thiserror`.
-use anyhow::Error;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum GroupMembershipError<ID> {
+    #[error("tried to access unrecognized member")]
+    UnrecognizedMember(ID),
+
+    #[error("tried to add a member who is already active in the group")]
+    AlreadyActive(ID),
+}
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub enum Access<C> {
@@ -25,6 +33,7 @@ pub enum Access<C> {
 
 #[derive(Clone, Debug)]
 pub struct MemberState<ID, C> {
+    // TODO: Do we need to include ID here if it's always tracked in `GroupMembersState`?
     pub member: ID,
     pub member_counter: usize,
     pub access: Access<C>,
@@ -94,13 +103,12 @@ where
 
 pub fn create_group<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     initial_members: &[(ID, Access<C>)],
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
             member: id.clone(),
             member_counter: 1,
-            // TODO: Can we avoid clone here?
             access: access.clone(),
             access_counter: 0,
         };
@@ -117,7 +125,7 @@ pub fn add_member<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     actor: ID,
     member: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // TODO: Consider whether we want to return Error rather than the unchanged state...
     // The error would communicate why there was an early return.
 
@@ -161,7 +169,7 @@ pub fn remove_member<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
     actor: ID,
     member: ID,
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         return Ok(state);
@@ -195,7 +203,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     actor: ID,
     member: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -229,7 +237,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     actor: ID,
     member: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -261,7 +269,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,
-) -> Result<GroupMembersState<ID, C>, Error> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
