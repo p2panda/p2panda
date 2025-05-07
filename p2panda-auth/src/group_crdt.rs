@@ -1,28 +1,40 @@
 // Group membership CRDT functions.
 
+// TODO: Changes that need to be made:
+//
+// x generic `conditions` parameter on `Write`
+// - introduce flag for “any member can add new members” (?)
+// - proper error handling
+// - tests
+// - documentation
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
+// TODO: Remove this and replace with custom error type using `thiserror`.
 use anyhow::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Access {
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub enum Access<C> {
     Pull,
     Read,
-    Write,
-    Manage, // Admin
+    Write { conditions: C },
+    Manage,
 }
 
 #[derive(Clone, Debug)]
-pub struct MemberState<ID> {
+pub struct MemberState<ID, C> {
     pub member: ID,
     pub member_counter: usize,
-    pub access: Access,
+    pub access: Access<C>,
     pub access_counter: usize,
 }
 
-impl<ID> MemberState<ID> {
+impl<ID, C> MemberState<ID, C>
+where
+    C: Clone + Debug + PartialEq,
+{
     pub fn is_member(&self) -> bool {
         self.member_counter % 2 != 0
     }
@@ -33,13 +45,14 @@ impl<ID> MemberState<ID> {
 }
 
 #[derive(Clone, Debug)]
-pub struct GroupMembersState<ID> {
-    pub members: HashMap<ID, MemberState<ID>>,
+pub struct GroupMembersState<ID, C> {
+    pub members: HashMap<ID, MemberState<ID, C>>,
 }
 
-impl<ID> GroupMembersState<ID>
+impl<ID, C> GroupMembersState<ID, C>
 where
     ID: Clone + Hash + Eq,
+    C: Clone + Debug + PartialEq,
 {
     pub fn members(&self) -> HashSet<ID> {
         self.members
@@ -68,7 +81,10 @@ where
     }
 }
 
-impl<ID> Default for GroupMembersState<ID> {
+impl<ID, C> Default for GroupMembersState<ID, C>
+where
+    C: PartialEq,
+{
     fn default() -> Self {
         Self {
             members: Default::default(),
@@ -76,15 +92,16 @@ impl<ID> Default for GroupMembersState<ID> {
     }
 }
 
-pub fn create_group<ID: Clone + Eq + Hash>(
-    initial_members: &[(ID, Access)],
-) -> Result<GroupMembersState<ID>, Error> {
+pub fn create_group<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
+    initial_members: &[(ID, Access<C>)],
+) -> Result<GroupMembersState<ID, C>, Error> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
             member: id.clone(),
             member_counter: 1,
-            access: *access,
+            // TODO: Can we avoid clone here?
+            access: access.clone(),
             access_counter: 0,
         };
         members.insert(id.clone(), member);
@@ -95,12 +112,12 @@ pub fn create_group<ID: Clone + Eq + Hash>(
     Ok(state)
 }
 
-pub fn add_member<ID: Clone + Eq + Hash>(
-    state: GroupMembersState<ID>,
+pub fn add_member<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
+    state: GroupMembersState<ID, C>,
     actor: ID,
     member: ID,
-    access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+    access: Access<C>,
+) -> Result<GroupMembersState<ID, C>, Error> {
     // TODO: Consider whether we want to return Error rather than the unchanged state...
     // The error would communicate why there was an early return.
 
@@ -125,7 +142,8 @@ pub fn add_member<ID: Clone + Eq + Hash>(
         .and_modify(|state| {
             if !state.is_member() {
                 state.member_counter += 1;
-                state.access = access;
+                // TODO: Can we avoid clone here?
+                state.access = access.clone();
                 state.access_counter = 0;
             }
         })
@@ -139,11 +157,11 @@ pub fn add_member<ID: Clone + Eq + Hash>(
     Ok(state)
 }
 
-pub fn remove_member<ID: Eq + Hash>(
-    state: GroupMembersState<ID>,
+pub fn remove_member<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
+    state: GroupMembersState<ID, C>,
     actor: ID,
     member: ID,
-) -> Result<GroupMembersState<ID>, Error> {
+) -> Result<GroupMembersState<ID, C>, Error> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         return Ok(state);
@@ -172,12 +190,12 @@ pub fn remove_member<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn promote<ID: Eq + Hash>(
-    state: GroupMembersState<ID>,
+pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+    state: GroupMembersState<ID, C>,
     actor: ID,
     member: ID,
-    access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+    access: Access<C>,
+) -> Result<GroupMembersState<ID, C>, Error> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -206,12 +224,12 @@ pub fn promote<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn demote<ID: Eq + Hash>(
-    state: GroupMembersState<ID>,
+pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+    state: GroupMembersState<ID, C>,
     actor: ID,
     member: ID,
-    access: Access,
-) -> Result<GroupMembersState<ID>, Error> {
+    access: Access<C>,
+) -> Result<GroupMembersState<ID, C>, Error> {
     // Check "actor" is known to the group.
     let Some(actor) = state.members.get(&actor) else {
         panic!()
@@ -240,10 +258,10 @@ pub fn demote<ID: Eq + Hash>(
     Ok(state)
 }
 
-pub fn merge<ID: Clone + Eq + Hash>(
-    state_1: GroupMembersState<ID>,
-    state_2: GroupMembersState<ID>,
-) -> Result<GroupMembersState<ID>, Error> {
+pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+    state_1: GroupMembersState<ID, C>,
+    state_2: GroupMembersState<ID, C>,
+) -> Result<GroupMembersState<ID, C>, Error> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
@@ -253,7 +271,8 @@ pub fn merge<ID: Clone + Eq + Hash>(
             // If the member is present in both states take the higher counter.
             if member_state_1.member_counter > member_state.member_counter {
                 member_state.member_counter = member_state_1.member_counter;
-                member_state.access = member_state_1.access;
+                // TODO: Can we avoid clone here?
+                member_state.access = member_state_1.access.clone();
                 member_state.access_counter = member_state_1.access_counter;
             }
 
@@ -261,7 +280,8 @@ pub fn merge<ID: Clone + Eq + Hash>(
             // access counter. If the access counters are equal, do nothing.
             if member_state_1.member_counter == member_state.member_counter {
                 if member_state_1.access_counter > member_state.access_counter {
-                    member_state.access = member_state_1.access;
+                    // TODO: Can we avoid clone here?
+                    member_state.access = member_state_1.access.clone();
                     member_state.access_counter = member_state_1.access_counter;
                 }
 
