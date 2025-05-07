@@ -20,7 +20,8 @@ use crate::traits::{
 ///
 /// NOTE: This orderer does _not_ fullfill the full specification for correct ordering. It's
 /// assuming that peers process all messages after each member has published max. one control
-/// or application message.
+/// or application message. On top it's very inefficient, as every published message points at
+/// _every_ previously published messages from all peers.
 ///
 /// This is sufficient for the current testing setup but for anything "production ready" and
 /// more robust for all concurrency scenarios, a more sophisticated solution will be required.
@@ -36,7 +37,6 @@ where
     pub fn init(my_id: MemberId) -> ForwardSecureOrdererState<DGM> {
         ForwardSecureOrdererState {
             next_message_seq: 0,
-            previous: HashMap::new(),
             orderer: Orderer::init(),
             my_id,
             messages: HashMap::new(),
@@ -58,9 +58,6 @@ where
 
     /// Internal helper to order messages based on their "previous" dependencies.
     orderer: OrdererState<MessageId>,
-
-    /// Latest known message id's from each group member. This is the "head" of the DAG.
-    previous: HashMap<MemberId, MessageId>,
 
     /// In-memory store of all messages.
     messages: HashMap<MessageId, TestMessage<DGM>>,
@@ -90,7 +87,11 @@ where
     ) -> Result<(Self::State, Self::Message), Self::Error> {
         let seq = y.next_message_seq;
         let sender = y.my_id;
-        let previous = y.previous.values().cloned().collect();
+
+        // This is a very naive implementation where every message points at _every_ known,
+        // previous message as an "dependency". This allows us to not write any code which tracks
+        // transitive dependencies.
+        let previous = y.messages.keys().cloned().collect();
 
         let message = TestMessage {
             seq,
@@ -103,7 +104,6 @@ where
         };
 
         y.messages.insert(message.id(), message.clone());
-        y.previous.insert(y.my_id, message.id());
         y.next_message_seq += 1;
 
         Ok((y, message))
@@ -116,7 +116,11 @@ where
     ) -> Result<(Self::State, Self::Message), Self::Error> {
         let seq = y.next_message_seq;
         let sender = y.my_id;
-        let previous = y.previous.values().cloned().collect();
+
+        // This is a very naive implementation where every message points at _every_ known,
+        // previous message as an "dependency". This allows us to not write any code which tracks
+        // transitive dependencies.
+        let previous = y.messages.keys().cloned().collect();
 
         let message = TestMessage {
             seq,
@@ -129,7 +133,6 @@ where
         };
 
         y.messages.insert(message.id(), message.clone());
-        y.previous.insert(y.my_id, message.id());
         y.next_message_seq += 1;
 
         Ok((y, message))
@@ -140,6 +143,8 @@ where
 
         y.messages.insert(id, message.clone());
 
+        // Clear dependencies list from own messages, we didn't queue them as we know that we've
+        // seen and processed them.
         let previous: Vec<MessageId> = message
             .previous
             .iter()
@@ -190,51 +195,29 @@ where
             });
 
             if let Some(message) = message {
+                // Don't forward welcome message, it was already processed.
                 if message.id() == welcome.id() {
                     continue;
                 }
 
-                let last_seq = welcome
-                    .previous
-                    .iter()
-                    .find(|msg| msg.sender == message.sender())
-                    .map(|msg| msg.seq);
-
-                // Is this message before our welcome?
+                // Control messages can be ignored if message is before our welcome. Concurrent
+                // messages need to be processed.
                 //
-                // This is a naive implementation where we assume that every member processed
-                // every control message after one round.
-                if let Some(last_seq) = last_seq {
-                    if message.id().seq < last_seq + 1 {
+                // This is a naive implementation where we assume that every member processed every
+                // control message after one round and where every message points at _every_
+                // previously created message.
+                if let ForwardSecureMessageType::Control { .. } = message.message_type() {
+                    if welcome.previous.contains(&message.id()) {
                         continue;
                     }
                 }
 
+                // Application messages can be ignored if before or concurrent to welcome.
                 if let ForwardSecureMessageType::Application { .. } = message.message_type() {
-                    let last_seq = y_loop
-                        .previous
-                        .values()
-                        .find_map(|id| {
-                            let msg = y_loop.messages.get(id).unwrap();
-                            if msg.sender == message.sender() {
-                                Some(msg)
-                            } else {
-                                None
-                            }
-                        })
-                        .map(|msg| msg.seq)
-                        .unwrap_or(0);
-                    if message.id().seq > last_seq {
+                    if !message.previous.contains(&welcome.id()) {
                         continue;
                     }
                 }
-
-                // Mark messages as "last seen" so we can mention the "previous" ones as soon
-                // as we publish a message ourselves.
-                //
-                // In a correct implementation we would _only_ track control messages here (and
-                // not also application messages).
-                y_loop.previous.insert(message.sender(), message.id());
 
                 return Ok((y_loop, Some(message)));
             } else {

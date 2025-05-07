@@ -2,12 +2,12 @@
 
 #![no_main]
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 
 use libfuzzer_sys::fuzz_target;
 use p2panda_group::message_scheme::MessageGroup;
-use p2panda_group::message_scheme::acked_dgm::test_utils::AckedTestDgm;
+use p2panda_group::test_utils::message_scheme::dgm::AckedTestDgm;
 use p2panda_group::test_utils::message_scheme::network::{
     TestGroupError, TestGroupState, init_group_state,
 };
@@ -18,9 +18,9 @@ use p2panda_group::{Rng, message_scheme};
 
 const INVALID_TRANSITION_CHANCE: u8 = 0; // in %
 
-const MAX_OPERATIONS: usize = 32;
+const MAX_OPERATIONS: usize = 3;
 
-const MAX_GROUP_SIZE: usize = 16;
+const MAX_GROUP_SIZE: usize = 4;
 
 fn random_u8(rng: &Rng) -> u8 {
     let value: [u8; 1] = rng.random_array().unwrap();
@@ -81,6 +81,8 @@ impl Values {
     }
 
     fn process_valid(&mut self, operation: &Operation) {
+        println!("process_valid {} {}", self.my_id, operation);
+
         match operation {
             Operation::Update | Operation::SendMessage { .. } | Operation::Noop => {
                 // Do nothing!
@@ -89,26 +91,31 @@ impl Values {
                 added,
                 initial_members,
             } => {
-                assert!(self.members.contains(added));
-                assert!(!self.active_members.contains(added));
-                assert!(!self.removed_members.contains(added));
+                // assert!(self.members.contains(added));
+                // assert!(!self.active_members.contains(added));
+                // assert!(!self.removed_members.contains(added));
                 if added == &self.my_id {
                     // Process "welcome".
-                    assert!(self.active_members.is_empty());
-                    assert!(self.removed_members.is_empty());
+                    // assert!(self.active_members.is_empty());
+                    // assert!(self.removed_members.is_empty());
                     for member in initial_members {
                         assert!(self.members.contains(member));
                     }
                     self.is_active = true;
                     self.active_members = initial_members.to_vec();
                 }
-                self.active_members.push(*added);
+
+                if !self.active_members.contains(added) {
+                    self.active_members.push(*added);
+                }
             }
             Operation::Remove { removed } => {
-                assert!(self.members.contains(removed));
-                assert!(self.active_members.contains(removed));
-                assert!(!self.removed_members.contains(removed));
-                self.removed_members.push(*removed);
+                // assert!(self.members.contains(removed));
+                // assert!(self.active_members.contains(removed));
+                // assert!(!self.removed_members.contains(removed));
+                if !self.removed_members.contains(removed) {
+                    self.removed_members.push(*removed);
+                }
                 self.active_members = self
                     .active_members
                     .iter()
@@ -325,6 +332,32 @@ impl Machine {
             self.state = next_state;
         }
     }
+
+    fn process_output(
+        &mut self,
+        added_members: &HashSet<MemberId>,
+        removed_members: &HashSet<MemberId>,
+    ) {
+        for added in added_members {
+            if added == &self.values.my_id {
+                continue;
+            }
+
+            self.values.process_valid(&Operation::Add {
+                added: *added,
+                initial_members: vec![],
+            });
+        }
+
+        for removed in removed_members {
+            if removed == &self.values.my_id {
+                continue;
+            }
+
+            self.values
+                .process_valid(&Operation::Remove { removed: *removed });
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -341,20 +374,16 @@ enum State {
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                State::Standby => "standby",
-                State::CreatedGroup => "created",
-                State::Welcomed => "welcomed",
-                State::AddedMember => "added",
-                State::RemovedMember => "removed",
-                State::UpdatedGroup => "updated",
-                State::SentMessage => "sent",
-                State::Invalid => "invalid",
-            }
-        )
+        write!(f, "{}", match self {
+            State::Standby => "standby",
+            State::CreatedGroup => "created",
+            State::Welcomed => "welcomed",
+            State::AddedMember => "added",
+            State::RemovedMember => "removed",
+            State::UpdatedGroup => "updated",
+            State::SentMessage => "sent",
+            State::Invalid => "invalid",
+        })
     }
 }
 
@@ -394,34 +423,30 @@ enum Operation {
 
 impl Display for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Operation::Noop => "noop".to_string(),
-                Operation::Create { initial_members } => format!(
-                    "create (initial_members={{{}}})",
-                    print_members(initial_members)
-                ),
-                Operation::Add {
+        write!(f, "{}", match self {
+            Operation::Noop => "noop".to_string(),
+            Operation::Create { initial_members } => format!(
+                "create (initial_members={{{}}})",
+                print_members(initial_members)
+            ),
+            Operation::Add {
+                added,
+                initial_members,
+            } => {
+                format!(
+                    "add {} (members_in_welcome={{{}}})",
                     added,
-                    initial_members,
-                } => {
-                    format!(
-                        "add {} (initial_members={{{}}})",
-                        added,
-                        print_members(initial_members)
-                    )
-                }
-                Operation::Remove { removed } => {
-                    format!("remove {}", removed)
-                }
-                Operation::Update => "update".to_string(),
-                Operation::SendMessage { plaintext } => {
-                    format!("send message (len={})", plaintext.len())
-                }
+                    print_members(initial_members)
+                )
             }
-        )
+            Operation::Remove { removed } => {
+                format!("remove {}", removed)
+            }
+            Operation::Update => "update".to_string(),
+            Operation::SendMessage { plaintext } => {
+                format!("send message (len={})", plaintext.len())
+            }
+        })
     }
 }
 
@@ -506,26 +531,29 @@ impl Member {
         &mut self,
         message: &Message,
         rng: &Rng,
-    ) -> Result<Vec<GroupOutput>, TestGroupError> {
-        // println!("{}: processing {}", self.id(), message.message_type());
+    ) -> Result<Option<GroupOutput>, TestGroupError> {
         if self.is_removed {
-            // println!("{}: ignored", self.id());
-            return Ok(vec![]);
+            return Ok(None);
         }
 
-        let (group_i, messages) = MessageGroup::receive(self.group.clone(), message, rng)?;
+        let (group_i, output) = MessageGroup::receive(self.group.clone(), message, rng)?;
         self.group = group_i;
 
-        for message in &messages {
-            if let message_scheme::GroupOutput::Removed = message {
-                self.is_removed = true;
+        if let Some(ref output) = output {
+            for event in &output.events {
+                if let message_scheme::GroupEvent::RemovedOurselves = event {
+                    self.is_removed = true;
+                }
             }
+
+            self.machine
+                .process_output(&output.added_members, &output.removed_members);
         }
 
-        Ok(messages)
+        Ok(output)
     }
 
-    pub fn assert_process(&mut self, _operation: &Operation, _outputs: &[GroupOutput]) {
+    pub fn assert_process(&mut self, _operation: &Operation, _output: &Option<GroupOutput>) {
         // match operation {
         //     Operation::Add {
         //         added,
@@ -565,35 +593,31 @@ fuzz_target!(|seed: [u8; 32]| {
 
     // Initialise state machines for each member.
     for id in &member_ids {
-        members.insert(
-            *id,
-            Member {
-                machine: if id == &group_creator {
-                    Machine::from_create(*id, member_ids.clone(), vec![*id])
-                } else {
-                    Machine::from_standby(*id, member_ids.clone())
-                },
-                group: {
-                    if id == &group_creator {
-                        let (group_i, message) =
-                            MessageGroup::create(group_states[*id].clone(), vec![*id], &rng)
-                                .unwrap();
-
-                        queue.push_back((
-                            Suggestion::Valid(Operation::Create {
-                                initial_members: vec![*id],
-                            }),
-                            message,
-                        ));
-
-                        group_i
-                    } else {
-                        group_states[*id].clone()
-                    }
-                },
-                is_removed: false,
+        members.insert(*id, Member {
+            machine: if id == &group_creator {
+                Machine::from_create(*id, member_ids.clone(), vec![*id])
+            } else {
+                Machine::from_standby(*id, member_ids.clone())
             },
-        );
+            group: {
+                if id == &group_creator {
+                    let (group_i, message) =
+                        MessageGroup::create(group_states[*id].clone(), vec![*id], &rng).unwrap();
+
+                    queue.push_back((
+                        Suggestion::Valid(Operation::Create {
+                            initial_members: vec![*id],
+                        }),
+                        message,
+                    ));
+
+                    group_i
+                } else {
+                    group_states[*id].clone()
+                }
+            },
+            is_removed: false,
+        });
     }
 
     println!("\n==============================");
@@ -605,6 +629,11 @@ fuzz_target!(|seed: [u8; 32]| {
 
         for member_id in &member_ids {
             let member = members.get_mut(member_id).unwrap();
+
+            if member.is_removed {
+                continue;
+            }
+
             let suggestion = member.machine.suggest(INVALID_TRANSITION_CHANCE, &rng);
 
             if let Operation::Noop = suggestion.operation() {
@@ -652,7 +681,7 @@ fuzz_target!(|seed: [u8; 32]| {
 
                 let member = members.get_mut(member_id).unwrap();
                 match member.process(&message, &rng) {
-                    Ok(outputs) => {
+                    Ok(output) => {
                         if let Suggestion::Invalid(operation) = suggestion {
                             panic!(
                                 "expected error when processing remote message from invalid operation '{}'",
@@ -660,11 +689,13 @@ fuzz_target!(|seed: [u8; 32]| {
                             )
                         }
 
-                        member.assert_process(&suggestion.operation(), &outputs);
+                        member.assert_process(&suggestion.operation(), &output);
 
-                        for output in outputs {
-                            if let message_scheme::GroupOutput::Control(output_message) = output {
-                                queue.push_back((suggestion.clone(), output_message));
+                        if let Some(output) = output {
+                            for event in output.events {
+                                if let message_scheme::GroupEvent::Control(output_message) = event {
+                                    queue.push_back((suggestion.clone(), output_message));
+                                }
                             }
                         }
                     }

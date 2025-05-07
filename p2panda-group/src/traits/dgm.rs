@@ -22,7 +22,11 @@ pub trait AckedGroupMembership<ID, OP> {
     fn create(my_id: ID, initial_members: &[ID]) -> Result<Self::State, Self::Error>;
 
     /// Processes the received DGM state from a welcome message.
-    fn from_welcome(my_id: ID, y: Self::State) -> Result<Self::State, Self::Error>;
+    ///
+    /// Implementations might want to take the state of the remote peer (sent via a welcome
+    /// message) and only keep their own id. We might receive multiple welcome messages as peers
+    /// might add us concurrently, in this case we might want to "merge" the states into one.
+    fn from_welcome(y: Self::State, y_welcome: Self::State) -> Result<Self::State, Self::Error>;
 
     /// Adds a member to the group.
     fn add(

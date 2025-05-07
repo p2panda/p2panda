@@ -1008,13 +1008,10 @@ mod tests {
         .unwrap();
 
         let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                delivered_from: node_1.node_id(),
-            }
-        );
+        assert_eq!(rx_2_msg, FromNetwork::GossipMessage {
+            bytes: "Hello, Node".to_bytes(),
+            delivered_from: node_1.node_id(),
+        });
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
@@ -1053,13 +1050,10 @@ mod tests {
         .unwrap();
 
         let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                delivered_from: node_1.node_id(),
-            }
-        );
+        assert_eq!(rx_2_msg, FromNetwork::GossipMessage {
+            bytes: "Hello, Node".to_bytes(),
+            delivered_from: node_1.node_id(),
+        });
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
@@ -1109,13 +1103,10 @@ mod tests {
         .unwrap();
 
         let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                delivered_from: node_1.node_id(),
-            }
-        );
+        assert_eq!(rx_2_msg, FromNetwork::GossipMessage {
+            bytes: "Hello, Node".to_bytes(),
+            delivered_from: node_1.node_id(),
+        });
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();
@@ -1358,24 +1349,18 @@ mod tests {
         .unwrap();
 
         let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                // Node 2 receives the message and it is delivered by node 1
-                delivered_from: node_1.node_id(),
-            }
-        );
+        assert_eq!(rx_2_msg, FromNetwork::GossipMessage {
+            bytes: "Hello, Node".to_bytes(),
+            // Node 2 receives the message and it is delivered by node 1
+            delivered_from: node_1.node_id(),
+        });
 
         let rx_3_msg = rx_3.recv().await.unwrap();
-        assert_eq!(
-            rx_3_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                // Node 3 receives the message and it is also delivered by node 1
-                delivered_from: node_1.node_id(),
-            }
-        );
+        assert_eq!(rx_3_msg, FromNetwork::GossipMessage {
+            bytes: "Hello, Node".to_bytes(),
+            // Node 3 receives the message and it is also delivered by node 1
+            delivered_from: node_1.node_id(),
+        });
 
         node_1.shutdown().await.unwrap();
         node_2.shutdown().await.unwrap();

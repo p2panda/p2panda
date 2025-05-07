@@ -581,10 +581,10 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        assert_message_bytes(
-            peer_b_read,
-            vec![Message::Done, Message::Have(topic_query.clone(), vec![])],
-        )
+        assert_message_bytes(peer_b_read, vec![
+            Message::Done,
+            Message::Have(topic_query.clone(), vec![]),
+        ])
         .await;
 
         // Assert that peer a sent the expected messages on it's app channel
@@ -635,10 +635,10 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        assert_message_bytes(
-            peer_b_read,
-            vec![Message::Have(topic_query.clone(), vec![]), Message::Done],
-        )
+        assert_message_bytes(peer_b_read, vec![
+            Message::Have(topic_query.clone(), vec![]),
+            Message::Done,
+        ])
         .await;
 
         // Assert that peer a sent the expected messages on it's app channel
@@ -716,10 +716,9 @@ mod tests {
             Message::Data(header_bytes_1, Some(body.to_bytes())),
             Message::Data(header_bytes_2, Some(body.to_bytes())),
             Message::Done,
-            Message::Have(
-                topic_query.clone(),
-                vec![(private_key.public_key(), vec![(0, 2)])],
-            ),
+            Message::Have(topic_query.clone(), vec![(private_key.public_key(), vec![
+                (0, 2),
+            ])]),
         ];
         assert_message_bytes(peer_b_read, messages).await;
 
@@ -785,39 +784,33 @@ mod tests {
             .unwrap();
 
         // Assert that peer a sent peer b the expected messages
-        assert_message_bytes(
-            peer_b_read,
-            vec![
-                Message::Have(
-                    topic_query.clone(),
-                    vec![(private_key.public_key(), vec![])],
-                ),
-                Message::Done,
-            ],
-        )
+        assert_message_bytes(peer_b_read, vec![
+            Message::Have(topic_query.clone(), vec![(
+                private_key.public_key(),
+                vec![],
+            )]),
+            Message::Done,
+        ])
         .await;
 
         // Assert that peer a sent the expected messages on it's app channel
         let mut messages = Vec::new();
         app_rx.recv_many(&mut messages, 10).await;
-        assert_eq!(
-            messages,
-            [
-                FromSync::HandshakeSuccess(topic_query),
-                FromSync::Data {
-                    header: header_bytes_0,
-                    payload: Some(body.to_bytes())
-                },
-                FromSync::Data {
-                    header: header_bytes_1,
-                    payload: Some(body.to_bytes())
-                },
-                FromSync::Data {
-                    header: header_bytes_2,
-                    payload: Some(body.to_bytes())
-                },
-            ]
-        );
+        assert_eq!(messages, [
+            FromSync::HandshakeSuccess(topic_query),
+            FromSync::Data {
+                header: header_bytes_0,
+                payload: Some(body.to_bytes())
+            },
+            FromSync::Data {
+                header: header_bytes_1,
+                payload: Some(body.to_bytes())
+            },
+            FromSync::Data {
+                header: header_bytes_2,
+                payload: Some(body.to_bytes())
+            },
+        ]);
     }
 
     #[tokio::test]

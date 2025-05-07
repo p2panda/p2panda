@@ -737,7 +737,10 @@ where
     ) -> DcgkaProcessResult<ID, OP, PKI, DGM, KMG> {
         // Adding user's copy of γ.history sent in their welcome message, which is used to
         // initialize the added user's history.
-        y.dgm = DGM::from_welcome(y.my_id, history).map_err(|err| DcgkaError::DgmOperation(err))?;
+        //
+        // Note that we might receive multiple welcome messages when peers added us concurrently. A
+        // DGM implementation might want to account for this.
+        y.dgm = DGM::from_welcome(y.dgm, history).map_err(|err| DcgkaError::DgmOperation(err))?;
 
         // Add ourselves.
         y.dgm =

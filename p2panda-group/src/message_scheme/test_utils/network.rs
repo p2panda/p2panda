@@ -3,9 +3,9 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::message_scheme::GroupError;
-use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
-use crate::message_scheme::group::{GroupConfig, GroupOutput, GroupState, MessageGroup};
+use crate::message_scheme::group::{GroupConfig, GroupEvent, GroupState, MessageGroup};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
+use crate::message_scheme::test_utils::dgm::AckedTestDgm;
 use crate::message_scheme::test_utils::ordering::{ForwardSecureOrderer, TestMessage};
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::ForwardSecureGroupMessage;
@@ -125,18 +125,22 @@ impl Network {
                 let (y_i, result) = MessageGroup::receive(y, &message, &self.rng).unwrap();
                 self.set_y(y_i);
 
-                for output in result {
-                    match output {
-                        GroupOutput::Control(control_message) => {
+                let Some(result) = result else {
+                    continue;
+                };
+
+                for event in result.events {
+                    match event {
+                        GroupEvent::Control(control_message) => {
                             // Processing messages might yield new ones, process these as well.
                             self.queue.push_back(control_message);
                         }
-                        GroupOutput::Application { plaintext } => decrypted_messages.push((
+                        GroupEvent::Application { plaintext } => decrypted_messages.push((
                             message.sender(), // Sender
                             *id,              // Receiver
                             plaintext,        // Decrypted content
                         )),
-                        GroupOutput::Removed => (),
+                        GroupEvent::RemovedOurselves => (),
                     }
                 }
             }
