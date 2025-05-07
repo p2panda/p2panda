@@ -4,9 +4,14 @@
 //
 // x generic `conditions` parameter on `Write`
 // - introduce flag for “any member can add new members” (?)
-// - proper error handling
+// x proper error handling
 // - tests
 // - documentation
+
+// Glossary
+//
+// - actor: an entity performing a group action (eg. adding or removing a member from a group)
+// - member: an entity on which a group action is performed (e.g. added or removed from a group)
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -15,12 +20,24 @@ use std::hash::Hash;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum GroupMembershipError<ID> {
-    #[error("tried to access unrecognized member")]
-    UnrecognizedMember(ID),
-
+pub enum GroupMembershipError {
     #[error("tried to add a member who is already active in the group")]
-    AlreadyActive(ID),
+    AlreadyAdded,
+
+    #[error("actor lacks sufficient access to update the group")]
+    InsufficientAccess,
+
+    #[error("actor is not an active member of the group")]
+    InactiveActor,
+
+    #[error("tried to remove a member who is already inactive in the group")]
+    AlreadyRemoved,
+
+    #[error("actor is not known to the group")]
+    UnrecognisedActor,
+
+    #[error("member is not known to the group")]
+    UnrecognisedMember,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -48,7 +65,7 @@ where
         self.member_counter % 2 != 0
     }
 
-    pub fn is_admin(&self) -> bool {
+    pub fn is_manager(&self) -> bool {
         self.access == Access::Manage
     }
 }
@@ -76,11 +93,11 @@ where
             .collect::<HashSet<_>>()
     }
 
-    pub fn admins(&self) -> HashSet<ID> {
+    pub fn managers(&self) -> HashSet<ID> {
         self.members
             .values()
             .filter_map(|state| {
-                if state.is_admin() && state.is_member() {
+                if state.is_member() && state.is_manager() {
                     Some(state.member.clone())
                 } else {
                     None
@@ -103,7 +120,7 @@ where
 
 pub fn create_group<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     initial_members: &[(ID, Access<C>)],
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
@@ -122,41 +139,44 @@ pub fn create_group<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
 
 pub fn add_member<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
-    actor: ID,
-    member: ID,
+    adder: ID,
+    added: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
-    // TODO: Consider whether we want to return Error rather than the unchanged state...
-    // The error would communicate why there was an early return.
-
-    // Check the actor is known to the group.
-    let Some(actor) = state.members.get(&actor) else {
-        // Throw error here.
-        panic!()
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+    // Ensure that "adder" is known to the group.
+    let Some(adder) = state.members.get(&adder) else {
+        return Err(GroupMembershipError::UnrecognisedActor);
     };
 
-    // If "actor" is not a current group member or not an admin, do not perform the add and
-    // directly return the state.
-    if !actor.is_member() || !actor.is_admin() {
-        panic!()
-    };
+    // Ensure that "adder" is a member of the group with manage access level.
+    if !adder.is_member() {
+        return Err(GroupMembershipError::InactiveActor);
+    } else if !adder.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess);
+    }
 
-    // Add "member" to the group or increment their counter if they are already known but were
+    // Ensure that "added" is not already an active member of the group.
+    if let Some(added) = state.members.get(&added) {
+        if added.is_member() {
+            return Err(GroupMembershipError::AlreadyAdded);
+        }
+    }
+
+    // Add "added" to the group or increment their counters if they are already known but were
     // previously removed.
     let mut state = state;
     state
         .members
-        .entry(member.clone())
-        .and_modify(|state| {
-            if !state.is_member() {
-                state.member_counter += 1;
-                // TODO: Can we avoid clone here?
-                state.access = access.clone();
-                state.access_counter = 0;
+        .entry(added.clone())
+        .and_modify(|added| {
+            if !added.is_member() {
+                added.member_counter += 1;
+                added.access = access.clone();
+                added.access_counter = 0;
             }
         })
         .or_insert(MemberState {
-            member,
+            member: added,
             member_counter: 1,
             access,
             access_counter: 0,
@@ -167,31 +187,39 @@ pub fn add_member<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
 
 pub fn remove_member<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
-    actor: ID,
-    member: ID,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
-    // Check "actor" is known to the group.
-    let Some(actor) = state.members.get(&actor) else {
-        return Ok(state);
+    remover: ID,
+    removed: ID,
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+    // Ensure that "remover" is known to the group.
+    let Some(remover) = state.members.get(&remover) else {
+        return Err(GroupMembershipError::UnrecognisedActor);
     };
 
-    // If "actor" is not a current group member or not an admin, do not perform the remove and
-    // directly return the state.
-    if !actor.is_member() || !actor.is_admin() {
-        panic!()
+    // Ensure that "remover" is a member of the group with manage access level.
+    if !remover.is_member() {
+        return Err(GroupMembershipError::InactiveActor);
+    } else if !remover.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess);
+    }
+
+    // Ensure that "removed" is known to the group.
+    if !state.members.contains_key(&removed) {
+        return Err(GroupMembershipError::UnrecognisedMember);
     };
 
-    // Check "member" is in the group.
-    if !state.members.contains_key(&member) {
-        panic!()
-    };
+    // Ensure that "removed" is not already an inactive member of the group.
+    if let Some(removed) = state.members.get(&removed) {
+        if !removed.is_member() {
+            return Err(GroupMembershipError::AlreadyRemoved);
+        }
+    }
 
-    // Increment "member" counter unless they are already removed.
+    // Increment "removed" counters unless they are already removed.
     let mut state = state;
-    state.members.entry(member).and_modify(|state| {
-        if state.is_member() {
-            state.member_counter += 1;
-            state.access_counter = 0;
+    state.members.entry(removed).and_modify(|removed| {
+        if removed.is_member() {
+            removed.member_counter += 1;
+            removed.access_counter = 0;
         }
     });
 
@@ -200,32 +228,33 @@ pub fn remove_member<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
 
 pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
-    actor: ID,
-    member: ID,
+    promoter: ID,
+    promoted: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
-    // Check "actor" is known to the group.
-    let Some(actor) = state.members.get(&actor) else {
-        panic!()
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+    // Ensure that "promoter" is known to the group.
+    let Some(promoter) = state.members.get(&promoter) else {
+        return Err(GroupMembershipError::UnrecognisedActor);
     };
 
-    // If "actor" is not a current group member or not an admin, do not perform the remove and
-    // directly return the state.
-    if !actor.is_member() || !actor.is_admin() {
-        panic!()
-    };
+    // Ensure that "promoter" is a member of the group with manage access level.
+    if !promoter.is_member() {
+        return Err(GroupMembershipError::InactiveActor);
+    } else if !promoter.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess);
+    }
 
-    // Check "member" is in the group.
-    if !state.members.contains_key(&member) {
-        panic!()
+    // Ensure that "promoted" is known to the group.
+    if !state.members.contains_key(&promoted) {
+        return Err(GroupMembershipError::UnrecognisedMember);
     };
 
     // Update access level.
     let mut state = state;
-    state.members.entry(member).and_modify(|state| {
-        if state.access < access {
-            state.access = access;
-            state.access_counter += 1;
+    state.members.entry(promoted).and_modify(|promoted| {
+        if promoted.access < access {
+            promoted.access = access;
+            promoted.access_counter += 1;
         }
     });
 
@@ -234,32 +263,33 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 
 pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
-    actor: ID,
-    member: ID,
+    demoter: ID,
+    demoted: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
-    // Check "actor" is known to the group.
-    let Some(actor) = state.members.get(&actor) else {
-        panic!()
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+    // Ensure that "demoter" is known to the group.
+    let Some(demoter) = state.members.get(&demoter) else {
+        return Err(GroupMembershipError::UnrecognisedActor);
     };
 
-    // If "actor" is not a current group member or not an admin, do not perform the remove and
-    // directly return the state.
-    if !actor.is_member() || !actor.is_admin() {
-        panic!()
-    };
+    // Ensure that "demoter" is a member of the group with manage access level.
+    if !demoter.is_member() {
+        return Err(GroupMembershipError::InactiveActor);
+    } else if !demoter.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess);
+    }
 
-    // Check "member" is in the group.
-    if !state.members.contains_key(&member) {
-        panic!()
+    // Ensure that "demoted" is known to the group.
+    if !state.members.contains_key(&demoted) {
+        return Err(GroupMembershipError::UnrecognisedMember);
     };
 
     // Update access level.
     let mut state = state;
-    state.members.entry(member).and_modify(|state| {
-        if state.access > access {
-            state.access = access;
-            state.access_counter += 1;
+    state.members.entry(demoted).and_modify(|demoted| {
+        if demoted.access > access {
+            demoted.access = access;
+            demoted.access_counter += 1;
         }
     });
 
@@ -269,7 +299,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
@@ -279,7 +309,6 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
             // If the member is present in both states take the higher counter.
             if member_state_1.member_counter > member_state.member_counter {
                 member_state.member_counter = member_state_1.member_counter;
-                // TODO: Can we avoid clone here?
                 member_state.access = member_state_1.access.clone();
                 member_state.access_counter = member_state_1.access_counter;
             }
@@ -288,7 +317,6 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
             // access counter. If the access counters are equal, do nothing.
             if member_state_1.member_counter == member_state.member_counter {
                 if member_state_1.access_counter > member_state.access_counter {
-                    // TODO: Can we avoid clone here?
                     member_state.access = member_state_1.access.clone();
                     member_state.access_counter = member_state_1.access_counter;
                 }
