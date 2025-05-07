@@ -39,7 +39,7 @@ use crate::traits::{
 /// [ordering](crate::traits::ordering::MessageOrdering) implementations.
 ///
 /// Applications can remove group secrets for forward secrecy based on their own logic. For
-/// removing group secrets implementors can use the [`EncryptionGro::update_secrets`] method.
+/// removing group secrets implementors can use the [`EncryptionGroup::update_secrets`] method.
 pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
