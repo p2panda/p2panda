@@ -24,14 +24,14 @@ pub enum GroupMembershipError {
     #[error("tried to add a member who is already active in the group")]
     AlreadyAdded,
 
+    #[error("tried to remove a member who is already inactive in the group")]
+    AlreadyRemoved,
+
     #[error("actor lacks sufficient access to update the group")]
     InsufficientAccess,
 
     #[error("actor is not an active member of the group")]
     InactiveActor,
-
-    #[error("tried to remove a member who is already inactive in the group")]
-    AlreadyRemoved,
 
     #[error("actor is not known to the group")]
     UnrecognisedActor,
@@ -44,7 +44,7 @@ pub enum GroupMembershipError {
 pub enum Access<C> {
     Pull,
     Read,
-    Write { conditions: C },
+    Write { conditions: Option<C> },
     Manage,
 }
 
@@ -331,4 +331,52 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     }
 
     Ok(next_state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_add_remove() {
+        // "Happy path" test for create, add and remove functions.
+
+        // TODO: Is there a way to avoid this completely?
+        //
+        // Avoid having to annotate the conditions `C`.
+        type AccessLevel = Access<String>;
+
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
+
+        // Alice create a group with Alice and Bob as members.
+        let group_y = create_group(&initial_members).unwrap();
+
+        assert!(group_y.members().contains(&alice));
+        assert!(group_y.members().contains(&bob));
+
+        assert!(group_y.managers().contains(&alice));
+        assert!(!group_y.managers().contains(&bob));
+
+        // Alice adds Charlie.
+        let group_y = add_member(
+            group_y,
+            alice,
+            charlie,
+            AccessLevel::Write {
+                conditions: Some("requirement".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert!(group_y.members().contains(&charlie));
+
+        // Alice removes Bob.
+        let group_y = remove_member(group_y, alice, bob).unwrap();
+
+        assert!(!group_y.members().contains(&bob));
+    }
 }
