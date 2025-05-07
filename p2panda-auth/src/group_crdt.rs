@@ -174,7 +174,7 @@ pub fn remove_member<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     };
 
     // Check "member" is in the group.
-    if state.members.get(&member).is_none() {
+    if !state.members.contains_key(&member) {
         panic!()
     };
 
@@ -208,7 +208,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     };
 
     // Check "member" is in the group.
-    if state.members.get(&member).is_none() {
+    if !state.members.contains_key(&member) {
         panic!()
     };
 
@@ -242,7 +242,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     };
 
     // Check "member" is in the group.
-    if state.members.get(&member).is_none() {
+    if !state.members.contains_key(&member) {
         panic!()
     };
 
@@ -286,10 +286,10 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
                 }
 
                 // If the access counters are the same, take the lower of the two access levels.
-                if member_state_1.access_counter == member_state.access_counter {
-                    if member_state_1.access < member_state.access {
-                        member_state.access = member_state_1.access;
-                    }
+                if member_state_1.access_counter == member_state.access_counter
+                    && member_state_1.access < member_state.access
+                {
+                    member_state.access = member_state_1.access;
                 }
             }
         } else {
