@@ -1,70 +1,119 @@
-use std::collections::VecDeque;
-use std::fmt::Display;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::rc::Rc;
 
+// use p2panda_stream::partial::{MemoryStore, PartialOrder};
 use thiserror::Error;
 
 use crate::group::GroupControlMessage;
-use crate::traits::{IdentityHandle, Operation, Ordering};
+use crate::traits::{Operation, Ordering};
 
-pub type TestOperationID = u32;
-
-#[derive(Clone, Debug)]
-pub struct TestOrderer {}
+use super::{
+    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupStateInner,
+    TestGroupStoreState,
+};
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
 
 #[derive(Clone, Debug)]
-pub struct TestOrdererState<ID> {
-    pub my_id: ID,
-    pub operations: VecDeque<TestOperation<ID, TestOperationID>>,
+pub struct TestOrdererState {
+    pub inner: Rc<RefCell<TestOrdererStateInner>>,
 }
 
-impl<ID> TestOrdererState<ID> {
-    pub fn new(my_id: ID) -> Self {
-        TestOrdererState {
+#[derive(Clone, Debug)]
+pub struct TestOrdererStateInner {
+    pub my_id: MemberId,
+    pub group_store_y: TestGroupStoreState<GroupId, TestGroupStateInner>,
+    pub partial_orderer_y: PartialOrdererState<MessageId>,
+    pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId>>,
+}
+
+impl TestOrdererState {
+    pub fn new(
+        my_id: MemberId,
+        group_store_y: TestGroupStoreState<GroupId, TestGroupStateInner>,
+    ) -> Self {
+        let inner = TestOrdererStateInner {
             my_id,
-            operations: Default::default(),
+            group_store_y,
+            messages: Default::default(),
+            partial_orderer_y: PartialOrdererState::default(),
+        };
+        Self {
+            inner: Rc::new(RefCell::new(inner)),
         }
+    }
+
+    pub fn my_id(&self) -> MemberId {
+        self.inner.borrow().my_id
     }
 }
 
-impl<ID> Ordering<ID, TestOperationID, GroupControlMessage<ID, TestOperationID>> for TestOrderer
-where
-    ID: IdentityHandle + Display,
-{
-    type State = TestOrdererState<ID>;
+#[derive(Clone, Debug, Default)]
+pub struct TestOrderer {}
 
-    type Message = TestOperation<ID, TestOperationID>;
+impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for TestOrderer {
+    type State = TestOrdererState;
 
     type Error = OrdererError;
 
+    type Message = TestOperation<MemberId, MessageId>;
+
     fn next_message(
         y: Self::State,
-        dependencies: Vec<TestOperationID>,
-        previous: Vec<TestOperationID>,
-        payload: &GroupControlMessage<ID, TestOperationID>,
+        dependencies: Vec<MessageId>,
+        previous: Vec<MessageId>,
+        payload: &GroupControlMessage<MemberId, MessageId>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        let next_operation = TestOperation {
+        let message = TestOperation {
             id: rand::random(),
-            sender: y.my_id,
+            sender: y.my_id(),
             dependencies,
             previous,
             payload: payload.clone(),
         };
-        Ok((y, next_operation))
+
+        // Queue locally created messages.
+        //
+        // @TODO: not sure we actually want to do this here, maybe it should be taken care of
+        // outside this method?
+        let y_i = Self::queue(y, &message)?;
+
+        Ok((y_i, message))
     }
 
-    fn queue(mut y: Self::State, operation: &Self::Message) -> Result<Self::State, Self::Error> {
-        y.operations.push_back(operation.clone());
+    fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
+        let id = message.id();
+
+        {
+            let mut inner = y.inner.borrow_mut();
+            inner.partial_orderer_y =
+                PartialOrderer::process_pending(inner.partial_orderer_y.clone(), id).unwrap();
+        }
+
         Ok(y)
     }
 
     fn next_ready_message(
-        mut y: Self::State,
+        y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-        let operation = y.operations.pop_front();
-        Ok((y, operation))
+        let mut next_msg = None;
+        {
+            let mut inner = y.inner.borrow_mut();
+            let (partial_orderer_y_i, msg) =
+                PartialOrderer::take_next_ready(inner.partial_orderer_y.clone()).unwrap();
+            inner.partial_orderer_y = partial_orderer_y_i;
+            next_msg = msg;
+        }
+
+        let next_msg = match next_msg {
+            Some(msg) => y.inner.borrow().messages.get(&msg).cloned(),
+            None => None,
+        };
+
+        Ok((y, next_msg))
     }
 }
 
