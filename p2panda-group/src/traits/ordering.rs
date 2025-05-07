@@ -1,29 +1,87 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Peers need to make sure that messages arrive "in order" to be processed correctly.
+//!
+//! We require three things:
+//!
+//! 1. Define a way to partially order our messages (for example through a vector clock), like this
+//!    we can sort events "after" or "before" each other, or identify messages which arrived "at
+//!    the same time".
+//! 2. Define a way to declare "dependencies", that is, messages which are required to be processed
+//!    _before_ we can process this message. This is slightly different from a vector clock as we
+//!    do not only declare which message we've observed "before" to help with partial ordering, but
+//!    also point at additional requirements to fullfil the protocol.
+//! 3. Define a set of rules, the "protocol", peers need to follow whenever they publish new
+//!    messages: What information do they need to mention for other peers to correctly order and
+//!    process messages from us?
+//!
+//! An "ordering" interface allows us to implement these requirements for our custom application
+//! data types.
 use std::error::Error;
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
-use crate::traits::{AckedGroupMembership, ForwardSecureMessage};
+use crate::crypto::xchacha20::XAeadNonce;
+use crate::data_scheme::{self, GroupSecretId};
+use crate::message_scheme::{self, Generation};
+use crate::traits::{
+    AckedGroupMembership, ForwardSecureGroupMessage, GroupMembership, GroupMessage,
+};
 
-/// Peers need to make sure that messages arrive "in order" to be processed correctly. For
-/// p2panda's "message encryption" scheme extra care is required, since the strong forward-secrecy
-/// guarantees makes ordering more strict.
+/// Ordering protocol for p2panda's "data encryption" scheme.
 ///
-/// We require three things:
+/// When publishing a message peers need to make sure to provide the following informations:
 ///
-/// 1. Define a way to partially order our messages (for example through a vector clock), like this
-///    we can sort events "after" or "before" each other, or identify messages which arrived "at
-///    the same time".
-/// 2. Define a way to declare "dependencies", that is, messages which are required to be processed
-///    _before_ we can process this message. This is slightly different from a vector clock as we
-///    do not only declare which message we've observed "before" to help with partial ordering, but
-///    also point at additional requirements to fullfil the protocol.
-/// 3. Define a set of rules, the "protocol", peers need to follow whenever they publish new
-///    messages: What information do they need to mention for other peers to correctly order and
-///    process messages from us?
+/// 1. "create" control messages do not have any dependencies as they are the first messages in a
+///    group.
+/// 2. When an "add", "update" or "remove" control message gets published, that message needs to
+///    point at all the last known, previously processed control messages (by us and others).
+/// 3. Every application message needs to point at the control message which generated the used
+///    secret. Usually applications always use the "latest" group secret. In this case it's enough
+///    to point at the last known control messages (similar to point 2).
+///
+/// When a peer processes a "welcome" message (they got added to a group) then all previously seen
+/// control and application messages can be re-processed.
+///
+/// Applications can choose to remove secrets from their group bundles for forward secrecy. In this
+/// case additional logic is required to "jump" over these "outdated" application messages.
+/// Ignoring these messages can take place when processing the "welcome" message.
+pub trait Ordering<ID, OP, DGM>
+where
+    DGM: GroupMembership<ID, OP>,
+{
+    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+
+    type Error: Error;
+
+    type Message: GroupMessage<ID, OP, DGM>;
+
+    fn next_control_message(
+        y: Self::State,
+        control_message: &data_scheme::ControlMessage<ID>,
+        direct_messages: &[data_scheme::DirectMessage<ID, OP, DGM>],
+    ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn next_application_message(
+        y: Self::State,
+        group_secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+        ciphertext: Vec<u8>,
+    ) -> Result<(Self::State, Self::Message), Self::Error>;
+
+    fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    fn set_welcome(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error>;
+
+    #[allow(clippy::type_complexity)]
+    fn next_ready_message(
+        y: Self::State,
+    ) -> Result<(Self::State, Option<Self::Message>), Self::Error>;
+}
+
+/// Ordering protocol for p2panda's "message encryption" scheme. Extra care is required here, since
+/// the strong forward-secrecy guarantees makes ordering more strict.
 ///
 /// When publishing a message peers need to make sure to provide the following information:
 ///
@@ -118,12 +176,12 @@ where
 
     type Error: Error;
 
-    type Message: ForwardSecureMessage<ID, OP, DGM>;
+    type Message: ForwardSecureGroupMessage<ID, OP, DGM>;
 
     fn next_control_message(
         y: Self::State,
-        control_message: &ControlMessage<ID, OP>,
-        direct_messages: &[DirectMessage<ID, OP, DGM>],
+        control_message: &message_scheme::ControlMessage<ID, OP>,
+        direct_messages: &[message_scheme::DirectMessage<ID, OP, DGM>],
     ) -> Result<(Self::State, Self::Message), Self::Error>;
 
     fn next_application_message(
