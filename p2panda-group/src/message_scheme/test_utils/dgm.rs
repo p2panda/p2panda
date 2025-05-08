@@ -312,7 +312,17 @@ where
                 remove_info.acks.contains(viewer)
             });
             if !any_acked {
-                view.insert(*member);
+                // Add the member to the view if the removal was not acked yet.
+                //
+                // It's possible that "removed_members" contains transitive removals (Charlie added
+                // Bob, but Alice removed Charlie, so we'll end up with Charlie AND Bob in the
+                // "removed_members" set).
+                //
+                // The viewer might still not have recognized that add of Bob, so we still need to
+                // check if they acked the "add" itself:
+                if member_info.acks.contains(viewer) {
+                    view.insert(*member);
+                }
             }
         }
 
@@ -448,6 +458,8 @@ pub enum TestAckedGroupError<ID, OP> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::test_utils::MessageId;
     use crate::traits::AckedGroupMembership;
 
@@ -460,10 +472,459 @@ mod tests {
         let charlie = 2;
         let daphne = 3;
 
+        // Charlie creates a group (charlie: seq=0 "create").
+
+        let charlie_y = AckedTestDgm::create(charlie, &[charlie]).unwrap();
+
+        // Charlie adds Alice (charlie: seq=1 "add").
+
+        let charlie_y = AckedTestDgm::add(charlie_y, charlie, alice, MessageId {
+            sender: charlie,
+            seq: 1,
+        })
+        .unwrap();
+
+        // Alice processes the "add" of Charlie (alice: seq=0 "ack").
+
+        let alice_y = AckedTestDgm::init(alice);
+        let alice_y = AckedTestDgm::from_welcome(alice_y, charlie_y.clone()).unwrap();
+
+        // Charlie processes Alice's ack.
+
+        let charlie_y = AckedTestDgm::ack(charlie_y, alice, MessageId {
+            sender: charlie,
+            seq: 1,
+        })
+        .unwrap();
+
+        // They have the same view on the group.
+
+        for id in [alice, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, charlie])
+            );
+
+            assert_eq!(
+                AckedTestDgm::members_view(&alice_y, &id).unwrap(),
+                HashSet::from([alice, charlie])
+            );
+        }
+
+        // -----------------
+
+        // Charlie adds Daphne (charlie: seq=2 "add").
+
+        let charlie_y = AckedTestDgm::add(charlie_y, charlie, daphne, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &charlie).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+
+        // Daphne processes their add (daphne: seq=0 "ack").
+
+        let daphne_y = AckedTestDgm::init(daphne);
+        let daphne_y = AckedTestDgm::from_welcome(daphne_y, charlie_y.clone()).unwrap();
+
+        assert_eq!(
+            AckedTestDgm::members_view(&daphne_y, &daphne).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+
+        // Alice processes Charlie's "add" of Daphne (alice: seq=1 "ack").
+
+        let alice_y = AckedTestDgm::add(alice_y, charlie, daphne, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &alice).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+
+        // Everyone processes each other's acks.
+
+        let charlie_y = AckedTestDgm::ack(charlie_y, daphne, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+        let alice_y = AckedTestDgm::ack(alice_y, daphne, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+        let charlie_y = AckedTestDgm::ack(charlie_y, alice, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+        let daphne_y = AckedTestDgm::ack(daphne_y, alice, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        // Everyone should have the same members views.
+
+        for id in [alice, charlie, daphne] {
+            assert_eq!(
+                AckedTestDgm::members_view(&alice_y, &id).unwrap(),
+                HashSet::from([alice, charlie, daphne])
+            );
+
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, charlie, daphne])
+            );
+
+            assert_eq!(
+                AckedTestDgm::members_view(&daphne_y, &id).unwrap(),
+                HashSet::from([alice, charlie, daphne])
+            );
+        }
+
+        // ----------------------
+
+        // Alice removes Charlie (alice: seq=2 "remove").
+
+        let alice_y = AckedTestDgm::remove(alice_y, alice, &charlie, MessageId {
+            sender: alice,
+            seq: 2,
+        })
+        .unwrap();
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &alice).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        // Charlie adds Bob concurrently (charlie: seq=3 "add").
+
+        let charlie_y = AckedTestDgm::add(charlie_y, charlie, bob, MessageId {
+            sender: charlie,
+            seq: 3,
+        })
+        .unwrap();
+
+        for id in [bob, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie, daphne])
+            );
+        }
+
+        for id in [alice, daphne] {
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, charlie, daphne])
+            );
+        }
+
+        // Bob processes their addition.
+
+        let bob_y = AckedTestDgm::init(bob);
+        let bob_y = AckedTestDgm::from_welcome(bob_y, charlie_y.clone()).unwrap();
+
+        for id in [bob, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&bob_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie, daphne])
+            );
+        }
+
+        // Everyone processes the removal of Charlie.
+
+        let bob_y = AckedTestDgm::remove(bob_y, alice, &charlie, MessageId {
+            sender: alice,
+            seq: 2,
+        })
+        .unwrap();
+
+        let charlie_y = AckedTestDgm::remove(charlie_y, alice, &charlie, MessageId {
+            sender: alice,
+            seq: 2,
+        })
+        .unwrap();
+
+        let daphne_y = AckedTestDgm::remove(daphne_y, alice, &charlie, MessageId {
+            sender: alice,
+            seq: 2,
+        })
+        .unwrap();
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &bob).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &charlie).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&daphne_y, &daphne).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        // Everyone else processes the add of Bob.
+
+        let alice_y = AckedTestDgm::add(alice_y, charlie, bob, MessageId {
+            sender: charlie,
+            seq: 3,
+        })
+        .unwrap();
+
+        let daphne_y = AckedTestDgm::add(daphne_y, charlie, bob, MessageId {
+            sender: charlie,
+            seq: 3,
+        })
+        .unwrap();
+
+        // Because of the strong removal CRDT, Bob's add will not be recognized as the adder
+        // Charlie got removed by Alice.
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &alice).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &charlie).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&daphne_y, &daphne).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        // Since nothing was ack'ed yet, all members should believe that the other's didn't do any
+        // changes to their member views yet.
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &daphne).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &alice).unwrap(),
+            HashSet::from([alice, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &charlie).unwrap(),
+            HashSet::from([alice, bob, charlie, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &daphne).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &daphne).unwrap(),
+            HashSet::from([alice, charlie, daphne])
+        );
+    }
+
+    #[test]
+    fn members_view() {
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        // Alice creates a group with Charlie.
+
+        let alice_y = AckedTestDgm::create(alice, &[alice, charlie]).unwrap();
+
+        let charlie_y = AckedTestDgm::init(charlie);
+        let charlie_y = AckedTestDgm::from_welcome(charlie_y, alice_y.clone()).unwrap();
+
+        // Alice adds Bob.
+
+        let alice_y = AckedTestDgm::add(alice_y, alice, bob, MessageId {
+            sender: alice,
+            seq: 1,
+        })
+        .unwrap();
+
+        let bob_y = AckedTestDgm::init(bob);
+        let bob_y = AckedTestDgm::from_welcome(bob_y, alice_y.clone()).unwrap();
+
+        // Bob acks their own add, Charlie doesn't ack yet.
+
+        let alice_y = AckedTestDgm::ack(alice_y, bob, MessageId {
+            sender: alice,
+            seq: 1,
+        })
+        .unwrap();
+
+        // Both Alice and Bob consider all three members of the set.
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &alice).unwrap(),
+            HashSet::from([alice, bob, charlie])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &bob).unwrap(),
+            HashSet::from([alice, bob, charlie])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &alice).unwrap(),
+            HashSet::from([alice, bob, charlie])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &bob).unwrap(),
+            HashSet::from([alice, bob, charlie])
+        );
+
+        // Charlie didn't ack added Bob yet.
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &charlie).unwrap(),
+            HashSet::from([alice, charlie])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &charlie).unwrap(),
+            HashSet::from([alice, charlie])
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &charlie).unwrap(),
+            HashSet::from([alice, charlie])
+        );
+
+        // Charlie processes and acks added Bob.
+
+        let charlie_y = AckedTestDgm::add(charlie_y, alice, bob, MessageId {
+            sender: alice,
+            seq: 1,
+        })
+        .unwrap();
+
+        let alice_y = AckedTestDgm::ack(alice_y, charlie, MessageId {
+            sender: alice,
+            seq: 1,
+        })
+        .unwrap();
+
+        let bob_y = AckedTestDgm::ack(bob_y, charlie, MessageId {
+            sender: alice,
+            seq: 1,
+        })
+        .unwrap();
+
+        // Everyone should have the same view.
+
+        for id in [alice, bob, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&alice_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie])
+            );
+
+            assert_eq!(
+                AckedTestDgm::members_view(&bob_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie])
+            );
+
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie])
+            );
+        }
+
+        // Charlie removes Bob.
+
+        let charlie_y = AckedTestDgm::remove(charlie_y, charlie, &bob, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        // Alice and Bob process the removal.
+
+        let alice_y = AckedTestDgm::remove(alice_y, charlie, &bob, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        let bob_y = AckedTestDgm::remove(bob_y, charlie, &bob, MessageId {
+            sender: charlie,
+            seq: 2,
+        })
+        .unwrap();
+
+        // Everyone considers for themselves and for Charlie (the "remover") that Bob is removed
+        // from the group.
+
+        assert_eq!(
+            AckedTestDgm::members_view(&charlie_y, &charlie).unwrap(),
+            HashSet::from([alice, charlie])
+        );
+
+        for id in [alice, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&alice_y, &id).unwrap(),
+                HashSet::from([alice, charlie])
+            );
+        }
+
+        for id in [bob, charlie] {
+            assert_eq!(
+                AckedTestDgm::members_view(&bob_y, &id).unwrap(),
+                HashSet::from([alice, charlie])
+            );
+        }
+
+        // .. but they assume so far that the other's still consider Bob part of the group (because
+        // no acks have been observed yet).
+
+        assert_eq!(
+            AckedTestDgm::members_view(&alice_y, &bob).unwrap(),
+            HashSet::from([alice, bob, charlie]),
+        );
+
+        assert_eq!(
+            AckedTestDgm::members_view(&bob_y, &alice).unwrap(),
+            HashSet::from([alice, bob, charlie]),
+        );
+
+        for id in [alice, bob] {
+            assert_eq!(
+                AckedTestDgm::members_view(&charlie_y, &id).unwrap(),
+                HashSet::from([alice, bob, charlie]),
+                "invalid members view from 2's perspective for {id}",
+            );
+        }
+    }
+
+    #[test]
+    fn strong_removal() {
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+        let daphne = 3;
+
         // Alice creates a group.
+
         let alice_y = AckedTestDgm::create(alice, &[alice]).unwrap();
 
         // Alice adds Bob.
+
         let alice_y = AckedTestDgm::add(alice_y, alice, bob, MessageId {
             sender: alice,
             seq: 0,
@@ -474,6 +935,7 @@ mod tests {
         let bob_y = AckedTestDgm::from_welcome(bob_y, alice_y.clone()).unwrap();
 
         // Alice removes Bob.
+
         let alice_y = AckedTestDgm::remove(alice_y, alice, &bob, MessageId {
             sender: alice,
             seq: 0,
@@ -481,6 +943,7 @@ mod tests {
         .unwrap();
 
         // Concurrently Bob adds Charlie and Daphne.
+
         let bob_y = AckedTestDgm::add(bob_y, bob, charlie, MessageId {
             sender: bob,
             seq: 0,
@@ -494,6 +957,7 @@ mod tests {
         .unwrap();
 
         // Alice applies Bob's changes.
+
         let alice_y = AckedTestDgm::add(alice_y, bob, charlie, MessageId {
             sender: bob,
             seq: 0,
@@ -507,6 +971,7 @@ mod tests {
         .unwrap();
 
         // Bob applies Alice's changes.
+
         let bob_y = AckedTestDgm::remove(bob_y, alice, &bob, MessageId {
             sender: alice,
             seq: 1,
