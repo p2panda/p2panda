@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![allow(clippy::type_complexity)]
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
@@ -255,9 +255,6 @@ where
         let mut events = Vec::new();
         let mut y_loop = y;
 
-        let mut control_messages = VecDeque::new();
-        let mut application_messages = VecDeque::new();
-
         // Check if there's any correctly ordered messages ready to-be processed.
         loop {
             let (y_orderer_next, result) =
@@ -277,27 +274,6 @@ where
                 }
             }
 
-            match message.message_type() {
-                ForwardSecureMessageType::Control(_) => {
-                    control_messages.push_back(message);
-                }
-                ForwardSecureMessageType::Application { .. } => {
-                    application_messages.push_back(message);
-                }
-            }
-        }
-
-        // Process all control messages first.
-        while let Some(message) = control_messages.pop_front() {
-            let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
-            y_loop = y_next;
-            if let Some(message) = result {
-                events.push(message);
-            }
-        }
-
-        // .. then process all application messages.
-        while let Some(message) = application_messages.pop_front() {
             let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
             y_loop = y_next;
             if let Some(message) = result {
