@@ -18,9 +18,9 @@ use p2panda_group::{Rng, message_scheme};
 
 const INVALID_TRANSITION_CHANCE: u8 = 0; // in %
 
-const MAX_OPERATIONS: usize = 3;
+const MAX_OPERATIONS: usize = 128;
 
-const MAX_GROUP_SIZE: usize = 4;
+const MAX_GROUP_SIZE: usize = 32;
 
 fn random_u8(rng: &Rng) -> u8 {
     let value: [u8; 1] = rng.random_array().unwrap();
@@ -333,16 +333,12 @@ enum State {
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                State::Standby => "standby",
-                State::Active => "active",
-                State::Removed => "removed",
-                State::Invalid => "invalid",
-            }
-        )
+        write!(f, "{}", match self {
+            State::Standby => "standby",
+            State::Active => "active",
+            State::Removed => "removed",
+            State::Invalid => "invalid",
+        })
     }
 }
 
@@ -382,34 +378,30 @@ enum Operation {
 
 impl Display for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Operation::Noop => "noop".to_string(),
-                Operation::Create { initial_members } => format!(
-                    "create (initial_members={{{}}})",
-                    print_members(initial_members)
-                ),
-                Operation::Add {
+        write!(f, "{}", match self {
+            Operation::Noop => "noop".to_string(),
+            Operation::Create { initial_members } => format!(
+                "create (initial_members={{{}}})",
+                print_members(initial_members)
+            ),
+            Operation::Add {
+                added,
+                members_in_welcome,
+            } => {
+                format!(
+                    "add {} (members_in_welcome={{{}}})",
                     added,
-                    members_in_welcome,
-                } => {
-                    format!(
-                        "add {} (members_in_welcome={{{}}})",
-                        added,
-                        print_members(members_in_welcome)
-                    )
-                }
-                Operation::Remove { removed } => {
-                    format!("remove {}", removed)
-                }
-                Operation::Update => "update".to_string(),
-                Operation::SendMessage { plaintext } => {
-                    format!("send message (len={})", plaintext.len())
-                }
+                    print_members(members_in_welcome)
+                )
             }
-        )
+            Operation::Remove { removed } => {
+                format!("remove {}", removed)
+            }
+            Operation::Update => "update".to_string(),
+            Operation::SendMessage { plaintext } => {
+                format!("send message (len={})", plaintext.len())
+            }
+        })
     }
 }
 
@@ -532,38 +524,34 @@ fuzz_target!(|seed: [u8; 32]| {
     let mut queue = VecDeque::new();
 
     for id in &member_ids {
-        members.insert(
-            *id,
-            Member {
-                // Initialise state machine for each member.
-                machine: if id == &group_creator {
-                    Machine::from_create(*id, member_ids.clone(), vec![*id])
-                } else {
-                    Machine::from_standby(*id, member_ids.clone())
-                },
-                // Set up group state for each member.
-                group: {
-                    if id == &group_creator {
-                        // The group "creator" initialises the group with themselves ..
-                        let (y_group_i, message) =
-                            MessageGroup::create(group_states[*id].clone(), vec![*id], &rng)
-                                .unwrap();
-
-                        // .. and publishes the first "create" control message on the test network.
-                        queue.push_back((
-                            Suggestion::Valid(Operation::Create {
-                                initial_members: vec![*id],
-                            }),
-                            message,
-                        ));
-
-                        Some(y_group_i)
-                    } else {
-                        Some(group_states[*id].clone())
-                    }
-                },
+        members.insert(*id, Member {
+            // Initialise state machine for each member.
+            machine: if id == &group_creator {
+                Machine::from_create(*id, member_ids.clone(), vec![*id])
+            } else {
+                Machine::from_standby(*id, member_ids.clone())
             },
-        );
+            // Set up group state for each member.
+            group: {
+                if id == &group_creator {
+                    // The group "creator" initialises the group with themselves ..
+                    let (y_group_i, message) =
+                        MessageGroup::create(group_states[*id].clone(), vec![*id], &rng).unwrap();
+
+                    // .. and publishes the first "create" control message on the test network.
+                    queue.push_back((
+                        Suggestion::Valid(Operation::Create {
+                            initial_members: vec![*id],
+                        }),
+                        message,
+                    ));
+
+                    Some(y_group_i)
+                } else {
+                    Some(group_states[*id].clone())
+                }
+            },
+        });
     }
 
     drop(group_states);
@@ -581,6 +569,8 @@ fuzz_target!(|seed: [u8; 32]| {
         // 1. Go through all members of the group, suggest and apply a local operation this member
         //    can do. Inactive or removed members will not cause any actions.
 
+        let mut concurrent_adds = HashSet::new();
+
         for member_id in &member_ids {
             let member = members.get_mut(member_id).expect("member exists");
 
@@ -592,6 +582,15 @@ fuzz_target!(|seed: [u8; 32]| {
                     member.machine.values.my_id,
                     suggestion.operation(),
                 );
+            }
+
+            // TODO(adz): Disallow concurrent adds of the same member for now, our (terrible) DGM
+            // implementation in test_utils is not handling that well.
+            if let Suggestion::Valid(Operation::Add { added, .. }) = suggestion {
+                if concurrent_adds.contains(&added) {
+                    continue;
+                }
+                concurrent_adds.insert(added);
             }
 
             // Process group operation locally for this member.
