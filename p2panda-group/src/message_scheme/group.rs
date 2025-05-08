@@ -242,7 +242,7 @@ where
             y.welcome = Some(message.clone());
 
             // Always process welcome message first before anything else.
-            let (y_i, result) = Self::process_ready(y, &message, rng)?;
+            let (y_i, result) = Self::process_ready(y, message, rng)?;
 
             let members_post = Self::members(&y_i)?;
 

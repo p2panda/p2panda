@@ -153,8 +153,8 @@ impl Machine {
         members: Vec<MemberId>,
         initial_members: Vec<MemberId>,
     ) -> Self {
-        assert!(members.len() > 0);
-        assert!(initial_members.len() > 0);
+        assert!(!members.is_empty());
+        assert!(!initial_members.is_empty());
 
         for member in &initial_members {
             assert!(members.contains(member));
@@ -286,7 +286,7 @@ impl Machine {
             panic!("{}: Reached invalid state!", self.values.my_id);
         }
 
-        self.values.apply(&operation);
+        self.values.apply(operation);
 
         self.history.push(operation.clone());
         self.state = next_state;
@@ -443,10 +443,10 @@ impl Member {
             }
             _ => {
                 let inner = match operation {
-                    Operation::Add { added, .. } => MessageGroup::add(y_group, *added, &rng),
-                    Operation::Remove { removed } => MessageGroup::remove(y_group, *removed, &rng),
-                    Operation::Update => MessageGroup::update(y_group, &rng),
-                    Operation::SendMessage { plaintext } => MessageGroup::send(y_group, &plaintext),
+                    Operation::Add { added, .. } => MessageGroup::add(y_group, *added, rng),
+                    Operation::Remove { removed } => MessageGroup::remove(y_group, *removed, rng),
+                    Operation::Update => MessageGroup::update(y_group, rng),
+                    Operation::SendMessage { plaintext } => MessageGroup::send(y_group, plaintext),
                     _ => unreachable!(),
                 };
                 inner.map(|(y, message)| (y, Some(message)))
@@ -586,8 +586,8 @@ fuzz_target!(|seed: [u8; 32]| {
             match &suggestion {
                 Suggestion::Valid(operation) => {
                     if let Some(message) = member
-                        .process_local(&operation, &rng)
-                        .expect(&format!("valid operations to not fail: {}", operation))
+                        .process_local(operation, &rng)
+                        .unwrap_or_else(|_| panic!("valid operations to not fail: {}", operation))
                     {
                         queue.push_back((suggestion.clone(), message));
                     }

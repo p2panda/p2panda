@@ -114,6 +114,12 @@ pub struct AssertableDcgka {
     update_secrets: HashMap<(MemberId, MemberId), UpdateSecret>,
 }
 
+impl Default for AssertableDcgka {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AssertableDcgka {
     pub fn new() -> Self {
         Self {
