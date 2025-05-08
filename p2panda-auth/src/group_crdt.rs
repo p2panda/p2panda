@@ -4,8 +4,10 @@
 //
 // x generic `conditions` parameter on `Write`
 // - introduce flag for “any member can add new members” (?)
+//   - `all_members_are_managers`
+//   - need to think about behaviour when it comes to `promote` and `demote`
 // x proper error handling
-// - tests
+// x tests
 // - documentation
 
 // Glossary
@@ -327,7 +329,7 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     // Iterate over entries in state_1.
     for (id, member_state_1) in state_1.members {
         if let Some(member_state) = next_state.members.get_mut(&id) {
-            // If the member is present in both states take the higher counter.
+            // If the member is present in both states, take the higher counter.
             if member_state_1.member_counter > member_state.member_counter {
                 member_state.member_counter = member_state_1.member_counter;
                 member_state.access = member_state_1.access.clone();
@@ -360,8 +362,6 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 
 #[cfg(test)]
 mod tests {
-    use std::result;
-
     use super::*;
 
     #[test]
@@ -680,5 +680,162 @@ mod tests {
 
         // ...but Charlie isn't a member.
         assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
+    }
+
+    #[test]
+    fn merge_state_member() {
+        // A member is added in one group state but not the other.
+        // We expect the post-merge state to include the member.
+
+        type AccessLevel = Access<String>;
+
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+        let daphne = 3;
+
+        let initial_members = [
+            (alice, AccessLevel::Manage),
+            (bob, AccessLevel::Read),
+            (charlie, AccessLevel::Pull),
+        ];
+
+        // Alice creates a group with Alice, Bob and Charlie as members.
+        let group_y_i = create(&initial_members).unwrap();
+
+        // Alice adds Daphne.
+        let group_y_ii = add(group_y_i.clone(), alice, daphne, AccessLevel::Read).unwrap();
+
+        // Merge the states.
+        let group_y = merge(group_y_i, group_y_ii).unwrap();
+
+        assert!(group_y.members().contains(&daphne));
+    }
+
+    #[test]
+    fn merge_state_counter() {
+        // A member exists in both group states but with different counters.
+        // We expect the post-merge state to contain the higher of the two counters.
+
+        type AccessLevel = Access<String>;
+
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let initial_members = [
+            (alice, AccessLevel::Manage),
+            (bob, AccessLevel::Read),
+            (charlie, AccessLevel::Pull),
+        ];
+
+        // Alice creates a group with Alice, Bob and Charlie as members.
+        let group_y_i = create(&initial_members).unwrap();
+
+        // Alice removes Bob.
+        let group_y_ii = remove(group_y_i.clone(), alice, bob).unwrap();
+
+        // Alice adds Bob.
+        let group_y_ii = add(group_y_ii, alice, bob, AccessLevel::Read).unwrap();
+
+        // Merge the states.
+        let group_y = merge(group_y_i, group_y_ii).unwrap();
+
+        assert!(group_y.members().contains(&alice));
+        assert!(group_y.members().contains(&bob));
+        assert!(group_y.members().contains(&charlie));
+
+        let bob_state = group_y.members.get(&bob).unwrap();
+
+        // We expect the merge to choose the higher counter value for Bob.
+        assert!(bob_state.member_counter == 3);
+    }
+
+    #[test]
+    fn merge_state_access_counter() {
+        // A member exists in both group states with equal counters but different access counters.
+        // We expect the post-merge state to contain the higher of the two access counters.
+
+        type AccessLevel = Access<String>;
+
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let initial_members = [
+            (alice, AccessLevel::Manage),
+            (bob, AccessLevel::Read),
+            (charlie, AccessLevel::Pull),
+        ];
+
+        // Alice creates a group with Alice, Bob and Charlie as members.
+        let group_y_i = create(&initial_members).unwrap();
+
+        // Alice promotes Charlie.
+        let group_y_ii = promote(group_y_i.clone(), alice, charlie, AccessLevel::Read).unwrap();
+
+        // Alice demotes Charlie.
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, AccessLevel::Pull).unwrap();
+
+        // Merge the states.
+        let group_y = merge(group_y_i, group_y_ii).unwrap();
+
+        let charlie_state = group_y.members.get(&charlie).unwrap();
+
+        // We expect the merge to choose the higher access counter value for Charlie.
+        assert!(charlie_state.access_counter == 2);
+
+        // We expect the access level to be Pull for Charlie.
+        assert!(charlie_state.access == Access::Pull);
+    }
+
+    #[test]
+    fn merge_state_access() {
+        // A member exists in both group states with equal counters and equal access counters
+        // but different access levels.
+        // We expect the post-merge state to contain the lower of the two access levels.
+
+        type AccessLevel = Access<String>;
+
+        let alice = 0;
+        let bob = 1;
+        let charlie = 2;
+
+        let initial_members = [
+            (alice, AccessLevel::Manage),
+            (bob, AccessLevel::Read),
+            (charlie, AccessLevel::Pull),
+        ];
+
+        // Alice creates a group with Alice, Bob and Charlie as members.
+        let group_y = create(&initial_members).unwrap();
+
+        // Alice promotes Charlie.
+        let group_y_i = promote(group_y.clone(), alice, charlie, AccessLevel::Read).unwrap();
+
+        // Alice demotes Charlie.
+        let group_y_i = demote(group_y_i.clone(), alice, charlie, AccessLevel::Pull).unwrap();
+
+        // Alice promotes Charlie.
+        let group_y_ii = promote(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
+
+        // Alice demotes Charlie.
+        let group_y_ii = demote(
+            group_y_ii.clone(),
+            alice,
+            charlie,
+            AccessLevel::Write {
+                conditions: Some("requirement".to_string()),
+            },
+        )
+        .unwrap();
+
+        // Merge the states.
+        let group_y = merge(group_y_i, group_y_ii).unwrap();
+
+        let charlie_state = group_y.members.get(&charlie).unwrap();
+
+        // We expect the access level to be Pull for Charlie.
+        assert!(charlie_state.access == Access::Pull);
     }
 }
