@@ -60,7 +60,6 @@ struct Values {
     members: Vec<MemberId>,
     active_members: Vec<MemberId>,
     removed_members: Vec<MemberId>,
-    is_active: bool,
 }
 
 impl Values {
@@ -80,29 +79,22 @@ impl Values {
         random_item(self.active_members.clone(), rng)
     }
 
-    fn process_valid(&mut self, operation: &Operation) {
-        println!("process_valid {} {}", self.my_id, operation);
-
+    fn apply(&mut self, operation: &Operation) {
         match operation {
             Operation::Update | Operation::SendMessage { .. } | Operation::Noop => {
                 // Do nothing!
             }
             Operation::Add {
                 added,
-                initial_members,
+                members_in_welcome: initial_members,
             } => {
-                // assert!(self.members.contains(added));
-                // assert!(!self.active_members.contains(added));
-                // assert!(!self.removed_members.contains(added));
                 if added == &self.my_id {
                     // Process "welcome".
-                    // assert!(self.active_members.is_empty());
-                    // assert!(self.removed_members.is_empty());
                     for member in initial_members {
-                        assert!(self.members.contains(member));
+                        if !self.active_members.contains(member) {
+                            self.active_members.push(*member);
+                        }
                     }
-                    self.is_active = true;
-                    self.active_members = initial_members.to_vec();
                 }
 
                 if !self.active_members.contains(added) {
@@ -110,21 +102,16 @@ impl Values {
                 }
             }
             Operation::Remove { removed } => {
-                // assert!(self.members.contains(removed));
-                // assert!(self.active_members.contains(removed));
-                // assert!(!self.removed_members.contains(removed));
                 if !self.removed_members.contains(removed) {
                     self.removed_members.push(*removed);
                 }
+
                 self.active_members = self
                     .active_members
                     .iter()
                     .filter(|member| *member != removed)
                     .cloned()
                     .collect();
-                if removed == &self.my_id {
-                    self.is_active = false;
-                }
             }
             Operation::Create { .. } => unreachable!(),
         }
@@ -155,7 +142,6 @@ impl Machine {
                 members,
                 active_members: Vec::new(),
                 removed_members: Vec::new(),
-                is_active: false,
             },
             history: Vec::new(),
             state: State::Standby,
@@ -180,26 +166,29 @@ impl Machine {
                 members,
                 active_members: initial_members.clone(),
                 removed_members: Vec::new(),
-                is_active: true,
             },
             history: vec![Operation::Create { initial_members }],
-            state: State::CreatedGroup,
+            state: State::Active,
         }
     }
 
+    pub fn is_removed(&self) -> bool {
+        matches!(self.state, State::Removed)
+    }
+
+    /// Suggest the next group membership operation (adding a member, sending a message, etc.)
+    /// based on the current member's state.
+    ///
+    /// Based on randomness the suggestion can either be a valid or invalid operation. To determine
+    /// how likely an invalid operation will be suggested use the `chance_for_invalid` parameter
+    /// (likelyhood in percentage).
     pub fn suggest(&self, chance_for_invalid: u8, rng: &Rng) -> Suggestion {
         assert!(chance_for_invalid <= 100);
         let suggest_valid = random_range(1, 100, rng) > chance_for_invalid;
-
         if suggest_valid {
             let operation = match self.state {
-                State::Standby => Operation::Noop,
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::SentMessage
-                | State::Invalid => self.suggest_valid(
+                State::Standby | State::Removed | State::Invalid => Operation::Noop,
+                State::Active => self.suggest_valid(
                     &[
                         Options::Add,
                         Options::Remove,
@@ -209,9 +198,6 @@ impl Machine {
                     ],
                     rng,
                 ),
-                State::UpdatedGroup => {
-                    self.suggest_valid(&[Options::Add, Options::Remove, Options::SendMessage], rng)
-                }
             };
             Suggestion::Valid(operation)
         } else {
@@ -220,17 +206,13 @@ impl Machine {
     }
 
     fn suggest_valid(&self, try_options: &[Options], rng: &Rng) -> Operation {
-        if !self.values.is_active {
-            return Operation::Noop;
-        }
-
         let mut options = Vec::new();
 
         if try_options.contains(&Options::Add) {
             if let Some(added) = self.values.random_member(rng) {
                 options.push(Operation::Add {
                     added,
-                    initial_members: self.values.active_members.clone(),
+                    members_in_welcome: self.values.active_members.clone(),
                 });
             }
         }
@@ -266,109 +248,86 @@ impl Machine {
         Operation::Noop
     }
 
-    fn transition(&mut self, operation: Operation) {
-        let next_state = match (&self.state, &operation) {
+    fn transition(&mut self, operation: &Operation) {
+        let next_state = match (&self.state, operation) {
             (State::Standby, Operation::Add { added, .. }) => {
                 if added == &self.values.my_id {
-                    State::Welcomed
+                    State::Active
                 } else {
-                    State::Invalid
+                    State::Standby
+                }
+            }
+            (State::Standby, _) => State::Standby,
+            (State::Active, Operation::Add { .. }) => State::Active,
+            (State::Active, Operation::Remove { removed }) => {
+                if removed == &self.values.my_id {
+                    State::Removed
+                } else {
+                    State::Active
                 }
             }
             (
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::UpdatedGroup
-                | State::SentMessage,
-                Operation::Add { .. },
-            ) => State::AddedMember,
-            (
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::UpdatedGroup
-                | State::SentMessage,
-                Operation::Remove { .. },
-            ) => State::RemovedMember,
-            (
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::SentMessage,
-                Operation::Update,
-            ) => State::UpdatedGroup,
-            (
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::UpdatedGroup
-                | State::SentMessage,
-                Operation::SendMessage { .. },
-            ) => State::SentMessage,
-            (
-                State::CreatedGroup
-                | State::Welcomed
-                | State::AddedMember
-                | State::RemovedMember
-                | State::SentMessage,
-                Operation::Noop,
-            ) => self.state.clone(),
+                State::Active,
+                Operation::Update | Operation::SendMessage { .. } | Operation::Noop,
+            ) => State::Active,
+            (State::Removed, Operation::Noop) => State::Removed,
             (_, Operation::Create { .. }) => {
                 unreachable!("create can not be called as a transition");
             }
             _ => State::Invalid,
         };
 
-        println!("{}: {} > {}", self.values.my_id, self.state, next_state);
-        self.values.process_valid(&operation);
+        // println!(
+        //     "{}: transition {} > {} after applying \"{}\"",
+        //     self.values.my_id, self.state, next_state, operation
+        // );
 
-        if self.values.is_active {
-            self.history.push(operation);
-            self.state = next_state;
+        if matches!(next_state, State::Invalid) {
+            panic!("{}: Reached invalid state!", self.values.my_id);
         }
+
+        self.values.apply(&operation);
+
+        self.history.push(operation.clone());
+        self.state = next_state;
     }
 
-    fn process_output(
+    fn transition_remote(
         &mut self,
         added_members: &HashSet<MemberId>,
         removed_members: &HashSet<MemberId>,
     ) {
         for added in added_members {
-            if added == &self.values.my_id {
-                continue;
-            }
-
-            self.values.process_valid(&Operation::Add {
+            self.transition(&Operation::Add {
                 added: *added,
-                initial_members: vec![],
+                members_in_welcome: vec![],
             });
         }
 
         for removed in removed_members {
-            if removed == &self.values.my_id {
-                continue;
+            // We get removed during this loop, so let's stop here.
+            if self.is_removed() {
+                break;
             }
 
-            self.values
-                .process_valid(&Operation::Remove { removed: *removed });
+            self.transition(&Operation::Remove { removed: *removed });
         }
     }
 }
 
 #[derive(Debug, Clone)]
 enum State {
+    /// Member was not welcomed to a group yet (either via a "create" or "add" control message).
     Standby,
-    CreatedGroup,
-    Welcomed,
-    AddedMember,
-    RemovedMember,
-    UpdatedGroup,
-    SentMessage,
+
+    /// Member is part of a group and active. They can add and remove other members, update the
+    /// group or send messages.
+    Active,
+
+    /// Member was removed from a group or removed themselves.
+    Removed,
+
+    /// Invalid state.
     Invalid,
 }
 
@@ -376,12 +335,8 @@ impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
             State::Standby => "standby",
-            State::CreatedGroup => "created",
-            State::Welcomed => "welcomed",
-            State::AddedMember => "added",
-            State::RemovedMember => "removed",
-            State::UpdatedGroup => "updated",
-            State::SentMessage => "sent",
+            State::Active => "active",
+            State::Removed => "removed",
             State::Invalid => "invalid",
         })
     }
@@ -410,7 +365,7 @@ enum Operation {
     },
     Add {
         added: MemberId,
-        initial_members: Vec<MemberId>,
+        members_in_welcome: Vec<MemberId>,
     },
     Remove {
         removed: MemberId,
@@ -431,12 +386,12 @@ impl Display for Operation {
             ),
             Operation::Add {
                 added,
-                initial_members,
+                members_in_welcome,
             } => {
                 format!(
                     "add {} (members_in_welcome={{{}}})",
                     added,
-                    print_members(initial_members)
+                    print_members(members_in_welcome)
                 )
             }
             Operation::Remove { removed } => {
@@ -462,8 +417,7 @@ type GroupOutput = message_scheme::GroupOutput<
 #[derive(Debug)]
 struct Member {
     machine: Machine,
-    group: TestGroupState,
-    is_removed: bool,
+    group: Option<TestGroupState>,
 }
 
 impl Member {
@@ -471,107 +425,85 @@ impl Member {
         self.machine.values.my_id
     }
 
-    pub fn next(
+    /// Apply and process a local group membership operation for this member.
+    ///
+    /// This might yield a message which then needs to be broadcast to the group.
+    pub fn process_local(
         &mut self,
         operation: &Operation,
         rng: &Rng,
     ) -> Result<Option<Message>, TestGroupError> {
+        let y_group = self.group.take().expect("group state exists");
+
+        // Apply and process the local operation.
         let result = match operation {
-            Operation::Add { added, .. } => MessageGroup::add(self.group.clone(), *added, &rng),
-            Operation::Remove { removed } => {
-                if removed == &self.id() {
-                    self.is_removed = true;
-                }
-                MessageGroup::remove(self.group.clone(), *removed, &rng)
-            }
-            Operation::Update => MessageGroup::update(self.group.clone(), &rng),
-            Operation::SendMessage { plaintext } => {
-                MessageGroup::send(self.group.clone(), &plaintext)
-            }
             Operation::Noop => {
                 // Do nothing
-                return Ok(None);
+                Ok((y_group, None))
             }
-            Operation::Create { .. } => {
-                unreachable!()
+            _ => {
+                let inner = match operation {
+                    Operation::Add { added, .. } => MessageGroup::add(y_group, *added, &rng),
+                    Operation::Remove { removed } => MessageGroup::remove(y_group, *removed, &rng),
+                    Operation::Update => MessageGroup::update(y_group, &rng),
+                    Operation::SendMessage { plaintext } => MessageGroup::send(y_group, &plaintext),
+                    _ => unreachable!(),
+                };
+                inner.map(|(y, message)| (y, Some(message)))
             }
         };
 
         match result {
-            Ok((group_i, message)) => {
-                self.machine.transition(operation.clone());
-                self.group = group_i;
-                Ok(Some(message))
+            Ok((y_group_i, message)) => {
+                self.machine.transition(operation);
+                self.group.replace(y_group_i);
+                Ok(message)
             }
             Err(err) => Err(err),
         }
     }
 
-    pub fn process_operation(&mut self, operation: &Operation) {
-        if self.is_removed {
-            return;
-        }
-
-        // Tell state machine if we've been added ("welcomed").
-        if let Operation::Add { added, .. } = operation {
-            if added == &self.id() {
-                self.machine.transition(operation.clone());
-            }
-        }
-
-        // Tell state machine about our own removal.
-        if let Operation::Remove { removed } = operation {
-            if removed == &self.id() {
-                self.machine.transition(operation.clone());
-            }
-        }
-    }
-
-    pub fn process(
+    /// Apply and process a remote group membership operation for this member.
+    ///
+    /// This might yield a message which then needs to be broadcast to the group.
+    pub fn process_remote(
         &mut self,
         message: &Message,
         rng: &Rng,
     ) -> Result<Option<GroupOutput>, TestGroupError> {
-        if self.is_removed {
+        if self.machine.is_removed() {
             return Ok(None);
         }
 
-        let (group_i, output) = MessageGroup::receive(self.group.clone(), message, rng)?;
-        self.group = group_i;
+        // Process remote message.
+        let y_group = self.group.take().expect("group state exists");
+        let (y_group_i, output) = MessageGroup::receive(y_group, message, rng)?;
+        self.group.replace(y_group_i);
 
         if let Some(ref output) = output {
-            for event in &output.events {
-                if let message_scheme::GroupEvent::RemovedOurselves = event {
-                    self.is_removed = true;
-                }
-            }
-
             self.machine
-                .process_output(&output.added_members, &output.removed_members);
+                .transition_remote(&output.added_members, &output.removed_members);
         }
 
         Ok(output)
     }
 
-    pub fn assert_process(&mut self, _operation: &Operation, _output: &Option<GroupOutput>) {
-        // match operation {
-        //     Operation::Add {
-        //         added,
-        //         initial_members,
-        //     } => todo!(),
-        //     Operation::Remove { removed } => todo!(),
-        //     Operation::Update => todo!(),
-        //     Operation::SendMessage { plaintext } => todo!(),
-        //     Operation::Noop | Operation::Create { .. } => (),
-        // }
+    pub fn assert_state(&mut self, _operation: &Operation, _output: &Option<GroupOutput>) {
+        // TODO
+        // let y_group = self.group.as_ref().expect("group state exists");
+        // Assert that peer has the expected "members" state.
+        // let members = MessageGroup::members(y_group).expect("members function does not fail");
+        // let expected_members: HashSet<MemberId> =
+        //     self.machine.values.active_members.iter().cloned().collect();
+        // assert_eq!(members, expected_members, "member set of {}", self.id());
     }
 }
 
 fuzz_target!(|seed: [u8; 32]| {
     let rng = Rng::from_seed(seed);
 
+    // Generate a list of all members.
     let mut members: HashMap<MemberId, Member> = HashMap::new();
-
     let member_ids = {
         let mut buf = Vec::with_capacity(MAX_GROUP_SIZE);
         for i in 0..MAX_GROUP_SIZE {
@@ -579,8 +511,6 @@ fuzz_target!(|seed: [u8; 32]| {
         }
         buf
     };
-
-    let mut queue = VecDeque::new();
 
     // Pick a random group creator.
     let group_creator = random_item(member_ids.clone(), &rng).unwrap();
@@ -591,19 +521,24 @@ fuzz_target!(|seed: [u8; 32]| {
         init_group_state::<MAX_GROUP_SIZE>(members, &rng)
     };
 
-    // Initialise state machines for each member.
+    let mut queue = VecDeque::new();
+
     for id in &member_ids {
         members.insert(*id, Member {
+            // Initialise state machine for each member.
             machine: if id == &group_creator {
                 Machine::from_create(*id, member_ids.clone(), vec![*id])
             } else {
                 Machine::from_standby(*id, member_ids.clone())
             },
+            // Set up group state for each member.
             group: {
                 if id == &group_creator {
-                    let (group_i, message) =
+                    // The group "creator" initialises the group with themselves ..
+                    let (y_group_i, message) =
                         MessageGroup::create(group_states[*id].clone(), vec![*id], &rng).unwrap();
 
+                    // .. and publishes the first "create" control message on the test network.
                     queue.push_back((
                         Suggestion::Valid(Operation::Create {
                             initial_members: vec![*id],
@@ -611,33 +546,35 @@ fuzz_target!(|seed: [u8; 32]| {
                         message,
                     ));
 
-                    group_i
+                    Some(y_group_i)
                 } else {
-                    group_states[*id].clone()
+                    Some(group_states[*id].clone())
                 }
             },
-            is_removed: false,
         });
     }
+
+    drop(group_states);
+
+    // Based on our deterministic state machines we can now generate `n` group operations for each
+    // member and test the integrity and robustness of the group by processing these suggested
+    // operations and comparing the resulting group state with the expected values from the state
+    // machine.
 
     println!("\n==============================");
     println!("group created [group_creator={}]", group_creator);
     println!("==============================");
 
     for _ in 0..MAX_OPERATIONS {
-        println!("--------");
+        // 1. Go through all members of the group, suggest and apply a local operation this member
+        //    can do. Inactive or removed members will not cause any actions.
 
         for member_id in &member_ids {
-            let member = members.get_mut(member_id).unwrap();
+            let member = members.get_mut(member_id).expect("member exists");
 
-            if member.is_removed {
-                continue;
-            }
-
+            // Suggest the next group membership operation for this member.
             let suggestion = member.machine.suggest(INVALID_TRANSITION_CHANCE, &rng);
-
-            if let Operation::Noop = suggestion.operation() {
-            } else {
+            if !matches!(suggestion.operation(), Operation::Noop) {
                 println!(
                     "member: {}, suggestion: {}",
                     member.machine.values.my_id,
@@ -645,10 +582,11 @@ fuzz_target!(|seed: [u8; 32]| {
                 );
             }
 
+            // Process group operation locally for this member.
             match &suggestion {
                 Suggestion::Valid(operation) => {
                     if let Some(message) = member
-                        .next(&operation, &rng)
+                        .process_local(&operation, &rng)
                         .expect(&format!("valid operations to not fail: {}", operation))
                     {
                         queue.push_back((suggestion.clone(), message));
@@ -656,31 +594,38 @@ fuzz_target!(|seed: [u8; 32]| {
                 }
                 Suggestion::Invalid(operation) => {
                     assert!(
-                        member.next(operation, &rng).is_err(),
+                        member.process_local(operation, &rng).is_err(),
                         "expected error due to invalid group operation"
                     );
                 }
             }
         }
 
-        let mut queue_2nd = queue.clone();
-        while let Some((suggestion, _)) = queue_2nd.pop_front() {
-            for member_id in &member_ids {
-                let member = members.get_mut(member_id).unwrap();
-                member.process_operation(&suggestion.operation());
-            }
-        }
+        // 2. Processing all local operations might have created a couple of messages which now
+        //    need to be "broadcast" to all members, which will process each of them as well.
+        //
+        //    By processing remote operations members might yield new messages for the group. We
+        //    loop over the message queue until all messages have been processed.
+        //
+        //    With this setup we will _always_ process all group operations after one round.
+        //    Concurrent operations can then only happen within this round. This is a simplified
+        //    fuzzing setup not simulating more complex concurrent p2p scenarios.
 
         while let Some((suggestion, message)) = queue.pop_front() {
-            println!("msg : {}", message.id());
+            println!(
+                "next message from queue: \"{}\" sent by {}",
+                message.message_type(),
+                message.sender()
+            );
+
             for member_id in &member_ids {
                 // Do not process our own messages.
                 if member_id == &message.sender() {
                     continue;
                 }
 
-                let member = members.get_mut(member_id).unwrap();
-                match member.process(&message, &rng) {
+                let member = members.get_mut(member_id).expect("member exists");
+                match member.process_remote(&message, &rng) {
                     Ok(output) => {
                         if let Suggestion::Invalid(operation) = suggestion {
                             panic!(
@@ -689,8 +634,12 @@ fuzz_target!(|seed: [u8; 32]| {
                             )
                         }
 
-                        member.assert_process(&suggestion.operation(), &output);
+                        // Compare the outcome of processing this operation with the expected
+                        // "simulated" state.
+                        member.assert_state(&suggestion.operation(), &output);
 
+                        // There might be more messages to-be-broadcast after processing. Let's
+                        // queue them up!
                         if let Some(output) = output {
                             for event in output.events {
                                 if let message_scheme::GroupEvent::Control(output_message) = event {
@@ -712,5 +661,7 @@ fuzz_target!(|seed: [u8; 32]| {
                 }
             }
         }
+
+        println!("--------");
     }
 });
