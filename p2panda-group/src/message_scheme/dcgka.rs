@@ -265,11 +265,14 @@ where
         assert!(output.control_message.is_none());
         assert!(output.direct_messages.is_empty());
 
-        Ok((y_i, OperationOutput {
-            control_message: input.control_message,
-            direct_messages: input.direct_messages,
-            me_update_secret: Some(output.sender_update_secret.unwrap()),
-        }))
+        Ok((
+            y_i,
+            OperationOutput {
+                control_message: input.control_message,
+                direct_messages: input.direct_messages,
+                me_update_secret: Some(output.sender_update_secret.unwrap()),
+            },
+        ))
     }
 
     /// Takes a set of users IDs (including us) and creates a new group with those members.
@@ -312,11 +315,14 @@ where
         //
         // process_create returns a tuple after updating the state including an update secret I; we
         // use these and ignore the rest.
-        Ok((y_ii, OperationOutput {
-            control_message,
-            direct_messages,
-            me_update_secret: None,
-        }))
+        Ok((
+            y_ii,
+            OperationOutput {
+                control_message,
+                direct_messages,
+                me_update_secret: None,
+            },
+        ))
     }
 
     /// Called by group members when they receive the "create" message.
@@ -395,12 +401,15 @@ where
         let (y_ii, sender_update_secret) =
             Self::update_ratchet(y_i, &sender, sender_member_secret)?;
 
-        Ok((y_ii, ProcessOutput {
-            control_message: None,
-            direct_messages: Vec::new(),
-            sender_update_secret: Some(sender_update_secret),
-            me_update_secret: None,
-        }))
+        Ok((
+            y_ii,
+            ProcessOutput {
+                control_message: None,
+                direct_messages: Vec::new(),
+                sender_update_secret: Some(sender_update_secret),
+                me_update_secret: None,
+            },
+        ))
     }
 
     /// Generate a new seed for the group. This "refreshes" the group's entropy and should be
@@ -418,11 +427,14 @@ where
 
         let (y_i, direct_messages) = Self::generate_seed(y, &recipient_ids, rng)?;
 
-        Ok((y_i, OperationOutput {
-            control_message,
-            direct_messages,
-            me_update_secret: None,
-        }))
+        Ok((
+            y_i,
+            OperationOutput {
+                control_message,
+                direct_messages,
+                me_update_secret: None,
+            },
+        ))
     }
 
     /// Called by group members when they receive the "update" control message.
@@ -453,11 +465,14 @@ where
 
         let (y_i, direct_messages) = Self::generate_seed(y, &recipient_ids, rng)?;
 
-        Ok((y_i, OperationOutput {
-            control_message,
-            direct_messages,
-            me_update_secret: None,
-        }))
+        Ok((
+            y_i,
+            OperationOutput {
+                control_message,
+                direct_messages,
+                me_update_secret: None,
+            },
+        ))
     }
 
     /// Called by group members when they receive the "remove" control message.
@@ -514,11 +529,14 @@ where
             },
         };
 
-        Ok((y_i, OperationOutput {
-            control_message,
-            direct_messages: vec![direct_message],
-            me_update_secret: None,
-        }))
+        Ok((
+            y_i,
+            OperationOutput {
+                control_message,
+                direct_messages: vec![direct_message],
+                me_update_secret: None,
+            },
+        ))
     }
 
     /// Called by both the sender and each recipient of an "add" control message, including the new
@@ -613,12 +631,15 @@ where
 
         // If the local user is the sender, we return that update secret.
         if sender == y_ii.my_id {
-            return Ok((y_ii, ProcessOutput {
-                control_message: None,
-                direct_messages: Vec::new(),
-                sender_update_secret,
-                me_update_secret: None,
-            }));
+            return Ok((
+                y_ii,
+                ProcessOutput {
+                    control_message: None,
+                    direct_messages: Vec::new(),
+                    sender_update_secret,
+                    me_update_secret: None,
+                },
+            ));
         }
 
         // Otherwise, we need to acknowledge the "add" message, so we construct a control message
@@ -653,12 +674,15 @@ where
         };
         let me_update_secret = output.sender_update_secret;
 
-        Ok((y_iv, ProcessOutput {
-            control_message: Some(control),
-            direct_messages: vec![forward],
-            sender_update_secret,
-            me_update_secret,
-        }))
+        Ok((
+            y_iv,
+            ProcessOutput {
+                control_message: Some(control),
+                direct_messages: vec![forward],
+                sender_update_secret,
+                me_update_secret,
+            },
+        ))
     }
 
     /// Called by both the sender and each recipient of an "add-ack" message, including the new
@@ -715,12 +739,15 @@ where
             // from before they were added.
             let (y_ii, sender_update_secret) =
                 Self::update_ratchet(y_i, &sender, ChainSecret::from_add())?;
-            return Ok((y_ii, ProcessOutput {
-                control_message: None,
-                direct_messages: Vec::new(),
-                sender_update_secret: Some(sender_update_secret),
-                me_update_secret: None,
-            }));
+            return Ok((
+                y_ii,
+                ProcessOutput {
+                    control_message: None,
+                    direct_messages: Vec::new(),
+                    sender_update_secret: Some(sender_update_secret),
+                    me_update_secret: None,
+                },
+            ));
         }
 
         Ok((y_i, ProcessOutput::default()))
@@ -796,14 +823,17 @@ where
         };
         let me_update_secret = output.sender_update_secret;
 
-        Ok((y_iv, ProcessOutput {
-            control_message: Some(control),
-            direct_messages: Vec::new(),
-            sender_update_secret: Some(sender_update_secret),
-            me_update_secret: Some(
-                me_update_secret.expect("sender update secret from process_ack"),
-            ),
-        }))
+        Ok((
+            y_iv,
+            ProcessOutput {
+                control_message: Some(control),
+                direct_messages: Vec::new(),
+                sender_update_secret: Some(sender_update_secret),
+                me_update_secret: Some(
+                    me_update_secret.expect("sender update secret from process_ack"),
+                ),
+            },
+        ))
     }
 
     /// Generates a seed secret using a secure source of random bits, then calls `encrypt_to` to
@@ -905,12 +935,15 @@ where
                 ack_sender: *sender,
                 ack_seq: seq,
             };
-            return Ok((y, ProcessOutput {
-                control_message: Some(control),
-                direct_messages: Vec::new(),
-                sender_update_secret: None,
-                me_update_secret: None,
-            }));
+            return Ok((
+                y,
+                ProcessOutput {
+                    control_message: Some(control),
+                    direct_messages: Vec::new(),
+                    sender_update_secret: None,
+                    me_update_secret: None,
+                },
+            ));
         };
 
         // Derive independent member secrets for each group member from the seed secret by
@@ -964,12 +997,15 @@ where
         // If the local user is the sender of the control message, we are now finished and return
         // the update secret.
         if sender == &y_ii.my_id {
-            return Ok((y_ii, ProcessOutput {
-                control_message: None,
-                direct_messages: Vec::new(),
-                sender_update_secret: Some(sender_update_secret),
-                me_update_secret: None,
-            }));
+            return Ok((
+                y_ii,
+                ProcessOutput {
+                    control_message: None,
+                    direct_messages: Vec::new(),
+                    sender_update_secret: Some(sender_update_secret),
+                    me_update_secret: None,
+                },
+            ));
         }
 
         // If we received the seed secret from another user, we construct an "ack" control message
@@ -1045,12 +1081,15 @@ where
         };
         let me_update_secret = output.sender_update_secret;
 
-        Ok((y_iv, ProcessOutput {
-            control_message: Some(control),
-            direct_messages: forward_messages,
-            sender_update_secret: Some(sender_update_secret),
-            me_update_secret,
-        }))
+        Ok((
+            y_iv,
+            ProcessOutput {
+                control_message: Some(control),
+                direct_messages: forward_messages,
+                sender_update_secret: Some(sender_update_secret),
+                me_update_secret,
+            },
+        ))
     }
 
     /// Uses 2SM to encrypt a direct message for another group member. The first time a message is
@@ -1197,14 +1236,18 @@ pub enum ControlMessage<ID, OP> {
 
 impl<ID, OP> Display for ControlMessage<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            ControlMessage::Create { .. } => "create",
-            ControlMessage::Ack { .. } => "ack",
-            ControlMessage::Update => "update",
-            ControlMessage::Remove { .. } => "remove",
-            ControlMessage::Add { .. } => "add",
-            ControlMessage::AddAck { .. } => "add_ack",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                ControlMessage::Create { .. } => "create",
+                ControlMessage::Ack { .. } => "ack",
+                ControlMessage::Update => "update",
+                ControlMessage::Remove { .. } => "remove",
+                ControlMessage::Add { .. } => "add",
+                ControlMessage::AddAck { .. } => "add_ack",
+            }
+        )
     }
 }
 
@@ -1327,11 +1370,15 @@ pub enum DirectMessageType {
 
 impl Display for DirectMessageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            DirectMessageType::Welcome => "welcome",
-            DirectMessageType::TwoParty => "2sm",
-            DirectMessageType::Forward => "forward",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                DirectMessageType::Welcome => "welcome",
+                DirectMessageType::TwoParty => "2sm",
+                DirectMessageType::Forward => "forward",
+            }
+        )
     }
 }
 

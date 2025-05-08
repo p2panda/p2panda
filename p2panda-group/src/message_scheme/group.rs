@@ -643,11 +643,10 @@ mod tests {
 
         // Alice sends a message to the group and Bob can decrypt it.
         network.send(alice, b"Hello everyone!");
-        assert_eq!(network.process(), vec![(
-            alice,
-            bob,
-            b"Hello everyone!".to_vec()
-        )],);
+        assert_eq!(
+            network.process(),
+            vec![(alice, bob, b"Hello everyone!".to_vec())],
+        );
     }
 
     #[test]
@@ -676,10 +675,13 @@ mod tests {
 
         // Alice sends a message to the group and Bob and Charlie can decrypt it.
         network.send(alice, b"Hello everyone!");
-        assert_eq!(network.process(), vec![
-            (alice, bob, b"Hello everyone!".to_vec()),
-            (alice, charlie, b"Hello everyone!".to_vec()),
-        ],);
+        assert_eq!(
+            network.process(),
+            vec![
+                (alice, bob, b"Hello everyone!".to_vec()),
+                (alice, charlie, b"Hello everyone!".to_vec()),
+            ],
+        );
     }
 
     #[test]
@@ -701,10 +703,13 @@ mod tests {
 
         // Bob sends a message to the group and Alice and Charlie can decrypt it.
         network.send(bob, b"Hello everyone!");
-        assert_eq!(network.process(), vec![
-            (bob, alice, b"Hello everyone!".to_vec()),
-            (bob, charlie, b"Hello everyone!".to_vec()),
-        ],);
+        assert_eq!(
+            network.process(),
+            vec![
+                (bob, alice, b"Hello everyone!".to_vec()),
+                (bob, charlie, b"Hello everyone!".to_vec()),
+            ],
+        );
     }
 
     #[test]

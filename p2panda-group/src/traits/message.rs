@@ -50,12 +50,16 @@ pub enum GroupMessageType<ID> {
 
 impl<ID> Display for GroupMessageType<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Control(control_message) => control_message.to_string(),
-            Self::Application {
-                group_secret_id, ..
-            } => format!("application @{}", hex::encode(group_secret_id)),
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Control(control_message) => control_message.to_string(),
+                Self::Application {
+                    group_secret_id, ..
+                } => format!("application @{}", hex::encode(group_secret_id)),
+            }
+        )
     }
 }
 
@@ -101,9 +105,13 @@ pub enum ForwardSecureMessageType<ID, OP> {
 
 impl<ID, OP> Display for ForwardSecureMessageType<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Control(control_message) => control_message.to_string(),
-            Self::Application { generation, .. } => format!("application @{}", generation),
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Control(control_message) => control_message.to_string(),
+                Self::Application { generation, .. } => format!("application @{}", generation),
+            }
+        )
     }
 }

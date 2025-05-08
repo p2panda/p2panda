@@ -346,10 +346,13 @@ mod tests {
         let mut bytes: Vec<u8> = Vec::new();
         let hash = Hash::new([1, 2, 3]);
         ciborium::ser::into_writer(&hash, &mut bytes).unwrap();
-        assert_eq!(bytes, vec![
-            88, 32, 177, 119, 236, 27, 242, 109, 251, 59, 112, 16, 212, 115, 230, 212, 71, 19, 178,
-            155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67
-        ]);
+        assert_eq!(
+            bytes,
+            vec![
+                88, 32, 177, 119, 236, 27, 242, 109, 251, 59, 112, 16, 212, 115, 230, 212, 71, 19,
+                178, 155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67
+            ]
+        );
 
         // Serialize JSON (human-readable hex encoding)
         let json = serde_json::to_string(&hash).unwrap();
@@ -385,10 +388,13 @@ mod tests {
         ])
         .unwrap();
         ciborium::ser::into_writer(&public_key, &mut bytes).unwrap();
-        assert_eq!(bytes, vec![
-            88, 32, 215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14,
-            225, 114, 243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
-        ]);
+        assert_eq!(
+            bytes,
+            vec![
+                88, 32, 215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14,
+                225, 114, 243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
+            ]
+        );
 
         // Serialize JSON (human-readable hex encoding)
         let json = serde_json::to_string(&public_key).unwrap();

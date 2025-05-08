@@ -478,10 +478,15 @@ mod tests {
 
         // Charlie adds Alice (charlie: seq=1 "add").
 
-        let charlie_y = AckedTestDgm::add(charlie_y, charlie, alice, MessageId {
-            sender: charlie,
-            seq: 1,
-        })
+        let charlie_y = AckedTestDgm::add(
+            charlie_y,
+            charlie,
+            alice,
+            MessageId {
+                sender: charlie,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // Alice processes the "add" of Charlie (alice: seq=0 "ack").
@@ -491,10 +496,14 @@ mod tests {
 
         // Charlie processes Alice's ack.
 
-        let charlie_y = AckedTestDgm::ack(charlie_y, alice, MessageId {
-            sender: charlie,
-            seq: 1,
-        })
+        let charlie_y = AckedTestDgm::ack(
+            charlie_y,
+            alice,
+            MessageId {
+                sender: charlie,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // They have the same view on the group.
@@ -515,10 +524,15 @@ mod tests {
 
         // Charlie adds Daphne (charlie: seq=2 "add").
 
-        let charlie_y = AckedTestDgm::add(charlie_y, charlie, daphne, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let charlie_y = AckedTestDgm::add(
+            charlie_y,
+            charlie,
+            daphne,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -538,10 +552,15 @@ mod tests {
 
         // Alice processes Charlie's "add" of Daphne (alice: seq=1 "ack").
 
-        let alice_y = AckedTestDgm::add(alice_y, charlie, daphne, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            charlie,
+            daphne,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -551,25 +570,41 @@ mod tests {
 
         // Everyone processes each other's acks.
 
-        let charlie_y = AckedTestDgm::ack(charlie_y, daphne, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let charlie_y = AckedTestDgm::ack(
+            charlie_y,
+            daphne,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
-        let alice_y = AckedTestDgm::ack(alice_y, daphne, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let alice_y = AckedTestDgm::ack(
+            alice_y,
+            daphne,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
-        let charlie_y = AckedTestDgm::ack(charlie_y, alice, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let charlie_y = AckedTestDgm::ack(
+            charlie_y,
+            alice,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
-        let daphne_y = AckedTestDgm::ack(daphne_y, alice, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let daphne_y = AckedTestDgm::ack(
+            daphne_y,
+            alice,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         // Everyone should have the same members views.
@@ -595,10 +630,15 @@ mod tests {
 
         // Alice removes Charlie (alice: seq=2 "remove").
 
-        let alice_y = AckedTestDgm::remove(alice_y, alice, &charlie, MessageId {
-            sender: alice,
-            seq: 2,
-        })
+        let alice_y = AckedTestDgm::remove(
+            alice_y,
+            alice,
+            &charlie,
+            MessageId {
+                sender: alice,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -608,10 +648,15 @@ mod tests {
 
         // Charlie adds Bob concurrently (charlie: seq=3 "add").
 
-        let charlie_y = AckedTestDgm::add(charlie_y, charlie, bob, MessageId {
-            sender: charlie,
-            seq: 3,
-        })
+        let charlie_y = AckedTestDgm::add(
+            charlie_y,
+            charlie,
+            bob,
+            MessageId {
+                sender: charlie,
+                seq: 3,
+            },
+        )
         .unwrap();
 
         for id in [bob, charlie] {
@@ -642,22 +687,37 @@ mod tests {
 
         // Everyone processes the removal of Charlie.
 
-        let bob_y = AckedTestDgm::remove(bob_y, alice, &charlie, MessageId {
-            sender: alice,
-            seq: 2,
-        })
+        let bob_y = AckedTestDgm::remove(
+            bob_y,
+            alice,
+            &charlie,
+            MessageId {
+                sender: alice,
+                seq: 2,
+            },
+        )
         .unwrap();
 
-        let charlie_y = AckedTestDgm::remove(charlie_y, alice, &charlie, MessageId {
-            sender: alice,
-            seq: 2,
-        })
+        let charlie_y = AckedTestDgm::remove(
+            charlie_y,
+            alice,
+            &charlie,
+            MessageId {
+                sender: alice,
+                seq: 2,
+            },
+        )
         .unwrap();
 
-        let daphne_y = AckedTestDgm::remove(daphne_y, alice, &charlie, MessageId {
-            sender: alice,
-            seq: 2,
-        })
+        let daphne_y = AckedTestDgm::remove(
+            daphne_y,
+            alice,
+            &charlie,
+            MessageId {
+                sender: alice,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -677,16 +737,26 @@ mod tests {
 
         // Everyone else processes the add of Bob.
 
-        let alice_y = AckedTestDgm::add(alice_y, charlie, bob, MessageId {
-            sender: charlie,
-            seq: 3,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            charlie,
+            bob,
+            MessageId {
+                sender: charlie,
+                seq: 3,
+            },
+        )
         .unwrap();
 
-        let daphne_y = AckedTestDgm::add(daphne_y, charlie, bob, MessageId {
-            sender: charlie,
-            seq: 3,
-        })
+        let daphne_y = AckedTestDgm::add(
+            daphne_y,
+            charlie,
+            bob,
+            MessageId {
+                sender: charlie,
+                seq: 3,
+            },
+        )
         .unwrap();
 
         // Because of the strong removal CRDT, Bob's add will not be recognized as the adder
@@ -751,10 +821,15 @@ mod tests {
 
         // Alice adds Bob.
 
-        let alice_y = AckedTestDgm::add(alice_y, alice, bob, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            alice,
+            bob,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         let bob_y = AckedTestDgm::init(bob);
@@ -762,10 +837,14 @@ mod tests {
 
         // Bob acks their own add, Charlie doesn't ack yet.
 
-        let alice_y = AckedTestDgm::ack(alice_y, bob, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let alice_y = AckedTestDgm::ack(
+            alice_y,
+            bob,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // Both Alice and Bob consider all three members of the set.
@@ -809,22 +888,35 @@ mod tests {
 
         // Charlie processes and acks added Bob.
 
-        let charlie_y = AckedTestDgm::add(charlie_y, alice, bob, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let charlie_y = AckedTestDgm::add(
+            charlie_y,
+            alice,
+            bob,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
-        let alice_y = AckedTestDgm::ack(alice_y, charlie, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let alice_y = AckedTestDgm::ack(
+            alice_y,
+            charlie,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
-        let bob_y = AckedTestDgm::ack(bob_y, charlie, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let bob_y = AckedTestDgm::ack(
+            bob_y,
+            charlie,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // Everyone should have the same view.
@@ -848,24 +940,39 @@ mod tests {
 
         // Charlie removes Bob.
 
-        let charlie_y = AckedTestDgm::remove(charlie_y, charlie, &bob, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let charlie_y = AckedTestDgm::remove(
+            charlie_y,
+            charlie,
+            &bob,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         // Alice and Bob process the removal.
 
-        let alice_y = AckedTestDgm::remove(alice_y, charlie, &bob, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let alice_y = AckedTestDgm::remove(
+            alice_y,
+            charlie,
+            &bob,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
-        let bob_y = AckedTestDgm::remove(bob_y, charlie, &bob, MessageId {
-            sender: charlie,
-            seq: 2,
-        })
+        let bob_y = AckedTestDgm::remove(
+            bob_y,
+            charlie,
+            &bob,
+            MessageId {
+                sender: charlie,
+                seq: 2,
+            },
+        )
         .unwrap();
 
         // Everyone considers for themselves and for Charlie (the "remover") that Bob is removed
@@ -925,10 +1032,15 @@ mod tests {
 
         // Alice adds Bob.
 
-        let alice_y = AckedTestDgm::add(alice_y, alice, bob, MessageId {
-            sender: alice,
-            seq: 0,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            alice,
+            bob,
+            MessageId {
+                sender: alice,
+                seq: 0,
+            },
+        )
         .unwrap();
 
         let bob_y = AckedTestDgm::init(bob);
@@ -936,46 +1048,76 @@ mod tests {
 
         // Alice removes Bob.
 
-        let alice_y = AckedTestDgm::remove(alice_y, alice, &bob, MessageId {
-            sender: alice,
-            seq: 0,
-        })
+        let alice_y = AckedTestDgm::remove(
+            alice_y,
+            alice,
+            &bob,
+            MessageId {
+                sender: alice,
+                seq: 0,
+            },
+        )
         .unwrap();
 
         // Concurrently Bob adds Charlie and Daphne.
 
-        let bob_y = AckedTestDgm::add(bob_y, bob, charlie, MessageId {
-            sender: bob,
-            seq: 0,
-        })
+        let bob_y = AckedTestDgm::add(
+            bob_y,
+            bob,
+            charlie,
+            MessageId {
+                sender: bob,
+                seq: 0,
+            },
+        )
         .unwrap();
 
-        let bob_y = AckedTestDgm::add(bob_y, bob, daphne, MessageId {
-            sender: bob,
-            seq: 1,
-        })
+        let bob_y = AckedTestDgm::add(
+            bob_y,
+            bob,
+            daphne,
+            MessageId {
+                sender: bob,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // Alice applies Bob's changes.
 
-        let alice_y = AckedTestDgm::add(alice_y, bob, charlie, MessageId {
-            sender: bob,
-            seq: 0,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            bob,
+            charlie,
+            MessageId {
+                sender: bob,
+                seq: 0,
+            },
+        )
         .unwrap();
 
-        let alice_y = AckedTestDgm::add(alice_y, bob, daphne, MessageId {
-            sender: bob,
-            seq: 1,
-        })
+        let alice_y = AckedTestDgm::add(
+            alice_y,
+            bob,
+            daphne,
+            MessageId {
+                sender: bob,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         // Bob applies Alice's changes.
 
-        let bob_y = AckedTestDgm::remove(bob_y, alice, &bob, MessageId {
-            sender: alice,
-            seq: 1,
-        })
+        let bob_y = AckedTestDgm::remove(
+            bob_y,
+            alice,
+            &bob,
+            MessageId {
+                sender: alice,
+                seq: 1,
+            },
+        )
         .unwrap();
 
         assert_eq!(
