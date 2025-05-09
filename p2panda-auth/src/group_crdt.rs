@@ -5,6 +5,8 @@
 // x generic `conditions` parameter on `Write`
 // - introduce flag for “any member can add new members” (?)
 //   - `all_members_are_managers`
+//   - it's not actually that all members are managers, it's that any member can add new members
+//   regardless of their own access level
 //   - need to think about behaviour when it comes to `promote` and `demote`
 // x proper error handling
 // x tests
@@ -23,10 +25,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum GroupMembershipError {
-    #[error("tried to add a member who is already active in the group")]
+    #[error("attempted to add a member who is already active in the group")]
     AlreadyAdded,
 
-    #[error("tried to remove a member who is already inactive in the group")]
+    #[error("attempted to remove a member who is already inactive in the group")]
     AlreadyRemoved,
 
     #[error("actor lacks sufficient access to update the group")]
@@ -55,9 +57,9 @@ pub enum Access<C> {
 
 #[derive(Clone, Debug)]
 pub struct MemberState<C> {
-    pub member_counter: usize,
-    pub access: Access<C>,
-    pub access_counter: usize,
+    member_counter: usize,
+    access: Access<C>,
+    access_counter: usize,
 }
 
 impl<C> MemberState<C>
@@ -95,6 +97,7 @@ where
     ID: Clone + Hash + Eq,
     C: Clone + Debug + PartialEq,
 {
+    /// Return all active group members.
     pub fn members(&self) -> HashSet<ID> {
         self.members
             .iter()
@@ -108,6 +111,7 @@ where
             .collect::<HashSet<ID>>()
     }
 
+    /// Return all active group members with manager access.
     pub fn managers(&self) -> HashSet<ID> {
         self.members
             .iter()
@@ -133,6 +137,7 @@ where
     }
 }
 
+/// Create a new group and add the given set of initial members.
 pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     initial_members: &[(ID, Access<C>)],
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
@@ -151,8 +156,10 @@ pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     Ok(state)
 }
 
-// TODO: Do we want to return the state as part of the error type?
-// This avoids needing to clone after error.
+/// Add a member to the group with the given access level.
+///
+/// The actor performing the action must be an active member of the group with manager access.
+/// Re-adding a previously removed member is supported.
 pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
     adder: ID,
@@ -200,6 +207,9 @@ pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     Ok(state)
 }
 
+/// Remove a member from the group.
+///
+/// The actor performing the action must be an active member of the group with manager access.
 pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
     remover: ID,
@@ -319,6 +329,15 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     Ok(state)
 }
 
+/// Merge two group states into one using a deterministic, conflict-free approach.
+///
+/// Grow-only counters are used internally to track state changes; one counter for add / remove
+/// actions and one for access modification action. These values are used to determine which
+/// membership and access states should be included in the merged group state. A state with a higher
+/// counter indicates that it has undergone more actions; this state will be included in the merge.
+///
+/// If a member exists with different access levels in each state and has undergone the same number
+/// of access modifications, the lower of the two access levels will be chosen.
 pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,
