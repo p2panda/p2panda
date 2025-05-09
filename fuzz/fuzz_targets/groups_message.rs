@@ -16,9 +16,6 @@ use p2panda_group::test_utils::{MemberId, MessageId};
 use p2panda_group::traits::ForwardSecureGroupMessage;
 use p2panda_group::{Rng, message_scheme};
 
-/// Chance to pick an invalid transition in percentage.
-const INVALID_TRANSITION_CHANCE: u8 = 0; // in %
-
 /// Number of max. group epochs per fuzzing round. Members can create one group operation each per
 /// epoch.
 const MAX_GROUP_EPOCHS: usize = 128;
@@ -182,31 +179,21 @@ impl StateMachine {
 
     /// Suggest the next group membership operation (adding a member, sending a message, etc.)
     /// based on the current member's state.
-    ///
-    /// Based on randomness the suggestion can either be a valid or invalid operation. To determine
-    /// how likely an invalid operation will be suggested use the `chance_for_invalid` parameter
-    /// (likelyhood in percentage).
-    pub fn suggest(&self, chance_for_invalid: u8, rng: &Rng) -> Suggestion {
-        assert!(chance_for_invalid <= 100);
-        let suggest_valid = random_range(1, 100, rng) > chance_for_invalid;
-        if suggest_valid {
-            let operation = match self.state {
-                State::Standby | State::Removed | State::Invalid => Operation::Noop,
-                State::Active => self.suggest_valid(
-                    &[
-                        Options::Add,
-                        Options::Remove,
-                        Options::Update,
-                        Options::SendMessage,
-                        Options::Noop,
-                    ],
-                    rng,
-                ),
-            };
-            Suggestion::Valid(operation)
-        } else {
-            Suggestion::Invalid(self.suggest_invalid(rng))
-        }
+    pub fn suggest(&self, rng: &Rng) -> Suggestion {
+        let operation = match self.state {
+            State::Standby | State::Removed | State::Invalid => Operation::Noop,
+            State::Active => self.suggest_valid(
+                &[
+                    Options::Add,
+                    Options::Remove,
+                    Options::Update,
+                    Options::SendMessage,
+                    Options::Noop,
+                ],
+                rng,
+            ),
+        };
+        Suggestion::Valid(operation)
     }
 
     /// Randomly suggest a valid, next group operation based on a set of given options.
@@ -248,12 +235,6 @@ impl StateMachine {
         }
     }
 
-    /// Randomly suggest an invalid group operation.
-    fn suggest_invalid(&self, _rng: &Rng) -> Operation {
-        // TODO
-        Operation::Noop
-    }
-
     /// Apply a group operation to the state machine, causing it to transition to a new state and
     /// adjust the expected group state values.
     fn transition(&mut self, operation: &Operation) {
@@ -285,11 +266,6 @@ impl StateMachine {
             }
             _ => State::Invalid,
         };
-
-        // println!(
-        //     "{}: transition {} > {} after applying \"{}\"",
-        //     self.values.my_id, self.state, next_state, operation
-        // );
 
         if matches!(next_state, State::Invalid) {
             panic!("{}: Reached invalid state!", self.values.my_id);
@@ -354,6 +330,8 @@ impl Display for State {
 #[derive(Clone, Debug)]
 enum Suggestion {
     Valid(Operation),
+
+    #[allow(dead_code)]
     Invalid(Operation),
 }
 
@@ -532,21 +510,12 @@ impl Member {
 
         // Expected outcomes from operations.
         for (operation, message) in operations {
-            match operation {
-                // TODO: Assert all operations.
-                // Operation::Add {
-                //     added,
-                //     members_in_welcome,
-                // } => {
-                // }
-                // Operation::Remove { removed } => {
-                // }
-                // Operation::Update => {
-                // }
-                Operation::SendMessage { plaintext } => {
-                    assert_send_message(self.id(), message, plaintext, outputs, status);
-                }
-                _ => (),
+            if status == MembershipStatus::Inactive {
+                continue;
+            }
+
+            if let Operation::SendMessage { plaintext } = operation {
+                assert_send_message(self.id(), message, plaintext, outputs, status);
             }
         }
     }
@@ -639,16 +608,22 @@ enum MembershipStatus {
 impl MembershipStatus {
     pub fn new(added_in_this_epoch: bool, removed_in_this_epoch: bool, is_active: bool) -> Self {
         if added_in_this_epoch {
-            MembershipStatus::AddedInEpoch
-        } else if removed_in_this_epoch {
-            MembershipStatus::RemovedInEpoch
-        } else if !added_in_this_epoch && is_active {
-            MembershipStatus::Active
-        } else if !removed_in_this_epoch && !is_active {
-            MembershipStatus::Inactive
-        } else {
-            unreachable!()
+            return MembershipStatus::AddedInEpoch;
         }
+
+        if removed_in_this_epoch {
+            return MembershipStatus::RemovedInEpoch;
+        }
+
+        if !added_in_this_epoch && is_active {
+            return MembershipStatus::Active;
+        }
+
+        if !removed_in_this_epoch && !is_active {
+            return MembershipStatus::Inactive;
+        }
+
+        unreachable!();
     }
 }
 
@@ -733,7 +708,7 @@ fuzz_target!(|seed: [u8; 32]| {
             let member = members.get_mut(member_id).expect("member exists");
 
             // Suggest the next group membership operation for this member.
-            let suggestion = member.machine.suggest(INVALID_TRANSITION_CHANCE, &rng);
+            let suggestion = member.machine.suggest(&rng);
 
             // TODO(adz): Disallow concurrent adds of the same member for now, our (terrible) DGM
             // implementation in test_utils is not handling that well.
