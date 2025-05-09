@@ -544,7 +544,7 @@ impl Member {
                 // Operation::Update => {
                 // }
                 Operation::SendMessage { plaintext } => {
-                    assert_send_message(self.id(), message, &plaintext, outputs, status);
+                    assert_send_message(self.id(), message, plaintext, outputs, status);
                 }
                 _ => (),
             }
@@ -840,7 +840,7 @@ fuzz_target!(|seed: [u8; 32]| {
 
         for member_id in &member_ids {
             let member = members.get_mut(member_id).expect("member exists");
-            member.assert_state(&operations, &outputs.get(member_id).unwrap_or(&vec![]));
+            member.assert_state(&operations, outputs.get(member_id).unwrap_or(&vec![]));
         }
 
         println!("--------");
