@@ -1,3 +1,6 @@
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
 use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
@@ -11,7 +14,8 @@ use super::{GroupAction, GroupControlMessage, GroupMember};
 fn basic_group() {
     let alice = 'A';
     let group_store_y = TestGroupStoreState::default();
-    let orderer_y = TestOrdererState::new(alice, group_store_y.clone());
+    let rng = StdRng::from_os_rng();
+    let orderer_y = TestOrdererState::new(alice, group_store_y.clone(), rng);
     let group_y = TestGroupState::new(alice, alice, group_store_y, orderer_y);
 
     // Create group with alice as initial admin member.
@@ -152,7 +156,8 @@ fn nested_groups() {
 
     // The group store is shared state across all group instances.
     let group_store_y = TestGroupStoreState::default();
-    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone());
+    let rng = StdRng::from_os_rng();
+    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone(), rng);
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
@@ -264,7 +269,7 @@ fn nested_groups() {
 fn multi_user() {
     let alice = 'A';
     let bob = 'B';
-    let claire = 'B';
+    let claire = 'C';
 
     let alice_mobile = 'M';
     let alice_laptop = 'L';
@@ -272,26 +277,112 @@ fn multi_user() {
     let alice_devices_group = 'D';
     let alice_team_group = 'T';
 
-    // The group store is shared state across all group instances.
-    let group_store_y = TestGroupStoreState::default();
-    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone());
+    let rng = StdRng::from_os_rng();
+    // let rng = StdRng::from_seed([0u8; 32]);
 
-    let mut network = Network::new([alice, bob, claire]);
+    let mut network = Network::new([alice, bob, claire], rng);
 
+    // Alice creates a team group with themselves as initial member.
     network.create(
         alice_team_group,
         alice,
         vec![(GroupMember::Individual(alice), Access::Manage)],
     );
 
+    // And then adds bob as manager.
     network.add(
         alice,
         GroupMember::Individual(bob),
         alice_team_group,
         Access::Manage,
     );
-    network.process();
 
-    network.add(bob, GroupMember::Individual(claire), alice_team_group, Access::Read);
-    network.process();
+    // Everyone processes these operations in random order.
+    network.process_ooo();
+
+    let alice_members = network.members(&alice, &alice_team_group);
+    let bob_members = network.members(&bob, &alice_team_group);
+    let claire_members = network.members(&claire, &alice_team_group);
+    assert_eq!(
+        alice_members,
+        vec![
+            (GroupMember::Individual('A'), Access::Manage),
+            (GroupMember::Individual('B'), Access::Manage),
+        ]
+    );
+    assert_eq!(alice_members, claire_members);
+    assert_eq!(alice_members, bob_members);
+
+    let alice_transitive_members = network.transitive_members(&alice, &alice_team_group);
+    let bob_transitive_members = network.transitive_members(&bob, &alice_team_group);
+    let claire_transitive_members = network.transitive_members(&claire, &alice_team_group);
+    assert_eq!(
+        alice_transitive_members,
+        vec![('A', Access::Manage), ('B', Access::Manage),]
+    );
+    assert_eq!(alice_transitive_members, bob_transitive_members);
+    assert_eq!(alice_transitive_members, claire_transitive_members);
+
+    // Bob adds claire with read access.
+    network.add(
+        bob,
+        GroupMember::Individual(claire),
+        alice_team_group,
+        Access::Read,
+    );
+
+    // Alice (concurrently) creates a devices group.
+    network.create(
+        alice_devices_group,
+        alice,
+        vec![
+            (GroupMember::Individual(alice_mobile), Access::Write),
+            (GroupMember::Individual(alice_laptop), Access::Manage),
+        ],
+    );
+
+    // And adds it to the teams group.
+    network.add(
+        alice,
+        GroupMember::Group {
+            id: alice_devices_group,
+        },
+        alice_team_group,
+        Access::Manage,
+    );
+
+    // Everyone processes these operations in random order.
+    network.process_ooo();
+
+    // alice, bob and claire now 
+    let alice_members = network.members(&alice, &alice_team_group);
+    let bob_members = network.members(&bob, &alice_team_group);
+    let claire_members = network.members(&claire, &alice_team_group);
+    assert_eq!(
+        alice_members,
+        vec![
+            (GroupMember::Individual('A'), Access::Manage),
+            (GroupMember::Individual('B'), Access::Manage),
+            (GroupMember::Individual('C'), Access::Read),
+            (GroupMember::Group { id: 'D' }, Access::Manage)
+        ]
+    );
+    assert_eq!(alice_members, bob_members);
+    assert_eq!(alice_members, claire_members);
+
+    let alice_transitive_members = network.transitive_members(&alice, &alice_team_group);
+    let bob_transitive_members = network.transitive_members(&bob, &alice_team_group);
+    let claire_transitive_members = network.transitive_members(&claire, &alice_team_group);
+    assert_eq!(
+        alice_transitive_members,
+        vec![
+            ('A', Access::Manage),
+            ('B', Access::Manage),
+            ('C', Access::Read),
+            ('L', Access::Manage),
+            ('M', Access::Write)
+        ]
+    );
+    assert_eq!(alice_transitive_members, bob_transitive_members);
+    assert_eq!(alice_transitive_members, claire_transitive_members);
 }
