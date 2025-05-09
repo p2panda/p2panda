@@ -2,6 +2,10 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+use rand::seq::IteratorRandom;
+
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, access::Access};
 use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
 
@@ -13,6 +17,7 @@ use super::{
 pub struct Network {
     members: HashMap<MemberId, NetworkMember>,
     queue: VecDeque<TestOperation<MemberId, MessageId>>,
+    rng: StdRng,
 }
 
 pub struct NetworkMember {
@@ -22,11 +27,15 @@ pub struct NetworkMember {
 }
 
 impl Network {
-    pub fn new<const N: usize>(members: [MemberId; N]) -> Self {
+    pub fn new<const N: usize>(members: [MemberId; N], mut rng: StdRng) -> Self {
         Self {
             members: HashMap::from_iter(members.into_iter().map(|member_id| {
                 let group_store_y = TestGroupStoreState::default();
-                let orderer_y = TestOrdererState::new(member_id, group_store_y.clone());
+                let orderer_y = TestOrdererState::new(
+                    member_id,
+                    group_store_y.clone(),
+                    StdRng::from_rng(&mut rng),
+                );
                 (
                     member_id,
                     NetworkMember {
@@ -37,6 +46,7 @@ impl Network {
                 )
             })),
             queue: VecDeque::new(),
+            rng,
         }
     }
 
@@ -47,15 +57,12 @@ impl Network {
         initial_members: Vec<(GroupMember<MemberId>, Access)>,
     ) {
         let y = self.get_y(&creator, &group_id);
-
         let control_message = GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Create { initial_members },
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
-        let mut y_ii = TestGroup::process(y_i, &operation).unwrap();
-        y_ii.group_store_y =
-            TestGroupStore::insert(y_ii.group_store_y.clone(), &group_id, &y_ii.inner).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
         self.queue.push_back(operation);
         self.set_y(y_ii);
     }
@@ -76,9 +83,7 @@ impl Network {
             },
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
-        let mut y_ii = TestGroup::process(y_i, &operation).unwrap();
-        y_ii.group_store_y =
-            TestGroupStore::insert(y_ii.group_store_y.clone(), &group_id, &y_ii.inner).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
         self.queue.push_back(operation);
         self.set_y(y_ii);
     }
@@ -95,6 +100,23 @@ impl Network {
         self.set_y(y_ii);
     }
 
+    pub fn process_ooo(&mut self) {
+        if self.queue.is_empty() {
+            return;
+        }
+
+        let member_ids: Vec<MemberId> = self.members.keys().cloned().collect();
+
+        self.shuffle();
+        while let Some(operation) = self.queue.pop_front() {
+            for id in &member_ids {
+                // Shuffle messages in the queue for each member.
+                self.shuffle();
+                self.member_process(&id, &operation)
+            }
+        }
+    }
+
     pub fn process(&mut self) {
         if self.queue.is_empty() {
             return;
@@ -103,33 +125,36 @@ impl Network {
         let member_ids: Vec<MemberId> = self.members.keys().cloned().collect();
 
         while let Some(operation) = self.queue.pop_front() {
-            let control_message = operation.payload();
-            let group_id = control_message.group_id();
-
             for id in &member_ids {
-                // Do not process our own messages.
-                if &operation.sender() == id {
-                    continue;
-                }
-
-                let mut y = self.get_y(id, &group_id);
-                y.orderer_y = TestOrderer::queue(y.orderer_y.clone(), &operation).unwrap();
-
-                loop {
-                    let (y_orderer_next, result) =
-                        TestOrderer::next_ready_message(y.orderer_y.clone()).unwrap();
-                    y.orderer_y = y_orderer_next;
-
-                    let Some(message) = result else {
-                        break;
-                    };
-                    y = TestGroup::process(y.clone(), &message).unwrap();
-                    y.group_store_y =
-                        TestGroupStore::insert(y.group_store_y.clone(), &group_id, &y.inner)
-                            .unwrap();
-                }
-                self.set_y(y.clone());
+                self.member_process(&id, &operation)
             }
+        }
+    }
+
+    fn member_process(&mut self, member_id: &char, operation: &TestOperation<char, u32>) {
+        // Do not process our own messages.
+        if &operation.sender() == member_id {
+            return;
+        }
+
+        let control_message = operation.payload();
+        let mut group_id = control_message.group_id();
+        let mut y = self.get_y(member_id, &group_id);
+        let orderer_y = TestOrderer::queue(y.orderer_y.clone(), &operation).unwrap();
+
+        loop {
+            let (orderer_y, result) = TestOrderer::next_ready_message(orderer_y.clone()).unwrap();
+            y.orderer_y = orderer_y;
+            self.set_y(y.clone());
+
+            let Some(message) = result else {
+                break;
+            };
+
+            group_id = message.payload().group_id();
+            y = self.get_y(member_id, &group_id);
+            y = TestGroup::process(y.clone(), &message).unwrap();
+            self.set_y(y.clone());
         }
     }
 
@@ -138,27 +163,35 @@ impl Network {
         member: &MemberId,
         group_id: &GroupId,
     ) -> Vec<(GroupMember<MemberId>, Access)> {
-        let member = self.members.get(member).expect("member exists");
-
-        let group_y_inner = TestGroupStore::get(&member.group_store_y, group_id)
-            .unwrap()
-            .expect("group exists");
-
-        let mut group_y = TestGroupState::new(
-            member.id,
-            *group_id,
-            member.group_store_y.clone(),
-            TestOrdererState::new(member.id, member.group_store_y.clone()),
-        );
-
-        group_y = TestGroupState::new_from_inner(&group_y, group_y_inner);
-
+        let group_y = self.get_y(member, group_id);
         let mut members = group_y.members();
         members.sort();
         members
     }
 
-    fn get_y(&mut self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
+    pub fn transitive_members(
+        &self,
+        member: &MemberId,
+        group_id: &GroupId,
+    ) -> Vec<(MemberId, Access)> {
+        let group_y = self.get_y(member, group_id);
+        let mut members = group_y
+            .transitive_members()
+            .expect("get transitive members");
+        members.sort();
+        members
+    }
+
+    fn shuffle(&mut self) {
+        let shuffled = self
+            .queue
+            .iter()
+            .cloned()
+            .choose_multiple(&mut self.rng, self.queue.len());
+        self.queue = VecDeque::from(shuffled);
+    }
+
+    fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
         let member = self.members.get(member).expect("member exists");
 
         let group_y = TestGroupState::new(
@@ -171,7 +204,7 @@ impl Network {
         let group_y_inner = TestGroupStore::get(&member.group_store_y, group_id).unwrap();
 
         match group_y_inner {
-            Some(group_y_inner) => TestGroupState::new_from_inner(&group_y, group_y_inner),
+            Some(group_y_inner) => group_y.new_from_inner(group_y_inner),
             None => group_y,
         }
     }
