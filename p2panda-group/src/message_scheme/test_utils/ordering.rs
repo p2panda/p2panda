@@ -12,7 +12,7 @@ use crate::message_scheme::{ControlMessage, DirectMessage, Generation};
 use crate::ordering::{Orderer, OrdererError, OrdererState};
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::{
-    AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
+    AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageContent,
     ForwardSecureOrdering,
 };
 
@@ -206,14 +206,16 @@ where
                 // This is a naive implementation where we assume that every member processed every
                 // control message after one round and where every message points at _every_
                 // previously created message.
-                if let ForwardSecureMessageType::Control { .. } = message.message_type() {
+                if let ForwardSecureMessageContent::Control { .. } = message.encryption_content() {
                     if welcome.previous.contains(&message.id()) {
                         continue;
                     }
                 }
 
                 // Application messages can be ignored if before or concurrent to welcome.
-                if let ForwardSecureMessageType::Application { .. } = message.message_type() {
+                if let ForwardSecureMessageContent::Application { .. } =
+                    message.encryption_content()
+                {
                     if !message.previous.contains(&welcome.id()) {
                         continue;
                     }
@@ -268,18 +270,18 @@ where
         self.sender
     }
 
-    fn message_type(&self) -> ForwardSecureMessageType<MemberId, MessageId> {
+    fn encryption_content(&self) -> ForwardSecureMessageContent<MemberId, MessageId> {
         match &self.content {
             TestMessageContent::Application {
                 ciphertext,
                 generation,
-            } => ForwardSecureMessageType::Application {
+            } => ForwardSecureMessageContent::Application {
                 ciphertext: ciphertext.to_owned(),
                 generation: *generation,
             },
             TestMessageContent::System {
                 control_message, ..
-            } => ForwardSecureMessageType::Control(control_message.to_owned()),
+            } => ForwardSecureMessageContent::Control(control_message.to_owned()),
         }
     }
 

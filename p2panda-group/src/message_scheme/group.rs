@@ -20,7 +20,7 @@ use crate::message_scheme::ratchet::{
     RatchetSecretState,
 };
 use crate::traits::{
-    AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageType,
+    AckedGroupMembership, ForwardSecureGroupMessage, ForwardSecureMessageContent,
     ForwardSecureOrdering, IdentityHandle, IdentityManager, IdentityRegistry, OperationId,
     PreKeyManager, PreKeyRegistry,
 };
@@ -196,13 +196,13 @@ where
         // messages.
         let members_pre = Self::members(&y)?;
 
-        let message_type = message.message_type();
+        let message_type = message.encryption_content();
         let is_established = y.ratchet.is_some();
         let mut is_create_or_welcome = false;
 
         // Accept "create" control messages if we haven't established our state yet and if we are
         // part of the initial members set.
-        if let ForwardSecureMessageType::Control(ControlMessage::Create {
+        if let ForwardSecureMessageContent::Control(ControlMessage::Create {
             ref initial_members,
         }) = message_type
         {
@@ -216,7 +216,7 @@ where
         }
 
         // Accept "add" control messages if we are being added by it.
-        if let ForwardSecureMessageType::Control(ControlMessage::Add { added }) = message_type {
+        if let ForwardSecureMessageContent::Control(ControlMessage::Add { added }) = message_type {
             if !is_established && added == y.my_id {
                 is_create_or_welcome = true;
             }
@@ -355,8 +355,9 @@ where
         message: &ORD::Message,
         rng: &Rng,
     ) -> GroupResult<Option<GroupEvent<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
-        match message.message_type() {
-            ForwardSecureMessageType::Control(control_message) => {
+        println!("{:?}: processing {}", y.my_id, message.encryption_content());
+        match message.encryption_content() {
+            ForwardSecureMessageContent::Control(control_message) => {
                 let direct_message = message
                     .direct_messages()
                     .into_iter()
@@ -379,12 +380,18 @@ where
                     Ok((y_i, output.map(|msg| GroupEvent::Control(msg))))
                 }
             }
-            ForwardSecureMessageType::Application {
+            ForwardSecureMessageContent::Application {
                 ciphertext,
                 generation,
             } => {
                 let (y_i, plaintext) = Self::decrypt(y, message.sender(), ciphertext, generation)?;
-                Ok((y_i, Some(GroupEvent::Application { plaintext })))
+                Ok((
+                    y_i,
+                    Some(GroupEvent::Application {
+                        plaintext,
+                        message_id: message.id(),
+                    }),
+                ))
             }
         }
     }
@@ -535,7 +542,7 @@ where
     Control(ORD::Message),
 
     /// Decrypted payload of message.
-    Application { plaintext: Vec<u8> },
+    Application { plaintext: Vec<u8>, message_id: OP },
 
     /// Signal that we've been removed from the group.
     RemovedOurselves,
