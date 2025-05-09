@@ -33,7 +33,7 @@ pub struct TopicReceiver<T> {
 }
 
 impl<T> TopicReceiver<T> {
-    pub(crate) async fn new(
+    pub(crate) fn new(
         topic: T,
         stream_id: usize,
         from_network_rx: mpsc::Receiver<FromNetwork>,

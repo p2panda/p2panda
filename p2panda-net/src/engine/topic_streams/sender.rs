@@ -29,7 +29,7 @@ pub struct TopicSender<T> {
 }
 
 impl<T> TopicSender<T> {
-    pub(crate) async fn new(
+    pub(crate) fn new(
         topic: T,
         stream_id: usize,
         to_network_tx: mpsc::Sender<ToNetwork>,

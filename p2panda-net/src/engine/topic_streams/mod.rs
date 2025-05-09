@@ -146,15 +146,13 @@ where
             stream_id,
             to_network_tx,
             self.engine_actor_tx.clone(),
-        )
-        .await;
+        );
         let topic_rx = TopicReceiver::new(
             topic.clone(),
             stream_id,
             from_network_rx,
             self.engine_actor_tx.clone(),
-        )
-        .await;
+        );
 
         // Send the topic stream channels back to the subscriber.
         if topic_sender_tx.send(topic_tx).is_err() {
