@@ -46,13 +46,16 @@ pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
 
 /// Group state for "data encryption" scheme. Serializable for persistence.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupState<ID, OP, PKI, DGM, KMG, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, LongTermKeyBundle>,
+    PKI::State: Clone,
     DGM: GroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
+    KMG::State: Clone,
     ORD: Ordering<ID, OP, DGM>,
 {
     pub(crate) my_id: ID,
@@ -67,8 +70,10 @@ where
     ID: IdentityHandle,
     OP: OperationId,
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, LongTermKeyBundle>,
+    PKI::State: Clone,
     DGM: GroupMembership<ID, OP>,
     KMG: IdentityManager<KMG::State> + PreKeyManager,
+    KMG::State: Clone,
     ORD: Ordering<ID, OP, DGM>,
 {
     /// Returns initial state for group.
