@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Introduce core group CRDT for auth [#748](https://github.com/p2panda/p2panda/pull/748)
+
 ## [0.3.1] - 14/04/2025
 
 ### Added
