@@ -355,7 +355,6 @@ where
         message: &ORD::Message,
         rng: &Rng,
     ) -> GroupResult<Option<GroupEvent<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
-        println!("{:?}: processing {}", y.my_id, message.encryption_content());
         match message.encryption_content() {
             ForwardSecureMessageContent::Control(control_message) => {
                 let direct_message = message

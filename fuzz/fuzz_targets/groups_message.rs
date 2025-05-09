@@ -734,13 +734,6 @@ fuzz_target!(|seed: [u8; 32]| {
 
             // Suggest the next group membership operation for this member.
             let suggestion = member.machine.suggest(INVALID_TRANSITION_CHANCE, &rng);
-            if !matches!(suggestion.operation(), Operation::Noop) {
-                println!(
-                    "member: {}, suggestion: {}",
-                    member.machine.values.my_id,
-                    suggestion.operation(),
-                );
-            }
 
             // TODO(adz): Disallow concurrent adds of the same member for now, our (terrible) DGM
             // implementation in test_utils is not handling that well.
@@ -749,6 +742,14 @@ fuzz_target!(|seed: [u8; 32]| {
                     continue;
                 }
                 concurrent_adds.insert(added);
+            }
+
+            if !matches!(suggestion.operation(), Operation::Noop) {
+                println!(
+                    "member: {}, operation: {}",
+                    member.machine.values.my_id,
+                    suggestion.operation(),
+                );
             }
 
             // Process group operation locally for this member.
@@ -784,11 +785,11 @@ fuzz_target!(|seed: [u8; 32]| {
         let mut outputs: HashMap<MemberId, Vec<GroupOutput>> = HashMap::new();
 
         while let Some((suggestion, message)) = queue.pop_front() {
-            println!(
-                "next message from queue: \"{}\" sent by {}",
-                message.encryption_content(),
-                message.sender()
-            );
+            // println!(
+            //     "next message from queue: \"{}\" sent by {}",
+            //     message.encryption_content(),
+            //     message.sender()
+            // );
 
             for member_id in &member_ids {
                 // Do not process our own messages.
@@ -843,6 +844,8 @@ fuzz_target!(|seed: [u8; 32]| {
             member.assert_state(&operations, outputs.get(member_id).unwrap_or(&vec![]));
         }
 
-        println!("--------");
+        if !outputs.is_empty() {
+            println!("--------");
+        }
     }
 });
