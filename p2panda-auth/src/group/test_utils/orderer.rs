@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-// use p2panda_stream::partial::{MemoryStore, PartialOrder};
+use rand::RngCore;
+use rand::rngs::StdRng;
 use thiserror::Error;
 
 use crate::group::GroupControlMessage;
@@ -28,18 +29,21 @@ pub struct TestOrdererStateInner {
     pub group_store_y: TestGroupStoreState<GroupId, TestGroupStateInner>,
     pub orderer_y: PartialOrdererState<MessageId>,
     pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId>>,
+    pub rng: StdRng,
 }
 
 impl TestOrdererState {
     pub fn new(
         my_id: MemberId,
         group_store_y: TestGroupStoreState<GroupId, TestGroupStateInner>,
+        rng: StdRng,
     ) -> Self {
         let inner = TestOrdererStateInner {
             my_id,
             group_store_y,
             messages: Default::default(),
             orderer_y: PartialOrdererState::default(),
+            rng,
         };
         Self {
             inner: Rc::new(RefCell::new(inner)),
@@ -67,8 +71,13 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
         previous: Vec<MessageId>,
         payload: &GroupControlMessage<MemberId, MessageId>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
+        let next_id = {
+            let mut y_mut = y.inner.borrow_mut();
+            y_mut.rng.next_u32()
+        };
+
         let message = TestOperation {
-            id: rand::random(),
+            id: next_id,
             sender: y.my_id(),
             dependencies,
             previous,
