@@ -1,5 +1,7 @@
 use crate::group::GroupState;
-use crate::group::test_utils::{TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState};
+use crate::group::test_utils::{
+    Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
+};
 use crate::traits::AuthGraph;
 
 use super::access::Access;
@@ -256,4 +258,40 @@ fn nested_groups() {
             (alice_mobile, Access::Read),
         ]
     );
+}
+
+#[test]
+fn multi_user() {
+    let alice = 'A';
+    let bob = 'B';
+    let claire = 'B';
+
+    let alice_mobile = 'M';
+    let alice_laptop = 'L';
+
+    let alice_devices_group = 'D';
+    let alice_team_group = 'T';
+
+    // The group store is shared state across all group instances.
+    let group_store_y = TestGroupStoreState::default();
+    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone());
+
+    let mut network = Network::new([alice, bob, claire]);
+
+    network.create(
+        alice_team_group,
+        alice,
+        vec![(GroupMember::Individual(alice), Access::Manage)],
+    );
+
+    network.add(
+        alice,
+        GroupMember::Individual(bob),
+        alice_team_group,
+        Access::Manage,
+    );
+    network.process();
+
+    network.add(bob, GroupMember::Individual(claire), alice_team_group, Access::Read);
+    network.process();
 }
