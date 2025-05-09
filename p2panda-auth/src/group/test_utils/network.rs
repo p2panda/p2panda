@@ -109,9 +109,9 @@ impl Network {
 
         self.shuffle();
         while let Some(operation) = self.queue.pop_front() {
-            // Shuffle messages in the queue for each member.
-            self.shuffle();
             for id in &member_ids {
+                // Shuffle messages in the queue for each member.
+                self.shuffle();
                 self.member_process(&id, &operation)
             }
         }
