@@ -18,7 +18,7 @@ all-features = true
 [dependencies]
 anyhow = "1.0.98"
 petgraph = { version = "0.8.1", features = ["serde-1"] }
-rand = "0.9.1"
+rand = { version = "0.9.1", features = ["alloc"] }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.12"
 

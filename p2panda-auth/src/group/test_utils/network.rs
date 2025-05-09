@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use rand::seq::IteratorRandom;
+use rand::seq::SliceRandom;
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, access::Access};
 use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
@@ -109,9 +109,9 @@ impl Network {
 
         self.shuffle();
         while let Some(operation) = self.queue.pop_front() {
+            // Shuffle messages in the queue for each member.
+            self.shuffle();
             for id in &member_ids {
-                // Shuffle messages in the queue for each member.
-                self.shuffle();
                 self.member_process(&id, &operation)
             }
         }
@@ -183,12 +183,9 @@ impl Network {
     }
 
     fn shuffle(&mut self) {
-        let shuffled = self
-            .queue
-            .iter()
-            .cloned()
-            .choose_multiple(&mut self.rng, self.queue.len());
-        self.queue = VecDeque::from(shuffled);
+        let mut queue = self.queue.clone().into_iter().collect::<Vec<_>>();
+        queue.shuffle(&mut self.rng);
+        self.queue = VecDeque::from(queue);
     }
 
     fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
