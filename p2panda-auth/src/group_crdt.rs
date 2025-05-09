@@ -1,21 +1,9 @@
-// Group membership CRDT functions.
+//! Group membership CRDT.
 
 // TODO: Changes that need to be made:
 //
-// x generic `conditions` parameter on `Write`
 // - introduce flag for “any member can add new members” (?)
-//   - `all_members_are_managers`
-//   - it's not actually that all members are managers, it's that any member can add new members
-//   regardless of their own access level
 //   - need to think about behaviour when it comes to `promote` and `demote`
-// x proper error handling
-// x tests
-// - documentation
-
-// Glossary
-//
-// - actor: an entity performing a group action (eg. adding or removing a member from a group)
-// - member: an entity on which a group action is performed (e.g. added or removed from a group)
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -89,7 +77,7 @@ where
 
 #[derive(Clone, Debug)]
 pub struct GroupMembersState<ID, C> {
-    pub members: HashMap<ID, MemberState<C>>,
+    members: HashMap<ID, MemberState<C>>,
 }
 
 impl<ID, C> GroupMembersState<ID, C>
@@ -251,27 +239,30 @@ pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     Ok(state)
 }
 
-pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+/// Modify the access level of a group member.
+///
+/// The actor performing the action must be an active member of the group with manager access.
+pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
-    promoter: ID,
-    promoted: ID,
+    modifier: ID,
+    modified: ID,
     access: Access<C>,
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
-    // Ensure that "promoter" is known to the group.
-    let Some(promoter) = state.members.get(&promoter) else {
+    // Ensure that "modifier" is known to the group.
+    let Some(modifier) = state.members.get(&modifier) else {
         return Err(GroupMembershipError::UnrecognisedActor);
     };
 
-    // Ensure that "promoter" is a member of the group with manage access level.
-    if !promoter.is_member() {
+    // Ensure that "modifier" is a member of the group with manage access level.
+    if !modifier.is_member() {
         return Err(GroupMembershipError::InactiveActor);
-    } else if !promoter.is_manager() {
+    } else if !modifier.is_manager() {
         return Err(GroupMembershipError::InsufficientAccess);
     }
 
-    // Ensure that "promoted" is an active member of the group.
-    if let Some(promoted) = state.members.get(&promoted) {
-        if !promoted.is_member() {
+    // Ensure that "modified" is an active member of the group.
+    if let Some(modified) = state.members.get(&modified) {
+        if !modified.is_member() {
             return Err(GroupMembershipError::InactiveMember);
         }
     } else {
@@ -280,53 +271,73 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 
     // Update access level.
     let mut state = state;
-    state.members.entry(promoted).and_modify(|promoted| {
-        if promoted.access < access {
-            promoted.access = access;
-            promoted.access_counter += 1;
+    state.members.entry(modified).and_modify(|modified| {
+        // Only perform the modification if the access levels differ.
+        if modified.access != access {
+            modified.access = access;
+            modified.access_counter += 1;
         }
     });
 
     Ok(state)
 }
 
+/// Promote a group member by a single access level.
+///
+/// No modification will occur if the promoted member already has `Manage` access. In that case, the
+/// given state is returned unchanged.
+///
+/// Conditions may be optionally provided. These are only applied in the case of a promotion from
+/// `Read` to `Write`.
+///
+/// The actor performing the action must be an active member of the group with manager access.
+pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+    state: GroupMembersState<ID, C>,
+    promoter: ID,
+    promoted: ID,
+    conditions: Option<C>,
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+    if let Some(member) = state.members.get(&promoted) {
+        let new_state = match member.access {
+            Access::Pull => modify(state, promoter, promoted, Access::Read)?,
+            Access::Read => modify(state, promoter, promoted, Access::Write { conditions })?,
+            Access::Write { .. } => modify(state, promoter, promoted, Access::Manage)?,
+            Access::Manage => state,
+        };
+
+        Ok(new_state)
+    } else {
+        Err(GroupMembershipError::UnrecognisedMember)
+    }
+}
+
+/// Demote a group member by a single access level.
+///
+/// No modification will occur if the demoted member already has `Pull` access. In that case, the
+/// given state is returned unchanged.
+///
+/// Conditions may be optionally provided. These are only applied in the case of a demotion from
+/// `Manage` to `Write`.
+///
+/// The actor performing the action must be an active member of the group with manager access.
 pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     demoter: ID,
     demoted: ID,
-    access: Access<C>,
+    conditions: Option<C>,
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
-    // Ensure that "demoter" is known to the group.
-    let Some(demoter) = state.members.get(&demoter) else {
-        return Err(GroupMembershipError::UnrecognisedActor);
-    };
+    if let Some(member) = state.members.get(&demoted) {
+        let new_state = match member.access {
+            Access::Pull => state,
+            Access::Read => modify(state, demoter, demoted, Access::Pull)?,
+            Access::Write { .. } => modify(state, demoter, demoted, Access::Read)?,
+            Access::Manage => modify(state, demoter, demoted, Access::Write { conditions })?,
+        };
 
-    // Ensure that "demoter" is a member of the group with manage access level.
-    if !demoter.is_member() {
-        return Err(GroupMembershipError::InactiveActor);
-    } else if !demoter.is_manager() {
-        return Err(GroupMembershipError::InsufficientAccess);
-    }
-
-    // Ensure that "demoted" is an active member of the group.
-    if let Some(demoted) = state.members.get(&demoted) {
-        if !demoted.is_member() {
-            return Err(GroupMembershipError::InactiveMember);
-        }
+        Ok(new_state)
     } else {
-        return Err(GroupMembershipError::UnrecognisedMember);
+        Err(GroupMembershipError::UnrecognisedMember)
     }
-
-    // Update access level.
-    let mut state = state;
-    state.members.entry(demoted).and_modify(|demoted| {
-        if demoted.access > access {
-            demoted.access = access;
-            demoted.access_counter += 1;
-        }
-    });
-
-    Ok(state)
 }
 
 /// Merge two group states into one using a deterministic, conflict-free approach.
@@ -387,7 +398,7 @@ mod tests {
     fn create_add_remove() {
         // "Happy path" test for create, add and remove functions.
 
-        // TODO: Is there a way to avoid this completely?
+        // @TODO(glyph): Is there a way to avoid this completely?
         //
         // Avoid having to annotate the conditions `C`.
         type AccessLevel = Access<String>;
@@ -427,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn promote_demote() {
+    fn promote_demote_modify() {
         type AccessLevel = Access<String>;
 
         let alice = 0;
@@ -439,26 +450,21 @@ mod tests {
         let group_y = create(&initial_members).unwrap();
 
         // Alice promotes Bob to Write access.
-        let group_y = promote(
-            group_y,
-            alice,
-            bob,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
-        )
-        .unwrap();
+        let group_y = promote(group_y, alice, bob, Some("requirement".to_string())).unwrap();
 
         let group_y_clone = group_y.clone();
 
         let bob_state = group_y_clone.members.get(&bob).unwrap();
         assert!(bob_state.is_writer());
 
-        // Alice demotes Bob to Pull access.
-        let group_y = demote(group_y, alice, bob, AccessLevel::Pull).unwrap();
+        // Alice demotes Bob to Read access.
+        let group_y = demote(group_y.clone(), alice, bob, None).unwrap();
+
+        // Alice promotes Bob to Manage access.
+        let group_y = modify(group_y, alice, bob, AccessLevel::Manage).unwrap();
 
         let bob_state = group_y.members.get(&bob).unwrap();
-        assert!(bob_state.is_puller());
+        assert!(bob_state.is_manager());
     }
 
     #[test]
@@ -589,7 +595,7 @@ mod tests {
         let group_y = create(&initial_members).unwrap();
 
         // Daphne promotes Charlie...
-        let result = promote(group_y.clone(), daphne, charlie, AccessLevel::Manage);
+        let result = promote(group_y.clone(), daphne, charlie, None);
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -598,14 +604,7 @@ mod tests {
         ));
 
         // Bob promotes Charlie...
-        let result = promote(
-            group_y.clone(),
-            bob,
-            charlie,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
-        );
+        let result = promote(group_y.clone(), bob, charlie, None);
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -614,7 +613,7 @@ mod tests {
         ));
 
         // Alice promotes Daphne...
-        let result = promote(group_y.clone(), alice, daphne, AccessLevel::Read);
+        let result = promote(group_y.clone(), alice, daphne, None);
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -626,13 +625,13 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice promotes Charlie...
-        let result = promote(group_y.clone(), alice, charlie, AccessLevel::Manage);
+        let result = promote(group_y.clone(), alice, charlie, None);
 
         // ...but Charlie isn't a member.
         assert!(matches!(result, Err(GroupMembershipError::InactiveMember)));
 
         // Charlie promotes Bob...
-        let result = promote(group_y, charlie, bob, AccessLevel::Read);
+        let result = promote(group_y, charlie, bob, None);
 
         // ...but Charlie isn't a member.
         assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
@@ -659,7 +658,7 @@ mod tests {
         let group_y = create(&initial_members).unwrap();
 
         // Daphne demotes Charlie...
-        let result = demote(group_y.clone(), daphne, charlie, AccessLevel::Manage);
+        let result = demote(group_y.clone(), daphne, charlie, None);
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -668,7 +667,7 @@ mod tests {
         ));
 
         // Bob demotes Charlie...
-        let result = demote(group_y.clone(), bob, charlie, AccessLevel::Pull);
+        let result = demote(group_y.clone(), bob, charlie, None);
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -677,7 +676,7 @@ mod tests {
         ));
 
         // Alice demotes Daphne...
-        let result = demote(group_y.clone(), alice, daphne, AccessLevel::Read);
+        let result = demote(group_y.clone(), alice, daphne, None);
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -689,13 +688,13 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice demotes Charlie...
-        let result = demote(group_y.clone(), alice, charlie, AccessLevel::Pull);
+        let result = demote(group_y.clone(), alice, charlie, None);
 
         // ...but Charlie isn't a member.
         assert!(matches!(result, Err(GroupMembershipError::InactiveMember)));
 
         // Charlie demotes Bob...
-        let result = demote(group_y, charlie, bob, AccessLevel::Read);
+        let result = demote(group_y, charlie, bob, None);
 
         // ...but Charlie isn't a member.
         assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
@@ -791,10 +790,10 @@ mod tests {
         let group_y_i = create(&initial_members).unwrap();
 
         // Alice promotes Charlie.
-        let group_y_ii = promote(group_y_i.clone(), alice, charlie, AccessLevel::Read).unwrap();
+        let group_y_ii = promote(group_y_i.clone(), alice, charlie, None).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, AccessLevel::Pull).unwrap();
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, None).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i, group_y_ii).unwrap();
@@ -830,27 +829,25 @@ mod tests {
         let group_y = create(&initial_members).unwrap();
 
         // Alice promotes Charlie.
-        let group_y_i = promote(group_y.clone(), alice, charlie, AccessLevel::Read).unwrap();
+        let group_y_i = promote(group_y.clone(), alice, charlie, None).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_i = demote(group_y_i.clone(), alice, charlie, AccessLevel::Pull).unwrap();
+        let group_y_i = demote(group_y_i.clone(), alice, charlie, None).unwrap();
 
         // Alice promotes Charlie.
-        let group_y_ii = promote(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
+        let group_y_ii = modify(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
 
         // Alice demotes Charlie.
         let group_y_ii = demote(
             group_y_ii.clone(),
             alice,
             charlie,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
+            Some("requirement".to_string()),
         )
         .unwrap();
 
         // Merge the states.
-        let group_y = merge(group_y_i, group_y_ii).unwrap();
+        let group_y = merge(group_y_i.clone(), group_y_ii.clone()).unwrap();
 
         let charlie_state = group_y.members.get(&charlie).unwrap();
 
