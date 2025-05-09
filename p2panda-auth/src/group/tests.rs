@@ -354,7 +354,6 @@ fn multi_user() {
     // Everyone processes these operations.
     network.process();
 
-    // alice, bob and claire now
     let alice_members = network.members(&alice, &alice_team_group);
     let bob_members = network.members(&bob, &alice_team_group);
     let claire_members = network.members(&claire, &alice_team_group);
@@ -404,7 +403,7 @@ fn ooo() {
 
     let mut network = Network::new([alice, bob, claire], rng);
 
-    // Alice creates a team group with themselves as initial member.
+    // Alice creates a friends group with themselves as initial member.
     network.create(
         friends_group,
         alice,
@@ -417,6 +416,7 @@ fn ooo() {
 
     network.process();
 
+    // alice, bob and claire all concurrently add 3 new friends, then remove one
     for friend in &alice_friends {
         network.add(
             alice,
@@ -458,6 +458,7 @@ fn ooo() {
         friends_group,
     );
 
+    // alice, bob and claire all process these messages in random orders.
     network.process_ooo();
 
     let alice_members = network.members(&alice, &friends_group);
@@ -482,4 +483,58 @@ fn ooo() {
     );
     assert_eq!(alice_members, claire_members);
     assert_eq!(alice_members, bob_members);
+}
+
+#[test]
+fn add_remove_add() {
+    let alice = 'A';
+    let bob = 'B';
+
+    let friends_group = 'T';
+
+    let rng = StdRng::from_os_rng();
+    // let rng = StdRng::from_seed([0u8; 32]);
+
+    let mut network = Network::new([alice, bob], rng);
+
+    network.create(
+        friends_group,
+        alice,
+        vec![(GroupMember::Individual(alice), Access::Manage)],
+    );
+
+    network.add(
+        alice,
+        GroupMember::Individual(bob),
+        friends_group,
+        Access::Read,
+    );
+
+    network.remove(alice, GroupMember::Individual(bob), friends_group);
+
+    let members = network.members(&alice, &friends_group);
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual('A'), Access::Manage),
+        ]
+    );
+
+    network.add(
+        alice,
+        GroupMember::Individual(bob),
+        friends_group,
+        Access::Read,
+    );
+
+    network.process();
+
+    let members = network.members(&alice, &friends_group);
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual('A'), Access::Manage),
+            (GroupMember::Individual('B'), Access::Read),
+        ]
+    );
 }
