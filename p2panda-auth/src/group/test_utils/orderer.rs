@@ -26,7 +26,7 @@ pub struct TestOrdererState {
 pub struct TestOrdererStateInner {
     pub my_id: MemberId,
     pub group_store_y: TestGroupStoreState<GroupId, TestGroupStateInner>,
-    pub partial_orderer_y: PartialOrdererState<MessageId>,
+    pub orderer_y: PartialOrdererState<MessageId>,
     pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId>>,
 }
 
@@ -39,7 +39,7 @@ impl TestOrdererState {
             my_id,
             group_store_y,
             messages: Default::default(),
-            partial_orderer_y: PartialOrdererState::default(),
+            orderer_y: PartialOrdererState::default(),
         };
         Self {
             inner: Rc::new(RefCell::new(inner)),
@@ -88,9 +88,22 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
         let id = message.id();
 
         {
-            let mut inner = y.inner.borrow_mut();
-            inner.partial_orderer_y =
-                PartialOrderer::process_pending(inner.partial_orderer_y.clone(), id).unwrap();
+            let mut inner: std::cell::RefMut<'_, TestOrdererStateInner> = y.inner.borrow_mut();
+            inner.messages.insert(id, message.clone());
+
+            let dependencies = message.dependencies();
+
+            if !PartialOrderer::ready(&inner.orderer_y, &dependencies).unwrap() {
+                let (orderer_y_i, _) =
+                    PartialOrderer::mark_pending(inner.orderer_y.clone(), id, dependencies.clone())
+                        .unwrap();
+                inner.orderer_y = orderer_y_i;
+            } else {
+                let (orderer_y_i, _) =
+                    PartialOrderer::mark_ready(inner.orderer_y.clone(), id).unwrap();
+                let orderer_y_ii = PartialOrderer::process_pending(orderer_y_i, id).unwrap();
+                inner.orderer_y = orderer_y_ii;
+            }
         }
 
         Ok(y)
@@ -99,14 +112,14 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
     fn next_ready_message(
         y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-        let mut next_msg = None;
-        {
+        let next_msg = {
             let mut inner = y.inner.borrow_mut();
-            let (partial_orderer_y_i, msg) =
-                PartialOrderer::take_next_ready(inner.partial_orderer_y.clone()).unwrap();
-            inner.partial_orderer_y = partial_orderer_y_i;
-            next_msg = msg;
-        }
+            let (orderer_y_i, msg) =
+                PartialOrderer::take_next_ready(inner.orderer_y.clone()).unwrap();
+
+            inner.orderer_y = orderer_y_i;
+            msg
+        };
 
         let next_msg = match next_msg {
             Some(msg) => y.inner.borrow().messages.get(&msg).cloned(),

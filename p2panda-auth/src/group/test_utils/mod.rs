@@ -4,7 +4,7 @@ mod orderer;
 mod partial_ord;
 
 pub use group_store::{TestGroupStore, TestGroupStoreState};
-// pub use orderer::*;
+pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
 

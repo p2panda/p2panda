@@ -3,28 +3,39 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, access::Access};
-use crate::traits::{AuthGraph, Operation, Ordering};
+use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStateInner,
+    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStateInner, TestGroupStore,
     TestGroupStoreState, TestOperation, TestOrderer, TestOrdererState,
 };
 
 pub struct Network {
-    group_store_y: TestGroupStoreState<MemberId, TestGroupStateInner>,
-    members: HashMap<MemberId, HashMap<GroupId, TestGroupState>>,
+    members: HashMap<MemberId, NetworkMember>,
     queue: VecDeque<TestOperation<MemberId, MessageId>>,
+}
+
+pub struct NetworkMember {
+    id: MemberId,
+    group_store_y: TestGroupStoreState<MemberId, TestGroupStateInner>,
+    orderer_y: TestOrdererState,
 }
 
 impl Network {
     pub fn new<const N: usize>(members: [MemberId; N]) -> Self {
         Self {
-            group_store_y: TestGroupStoreState::default(),
-            members: HashMap::from_iter(
-                members
-                    .into_iter()
-                    .map(|member_id| (member_id, HashMap::default())),
-            ),
+            members: HashMap::from_iter(members.into_iter().map(|member_id| {
+                let group_store_y = TestGroupStoreState::default();
+                let orderer_y = TestOrdererState::new(member_id, group_store_y.clone());
+                (
+                    member_id,
+                    NetworkMember {
+                        id: member_id,
+                        group_store_y,
+                        orderer_y,
+                    },
+                )
+            })),
             queue: VecDeque::new(),
         }
     }
@@ -35,18 +46,16 @@ impl Network {
         creator: MemberId,
         initial_members: Vec<(GroupMember<MemberId>, Access)>,
     ) {
-        let y = TestGroupState::new(
-            creator,
-            group_id,
-            self.group_store_y.clone(),
-            TestOrdererState::new(creator, self.group_store_y.clone()),
-        );
+        let y = self.get_y(&creator, &group_id);
+
         let control_message = GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Create { initial_members },
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
-        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let mut y_ii = TestGroup::process(y_i, &operation).unwrap();
+        y_ii.group_store_y =
+            TestGroupStore::insert(y_ii.group_store_y.clone(), &group_id, &y_ii.inner).unwrap();
         self.queue.push_back(operation);
         self.set_y(y_ii);
     }
@@ -67,7 +76,9 @@ impl Network {
             },
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
-        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let mut y_ii = TestGroup::process(y_i, &operation).unwrap();
+        y_ii.group_store_y =
+            TestGroupStore::insert(y_ii.group_store_y.clone(), &group_id, &y_ii.inner).unwrap();
         self.queue.push_back(operation);
         self.set_y(y_ii);
     }
@@ -112,10 +123,12 @@ impl Network {
                     let Some(message) = result else {
                         break;
                     };
-
-                    y = TestGroup::process(y.clone(), &operation).unwrap();
+                    y = TestGroup::process(y.clone(), &message).unwrap();
+                    y.group_store_y =
+                        TestGroupStore::insert(y.group_store_y.clone(), &group_id, &y.inner)
+                            .unwrap();
                 }
-                self.set_y(y);
+                self.set_y(y.clone());
             }
         }
     }
@@ -125,44 +138,49 @@ impl Network {
         member: &MemberId,
         group_id: &GroupId,
     ) -> Vec<(GroupMember<MemberId>, Access)> {
-        let y = self
-            .members
-            .get(member)
-            .expect("member exists")
-            .get(group_id)
+        let member = self.members.get(member).expect("member exists");
+
+        let group_y_inner = TestGroupStore::get(&member.group_store_y, group_id)
+            .unwrap()
             .expect("group exists");
 
-        let mut members = y.members();
+        let mut group_y = TestGroupState::new(
+            member.id,
+            *group_id,
+            member.group_store_y.clone(),
+            TestOrdererState::new(member.id, member.group_store_y.clone()),
+        );
+
+        group_y = TestGroupState::new_from_inner(&group_y, group_y_inner);
+
+        let mut members = group_y.members();
         members.sort();
         members
     }
 
     fn get_y(&mut self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
-        let group_y = self
-            .members
-            .get_mut(member)
-            .expect("member exists")
-            .remove(group_id);
+        let member = self.members.get(member).expect("member exists");
 
-        match group_y {
-            Some(group_y) => group_y,
-            None => TestGroupState::new(
-                *member,
-                *group_id,
-                self.group_store_y.clone(),
-                TestOrdererState::new(*member, self.group_store_y.clone()),
-            ),
+        let group_y = TestGroupState::new(
+            member.id,
+            *group_id,
+            member.group_store_y.clone(),
+            member.orderer_y.clone(),
+        );
+
+        let group_y_inner = TestGroupStore::get(&member.group_store_y, group_id).unwrap();
+
+        match group_y_inner {
+            Some(group_y_inner) => TestGroupState::new_from_inner(&group_y, group_y_inner),
+            None => group_y,
         }
     }
 
     fn set_y(&mut self, y: TestGroupState) {
-        assert!(
-            self.members
-                .get_mut(&y.my_id)
-                .expect("member exists")
-                .insert(y.id(), y)
-                .is_none(),
-            "state was removed before insertion"
-        );
+        let member = self.members.get_mut(&y.my_id).expect("member exists");
+
+        let group_store_y =
+            TestGroupStore::insert(member.group_store_y.clone(), &y.id(), &y.inner).unwrap();
+        member.group_store_y = group_store_y;
     }
 }
