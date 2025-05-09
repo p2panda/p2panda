@@ -48,6 +48,9 @@ where
 
     #[error("state {0} not found in group {1}")]
     StateNotFound(OP, ID),
+
+    #[error("operation for group {0} processed in group {1}")]
+    IncorrectGroupId(ID, ID),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -420,7 +423,7 @@ where
             // This operation is not intended for this group.
             //
             // TODO: Throw error here.
-            return Ok(y);
+            return Err(GroupError::IncorrectGroupId(group_id, y.inner.group_id));
         }
 
         // The resolver implementation contains the logic which determines when rebuilds are
