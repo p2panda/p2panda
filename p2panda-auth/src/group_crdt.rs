@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Group membership CRDT.
 
 // TODO: Changes that need to be made:
