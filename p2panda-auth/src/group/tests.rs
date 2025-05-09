@@ -386,3 +386,100 @@ fn multi_user() {
     assert_eq!(alice_transitive_members, bob_transitive_members);
     assert_eq!(alice_transitive_members, claire_transitive_members);
 }
+
+#[test]
+fn ooo() {
+    let alice = 'A';
+    let bob = 'B';
+    let claire = 'C';
+
+    let alice_friends = vec!['D', 'E', 'F'];
+    let bob_friends = vec!['G', 'H', 'I'];
+    let claire_friends = vec!['J', 'K', 'L'];
+
+    let friends_group = 'T';
+
+    let rng = StdRng::from_os_rng();
+    // let rng = StdRng::from_seed([0u8; 32]);
+
+    let mut network = Network::new([alice, bob, claire], rng);
+
+    // Alice creates a team group with themselves as initial member.
+    network.create(
+        friends_group,
+        alice,
+        vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (GroupMember::Individual(bob), Access::Manage),
+            (GroupMember::Individual(claire), Access::Manage),
+        ],
+    );
+
+    network.process();
+
+    for friend in &alice_friends {
+        network.add(
+            alice,
+            GroupMember::Individual(*friend),
+            friends_group,
+            Access::Read,
+        );
+    }
+
+    network.remove(
+        alice,
+        GroupMember::Individual(alice_friends[0]),
+        friends_group,
+    );
+
+    for friend in &bob_friends {
+        network.add(
+            bob,
+            GroupMember::Individual(*friend),
+            friends_group,
+            Access::Read,
+        );
+    }
+
+    network.remove(bob, GroupMember::Individual(bob_friends[0]), friends_group);
+
+    for friend in &claire_friends {
+        network.add(
+            claire,
+            GroupMember::Individual(*friend),
+            friends_group,
+            Access::Read,
+        );
+    }
+
+    network.remove(
+        claire,
+        GroupMember::Individual(claire_friends[0]),
+        friends_group,
+    );
+
+    network.process_ooo();
+
+    let alice_members = network.members(&alice, &friends_group);
+    let bob_members = network.members(&bob, &friends_group);
+    let claire_members = network.members(&claire, &friends_group);
+    assert_eq!(
+        alice_members,
+        vec![
+            (GroupMember::Individual('A'), Access::Manage),
+            (GroupMember::Individual('B'), Access::Manage),
+            (GroupMember::Individual('C'), Access::Manage),
+            // (GroupMember::Individual('D'), Access::Read),
+            (GroupMember::Individual('E'), Access::Read),
+            (GroupMember::Individual('F'), Access::Read),
+            // (GroupMember::Individual('G'), Access::Read),
+            (GroupMember::Individual('H'), Access::Read),
+            (GroupMember::Individual('I'), Access::Read),
+            // (GroupMember::Individual('J'), Access::Read),
+            (GroupMember::Individual('K'), Access::Read),
+            (GroupMember::Individual('L'), Access::Read),
+        ]
+    );
+    assert_eq!(alice_members, claire_members);
+    assert_eq!(alice_members, bob_members);
+}
