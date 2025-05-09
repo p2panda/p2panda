@@ -297,8 +297,8 @@ fn multi_user() {
         Access::Manage,
     );
 
-    // Everyone processes these operations in random order.
-    network.process_ooo();
+    // Everyone processes these operations.
+    network.process();
 
     let alice_members = network.members(&alice, &alice_team_group);
     let bob_members = network.members(&bob, &alice_team_group);
@@ -351,10 +351,10 @@ fn multi_user() {
         Access::Manage,
     );
 
-    // Everyone processes these operations in random order.
-    network.process_ooo();
+    // Everyone processes these operations.
+    network.process();
 
-    // alice, bob and claire now 
+    // alice, bob and claire now
     let alice_members = network.members(&alice, &alice_team_group);
     let bob_members = network.members(&bob, &alice_team_group);
     let claire_members = network.members(&claire, &alice_team_group);
