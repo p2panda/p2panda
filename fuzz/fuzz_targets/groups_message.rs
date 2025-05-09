@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_group::message_scheme::MessageGroup;
+use p2panda_group::message_scheme::{GroupEvent, MessageGroup};
 use p2panda_group::test_utils::message_scheme::dgm::AckedTestDgm;
 use p2panda_group::test_utils::message_scheme::network::{
     TestGroupError, TestGroupState, init_group_state,
@@ -16,10 +16,14 @@ use p2panda_group::test_utils::{MemberId, MessageId};
 use p2panda_group::traits::ForwardSecureGroupMessage;
 use p2panda_group::{Rng, message_scheme};
 
+/// Chance to pick an invalid transition in percentage.
 const INVALID_TRANSITION_CHANCE: u8 = 0; // in %
 
-const MAX_OPERATIONS: usize = 128;
+/// Number of max. group epochs per fuzzing round. Members can create one group operation each per
+/// epoch.
+const MAX_GROUP_EPOCHS: usize = 128;
 
+/// Max. number of members in a group.
 const MAX_GROUP_SIZE: usize = 32;
 
 fn random_u8(rng: &Rng) -> u8 {
@@ -55,14 +59,14 @@ fn print_members(members: &[MemberId]) -> String {
 }
 
 #[derive(Debug)]
-struct Values {
+struct AssertableValues {
     my_id: MemberId,
     members: Vec<MemberId>,
     active_members: Vec<MemberId>,
     removed_members: Vec<MemberId>,
 }
 
-impl Values {
+impl AssertableValues {
     fn random_member(&self, rng: &Rng) -> Option<MemberId> {
         let members: Vec<MemberId> = self
             .members
@@ -128,16 +132,16 @@ enum Options {
 }
 
 #[derive(Debug)]
-struct Machine {
-    values: Values,
+struct StateMachine {
+    values: AssertableValues,
     history: Vec<Operation>,
     state: State,
 }
 
-impl Machine {
+impl StateMachine {
     pub fn from_standby(my_id: MemberId, members: Vec<MemberId>) -> Self {
         Self {
-            values: Values {
+            values: AssertableValues {
                 my_id,
                 members,
                 active_members: Vec::new(),
@@ -161,7 +165,7 @@ impl Machine {
         }
 
         Self {
-            values: Values {
+            values: AssertableValues {
                 my_id,
                 members,
                 active_members: initial_members.clone(),
@@ -205,6 +209,7 @@ impl Machine {
         }
     }
 
+    /// Randomly suggest a valid, next group operation based on a set of given options.
     fn suggest_valid(&self, try_options: &[Options], rng: &Rng) -> Operation {
         let mut options = Vec::new();
 
@@ -243,11 +248,14 @@ impl Machine {
         }
     }
 
+    /// Randomly suggest an invalid group operation.
     fn suggest_invalid(&self, _rng: &Rng) -> Operation {
         // TODO
         Operation::Noop
     }
 
+    /// Apply a group operation to the state machine, causing it to transition to a new state and
+    /// adjust the expected group state values.
     fn transition(&mut self, operation: &Operation) {
         let next_state = match (&self.state, operation) {
             (State::Standby, Operation::Add { added, .. }) => {
@@ -271,6 +279,7 @@ impl Machine {
                 Operation::Update | Operation::SendMessage { .. } | Operation::Noop,
             ) => State::Active,
             (State::Removed, Operation::Noop) => State::Removed,
+            (State::Removed, Operation::Remove { .. }) => State::Removed,
             (_, Operation::Create { .. }) => {
                 unreachable!("create can not be called as a transition");
             }
@@ -292,6 +301,7 @@ impl Machine {
         self.state = next_state;
     }
 
+    /// Apply state changes to our machine based on the results of processing a remote message.
     fn transition_remote(
         &mut self,
         added_members: &HashSet<MemberId>,
@@ -305,11 +315,6 @@ impl Machine {
         }
 
         for removed in removed_members {
-            // We get removed during this loop, so let's stop here.
-            if self.is_removed() {
-                break;
-            }
-
             self.transition(&Operation::Remove { removed: *removed });
         }
     }
@@ -352,11 +357,11 @@ enum Suggestion {
     Invalid(Operation),
 }
 
-impl Suggestion {
-    fn operation(&self) -> Operation {
+impl<'a> Suggestion {
+    fn operation(&'a self) -> &'a Operation {
         match self {
-            Suggestion::Valid(operation) => operation.clone(),
-            Suggestion::Invalid(operation) => operation.clone(),
+            Suggestion::Valid(operation) => operation,
+            Suggestion::Invalid(operation) => operation,
         }
     }
 }
@@ -424,7 +429,7 @@ type GroupOutput = message_scheme::GroupOutput<
 
 #[derive(Debug)]
 struct Member {
-    machine: Machine,
+    machine: StateMachine,
     group: Option<TestGroupState>,
 }
 
@@ -496,14 +501,154 @@ impl Member {
         Ok(output)
     }
 
-    pub fn assert_state(&mut self, _operation: &Operation, _output: &Option<GroupOutput>) {
-        // TODO
-        // let y_group = self.group.as_ref().expect("group state exists");
-        // Assert that peer has the expected "members" state.
-        // let members = MessageGroup::members(y_group).expect("members function does not fail");
-        // let expected_members: HashSet<MemberId> =
-        //     self.machine.values.active_members.iter().cloned().collect();
-        // assert_eq!(members, expected_members, "member set of {}", self.id());
+    pub fn assert_state(&self, operations: &[(Operation, Message)], outputs: &[GroupOutput]) {
+        let y_group = self.group.as_ref().expect("group state exists");
+
+        // Define membership status.
+        let members = MessageGroup::members(y_group).expect("members function does not fail");
+        let status = {
+            let added_in_this_epoch = operations.iter().any(|(operation, _)| {
+                if let Operation::Add { added, .. } = operation {
+                    added == &self.id()
+                } else {
+                    false
+                }
+            });
+            let removed_in_this_epoch = operations.iter().any(|(operation, _)| {
+                if let Operation::Remove { removed } = operation {
+                    removed == &self.id()
+                } else {
+                    false
+                }
+            });
+            let is_active = members.contains(&self.id());
+            MembershipStatus::new(added_in_this_epoch, removed_in_this_epoch, is_active)
+        };
+
+        // Expected "members" state.
+        let expected_members: HashSet<MemberId> =
+            self.machine.values.active_members.iter().cloned().collect();
+        assert_eq!(members, expected_members, "member set of {}", self.id());
+
+        // Expected outcomes from operations.
+        for (operation, message) in operations {
+            match operation {
+                // TODO: Assert all operations.
+                // Operation::Add {
+                //     added,
+                //     members_in_welcome,
+                // } => {
+                // }
+                // Operation::Remove { removed } => {
+                // }
+                // Operation::Update => {
+                // }
+                Operation::SendMessage { plaintext } => {
+                    assert_send_message(self.id(), message, &plaintext, outputs, status);
+                }
+                _ => (),
+            }
+        }
+    }
+}
+
+/// Assert expected outcomes when processing an encrypted message.
+fn assert_send_message(
+    recipient: MemberId,
+    message: &Message,
+    expected_plaintext: &[u8],
+    outputs: &[GroupOutput],
+    status: MembershipStatus,
+) {
+    // We don't expect decrypted messages in the outputs if we encrypted them ourselves.
+    if message.sender() == recipient {
+        return;
+    }
+
+    // Find a matching decrypted application message in the outputs for this round.
+    let application_event = {
+        let mut result = None;
+        for output in outputs {
+            for event in &output.events {
+                if let GroupEvent::Application { message_id, .. } = event {
+                    if message_id != &message.id() {
+                        continue;
+                    }
+                    result = Some(event.clone());
+                }
+            }
+        }
+        result
+    };
+
+    match application_event {
+        Some(GroupEvent::Application { plaintext, .. }) => {
+            // Member should not have received that event as they are either not active or just
+            // have been added in this epoch (concurrent messages can not be decrypted).
+            if status == MembershipStatus::AddedInEpoch || status == MembershipStatus::Inactive {
+                panic!(
+                    "unexpected \"application\" output event (recipient_id={}, sender_id={})",
+                    recipient,
+                    message.sender(),
+                );
+            }
+
+            // Member was part of the group in the moment the message was sent and thus should
+            // be able to decrypt it's contents.
+            if status == MembershipStatus::Active || status == MembershipStatus::RemovedInEpoch {
+                assert_eq!(
+                    &plaintext, expected_plaintext,
+                    "unexpected plaintext after decrypting"
+                );
+            }
+        }
+        None => {
+            // Member was part of the group in the moment the message was sent and should have
+            // received an decrypted application event in the outputs.
+            //
+            // Members who were concurrently removed to the message _can_ still decrypt the
+            // content. If this happened depends on if they processed the application message
+            // before the removal, this is why we're not checking that here.
+            if status == MembershipStatus::Active {
+                panic!(
+                    "expected \"application\" output event after processing \"send message\" operation (recipient_id={}, sender_id={})",
+                    recipient,
+                    message.sender(),
+                );
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum MembershipStatus {
+    /// Member was just added in this epoch. They will be active from next epoch on.
+    AddedInEpoch,
+
+    /// Member was just removed in this epoch. They will be inactive from next epoch on.
+    RemovedInEpoch,
+
+    /// Member was already active, no change in status.
+    Active,
+
+    /// Member is not active, either because they were never welcomed or removed some time ago.
+    Inactive,
+}
+
+impl MembershipStatus {
+    pub fn new(added_in_this_epoch: bool, removed_in_this_epoch: bool, is_active: bool) -> Self {
+        if added_in_this_epoch {
+            MembershipStatus::AddedInEpoch
+        } else if removed_in_this_epoch {
+            MembershipStatus::RemovedInEpoch
+        } else if !added_in_this_epoch && is_active {
+            MembershipStatus::Active
+        } else if !removed_in_this_epoch && !is_active {
+            MembershipStatus::Inactive
+        } else {
+            unreachable!()
+        }
     }
 }
 
@@ -537,9 +682,9 @@ fuzz_target!(|seed: [u8; 32]| {
             Member {
                 // Initialise state machine for each member.
                 machine: if id == &group_creator {
-                    Machine::from_create(*id, member_ids.clone(), vec![*id])
+                    StateMachine::from_create(*id, member_ids.clone(), vec![*id])
                 } else {
-                    Machine::from_standby(*id, member_ids.clone())
+                    StateMachine::from_standby(*id, member_ids.clone())
                 },
                 // Set up group state for each member.
                 group: {
@@ -577,11 +722,12 @@ fuzz_target!(|seed: [u8; 32]| {
     println!("group created [group_creator={}]", group_creator);
     println!("==============================");
 
-    for _ in 0..MAX_OPERATIONS {
+    for _ in 0..MAX_GROUP_EPOCHS {
         // 1. Go through all members of the group, suggest and apply a local operation this member
         //    can do. Inactive or removed members will not cause any actions.
 
         let mut concurrent_adds = HashSet::new();
+        let mut operations: Vec<(Operation, Message)> = Vec::new();
 
         for member_id in &member_ids {
             let member = members.get_mut(member_id).expect("member exists");
@@ -612,7 +758,8 @@ fuzz_target!(|seed: [u8; 32]| {
                         .process_local(operation, &rng)
                         .unwrap_or_else(|_| panic!("valid operations to not fail: {}", operation))
                     {
-                        queue.push_back((suggestion.clone(), message));
+                        operations.push((operation.clone(), message.clone()));
+                        queue.push_back((suggestion, message));
                     }
                 }
                 Suggestion::Invalid(operation) => {
@@ -634,10 +781,12 @@ fuzz_target!(|seed: [u8; 32]| {
         //    Concurrent operations can then only happen within this round. This is a simplified
         //    fuzzing setup not simulating more complex concurrent p2p scenarios.
 
+        let mut outputs: HashMap<MemberId, Vec<GroupOutput>> = HashMap::new();
+
         while let Some((suggestion, message)) = queue.pop_front() {
             println!(
                 "next message from queue: \"{}\" sent by {}",
-                message.message_type(),
+                message.encryption_content(),
                 message.sender()
             );
 
@@ -657,18 +806,20 @@ fuzz_target!(|seed: [u8; 32]| {
                             )
                         }
 
-                        // Compare the outcome of processing this operation with the expected
-                        // "simulated" state.
-                        member.assert_state(&suggestion.operation(), &output);
-
-                        // There might be more messages to-be-broadcast after processing. Let's
-                        // queue them up!
                         if let Some(output) = output {
-                            for event in output.events {
+                            // There might be more messages to-be-broadcast after processing. Let's
+                            // queue them up!
+                            for event in &output.events {
                                 if let message_scheme::GroupEvent::Control(output_message) = event {
-                                    queue.push_back((suggestion.clone(), output_message));
+                                    queue.push_back((suggestion.clone(), output_message.clone()));
                                 }
                             }
+
+                            // Keep all outputs per member for later to assert.
+                            outputs
+                                .entry(*member_id)
+                                .and_modify(|outputs| outputs.push(output.clone()))
+                                .or_insert(vec![output]);
                         }
                     }
                     Err(err) => {
@@ -683,6 +834,13 @@ fuzz_target!(|seed: [u8; 32]| {
                     }
                 }
             }
+        }
+
+        // 3. Assert outcomes.
+
+        for member_id in &member_ids {
+            let member = members.get_mut(member_id).expect("member exists");
+            member.assert_state(&operations, &outputs.get(member_id).unwrap_or(&vec![]));
         }
 
         println!("--------");
