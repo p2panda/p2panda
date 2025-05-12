@@ -2,11 +2,6 @@
 
 //! Group membership CRDT.
 
-// TODO: Changes that need to be made:
-//
-// - introduce flag for “any member can add new members” (?)
-//   - need to think about behaviour when it comes to `promote` and `demote`
-
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
