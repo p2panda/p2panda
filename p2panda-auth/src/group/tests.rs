@@ -515,9 +515,7 @@ fn add_remove_add() {
     let members = network.members(&alice, &friends_group);
     assert_eq!(
         members,
-        vec![
-            (GroupMember::Individual('A'), Access::Manage),
-        ]
+        vec![(GroupMember::Individual('A'), Access::Manage),]
     );
 
     network.add(
