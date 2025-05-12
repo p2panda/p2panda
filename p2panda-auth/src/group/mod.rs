@@ -421,8 +421,6 @@ where
 
         if y.inner.group_id != group_id {
             // This operation is not intended for this group.
-            //
-            // TODO: Throw error here.
             return Err(GroupError::IncorrectGroupId(group_id, y.inner.group_id));
         }
 
