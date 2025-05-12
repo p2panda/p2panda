@@ -1,13 +1,15 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
+use petgraph::algo::toposort;
+use petgraph::prelude::DiGraphMap;
 use thiserror::Error;
 
-use crate::group::{GroupControlMessage, GroupState};
+use crate::group::{GroupControlMessage, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+
+use super::{GroupAction, GroupStateInner};
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
@@ -34,6 +36,7 @@ where
 
     fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
+        let actor = operation.sender();
 
         // Sanity check.
         if control_message.group_id() != y.group_id {
@@ -49,6 +52,9 @@ where
         // dependencies.
         let is_concurrent = heads != HashSet::from_iter(operation.dependencies().clone());
 
+        // TODO: Get concurrent branches.
+        // let concurrent_operations = get_concurrent(operation: &OP, graph: &y.inner.graph);
+
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
                 // Any revoke message requires a re-build.
@@ -56,9 +62,34 @@ where
             }
             GroupControlMessage::GroupAction { .. } => {
                 if is_concurrent {
-                    // TODO: Implement logic for detecting when concurrent actions should
-                    // trigger a re-build.
-                    false
+                    match action {
+                        GroupAction::Remove { member } => {
+                            // Optional optimization to avoid unnecessary re-builds, only return
+                            // true if:
+                            // 1) The removed member performed an admin action in any concurrent
+                            //    branch && they actually were an admin.
+                            // 2) ..?
+
+                            true
+                        }
+                        GroupAction::Demote { member, access } => {
+                            // Optional optimizations to avoid unnecessary re-builds, only return
+                            // true if:
+                            // 1) The demoted member was previously an admin && they performed an
+                            //    admin action in a concurrent branch.
+                            // 2) The demoted member was promoted to admin in a concurrent branch
+                            //    && they performed an admin action.
+                            // 3) ..?
+
+                            true
+                        }
+                        _ => {
+                            // TODO: Check if there are any concurrent actions which invalidate this
+                            // action. If there are we could actually invalidate it immediately,
+                            // maybe this method should return a state object as well as the boolean.
+                            false
+                        }
+                    }
                 } else {
                     false
                 }
@@ -66,8 +97,51 @@ where
         }
     }
 
-    fn process(y: Self::State) -> Result<Self::State, Self::Error> {
-        // TODO: Implement resolver logic.
+    fn process(
+        mut y: GroupState<ID, OP, Self, ORD, GS>,
+    ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
+        // Calculate a map of operations to a "bubble" of all operations concurrent to them.
+        fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, Vec<OP>> {
+            // example: https://github.com/p2panda/access-control-playground/blob/e552e5eef90bc9e05bb4c96b2ac9ee7d694b0afa/004_petgraph-reduce-graph-with-filter/src/main.rs#L8
+            todo!()
+        }
+
+        // All bubbles present in this graph.
+        let bubbles = get_concurrent_bubbles(&y.inner.graph);
+
+        // A new set of operations to be filtered which we will now populate.
+        let mut filter: HashSet<OP> = Default::default();
+
+        // Iterate over all bubbles, apply membership rules and populate the filter accordingly.
+        for (operation, bubble) in bubbles {
+            // Steps based on auth membership rules: https://github.com/local-first-web/auth/blob/f61e3678d74f9a30946475941ef9ef0c8c45d664/packages/auth/src/team/membershipResolver.ts#L83
+            //
+            // NOTE: we made some different decisions about how to resolve conflicts, but
+            // how to understand what constitutes a conflict is still useful to follow.
+
+            // 1) Mutual removals
+            //
+            // In our first resolve strategy mutual removals result in both members being removed from
+            // the group. We imagine further implementations taking different approaches, like
+            // resolving by seniority, hash id, quorum or some other parameter.
+
+            // 2) Re-adding member concurrently
+            //
+            // We don't stop this behaviour, if A removes C and B removes then adds C concurrently, C is still
+            // in the group.
+
+            // 3) Removed admin performing concurrent actions
+            //
+            // If A removes B, then B shouldn't be able to perform any actions concurrently.
+
+            // 4) Demoted admin performing concurrent actions
+            //
+            // If A demotes B (from admin), then B shouldn't be able to perform any actions concurrently.
+        }
+
+        // Set the new "ignore filter".
+        y.inner.ignore = filter;
+
         Ok(y)
     }
 }
