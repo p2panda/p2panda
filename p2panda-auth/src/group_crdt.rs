@@ -33,25 +33,20 @@ pub enum GroupMembershipError<ID> {
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Access<C> {
-    Pull,
-    Read,
-    Write { conditions: Option<C> },
-    Manage,
+pub enum Access {
+    Member,
+    Manager,
 }
 
 #[derive(Clone, Debug)]
-pub struct MemberState<C> {
+pub struct MemberState {
     pub(crate) member_counter: usize,
-    pub(crate) access: Access<C>,
+    pub(crate) access: Access,
     pub(crate) access_counter: usize,
 }
 
-impl<C> MemberState<C>
-where
-    C: Clone + Debug + PartialEq,
-{
-    pub fn access(&self) -> Access<C> {
+impl MemberState {
+    pub fn access(&self) -> Access {
         self.access.clone()
     }
 
@@ -59,32 +54,19 @@ where
         self.member_counter % 2 != 0
     }
 
-    pub fn is_puller(&self) -> bool {
-        self.access == Access::Pull
-    }
-
-    pub fn is_reader(&self) -> bool {
-        self.access == Access::Read
-    }
-
-    pub fn is_writer(&self) -> bool {
-        self.access != Access::Pull && self.access != Access::Read && self.access != Access::Manage
-    }
-
     pub fn is_manager(&self) -> bool {
-        self.access == Access::Manage
+        self.access == Access::Manager
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct GroupMembersState<ID, C> {
-    pub(crate) members: HashMap<ID, MemberState<C>>,
+pub struct GroupMembersState<ID> {
+    pub(crate) members: HashMap<ID, MemberState>,
 }
 
-impl<ID, C> GroupMembersState<ID, C>
+impl<ID> GroupMembersState<ID>
 where
     ID: Clone + Hash + Eq,
-    C: Clone + Debug + PartialEq,
 {
     /// Return all active group members.
     pub fn members(&self) -> HashSet<ID> {
@@ -115,10 +97,7 @@ where
     }
 }
 
-impl<ID, C> Default for GroupMembersState<ID, C>
-where
-    C: PartialEq,
-{
+impl<ID> Default for GroupMembersState<ID> {
     fn default() -> Self {
         Self {
             members: Default::default(),
@@ -127,9 +106,7 @@ where
 }
 
 /// Create a new group and add the given set of initial members.
-pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
-    initial_members: &[(ID, Access<C>)],
-) -> GroupMembersState<ID, C> {
+pub fn create<ID: Clone + Eq + Hash>(initial_members: &[(ID, Access)]) -> GroupMembersState<ID> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
@@ -147,12 +124,12 @@ pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
 ///
 /// The actor performing the action must be an active member of the group with manager access.
 /// Re-adding a previously removed member is supported.
-pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
-    state: GroupMembersState<ID, C>,
+pub fn add<ID: Clone + Eq + Hash>(
+    state: GroupMembersState<ID>,
     adder: ID,
     added: ID,
-    access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+    access: Access,
+) -> Result<GroupMembersState<ID>, GroupMembershipError<ID>> {
     // Ensure that "adder" is known to the group.
     let Some(adder_state) = state.members.get(&adder) else {
         return Err(GroupMembershipError::UnrecognisedActor(adder));
@@ -197,11 +174,11 @@ pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
 /// Remove a member from the group.
 ///
 /// The actor performing the action must be an active member of the group with manager access.
-pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
-    state: GroupMembersState<ID, C>,
+pub fn remove<ID: Eq + Hash>(
+    state: GroupMembersState<ID>,
     remover: ID,
     removed: ID,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError<ID>> {
     // Ensure that "remover" is known to the group.
     let Some(remover_state) = state.members.get(&remover) else {
         return Err(GroupMembershipError::UnrecognisedActor(remover));
@@ -241,12 +218,12 @@ pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
 /// Modify the access level of a group member.
 ///
 /// The actor performing the action must be an active member of the group with manager access.
-pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
-    state: GroupMembersState<ID, C>,
+pub fn modify<ID: Eq + Hash>(
+    state: GroupMembersState<ID>,
     modifier: ID,
     modified: ID,
-    access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+    access: Access,
+) -> Result<GroupMembersState<ID>, GroupMembershipError<ID>> {
     // Ensure that "modifier" is known to the group.
     let Some(modifier_state) = state.members.get(&modifier) else {
         return Err(GroupMembershipError::UnrecognisedActor(modifier));
@@ -290,18 +267,15 @@ pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// `Read` to `Write`.
 ///
 /// The actor performing the action must be an active member of the group with manager access.
-pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
-    state: GroupMembersState<ID, C>,
+pub fn promote<ID: Eq + Hash>(
+    state: GroupMembersState<ID>,
     promoter: ID,
     promoted: ID,
-    conditions: Option<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&promoted) {
         let new_state = match member.access {
-            Access::Pull => modify(state, promoter, promoted, Access::Read)?,
-            Access::Read => modify(state, promoter, promoted, Access::Write { conditions })?,
-            Access::Write { .. } => modify(state, promoter, promoted, Access::Manage)?,
-            Access::Manage => state,
+            Access::Member => modify(state, promoter, promoted, Access::Manager)?,
+            Access::Manager => state,
         };
 
         Ok(new_state)
@@ -319,18 +293,15 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// `Manage` to `Write`.
 ///
 /// The actor performing the action must be an active member of the group with manager access.
-pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
-    state: GroupMembersState<ID, C>,
+pub fn demote<ID: Eq + Hash>(
+    state: GroupMembersState<ID>,
     demoter: ID,
     demoted: ID,
-    conditions: Option<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
+) -> Result<GroupMembersState<ID>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&demoted) {
         let new_state = match member.access {
-            Access::Pull => state,
-            Access::Read => modify(state, demoter, demoted, Access::Pull)?,
-            Access::Write { .. } => modify(state, demoter, demoted, Access::Read)?,
-            Access::Manage => modify(state, demoter, demoted, Access::Write { conditions })?,
+            Access::Member => state,
+            Access::Manager => modify(state, demoter, demoted, Access::Member)?,
         };
 
         Ok(new_state)
@@ -348,10 +319,10 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 ///
 /// If a member exists with different access levels in each state and has undergone the same number
 /// of access modifications, the lower of the two access levels will be chosen.
-pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
-    state_1: GroupMembersState<ID, C>,
-    state_2: GroupMembersState<ID, C>,
-) -> GroupMembersState<ID, C> {
+pub fn merge<ID: Clone + Eq + Hash>(
+    state_1: GroupMembersState<ID>,
+    state_2: GroupMembersState<ID>,
+) -> GroupMembersState<ID> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
