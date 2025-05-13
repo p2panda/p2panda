@@ -42,15 +42,19 @@ pub enum Access<C> {
 
 #[derive(Clone, Debug)]
 pub struct MemberState<C> {
-    member_counter: usize,
-    access: Access<C>,
-    access_counter: usize,
+    pub(crate) member_counter: usize,
+    pub(crate) access: Access<C>,
+    pub(crate) access_counter: usize,
 }
 
 impl<C> MemberState<C>
 where
     C: Clone + Debug + PartialEq,
 {
+    pub fn access(&self) -> Access<C> {
+        self.access.clone()
+    }
+
     pub fn is_member(&self) -> bool {
         self.member_counter % 2 != 0
     }
@@ -74,7 +78,7 @@ where
 
 #[derive(Clone, Debug)]
 pub struct GroupMembersState<ID, C> {
-    members: HashMap<ID, MemberState<C>>,
+    pub(crate) members: HashMap<ID, MemberState<C>>,
 }
 
 impl<ID, C> GroupMembersState<ID, C>
