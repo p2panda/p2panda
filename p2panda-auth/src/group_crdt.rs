@@ -9,27 +9,27 @@ use std::hash::Hash;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
-pub enum GroupMembershipError {
-    #[error("attempted to add a member who is already active in the group")]
-    AlreadyAdded,
+pub enum GroupMembershipError<ID> {
+    #[error("attempted to add a member who is already active in the group: {0}")]
+    AlreadyAdded(ID),
 
-    #[error("attempted to remove a member who is already inactive in the group")]
-    AlreadyRemoved,
+    #[error("attempted to remove a member who is already inactive in the group: {0}")]
+    AlreadyRemoved(ID),
 
-    #[error("actor lacks sufficient access to update the group")]
-    InsufficientAccess,
+    #[error("actor lacks sufficient access to update the group: {0}")]
+    InsufficientAccess(ID),
 
-    #[error("actor is not an active member of the group")]
-    InactiveActor,
+    #[error("actor is not an active member of the group: {0}")]
+    InactiveActor(ID),
 
-    #[error("member is not an active member of the group")]
-    InactiveMember,
+    #[error("member is not an active member of the group: {0}")]
+    InactiveMember(ID),
 
-    #[error("actor is not known to the group")]
-    UnrecognisedActor,
+    #[error("actor is not known to the group: {0}")]
+    UnrecognisedActor(ID),
 
-    #[error("member is not known to the group")]
-    UnrecognisedMember,
+    #[error("member is not known to the group: {0}")]
+    UnrecognisedMember(ID),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -125,7 +125,7 @@ where
 /// Create a new group and add the given set of initial members.
 pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
     initial_members: &[(ID, Access<C>)],
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> GroupMembersState<ID, C> {
     let mut members = HashMap::new();
     for (id, access) in initial_members {
         let member = MemberState {
@@ -136,9 +136,7 @@ pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
         members.insert(id.clone(), member);
     }
 
-    let state = GroupMembersState { members };
-
-    Ok(state)
+    GroupMembersState { members }
 }
 
 /// Add a member to the group with the given access level.
@@ -150,23 +148,23 @@ pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     adder: ID,
     added: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Ensure that "adder" is known to the group.
-    let Some(adder) = state.members.get(&adder) else {
-        return Err(GroupMembershipError::UnrecognisedActor);
+    let Some(adder_state) = state.members.get(&adder) else {
+        return Err(GroupMembershipError::UnrecognisedActor(adder));
     };
 
     // Ensure that "adder" is a member of the group with manage access level.
-    if !adder.is_member() {
-        return Err(GroupMembershipError::InactiveActor);
-    } else if !adder.is_manager() {
-        return Err(GroupMembershipError::InsufficientAccess);
+    if !adder_state.is_member() {
+        return Err(GroupMembershipError::InactiveActor(adder));
+    } else if !adder_state.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess(adder));
     }
 
     // Ensure that "added" is not already an active member of the group.
-    if let Some(added) = state.members.get(&added) {
-        if added.is_member() {
-            return Err(GroupMembershipError::AlreadyAdded);
+    if let Some(added_state) = state.members.get(&added) {
+        if added_state.is_member() {
+            return Err(GroupMembershipError::AlreadyAdded(added));
         }
     }
 
@@ -199,28 +197,28 @@ pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
     remover: ID,
     removed: ID,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Ensure that "remover" is known to the group.
-    let Some(remover) = state.members.get(&remover) else {
-        return Err(GroupMembershipError::UnrecognisedActor);
+    let Some(remover_state) = state.members.get(&remover) else {
+        return Err(GroupMembershipError::UnrecognisedActor(remover));
     };
 
     // Ensure that "remover" is a member of the group with manage access level.
-    if !remover.is_member() {
-        return Err(GroupMembershipError::InactiveActor);
-    } else if !remover.is_manager() {
-        return Err(GroupMembershipError::InsufficientAccess);
+    if !remover_state.is_member() {
+        return Err(GroupMembershipError::InactiveActor(remover));
+    } else if !remover_state.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess(remover));
     }
 
     // Ensure that "removed" is known to the group.
     if !state.members.contains_key(&removed) {
-        return Err(GroupMembershipError::UnrecognisedMember);
+        return Err(GroupMembershipError::UnrecognisedMember(removed));
     };
 
     // Ensure that "removed" is not already an inactive member of the group.
-    if let Some(removed) = state.members.get(&removed) {
-        if !removed.is_member() {
-            return Err(GroupMembershipError::AlreadyRemoved);
+    if let Some(removed_state) = state.members.get(&removed) {
+        if !removed_state.is_member() {
+            return Err(GroupMembershipError::AlreadyRemoved(removed));
         }
     }
 
@@ -244,26 +242,26 @@ pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     modifier: ID,
     modified: ID,
     access: Access<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Ensure that "modifier" is known to the group.
-    let Some(modifier) = state.members.get(&modifier) else {
-        return Err(GroupMembershipError::UnrecognisedActor);
+    let Some(modifier_state) = state.members.get(&modifier) else {
+        return Err(GroupMembershipError::UnrecognisedActor(modifier));
     };
 
     // Ensure that "modifier" is a member of the group with manage access level.
-    if !modifier.is_member() {
-        return Err(GroupMembershipError::InactiveActor);
-    } else if !modifier.is_manager() {
-        return Err(GroupMembershipError::InsufficientAccess);
+    if !modifier_state.is_member() {
+        return Err(GroupMembershipError::InactiveActor(modifier));
+    } else if !modifier_state.is_manager() {
+        return Err(GroupMembershipError::InsufficientAccess(modifier));
     }
 
     // Ensure that "modified" is an active member of the group.
-    if let Some(modified) = state.members.get(&modified) {
-        if !modified.is_member() {
-            return Err(GroupMembershipError::InactiveMember);
+    if let Some(modified_state) = state.members.get(&modified) {
+        if !modified_state.is_member() {
+            return Err(GroupMembershipError::InactiveMember(modified));
         }
     } else {
-        return Err(GroupMembershipError::UnrecognisedMember);
+        return Err(GroupMembershipError::UnrecognisedMember(modified));
     }
 
     // Update access level.
@@ -293,7 +291,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     promoter: ID,
     promoted: ID,
     conditions: Option<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&promoted) {
         let new_state = match member.access {
             Access::Pull => modify(state, promoter, promoted, Access::Read)?,
@@ -304,7 +302,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 
         Ok(new_state)
     } else {
-        Err(GroupMembershipError::UnrecognisedMember)
+        Err(GroupMembershipError::UnrecognisedMember(promoted))
     }
 }
 
@@ -322,7 +320,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     demoter: ID,
     demoted: ID,
     conditions: Option<C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&demoted) {
         let new_state = match member.access {
             Access::Pull => state,
@@ -333,7 +331,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 
         Ok(new_state)
     } else {
-        Err(GroupMembershipError::UnrecognisedMember)
+        Err(GroupMembershipError::UnrecognisedMember(demoted))
     }
 }
 
@@ -349,7 +347,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,
-) -> Result<GroupMembersState<ID, C>, GroupMembershipError> {
+) -> GroupMembersState<ID, C> {
     // Start from state_2 state.
     let mut next_state = state_2.clone();
 
@@ -384,7 +382,7 @@ pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
         }
     }
 
-    Ok(next_state)
+    next_state
 }
 
 #[cfg(test)]
@@ -407,7 +405,7 @@ mod tests {
         let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
 
         // Alice creates a group with Alice and Bob as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         assert!(group_y.members().contains(&alice));
         assert!(group_y.members().contains(&bob));
@@ -444,7 +442,7 @@ mod tests {
         let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
 
         // Alice creates a group with Alice and Bob as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Alice promotes Bob to Write access.
         let group_y = promote(group_y, alice, bob, Some("requirement".to_string())).unwrap();
@@ -478,7 +476,7 @@ mod tests {
         let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
 
         // Alice creates a group with Alice and Bob as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Charlie adds Daphne...
         let result = add(group_y.clone(), charlie, daphne, AccessLevel::Read);
@@ -486,7 +484,7 @@ mod tests {
         // ...but Charlie isn't known to the group (has never been a member).
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedActor)
+            Err(GroupMembershipError::UnrecognisedActor(_bob))
         ));
 
         // Bob adds Daphne...
@@ -495,14 +493,17 @@ mod tests {
         // ...but Bob isn't a manager.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::InsufficientAccess)
+            Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
 
         // Alice adds Bob...
         let result = add(group_y.clone(), alice, bob, AccessLevel::Read);
 
         // ...but Bob is already an active member.
-        assert!(matches!(result, Err(GroupMembershipError::AlreadyAdded)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::AlreadyAdded(_bob))
+        ));
 
         // Alice removes Bob.
         let group_y = remove(group_y, alice, bob).unwrap();
@@ -511,7 +512,21 @@ mod tests {
         let result = add(group_y, bob, daphne, AccessLevel::Read);
 
         // ...but Bob isn't an active member.
-        assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::InactiveActor(_bob))
+        ));
+
+        // TODO.
+        // The `assert!(matches!())` tests don't test the value in the variant tuple.
+        // We should consider rather using `if let` to match fully.
+        /*
+        if let Err(GroupMembershipError::InactiveActor(actor)) = result {
+            assert_eq!(actor, bob)
+        } else {
+            panic!("description goes here...")
+        }
+        */
     }
 
     #[test]
@@ -532,7 +547,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Daphne removes Charlie...
         let result = remove(group_y.clone(), daphne, charlie);
@@ -540,7 +555,7 @@ mod tests {
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedActor)
+            Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
 
         // Bob removes Charlie...
@@ -549,7 +564,7 @@ mod tests {
         // ...but Bob isn't a manager.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::InsufficientAccess)
+            Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
 
         // Alice removes Daphne...
@@ -558,7 +573,7 @@ mod tests {
         // ...but Daphne isn't a member.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedMember)
+            Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
 
         // Alice removes Charlie.
@@ -568,7 +583,10 @@ mod tests {
         let result = remove(group_y, alice, charlie);
 
         // ...but Charlie has already been removed.
-        assert!(matches!(result, Err(GroupMembershipError::AlreadyRemoved)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::AlreadyRemoved(_charlie))
+        ));
     }
 
     #[test]
@@ -589,7 +607,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Daphne promotes Charlie...
         let result = promote(group_y.clone(), daphne, charlie, None);
@@ -597,7 +615,7 @@ mod tests {
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedActor)
+            Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
 
         // Bob promotes Charlie...
@@ -606,7 +624,7 @@ mod tests {
         // ...but Bob isn't a manager.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::InsufficientAccess)
+            Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
 
         // Alice promotes Daphne...
@@ -615,7 +633,7 @@ mod tests {
         // ...but Daphne isn't a member.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedMember)
+            Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
 
         // Alice removes Charlie.
@@ -625,13 +643,19 @@ mod tests {
         let result = promote(group_y.clone(), alice, charlie, None);
 
         // ...but Charlie isn't a member.
-        assert!(matches!(result, Err(GroupMembershipError::InactiveMember)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::InactiveMember(_charlie))
+        ));
 
         // Charlie promotes Bob...
         let result = promote(group_y, charlie, bob, None);
 
         // ...but Charlie isn't a member.
-        assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::InactiveActor(_charlie))
+        ));
     }
 
     #[test]
@@ -652,7 +676,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Daphne demotes Charlie...
         let result = demote(group_y.clone(), daphne, charlie, None);
@@ -660,7 +684,7 @@ mod tests {
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedActor)
+            Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
 
         // Bob demotes Charlie...
@@ -669,7 +693,7 @@ mod tests {
         // ...but Bob isn't a manager.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::InsufficientAccess)
+            Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
 
         // Alice demotes Daphne...
@@ -678,7 +702,7 @@ mod tests {
         // ...but Daphne isn't a member.
         assert!(matches!(
             result,
-            Err(GroupMembershipError::UnrecognisedMember)
+            Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
 
         // Alice removes Charlie.
@@ -688,13 +712,19 @@ mod tests {
         let result = demote(group_y.clone(), alice, charlie, None);
 
         // ...but Charlie isn't a member.
-        assert!(matches!(result, Err(GroupMembershipError::InactiveMember)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::InactiveMember(_charlie))
+        ));
 
         // Charlie demotes Bob...
         let result = demote(group_y, charlie, bob, None);
 
         // ...but Charlie isn't a member.
-        assert!(matches!(result, Err(GroupMembershipError::InactiveActor)));
+        assert!(matches!(
+            result,
+            Err(GroupMembershipError::InactiveActor(_charlie))
+        ));
     }
 
     #[test]
@@ -716,13 +746,13 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y_i = create(&initial_members).unwrap();
+        let group_y_i = create(&initial_members);
 
         // Alice adds Daphne.
         let group_y_ii = add(group_y_i.clone(), alice, daphne, AccessLevel::Read).unwrap();
 
         // Merge the states.
-        let group_y = merge(group_y_i, group_y_ii).unwrap();
+        let group_y = merge(group_y_i, group_y_ii);
 
         assert!(group_y.members().contains(&daphne));
     }
@@ -745,7 +775,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y_i = create(&initial_members).unwrap();
+        let group_y_i = create(&initial_members);
 
         // Alice removes Bob.
         let group_y_ii = remove(group_y_i.clone(), alice, bob).unwrap();
@@ -754,7 +784,7 @@ mod tests {
         let group_y_ii = add(group_y_ii, alice, bob, AccessLevel::Read).unwrap();
 
         // Merge the states.
-        let group_y = merge(group_y_i, group_y_ii).unwrap();
+        let group_y = merge(group_y_i, group_y_ii);
 
         assert!(group_y.members().contains(&alice));
         assert!(group_y.members().contains(&bob));
@@ -784,7 +814,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y_i = create(&initial_members).unwrap();
+        let group_y_i = create(&initial_members);
 
         // Alice promotes Charlie.
         let group_y_ii = promote(group_y_i.clone(), alice, charlie, None).unwrap();
@@ -793,7 +823,7 @@ mod tests {
         let group_y_ii = demote(group_y_ii.clone(), alice, charlie, None).unwrap();
 
         // Merge the states.
-        let group_y = merge(group_y_i, group_y_ii).unwrap();
+        let group_y = merge(group_y_i, group_y_ii);
 
         let charlie_state = group_y.members.get(&charlie).unwrap();
 
@@ -823,7 +853,7 @@ mod tests {
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
-        let group_y = create(&initial_members).unwrap();
+        let group_y = create(&initial_members);
 
         // Alice promotes Charlie.
         let group_y_i = promote(group_y.clone(), alice, charlie, None).unwrap();
@@ -844,7 +874,7 @@ mod tests {
         .unwrap();
 
         // Merge the states.
-        let group_y = merge(group_y_i.clone(), group_y_ii.clone()).unwrap();
+        let group_y = merge(group_y_i.clone(), group_y_ii.clone());
 
         let charlie_state = group_y.members.get(&charlie).unwrap();
 
