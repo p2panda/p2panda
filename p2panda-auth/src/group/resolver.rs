@@ -3,7 +3,9 @@ use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
 use petgraph::algo::toposort;
+use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::DiGraphMap;
+use petgraph::visit::{Dfs, Reversed};
 use thiserror::Error;
 
 use crate::group::{GroupControlMessage, GroupMember, GroupState};
@@ -100,13 +102,9 @@ where
     fn process(
         mut y: GroupState<ID, OP, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
-        // Calculate a map of operations to a "bubble" of all operations concurrent to them.
-        fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, Vec<OP>> {
-            // example: https://github.com/p2panda/access-control-playground/blob/e552e5eef90bc9e05bb4c96b2ac9ee7d694b0afa/004_petgraph-reduce-graph-with-filter/src/main.rs#L8
-            todo!()
-        }
-
         // All bubbles present in this graph.
+        //
+        // TODO: Conversion between `DiGraphMap` and `DiGraph` (or better solution).
         let bubbles = get_concurrent_bubbles(&y.inner.graph);
 
         // A new set of operations to be filtered which we will now populate.
@@ -125,6 +123,12 @@ where
             // the group. We imagine further implementations taking different approaches, like
             // resolving by seniority, hash id, quorum or some other parameter.
 
+            // Is `operation` a removal?
+            // - Who performed the removal?
+            // - Does any operation in the `bubble` remove the remover?
+            //   - If so, add both to the filter
+            //   - Also add all concurrent operations performed by remover and removed
+
             // 2) Re-adding member concurrently
             //
             // We don't stop this behaviour, if A removes C and B removes then adds C concurrently, C is still
@@ -134,9 +138,22 @@ where
             //
             // If A removes B, then B shouldn't be able to perform any actions concurrently.
 
+            if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
+                if let GroupAction::Remove { member } = action {
+                    for op in bubble {
+                        if op.sender() == member {
+                            filter.insert(op);
+                        };
+                    }
+                }
+            }
+
             // 4) Demoted admin performing concurrent actions
             //
             // If A demotes B (from admin), then B shouldn't be able to perform any actions concurrently.
+
+            // Is `operation` a demotion from admin?
+            // - Filter all concurrent operations performed by the demoted actor.
         }
 
         // Set the new "ignore filter".
@@ -146,28 +163,44 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
+// Returns a HashMap containing a hash and all hashes directly or indirectly concurrent with it.
+fn get_concurrent_bubbles<OP>(graph: &DiGraph<OP, ()>) -> HashMap<OP, HashSet<OP>> {
+    let mut bubbles = HashMap::new();
 
-    use crate::group::resolver::GroupResolver;
-    use crate::group::test_utils::{
-        MemberId, MessageId, TestGroupStore, TestOrderer, TestOrdererState, TestResolver,
-    };
-    use crate::group::{Group, GroupState};
+    // Walk the graph.
+    graph.node_indices().for_each(|target| {
+        // Get all concurrent operations for this node.
+        let concurrent_operations = get_concurrent_operations(graph, target);
+        if !concurrent_operations.is_empty() {
+            bubbles.insert(target, concurrent_operations);
+        }
+    });
 
-    #[test]
-    fn trait_definition_not_recursive() {
-        type AuthResolver<ORD, GS> = GroupResolver<MemberId, MessageId, (), ORD, GS>;
-        type AuthGroup<ORD, GS> = Group<MemberId, MessageId, (), AuthResolver<ORD, GS>, ORD, GS>;
-        type AuthGroupState<RS, ORD, GS> = GroupState<MemberId, MessageId, (), RS, ORD, GS>;
+    bubbles
+}
 
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer_y = TestOrdererState::new('A', store.clone(), rng);
-        let group_y: AuthGroupState<TestResolver, TestOrderer, TestGroupStore> =
-            AuthGroupState::new('A', 'B', store.clone(), orderer_y);
-        let _group_y_i = AuthGroup::rebuild(group_y).unwrap();
+// Return concurrent operations for a given target node / operation.
+fn get_concurrent_operations<OP>(graph: &DiGraph<OP, ()>, target: NodeIndex) -> HashSet<NodeIndex> {
+    // Get all successors.
+    let mut successors = HashSet::new();
+    let mut dfs = Dfs::new(&graph, target);
+    while let Some(nx) = dfs.next(&graph) {
+        successors.insert(nx);
     }
+
+    // Get all predecessors.
+    let mut predecessors = HashSet::new();
+    let reversed = Reversed(graph);
+    let mut dfs_rev = Dfs::new(&reversed, target);
+    while let Some(nx) = dfs_rev.next(&reversed) {
+        predecessors.insert(nx);
+    }
+
+    let relatives: HashSet<_> = successors.union(&predecessors).cloned().collect();
+
+    // Collect all operations which are not successors or predecessors.
+    graph
+        .node_indices()
+        .filter(|n| !relatives.contains(n))
+        .collect()
 }
