@@ -55,16 +55,18 @@ impl Network {
         group_id: GroupId,
         creator: MemberId,
         initial_members: Vec<(GroupMember<MemberId>, Access)>,
-    ) {
+    ) -> MessageId {
         let y = self.get_y(&creator, &group_id);
         let control_message = GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Create { initial_members },
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
+        let operation_id = operation.id();
         let y_ii = TestGroup::process(y_i, &operation).unwrap();
         self.queue.push_back(operation);
         self.set_y(y_ii);
+        operation_id
     }
 
     pub fn add(
@@ -73,7 +75,7 @@ impl Network {
         added: GroupMember<MemberId>,
         group_id: GroupId,
         access: Access,
-    ) {
+    ) -> MessageId {
         let y = self.get_y(&adder, &group_id);
         let control_message = GroupControlMessage::GroupAction {
             group_id,
@@ -84,11 +86,18 @@ impl Network {
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
         let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
         self.queue.push_back(operation);
         self.set_y(y_ii);
+        operation_id
     }
 
-    pub fn remove(&mut self, remover: MemberId, removed: GroupMember<MemberId>, group_id: GroupId) {
+    pub fn remove(
+        &mut self,
+        remover: MemberId,
+        removed: GroupMember<MemberId>,
+        group_id: GroupId,
+    ) -> MessageId {
         let y = self.get_y(&remover, &group_id);
         let control_message = GroupControlMessage::GroupAction {
             group_id,
@@ -96,8 +105,10 @@ impl Network {
         };
         let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
         let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
         self.queue.push_back(operation);
         self.set_y(y_ii);
+        operation_id
     }
 
     pub fn process_ooo(&mut self) {
@@ -169,6 +180,18 @@ impl Network {
         members
     }
 
+    pub fn members_at(
+        &self,
+        member: &MemberId,
+        group_id: &GroupId,
+        operations: &Vec<MessageId>,
+    ) -> Vec<(GroupMember<MemberId>, Access)> {
+        let group_y = self.get_y(member, group_id);
+        let mut members = group_y.members_at(operations).unwrap();
+        members.sort();
+        members
+    }
+
     pub fn transitive_members(
         &self,
         member: &MemberId,
@@ -182,13 +205,27 @@ impl Network {
         members
     }
 
+    pub fn transitive_members_at(
+        &self,
+        member: &MemberId,
+        group_id: &GroupId,
+        operations: &Vec<MessageId>,
+    ) -> Vec<(MemberId, Access)> {
+        let group_y = self.get_y(member, group_id);
+        let mut members = group_y
+            .transitive_members_at(operations)
+            .expect("get transitive members");
+        members.sort();
+        members
+    }
+
     fn shuffle(&mut self) {
         let mut queue = self.queue.clone().into_iter().collect::<Vec<_>>();
         queue.shuffle(&mut self.rng);
         self.queue = VecDeque::from(queue);
     }
 
-    fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
+    pub fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
         let member = self.members.get(member).expect("member exists");
 
         let group_y = TestGroupState::new(

@@ -5,9 +5,10 @@ use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
 };
-use crate::traits::AuthGraph;
+use crate::traits::{AuthGraph, Operation};
 
 use super::access::Access;
+use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
 #[test]
@@ -550,20 +551,31 @@ const ALICE_ORG_GROUP: char = 'O';
 
 // No concurrency in these test groups, the group store and orderer are shared across all group
 // instances.
-fn test_groups(rng: StdRng) -> Network {
+fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
     let mut network = Network::new([ALICE, BOB, CHARLIE], rng);
+    let mut operations = vec![];
 
-    network.create(
+    let id = network.create(
         BOB_DEVICES_GROUP,
         BOB,
         vec![
             (GroupMember::Individual(BOB), Access::Manage),
             (GroupMember::Individual(BOB_LAPTOP), Access::Write),
-            (GroupMember::Individual(BOB_MOBILE), Access::Read),
         ],
     );
+    operations.push(id);
 
-    network.create(
+    let id = network.add(
+        BOB,
+        GroupMember::Individual(BOB_MOBILE),
+        BOB_DEVICES_GROUP,
+        Access::Read,
+    );
+    operations.push(id);
+
+    network.process();
+
+    let id = network.create(
         CHARLIE_TEAM_GROUP,
         CHARLIE,
         vec![
@@ -571,16 +583,18 @@ fn test_groups(rng: StdRng) -> Network {
             (GroupMember::Individual(EDITH), Access::Read),
         ],
     );
+    operations.push(id);
 
-    network.create(
+    let id = network.create(
         ALICE_ORG_GROUP,
         ALICE,
         vec![(GroupMember::Individual(ALICE), Access::Manage)],
     );
+    operations.push(id);
 
     network.process();
 
-    network.add(
+    let id = network.add(
         CHARLIE,
         GroupMember::Group {
             id: BOB_DEVICES_GROUP,
@@ -588,10 +602,11 @@ fn test_groups(rng: StdRng) -> Network {
         CHARLIE_TEAM_GROUP,
         Access::Manage,
     );
+    operations.push(id);
 
     network.process();
 
-    network.add(
+    let id = network.add(
         ALICE,
         GroupMember::Group {
             id: CHARLIE_TEAM_GROUP,
@@ -599,16 +614,17 @@ fn test_groups(rng: StdRng) -> Network {
         ALICE_ORG_GROUP,
         Access::Write,
     );
+    operations.push(id);
 
     network.process();
 
-    network
+    (network, operations)
 }
 
 #[test]
 fn transitive_members() {
     let rng = StdRng::from_os_rng();
-    let network = test_groups(rng);
+    let (network, operations) = test_groups(rng);
 
     let expected_bob_devices_group_direct_members = vec![
         (GroupMember::Individual(BOB), Access::Manage),
@@ -685,5 +701,97 @@ fn transitive_members() {
     assert_eq!(
         transitive_members,
         expected_alice_org_group_transitive_members
+    );
+}
+
+#[test]
+fn members_at() {
+    let rng = StdRng::from_os_rng();
+    let (network, operations) = test_groups(rng);
+
+    let create_devices_op_id = operations[0];
+    let add_mobile_to_devices_op_id = operations[1];
+    let create_team_op_id = operations[2];
+    let create_org_op_id = operations[3];
+    let add_devices_to_team_op_id = operations[4];
+    let add_team_to_org_op_id = operations[5];
+
+    // Initial state of the org group.
+    let members = network.transitive_members_at(&ALICE, &ALICE_ORG_GROUP, &vec![create_org_op_id]);
+    assert_eq!(members, vec![(ALICE, Access::Manage)]);
+
+    // CHARLIE_TEAM was added but before BOB_DEVICES was added to the team.
+    let members = network.transitive_members_at(
+        &ALICE,
+        &ALICE_ORG_GROUP,
+        &vec![
+            add_team_to_org_op_id,
+            create_devices_op_id,
+            create_team_op_id,
+        ],
+    );
+    assert_eq!(
+        members,
+        vec![
+            (ALICE, Access::Manage),
+            (CHARLIE, Access::Write),
+            (EDITH, Access::Read)
+        ]
+    );
+
+    // now BOB_DEVICES was added to the team.
+    let members = network.transitive_members_at(
+        &ALICE,
+        &ALICE_ORG_GROUP,
+        &vec![
+            add_team_to_org_op_id,
+            create_devices_op_id,
+            add_devices_to_team_op_id,
+        ],
+    );
+    assert_eq!(
+        members,
+        vec![
+            (ALICE, Access::Manage),
+            (BOB, Access::Write),
+            (CHARLIE, Access::Write),
+            (EDITH, Access::Read),
+            (BOB_LAPTOP, Access::Write),
+        ]
+    );
+
+    // now BOB_MOBILE was added to the devices group and we are at "current state".
+    let members_at_most_recent_heads = network.transitive_members_at(
+        &ALICE,
+        &ALICE_ORG_GROUP,
+        &vec![
+            add_team_to_org_op_id,
+            add_mobile_to_devices_op_id,
+            add_devices_to_team_op_id,
+        ],
+    );
+    assert_eq!(
+        members_at_most_recent_heads,
+        vec![
+            (ALICE, Access::Manage),
+            (BOB, Access::Write),
+            (CHARLIE, Access::Write),
+            (EDITH, Access::Read),
+            (BOB_LAPTOP, Access::Write),
+            (BOB_MOBILE, Access::Read),
+        ]
+    );
+
+    // These queries should produce the same "current" member state.
+    let current_members = network.transitive_members(&ALICE, &ALICE_ORG_GROUP);
+    // This is a slightly strange thing to do, we are requesting the current state by passing in a
+    // vec of all known operation ids. Logically it should produce the same state though.
+    let members_by_all_known_operations =
+        network.transitive_members_at(&ALICE, &ALICE_ORG_GROUP, &operations);
+
+    assert_eq!(members_at_most_recent_heads, current_members);
+    assert_eq!(
+        members_at_most_recent_heads,
+        members_by_all_known_operations
     );
 }
