@@ -1,13 +1,14 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
 };
+use crate::group::{Group, GroupState};
 use crate::traits::AuthGraph;
 
 use super::access::Access;
+use super::test_utils::TestGroupStateInner;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
 #[test]
@@ -534,5 +535,156 @@ fn add_remove_add() {
             (GroupMember::Individual('A'), Access::Manage),
             (GroupMember::Individual('B'), Access::Read),
         ]
+    );
+}
+
+const ALICE: char = 'A';
+const BOB: char = 'B';
+const CHARLIE: char = 'C';
+const EDITH: char = 'E';
+const BOB_MOBILE: char = 'M';
+const BOB_LAPTOP: char = 'L';
+
+const BOB_DEVICES_GROUP: char = 'D';
+const CHARLIE_TEAM_GROUP: char = 'T';
+const ALICE_ORG_GROUP: char = 'O';
+
+// No concurrency in these test groups, the group store and orderer are shared across all group
+// instances.
+fn test_groups(rng: StdRng) -> Network {
+    let mut network = Network::new([ALICE, BOB, CHARLIE], rng);
+
+    network.create(
+        BOB_DEVICES_GROUP,
+        BOB,
+        vec![
+            (GroupMember::Individual(BOB), Access::Manage),
+            (GroupMember::Individual(BOB_LAPTOP), Access::Write),
+            (GroupMember::Individual(BOB_MOBILE), Access::Read),
+        ],
+    );
+
+    network.create(
+        CHARLIE_TEAM_GROUP,
+        CHARLIE,
+        vec![
+            (GroupMember::Individual(CHARLIE), Access::Manage),
+            (GroupMember::Individual(EDITH), Access::Read),
+        ],
+    );
+
+    network.create(
+        ALICE_ORG_GROUP,
+        ALICE,
+        vec![(GroupMember::Individual(ALICE), Access::Manage)],
+    );
+
+    network.process();
+
+    network.add(
+        CHARLIE,
+        GroupMember::Group {
+            id: BOB_DEVICES_GROUP,
+        },
+        CHARLIE_TEAM_GROUP,
+        Access::Manage,
+    );
+
+    network.process();
+
+    network.add(
+        ALICE,
+        GroupMember::Group {
+            id: CHARLIE_TEAM_GROUP,
+        },
+        ALICE_ORG_GROUP,
+        Access::Write,
+    );
+
+    network.process();
+
+    network
+}
+
+#[test]
+fn transitive_members() {
+    let rng = StdRng::from_os_rng();
+    let network = test_groups(rng);
+
+    let expected_bob_devices_group_direct_members = vec![
+        (GroupMember::Individual(BOB), Access::Manage),
+        (GroupMember::Individual(BOB_LAPTOP), Access::Write),
+        (GroupMember::Individual(BOB_MOBILE), Access::Read),
+    ];
+
+    let expected_bob_devices_group_transitive_members = vec![
+        (BOB, Access::Manage),
+        (BOB_LAPTOP, Access::Write),
+        (BOB_MOBILE, Access::Read),
+    ];
+
+    let expected_charlie_team_group_direct_members = vec![
+        (GroupMember::Individual(CHARLIE), Access::Manage),
+        (GroupMember::Individual(EDITH), Access::Read),
+        (
+            GroupMember::Group {
+                id: BOB_DEVICES_GROUP,
+            },
+            Access::Manage,
+        ),
+    ];
+
+    let expected_charlie_team_group_transitive_members = vec![
+        (BOB, Access::Manage),
+        (CHARLIE, Access::Manage),
+        (EDITH, Access::Read),
+        (BOB_LAPTOP, Access::Write),
+        (BOB_MOBILE, Access::Read),
+    ];
+
+    let expected_alice_org_group_direct_members = vec![
+        (GroupMember::Individual(ALICE), Access::Manage),
+        (
+            GroupMember::Group {
+                id: CHARLIE_TEAM_GROUP,
+            },
+            Access::Write,
+        ),
+    ];
+
+    let expected_alice_org_group_transitive_members = vec![
+        (ALICE, Access::Manage),
+        (BOB, Access::Write),
+        (CHARLIE, Access::Write),
+        (EDITH, Access::Read),
+        (BOB_LAPTOP, Access::Write),
+        (BOB_MOBILE, Access::Read),
+    ];
+
+    let members = network.members(&BOB, &BOB_DEVICES_GROUP);
+    assert_eq!(members, expected_bob_devices_group_direct_members);
+
+    let transitive_members = network.transitive_members(&BOB, &BOB_DEVICES_GROUP);
+    assert_eq!(
+        transitive_members,
+        expected_bob_devices_group_transitive_members
+    );
+
+    let members = network.members(&CHARLIE, &CHARLIE_TEAM_GROUP);
+    assert_eq!(members, expected_charlie_team_group_direct_members);
+
+    let transitive_members = network.transitive_members(&CHARLIE, &CHARLIE_TEAM_GROUP);
+    assert_eq!(
+        transitive_members,
+        expected_charlie_team_group_transitive_members
+    );
+
+    let members = network.members(&ALICE, &ALICE_ORG_GROUP);
+    assert_eq!(members, expected_alice_org_group_direct_members);
+
+    let transitive_members = network.transitive_members(&ALICE, &ALICE_ORG_GROUP);
+    assert_eq!(
+        transitive_members,
+        expected_alice_org_group_transitive_members
     );
 }
