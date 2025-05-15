@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_group::test_utils::SecretKey;
+use p2panda_group::test_utils::crypto::SecretKey;
 use p2panda_group::traits::PreKeyManager;
 use p2panda_group::{KeyManager, Lifetime, OneTimeTwoParty, Rng, TwoPartyMessage};
 

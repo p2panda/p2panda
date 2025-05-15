@@ -176,7 +176,10 @@ where
 
     type Error: Error;
 
-    type Message: ForwardSecureGroupMessage<ID, OP, DGM>;
+    type Message: Clone
+        + ForwardSecureGroupMessage<ID, OP, DGM>
+        + Serialize
+        + for<'a> Deserialize<'a>;
 
     fn next_control_message(
         y: Self::State,
