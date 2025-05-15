@@ -1,14 +1,13 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
+use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
 };
-use crate::group::{Group, GroupState};
 use crate::traits::AuthGraph;
 
 use super::access::Access;
-use super::test_utils::TestGroupStateInner;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
 #[test]
