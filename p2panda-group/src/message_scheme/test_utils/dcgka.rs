@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::crypto::x25519::SecretKey;
-use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
+use crate::message_scheme::test_utils::dgm::AckedTestDgm;
 use crate::message_scheme::{
     ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType, OperationOutput,
     ProcessOutput, UpdateSecret,
@@ -112,6 +112,12 @@ pub fn assert_members_view(dcgka: &TestDcgkaState, assertions: &[ExpectedMembers
 pub struct AssertableDcgka {
     /// Update secrets the DCGKA exported for "local member -> remote member".
     update_secrets: HashMap<(MemberId, MemberId), UpdateSecret>,
+}
+
+impl Default for AssertableDcgka {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AssertableDcgka {

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod acked_dgm;
 mod dcgka;
 mod group;
 mod message;
@@ -17,6 +16,7 @@ pub use dcgka::{
     DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
     UpdateSecret,
 };
+pub use group::{GroupError, GroupEvent, GroupOutput, GroupState, MessageGroup};
 #[allow(unused)]
 pub use ratchet::{
     DecryptionRatchet, DecryptionRatchetState, Generation, MESSAGE_KEY_SIZE, RatchetError,

@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 use crate::traits::OperationId;
 
 // Re-export private types for fuzz tests when `test_utils` feature flag is enabled.
-pub use crate::crypto::x25519::SecretKey;
+pub mod crypto {
+    pub use crate::crypto::x25519::SecretKey;
+}
+
+pub mod data_scheme {
+    pub use crate::data_scheme::test_utils::*;
+}
+
+pub mod message_scheme {
+    pub use crate::message_scheme::test_utils::*;
+}
 
 /// Simple member id for tests.
 pub type MemberId = usize;
