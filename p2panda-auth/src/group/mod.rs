@@ -285,7 +285,9 @@ where
         let mut y = GroupMembersState::default();
         for id in operations {
             let Some(previous_y) = self.inner.states.get(id) else {
-                return Err(GroupError::StateNotFound(*id, self.id()));
+                // We might be in a sub-group here processing dependencies which don't exist in
+                // this graph, in that case we just ignore missing states.
+                continue;
             };
             y = group_state::merge(previous_y.clone(), y);
         }
@@ -293,9 +295,12 @@ where
         Ok(y)
     }
 
-    pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
-        self.current_state()
-            .members
+    fn members_at(
+        &self,
+        operations: &Vec<OP>,
+    ) -> Result<Vec<(GroupMember<ID>, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let y = self.state_at(operations)?;
+        Ok(y.members
             .values()
             .filter_map(|state| {
                 if state.is_member() {
@@ -304,19 +309,22 @@ where
                     None
                 }
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>())
     }
 
-    pub fn transitive_members(&self) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
+    fn transitive_members_at(
+        &self,
+        operations: &Vec<OP>,
+    ) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut members: HashMap<ID, Access> = HashMap::new();
-        for (member, root_access) in self.members() {
+        for (member, root_access) in self.members_at(operations)? {
             match member {
                 GroupMember::Individual(id) => {
                     members.insert(id, root_access);
                 }
                 GroupMember::Group { id } => {
                     let sub_group = self.get_sub_group(id)?;
-                    let transitive_members = sub_group.transitive_members()?;
+                    let transitive_members = sub_group.transitive_members_at(operations)?;
                     for (transitive_member, transitive_access) in transitive_members {
                         members
                             .entry(transitive_member)
@@ -337,6 +345,26 @@ where
             }
         }
         Ok(members.into_iter().collect())
+    }
+
+    pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
+        self.current_state()
+            .members
+            .values()
+            .filter_map(|state| {
+                if state.is_member() {
+                    Some((state.member.clone(), state.access))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn transitive_members(&self) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let heads = self.transitive_heads()?;
+        let members = self.transitive_members_at(&heads)?;
+        Ok(members)
     }
 
     pub fn transitive_sub_groups(
@@ -376,6 +404,9 @@ pub struct Group<ID, OP, RS, ORD, GS> {
     _phantom: PhantomData<(ID, OP, RS, ORD, GS)>,
 }
 
+// ORCHESTRATION REQUIREMENT NOTES:
+// 1) when a sub-group receives an operation which effects the set of admin members, then any root
+//    groups should be rebuilt in case the resolver needs to react to the admin change.
 impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
@@ -428,7 +459,14 @@ where
         // required, likely due to concurrent operations arriving which should trigger a new filter
         // to be constructed.
         if RS::rebuild_required(&y, &operation) {
-            return Self::add_with_rebuild(y, operation.clone());
+            // Add all new operations to the graph and operations vec.
+            y.inner.graph.add_node(operation.id());
+            for previous in operation.previous() {
+                y.inner.graph.add_edge(*previous, operation.id(), ());
+            }
+            y.inner.operations.push(operation.clone());
+
+            return Self::rebuild(&y);
         }
 
         // Compute the members state by applying the new operation to it's claimed "previous"
@@ -528,19 +566,11 @@ where
         Ok(y)
     }
 
-    fn add_with_rebuild(
-        mut y: GroupState<ID, OP, RS, ORD, GS>,
-        operation: ORD::Message,
+    fn rebuild(
+        y: &GroupState<ID, OP, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        // Add all new operations to the graph and operations vec.
-        y.inner.graph.add_node(operation.id());
-        for previous in operation.previous() {
-            y.inner.graph.add_edge(*previous, operation.id(), ());
-        }
-        y.inner.operations.push(operation);
-
         // Use the resolver to construct a filter for this group membership graph.
-        y = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
+        let y = RS::process(y.clone()).map_err(|error| GroupError::ResolverError(error))?;
 
         let mut y_i = GroupState::new(
             y.my_id,
