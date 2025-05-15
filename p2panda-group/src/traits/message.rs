@@ -79,8 +79,8 @@ where
     /// Unique identifier of the sender of this message.
     fn sender(&self) -> ID;
 
-    /// Returns if this is a control- or application message.
-    fn message_type(&self) -> ForwardSecureMessageType<ID, OP>;
+    /// Returns data required to manage group encryption and receive decrypted application messages.
+    fn encryption_content(&self) -> ForwardSecureMessageContent<ID, OP>;
 
     /// Returns optional list of direct messages.
     ///
@@ -92,7 +92,7 @@ where
 }
 
 #[derive(Debug)]
-pub enum ForwardSecureMessageType<ID, OP> {
+pub enum ForwardSecureMessageContent<ID, OP> {
     /// Control message managing messaging encryption group.
     Control(message_scheme::ControlMessage<ID, OP>),
 
@@ -103,7 +103,7 @@ pub enum ForwardSecureMessageType<ID, OP> {
     },
 }
 
-impl<ID, OP> Display for ForwardSecureMessageType<ID, OP> {
+impl<ID, OP> Display for ForwardSecureMessageContent<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

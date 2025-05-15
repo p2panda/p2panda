@@ -2,9 +2,10 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::message_scheme::acked_dgm::test_utils::AckedTestDgm;
-use crate::message_scheme::group::{GroupConfig, GroupOutput, GroupState, MessageGroup};
+use crate::message_scheme::GroupError;
+use crate::message_scheme::group::{GroupConfig, GroupEvent, GroupState, MessageGroup};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
+use crate::message_scheme::test_utils::dgm::AckedTestDgm;
 use crate::message_scheme::test_utils::ordering::{ForwardSecureOrderer, TestMessage};
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::ForwardSecureGroupMessage;
@@ -19,6 +20,39 @@ pub type TestGroupState = GroupState<
     ForwardSecureOrderer<AckedTestDgm<MemberId, MessageId>>,
 >;
 
+pub type TestGroupError = GroupError<
+    MemberId,
+    MessageId,
+    KeyRegistry<MemberId>,
+    AckedTestDgm<MemberId, MessageId>,
+    KeyManager,
+    ForwardSecureOrderer<AckedTestDgm<MemberId, MessageId>>,
+>;
+
+pub fn init_group_state<const N: usize>(
+    member_ids: [MemberId; N],
+    rng: &Rng,
+) -> [TestGroupState; N] {
+    init_dcgka_state(member_ids, rng)
+        .into_iter()
+        .map(|dcgka| {
+            let orderer =
+                ForwardSecureOrderer::<AckedTestDgm<MemberId, MessageId>>::init(dcgka.my_id);
+            TestGroupState {
+                my_id: dcgka.my_id,
+                dcgka,
+                orderer,
+                welcome: None,
+                ratchet: None,
+                decryption_ratchet: HashMap::new(),
+                config: GroupConfig::default(),
+            }
+        })
+        .collect::<Vec<TestGroupState>>()
+        .try_into()
+        .unwrap()
+}
+
 pub struct Network {
     rng: Rng,
     members: HashMap<MemberId, TestGroupState>,
@@ -27,23 +61,9 @@ pub struct Network {
 
 impl Network {
     pub fn new<const N: usize>(members: [MemberId; N], rng: Rng) -> Self {
-        let members = init_dcgka_state(members, &rng);
+        let members = init_group_state(members, &rng);
         Self {
-            members: HashMap::from_iter(members.into_iter().map(|dcgka| {
-                (dcgka.my_id, {
-                    let orderer = ForwardSecureOrderer::<AckedTestDgm<MemberId, MessageId>>::init(
-                        dcgka.my_id,
-                    );
-                    TestGroupState {
-                        my_id: dcgka.my_id,
-                        dcgka,
-                        orderer,
-                        ratchet: None,
-                        decryption_ratchet: HashMap::new(),
-                        config: GroupConfig::default(),
-                    }
-                })
-            })),
+            members: HashMap::from_iter(members.into_iter().map(|state| (state.my_id, state))),
             rng,
             queue: VecDeque::new(),
         }
@@ -105,18 +125,22 @@ impl Network {
                 let (y_i, result) = MessageGroup::receive(y, &message, &self.rng).unwrap();
                 self.set_y(y_i);
 
-                for output in result {
-                    match output {
-                        GroupOutput::Control(control_message) => {
+                let Some(result) = result else {
+                    continue;
+                };
+
+                for event in result.events {
+                    match event {
+                        GroupEvent::Control(control_message) => {
                             // Processing messages might yield new ones, process these as well.
                             self.queue.push_back(control_message);
                         }
-                        GroupOutput::Application { plaintext } => decrypted_messages.push((
+                        GroupEvent::Application { plaintext, .. } => decrypted_messages.push((
                             message.sender(), // Sender
                             *id,              // Receiver
                             plaintext,        // Decrypted content
                         )),
-                        GroupOutput::Removed => (),
+                        GroupEvent::RemovedOurselves => (),
                     }
                 }
             }
