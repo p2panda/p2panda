@@ -2,20 +2,16 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use group_state::{GroupStateError, MemberState};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use thiserror::Error;
 
-use crate::group::access::Access;
-use crate::group::group_state::GroupMembersState;
+use crate::group_crdt::{self, Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
 
-mod access;
 mod display;
-mod group_state;
 mod resolver;
 #[cfg(test)]
 mod test_utils;
@@ -36,7 +32,7 @@ where
     DuplicateOperation(OP, ID),
 
     #[error("error occurred applying state change action")]
-    StateChangeError(#[from] GroupStateError),
+    StateChangeError(GroupMembershipError<GroupMember<ID>>),
 
     #[error("expected sub-group {0} to exist in the store")]
     MissingSubGroup(ID),
@@ -63,28 +59,38 @@ pub enum GroupMember<ID> {
     Group { id: ID },
 }
 
+// Display is required by thiserror::Error trait.
+impl<ID> Display for GroupMember<ID>
+where
+    ID: IdentityHandle,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be performed by group members.
 #[derive(Clone, Debug, PartialEq)]
 pub enum GroupAction<ID> {
     Create {
-        initial_members: Vec<(GroupMember<ID>, Access)>,
+        initial_members: Vec<(GroupMember<ID>, Access<()>)>,
     },
     Add {
         member: GroupMember<ID>,
-        access: Access,
+        access: Access<()>,
     },
     Remove {
         member: GroupMember<ID>,
     },
     Promote {
         member: GroupMember<ID>,
-        access: Access,
+        access: Access<()>,
     },
     Demote {
         member: GroupMember<ID>,
-        access: Access,
+        access: Access<()>,
     },
 }
 
@@ -149,7 +155,7 @@ where
     pub group_id: ID,
 
     /// States at every position in the operation graph.
-    pub states: HashMap<OP, GroupMembersState<GroupMember<ID>>>,
+    pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, ()>>,
 
     /// All operations processed by this group.
     ///
@@ -272,12 +278,12 @@ where
         Ok(transitive_heads)
     }
 
-    fn current_state(&self) -> GroupMembersState<GroupMember<ID>> {
+    fn current_state(&self) -> GroupMembersState<GroupMember<ID>, ()> {
         let mut current_state = GroupMembersState::default();
         for state in self.heads() {
             // Unwrap as all "head" states should exist.
             let state = self.inner.states.get(&state).unwrap();
-            current_state = group_state::merge(state.clone(), current_state);
+            current_state = group_crdt::merge(state.clone(), current_state);
         }
         current_state
     }
@@ -285,7 +291,7 @@ where
     fn state_at(
         &self,
         operations: &Vec<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut y = GroupMembersState::default();
         for id in operations {
             let Some(previous_y) = self.inner.states.get(id) else {
@@ -293,7 +299,7 @@ where
                 // this graph, in that case we just ignore missing states.
                 continue;
             };
-            y = group_state::merge(previous_y.clone(), y);
+            y = group_crdt::merge(previous_y.clone(), y);
         }
 
         Ok(y)
@@ -302,13 +308,13 @@ where
     fn members_at(
         &self,
         operations: &Vec<OP>,
-    ) -> Result<Vec<(GroupMember<ID>, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
         let y = self.state_at(operations)?;
         Ok(y.members
-            .values()
-            .filter_map(|state| {
+            .into_iter()
+            .filter_map(|(id, state)| {
                 if state.is_member() {
-                    Some((state.member.clone(), state.access))
+                    Some((id, state.access))
                 } else {
                     None
                 }
@@ -321,29 +327,32 @@ where
     fn transitive_members_at(
         &self,
         operations: &Vec<OP>,
-    ) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let mut members: HashMap<ID, Access> = HashMap::new();
+    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let mut members: HashMap<ID, Access<()>> = HashMap::new();
         for (member, root_access) in self.members_at(operations)? {
             match member {
                 GroupMember::Individual(id) => {
-                    members.insert(id, root_access);
+                    members.insert(id, root_access.clone());
                 }
                 GroupMember::Group { id } => {
                     let sub_group = self.get_sub_group(id)?;
                     let transitive_members = sub_group.transitive_members_at(operations)?;
                     for (transitive_member, transitive_access) in transitive_members {
+                        let root_access_copy = root_access.clone();
                         members
                             .entry(transitive_member)
                             .and_modify(|access| {
-                                if transitive_access > *access && transitive_access <= root_access {
-                                    *access = transitive_access
+                                if transitive_access > *access
+                                    && transitive_access <= root_access_copy
+                                {
+                                    *access = transitive_access.clone()
                                 }
                             })
                             .or_insert_with(|| {
-                                if transitive_access <= root_access {
+                                if transitive_access <= root_access_copy {
                                     transitive_access
                                 } else {
-                                    root_access
+                                    root_access_copy
                                 }
                             });
                     }
@@ -353,13 +362,13 @@ where
         Ok(members.into_iter().collect())
     }
 
-    pub fn members(&self) -> Vec<(GroupMember<ID>, Access)> {
+    pub fn members(&self) -> Vec<(GroupMember<ID>, Access<()>)> {
         self.current_state()
             .members
-            .values()
-            .filter_map(|state| {
+            .into_iter()
+            .filter_map(|(id, state)| {
                 if state.is_member() {
-                    Some((state.member.clone(), state.access))
+                    Some((id, state.access))
                 } else {
                     None
                 }
@@ -367,7 +376,9 @@ where
             .collect::<Vec<_>>()
     }
 
-    pub fn transitive_members(&self) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
+    pub fn transitive_members(
+        &self,
+    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
         let heads = self.transitive_heads()?;
         let members = self.transitive_members_at(&heads)?;
         Ok(members)
@@ -375,8 +386,8 @@ where
 
     pub fn transitive_sub_groups(
         &self,
-    ) -> Result<Vec<(ID, Access)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let mut sub_groups: Vec<(ID, Access)> = Vec::new();
+    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let mut sub_groups: Vec<(ID, Access<()>)> = Vec::new();
         for (member, access) in self.members() {
             if let GroupMember::Group { id } = member {
                 let sub_group = self.get_sub_group(id)?;
@@ -572,16 +583,14 @@ where
         let members_y_copy = members_y.clone();
         let members_y_i = match action.clone() {
             GroupAction::Add { member, access, .. } => {
-                group_state::add_member(members_y_copy, actor, member, access)
+                group_crdt::add(members_y_copy, actor, member, access)
             }
-            GroupAction::Remove { member, .. } => {
-                group_state::remove_member(members_y_copy, actor, member)
-            }
+            GroupAction::Remove { member, .. } => group_crdt::remove(members_y_copy, actor, member),
             GroupAction::Promote { member, access, .. } => {
-                group_state::promote(members_y_copy, actor, member, access)
+                group_crdt::promote(members_y_copy, actor, member, None)
             }
             GroupAction::Demote { member, access, .. } => {
-                group_state::demote(members_y_copy, actor, member, access)
+                group_crdt::demote(members_y_copy, actor, member, None)
             }
             GroupAction::Create { initial_members } => {
                 let members = initial_members
@@ -590,9 +599,8 @@ where
                         (
                             *member,
                             MemberState {
-                                member: *member,
                                 member_counter: 1,
-                                access: *access,
+                                access: access.clone(),
                                 access_counter: 0,
                             },
                         )
@@ -600,7 +608,8 @@ where
                     .collect::<HashMap<_, _>>();
                 Ok(GroupMembersState { members })
             }
-        }?;
+        }
+        .map_err(|error| GroupError::StateChangeError(error))?;
 
         // Only add the resulting members state to the states map if the operation isn't
         // flagged to be ignored.

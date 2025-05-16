@@ -6,7 +6,8 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember, access::Access};
+use crate::group::{GroupAction, GroupControlMessage, GroupMember};
+use crate::group_crdt::Access;
 use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
 
 use super::{
@@ -54,7 +55,7 @@ impl Network {
         &mut self,
         group_id: GroupId,
         creator: MemberId,
-        initial_members: Vec<(GroupMember<MemberId>, Access)>,
+        initial_members: Vec<(GroupMember<MemberId>, Access<()>)>,
     ) -> MessageId {
         let y = self.get_y(&creator, &group_id);
         let control_message = GroupControlMessage::GroupAction {
@@ -74,7 +75,7 @@ impl Network {
         adder: MemberId,
         added: GroupMember<MemberId>,
         group_id: GroupId,
-        access: Access,
+        access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&adder, &group_id);
         let control_message = GroupControlMessage::GroupAction {
@@ -177,7 +178,7 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-    ) -> Vec<(GroupMember<MemberId>, Access)> {
+    ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y.members();
         members.sort();
@@ -189,7 +190,7 @@ impl Network {
         member: &MemberId,
         group_id: &GroupId,
         operations: &Vec<MessageId>,
-    ) -> Vec<(GroupMember<MemberId>, Access)> {
+    ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y.members_at(operations).unwrap();
         members.sort();
@@ -200,7 +201,7 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-    ) -> Vec<(MemberId, Access)> {
+    ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
             .transitive_members()
@@ -214,7 +215,7 @@ impl Network {
         member: &MemberId,
         group_id: &GroupId,
         operations: &Vec<MessageId>,
-    ) -> Vec<(MemberId, Access)> {
+    ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
             .transitive_members_at(operations)
