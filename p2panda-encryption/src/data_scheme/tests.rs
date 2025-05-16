@@ -3,8 +3,8 @@
 use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
 use crate::data_scheme::dcgka::{Dcgka, DcgkaError, DcgkaState, GroupSecretOutput, ProcessInput};
-use crate::data_scheme::dgm::test_utils::TestDgm;
 use crate::data_scheme::group_secret::SecretBundle;
+use crate::data_scheme::test_utils::dgm::TestDgm;
 use crate::key_bundle::Lifetime;
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
