@@ -11,7 +11,7 @@ pub mod test_utils;
 mod tests;
 
 pub use data::{decrypt_data, encrypt_data};
-pub use dcgka::{ControlMessage, DirectMessage};
+pub use dcgka::{ControlMessage, DirectMessage, DirectMessageContent, DirectMessageType};
 pub use group::{EncryptionGroup, EncryptionGroupError, GroupOutput, GroupResult, GroupState};
 pub use group_secret::{
     GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, GroupSecretId, SecretBundle,
