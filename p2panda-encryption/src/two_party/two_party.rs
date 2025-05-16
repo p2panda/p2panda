@@ -205,7 +205,7 @@ pub enum KeyUsed {
     OwnKey(u64),
 }
 
-/// Message to be sent over the network.
+/// 2SM message to be sent over the network.
 ///
 /// Note that this does not contain any additional information about the sender and receiver. This
 /// information needs to be added in applications.
