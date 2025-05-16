@@ -1,15 +1,11 @@
-use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 
 use petgraph::dot::{Config, Dot};
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::graph::DiGraph;
 use petgraph::visit::IntoNodeReferences;
 
-use crate::group::group_state::GroupMembersState;
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState, GroupStateInner};
-use crate::traits::{
-    AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
-};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
