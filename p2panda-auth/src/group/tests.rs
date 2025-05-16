@@ -5,9 +5,9 @@ use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
 };
+use crate::group_crdt::Access;
 use crate::traits::{AuthGraph, Operation};
 
-use super::access::Access;
 use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
@@ -64,7 +64,7 @@ fn basic_group() {
         group_id: alice,
         action: GroupAction::Add {
             member: GroupMember::Individual(claire),
-            access: Access::Write,
+            access: Access::Write { conditions: None },
         },
     };
     let (group_y, operation_003) = TestGroup::prepare(group_y, &control_message_003).unwrap();
@@ -77,7 +77,10 @@ fn basic_group() {
         vec![
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(bob), Access::Read),
-            (GroupMember::Individual(claire), Access::Write)
+            (
+                GroupMember::Individual(claire),
+                Access::Write { conditions: None }
+            )
         ]
     );
 
@@ -183,7 +186,10 @@ fn nested_groups() {
             initial_members: vec![
                 (GroupMember::Individual(alice), Access::Manage),
                 (GroupMember::Individual(alice_laptop), Access::Manage),
-                (GroupMember::Individual(alice_mobile), Access::Write),
+                (
+                    GroupMember::Individual(alice_mobile),
+                    Access::Write { conditions: None },
+                ),
             ],
         },
     };
@@ -203,7 +209,10 @@ fn nested_groups() {
         vec![
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(alice_laptop), Access::Manage),
-            (GroupMember::Individual(alice_mobile), Access::Write),
+            (
+                GroupMember::Individual(alice_mobile),
+                Access::Write { conditions: None }
+            ),
         ],
     );
 
@@ -337,7 +346,10 @@ fn multi_user() {
         alice_devices_group,
         alice,
         vec![
-            (GroupMember::Individual(alice_mobile), Access::Write),
+            (
+                GroupMember::Individual(alice_mobile),
+                Access::Write { conditions: None },
+            ),
             (GroupMember::Individual(alice_laptop), Access::Manage),
         ],
     );
@@ -380,7 +392,7 @@ fn multi_user() {
             ('B', Access::Manage),
             ('C', Access::Read),
             ('L', Access::Manage),
-            ('M', Access::Write)
+            ('M', Access::Write { conditions: None })
         ]
     );
     assert_eq!(alice_transitive_members, bob_transitive_members);
@@ -560,7 +572,10 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         BOB,
         vec![
             (GroupMember::Individual(BOB), Access::Manage),
-            (GroupMember::Individual(BOB_LAPTOP), Access::Write),
+            (
+                GroupMember::Individual(BOB_LAPTOP),
+                Access::Write { conditions: None },
+            ),
         ],
     );
     operations.push(id);
@@ -612,7 +627,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
             id: CHARLIE_TEAM_GROUP,
         },
         ALICE_ORG_GROUP,
-        Access::Write,
+        Access::Write { conditions: None },
     );
     operations.push(id);
 
@@ -628,13 +643,16 @@ fn transitive_members() {
 
     let expected_bob_devices_group_direct_members = vec![
         (GroupMember::Individual(BOB), Access::Manage),
-        (GroupMember::Individual(BOB_LAPTOP), Access::Write),
+        (
+            GroupMember::Individual(BOB_LAPTOP),
+            Access::Write { conditions: None },
+        ),
         (GroupMember::Individual(BOB_MOBILE), Access::Read),
     ];
 
     let expected_bob_devices_group_transitive_members = vec![
         (BOB, Access::Manage),
-        (BOB_LAPTOP, Access::Write),
+        (BOB_LAPTOP, Access::Write { conditions: None }),
         (BOB_MOBILE, Access::Read),
     ];
 
@@ -653,7 +671,7 @@ fn transitive_members() {
         (BOB, Access::Manage),
         (CHARLIE, Access::Manage),
         (EDITH, Access::Read),
-        (BOB_LAPTOP, Access::Write),
+        (BOB_LAPTOP, Access::Write { conditions: None }),
         (BOB_MOBILE, Access::Read),
     ];
 
@@ -663,16 +681,16 @@ fn transitive_members() {
             GroupMember::Group {
                 id: CHARLIE_TEAM_GROUP,
             },
-            Access::Write,
+            Access::Write { conditions: None },
         ),
     ];
 
     let expected_alice_org_group_transitive_members = vec![
         (ALICE, Access::Manage),
-        (BOB, Access::Write),
-        (CHARLIE, Access::Write),
+        (BOB, Access::Write { conditions: None }),
+        (CHARLIE, Access::Write { conditions: None }),
         (EDITH, Access::Read),
-        (BOB_LAPTOP, Access::Write),
+        (BOB_LAPTOP, Access::Write { conditions: None }),
         (BOB_MOBILE, Access::Read),
     ];
 
@@ -734,7 +752,7 @@ fn members_at() {
         members,
         vec![
             (ALICE, Access::Manage),
-            (CHARLIE, Access::Write),
+            (CHARLIE, Access::Write { conditions: None }),
             (EDITH, Access::Read)
         ]
     );
@@ -753,10 +771,10 @@ fn members_at() {
         members,
         vec![
             (ALICE, Access::Manage),
-            (BOB, Access::Write),
-            (CHARLIE, Access::Write),
+            (BOB, Access::Write { conditions: None }),
+            (CHARLIE, Access::Write { conditions: None }),
             (EDITH, Access::Read),
-            (BOB_LAPTOP, Access::Write),
+            (BOB_LAPTOP, Access::Write { conditions: None }),
         ]
     );
 
@@ -774,10 +792,10 @@ fn members_at() {
         members_at_most_recent_heads,
         vec![
             (ALICE, Access::Manage),
-            (BOB, Access::Write),
-            (CHARLIE, Access::Write),
+            (BOB, Access::Write { conditions: None }),
+            (CHARLIE, Access::Write { conditions: None }),
             (EDITH, Access::Read),
-            (BOB_LAPTOP, Access::Write),
+            (BOB_LAPTOP, Access::Write { conditions: None }),
             (BOB_MOBILE, Access::Read),
         ]
     );
