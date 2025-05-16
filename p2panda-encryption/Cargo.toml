@@ -1,5 +1,5 @@
 [package]
-name = "p2panda-group"
+name = "p2panda-encryption"
 version = "0.1.0"
 edition = "2024"
 authors = [

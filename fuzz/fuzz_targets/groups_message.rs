@@ -6,15 +6,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_group::message_scheme::{GroupEvent, MessageGroup};
-use p2panda_group::test_utils::message_scheme::dgm::AckedTestDgm;
-use p2panda_group::test_utils::message_scheme::network::{
+use p2panda_encryption::message_scheme::{GroupEvent, MessageGroup};
+use p2panda_encryption::test_utils::message_scheme::dgm::AckedTestDgm;
+use p2panda_encryption::test_utils::message_scheme::network::{
     TestGroupError, TestGroupState, init_group_state,
 };
-use p2panda_group::test_utils::message_scheme::ordering::{ForwardSecureOrderer, TestMessage};
-use p2panda_group::test_utils::{MemberId, MessageId};
-use p2panda_group::traits::ForwardSecureGroupMessage;
-use p2panda_group::{Rng, message_scheme};
+use p2panda_encryption::test_utils::message_scheme::ordering::{ForwardSecureOrderer, TestMessage};
+use p2panda_encryption::test_utils::{MemberId, MessageId};
+use p2panda_encryption::traits::ForwardSecureGroupMessage;
+use p2panda_encryption::{Rng, message_scheme};
 
 /// Number of max. group epochs per fuzzing round. Members can create one group operation each per
 /// epoch.
@@ -314,16 +314,12 @@ enum State {
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                State::Standby => "standby",
-                State::Active => "active",
-                State::Removed => "removed",
-                State::Invalid => "invalid",
-            }
-        )
+        write!(f, "{}", match self {
+            State::Standby => "standby",
+            State::Active => "active",
+            State::Removed => "removed",
+            State::Invalid => "invalid",
+        })
     }
 }
 
@@ -365,34 +361,30 @@ enum Operation {
 
 impl Display for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Operation::Noop => "noop".to_string(),
-                Operation::Create { initial_members } => format!(
-                    "create (initial_members={{{}}})",
-                    print_members(initial_members)
-                ),
-                Operation::Add {
+        write!(f, "{}", match self {
+            Operation::Noop => "noop".to_string(),
+            Operation::Create { initial_members } => format!(
+                "create (initial_members={{{}}})",
+                print_members(initial_members)
+            ),
+            Operation::Add {
+                added,
+                members_in_welcome,
+            } => {
+                format!(
+                    "add {} (members_in_welcome={{{}}})",
                     added,
-                    members_in_welcome,
-                } => {
-                    format!(
-                        "add {} (members_in_welcome={{{}}})",
-                        added,
-                        print_members(members_in_welcome)
-                    )
-                }
-                Operation::Remove { removed } => {
-                    format!("remove {}", removed)
-                }
-                Operation::Update => "update".to_string(),
-                Operation::SendMessage { plaintext } => {
-                    format!("send message (len={})", plaintext.len())
-                }
+                    print_members(members_in_welcome)
+                )
             }
-        )
+            Operation::Remove { removed } => {
+                format!("remove {}", removed)
+            }
+            Operation::Update => "update".to_string(),
+            Operation::SendMessage { plaintext } => {
+                format!("send message (len={})", plaintext.len())
+            }
+        })
     }
 }
 
@@ -652,38 +644,34 @@ fuzz_target!(|seed: [u8; 32]| {
     let mut queue = VecDeque::new();
 
     for id in &member_ids {
-        members.insert(
-            *id,
-            Member {
-                // Initialise state machine for each member.
-                machine: if id == &group_creator {
-                    StateMachine::from_create(*id, member_ids.clone(), vec![*id])
-                } else {
-                    StateMachine::from_standby(*id, member_ids.clone())
-                },
-                // Set up group state for each member.
-                group: {
-                    if id == &group_creator {
-                        // The group "creator" initialises the group with themselves ..
-                        let (y_group_i, message) =
-                            MessageGroup::create(group_states[*id].clone(), vec![*id], &rng)
-                                .unwrap();
-
-                        // .. and publishes the first "create" control message on the test network.
-                        queue.push_back((
-                            Suggestion::Valid(Operation::Create {
-                                initial_members: vec![*id],
-                            }),
-                            message,
-                        ));
-
-                        Some(y_group_i)
-                    } else {
-                        Some(group_states[*id].clone())
-                    }
-                },
+        members.insert(*id, Member {
+            // Initialise state machine for each member.
+            machine: if id == &group_creator {
+                StateMachine::from_create(*id, member_ids.clone(), vec![*id])
+            } else {
+                StateMachine::from_standby(*id, member_ids.clone())
             },
-        );
+            // Set up group state for each member.
+            group: {
+                if id == &group_creator {
+                    // The group "creator" initialises the group with themselves ..
+                    let (y_group_i, message) =
+                        MessageGroup::create(group_states[*id].clone(), vec![*id], &rng).unwrap();
+
+                    // .. and publishes the first "create" control message on the test network.
+                    queue.push_back((
+                        Suggestion::Valid(Operation::Create {
+                            initial_members: vec![*id],
+                        }),
+                        message,
+                    ));
+
+                    Some(y_group_i)
+                } else {
+                    Some(group_states[*id].clone())
+                }
+            },
+        });
     }
 
     drop(group_states);
