@@ -19,6 +19,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Partial ordering algorithm for operations [#710](https://github.com/p2panda/p2panda/pull/710)
+- `p2panda-encryption` decentralized secure data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 
 ### Changed
 
