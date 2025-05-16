@@ -5,9 +5,11 @@ edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
 ]
+description = "Decentralized secure data- and message encryption for groups with post-compromise security and optional forward secrecy"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+keywords = ["p2p", "encryption", "groups", "double-ratchet"]
 
 [package.metadata.docs.rs]
 all-features = true
