@@ -14,6 +14,7 @@ use crate::traits::{
 };
 
 mod access;
+mod display;
 mod group_state;
 mod resolver;
 #[cfg(test)]
@@ -31,6 +32,9 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
+    #[error("duplicate operation {0} processed in group {1}")]
+    DuplicateOperation(OP, ID),
+
     #[error("error occurred applying state change action")]
     StateChangeError(#[from] GroupStateError),
 
@@ -312,6 +316,8 @@ where
             .collect::<Vec<_>>())
     }
 
+    // TODO: validate that all operations were visited during traversal to assure that missing
+    // state was not requested.
     fn transitive_members_at(
         &self,
         operations: &Vec<OP>,
@@ -476,6 +482,19 @@ where
         let control_message = operation.payload();
         let previous = operation.previous();
         let group_id = control_message.group_id();
+
+        // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
+        // processing here in the groups api then there should probably be a hashset of operations
+        // ids maintained on the struct for efficient lookup.
+        if y.inner
+            .operations
+            .iter()
+            .map(|op| op.id())
+            .find(|id| id == &operation_id)
+            .is_some()
+        {
+            return Err(GroupError::DuplicateOperation(operation_id, group_id));
+        }
 
         if y.inner.group_id != group_id {
             // This operation is not intended for this group.
