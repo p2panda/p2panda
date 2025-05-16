@@ -12,10 +12,12 @@ use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use thiserror::Error;
 
-use crate::crypto::ed25519::SIGNATURE_SIZE;
 use crate::crypto::sha2::sha2_512;
 use crate::crypto::x25519::{PublicKey, SecretKey};
 use crate::crypto::{Rng, RngError};
+
+/// 512-bit signature.
+pub const SIGNATURE_SIZE: usize = 64;
 
 /// Hash1 changes the first byte to 0xFE.
 const HASH_1_PREFIX: [u8; 32] = [

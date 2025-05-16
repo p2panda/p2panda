@@ -15,7 +15,6 @@
 //! Random Number Generator:
 //! - ChaCha20 stream cipher, seeded via `getrandom`
 pub mod aead;
-pub mod ed25519;
 pub mod hkdf;
 pub mod hpke;
 mod rng;
