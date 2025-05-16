@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Interfaces to integrate `p2panda-encryption` into custom data- and messaging types, group
+//! management- and ordering strategies.
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
@@ -10,14 +12,21 @@ mod key_registry;
 mod message;
 mod ordering;
 
-pub use dgm::{AckedGroupMembership, GroupMembership};
+#[cfg(feature = "message_scheme")]
+pub use dgm::AckedGroupMembership;
+#[cfg(feature = "data_scheme")]
+pub use dgm::GroupMembership;
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
-pub use message::{
-    ForwardSecureGroupMessage, ForwardSecureMessageContent, GroupMessage, GroupMessageType,
-};
-pub use ordering::{ForwardSecureOrdering, Ordering};
+#[cfg(feature = "message_scheme")]
+pub use message::{ForwardSecureGroupMessage, ForwardSecureMessageContent};
+#[cfg(feature = "data_scheme")]
+pub use message::{GroupMessage, GroupMessageType};
+#[cfg(feature = "message_scheme")]
+pub use ordering::ForwardSecureOrdering;
+#[cfg(feature = "data_scheme")]
+pub use ordering::Ordering;
 
 /// Handle to identify a group member.
 ///

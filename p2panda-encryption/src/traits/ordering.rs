@@ -23,11 +23,14 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::xchacha20::XAeadNonce;
+#[cfg(feature = "data_scheme")]
 use crate::data_scheme::{self, GroupSecretId};
+#[cfg(feature = "message_scheme")]
 use crate::message_scheme::{self, Generation};
-use crate::traits::{
-    AckedGroupMembership, ForwardSecureGroupMessage, GroupMembership, GroupMessage,
-};
+#[cfg(feature = "message_scheme")]
+use crate::traits::{AckedGroupMembership, ForwardSecureGroupMessage};
+#[cfg(feature = "data_scheme")]
+use crate::traits::{GroupMembership, GroupMessage};
 
 /// Ordering protocol for p2panda's "data encryption" scheme.
 ///
@@ -47,6 +50,7 @@ use crate::traits::{
 /// Applications can choose to remove secrets from their group bundles for forward secrecy. In this
 /// case additional logic is required to "jump" over these "outdated" application messages.
 /// Ignoring these messages can take place when processing the "welcome" message.
+#[cfg(feature = "data_scheme")]
 pub trait Ordering<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
@@ -168,6 +172,7 @@ where
 /// been encrypted by Alice prior to their knowledge that Charlie was already in the group then. As
 /// soon as Alice will learn that Charlie was added they will "forward" their ratchet state to
 /// Charlie, but this will only be used for future messages.
+#[cfg(feature = "message_scheme")]
 pub trait ForwardSecureOrdering<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Internal helpers for writing (fuzz-) tests against `p2panda-encryption`.
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};

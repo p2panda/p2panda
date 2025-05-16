@@ -18,7 +18,9 @@ all-features = true
 workspace = true
 
 [features]
-default = []
+default = ["data_scheme"]
+data_scheme = []
+message_scheme = []
 test_utils = []
 
 [dependencies]

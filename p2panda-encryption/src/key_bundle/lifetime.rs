@@ -12,6 +12,9 @@ const DEFAULT_LIFETIME: u64 = 60 * 60 * 24 * 28 * 3;
 /// amounts to 1h.
 const DEFAULT_LIFETIME_MARGIN: u64 = 60 * 60;
 
+/// Determines the lifetime of a pre-key by defining a time range.
+///
+/// Implementations should reject received messages with expired pre-keys and disallow use.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lifetime {
     not_before: u64,

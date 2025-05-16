@@ -8,10 +8,10 @@ use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_verify};
 use crate::key_bundle::{LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
 use crate::traits::KeyBundle;
 
-/// Key-bundle with pre-published public keys to be used exactly _once_.
+/// Key-bundle with public keys to be used exactly _once_.
 ///
 /// Note that while pre-keys are signed for X3DH, bundles should be part of an authenticated
-/// messaging scheme where the whole payload (and thus it's lifetime and one-time pre-key) is
+/// messaging format where the whole payload (and thus it's lifetime and one-time pre-key) is
 /// signed by the same identity to prevent replay and impersonation attacks.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OneTimeKeyBundle {
@@ -69,10 +69,10 @@ impl KeyBundle for OneTimeKeyBundle {
     }
 }
 
-/// Key-bundle with pre-published public keys to be used until the pre-key expired.
+/// Key-bundle with public keys to be used until the pre-key expired.
 ///
 /// Note that while pre-keys are signed for X3DH, bundles should be part of an authenticated
-/// messaging scheme where the whole payload (and thus it's lifetime) is signed by the same
+/// messaging format where the whole payload (and thus it's lifetime) is signed by the same
 /// identity to prevent replay and impersonation attacks.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LongTermKeyBundle {
