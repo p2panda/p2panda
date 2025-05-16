@@ -79,6 +79,7 @@ where
     /// Returns initial state for group.
     ///
     /// This needs to be called before creating or being added to a group.
+    #[allow(unused)]
     pub fn init(
         my_id: ID,
         my_keys: KMG::State,
@@ -326,6 +327,7 @@ where
     ///
     /// Make sure that the ordering implementation and higher-level application logic accounts for
     /// error cases where past secrets might not exist anymore.
+    #[allow(unused)]
     pub fn update_secrets<F>(
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         update_fn: F,
@@ -541,12 +543,6 @@ where
 
     #[error("can not add ourselves to the group")]
     NotAddOurselves,
-
-    #[error("received a \"create\" control message which is not for us")]
-    CreateNotForUs,
-
-    #[error("received an \"add\" control message (welcome) which is not for us")]
-    WelcomeNotForUs,
 
     #[error("we do not have created or learned about any group secrets yet")]
     NoGroupSecretAvailable,

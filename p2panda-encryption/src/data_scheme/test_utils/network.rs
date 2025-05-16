@@ -4,10 +4,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::crypto::Rng;
 use crate::data_scheme::ControlMessage;
-use crate::data_scheme::dgm::test_utils::TestDgm;
 use crate::data_scheme::group::{EncryptionGroup, GroupOutput, GroupState};
 use crate::data_scheme::group_secret::SecretBundle;
 use crate::data_scheme::test_utils::dcgka::init_dcgka_state;
+use crate::data_scheme::test_utils::dgm::TestDgm;
 use crate::data_scheme::test_utils::ordering::{MessageOrderer, TestMessage};
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
