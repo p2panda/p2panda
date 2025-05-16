@@ -3,13 +3,13 @@
 use std::fmt::Display;
 
 use crate::crypto::xchacha20::XAeadNonce;
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 use crate::data_scheme::{self, GroupSecretId};
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 use crate::message_scheme::{self, Generation};
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 use crate::traits::AckedGroupMembership;
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 use crate::traits::GroupMembership;
 
 /// Interface to express required information from messages following the "data encryption"
@@ -18,7 +18,7 @@ use crate::traits::GroupMembership;
 /// Applications implementing these traits should authenticate the original sender of each message.
 ///
 /// Messages, except of the direct ones, need to be broadcast to the whole group.
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 pub trait GroupMessage<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
@@ -36,7 +36,7 @@ where
     fn direct_messages(&self) -> Vec<data_scheme::DirectMessage<ID, OP, DGM>>;
 }
 
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 #[derive(Debug)]
 pub enum GroupMessageType<ID> {
     /// Control message managing encryption group.
@@ -55,7 +55,7 @@ pub enum GroupMessageType<ID> {
     },
 }
 
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 impl<ID> Display for GroupMessageType<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -77,7 +77,7 @@ impl<ID> Display for GroupMessageType<ID> {
 /// Applications implementing these traits should authenticate the original sender of each message.
 ///
 /// Messages, except for the direct ones, need to be broadcast to the whole group.
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 pub trait ForwardSecureGroupMessage<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
@@ -100,7 +100,7 @@ where
     fn direct_messages(&self) -> Vec<message_scheme::DirectMessage<ID, OP, DGM>>;
 }
 
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 #[derive(Debug)]
 pub enum ForwardSecureMessageContent<ID, OP> {
     /// Control message managing messaging encryption group.
@@ -113,7 +113,7 @@ pub enum ForwardSecureMessageContent<ID, OP> {
     },
 }
 
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 impl<ID, OP> Display for ForwardSecureMessageContent<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

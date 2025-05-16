@@ -12,20 +12,20 @@ mod key_registry;
 mod message;
 mod ordering;
 
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 pub use dgm::AckedGroupMembership;
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 pub use dgm::GroupMembership;
 pub use key_bundle::KeyBundle;
 pub use key_manager::{IdentityManager, PreKeyManager};
 pub use key_registry::{IdentityRegistry, PreKeyRegistry};
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 pub use message::{ForwardSecureGroupMessage, ForwardSecureMessageContent};
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 pub use message::{GroupMessage, GroupMessageType};
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 pub use ordering::ForwardSecureOrdering;
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 pub use ordering::Ordering;
 
 /// Handle to identify a group member.

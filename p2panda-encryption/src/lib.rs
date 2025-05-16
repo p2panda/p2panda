@@ -134,12 +134,12 @@
 //! key-agreement for initial rounds. This includes Signal's work around the
 //! [XEdDSA](https://signal.org/docs/specifications/xeddsa) signature schemes.
 mod crypto;
-#[cfg(feature = "data_scheme")]
+#[cfg(any(test, feature = "data_scheme"))]
 pub mod data_scheme;
 mod key_bundle;
 mod key_manager;
 mod key_registry;
-#[cfg(feature = "message_scheme")]
+#[cfg(any(test, feature = "message_scheme"))]
 pub mod message_scheme;
 mod ordering;
 #[cfg(any(test, feature = "test_utils"))]
