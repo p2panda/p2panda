@@ -521,14 +521,6 @@ where
             added_members,
         }
     }
-
-    pub(crate) fn from_events(events: Vec<GroupEvent<ID, OP, DGM, ORD>>) -> Self {
-        GroupOutput {
-            events,
-            removed_members: HashSet::new(),
-            added_members: HashSet::new(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

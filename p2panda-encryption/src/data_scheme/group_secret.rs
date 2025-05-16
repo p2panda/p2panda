@@ -40,7 +40,7 @@ pub struct GroupSecret(Secret<GROUP_SECRET_SIZE>, Timestamp);
 
 impl GroupSecret {
     #[cfg(any(test, feature = "test_utils"))]
-    pub(crate) fn new(bytes: [u8; GROUP_SECRET_SIZE], timestamp: Timestamp) -> Self {
+    pub fn new(bytes: [u8; GROUP_SECRET_SIZE], timestamp: Timestamp) -> Self {
         Self(Secret::from_bytes(bytes), timestamp)
     }
 
@@ -144,11 +144,6 @@ impl SecretBundleState {
         self.secrets.iter()
     }
 
-    /// Iterator over secrets (values) and their ids (keys).
-    pub fn into_iter(self) -> IntoIter<GroupSecretId, GroupSecret> {
-        self.secrets.into_iter()
-    }
-
     /// Iterator over all ids.
     pub fn ids(&self) -> Keys<'_, GroupSecretId, GroupSecret> {
         self.secrets.keys()
@@ -162,6 +157,16 @@ impl SecretBundleState {
     /// Encodes bundle in CBOR format.
     pub(crate) fn to_bytes(&self) -> Result<Vec<u8>, GroupSecretError> {
         Ok(encode_cbor(self)?)
+    }
+}
+
+impl std::iter::IntoIterator for SecretBundleState {
+    type Item = (GroupSecretId, GroupSecret);
+
+    type IntoIter = IntoIter<GroupSecretId, GroupSecret>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.secrets.into_iter()
     }
 }
 

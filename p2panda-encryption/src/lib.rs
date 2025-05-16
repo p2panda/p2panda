@@ -141,6 +141,7 @@ mod key_manager;
 mod key_registry;
 #[cfg(any(test, feature = "message_scheme"))]
 pub mod message_scheme;
+#[cfg(any(test, feature = "test_utils"))]
 mod ordering;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;

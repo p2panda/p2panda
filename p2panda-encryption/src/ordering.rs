@@ -12,6 +12,9 @@ use thiserror::Error;
 /// Internally this assumes a structure where items can point at others as "dependencies", forming
 /// an DAG (Directed Acyclic Graph). The "orderer" monitors incoming items, asserts if the
 /// dependencies are met and yields a linearized sequence of "dependency checked" items.
+///
+/// Note that this is only used for fuzzing and testing purposes. A more robust implementation
+/// would need to take file-system persistance and atomic transactions into account.
 #[derive(Debug)]
 pub struct Orderer<T> {
     _marker: PhantomData<T>,

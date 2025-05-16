@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 /// ratchets (see DCGKA implementation and paper for handling concurrency cases for more info).
 ///
 /// This is the DGM interface for p2panda's "message encryption" scheme.
+#[cfg(any(test, feature = "message_scheme"))]
 pub trait AckedGroupMembership<ID, OP> {
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
@@ -62,6 +63,7 @@ pub trait AckedGroupMembership<ID, OP> {
     fn is_remove(y: &Self::State, operation_id: OP) -> bool;
 }
 
+#[cfg(any(test, feature = "data_scheme"))]
 pub trait GroupMembership<ID, OP> {
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
