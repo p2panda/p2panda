@@ -26,13 +26,6 @@ use crate::traits::{
 };
 
 /// Group encryption scheme for messaging with strong security guarantees.
-// NOTE: This implementation is not complete yet and will be finalized in sub-sequent "integration"
-// PRs along work on our access control crate to make it "production ready":
-//
-// 1. DGM with access control is missing
-// 2. Orderer is missing supporting more complex concurrency scenarios
-// 3. Re-adding members is currently not possible
-// 4. Memory-bound state handling (especially required in orderer)
 pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
