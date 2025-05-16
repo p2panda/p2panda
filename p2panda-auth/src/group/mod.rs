@@ -424,7 +424,34 @@ where
         operation: &Self::Action,
     ) -> Result<(GroupState<ID, OP, RS, ORD, GS>, ORD::Message), GroupError<ID, OP, RS, ORD, GS>>
     {
-        let dependencies = y.transitive_heads()?;
+        let mut dependencies = y.transitive_heads()?;
+
+        if let GroupControlMessage::GroupAction {
+            action:
+                GroupAction::Add {
+                    member: GroupMember::Group { id },
+                    ..
+                },
+            ..
+        } = operation
+        {
+            let added_sub_group = y.get_sub_group(*id)?;
+            dependencies.extend(&added_sub_group.transitive_heads()?);
+        };
+
+        if let GroupControlMessage::GroupAction {
+            action: GroupAction::Create { initial_members },
+            ..
+        } = operation
+        {
+            for (member, _) in initial_members {
+                if let GroupMember::Group { id } = member {
+                    let sub_group = y.get_sub_group(*id)?;
+                    dependencies.extend(&sub_group.transitive_heads()?);
+                }
+            }
+        };
+
         let previous = y.heads();
         let ordering_y = y.orderer_y.clone();
         let (ordering_y, message) =
