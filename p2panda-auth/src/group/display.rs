@@ -23,8 +23,8 @@ where
         &self,
         root: Self,
         visited: &mut Vec<OP>,
-        mut graph: DiGraph<(ORD::Message, String), ()>,
-    ) -> DiGraph<(ORD::Message, String), ()> {
+        mut graph: DiGraph<(ORD::Message, String), String>,
+    ) -> DiGraph<(ORD::Message, String), String> {
         for operation in &self.inner.operations {
             visited.push(operation.id());
             graph.add_node((
@@ -60,7 +60,7 @@ where
                     .find(|(idx, (op, _))| op.id() == create_operation.id())
                     .unwrap();
 
-                graph.add_edge(operation_idx, create_operation_idx, ());
+                graph.add_edge(operation_idx, create_operation_idx, "sub group".to_string());
             }
 
             for dependency in operation.dependencies() {
@@ -68,7 +68,7 @@ where
                     .node_references()
                     .find(|(idx, (op, _))| op.id() == *dependency)
                     .unwrap();
-                graph.add_edge(operation_idx, idx, ());
+                graph.add_edge(operation_idx, idx, "dependency".to_string());
             }
         }
 
@@ -84,7 +84,7 @@ where
         let dag_graphviz = Dot::with_attr_getters(
             &graph,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
-            &|_, _| format!(""),
+            &|_, edge| format!("label = \"{}\"", edge.weight()),
             &|_, (idx, (_, s))| format!("label = {}", s),
         );
 
