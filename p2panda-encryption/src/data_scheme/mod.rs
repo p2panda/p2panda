@@ -2,19 +2,17 @@
 
 //! Data encryption for groups with post-compromise security and optional forward-secrecy.
 mod data;
-mod dcgka;
-mod dgm;
-mod group;
-mod group_secret;
+pub mod dcgka;
+pub mod group;
+pub mod group_secret;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
-pub use dcgka::{
-    ControlMessage, Dcgka, DcgkaError, DcgkaResult, DcgkaState, DirectMessage,
-    DirectMessageContent, DirectMessageType, OperationOutput, ProcessInput, ProcessOutput,
-};
+pub use data::{decrypt_data, encrypt_data};
+pub use dcgka::{ControlMessage, DirectMessage};
+pub use group::{EncryptionGroup, EncryptionGroupError, GroupOutput, GroupResult, GroupState};
 pub use group_secret::{
     GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, GroupSecretId, SecretBundle,
     SecretBundleState,

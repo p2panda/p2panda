@@ -601,12 +601,6 @@ where
     #[error("can not add ourselves to the group")]
     NotAddOurselves,
 
-    #[error("received a \"create\" control message which is not for us")]
-    CreateNotForUs,
-
-    #[error("received an \"add\" control message (welcome) which is not for us")]
-    WelcomeNotForUs,
-
     #[error("received \"create\" or \"add\" message addressing us but no direct message attached")]
     DirectMessageMissing,
 

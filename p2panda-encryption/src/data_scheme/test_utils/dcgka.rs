@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::crypto::x25519::SecretKey;
-use crate::data_scheme::dgm::test_utils::TestDgm;
-use crate::data_scheme::{Dcgka, DcgkaState};
+use crate::data_scheme::dcgka::{Dcgka, DcgkaState};
+use crate::data_scheme::test_utils::dgm::TestDgm;
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::PreKeyManager;
 use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
