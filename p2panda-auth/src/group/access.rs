@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 /// Access levels which can be assigned to a group member.
@@ -11,4 +13,17 @@ pub enum Access {
     Read,
     Write,
     Manage, // Admin
+}
+
+impl Display for Access {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Access::Pull => "pull",
+            Access::Read => "read",
+            Access::Write => "write",
+            Access::Manage => "manage",
+        };
+
+        write!(f, "{}", s)
+    }
 }

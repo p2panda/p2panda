@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use petgraph::dot::{Config, Dot};
-use petgraph::graph::DiGraph;
+use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState, GroupStateInner};
@@ -9,41 +9,274 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 
 impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
-    ID: IdentityHandle + Display,
+    ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
     RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
+    pub fn display(&self) -> String {
+        let mut graph = DiGraph::new();
+        graph = self.add_nodes_and_previous_edges(self.clone(), graph);
+
+        let dag_graphviz = Dot::with_attr_getters(
+            &graph,
+            &[Config::NodeNoLabel, Config::EdgeNoLabel],
+            &|_, edge| {
+                let weight = edge.weight();
+                if weight == "previous" || weight == "member" || weight == "sub group" {
+                    return format!("label = \"{}\"", weight);
+                }
+
+                format!("label = \"{}\", constraint = false", weight)
+            },
+            &|_, (_, (_, s))| format!("label = {}", s),
+        );
+
+        format!("{:?}", dag_graphviz)
+    }
+
     fn add_nodes_and_previous_edges(
         &self,
         root: Self,
-        visited: &mut Vec<OP>,
-        mut graph: DiGraph<(ORD::Message, String), String>,
-    ) -> DiGraph<(ORD::Message, String), String> {
+        mut graph: DiGraph<(Option<OP>, String), String>,
+    ) -> DiGraph<(Option<OP>, String), String> {
         for operation in &self.inner.operations {
-            visited.push(operation.id());
             graph.add_node((
-                operation.clone(),
-                self.format_operation(&root, operation, visited),
+                Some(operation.id()),
+                self.format_operation(&root, operation),
             ));
 
             let (operation_idx, _) = graph
                 .node_references()
-                .find(|(idx, (op, _))| op.id() == operation.id())
+                .find(|(_, (op, _))| {
+                    if let Some(op) = op {
+                        *op == operation.id()
+                    } else {
+                        false
+                    }
+                })
                 .unwrap();
 
             if let GroupControlMessage::GroupAction {
+                action: GroupAction::Add { member, .. },
+                ..
+            } = operation.payload()
+            {
+                graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+            }
+
+            if let GroupControlMessage::GroupAction {
                 action:
-                    GroupAction::Add {
-                        member: GroupMember::Group { id },
-                        ..
+                    GroupAction::Create {
+                        initial_members, ..
                     },
                 ..
             } = operation.payload()
             {
+                for (member, access) in initial_members {
+                    graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                }
+            }
+
+            let mut dependencies = operation.dependencies().clone();
+            let previous = operation.previous();
+            dependencies.retain(|id| !previous.contains(id));
+
+            for dependency in dependencies {
+                let (idx, _) = graph
+                    .node_references()
+                    .find(|(_, (op, _))| {
+                        if let Some(op) = op {
+                            *op == dependency
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap();
+                graph.add_edge(operation_idx, idx, "dependency".to_string());
+            }
+
+            for previous in previous {
+                let (idx, _) = graph
+                    .node_references()
+                    .find(|(_, (op, _))| {
+                        if let Some(op) = op {
+                            op == previous
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap();
+                graph.add_edge(operation_idx, idx, "previous".to_string());
+            }
+        }
+
+        graph
+    }
+
+    fn format_operation(&self, root: &Self, operation: &ORD::Message) -> String {
+        let control_message = operation.payload();
+        let mut s = String::new();
+
+        let color = if control_message.is_create() {
+            "bisque"
+        } else {
+            "grey"
+        };
+
+        s += &format!(
+            "<<TABLE BGCOLOR=\"{color}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
+        );
+        s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
+        s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
+        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.sender());
+        let previous = operation.previous();
+        if !previous.is_empty() {
+            s += &format!(
+                "<TR><TD>previous</TD><TD>{}</TD></TR>",
+                self.format_dependencies(previous)
+            );
+        }
+        let mut dependencies = operation.dependencies().clone();
+        dependencies.retain(|id| !previous.contains(id));
+        if !dependencies.is_empty() {
+            s += &format!(
+                "<TR><TD>dependencies</TD><TD>{}</TD></TR>",
+                self.format_dependencies(&dependencies)
+            );
+        }
+        s += &format!(
+            "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
+            self.format_control_message(&control_message)
+        );
+        s += &format!(
+            "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
+            self.format_members(&operation)
+        );
+        s += "</TABLE>>";
+        s
+    }
+
+    fn format_control_message(&self, message: &GroupControlMessage<ID, OP>) -> String {
+        let mut s = String::new();
+        s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
+
+        match message {
+            GroupControlMessage::Revoke { .. } => todo!(),
+            GroupControlMessage::GroupAction { action, .. } => match action {
+                GroupAction::Create { initial_members } => {
+                    s += "<TR><TD>CREATE</TD></TR>";
+                    s += "<TR><TD>initial members</TD></TR>";
+                    for (member, access) in initial_members {
+                        match member {
+                            GroupMember::Individual(id) => {
+                                s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                            }
+                            GroupMember::Group { id } => {
+                                s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                            }
+                        }
+                    }
+                }
+                GroupAction::Add { member, access } => {
+                    s += "<TR><TD>ADD</TD></TR>";
+                    match member {
+                        GroupMember::Individual(id) => {
+                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        }
+                        GroupMember::Group { id } => {
+                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        }
+                    }
+                }
+                GroupAction::Remove { member } => {
+                    s += "<TR><TD>REMOVE</TD></TR>";
+                    match member {
+                        GroupMember::Individual(id) => {
+                            s += &format!("<TR><TD>individual : {}</TD></TR>", id)
+                        }
+                        GroupMember::Group { id } => {
+                            s += &format!("<TR><TD>group : {}</TD></TR>", id)
+                        }
+                    }
+                }
+                GroupAction::Promote { member, access } => {
+                    s += "<TR><TD>PROMOTE</TD></TR>";
+                    match member {
+                        GroupMember::Individual(id) => {
+                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        }
+                        GroupMember::Group { id } => {
+                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        }
+                    }
+                }
+                GroupAction::Demote { member, access } => {
+                    s += "<TR><TD>DEMOTE</TD></TR>";
+                    match member {
+                        GroupMember::Individual(id) => {
+                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        }
+                        GroupMember::Group { id } => {
+                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        }
+                    }
+                }
+            },
+        }
+
+        s += "</TABLE>";
+        s
+    }
+
+    fn format_members(&self, operation: &ORD::Message) -> String {
+        let mut dependencies = operation.dependencies().clone();
+        dependencies.push(operation.id());
+        let mut members = self
+            .transitive_members_at(&dependencies)
+            .expect("state exists");
+        members.sort_by(|(id_a, _), (id_b, _)| id_a.cmp(id_b));
+
+        let mut s = String::new();
+        s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
+        s += "<TR><TD>MEMBERS</TD></TR>";
+
+        for (member, access) in members {
+            s += &format!("<TR><TD>{member} : {access}</TD></TR>")
+        }
+
+        s += "</TABLE>";
+        s
+    }
+
+    fn format_dependencies(&self, dependencies: &Vec<OP>) -> String {
+        let mut s = String::new();
+        s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
+
+        for id in dependencies {
+            s += &format!("<TR><TD>{id}</TD></TR>")
+        }
+
+        s += "</TABLE>";
+        s
+    }
+
+    fn add_member_to_graph(
+        &self,
+        operation_idx: NodeIndex,
+        member: &GroupMember<ID>,
+        root: Self,
+        mut graph: DiGraph<(Option<OP>, String), String>,
+    ) -> DiGraph<(Option<OP>, String), String> {
+        match member {
+            GroupMember::Individual(id) => {
+                let idx = graph.add_node((None, format!("<<TABLE BGCOLOR=\"bisque\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\"><TR><TD>individual</TD><TD>{id}</TD></TR></TABLE>>")));
+                graph.add_edge(operation_idx, idx, "member".to_string());
+            }
+            GroupMember::Group { id } => {
                 let sub_group = self.get_sub_group(*id).unwrap();
-                graph = sub_group.add_nodes_and_previous_edges(root.clone(), visited, graph);
+                graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
 
                 let create_operation = sub_group
                     .inner
@@ -53,71 +286,18 @@ where
 
                 let (create_operation_idx, _) = graph
                     .node_references()
-                    .find(|(idx, (op, _))| op.id() == create_operation.id())
+                    .find(|(_, (op, _))| {
+                        if let Some(op) = op {
+                            *op == create_operation.id()
+                        } else {
+                            false
+                        }
+                    })
                     .unwrap();
 
                 graph.add_edge(operation_idx, create_operation_idx, "sub group".to_string());
             }
-
-            for dependency in operation.dependencies() {
-                let (idx, _) = graph
-                    .node_references()
-                    .find(|(idx, (op, _))| op.id() == *dependency)
-                    .unwrap();
-                graph.add_edge(operation_idx, idx, "dependency".to_string());
-            }
         }
-
-        // graph = self.add_nodes_and_previous_edges(graph);
         graph
-    }
-
-    pub fn display(&self) -> String {
-        let mut graph = DiGraph::new();
-        let mut visited = vec![];
-        graph = self.add_nodes_and_previous_edges(self.clone(), &mut visited, graph);
-
-        let dag_graphviz = Dot::with_attr_getters(
-            &graph,
-            &[Config::NodeNoLabel, Config::EdgeNoLabel],
-            &|_, edge| format!("label = \"{}\"", edge.weight()),
-            &|_, (idx, (_, s))| format!("label = {}", s),
-        );
-
-        format!("{:?}", dag_graphviz)
-    }
-
-    fn format_operation(&self, root: &Self, operation: &ORD::Message, visited: &Vec<OP>) -> String {
-        let control_message = operation.payload();
-        let mut dependencies = operation.dependencies().clone();
-        dependencies.push(operation.id());
-        let members = self
-            .transitive_members_at(&dependencies)
-            .expect("state exists");
-        let mut f = String::new();
-
-        let color = if control_message.is_create() {
-            "bisque"
-        } else {
-            "grey"
-        };
-
-        f += &format!(
-            "<<TABLE BGCOLOR=\"{color}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
-        );
-        f += &format!("<TR><TD>id</TD><TD>{}</TD></TR>", operation.id());
-        f += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.sender());
-        f += &format!(
-            "<TR><TD>previous</TD><TD>{:?}</TD></TR>",
-            operation.previous()
-        );
-        f += &format!(
-            "<TR><TD>dependencies</TD><TD>{:?}</TD></TR>",
-            operation.dependencies()
-        );
-        f += &format!("<TR><TD COLSPAN=\"2\">{:?}</TD></TR>", control_message);
-        f += &format!("<TR><TD COLSPAN=\"2\">{:?}</TD></TR>", members);
-        f += "</TABLE>>";
-        f
     }
 }
