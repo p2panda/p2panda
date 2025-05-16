@@ -158,13 +158,17 @@ impl Network {
             y.orderer_y = orderer_y;
             self.set_y(y.clone());
 
-            let Some(message) = result else {
+            let Some(operation) = result else {
                 break;
             };
 
-            group_id = message.payload().group_id();
+            if &operation.sender() == member_id {
+                continue;
+            }
+
+            group_id = operation.payload().group_id();
             y = self.get_y(member_id, &group_id);
-            y = TestGroup::process(y.clone(), &message).unwrap();
+            y = TestGroup::process(y.clone(), &operation).unwrap();
             self.set_y(y.clone());
         }
     }
