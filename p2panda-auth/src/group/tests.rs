@@ -795,3 +795,11 @@ fn members_at() {
         members_by_all_known_operations
     );
 }
+
+#[test]
+fn display_graph() {
+    let rng = StdRng::from_os_rng();
+    let (network, operations) = test_groups(rng);
+    let y = network.get_y(&ALICE, &ALICE_ORG_GROUP);
+    println!("{}", y.display());
+}
