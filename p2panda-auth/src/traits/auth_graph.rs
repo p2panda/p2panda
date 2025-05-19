@@ -27,8 +27,9 @@ where
 
     /// Prepare an action for processing.
     ///
-    /// Meta-data like author identity, signature, or local-time should be added in this method
-    /// and an operation is returned which can be processed locally or sent to a remote peer.
+    /// Meta-data like author identity, signature, or ordering clock should be added in this
+    /// method and an operation is returned which can be processed locally or sent to a remote
+    /// peer.
     fn prepare(
         y: Self::State,
         action: &Self::Action,
