@@ -46,8 +46,11 @@ where
     #[error("group store error: {0}")]
     GroupStoreError(GS::Error),
 
-    #[error("state {0} not found in group {1}")]
-    StateNotFound(OP, ID),
+    #[error("states {0:?} not found in group {1}")]
+    StatesNotFound(Vec<OP>, ID),
+
+    #[error("expected dependencies {0:?} not found in group {1}")]
+    DependenciesNotFound(Vec<OP>, ID),
 
     #[error("operation for group {0} processed in group {1}")]
     IncorrectGroupId(ID, ID),
@@ -288,29 +291,56 @@ where
         current_state
     }
 
-    fn state_at(
+    fn state_at_inner(
         &self,
-        operations: &HashSet<OP>,
+        dependencies: &mut HashSet<OP>,
     ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut y = GroupMembersState::default();
-        for id in operations {
+        let mut visited = HashSet::new();
+        for id in dependencies.iter() {
             let Some(previous_y) = self.inner.states.get(id) else {
                 // We might be in a sub-group here processing dependencies which don't exist in
                 // this graph, in that case we just ignore missing states.
                 continue;
             };
+            // Merge all dependency states from this group together.
             y = group_crdt::merge(previous_y.clone(), y);
+            visited.insert(*id);
+        }
+
+        // remove all visited states from the dependencies set.
+        for id in visited {
+            dependencies.remove(&id);
         }
 
         Ok(y)
     }
 
-    fn members_at(
+    /// Get the state of a group at a certain point in it's history.
+    pub fn state_at(
         &self,
         dependencies: &HashSet<OP>,
+    ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
+        let mut dependencies = dependencies.clone();
+        let state = self.state_at_inner(&mut dependencies)?;
+
+        if !dependencies.is_empty() {
+            return Err(GroupError::StatesNotFound(
+                dependencies.into_iter().collect::<Vec<_>>(),
+                self.id(),
+            ));
+        }
+
+        Ok(state)
+    }
+
+    fn members_at_inner(
+        &self,
+        dependencies: &mut HashSet<OP>,
     ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let y = self.state_at(dependencies)?;
-        Ok(y.members
+        let y = self.state_at_inner(dependencies)?;
+        let members = y
+            .members
             .into_iter()
             .filter_map(|(id, state)| {
                 if state.is_member() {
@@ -319,29 +349,66 @@ where
                     None
                 }
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        Ok(members)
     }
 
-    // TODO: validate that all operations were visited during traversal to assure that missing
-    // state was not requested.
-    fn transitive_members_at(
+    /// Get the group members at a certain point in groups history.
+    pub fn members_at(
         &self,
-        mut dependencies: &HashSet<OP>,
+        dependencies: &HashSet<OP>,
+    ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let mut dependencies = dependencies.clone();
+        let members = self.members_at_inner(&mut dependencies)?;
+
+        if !dependencies.is_empty() {
+            return Err(GroupError::DependenciesNotFound(
+                dependencies.into_iter().collect::<Vec<_>>(),
+                self.id(),
+            ));
+        }
+
+        Ok(members)
+    }
+
+    fn transitive_members_at_inner(
+        &self,
+        dependencies: &mut HashSet<OP>,
     ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut members: HashMap<ID, Access<()>> = HashMap::new();
-        for (member, root_access) in self.members_at(dependencies)? {
+
+        // Get members of a group at a certain point in the groups history.
+        for (member, root_access) in self.members_at_inner(dependencies)? {
             match member {
                 GroupMember::Individual(id) => {
+                    // If this is an individual member, then add them straight to the members map.
                     members.insert(id, root_access.clone());
                 }
                 GroupMember::Group { id } => {
+                    // If this is a sub-group member, then get the sub-group state from the store
+                    // and recurse into the group passing the dependencies set which identify the
+                    // particular states we're interested in.
                     let sub_group = self.get_sub_group(id)?;
-                    let transitive_members = sub_group.transitive_members_at(dependencies)?;
+
+                    // The access level for all transitive members must not be greater than the
+                    // access level assigned to the current sub-group.
+                    let transitive_members = sub_group.transitive_members_at_inner(dependencies)?;
+
+                    // For each transitive member, add them to the members map if they were not
+                    // already a member, assigning them the correct access level. If they were
+                    // already a member, then modify their existing access level _if_ it elevates
+                    // their access to a higher level, but not higher than the current sub.
                     for (transitive_member, transitive_access) in transitive_members {
                         let root_access_copy = root_access.clone();
                         members
                             .entry(transitive_member)
                             .and_modify(|access| {
+                                // If the transitive access level this member holds (the access
+                                // level the member has in it's sub-group) is greater than it's
+                                // current access level, but not greater than the root access
+                                // level (the access level initially assigned from the parent
+                                // group) then update the access level.
                                 if transitive_access > *access
                                     && transitive_access <= root_access_copy
                                 {
@@ -362,6 +429,28 @@ where
         Ok(members.into_iter().collect())
     }
 
+    /// Get all transitive members of the group at a certain point in it's history.
+    ///
+    /// This method recurses into all sub-groups collecting all "tip" members, which are the
+    /// stateless "individual" members of a group, likely identified by a public key.
+    pub fn transitive_members_at(
+        &self,
+        dependencies: &HashSet<OP>,
+    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+        let mut dependencies = dependencies.clone();
+        let members = self.transitive_members_at_inner(&mut dependencies)?;
+
+        if !dependencies.is_empty() {
+            return Err(GroupError::DependenciesNotFound(
+                dependencies.into_iter().collect::<Vec<_>>(),
+                self.id(),
+            ));
+        }
+
+        Ok(members)
+    }
+
+    // Get all current members of the group.
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access<()>)> {
         self.current_state()
             .members
@@ -376,6 +465,10 @@ where
             .collect::<Vec<_>>()
     }
 
+    /// Get all current transitive members of the group.
+    ///
+    /// This method recurses into all sub-groups collecting all "tip" members, which are the
+    /// stateless "individual" members of a group, likely identified by a public key.
     pub fn transitive_members(
         &self,
     ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
@@ -384,21 +477,8 @@ where
         Ok(members)
     }
 
-    pub fn transitive_sub_groups(
-        &self,
-    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let mut sub_groups: Vec<(ID, Access<()>)> = Vec::new();
-        for (member, access) in self.members() {
-            if let GroupMember::Group { id } = member {
-                let sub_group = self.get_sub_group(id)?;
-                let transitive_sub_groups = sub_group.transitive_sub_groups()?;
-                sub_groups = vec![transitive_sub_groups, sub_groups, vec![(id, access)]].concat();
-            }
-        }
-        Ok(sub_groups.into_iter().collect())
-    }
-
-    pub fn get_sub_group(
+    /// Get a sub group from the group store.
+    fn get_sub_group(
         &self,
         id: ID,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
