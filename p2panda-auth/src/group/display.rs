@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 
 use petgraph::dot::{Config, Dot};
@@ -231,8 +232,8 @@ where
     }
 
     fn format_members(&self, operation: &ORD::Message) -> String {
-        let mut dependencies = operation.dependencies().clone();
-        dependencies.push(operation.id());
+        let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
+        dependencies.insert(operation.id());
         let mut members = self
             .transitive_members_at(&dependencies)
             .expect("state exists");

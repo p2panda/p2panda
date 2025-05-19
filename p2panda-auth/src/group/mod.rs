@@ -249,7 +249,7 @@ where
         state
     }
 
-    pub fn heads(&self) -> Vec<OP> {
+    pub fn heads(&self) -> HashSet<OP> {
         self.inner
             .graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
@@ -263,15 +263,15 @@ where
             .into_graph::<usize>()
             .externals(petgraph::Direction::Outgoing)
             .map(|idx| self.inner.graph.from_index(idx.index()))
-            .collect::<Vec<_>>()
+            .collect::<HashSet<_>>()
     }
 
-    fn transitive_heads(&self) -> Result<Vec<OP>, GroupError<ID, OP, RS, ORD, GS>> {
+    fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
             if let GroupMember::Group { id } = member {
                 let sub_group = self.get_sub_group(id)?;
-                transitive_heads = vec![transitive_heads, sub_group.transitive_heads()?].concat();
+                transitive_heads.extend(sub_group.transitive_heads()?);
             }
         }
 
@@ -290,7 +290,7 @@ where
 
     fn state_at(
         &self,
-        operations: &Vec<OP>,
+        operations: &HashSet<OP>,
     ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut y = GroupMembersState::default();
         for id in operations {
@@ -307,9 +307,9 @@ where
 
     fn members_at(
         &self,
-        operations: &Vec<OP>,
+        dependencies: &HashSet<OP>,
     ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let y = self.state_at(operations)?;
+        let y = self.state_at(dependencies)?;
         Ok(y.members
             .into_iter()
             .filter_map(|(id, state)| {
@@ -326,17 +326,17 @@ where
     // state was not requested.
     fn transitive_members_at(
         &self,
-        operations: &Vec<OP>,
+        mut dependencies: &HashSet<OP>,
     ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut members: HashMap<ID, Access<()>> = HashMap::new();
-        for (member, root_access) in self.members_at(operations)? {
+        for (member, root_access) in self.members_at(dependencies)? {
             match member {
                 GroupMember::Individual(id) => {
                     members.insert(id, root_access.clone());
                 }
                 GroupMember::Group { id } => {
                     let sub_group = self.get_sub_group(id)?;
-                    let transitive_members = sub_group.transitive_members_at(operations)?;
+                    let transitive_members = sub_group.transitive_members_at(dependencies)?;
                     for (transitive_member, transitive_access) in transitive_members {
                         let root_access_copy = root_access.clone();
                         members
@@ -439,8 +439,8 @@ where
     /// Prepare a next message/operation which should include all meta-data required for ordering
     /// auth group operations. An ORD implementation needs to guarantee that operations are
     /// processed after any dependencies they have on the group graph they are part of, as well as
-    /// any sub-groups. 
-    /// 
+    /// any sub-groups.
+    ///
     /// The method GroupState::heads and GroupState::transitive_heads can be used to retrieve the
     /// operation ids of these operation dependencies.
     fn prepare(
@@ -476,7 +476,7 @@ where
         let operation_id = operation.id();
         let actor = operation.sender();
         let control_message = operation.payload();
-        let previous = operation.previous();
+        let previous_operations = HashSet::from_iter(operation.previous().clone());
         let group_id = control_message.group_id();
 
         // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
@@ -503,8 +503,8 @@ where
         if RS::rebuild_required(&y, &operation) {
             // Add all new operations to the graph and operations vec.
             y.inner.graph.add_node(operation.id());
-            for previous in operation.previous() {
-                y.inner.graph.add_edge(*previous, operation.id(), ());
+            for previous in previous_operations {
+                y.inner.graph.add_edge(previous, operation.id(), ());
             }
             y.inner.operations.push(operation.clone());
 
@@ -521,7 +521,7 @@ where
                     y,
                     operation_id,
                     GroupMember::Individual(actor),
-                    previous,
+                    &previous_operations,
                     action,
                 )?;
             }
@@ -531,8 +531,8 @@ where
 
         // Add the new operation to the group states' graph and operations vec.
         y.inner.graph.add_node(operation_id);
-        for previous in previous {
-            y.inner.graph.add_edge(*previous, operation_id, ());
+        for previous in previous_operations {
+            y.inner.graph.add_edge(previous, operation_id, ());
         }
         y.inner.operations.push(operation.clone());
         y.group_store_y = GS::insert(y.group_store_y, &group_id, &y.inner)
@@ -554,7 +554,7 @@ where
         mut y: GroupState<ID, OP, RS, ORD, GS>,
         id: OP,
         actor: GroupMember<ID>,
-        previous: &Vec<OP>,
+        previous: &HashSet<OP>,
         action: &GroupAction<ID>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
         // Compute the members state by applying the new operation to it's claimed "previous"
@@ -627,7 +627,7 @@ where
             let actor = operation.sender();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
-            let previous = operation.previous();
+            let previous_operations = HashSet::from_iter(operation.previous().clone());
 
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y.inner.group_id, group_id);
@@ -637,9 +637,13 @@ where
             create_found = true;
 
             y_i = match control_message {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    Self::apply_action(y_i, id, GroupMember::Individual(actor), previous, action)?
-                }
+                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
+                    y_i,
+                    id,
+                    GroupMember::Individual(actor),
+                    &previous_operations,
+                    action,
+                )?,
                 // No action required as revokes were already processed when we resolved a filter.
                 GroupControlMessage::Revoke { .. } => y_i,
             };
