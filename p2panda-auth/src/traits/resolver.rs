@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::error::Error;
 
 /// Resolver trait used in op-based CRDT for producing operation filters when concurrent

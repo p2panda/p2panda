@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 /// Interface to express required information from operations processed by any auth graph
 /// implementation.
 ///
