@@ -742,11 +742,7 @@ fn members_at() {
     let members = network.transitive_members_at(
         &ALICE,
         &ALICE_ORG_GROUP,
-        &vec![
-            add_team_to_org_op_id,
-            create_devices_op_id,
-            create_team_op_id,
-        ],
+        &vec![add_team_to_org_op_id, create_team_op_id],
     );
     assert_eq!(
         members,
