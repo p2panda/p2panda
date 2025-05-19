@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -6,7 +8,7 @@ use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
 };
 use crate::group_crdt::Access;
-use crate::traits::{AuthGraph, Operation};
+use crate::traits::AuthGraph;
 
 use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};

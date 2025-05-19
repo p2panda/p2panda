@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::error::Error;
 use std::fmt::Debug;
 
 use super::IdentityHandle;
 
-/// GroupStore trait providing access to a global group store.
+/// API for global group store.
 pub trait GroupStore<ID, G>
 where
     ID: IdentityHandle,
