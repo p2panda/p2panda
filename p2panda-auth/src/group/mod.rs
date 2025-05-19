@@ -436,54 +436,39 @@ where
     type Action = GroupControlMessage<ID, OP>;
     type Error = GroupError<ID, OP, RS, ORD, GS>;
 
+    /// Prepare a next message/operation which should include all meta-data required for ordering
+    /// auth group operations. An ORD implementation needs to guarantee that operations are
+    /// processed after any dependencies they have on the group graph they are part of, as well as
+    /// any sub-groups. 
+    /// 
+    /// The method GroupState::heads and GroupState::transitive_heads can be used to retrieve the
+    /// operation ids of these operation dependencies.
     fn prepare(
         mut y: Self::State,
-        operation: &Self::Action,
+        action: &Self::Action,
     ) -> Result<(GroupState<ID, OP, RS, ORD, GS>, ORD::Message), GroupError<ID, OP, RS, ORD, GS>>
     {
-        let mut dependencies = y.transitive_heads()?;
-
-        if let GroupControlMessage::GroupAction {
-            action:
-                GroupAction::Add {
-                    member: GroupMember::Group { id },
-                    ..
-                },
-            ..
-        } = operation
-        {
-            let added_sub_group = y.get_sub_group(*id)?;
-            dependencies.extend(&added_sub_group.transitive_heads()?);
-        };
-
-        if let GroupControlMessage::GroupAction {
-            action: GroupAction::Create { initial_members },
-            ..
-        } = operation
-        {
-            for (member, _) in initial_members {
-                if let GroupMember::Group { id } = member {
-                    let sub_group = y.get_sub_group(*id)?;
-                    dependencies.extend(&sub_group.transitive_heads()?);
-                }
-            }
-        };
-
-        let previous = y.heads();
+        // Get the next operation from our global orderer. The operation wraps the action we want
+        // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y.clone();
-        let (ordering_y, message) =
-            match ORD::next_message(ordering_y, dependencies, previous, &operation) {
-                Ok(message) => message,
-                Err(_) => panic!(),
-            };
+        let (ordering_y, operation) = match ORD::next_message(ordering_y, &action) {
+            Ok(operation) => operation,
+            Err(_) => panic!(),
+        };
 
-        // Queue the message in the orderer.
+        // Queue the operation in the orderer.
+        //
+        // Even though we know the operation is ready for processing (ordering dependencies are
+        // met), we need to queue it so that the orderer progresses to the correct state.
+        //
+        // TODO: maybe this should rather happen inside ORD::next_message?
         let ordering_y =
-            ORD::queue(ordering_y, &message).map_err(|error| GroupError::OrderingError(error))?;
+            ORD::queue(ordering_y, &operation).map_err(|error| GroupError::OrderingError(error))?;
         y.orderer_y = ordering_y;
-        Ok((y, message))
+        Ok((y, operation))
     }
 
+    /// Process an operation created locally or received from a remote peer.
     fn process(
         mut y: Self::State,
         operation: &ORD::Message,

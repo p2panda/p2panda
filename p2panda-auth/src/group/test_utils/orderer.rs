@@ -7,12 +7,12 @@ use rand::RngCore;
 use rand::rngs::StdRng;
 use thiserror::Error;
 
-use crate::group::GroupControlMessage;
-use crate::traits::{Operation, Ordering};
+use crate::group::{GroupAction, GroupControlMessage, GroupMember};
+use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupStateInner,
-    TestGroupStoreState,
+    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroup, TestGroupState,
+    TestGroupStateInner, TestGroupStore, TestGroupStoreState,
 };
 
 #[derive(Debug, Error)]
@@ -65,32 +65,101 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
 
     type Message = TestOperation<MemberId, MessageId>;
 
+    /// Construct the next operation which should include meta-data required for establishing order
+    /// between different operations.
+    ///
+    /// In this implementation causal order is established between operations using a graph
+    /// structure. Every operation contains a pointer to both the previous operations in a single auth
+    /// group graph, and also the tips of any sub-group graphs.
     fn next_message(
         y: Self::State,
-        dependencies: Vec<MessageId>,
-        previous: Vec<MessageId>,
-        payload: &GroupControlMessage<MemberId, MessageId>,
+        control_message: &GroupControlMessage<MemberId, MessageId>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
+        let group_id = control_message.group_id();
+        let group_y = {
+            let y_inner = y.inner.borrow();
+
+            // Instantiate a new group.
+            let mut group_y = TestGroupState::new(
+                y_inner.my_id,
+                group_id,
+                y_inner.group_store_y.clone(),
+                y.clone(),
+            );
+
+            // If this isn't a create message, retrieve the current group state from the store.
+            if !control_message.is_create() {
+                let inner = TestGroupStore::get(&y_inner.group_store_y, &group_id)
+                    .expect("get group state from store")
+                    .expect("group exists");
+                group_y = group_y.new_from_inner(inner);
+            }
+
+            group_y
+        };
+
+        // Get the "dependencies" of this operation. Dependencies are any other operations from any
+        // group which should be processed before this one. The transitive_heads method traverses
+        // the current group graph to all tips, and recurses into any sub-groups.
+        let mut dependencies = group_y
+            .transitive_heads()
+            .expect("retrieve transitive heads");
+
+        // If this operation adds a new member to the group, and that member itself is a
+        // sub-group, then also include the current tips for this to-be-added sub-group graph.
+        if let GroupControlMessage::GroupAction {
+            action:
+                GroupAction::Add {
+                    member: GroupMember::Group { id },
+                    ..
+                },
+            ..
+        } = control_message
+        {
+            let added_sub_group = group_y.get_sub_group(*id).expect("sub-group exists");
+            dependencies.extend(
+                &added_sub_group
+                    .transitive_heads()
+                    .expect("retrieve transitive heads"),
+            );
+        };
+
+        if let GroupControlMessage::GroupAction {
+            action: GroupAction::Create { initial_members },
+            ..
+        } = control_message
+        {
+            for (member, _) in initial_members {
+                if let GroupMember::Group { id } = member {
+                    let sub_group = group_y.get_sub_group(*id).expect("sub-group exists");
+                    dependencies.extend(
+                        &sub_group
+                            .transitive_heads()
+                            .expect("retrieve transitive heads"),
+                    );
+                }
+            }
+        };
+
+        // The previous field includes only the tip operations for the target group graph.
+        let previous = group_y.heads();
+
+        // Generate a new random operation id.
         let next_id = {
             let mut y_mut = y.inner.borrow_mut();
             y_mut.rng.next_u32()
         };
 
-        let message = TestOperation {
+        // Construct the actual operation.
+        let operation = TestOperation {
             id: next_id,
             sender: y.my_id(),
             dependencies,
             previous,
-            payload: payload.clone(),
+            payload: control_message.clone(),
         };
 
-        // Queue locally created messages.
-        //
-        // @TODO: not sure we actually want to do this here, maybe it should be taken care of
-        // outside this method?
-        let y_i = Self::queue(y, &message)?;
-
-        Ok((y_i, message))
+        Ok((y, operation))
     }
 
     fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
