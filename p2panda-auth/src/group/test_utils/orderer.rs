@@ -154,8 +154,8 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
         let operation = TestOperation {
             id: next_id,
             sender: y.my_id(),
-            dependencies,
-            previous,
+            dependencies: dependencies.into_iter().collect::<Vec<_>>(),
+            previous: previous.into_iter().collect::<Vec<_>>(),
             payload: control_message.clone(),
         };
 

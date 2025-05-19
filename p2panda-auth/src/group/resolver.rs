@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -37,11 +38,13 @@ where
         }
 
         // Get all current tip operations.
+        //
+        // TODO: should be checking against transitive heads here.
         let heads = y.heads();
 
         // Detect concurrent operations by comparing the current heads with the new operations
         // dependencies.
-        let is_concurrent = &heads != operation.dependencies();
+        let is_concurrent = heads != HashSet::from_iter(operation.dependencies().clone());
 
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {

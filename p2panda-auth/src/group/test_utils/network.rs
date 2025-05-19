@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -189,10 +189,12 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        operations: &Vec<MessageId>,
+        previous: &Vec<MessageId>,
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
-        let mut members = group_y.members_at(operations).unwrap();
+        let mut members = group_y
+            .members_at(&previous.clone().into_iter().collect::<HashSet<_>>())
+            .unwrap();
         members.sort();
         members
     }
@@ -214,11 +216,11 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        operations: &Vec<MessageId>,
+        dependencies: &Vec<MessageId>,
     ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
-            .transitive_members_at(operations)
+            .transitive_members_at(&dependencies.clone().into_iter().collect::<HashSet<_>>())
             .expect("get transitive members");
         members.sort();
         members
