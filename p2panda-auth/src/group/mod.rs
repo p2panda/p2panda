@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+#![allow(clippy::type_complexity)]
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
@@ -20,7 +21,6 @@ mod test_utils;
 #[cfg(test)]
 mod tests;
 
-// TODO: introduce all error types.
 #[derive(Debug, Error)]
 pub enum GroupError<ID, OP, RS, ORD, GS>
 where
@@ -796,7 +796,7 @@ where
             assert!(!create_found && !control_message.is_create());
 
             create_found = true;
-            
+
             y_i = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
                     y_i,
