@@ -675,6 +675,9 @@ where
                 )?;
             }
             // No action required as revokes would have triggered a rebuild in the previous step.
+            //
+            // TODO: we could bake in revoke support here if we want to keep it as a core feature
+            // (on top of any provided Resolver).
             GroupControlMessage::Revoke { .. } => (),
         }
 
