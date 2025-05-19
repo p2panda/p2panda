@@ -56,25 +56,17 @@ where
     IncorrectGroupId(ID, ID),
 }
 
+/// A group member which can be a single stateless individual, or a stateful group. In both cases
+/// the member identifier is the same generic ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum GroupMember<ID> {
     Individual(ID),
     Group { id: ID },
 }
 
-// Display is required by thiserror::Error trait.
-impl<ID> Display for GroupMember<ID>
-where
-    ID: IdentityHandle,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
-/// Actions which can be performed by group members.
+/// Actions which can be applied to a group.
 #[derive(Clone, Debug, PartialEq)]
 pub enum GroupAction<ID> {
     Create {
@@ -101,6 +93,7 @@ impl<ID> GroupAction<ID>
 where
     ID: Copy,
 {
+    /// Returns true if this is a create action.
     pub fn is_create(&self) -> bool {
         if let GroupAction::Create { .. } = self {
             true
@@ -111,22 +104,38 @@ where
 }
 
 /// Control messages which are processed by a group.
+///
+/// There are two variants, one containing a group action and the id of the group where the action
+/// should be applied. The other is a special message which can be used to "undo" a message which
+/// has been applied to the group in the past.
 #[derive(Clone, Debug)]
 pub enum GroupControlMessage<ID, OP> {
-    Revoke {
-        group_id: ID,
-        id: OP,
-    },
+    /// An action to apply to the group state.
     GroupAction {
         group_id: ID,
         action: GroupAction<ID>,
     },
+
+    /// A revoke message can be published in order to explicitly invalidate other messages already
+    /// included in a group graph. This action is agnostic to any, probably more nuanced,
+    /// resolving logic which reacts to group actions.
+    ///
+    /// TODO: revoking messages is not implemented yet. I'm still considering if it is required in
+    /// or initial group implementation or something that can come later. There are distinct
+    /// benefits to revoking messages, over "just" making sure to resolve concurrent group action
+    /// conflicts (for example with "strong removal") strategy. By issuing a revoke message
+    /// revoking the message which first added a member into the group, it's possible to
+    /// completely erase that member from the group history. There can be an implicit "seniority"
+    /// rule in play, where it's only possible for an admin to revoke messages that they
+    /// published, or from when they were in the group.
+    Revoke { group_id: ID, id: OP },
 }
 
 impl<ID, OP> GroupControlMessage<ID, OP>
 where
     ID: Copy,
 {
+    /// Returns true if this is a create control message.
     pub fn is_create(&self) -> bool {
         if let GroupControlMessage::GroupAction {
             action: GroupAction::Create { .. },
@@ -139,6 +148,7 @@ where
         }
     }
 
+    /// Id of the group this message should be applied to.
     pub fn group_id(&self) -> ID {
         match self {
             GroupControlMessage::Revoke { group_id, .. } => *group_id,
@@ -147,6 +157,20 @@ where
     }
 }
 
+/// The inner state object for a single group.
+///
+/// This object has been separated from the GroupState so that it can be easily serialized and
+/// deserialized into a persistent store.
+///
+/// TODO: We may make custom implementations of serde traits where we "inject" the additional
+/// state required for GroupStore. In that case we don't need this separation and the inner and
+/// outer states could be combined again.  
+///
+/// TODO: One other reason these are separate structs is because I got into "recursive generic
+/// parameter" hell when trying to define a generic type (GroupStoreState) which returned another
+/// type (GroupState) which itself contained the container generic type (GroupStoreState)....
+/// Returning an "inner" state from the store (which doesn't know about the store) got around this
+/// issue.
 #[derive(Clone, Debug)]
 pub struct GroupStateInner<ID, OP, MSG>
 where
@@ -157,7 +181,7 @@ where
     // ID of the group.
     pub group_id: ID,
 
-    /// States at every position in the operation graph.
+    /// Group state at every position in the operation graph.
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, ()>>,
 
     /// All operations processed by this group.
@@ -168,7 +192,7 @@ where
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
 
-    /// Operation graph.
+    /// Operation graph for this group.
     pub graph: DiGraphMap<OP, ()>,
 }
 
@@ -189,11 +213,8 @@ where
     }
 }
 
-/// The internal state of a group.
-///
-/// TODO: We want to be able to serialize and deserialize group state, but this doesn't play well
-/// with "shared state" like the group store abstraction. In this state object the "inner" state
-/// can be serialized and deserialized.
+/// The state of a group, the local actor id, as well as state objects for the global
+/// group store and orderer.
 #[derive(Clone, Debug)]
 pub struct GroupState<ID, OP, RS, ORD, GS>
 where
@@ -226,6 +247,7 @@ where
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
+    /// Instantiate a new group state.
     fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
@@ -242,16 +264,21 @@ where
         }
     }
 
-    pub fn id(&self) -> ID {
-        self.inner.group_id
-    }
-
+    /// Create a new group state from an "inner" group state. This method is a helper to make it
+    /// easier to instantiate a new group state which will have the same actor id, orderer state
+    /// and store state but different inner group state.
     fn new_from_inner(&self, inner: GroupStateInner<ID, OP, ORD::Message>) -> Self {
         let mut state = self.clone();
         state.inner = inner;
         state
     }
 
+    /// The id of this group.
+    pub fn id(&self) -> ID {
+        self.inner.group_id
+    }
+
+    /// The current graph tips for this group.
     pub fn heads(&self) -> HashSet<OP> {
         self.inner
             .graph
@@ -269,6 +296,7 @@ where
             .collect::<HashSet<_>>()
     }
 
+    /// The current graph tips for this group and any sub-groups who are currently members.
     fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
@@ -281,7 +309,11 @@ where
         Ok(transitive_heads)
     }
 
-    fn current_state(&self) -> GroupMembersState<GroupMember<ID>, ()> {
+    /// The current state of this group.
+    ///
+    /// This method gets the state at all graph tips and then merges them together into one new
+    /// state which represents the current state of the group.
+    pub fn current_state(&self) -> GroupMembersState<GroupMember<ID>, ()> {
         let mut current_state = GroupMembersState::default();
         for state in self.heads() {
             // Unwrap as all "head" states should exist.
@@ -501,9 +533,41 @@ pub struct Group<ID, OP, RS, ORD, GS> {
     _phantom: PhantomData<(ID, OP, RS, ORD, GS)>,
 }
 
-// ORCHESTRATION REQUIREMENT NOTES:
-// 1) when a sub-group receives an operation which effects the set of admin members, then any root
-//    groups should be rebuilt in case the resolver needs to react to the admin change.
+/// Core auth protocol for maintaining group membership state in a distributed system. Group
+/// members can be assigned different access levels, where only a sub-set of members can mutate
+/// the state of the group itself.
+///
+/// The core data type is an Acyclic Directed Graph of `GroupControlMessage`s. Messages contain
+/// group control messages which mutate the previous group state. Messages refer to the "previous"
+/// state (set of graph tips) which the action they contain should be applied to, these references
+/// make up the edges in the graph. Additionally, messages have a set of "dependencies" which
+/// messages which could be part of any auth sub-group.
+///
+/// A requirement of the protocol is that all messages are processed in partial-order. When using
+/// a dependency graph structure (as is the case in this implementation) it is possible to achieve
+/// this by only processing a message once all it's dependencies have themselves been processed.
+///
+/// Group state is maintained using a state-based CRDT `GroupMembersState`. Every time a message
+/// is processed, a new state is generated and added to the map of all states. When a new messages
+/// is received, it's "previous" state is calculated and then the message applied, resulting in a
+/// new state. This approach allows one to use the state-based CRDT `merge` method to combine
+/// states from any points in the group history into a new state. This property is what allows us
+/// to process messages in partial- rather than total-order.
+///
+/// Group membership rules are checked when an action is applied to the previous state, read more
+/// in the `group_crdt` module.
+///
+/// This is an implementation of the `AuthGraph` trait which requires a `prepare` and `process`
+/// method. This implementation allows for providing several generic parameters which allows for
+/// integration into different systems and customization of how group change conflicts are
+/// handled.
+///
+/// - Resolver (RS): contains logic for deciding when group state rebuilds are required, and how
+///   concurrent actions are handled.
+/// - Orderer (ORD): the orderer implements an approach to ordering messages, the protocol
+///   requires that all messages are processed in partial-order, but exactly how this is achieved
+///   is not specified.
+/// - Group Store (GS): global store containing states for all known groups.
 impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
@@ -521,7 +585,7 @@ where
     /// processed after any dependencies they have on the group graph they are part of, as well as
     /// any sub-groups.
     ///
-    /// The method GroupState::heads and GroupState::transitive_heads can be used to retrieve the
+    /// The method `GroupState::heads` and `GroupState::transitive_heads` can be used to retrieve the
     /// operation ids of these operation dependencies.
     fn prepare(
         mut y: Self::State,
@@ -578,8 +642,10 @@ where
         }
 
         // The resolver implementation contains the logic which determines when rebuilds are
-        // required, likely due to concurrent operations arriving which should trigger a new filter
-        // to be constructed.
+        // required.
+        //
+        // TODO: before performing this check we want to actually apply the operation to the
+        // group. This will allow us to handle any validation which occur at that point already.
         if RS::rebuild_required(&y, &operation) {
             // Add all new operations to the graph and operations vec.
             y.inner.graph.add_node(operation.id());
@@ -588,13 +654,14 @@ where
             }
             y.inner.operations.push(operation.clone());
 
+            // Perform the re-build and return the new state.
             return Self::rebuild(&y);
         }
 
         // Compute the members state by applying the new operation to it's claimed "previous"
         // state.
         //
-        // This method validates that the actor has permission perform the action.
+        // This method validates that the actor has permission to perform the action.
         match control_message {
             GroupControlMessage::GroupAction { action, .. } => {
                 y = Self::apply_action(
@@ -605,7 +672,7 @@ where
                     action,
                 )?;
             }
-            // No action required as revokes were already processed when we resolved a filter.
+            // No action required as revokes would have triggered a rebuild in the previous step.
             GroupControlMessage::Revoke { .. } => (),
         }
 
@@ -615,6 +682,8 @@ where
             y.inner.graph.add_edge(previous, operation_id, ());
         }
         y.inner.operations.push(operation.clone());
+
+        // Update the group in the store.
         y.group_store_y = GS::insert(y.group_store_y, &group_id, &y.inner)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
@@ -630,6 +699,7 @@ where
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
+    /// Apply an action to a single group state.
     fn apply_action(
         mut y: GroupState<ID, OP, RS, ORD, GS>,
         id: OP,
@@ -652,9 +722,13 @@ where
             }
             GroupAction::Remove { member, .. } => group_crdt::remove(members_y_copy, actor, member),
             GroupAction::Promote { member, access, .. } => {
+                // TODO: need changes in the group_crdt api so that we can pass in the access
+                // level rather than only the conditions.
                 group_crdt::promote(members_y_copy, actor, member, None)
             }
             GroupAction::Demote { member, access, .. } => {
+                // TODO: need changes in the group_crdt api so that we can pass in the access
+                // level rather than only the conditions.
                 group_crdt::demote(members_y_copy, actor, member, None)
             }
             GroupAction::Create { initial_members } => {
@@ -689,9 +763,11 @@ where
     fn rebuild(
         y: &GroupState<ID, OP, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        // Use the resolver to construct a filter for this group membership graph.
+        // Process the group state with the provided resolver. This will populate the set of
+        // messages which should be ignored when applying group control messages.
         let y = RS::process(y.clone()).map_err(|error| GroupError::ResolverError(error))?;
 
+        // Re-build the group state.
         let mut y_i = GroupState::new(
             y.my_id,
             y.inner.group_id,
@@ -702,6 +778,8 @@ where
         y_i.inner.graph = y.inner.graph;
 
         let mut create_found = false;
+
+        // Apply every operation.
         for operation in y.inner.operations {
             let id = operation.id();
             let actor = operation.sender();
@@ -714,8 +792,9 @@ where
 
             // Sanity check: the first operation must be a create.
             assert!(!create_found && !control_message.is_create());
-            create_found = true;
 
+            create_found = true;
+            
             y_i = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
                     y_i,
@@ -724,7 +803,7 @@ where
                     &previous_operations,
                     action,
                 )?,
-                // No action required as revokes were already processed when we resolved a filter.
+                // No action required as revokes were already processed and the `ignore` field populated.
                 GroupControlMessage::Revoke { .. } => y_i,
             };
 

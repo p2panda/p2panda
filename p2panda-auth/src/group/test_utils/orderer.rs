@@ -11,7 +11,7 @@ use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroup, TestGroupState,
+    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStateInner, TestGroupStore, TestGroupStoreState,
 };
 
@@ -106,7 +106,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
             .expect("retrieve transitive heads");
 
         // If this operation adds a new member to the group, and that member itself is a
-        // sub-group, then also include the current tips for this to-be-added sub-group graph.
+        // sub-group, include their current transitive heads in our dependencies.
         if let GroupControlMessage::GroupAction {
             action:
                 GroupAction::Add {
@@ -124,6 +124,8 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
             );
         };
 
+        // If this is a create action, check if any of the initial members are sub-groups and if
+        // so include their current transitive heads in our dependencies.
         if let GroupControlMessage::GroupAction {
             action: GroupAction::Create { initial_members },
             ..

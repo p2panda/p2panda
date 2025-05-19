@@ -42,7 +42,7 @@ where
         // TODO: should be checking against transitive heads here.
         let heads = y.heads();
 
-        // Detect concurrent operations by comparing the current heads with the new operations
+        // Detect concurrent operations by comparing the current heads with the new operations'
         // dependencies.
         let is_concurrent = heads != HashSet::from_iter(operation.dependencies().clone());
 
@@ -54,7 +54,8 @@ where
             GroupControlMessage::GroupAction { action, .. } => {
                 if is_concurrent {
                     match action {
-                        // TODO: Decide which (if any) concurrent actions cause a rebuild.
+                        // TODO: Implement logic for detecting when concurrent actions should
+                        // trigger a re-build.
                         _ => false,
                     }
                 } else {
@@ -67,7 +68,7 @@ where
     fn process(
         y: GroupState<ID, OP, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
-        // TODO: We don't construct any filter, this is where that logic should be implemented.
+        // TODO: Implement resolver logic.
         Ok(y)
     }
 }
