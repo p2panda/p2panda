@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::rc::Rc;
 use std::{cell::RefCell, marker::PhantomData};
 
@@ -12,7 +12,7 @@ use super::TestGroupStateInner;
 #[derive(Debug, Clone)]
 pub struct TestGroupStoreState<ID, G>(Rc<RefCell<HashMap<ID, G>>>)
 where
-    ID: IdentityHandle + Display;
+    ID: IdentityHandle;
 
 #[derive(Debug, Error)]
 pub enum GroupStoreError {}
@@ -24,7 +24,7 @@ pub struct TestGroupStore<ID, G> {
 
 impl<ID> Default for TestGroupStoreState<ID, TestGroupStateInner>
 where
-    ID: IdentityHandle + Display,
+    ID: IdentityHandle,
 {
     fn default() -> Self {
         Self(Rc::new(RefCell::new(HashMap::new())))
