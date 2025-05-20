@@ -269,6 +269,10 @@ where
 
             let (y_next, result) = Self::process_ready(y_loop, &message, rng)?;
             y_loop = y_next;
+
+            // NOTE: We don't want to build up a massive events array in memory here (in case many
+            // application messages got decrypted because of one control message), an iterator of
+            // some kind is better.
             if let Some(message) = result {
                 events.push(message);
             }

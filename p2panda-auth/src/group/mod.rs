@@ -16,9 +16,7 @@ use crate::traits::{
 
 mod display;
 mod resolver;
-#[cfg(test)]
-mod test_utils;
-#[cfg(test)]
+pub mod test_utils;
 mod tests;
 
 #[derive(Debug, Error)]
@@ -250,7 +248,7 @@ where
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
     /// Instantiate a new group state.
-    fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
+    pub fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
             inner: GroupStateInner {

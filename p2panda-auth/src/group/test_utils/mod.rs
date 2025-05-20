@@ -17,13 +17,13 @@ use super::{Group, GroupState, GroupStateInner, resolver::GroupResolver};
 impl IdentityHandle for char {}
 impl OperationId for u32 {}
 
-pub(crate) type MemberId = char;
-pub(crate) type GroupId = char;
-pub(crate) type MessageId = u32;
+pub type MemberId = char;
+pub type GroupId = char;
+pub type MessageId = u32;
 
-pub(crate) type TestResolver = GroupResolver<char, u32, TestOperation<char, u32>>;
-pub(crate) type TestGroup =
+pub type TestResolver = GroupResolver<char, u32, TestOperation<char, u32>>;
+pub type TestGroup =
     Group<char, u32, TestResolver, TestOrderer, TestGroupStore<char, TestGroupStateInner>>;
-pub(crate) type TestGroupState =
+pub type TestGroupState =
     GroupState<char, u32, TestResolver, TestOrderer, TestGroupStore<char, TestGroupStateInner>>;
-pub(crate) type TestGroupStateInner = GroupStateInner<char, u32, TestOperation<char, u32>>;
+pub type TestGroupStateInner = GroupStateInner<char, u32, TestOperation<char, u32>>;
