@@ -3,26 +3,18 @@
 //! `p2panda-encryption` provides decentralized secure data- and message encryption for groups with
 //! post-compromise security and optional forward secrecy.
 //!
-//! This implementation is compatible with any data type, encoding format or transport, made for
-//! p2p applications which do not rely on constant internet connectivity. Similar to our other
-//! p2panda crates, we aim to make our implementation "framework independent" while providing
-//! optional "glue code" to integrate it in into the larger [p2panda
-//! ecosystem](https://p2panda.org).
+//! The crate implements two different group key-agreement and encryption schemes for a whole range
+//! of use cases.
 //!
-//! More detail about the particular implementation and design choices of `p2panda-encryption` can
-//! be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
-//!
-//! ## Two encryption schemes
-//!
-//! `p2panda-encryption` offers two different group key-agreement and encryption schemes. The first
-//! scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with a secret,
-//! symmetric key for a group (XChaCha20-Poly1305). This will be useful for building applications
-//! where users who enter a group late will still have access to previously created content, for
-//! example private knowledge or wiki applications or a booking tool for rehearsal rooms. A member
-//! will not learn about any newly created data after removing them from the group since the key
-//! gets rotated on member removal or manual key update. This should accommodate for many use-cases
-//! in p2p applications which rely on basic group encryption with post-compromise security (PCS)
-//! and forward secrecy (FS) during key agreement.
+//! The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with
+//! a secret, symmetric key for a group (XChaCha20-Poly1305). This will be useful for building
+//! applications where users who enter a group late will still have access to previously created
+//! content, for example private knowledge or wiki applications or a booking tool for rehearsal
+//! rooms. A member will not learn about any newly created data after removing them from the group
+//! since the key gets rotated on member removal or manual key update. This should accommodate for
+//! many use-cases in p2p applications which rely on basic group encryption with post-compromise
+//! security (PCS) and forward secrecy (FS) during key agreement. Applications can optionaly choose
+//! to remove encryption keys for forward secrecy if they desire so.
 //!
 //! The second scheme is **"Message Encryption"**, offering a forward-secure (FS) messaging
 //! ratchet, similar to Signal’s [Double Ratchet
@@ -33,7 +25,40 @@
 //! it's own UX requirements, but we are excited to offer a solution for both worlds, depending on
 //! the application's needs.
 //!
-//! ## Secure key-agreement
+//! More detail about the particular implementation and design choices of `p2panda-encryption` can
+//! be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
+//!
+//! ## Goals
+//!
+//! ### Strong Security Guarantees
+//!
+//! Key agreement in `p2panda-encryption` has strong forward-secrecy, while the security of the
+//! encryption itself depends on the "encryption scheme" used. The crate offers two different
+//! schemes, depending on the use-case. **Data Encryption**
+//!
+//! ### Framework-independent
+//!
+//! This implementation is compatible with any data type, encoding format or transport, made for
+//! p2p applications which do not rely on constant internet connectivity. Similar to our other
+//! p2panda crates, we aim to make our implementation "framework independent" while providing
+//! optional "glue code" to integrate it in into the larger [p2panda
+//! ecosystem](https://p2panda.org). The latter offers a fully integrated stack which is
+//! feature-complete, tested and ready for use in secure, decentralized applications.
+//!
+//! ## Robustness in decentralized systems
+//!
+//! `p2panda-encryption` has been specifically designed to be robust when used in decentralized
+//! systems. It accounts for use in scenarios without guaranteed connectivity between members of
+//! the group and corner cases where group changes (adding, removing members etc.) take place
+//! concurrently. No centralised server is required for coordination of the group.
+//!
+//! ### Crash-resiliant
+//!
+//! ## Design
+//!
+//! ### Encryption schemes
+//!
+//! ### Secure key-agreement
 //!
 //! To encrypt any data towards a group we need to first securely and efficiently make all members
 //! of the group aware of the secret key which was used to encrypt the message. This takes place
@@ -51,13 +76,6 @@
 //! Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced
 //! by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy
 //! guarantees for each round, independent of the used pre-keys.
-//!
-//! ## Robustness in decentralized systems
-//!
-//! `p2panda-encryption` has been specifically designed to be robust when used in decentralized
-//! systems. It accounts for use in scenarios without guaranteed connectivity between members of
-//! the group and corner cases where group changes (adding, removing members etc.) take place
-//! concurrently. No centralised server is required for coordination of the group.
 //!
 //! ## Usage & integration
 //!
