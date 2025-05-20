@@ -113,6 +113,8 @@ pub fn do_it() {
     // Orderer comes here!
     //
     // - It needs to be here, right at the beginning, it knows about multiple documents
+    // - TODO: Can it even be _outside_ all of this? Shouldn't the orderer be part of
+    // `p2panda-stream`?
 
     // Router comes here!
     //
