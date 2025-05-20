@@ -9,7 +9,6 @@ use anyhow::Result;
 use futures_lite::future::Boxed as BoxedFuture;
 use futures_util::future::join_all;
 use iroh::endpoint::Connecting;
-use tracing::debug;
 
 /// Interface to accept incoming connections for custom protocol implementations.
 ///
@@ -64,9 +63,7 @@ impl ProtocolMap {
     /// Calls and awaits [`ProtocolHandler::shutdown`] for all registered handlers concurrently.
     pub(super) async fn shutdown(&self) {
         let handlers = self.0.values().cloned().map(ProtocolHandler::shutdown);
-        debug!("await all handler shutdown handles");
         join_all(handlers).await;
-        debug!("all handlers closed");
     }
 }
 

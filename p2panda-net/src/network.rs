@@ -135,7 +135,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{Instrument, debug, error, error_span, warn};
+use tracing::{Instrument, debug, error, error_span, info, warn};
 
 use crate::addrs::{DEFAULT_STUN_PORT, to_node_addr, to_relay_url};
 use crate::config::{Config, DEFAULT_BIND_PORT, GossipConfig};
@@ -548,13 +548,37 @@ where
     /// local address book so they may be involved in connection and gossip activites.
     async fn spawn(self: Arc<Self>, protocols: Arc<ProtocolMap>) {
         let (ipv4, ipv6) = self.endpoint.bound_sockets();
-        debug!(
+        info!(
             "listening at: {}{}",
             ipv4,
             ipv6.map(|addr| format!(" and {addr}")).unwrap_or_default()
         );
 
         let mut join_set = JoinSet::<Result<()>>::new();
+
+        // Learn about current home relay
+        {
+            let inner = self.clone();
+            join_set.spawn(async move {
+                let mut stream = inner.endpoint.home_relay().stream();
+                let mut current_relay = None;
+
+                for relay_url in stream.next().await {
+                    if current_relay != relay_url {
+                        match relay_url {
+                            Some(ref url) => info!("connected to relay {url}"),
+                            None => info!(
+                                "disconnected from relay {}",
+                                current_relay.expect("current relay url")
+                            ),
+                        }
+                    }
+
+                    current_relay = relay_url;
+                }
+                Ok(())
+            });
+        }
 
         // Spawn a task that updates discovery services as our local addresses change.
         {
@@ -619,8 +643,6 @@ where
                 },
                 // Handle incoming p2p connections.
                 Some(incoming) = self.endpoint.accept() => {
-                    // @TODO: This is the point at which we can reject the connection if limits
-                    // have been reached.
                     let connecting = match incoming.accept() {
                         Ok(connecting) => connecting,
                         Err(err) => {

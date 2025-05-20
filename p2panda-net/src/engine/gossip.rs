@@ -12,7 +12,7 @@ use p2panda_sync::TopicQuery;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_stream::StreamMap;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::engine::ToEngineActor;
 use crate::{from_public_key, to_public_key};
@@ -139,6 +139,8 @@ where
                 self.pending_joins.spawn(fut);
             }
             ToGossipActor::Leave { topic_id } => {
+                info!("left gossip overlay: {:?}", topic_id);
+
                 // Quit the topic by dropping all handles to `GossipTopic` for the given topic id.
                 let _handle = self.gossip_events.remove(&topic_id);
                 self.joined.remove(&topic_id);
@@ -231,6 +233,8 @@ where
     }
 
     async fn on_joined(&mut self, topic_id: [u8; 32], stream: GossipTopic) -> Result<()> {
+        info!("joined gossip overlay: {:?}", topic_id);
+
         self.joined.insert(topic_id);
 
         // Split the gossip stream and insert handles to the receiver and sender.

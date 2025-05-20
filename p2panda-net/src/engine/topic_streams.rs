@@ -7,7 +7,7 @@ use anyhow::Result;
 use p2panda_core::PublicKey;
 use p2panda_sync::TopicQuery;
 use tokio::sync::{RwLock, mpsc, oneshot};
-use tracing::{debug, error, warn};
+use tracing::{error, trace, warn};
 
 use crate::TopicId;
 use crate::engine::address_book::AddressBook;
@@ -194,16 +194,20 @@ where
     }
 
     /// Mark that we've successfully joined a gossip overlay for this topic.
-    pub async fn on_gossip_joined(&mut self, topic_id: [u8; 32]) {
+    pub async fn on_gossip_joined(&mut self, topic_id: [u8; 32]) -> bool {
         if let Some(ready_tx) = self.gossip_pending.remove(&topic_id) {
             let mut gossip_joined = self.gossip_joined.write().await;
-            gossip_joined.insert(topic_id);
+            let joined_newly = gossip_joined.insert(topic_id);
 
             // Inform local topic subscribers that the gossip overlay has been joined and is ready
             // for messages.
             if ready_tx.send(()).is_err() {
                 warn!("gossip topic oneshot ready receiver dropped")
             }
+
+            joined_newly
+        } else {
+            false
         }
     }
 
@@ -283,7 +287,7 @@ where
         their_topic_ids: Vec<[u8; 32]>,
         peer: PublicKey,
     ) -> Result<()> {
-        debug!("learned about topic ids of {}: {:?}", peer, their_topic_ids);
+        trace!("learned about topic ids of {}: {:?}", peer, their_topic_ids);
 
         // Inform the sync manager about any peer-topic combinations which are of interest to us.
         //

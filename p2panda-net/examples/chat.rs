@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let network_id = Hash::new(b"p2panda_chat_example");
+    let network_id = Hash::new(b"aardvark");
     let topic = ChatTopic::new("my_chat");
 
     let private_key = PrivateKey::new();

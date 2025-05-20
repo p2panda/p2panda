@@ -93,9 +93,9 @@ impl TopicDiscovery {
         self.status = Status::Idle;
     }
 
-    pub fn on_gossip_joined(&mut self) {
+    pub fn on_gossip_joined(&mut self) -> bool {
         if self.status == Status::Active {
-            return;
+            return false;
         }
 
         if self.status == Status::Idle {
@@ -103,6 +103,8 @@ impl TopicDiscovery {
         }
 
         self.status = Status::Active;
+
+        true
     }
 
     pub async fn on_gossip_message(&mut self, bytes: &[u8]) -> Result<(Vec<[u8; 32]>, PublicKey)> {

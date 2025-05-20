@@ -16,7 +16,7 @@ use iroh::NodeAddr;
 use netwatch::netmon::Monitor;
 use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::mdns::dns::{MulticastDNSMessage, make_query, make_response, parse_message};
 use crate::mdns::socket::{send, socket_v4, socket_v4_unbound};
@@ -165,10 +165,10 @@ impl LocalDiscovery {
                             match socket_v4() {
                                 Ok(bound_socket) => {
                                     socket = bound_socket;
-                                    debug!("bound udp socket for mdns discovery");
+                                    trace!("bound udp socket for mdns discovery");
                                     socket_is_bound = true;
                                 }
-                                Err(err) => warn!("failed to rebind socket: {}", err)
+                                Err(err) => warn!("failed to rebind socket for mdns: {}", err)
                             }
                         }
                     }

@@ -9,7 +9,7 @@ use p2panda_sync::TopicQuery;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::addrs::{from_node_addr, to_relay_url};
 use crate::engine::address_book::AddressBook;
@@ -369,14 +369,16 @@ where
 
     /// Update the join status for the given gossip overlay.
     async fn on_gossip_joined(&mut self, topic_id: [u8; 32], peers: Vec<PublicKey>) -> Result<()> {
-        if topic_id == self.network_id {
-            self.topic_discovery.on_gossip_joined();
+        let joined_newly = if topic_id == self.network_id {
+            self.topic_discovery.on_gossip_joined()
         } else {
-            self.topic_streams.on_gossip_joined(topic_id).await;
-        }
+            self.topic_streams.on_gossip_joined(topic_id).await
+        };
 
-        if let Some(event_tx) = &self.system_event_tx {
-            event_tx.send(SystemEvent::GossipJoined { topic_id, peers })?;
+        if joined_newly {
+            if let Some(event_tx) = &self.system_event_tx {
+                event_tx.send(SystemEvent::GossipJoined { topic_id, peers })?;
+            }
         }
 
         Ok(())
