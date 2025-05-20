@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+p2panda-auth = { path = "../p2panda-auth", version = "0.1.0" }
+p2panda-core = { path = "../p2panda-core", version = "0.3.1" }
+p2panda-encryption = { path = "../p2panda-encryption", version = "0.1.0" }
 
 [lints]
 workspace = true
