@@ -8,7 +8,7 @@ use std::str::FromStr;
 use hickory_proto::op::{Message, MessageType, Query};
 use hickory_proto::rr::{DNSClass, Name, RData, Record, RecordType, rdata};
 use iroh::{NodeAddr, NodeId};
-use tracing::{debug, trace};
+use tracing::{trace, warn};
 
 use crate::mdns::ServiceName;
 
@@ -83,7 +83,7 @@ pub fn parse_message(bytes: &[u8]) -> Option<MulticastDNSMessage> {
     let message = match Message::from_vec(bytes) {
         Ok(packet) => packet,
         Err(err) => {
-            debug!("error parsing mdns packet: {}", err);
+            warn!("error parsing mdns packet: {}", err);
             return None;
         }
     };
@@ -144,34 +144,34 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
             }
             None => Some(name.base_name()),
         };
-        debug!("received mdns response for {}", name);
+        trace!("received mdns response for {}", name);
         let node_id = {
             let Some(node_id_bytes) = name.iter().next() else {
                 continue;
             };
             let Cow::Borrowed(node_id_str) = String::from_utf8_lossy(node_id_bytes) else {
-                debug!(
+                warn!(
                     "received mdns response with invalid node id utf8 string {:?}",
                     node_id_bytes
                 );
                 continue;
             };
             let Some(decoded) = base32::decode(base32::Alphabet::Z, node_id_str) else {
-                debug!(
+                warn!(
                     "received mdns response with invalid base32 encoding {:?}",
                     node_id_bytes
                 );
                 continue;
             };
             let Ok(node_id_bytes) = TryInto::<[u8; 32]>::try_into(decoded) else {
-                debug!(
+                warn!(
                     "received mdns response with invalid node id bytes {:?}",
                     node_id_bytes
                 );
                 continue;
             };
             let Ok(node_id) = NodeId::from_bytes(&node_id_bytes) else {
-                debug!(
+                warn!(
                     "received mdns response with invalid node id {:?}",
                     node_id_bytes
                 );
@@ -209,7 +209,7 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
             RData::A(addr) => addr.0.into(),
             RData::AAAA(addr) => addr.0.into(),
             _ => {
-                debug!(
+                warn!(
                     "received mdns additional with wrong data {:?}",
                     additional.data()
                 );
@@ -245,7 +245,7 @@ fn parse_response(message: &Message) -> Option<MulticastDNSMessage> {
     match service_name {
         Some(service_name) => Some(MulticastDNSMessage::Response(service_name.clone(), ret)),
         None => {
-            debug!("received mdns response without service name");
+            warn!("received mdns response without service name");
             None
         }
     }

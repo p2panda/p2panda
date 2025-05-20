@@ -21,7 +21,7 @@ use p2panda_sync::TopicQuery;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinError;
 use tokio_util::task::AbortOnDropHandle;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 pub use crate::engine::address_book::AddressBook;
 use crate::engine::engine::EngineActor;
@@ -159,7 +159,7 @@ where
             .send(ToEngineActor::Shutdown { reply })
             .await?;
         reply_rx.await?;
-        debug!("engine shutdown");
+        trace!("engine shutdown");
         Ok(())
     }
 

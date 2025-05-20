@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use p2panda_core::PublicKey;
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 #[derive(Debug, Default)]
 pub struct GossipBuffer {
@@ -18,7 +18,7 @@ impl GossipBuffer {
 
         self.buffers.entry((peer, topic_id)).or_default();
 
-        debug!(
+        trace!(
             "lock gossip buffer with {} on topic {:?}: {}",
             peer, topic_id, counter
         );
@@ -29,14 +29,14 @@ impl GossipBuffer {
         match self.counters.get_mut(&(peer, topic_id)) {
             Some(counter) if *counter > 0 => {
                 *counter -= 1;
-                debug!(
+                trace!(
                     "unlock gossip buffer with {} on topic {:?}: {}",
                     peer, topic_id, counter
                 );
                 Some(*counter)
             }
             _ => {
-                warn!(
+                trace!(
                     "attempted to unlock non-existing gossip buffer with {} on topic {:?}",
                     peer, topic_id
                 );
