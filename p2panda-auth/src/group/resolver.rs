@@ -65,7 +65,7 @@ where
             GroupControlMessage::GroupAction { .. } => {
                 if is_concurrent {
                     match action {
-                        GroupAction::Remove { member } => {
+                        GroupAction::Remove { member: _ } => {
                             // Optional optimization to avoid unnecessary re-builds, only return
                             // true if:
                             // 1) The removed member performed an admin action in any concurrent
@@ -74,7 +74,10 @@ where
 
                             true
                         }
-                        GroupAction::Demote { member, access } => {
+                        GroupAction::Demote {
+                            member: _,
+                            access: _,
+                        } => {
                             // Optional optimizations to avoid unnecessary re-builds, only return
                             // true if:
                             // 1) The demoted member was previously an admin && they performed an
@@ -99,62 +102,120 @@ where
         }
     }
 
+    // Steps based on auth membership rules: https://github.com/local-first-web/auth/blob/f61e3678d74f9a30946475941ef9ef0c8c45d664/packages/auth/src/team/membershipResolver.ts#L83
+    //
+    // NOTE: we made some different decisions about how to resolve conflicts, but
+    // how to understand what constitutes a conflict is still useful to follow.
+    //
+    // TODO: We also need to consider operations which depend on concurrent operations
+    // (which may be filtered by the resolver). `auth` has some `findDependentLinks`
+    // functionality.
+
+    // 1) Mutual removals
+    //
+    // In our first resolve strategy mutual removals result in both members being removed from
+    // the group. We imagine further implementations taking different approaches, like
+    // resolving by seniority, hash id, quorum or some other parameter.
+    //
+    // If a mutual removal has occurred, we want to retain the removal operations but
+    // filter all concurrent operations performed by the removed members.
+
+    // 2) Re-adding member concurrently
+    //
+    // We don't stop this behaviour, if A removes C and B removes then adds C concurrently, C is still
+    // in the group.
+
+    // 3) Removed admin performing concurrent actions
+    //
+    // If A removes B, then B shouldn't be able to perform any actions concurrently.
+
+    // 4) Demoted admin performing concurrent actions
+    //
+    // If A demotes B (from admin), then B shouldn't be able to perform any actions concurrently.
+
     fn process(
         mut y: GroupState<ID, OP, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
-        // All bubbles present in this graph.
-        //
-        // TODO: Conversion between `DiGraphMap` and `DiGraph` (or better solution).
-        let bubbles = get_concurrent_bubbles(&y.inner.graph);
-
         // A new set of operations to be filtered which we will now populate.
         let mut filter: HashSet<OP> = Default::default();
 
+        // All bubbles present in this graph.
+        let bubbles = get_concurrent_bubbles(&y.inner.graph);
+
         // Iterate over all bubbles, apply membership rules and populate the filter accordingly.
-        for (operation, bubble) in bubbles {
-            // Steps based on auth membership rules: https://github.com/local-first-web/auth/blob/f61e3678d74f9a30946475941ef9ef0c8c45d664/packages/auth/src/team/membershipResolver.ts#L83
-            //
-            // NOTE: we made some different decisions about how to resolve conflicts, but
-            // how to understand what constitutes a conflict is still useful to follow.
-
-            // 1) Mutual removals
-            //
-            // In our first resolve strategy mutual removals result in both members being removed from
-            // the group. We imagine further implementations taking different approaches, like
-            // resolving by seniority, hash id, quorum or some other parameter.
-
-            // Is `operation` a removal?
-            // - Who performed the removal?
-            // - Does any operation in the `bubble` remove the remover?
-            //   - If so, add both to the filter
-            //   - Also add all concurrent operations performed by remover and removed
-
-            // 2) Re-adding member concurrently
-            //
-            // We don't stop this behaviour, if A removes C and B removes then adds C concurrently, C is still
-            // in the group.
-
-            // 3) Removed admin performing concurrent actions
-            //
-            // If A removes B, then B shouldn't be able to perform any actions concurrently.
+        for (operation_id, bubble) in bubbles {
+            // Get the operation corresponding to the given id.
+            let Some(operation) = y.inner.operations.iter().find(|op| op.id() == operation_id)
+            else {
+                // TODO: Error: Operation is expected to exist.
+                panic!()
+            };
 
             if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
                 if let GroupAction::Remove { member } = action {
-                    for op in bubble {
-                        if op.sender() == member {
-                            filter.insert(op);
+                    for concurrent_operation_id in &bubble {
+                        // Get the operation corresponding to the given id.
+                        let Some(concurrent_operation) = y
+                            .inner
+                            .operations
+                            .iter()
+                            .find(|op| op.id() == *concurrent_operation_id)
+                        else {
+                            // TODO: Error: Operation is expected to exist.
+                            panic!()
                         };
+
+                        // Is this operation authored by the removed author (`member`)?
+                        // - Add it to the filter if it's not a predecessor of the remove operation
+                        // (`operation_id`)
+
+                        // Match on any concurrent operation authored by the member being removed.
+                        if concurrent_operation.sender() == member.id()
+                            && !operation.previous().contains(&concurrent_operation_id)
+                        {
+                            if let GroupControlMessage::GroupAction { .. } =
+                                concurrent_operation.payload()
+                            {
+                                filter.insert(*concurrent_operation_id);
+                            }
+                        }
+                    }
+                }
+
+                // 4) Fitler all concurrent operations authored by the demoted member.
+                if let GroupAction::Demote { member, .. } = action {
+                    for concurrent_operation_id in bubble {
+                        // Get the operation corresponding to the given id.
+                        let Some(concurrent_operation) = y
+                            .inner
+                            .operations
+                            .iter()
+                            .find(|op| op.id() == concurrent_operation_id)
+                        else {
+                            // TODO: Error: Operation is expected to exist.
+                            panic!()
+                        };
+
+                        // Is this operation authored by the removed author (`member`)?
+                        // - Add it to the filter if it's not a predecessor of the remove operation
+                        // (`operation_id`)
+
+                        // Match on any concurrent operation authored by the member being removed.
+                        if concurrent_operation.sender() == member.id()
+                            && !operation.previous().contains(&concurrent_operation_id)
+                        {
+                            if let GroupControlMessage::GroupAction { .. } =
+                                concurrent_operation.payload()
+                            {
+                                filter.insert(concurrent_operation_id);
+                            }
+                        }
                     }
                 }
             }
-
-            // 4) Demoted admin performing concurrent actions
-            //
-            // If A demotes B (from admin), then B shouldn't be able to perform any actions concurrently.
-
-            // Is `operation` a demotion from admin?
-            // - Filter all concurrent operations performed by the demoted actor.
         }
+
+        // TODO: Don't forget to filter all nodes which are dependent on filtered operations.
 
         // Set the new "ignore filter".
         y.inner.ignore = filter;
@@ -163,12 +224,15 @@ where
     }
 }
 
-// Returns a HashMap containing a hash and all hashes directly or indirectly concurrent with it.
-fn get_concurrent_bubbles<OP>(graph: &DiGraph<OP, ()>) -> HashMap<OP, HashSet<OP>> {
+// Returns "bubbles" of concurrent operations by their node indexes in the graph.
+fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
+where
+    OP: OperationId + Display + Ord,
+{
     let mut bubbles = HashMap::new();
 
-    // Walk the graph.
-    graph.node_indices().for_each(|target| {
+    // Walk the graph and find concurrent bubbles of operations.
+    graph.nodes().for_each(|target| {
         // Get all concurrent operations for this node.
         let concurrent_operations = get_concurrent_operations(graph, target);
         if !concurrent_operations.is_empty() {
@@ -180,7 +244,12 @@ fn get_concurrent_bubbles<OP>(graph: &DiGraph<OP, ()>) -> HashMap<OP, HashSet<OP
 }
 
 // Return concurrent operations for a given target node / operation.
-fn get_concurrent_operations<OP>(graph: &DiGraph<OP, ()>, target: NodeIndex) -> HashSet<NodeIndex> {
+//
+// The returned set includes the target node.
+fn get_concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
+where
+    OP: OperationId + Display + Ord,
+{
     // Get all successors.
     let mut successors = HashSet::new();
     let mut dfs = Dfs::new(&graph, target);
@@ -199,8 +268,103 @@ fn get_concurrent_operations<OP>(graph: &DiGraph<OP, ()>, target: NodeIndex) -> 
     let relatives: HashSet<_> = successors.union(&predecessors).cloned().collect();
 
     // Collect all operations which are not successors or predecessors.
-    graph
-        .node_indices()
-        .filter(|n| !relatives.contains(n))
-        .collect()
+    graph.nodes().filter(|n| !relatives.contains(n)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl OperationId for &str {}
+
+    #[test]
+    fn concurrent_bubbles() {
+        //       A
+        //     /   \
+        //    B     C
+        //   / \     \
+        //  D   E     F
+        //   \ /     /
+        //    G     H
+        //     \   /
+        //       I
+        //       |
+        //       J
+
+        let mut graph = DiGraph::new();
+
+        // Add nodes A–M.
+        let a = graph.add_node("A"); // 0
+        let b = graph.add_node("B"); // 1
+        let c = graph.add_node("C"); // 2
+        let d = graph.add_node("D"); // 3
+        let e = graph.add_node("E"); // 4
+        let f = graph.add_node("F"); // 5
+        let g = graph.add_node("G"); // 6
+        let h = graph.add_node("H"); // 7
+        let i = graph.add_node("I"); // 8
+        let j = graph.add_node("J"); // 9
+
+        // Add edges.
+        graph.extend_with_edges(&[
+            (a, b),
+            (a, c),
+            (b, d),
+            (b, e),
+            (d, g),
+            (e, g),
+            (c, f),
+            (f, h),
+            (h, i),
+            (g, i),
+            (i, j),
+        ]);
+
+        let graph_map = DiGraphMap::from_graph(graph);
+        let concurrent_bubbles = get_concurrent_bubbles(&graph_map);
+
+        assert_eq!(concurrent_bubbles.len(), 7);
+
+        // "D": {"F", "H", "C", "E"}
+        let bubble = concurrent_bubbles.get("D").unwrap();
+        for id in &["F", "H", "C", "E"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "F": {"B", "D", "G", "E"}
+        let bubble = concurrent_bubbles.get("F").unwrap();
+        for id in &["B", "D", "G", "E"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "G": {"F", "H", "C"}
+        let bubble = concurrent_bubbles.get("G").unwrap();
+        for id in &["F", "H", "C"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "H": {"D", "E", "G", "B"}
+        let bubble = concurrent_bubbles.get("H").unwrap();
+        for id in &["D", "E", "G", "B"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "B": {"C", "F", "H"}
+        let bubble = concurrent_bubbles.get("B").unwrap();
+        for id in &["C", "F", "H"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "C": {"B", "G", "D", "E"
+        let bubble = concurrent_bubbles.get("C").unwrap();
+        for id in &["B", "G", "D", "E"] {
+            assert!(bubble.contains(id));
+        }
+
+        // "E": {"F", "H", "D", "C"}
+        let bubble = concurrent_bubbles.get("E").unwrap();
+        for id in &["F", "H", "D", "C"] {
+            assert!(bubble.contains(id));
+        }
+    }
 }
