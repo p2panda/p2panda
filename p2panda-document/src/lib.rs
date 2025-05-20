@@ -126,7 +126,7 @@ where
 {
     group_id: MemberId,
     auth_state: AuthGroupState<RS, GS>,
-    // auth_group_store: TestGroupStoreState<MemberId, TestGroupStateInner>,
+    auth_store: GS,
     _marker: PhantomData<C>,
 }
 
@@ -146,10 +146,6 @@ where
     // We call this after receiving a CREATE or ADD which brings us into a document.
     pub fn from_welcome(my_id: MemberId, group_id: PublicKey) -> Self {
         todo!()
-        // Self {
-        //     auth_state: TestGroupState::new(my_id, group_id, group_store_y, orderer_y),
-        //     auth_group_store: TestGroupStoreState::default(),
-        // }
     }
 
     // TODO: Access should use our C generic here.
@@ -163,7 +159,6 @@ where
         };
 
         // TODO
-        // let group_y = AuthGroupState::new(alice, alice, group_store_y, orderer_y);
         // let (group_y, operation_001) = AuthGroup::prepare(group_y, &control_message).unwrap();
         // let group_y = AuthGroup::process(group_y, &operation_001).unwrap();
     }
