@@ -33,6 +33,18 @@ pub enum GroupMember<ID> {
     Group(ID),
 }
 
+impl<ID> GroupMember<ID>
+where
+    ID: Copy,
+{
+    pub fn id(&self) -> ID {
+        match self {
+            GroupMember::Individual(id) => *id,
+            GroupMember::Group { id, .. } => *id,
+        }
+    }
+}
+
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be applied to a group.
