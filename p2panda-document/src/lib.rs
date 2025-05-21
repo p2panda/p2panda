@@ -3,15 +3,16 @@ use std::fmt::{self, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
+use p2panda_auth::group::resolver::GroupResolver;
 use p2panda_auth::group::{
-    Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState, GroupStateInner,
+    Group, GroupAction, GroupControlMessage, GroupMember, GroupState, GroupStateInner,
 };
 use p2panda_auth::group_crdt::Access;
+use p2panda_auth::traits::Ordering as AuthOrdering;
 use p2panda_auth::traits::{
     AuthGraph, GroupStore, IdentityHandle as AuthIdentityHandle, Operation as AuthOperation,
     OperationId,
 };
-use p2panda_auth::traits::{Ordering as AuthOrdering, Resolver};
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use p2panda_encryption::traits::IdentityHandle as EncryptionIdentityHandle;
 use p2panda_encryption::{KeyRegistry, KeyRegistryState};
@@ -51,9 +52,13 @@ impl OperationId for MessageId {}
 // Auth group types
 // ~~~~~~~~~~~~~~~~
 
-pub type AuthGroup<RS, GS> = Group<MemberId, MessageId, RS, DocumentOrderer<RS, GS>, GS>;
+// TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
+pub type AuthResolver = GroupResolver<MemberId, MessageId, DocumentMessage>;
 
-pub type AuthGroupState<RS, GS> = GroupState<MemberId, MessageId, RS, DocumentOrderer<RS, GS>, GS>;
+pub type AuthGroup<GS> = Group<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>;
+
+pub type AuthGroupState<GS> =
+    GroupState<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>;
 
 // TODO: This will probably be removed soon?
 pub type AuthGroupStateInner = GroupStateInner<MemberId, MessageId, DocumentMessage>;
@@ -65,23 +70,23 @@ pub type AuthControlMessage = GroupControlMessage<MemberId, MessageId>;
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct DocumentOrderer<RS, GS> {
-    _marker: PhantomData<(RS, GS)>,
+pub struct DocumentOrderer<GS> {
+    _marker: PhantomData<GS>,
 }
 
 #[derive(Clone, Debug)]
 pub struct DocumentOrdererState {}
 
-impl<RS, GS> AuthOrdering<MemberId, MessageId, AuthControlMessage> for DocumentOrderer<RS, GS>
+impl<GS> AuthOrdering<MemberId, MessageId, AuthControlMessage> for DocumentOrderer<GS>
 where
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     type State = DocumentOrdererState;
 
     type Message = DocumentMessage;
 
-    type Error = DocumentError<RS, GS>;
+    type Error = DocumentError;
 
     fn next_message(
         _y: Self::State,
@@ -134,20 +139,20 @@ impl AuthOperation<MemberId, MessageId, AuthControlMessage> for DocumentMessage 
 // Document
 // ~~~~~~~~
 
-pub struct Document<C, RS, GS>
+pub struct Document<C, GS>
 where
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
     GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug,
 {
     my_id: MemberId,
     group_store: GS,
-    _marker: PhantomData<(C, RS)>,
+    _marker: PhantomData<C>,
 }
 
-impl<C, RS, GS> Document<C, RS, GS>
+impl<C, GS> Document<C, GS>
 where
     // TODO: Clone and Debug bound for both RS and GS is maybe not necessary?
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + Clone + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + Clone + fmt::Debug,
     GS: GroupStore<MemberId, AuthGroupStateInner> + Clone + fmt::Debug,
 {
     pub fn new(my_id: MemberId, group_store: GS) -> Self {
@@ -163,7 +168,7 @@ where
         initial_members: &[(GroupMember<MemberId>, Access<()>)],
         group_store_state: GS::State,
         orderer: DocumentOrdererState,
-    ) -> Result<AuthGroupState<RS, GS>, DocumentError<RS, GS>> {
+    ) -> Result<AuthGroupState<GS>, DocumentError> {
         // TODO: Here something happens with deriving a group id.
         let group_id = MemberId(PrivateKey::new().public_key());
 
@@ -176,9 +181,9 @@ where
             },
         };
 
-        let (y_i, operation) =
-            AuthGroup::prepare(y, &control_message).map_err(DocumentError::Group)?;
-        let y_ii = AuthGroup::process(y_i, &operation).map_err(DocumentError::Group)?;
+        // TODO: We can't handle the error yet (see `DocumentError`).
+        let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
+        let y_ii = AuthGroup::process(y_i, &operation).unwrap(); //.map_err(DocumentError::Group)?;
 
         Ok(y_ii)
     }
@@ -189,16 +194,16 @@ where
         _group_id: MemberId,
         _group_store_state: GS::State,
         _orderer: DocumentOrdererState,
-    ) -> Result<AuthGroupState<RS, GS>, DocumentError<RS, GS>> {
+    ) -> Result<AuthGroupState<GS>, DocumentError> {
         todo!()
     }
 
     pub fn add(
         &self,
-        y: AuthGroupState<RS, GS>,
+        y: AuthGroupState<GS>,
         added: GroupMember<MemberId>,
         access: Access<()>,
-    ) -> Result<AuthGroupState<RS, GS>, DocumentError<RS, GS>> {
+    ) -> Result<AuthGroupState<GS>, DocumentError> {
         // TODO: Basic checks here? Is this member already part of the group, do we try to add
         // ourselves, etc.?
 
@@ -214,9 +219,10 @@ where
         // TODO: Clone bound on RS and ORD in `prepare` is confusing.
         // TODO: Prepare should not queue the operation for us (we don't need it inside the
         // orderer).
-        let (y_i, operation) =
-            AuthGroup::prepare(y, &control_message).map_err(DocumentError::Group)?;
-        let y_ii = AuthGroup::process(y_i, &operation).map_err(DocumentError::Group)?;
+        // TODO: We can't handle the error yet (see `DocumentError`).
+        let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap();
+        let y_ii = AuthGroup::process(y_i, &operation).unwrap();
+        // map_err(DocumentError::Group)?;
 
         Ok(y_ii)
     }
@@ -234,27 +240,27 @@ pub enum UniverseMessage {
 }
 
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
-pub struct Universe<C, RS, GS>
+pub struct Universe<C, GS>
 where
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     // Here we have _all_ groups EXCEPT "root groups" / documents.
-    groups: HashMap<PublicKey, AuthGroupState<RS, GS>>,
+    groups: HashMap<PublicKey, AuthGroupState<GS>>,
 
     // Here we have all "root groups" / documents, no "sub groups".
-    documents: HashMap<PublicKey, Document<C, RS, GS>>,
+    documents: HashMap<PublicKey, Document<C, GS>>,
 
     // Key bundles.
     key_registry: KeyRegistryState<MemberId>,
 }
 
-impl<C, RS, GS> Universe<C, RS, GS>
+impl<C, GS> Universe<C, GS>
 where
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug + Clone,
+    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug + Clone,
     GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    pub fn new(conditions: C, resolver: RS, store: GS) -> Self {
+    pub fn new(conditions: C, store: GS) -> Self {
         // ... observes messages on the network (scoped by topic id)
 
         // Orderer comes here!
@@ -295,7 +301,7 @@ where
         // TODO: Get private key from the outside.
         let my_id = MemberId(PrivateKey::new().public_key());
 
-        let document: Document<C, RS, GS> = Document::new(my_id, store);
+        let document: Document<C, GS> = Document::new(my_id, store);
 
         Self {
             groups: HashMap::new(),
@@ -306,14 +312,16 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum DocumentError<RS, GS>
-where
-    RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug,
+pub enum DocumentError
+// where
+// RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+// GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     // TODO: We're hiding the error message here.
-    #[error("group error occurred")]
-    Group(GroupError<MemberId, MessageId, RS, DocumentOrderer<RS, GS>, GS>),
+    // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
+    // overflows Rust.
+    // #[error("group error occurred")]
+    // Group(GroupError<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>),
 }
 
 #[cfg(test)]
@@ -360,9 +368,9 @@ mod tests {
     #[test]
     fn it_works() {
         let store = SqliteStore::new();
-        let resolver = GroupResolver::default();
+        // let resolver = GroupResolver::default();
         let conditions = ();
 
-        let universe = Universe::new(conditions, resolver, store);
+        let universe = Universe::new(conditions, store);
     }
 }
