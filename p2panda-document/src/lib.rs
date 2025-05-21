@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use p2panda_auth::group::resolver::GroupResolver;
 use p2panda_auth::group::{
@@ -18,6 +19,7 @@ use p2panda_encryption::traits::IdentityHandle as EncryptionIdentityHandle;
 use p2panda_encryption::{KeyRegistry, KeyRegistryState};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 // ~~~~~~~~~~
 // Core types
@@ -55,10 +57,9 @@ impl OperationId for MessageId {}
 // TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
 pub type AuthResolver = GroupResolver<MemberId, MessageId, DocumentMessage>;
 
-pub type AuthGroup<GS> = Group<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>;
+pub type AuthGroup<GS> = Group<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
-pub type AuthGroupState<GS> =
-    GroupState<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>;
+pub type AuthGroupState<GS> = GroupState<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
 // TODO: This will probably be removed soon?
 pub type AuthGroupStateInner = GroupStateInner<MemberId, MessageId, DocumentMessage>;
@@ -70,19 +71,19 @@ pub type AuthControlMessage = GroupControlMessage<MemberId, MessageId>;
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct DocumentOrderer<GS> {
+pub struct Orderer<GS> {
     _marker: PhantomData<GS>,
 }
 
 #[derive(Clone, Debug)]
-pub struct DocumentOrdererState {}
+pub struct OrdererState {}
 
-impl<GS> AuthOrdering<MemberId, MessageId, AuthControlMessage> for DocumentOrderer<GS>
+impl<GS> AuthOrdering<MemberId, MessageId, AuthControlMessage> for Orderer<GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
     GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    type State = DocumentOrdererState;
+    type State = OrdererState;
 
     type Message = DocumentMessage;
 
@@ -142,11 +143,18 @@ impl AuthOperation<MemberId, MessageId, AuthControlMessage> for DocumentMessage 
 pub struct Document<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug,
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    my_id: MemberId,
-    group_store: GS,
+    document_id: MemberId,
+    universe: Universe<C, GS>,
     _marker: PhantomData<C>,
+}
+
+pub struct DocumentState<GS>
+where
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+{
+    auth_state: AuthGroupState<GS>,
 }
 
 impl<C, GS> Document<C, GS>
@@ -155,47 +163,59 @@ where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + Clone + fmt::Debug,
     GS: GroupStore<MemberId, AuthGroupStateInner> + Clone + fmt::Debug,
 {
-    pub fn new(my_id: MemberId, group_store: GS) -> Self {
-        Self {
-            my_id,
-            group_store,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn create(
-        &self,
+    pub(crate) async fn create(
+        universe: Universe<C, GS>,
         initial_members: &[(GroupMember<MemberId>, Access<()>)],
-        group_store_state: GS::State,
-        orderer: DocumentOrdererState,
-    ) -> Result<AuthGroupState<GS>, DocumentError> {
+    ) -> Result<(Document<C, GS>, DocumentState<GS>), DocumentError> {
         // TODO: Here something happens with deriving a group id.
-        let group_id = MemberId(PrivateKey::new().public_key());
+        let document_id = MemberId(PrivateKey::new().public_key());
 
-        let y = AuthGroupState::new(self.my_id, group_id, group_store_state, orderer);
+        let auth_state = {
+            let universe = universe.inner.read().await;
 
-        let control_message = AuthControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Create {
-                initial_members: initial_members.to_vec(),
-            },
+            let y = AuthGroupState::new(
+                universe.my_id,
+                document_id,
+                universe.group_store_state.clone(), // TODO: This will probably change
+                universe.orderer.clone(),
+            );
+
+            let control_message = AuthControlMessage::GroupAction {
+                group_id: document_id,
+                action: GroupAction::Create {
+                    initial_members: initial_members.to_vec(),
+                },
+            };
+
+            // TODO: We can't handle the error yet (see `DocumentError`).
+            let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
+            let y_ii = AuthGroup::process(y_i, &operation).unwrap(); //.map_err(DocumentError::Group)?;
+
+            y_ii
         };
 
-        // TODO: We can't handle the error yet (see `DocumentError`).
-        let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
-        let y_ii = AuthGroup::process(y_i, &operation).unwrap(); //.map_err(DocumentError::Group)?;
-
-        Ok(y_ii)
+        Ok((
+            Document {
+                document_id,
+                universe,
+                _marker: PhantomData,
+            },
+            DocumentState { auth_state },
+        ))
     }
 
     // We call this after receiving a CREATE or ADD which brings us into a document.
-    pub fn from_welcome(
+    pub(crate) fn from_welcome(
         &self,
         _group_id: MemberId,
         _group_store_state: GS::State,
-        _orderer: DocumentOrdererState,
+        _orderer: OrdererState,
     ) -> Result<AuthGroupState<GS>, DocumentError> {
         todo!()
+    }
+
+    pub fn id(&self) -> MemberId {
+        self.document_id
     }
 
     pub fn add(
@@ -239,20 +259,37 @@ pub enum UniverseMessage {
     Document,
 }
 
+pub struct InnerUniverse<C, GS>
+where
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+{
+    pub(crate) my_id: MemberId,
+
+    // Here we have _all_ groups EXCEPT "root groups" / documents.
+    pub(crate) groups: HashMap<MemberId, AuthGroupState<GS>>,
+
+    // Here we have all "root groups" / documents, no "sub groups".
+    pub(crate) documents: HashMap<MemberId, DocumentState<GS>>,
+
+    // Key bundles.
+    pub(crate) key_registry: KeyRegistryState<MemberId>,
+
+    pub(crate) store: GS,
+
+    pub(crate) group_store_state: GS::State,
+
+    pub(crate) orderer: OrdererState,
+
+    _marker: PhantomData<C>,
+}
+
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
 pub struct Universe<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
     GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    // Here we have _all_ groups EXCEPT "root groups" / documents.
-    groups: HashMap<PublicKey, AuthGroupState<GS>>,
-
-    // Here we have all "root groups" / documents, no "sub groups".
-    documents: HashMap<PublicKey, Document<C, GS>>,
-
-    // Key bundles.
-    key_registry: KeyRegistryState<MemberId>,
+    pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
 }
 
 impl<C, GS> Universe<C, GS>
@@ -260,7 +297,7 @@ where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug + Clone,
     GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    pub fn new(conditions: C, store: GS) -> Self {
+    pub fn new(store: GS, group_store_state: GS::State) -> Self {
         // ... observes messages on the network (scoped by topic id)
 
         // Orderer comes here!
@@ -301,14 +338,66 @@ where
         // TODO: Get private key from the outside.
         let my_id = MemberId(PrivateKey::new().public_key());
 
-        let document: Document<C, GS> = Document::new(my_id, store);
+        let orderer = OrdererState {};
 
         Self {
-            groups: HashMap::new(),
-            documents: HashMap::new(),
-            key_registry: KeyRegistry::init(),
+            inner: Arc::new(RwLock::new(InnerUniverse {
+                my_id,
+                groups: HashMap::new(),
+                documents: HashMap::new(),
+                key_registry: KeyRegistry::init(),
+                store,
+                group_store_state,
+                orderer,
+                _marker: PhantomData,
+            })),
         }
     }
+
+    pub async fn create_document(
+        &mut self,
+        initial_members: &[(GroupMember<MemberId>, Access<()>)],
+    ) -> Result<Document<C, GS>, UniverseError> {
+        let (document, y_doc) = Document::create(self.clone(), initial_members).await?;
+
+        let mut inner = self.inner.write().await;
+        inner.documents.insert(document.id(), y_doc);
+
+        Ok(document)
+    }
+
+    pub fn create_group(&self) {
+        // TODO
+    }
+
+    pub fn process(&self) {
+        // TODO
+
+        // TODO
+        // Yields events:
+        // - Has a group been created / updated
+        // - Has a document been created / updated
+        // - Have we been invited somewhere
+        // - Have we been removed somewhere
+        // - Did we receive some decrypted application data
+    }
+}
+
+impl<C, GS> Clone for Universe<C, GS>
+where
+    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum UniverseError {
+    #[error(transparent)]
+    Document(#[from] DocumentError),
 }
 
 #[derive(Debug, Error)]
@@ -321,7 +410,7 @@ pub enum DocumentError
     // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
     // overflows Rust.
     // #[error("group error occurred")]
-    // Group(GroupError<MemberId, MessageId, AuthResolver, DocumentOrderer<GS>, GS>),
+    // Group(GroupError<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>),
 }
 
 #[cfg(test)]
@@ -332,7 +421,7 @@ mod tests {
 
     use std::convert::Infallible;
 
-    use p2panda_auth::group::resolver::GroupResolver;
+    // use p2panda_auth::group::resolver::GroupResolver;
     use p2panda_auth::traits::GroupStore;
 
     use super::{AuthGroupStateInner, MemberId, Universe};
@@ -347,30 +436,40 @@ mod tests {
     }
 
     impl GroupStore<MemberId, AuthGroupStateInner> for SqliteStore {
-        type State = AuthGroupStateInner;
+        type State = ();
 
         type Error = Infallible;
 
         // TODO: No writes here.
         fn insert(
-            y: Self::State,
-            id: &MemberId,
-            group: &AuthGroupStateInner,
+            _y: Self::State,
+            _id: &MemberId,
+            _group: &AuthGroupStateInner,
         ) -> Result<Self::State, Self::Error> {
             todo!()
         }
 
-        fn get(y: &Self::State, id: &MemberId) -> Result<Option<AuthGroupStateInner>, Self::Error> {
+        fn get(
+            _y: &Self::State,
+            _id: &MemberId,
+        ) -> Result<Option<AuthGroupStateInner>, Self::Error> {
             todo!()
         }
     }
 
-    #[test]
-    fn it_works() {
+    type Conditions = ();
+
+    #[tokio::test]
+    async fn it_works() {
         let store = SqliteStore::new();
         // let resolver = GroupResolver::default();
-        let conditions = ();
 
-        let universe = Universe::new(conditions, store);
+        let mut universe = Universe::<Conditions, SqliteStore>::new(store, ());
+
+        let _document = universe.create_document(&[]).await.unwrap();
+
+        // TODO: Later we want to do this (after a user action or processing).
+        // universe.write(&mut tx).await.unwrap();
+        // tx.commit().await.unwrap();
     }
 }
