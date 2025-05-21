@@ -14,7 +14,7 @@ use p2panda_auth::traits::{
     AuthGraph, GroupStore, IdentityHandle as AuthIdentityHandle, Operation as AuthOperation,
     OperationId,
 };
-use p2panda_core::{Hash, PrivateKey, PublicKey};
+use p2panda_core::{Hash, Operation, PrivateKey, PublicKey};
 use p2panda_encryption::traits::IdentityHandle as EncryptionIdentityHandle;
 use p2panda_encryption::{KeyRegistry, KeyRegistryState};
 use serde::{Deserialize, Serialize};
@@ -55,14 +55,14 @@ impl OperationId for MessageId {}
 // ~~~~~~~~~~~~~~~~
 
 // TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
-pub type AuthResolver = GroupResolver<ActorId, MessageId, DocumentMessage>;
+pub type AuthResolver = GroupResolver<ActorId, MessageId, Message>;
 
 pub type AuthGroup<GS> = Group<ActorId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
 pub type AuthGroupState<GS> = GroupState<ActorId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
 // TODO: This will probably be removed soon?
-pub type AuthGroupStateInner = GroupStateInner<ActorId, MessageId, DocumentMessage>;
+pub type AuthGroupStateInner = GroupStateInner<ActorId, MessageId, Message>;
 
 pub type AuthControlMessage = GroupControlMessage<ActorId, MessageId>;
 
@@ -80,20 +80,26 @@ pub struct OrdererState {}
 
 impl<GS> AuthOrdering<ActorId, MessageId, AuthControlMessage> for Orderer<GS>
 where
-    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     type State = OrdererState;
 
-    type Message = DocumentMessage;
+    type Message = Message;
 
     type Error = DocumentError;
 
     fn next_message(
-        _y: Self::State,
-        _control_message: &AuthControlMessage,
+        y: Self::State,
+        control_message: &AuthControlMessage,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        todo!()
+        Ok((
+            y,
+            Message::Pre {
+                document_id: control_message.group_id(),
+                auth_control_message: Some(control_message.to_owned()),
+            },
+        ))
     }
 
     fn queue(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
@@ -112,15 +118,31 @@ where
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct DocumentMessage {}
+pub enum Message {
+    Pre {
+        document_id: ActorId,
+        auth_control_message: Option<AuthControlMessage>,
+    },
+    Signed(Operation<()>),
+}
 
-impl AuthOperation<ActorId, MessageId, AuthControlMessage> for DocumentMessage {
+impl AuthOperation<ActorId, MessageId, AuthControlMessage> for Message {
     fn id(&self) -> MessageId {
-        todo!()
+        match self {
+            Message::Pre { .. } => {
+                unreachable!("should never call id on message in unsigned pre-state")
+            }
+            Message::Signed(operation) => MessageId(operation.hash),
+        }
     }
 
     fn sender(&self) -> ActorId {
-        todo!()
+        match self {
+            Message::Pre { .. } => {
+                unreachable!("should never call sender on message in unsigned pre-state")
+            }
+            Message::Signed(operation) => ActorId(operation.header.public_key),
+        }
     }
 
     fn dependencies(&self) -> &Vec<MessageId> {
@@ -146,7 +168,7 @@ impl AuthOperation<ActorId, MessageId, AuthControlMessage> for DocumentMessage {
 // "universe". Finally the user can "commit" the changed state of the universe to the database.
 pub struct Document<C, GS>
 where
-    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     id: ActorId,
@@ -164,7 +186,7 @@ where
 impl<C, GS> Document<C, GS>
 where
     // TODO: Clone and Debug bound for both RS and GS is maybe not necessary?
-    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + Clone + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, Message> + Clone + fmt::Debug,
     GS: GroupStore<ActorId, AuthGroupStateInner> + Clone + fmt::Debug,
 {
     pub(crate) async fn create(
@@ -192,8 +214,16 @@ where
             };
 
             // TODO: We can't handle the error yet (see `DocumentError`).
-            let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
-            let y_ii = AuthGroup::process(y_i, &operation).unwrap(); //.map_err(DocumentError::Group)?;
+            let (y_i, pre) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
+
+            // TODO: Set up encryption state.
+
+            // TODO: Create & sign p2panda operation here.
+            // let operation = ...
+
+            let y_ii = AuthGroup::process(y_i, &pre).unwrap(); //.map_err(DocumentError::Group)?;
+
+            // TODO: Process encryption group as well.
 
             y_ii
         };
@@ -303,7 +333,7 @@ where
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
 pub struct Universe<C, GS>
 where
-    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
@@ -311,7 +341,7 @@ where
 
 impl<C, GS> Universe<C, GS>
 where
-    // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug + Clone,
+    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug + Clone,
     GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     pub fn new(store: GS, group_store_state: GS::State) -> Self {
@@ -419,7 +449,7 @@ pub enum UniverseError {
 #[derive(Debug, Error)]
 pub enum DocumentError
 // where
-// RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
+// RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
 // GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     #[error("tried to access a document {0} which is not known to us")]
