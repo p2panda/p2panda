@@ -36,6 +36,7 @@ where
 
     fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
+        let group_id = control_message.group_id();
         let _actor = operation.sender();
 
         // Sanity check.
@@ -43,17 +44,7 @@ where
             panic!();
         }
 
-        // Get all current tip operations.
-        //
-        // TODO: should be checking against transitive heads here.
-        let heads = y.heads();
-
-        // Detect concurrent operations by comparing the current heads with the new operations'
-        // dependencies.
-        let is_concurrent = heads != HashSet::from_iter(operation.dependencies().clone());
-
-        // TODO: Get concurrent branches.
-        // let concurrent_operations = get_concurrent(operation: &OP, graph: &y.inner.graph);
+        let is_concurrent = !get_concurrent_operations(&y.inner.graph, operation.id()).is_empty();
 
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
@@ -100,37 +91,32 @@ where
         }
     }
 
-    // Steps based on auth membership rules: https://github.com/local-first-web/auth/blob/f61e3678d74f9a30946475941ef9ef0c8c45d664/packages/auth/src/team/membershipResolver.ts#L83
-    //
-    // NOTE: we made some different decisions about how to resolve conflicts, but
-    // how to understand what constitutes a conflict is still useful to follow.
-    //
-    // TODO: We also need to consider operations which depend on concurrent operations
-    // (which may be filtered by the resolver). `auth` has some `findDependentLinks`
-    // functionality.
-
-    // 1) Mutual removals
-    //
-    // In our first resolve strategy mutual removals result in both members being removed from
-    // the group. We imagine further implementations taking different approaches, like
-    // resolving by seniority, hash id, quorum or some other parameter.
-    //
-    // If a mutual removal has occurred, we want to retain the removal operations but
-    // filter all concurrent operations performed by the removed members.
-
-    // 2) Re-adding member concurrently
-    //
-    // We don't stop this behaviour, if A removes C and B removes then adds C concurrently, C is still
-    // in the group.
-
-    // 3) Removed admin performing concurrent actions
-    //
-    // If A removes B, then B shouldn't be able to perform any actions concurrently.
-
-    // 4) Demoted admin performing concurrent actions
-    //
-    // If A demotes B (from admin), then B shouldn't be able to perform any actions concurrently.
-
+    /// Resolve group membership by processing all concurrent operations in the graph.
+    ///
+    /// The following ruleset is applied when chosing which operations to "filter":
+    ///
+    /// 1) Mutual removals
+    ///
+    /// In our first resolve strategy mutual removals result in both members being removed from
+    /// the group. We imagine further implementations taking different approaches, like
+    /// resolving by seniority, hash id, quorum or some other parameter.
+    ///
+    /// If a mutual removal has occurred, we want to retain the removal operations but
+    /// filter all concurrent operations performed by the removed members.
+    ///
+    /// 2) Re-adding member concurrently
+    ///
+    /// We don't stop this behaviour, if Alice removes Charlie and Bob removes then adds Charlie
+    /// concurrently, Charlie is still in the group.
+    ///
+    /// 3) Removed admin performing concurrent actions
+    ///
+    /// If Alice removes Bob, then Bob shouldn't be able to perform any actions concurrently.
+    ///
+    /// 4) Demoted admin performing concurrent actions
+    ///
+    /// If Alice demotes Bob (from admin), then Bob is no longer an admin and shouldn't be able to
+    /// perform any actions concurrently.
     fn process(
         mut y: GroupState<ID, OP, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
@@ -232,16 +218,14 @@ where
     }
 }
 
-// Returns "bubbles" of concurrent operations by their node indexes in the graph.
+/// Walk the graph and identify the set of concurrent operations for each node.
 fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
 where
     OP: OperationId + Display + Ord,
 {
     let mut bubbles = HashMap::new();
 
-    // Walk the graph and find concurrent bubbles of operations.
     graph.nodes().for_each(|target| {
-        // Get all concurrent operations for this node.
         let concurrent_operations = get_concurrent_operations(graph, target);
         if !concurrent_operations.is_empty() {
             bubbles.insert(target, concurrent_operations);
@@ -251,9 +235,9 @@ where
     bubbles
 }
 
-// Return concurrent operations for a given target node / operation.
-//
-// The returned set includes the target node.
+/// Return any operations concurrent with the given target operation.
+///
+/// An operation is concurrent if it is not a predecessor or successor of the target operation.
 fn get_concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId + Display + Ord,
@@ -281,6 +265,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use petgraph::graph::DiGraph;
+
     use super::*;
 
     impl OperationId for &str {}
