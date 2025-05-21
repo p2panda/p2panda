@@ -136,15 +136,12 @@ where
     fn process(
         mut y: GroupState<ID, OP, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
-        // A new set of operations to be filtered which we will now populate.
         let mut filter: HashSet<OP> = Default::default();
 
-        // All bubbles present in this graph.
         let bubbles = get_concurrent_bubbles(&y.inner.graph);
 
-        // Iterate over all bubbles, apply membership rules and populate the filter accordingly.
         for (operation_id, bubble) in bubbles {
-            // Get the operation corresponding to the given id.
+            // TODO: Consider keeping a HashMap in memory to optimise lookup.
             let Some(operation) = y.inner.operations.iter().find(|op| op.id() == operation_id)
             else {
                 // TODO: Error: Operation is expected to exist.
@@ -152,9 +149,17 @@ where
             };
 
             if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
-                if let GroupAction::Remove { member } = action {
+                // Process a remove action.
+                //
+                // Iterate over all actions that occurred concurrent to the remove and identify
+                // those authored by the removed member. Filter any action by the removed member,
+                // as long as it's 1) not a predecessor of the remove operation, and 2) not a
+                // mutual removal (removal of the remover by the removed member).
+                if let GroupAction::Remove {
+                    member: removed_member,
+                } = action
+                {
                     for concurrent_operation_id in &bubble {
-                        // Get the operation corresponding to the given id.
                         let Some(concurrent_operation) = y
                             .inner
                             .operations
@@ -165,27 +170,38 @@ where
                             panic!()
                         };
 
-                        // Is this operation authored by the removed author (`member`)?
-                        // - Add it to the filter if it's not a predecessor of the remove operation
-                        // (`operation_id`)
-
-                        // Match on any concurrent operation authored by the member being removed.
-                        if concurrent_operation.sender() == member.id()
+                        if concurrent_operation.sender() == removed_member.id()
                             && !operation.previous().contains(&concurrent_operation_id)
                         {
-                            if let GroupControlMessage::GroupAction { .. } =
+                            if let GroupControlMessage::GroupAction { action, .. } =
                                 concurrent_operation.payload()
                             {
-                                filter.insert(*concurrent_operation_id);
+                                if let GroupAction::Remove { member } = action {
+                                    // The removed member is concurrently removing the remover.
+                                    if member.id() == operation.sender() {
+                                        // Do not filter.
+                                    } else {
+                                        filter.insert(*concurrent_operation_id);
+                                    }
+                                } else {
+                                    filter.insert(*concurrent_operation_id);
+                                }
                             }
                         }
                     }
                 }
 
-                // 4) Fitler all concurrent operations authored by the demoted member.
-                if let GroupAction::Demote { member, .. } = action {
+                // Process a demote action.
+                //
+                // Iterate over all actions that occurred concurrent to the demote and identify
+                // those authored by the demoted member. Filter any action by the demoted member,
+                // as long as it's not a predecessor of the demote operation.
+                if let GroupAction::Demote {
+                    member: demoted_member,
+                    ..
+                } = action
+                {
                     for concurrent_operation_id in bubble {
-                        // Get the operation corresponding to the given id.
                         let Some(concurrent_operation) = y
                             .inner
                             .operations
@@ -196,12 +212,7 @@ where
                             panic!()
                         };
 
-                        // Is this operation authored by the removed author (`member`)?
-                        // - Add it to the filter if it's not a predecessor of the remove operation
-                        // (`operation_id`)
-
-                        // Match on any concurrent operation authored by the member being removed.
-                        if concurrent_operation.sender() == member.id()
+                        if concurrent_operation.sender() == demoted_member.id()
                             && !operation.previous().contains(&concurrent_operation_id)
                         {
                             if let GroupControlMessage::GroupAction { .. } =
@@ -216,6 +227,7 @@ where
         }
 
         // TODO: Don't forget to filter all nodes which are dependent on filtered operations.
+        // get_dependent_operations()
 
         // Set the new "ignore filter".
         y.inner.ignore = filter;
