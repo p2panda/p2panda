@@ -27,17 +27,17 @@ use tokio::sync::RwLock;
 
 // Can be both a group id or individual id.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
-pub struct MemberId(pub PublicKey);
+pub struct ActorId(pub PublicKey);
 
-impl Display for MemberId {
+impl Display for ActorId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl AuthIdentityHandle for MemberId {}
+impl AuthIdentityHandle for ActorId {}
 
-impl EncryptionIdentityHandle for MemberId {}
+impl EncryptionIdentityHandle for ActorId {}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash)]
 pub struct MessageId(pub Hash);
@@ -55,16 +55,16 @@ impl OperationId for MessageId {}
 // ~~~~~~~~~~~~~~~~
 
 // TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
-pub type AuthResolver = GroupResolver<MemberId, MessageId, DocumentMessage>;
+pub type AuthResolver = GroupResolver<ActorId, MessageId, DocumentMessage>;
 
-pub type AuthGroup<GS> = Group<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>;
+pub type AuthGroup<GS> = Group<ActorId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
-pub type AuthGroupState<GS> = GroupState<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>;
+pub type AuthGroupState<GS> = GroupState<ActorId, MessageId, AuthResolver, Orderer<GS>, GS>;
 
 // TODO: This will probably be removed soon?
-pub type AuthGroupStateInner = GroupStateInner<MemberId, MessageId, DocumentMessage>;
+pub type AuthGroupStateInner = GroupStateInner<ActorId, MessageId, DocumentMessage>;
 
-pub type AuthControlMessage = GroupControlMessage<MemberId, MessageId>;
+pub type AuthControlMessage = GroupControlMessage<ActorId, MessageId>;
 
 // ~~~~~~~
 // Orderer
@@ -78,10 +78,10 @@ pub struct Orderer<GS> {
 #[derive(Clone, Debug)]
 pub struct OrdererState {}
 
-impl<GS> AuthOrdering<MemberId, MessageId, AuthControlMessage> for Orderer<GS>
+impl<GS> AuthOrdering<ActorId, MessageId, AuthControlMessage> for Orderer<GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     type State = OrdererState;
 
@@ -114,12 +114,12 @@ where
 #[derive(Clone, Debug)]
 pub struct DocumentMessage {}
 
-impl AuthOperation<MemberId, MessageId, AuthControlMessage> for DocumentMessage {
+impl AuthOperation<ActorId, MessageId, AuthControlMessage> for DocumentMessage {
     fn id(&self) -> MessageId {
         todo!()
     }
 
-    fn sender(&self) -> MemberId {
+    fn sender(&self) -> ActorId {
         todo!()
     }
 
@@ -143,16 +143,16 @@ impl AuthOperation<MemberId, MessageId, AuthControlMessage> for DocumentMessage 
 pub struct Document<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    document_id: MemberId,
+    document_id: ActorId,
     universe: Universe<C, GS>,
     _marker: PhantomData<C>,
 }
 
 pub struct DocumentState<GS>
 where
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     auth_state: AuthGroupState<GS>,
 }
@@ -161,14 +161,14 @@ impl<C, GS> Document<C, GS>
 where
     // TODO: Clone and Debug bound for both RS and GS is maybe not necessary?
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + Clone + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + Clone + fmt::Debug,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + Clone + fmt::Debug,
 {
     pub(crate) async fn create(
         universe: Universe<C, GS>,
-        initial_members: &[(GroupMember<MemberId>, Access<()>)],
+        initial_members: &[(GroupMember<ActorId>, Access<()>)],
     ) -> Result<(Document<C, GS>, DocumentState<GS>), DocumentError> {
         // TODO: Here something happens with deriving a group id.
-        let document_id = MemberId(PrivateKey::new().public_key());
+        let document_id = ActorId(PrivateKey::new().public_key());
 
         let auth_state = {
             let universe = universe.inner.read().await;
@@ -207,21 +207,21 @@ where
     // We call this after receiving a CREATE or ADD which brings us into a document.
     pub(crate) fn from_welcome(
         &self,
-        _group_id: MemberId,
+        _group_id: ActorId,
         _group_store_state: GS::State,
         _orderer: OrdererState,
     ) -> Result<AuthGroupState<GS>, DocumentError> {
         todo!()
     }
 
-    pub fn id(&self) -> MemberId {
+    pub fn id(&self) -> ActorId {
         self.document_id
     }
 
     pub fn add(
         &self,
         y: AuthGroupState<GS>,
-        added: GroupMember<MemberId>,
+        added: GroupMember<ActorId>,
         access: Access<()>,
     ) -> Result<AuthGroupState<GS>, DocumentError> {
         // TODO: Basic checks here? Is this member already part of the group, do we try to add
@@ -261,18 +261,18 @@ pub enum UniverseMessage {
 
 pub struct InnerUniverse<C, GS>
 where
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    pub(crate) my_id: MemberId,
+    pub(crate) my_id: ActorId,
 
     // Here we have _all_ groups EXCEPT "root groups" / documents.
-    pub(crate) groups: HashMap<MemberId, AuthGroupState<GS>>,
+    pub(crate) groups: HashMap<ActorId, AuthGroupState<GS>>,
 
     // Here we have all "root groups" / documents, no "sub groups".
-    pub(crate) documents: HashMap<MemberId, DocumentState<GS>>,
+    pub(crate) documents: HashMap<ActorId, DocumentState<GS>>,
 
     // Key bundles.
-    pub(crate) key_registry: KeyRegistryState<MemberId>,
+    pub(crate) key_registry: KeyRegistryState<ActorId>,
 
     pub(crate) store: GS,
 
@@ -287,7 +287,7 @@ where
 pub struct Universe<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
 }
@@ -295,7 +295,7 @@ where
 impl<C, GS> Universe<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug + Clone,
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     pub fn new(store: GS, group_store_state: GS::State) -> Self {
         // ... observes messages on the network (scoped by topic id)
@@ -336,7 +336,7 @@ where
         // - Extra rules around what to process first
 
         // TODO: Get private key from the outside.
-        let my_id = MemberId(PrivateKey::new().public_key());
+        let my_id = ActorId(PrivateKey::new().public_key());
 
         let orderer = OrdererState {};
 
@@ -356,7 +356,7 @@ where
 
     pub async fn create_document(
         &mut self,
-        initial_members: &[(GroupMember<MemberId>, Access<()>)],
+        initial_members: &[(GroupMember<ActorId>, Access<()>)],
     ) -> Result<Document<C, GS>, UniverseError> {
         let (document, y_doc) = Document::create(self.clone(), initial_members).await?;
 
@@ -385,7 +385,7 @@ where
 
 impl<C, GS> Clone for Universe<C, GS>
 where
-    GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -404,13 +404,13 @@ pub enum UniverseError {
 pub enum DocumentError
 // where
 // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
-// GS: GroupStore<MemberId, AuthGroupStateInner> + fmt::Debug + Clone,
+// GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
     // TODO: We're hiding the error message here.
     // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
     // overflows Rust.
     // #[error("group error occurred")]
-    // Group(GroupError<MemberId, MessageId, AuthResolver, Orderer<GS>, GS>),
+    // Group(GroupError<ActorId, MessageId, AuthResolver, Orderer<GS>, GS>),
 }
 
 #[cfg(test)]
@@ -424,7 +424,7 @@ mod tests {
     // use p2panda_auth::group::resolver::GroupResolver;
     use p2panda_auth::traits::GroupStore;
 
-    use super::{AuthGroupStateInner, MemberId, Universe};
+    use super::{ActorId, AuthGroupStateInner, Universe};
 
     #[derive(Debug, Clone)]
     pub struct SqliteStore;
@@ -435,7 +435,7 @@ mod tests {
         }
     }
 
-    impl GroupStore<MemberId, AuthGroupStateInner> for SqliteStore {
+    impl GroupStore<ActorId, AuthGroupStateInner> for SqliteStore {
         type State = ();
 
         type Error = Infallible;
@@ -443,7 +443,7 @@ mod tests {
         // TODO: No writes here.
         fn insert(
             _y: Self::State,
-            _id: &MemberId,
+            _id: &ActorId,
             _group: &AuthGroupStateInner,
         ) -> Result<Self::State, Self::Error> {
             todo!()
@@ -451,7 +451,7 @@ mod tests {
 
         fn get(
             _y: &Self::State,
-            _id: &MemberId,
+            _id: &ActorId,
         ) -> Result<Option<AuthGroupStateInner>, Self::Error> {
             todo!()
         }
