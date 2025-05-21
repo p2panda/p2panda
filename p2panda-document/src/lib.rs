@@ -140,12 +140,16 @@ impl AuthOperation<ActorId, MessageId, AuthControlMessage> for DocumentMessage {
 // Document
 // ~~~~~~~~
 
+// This is merely a "pointer" at a document through holding it's id. On top this struct also has
+// access to the "universe". This allows us to build a nice API where the users can handle objects
+// like groups or documents independently while we internally handle all state inside the
+// "universe". Finally the user can "commit" the changed state of the universe to the database.
 pub struct Document<C, GS>
 where
     // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
     GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
-    document_id: ActorId,
+    id: ActorId,
     universe: Universe<C, GS>,
     _marker: PhantomData<C>,
 }
@@ -196,7 +200,7 @@ where
 
         Ok((
             Document {
-                document_id,
+                id: document_id,
                 universe,
                 _marker: PhantomData,
             },
@@ -215,36 +219,49 @@ where
     }
 
     pub fn id(&self) -> ActorId {
-        self.document_id
+        self.id
     }
 
-    pub fn add(
+    pub async fn add(
         &self,
-        y: AuthGroupState<GS>,
         added: GroupMember<ActorId>,
         access: Access<()>,
-    ) -> Result<AuthGroupState<GS>, DocumentError> {
+    ) -> Result<(), DocumentError> {
         // TODO: Basic checks here? Is this member already part of the group, do we try to add
         // ourselves, etc.?
 
-        let control_message = AuthControlMessage::GroupAction {
-            group_id: y.inner.group_id,
-            action: GroupAction::Add {
-                member: added,
-                // TODO: Access should use our C generic here.
-                access,
-            },
+        let mut universe = self.universe.inner.write().await;
+        let mut y_doc = universe
+            .documents
+            .remove(&self.id)
+            .ok_or(DocumentError::UnknownDocument(self.id))?;
+
+        let auth_state = {
+            let y = y_doc.auth_state;
+
+            let control_message = AuthControlMessage::GroupAction {
+                group_id: self.id,
+                action: GroupAction::Add {
+                    member: added,
+                    // TODO: Access should use our C generic here.
+                    access,
+                },
+            };
+
+            // TODO: Clone bound on RS and ORD in `prepare` is confusing.
+            // TODO: Prepare should not queue the operation for us (we don't need it inside the
+            // orderer).
+            // TODO: We can't handle the error yet (see `DocumentError`).
+            let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap();
+            let y_ii = AuthGroup::process(y_i, &operation).unwrap();
+            y_ii
         };
 
-        // TODO: Clone bound on RS and ORD in `prepare` is confusing.
-        // TODO: Prepare should not queue the operation for us (we don't need it inside the
-        // orderer).
-        // TODO: We can't handle the error yet (see `DocumentError`).
-        let (y_i, operation) = AuthGroup::prepare(y, &control_message).unwrap();
-        let y_ii = AuthGroup::process(y_i, &operation).unwrap();
-        // map_err(DocumentError::Group)?;
+        y_doc.auth_state = auth_state;
 
-        Ok(y_ii)
+        universe.documents.insert(self.id, y_doc);
+
+        Ok(())
     }
 }
 
@@ -329,7 +346,6 @@ where
         //
         // - We also observe published key bundle messages in the network. If they're not expired we
         // also store them in some sort of key registry.
-        // - TODO: Shouldn't this be handled outside as well? Across all "universes"?
 
         // Validation?
         //
@@ -406,6 +422,8 @@ pub enum DocumentError
 // RS: Resolver<AuthGroupState<RS, GS>, DocumentMessage> + fmt::Debug,
 // GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone,
 {
+    #[error("tried to access a document {0} which is not known to us")]
+    UnknownDocument(ActorId),
     // TODO: We're hiding the error message here.
     // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
     // overflows Rust.
@@ -462,6 +480,8 @@ mod tests {
     #[tokio::test]
     async fn it_works() {
         let store = SqliteStore::new();
+
+        // TODO: Make resolver generic again.
         // let resolver = GroupResolver::default();
 
         let mut universe = Universe::<Conditions, SqliteStore>::new(store, ());
