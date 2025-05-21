@@ -2,13 +2,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
-use petgraph::algo::toposort;
-use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
 use thiserror::Error;
 
-use crate::group::{GroupControlMessage, GroupMember, GroupState};
+use crate::group::{GroupControlMessage, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::{GroupAction, GroupStateInner};
@@ -38,7 +36,7 @@ where
 
     fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
-        let actor = operation.sender();
+        let _actor = operation.sender();
 
         // Sanity check.
         if control_message.group_id() != y.group_id {
@@ -171,7 +169,7 @@ where
                         };
 
                         if concurrent_operation.sender() == removed_member.id()
-                            && !operation.previous().contains(&concurrent_operation_id)
+                            && !operation.previous().contains(concurrent_operation_id)
                         {
                             if let GroupControlMessage::GroupAction { action, .. } =
                                 concurrent_operation.payload()
@@ -201,35 +199,54 @@ where
                     ..
                 } = action
                 {
-                    for concurrent_operation_id in bubble {
+                    for concurrent_operation_id in &bubble {
                         let Some(concurrent_operation) = y
                             .inner
                             .operations
                             .iter()
-                            .find(|op| op.id() == concurrent_operation_id)
+                            .find(|op| op.id() == *concurrent_operation_id)
                         else {
                             // TODO: Error: Operation is expected to exist.
                             panic!()
                         };
 
                         if concurrent_operation.sender() == demoted_member.id()
-                            && !operation.previous().contains(&concurrent_operation_id)
+                            && !operation.previous().contains(concurrent_operation_id)
                         {
                             if let GroupControlMessage::GroupAction { .. } =
                                 concurrent_operation.payload()
                             {
-                                filter.insert(concurrent_operation_id);
+                                filter.insert(*concurrent_operation_id);
                             }
                         }
                     }
                 }
             }
+
+            // Process a dependent action.
+            //
+            // Iterate over all concurrent operations in the bubble, finding any which include
+            // filtered operations in their `previous` field. Add those dependent operations to the
+            // filter.
+            for concurrent_operation_id in bubble {
+                let Some(concurrent_operation) = y
+                    .inner
+                    .operations
+                    .iter()
+                    .find(|op| op.id() == concurrent_operation_id)
+                else {
+                    // TODO: Error: Operation is expected to exist.
+                    panic!()
+                };
+
+                for previous_operation in concurrent_operation.previous() {
+                    if filter.contains(previous_operation) {
+                        filter.insert(concurrent_operation_id);
+                    }
+                }
+            }
         }
 
-        // TODO: Don't forget to filter all nodes which are dependent on filtered operations.
-        // get_dependent_operations()
-
-        // Set the new "ignore filter".
         y.inner.ignore = filter;
 
         Ok(y)
