@@ -15,7 +15,7 @@ use crate::traits::{
 };
 
 mod display;
-mod resolver;
+pub mod resolver;
 pub mod test_utils;
 mod tests;
 
