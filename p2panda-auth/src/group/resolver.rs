@@ -146,28 +146,29 @@ where
                 panic!()
             };
 
-            if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
-                // Process a remove action.
-                //
-                // Iterate over all actions that occurred concurrent to the remove and identify
-                // those authored by the removed member. Filter any action by the removed member,
-                // as long as it's 1) not a predecessor of the remove operation, and 2) not a
-                // mutual removal (removal of the remover by the removed member).
-                if let GroupAction::Remove {
-                    member: removed_member,
-                } = action
-                {
-                    for concurrent_operation_id in &bubble {
-                        let Some(concurrent_operation) = y
-                            .inner
-                            .operations
-                            .iter()
-                            .find(|op| op.id() == *concurrent_operation_id)
-                        else {
-                            // TODO: Error: Operation is expected to exist.
-                            panic!()
-                        };
+            // Iterate over all concurrent operations in the bubble.
+            for concurrent_operation_id in &bubble {
+                let Some(concurrent_operation) = y
+                    .inner
+                    .operations
+                    .iter()
+                    .find(|op| op.id() == *concurrent_operation_id)
+                else {
+                    // TODO: Error: Operation is expected to exist.
+                    panic!()
+                };
 
+                if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
+                    // Process a remove action.
+                    //
+                    // Iterate over all actions that occurred concurrent to the remove and identify
+                    // those authored by the removed member. Filter any action by the removed member,
+                    // as long as it's 1) not a predecessor of the remove operation, and 2) not a
+                    // mutual removal (removal of the remover by the removed member).
+                    if let GroupAction::Remove {
+                        member: removed_member,
+                    } = action
+                    {
                         if concurrent_operation.sender() == removed_member.id()
                             && !operation.previous().contains(concurrent_operation_id)
                         {
@@ -187,29 +188,17 @@ where
                             }
                         }
                     }
-                }
 
-                // Process a demote action.
-                //
-                // Iterate over all actions that occurred concurrent to the demote and identify
-                // those authored by the demoted member. Filter any action by the demoted member,
-                // as long as it's not a predecessor of the demote operation.
-                if let GroupAction::Demote {
-                    member: demoted_member,
-                    ..
-                } = action
-                {
-                    for concurrent_operation_id in &bubble {
-                        let Some(concurrent_operation) = y
-                            .inner
-                            .operations
-                            .iter()
-                            .find(|op| op.id() == *concurrent_operation_id)
-                        else {
-                            // TODO: Error: Operation is expected to exist.
-                            panic!()
-                        };
-
+                    // Process a demote action.
+                    //
+                    // Iterate over all actions that occurred concurrent to the demote and identify
+                    // those authored by the demoted member. Filter any action by the demoted member,
+                    // as long as it's not a predecessor of the demote operation.
+                    if let GroupAction::Demote {
+                        member: demoted_member,
+                        ..
+                    } = action
+                    {
                         if concurrent_operation.sender() == demoted_member.id()
                             && !operation.previous().contains(concurrent_operation_id)
                         {
@@ -221,27 +210,17 @@ where
                         }
                     }
                 }
-            }
 
-            // Process a dependent action.
-            //
-            // Iterate over all concurrent operations in the bubble, finding any which include
-            // filtered operations in their `previous` field. Add those dependent operations to the
-            // filter.
-            for concurrent_operation_id in bubble {
-                let Some(concurrent_operation) = y
-                    .inner
-                    .operations
-                    .iter()
-                    .find(|op| op.id() == concurrent_operation_id)
-                else {
-                    // TODO: Error: Operation is expected to exist.
-                    panic!()
-                };
-
+                // TODO(glyph): I'm not confident that the placement of this is correct.
+                //
+                // Process a dependent action.
+                //
+                // Iterate over all concurrent operations in the bubble, finding any which include
+                // filtered operations in their `previous` field. Add those dependent operations to the
+                // filter.
                 for previous_operation in concurrent_operation.previous() {
                     if filter.contains(previous_operation) {
-                        filter.insert(concurrent_operation_id);
+                        filter.insert(*concurrent_operation_id);
                     }
                 }
             }
