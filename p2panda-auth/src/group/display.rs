@@ -67,7 +67,7 @@ where
                 ..
             } = operation.payload()
             {
-                graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                graph = self.add_member_to_graph(operation_idx, &member, root.clone(), graph);
             }
 
             if let GroupControlMessage::GroupAction {
@@ -79,7 +79,7 @@ where
             } = operation.payload()
             {
                 for (member, access) in initial_members {
-                    graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                    graph = self.add_member_to_graph(operation_idx, &member, root.clone(), graph);
                 }
             }
 
@@ -106,7 +106,7 @@ where
                     .node_references()
                     .find(|(_, (op, _))| {
                         if let Some(op) = op {
-                            op == previous
+                            *op == previous
                         } else {
                             false
                         }
@@ -139,7 +139,7 @@ where
         if !previous.is_empty() {
             s += &format!(
                 "<TR><TD>previous</TD><TD>{}</TD></TR>",
-                self.format_dependencies(previous)
+                self.format_dependencies(&previous)
             );
         }
         let mut dependencies = operation.dependencies().clone();

@@ -13,11 +13,11 @@ pub trait Operation<ID, OP, P> {
     fn sender(&self) -> ID;
 
     /// Other operation dependencies.
-    fn dependencies(&self) -> &Vec<OP>;
+    fn dependencies(&self) -> Vec<OP>;
 
     /// The last graph tips in the group this operation belongs to.
-    fn previous(&self) -> &Vec<OP>;
+    fn previous(&self) -> Vec<OP>;
 
     /// Payload of this operation.
-    fn payload(&self) -> &P;
+    fn payload(&self) -> P;
 }
