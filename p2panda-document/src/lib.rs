@@ -18,18 +18,17 @@ use p2panda_auth::traits::{
 use p2panda_core::{Hash, Operation, PrivateKey, PublicKey};
 use p2panda_encryption::crypto::{SecretKey, XAeadNonce};
 use p2panda_encryption::data_scheme::{
-    ControlMessage as EncryptionControlMessage, DirectMessage as EncryptionDirectMessage,
+    ControlMessage as EncryptionControlMessage, DirectMessage as EncryptionDirectMessageGeneric,
     EncryptionGroup, EncryptionGroupError as EncryptionGroupErrorGeneric, GroupSecretId,
     GroupState as EncryptionGroupStateGeneric,
 };
 use p2panda_encryption::traits::{
     GroupMembership, GroupMessage as EncryptionMessage, GroupMessageType,
-    IdentityHandle as EncryptionIdentityHandle, IdentityManager, IdentityRegistry,
-    OperationId as EncryptionOperationId, Ordering as EncryptionOrdering, PreKeyManager,
-    PreKeyRegistry,
+    IdentityHandle as EncryptionIdentityHandle, IdentityRegistry,
+    OperationId as EncryptionOperationId, Ordering as EncryptionOrdering, PreKeyRegistry,
 };
 use p2panda_encryption::{
-    KeyManager, KeyManagerError, KeyManagerState, KeyRegistry as KeyRegistryInner,
+    KeyManager, KeyManagerError, KeyRegistry as KeyRegistryInner,
     KeyRegistryState as KeyRegistryStateInner, Lifetime, LongTermKeyBundle, Rng, RngError,
 };
 use serde::{Deserialize, Serialize};
@@ -179,11 +178,14 @@ pub type EncryptionGroupError<GS> = EncryptionGroupErrorGeneric<
     Orderer<GS>,
 >;
 
+pub type EncryptionDirectMessage =
+    EncryptionDirectMessageGeneric<ActorId, OperationId, EncryptionGroupManager>;
+
 // ~~~~~~~~~~~~~~
 // Encryption DGM
 // ~~~~~~~~~~~~~~
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EncryptionGroupManager {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,7 +203,8 @@ impl GroupMembership<ActorId, OperationId> for EncryptionGroupManager {
     type Error = Infallible;
 
     fn create(_my_id: ActorId, _initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
-        todo!()
+        // TODO: Noop?
+        Ok(EncryptionGroupManagerState::init())
     }
 
     fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
@@ -241,7 +244,9 @@ pub struct Orderer<GS> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OrdererState {}
+pub struct OrdererState {
+    my_id: ActorId,
+}
 
 impl<GS> AuthOrdering<ActorId, OperationId, AuthControlMessage> for Orderer<GS>
 where
@@ -258,11 +263,13 @@ where
         y: Self::State,
         control_message: &AuthControlMessage,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
+        let sender = y.my_id;
         Ok((
             y,
-            Message::Pre {
+            Message::PreAuth {
+                sender,
                 document_id: control_message.group_id(),
-                auth_control_message: Some(control_message.to_owned()),
+                control_message: control_message.to_owned(),
             },
         ))
     }
@@ -286,15 +293,19 @@ impl<GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Or
     type Message = Message;
 
     fn next_control_message(
-        _y: Self::State,
-        _control_message: &EncryptionControlMessage<ActorId>,
-        _direct_messages: &[EncryptionDirectMessage<
-            ActorId,
-            OperationId,
-            EncryptionGroupManager,
-        >],
+        y: Self::State,
+        control_message: &EncryptionControlMessage<ActorId>,
+        direct_messages: &[EncryptionDirectMessage],
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        todo!()
+        let sender = y.my_id;
+        Ok((
+            y,
+            Message::PreEncryption {
+                sender,
+                control_message: control_message.clone(),
+                direct_messages: direct_messages.to_vec(),
+            },
+        ))
     }
 
     fn next_application_message(
@@ -310,8 +321,9 @@ impl<GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Or
         todo!()
     }
 
-    fn set_welcome(_y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
-        todo!()
+    fn set_welcome(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
+        // TODO: Noop?
+        Ok(y)
     }
 
     fn next_ready_message(
@@ -327,9 +339,15 @@ impl<GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Or
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Pre {
+    PreAuth {
+        sender: ActorId,
         document_id: ActorId,
-        auth_control_message: Option<AuthControlMessage>,
+        control_message: AuthControlMessage,
+    },
+    PreEncryption {
+        sender: ActorId,
+        control_message: EncryptionControlMessage<ActorId>,
+        direct_messages: Vec<EncryptionDirectMessage>,
     },
     Signed(Operation<()>),
 }
@@ -337,18 +355,15 @@ pub enum Message {
 impl AuthMessage<ActorId, OperationId, AuthControlMessage> for Message {
     fn id(&self) -> OperationId {
         match self {
-            Message::Pre { .. } => {
-                unreachable!("should never call id on message in unsigned pre-state")
-            }
             Message::Signed(operation) => OperationId(operation.hash),
+            _ => unreachable!(),
         }
     }
 
     fn sender(&self) -> ActorId {
         match self {
-            Message::Pre { .. } => {
-                unreachable!("should never call sender on message in unsigned pre-state")
-            }
+            Message::PreAuth { sender, .. } => *sender,
+            Message::PreEncryption { .. } => unreachable!(),
             Message::Signed(operation) => ActorId(operation.header.public_key),
         }
     }
@@ -368,20 +383,26 @@ impl AuthMessage<ActorId, OperationId, AuthControlMessage> for Message {
 
 impl EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Message {
     fn id(&self) -> OperationId {
-        todo!()
+        match self {
+            Message::PreAuth { .. } => unreachable!(),
+            Message::PreEncryption { .. } => OperationId(Hash::new(b"pre")),
+            Message::Signed(operation) => OperationId(operation.hash),
+        }
     }
 
     fn sender(&self) -> ActorId {
-        todo!()
+        match self {
+            Message::PreAuth { .. } => unreachable!(),
+            Message::PreEncryption { sender, .. } => *sender,
+            Message::Signed(operation) => ActorId(operation.header.public_key),
+        }
     }
 
     fn message_type(&self) -> GroupMessageType<ActorId> {
         todo!()
     }
 
-    fn direct_messages(
-        &self,
-    ) -> Vec<EncryptionDirectMessage<ActorId, OperationId, EncryptionGroupManager>> {
+    fn direct_messages(&self) -> Vec<EncryptionDirectMessage> {
         todo!()
     }
 }
@@ -419,15 +440,15 @@ where
     GS: GroupStore<ActorId, AuthGroupStateInner> + Clone + fmt::Debug + 'static,
 {
     pub(crate) async fn create(
-        universe: Universe<C, GS>,
+        universe_owned: Universe<C, GS>,
         initial_members: &[(GroupMember<ActorId>, Access<()>)],
     ) -> Result<(Document<C, GS>, DocumentState<GS>), DocumentError<GS>> {
+        let universe = universe_owned.inner.read().await;
+
         // TODO: Here something happens with deriving a group id.
         let document_id = ActorId(PrivateKey::new().public_key());
 
-        let auth_state = {
-            let universe = universe.inner.read().await;
-
+        let (auth_state, auth_pre_message) = {
             let y = AuthGroupState::new(
                 universe.my_id,
                 document_id,
@@ -443,23 +464,14 @@ where
             };
 
             // TODO: We can't handle the error yet (see `DocumentError`).
-            let (y_i, pre) = AuthGroup::prepare(y, &control_message).unwrap(); //map_err(DocumentError::Group)?;
+            let (y_i, pre) = AuthGroup::prepare(y, &control_message).unwrap();
 
-            // TODO: Set up encryption state.
-
-            // TODO: Create & sign p2panda operation here.
-            // let operation = ...
-
-            let y_ii = AuthGroup::process(y_i, &pre).unwrap(); //.map_err(DocumentError::Group)?;
-
-            // TODO: Process encryption group as well.
-
-            y_ii
+            (y_i, pre)
         };
 
-        let encryption_state = {
-            let universe = universe.inner.read().await;
-
+        let (encryption_state, encryption_pre_message) = {
+            // Every document gets their own key manager, the identity secret is the same (cloned)
+            // but the pre-key will be different across documents.
             let my_keys = KeyManager::init(
                 &universe.identity_secret,
                 // TODO: Make lifetime configurable.
@@ -475,15 +487,34 @@ where
                 universe.orderer.clone(),
             );
 
-            let (y_ii, _) = EncryptionGroup::create(y, vec![], &universe.rng)?;
+            // Compute set of members who are part of the encryption group.
+            let initial_members = secret_members(initial_members);
 
-            y_ii
+            let (y_ii, pre) = EncryptionGroup::create(y, initial_members, &universe.rng)?;
+
+            (y_ii, pre)
         };
+
+        println!("{:?}", auth_pre_message);
+        println!("{:?}", encryption_pre_message);
+
+        // let (auth_state, pre_message) = {
+        //     // TODO: Create & sign p2panda operation here.
+        //     // let operation = ...
+        //
+        //     let y_ii = AuthGroup::process(y_i, &pre).unwrap();
+        //
+        //     // TODO: Process encryption group as well.
+        //
+        //     y_ii
+        // };
+
+        drop(universe);
 
         Ok((
             Document {
                 id: document_id,
-                universe,
+                universe: universe_owned,
                 _marker: PhantomData,
             },
             DocumentState {
@@ -548,6 +579,20 @@ where
 
         Ok(())
     }
+}
+
+fn secret_members(members: &[(GroupMember<ActorId>, Access<()>)]) -> Vec<ActorId> {
+    members
+        .iter()
+        .filter_map(|(member, access)| match access {
+            Access::Pull => None,
+            Access::Read | Access::Write { .. } | Access::Manage => match member {
+                GroupMember::Individual(id) => Some(id),
+                GroupMember::Group { id } => Some(id),
+            },
+        })
+        .cloned()
+        .collect()
 }
 
 // ~~~~~~~~
@@ -658,7 +703,7 @@ where
 
         let dgm = EncryptionGroupManagerState::init();
 
-        let orderer = OrdererState {};
+        let orderer = OrdererState { my_id };
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
