@@ -1,3 +1,109 @@
+//! # Notes
+//!
+//! - Users can create a "universe"
+//!     - A universe manages everything for that device
+//!     - It also manages our key material (identity secret and pre keys for encryption)
+//!     - This includes our regular p2panda private key for signing operations
+//!     - It creates & signs operations automatically for groups (system), key bundles (system) and
+//!     documents (system & application)
+//!     - A universe has an "actor id", this is how other's can add us (our "device") to groups or
+//!     documents
+//! - Users can create "groups"
+//!     - A group can be used to add members ("devices") or groups ("sub groups")
+//! - Users can create "documents"
+//!     - A document is a special group ("root group") which also manages encryption secrets
+//!     - The user needs to be part of that document (in the beginning)
+//!     - Application data can be encrypted inside a document and decrypted by other members
+//!     - Documents use "data scheme" encryption
+//!     - .. for "message scheme" we might want to introduce a new, separate thing
+//! - Users publish key bundles
+//!     - Universes manage the key material to generate bundles
+//!     - Universes observe the network for published bundles and keep track of them in some sort
+//!     of "address book" / key registry
+//! - How should members be addressed in the user-facing API?
+//!     - It's maybe too much to ask user's to know if it's an "individual" or "group"
+//!     - Better if one just gives an ActorId / PublicKey and the internal system figures out if it
+//!     belongs to a group or individual or is unknown
+//!     - The unknown case is when we either don't have a key bundle / member message or a group
+//!     message yet for that actor id
+//!     - .. that should probably be an error case? For documents we will fail anyhow as we can't
+//!     do much without a key bundle. For groups we might introduce bugs by addressing the actor
+//!     wrongly?
+//! - What events should the "universe" yield after calling `process` / `receive` on it with some
+//! operations?
+//!     - Learned about a new / updated member (observed key bundle)
+//!     - Learned about a new / updated group
+//!     - Learned about a new / updated document
+//!     - We need to publish a new pre key bundle
+//!     - We need to publish a new message (system- or application data)
+//!     - Decrypted application data
+//!     - Have we been invited somewhere to a document or group
+//!     - Have we been removed somewhere, from a document or group
+//!     - ...
+//! - Ideally the generated events should not all be in memory but we can pick them up after each
+//! other with an "stream consumer"
+//! - "Members" are the "leaves" of the group graph
+//!     - They can be addressed with an ActorId in the API
+//!     - We _can't_ add them to a group / document if we don't have a key bundle of them yet
+//!     - When adding a member to a group via it's actor id and the key bundle is expired /
+//!     inexistant we throw an error
+//!     - We need a way to calculate the "members", recursively when looking at a group, this is to
+//!     determine the encryption `initial_members` etc.
+//! - Universes observe the network for key bundles and automatically keep track of an key registry
+//!     - We should allow implementations where this registry can be searched / filtered / etc.?
+//!     - Maybe interesting for "address book" UIs
+//! - There should be a way to manually export and import key bundles for a member
+//!     - For example for cases where it got imported via scanning a QR code etc.
+//!     - .. not using p2panda
+//! - How are my own keys managed?
+//!     - A universe is basically one single device / identity / member. We shouldn't offer
+//!     managing multiple keys / identities within a universe, it would get too complicated too
+//!     fast for now (how to communicate to the user how to manage multiple identities etc.)
+//!     - When a universe gets created a new identity secret gets generated, the public identity
+//!     part (for encryption) is connected now to the regular public key (for signing operations /
+//!     identity handle)
+//!     - Pre-keys can be rotated at any time
+//!     - Some mechanism should exist which automatically generates new pre keys when the previous
+//!     one expired
+//!     - Users should be able to define the lifetime for their pre keys
+//! - Created groups do not need to include ourselves
+//! - Created documents need to include at least ourselves
+//! - The universe object should implement the `WriteToStore` trait, inside of that trait
+//! implementation we call the nested, other state objects, who also implement the same trait, like
+//! this we can make sure that the whole "state tree" gets written into the database, into
+//! different tables, all within one atomic transaction
+//!     - Users should not need to worry too much about state handling
+//!     - They only need to create a transaction object, write the universe state with it and
+//!     commit the transaction
+//!         - After receiving one or many operations and processing them
+//!         - After calling one or many methods (like "create document" or "add member to group" or
+//!         "rotate pre key", etc.)
+//!     - The universe will take a store object which needs to implement a whole bunch of
+//!     "read-only" store traits (for reading all sorts of states)
+//! - For now we can have a lot of state in memory
+//!     - Later we want to reduce as much memory use as possible, when it is not necessary to have
+//!     it around all the time
+//!     - Re-computing groups might not happen too often, for this it would be good to only load
+//!     required state into memory when we need to change something
+//!     - For access checks / authorization though we might need the state all the time, maybe we
+//!     can keep that part in memory (not the whole tree, just the merged state CRDT result?)
+//!     - For encryption we probably need to keep everything in memory as well, as applications
+//!     create and read data all the time
+//! - The orderer could live outside the universe and is rather part of the p2panda pipeline (with
+//! validation first, then orderer, then the universe, etc.)
+//! - Operations will have a bit of meta-data in the header extensions (like group id etc.)
+//!     - How do we require / crate these extensions while allowing adding more as well (for
+//!     application layer)
+//! - The universe should detect if somebody used an outdated pre key of us and we should reject it
+//!     - This is easy to do, we just need to regularily remove expired pre keys from our key
+//!     manager
+//! - How do we deal with document messages who arrive earlier than the key bundles?
+//!     - Processing them will fail (as we can't decrypt the X3DH ciphertext from the first 2SM round)
+//!     - Messages do not point at key bundles, that wouldn't anyway make sense as they can expire,
+//!     or in "message scheme" they are even one-time only
+//!     - We need another way to re-try as soon as that key bundle arrives
+//!         - Probably need to establish a "waiting room" for failed document messages. We have a
+//!         concrete error type when this happens (MissingPreKeys)
 #![allow(unused)]
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
@@ -958,14 +1064,6 @@ where
 
     pub fn process(&self) {
         // TODO
-
-        // TODO
-        // Yields events:
-        // - Has a group been created / updated
-        // - Has a document been created / updated
-        // - Have we been invited somewhere
-        // - Have we been removed somewhere
-        // - Did we receive some decrypted application data
     }
 }
 
