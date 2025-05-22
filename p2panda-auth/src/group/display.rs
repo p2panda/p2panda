@@ -67,7 +67,7 @@ where
                 ..
             } = operation.payload()
             {
-                graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                graph = self.add_member_to_graph(operation_idx, &member, root.clone(), graph);
             }
 
             if let GroupControlMessage::GroupAction {
