@@ -25,7 +25,7 @@ pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
 
 /// Serializable state of "data encryption" DCGKA (for persistence).
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+// #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct DcgkaState<ID, OP, PKI, DGM, KMG>
 where
     ID: IdentityHandle,

@@ -151,7 +151,7 @@
 //! Our implementation uses Signal's [X3DH](https://signal.org/docs/specifications/x3dh)
 //! key-agreement for initial rounds. This includes Signal's work around the
 //! [XEdDSA](https://signal.org/docs/specifications/xeddsa) signature schemes.
-mod crypto;
+pub mod crypto;
 #[cfg(any(test, feature = "data_scheme"))]
 pub mod data_scheme;
 mod key_bundle;
