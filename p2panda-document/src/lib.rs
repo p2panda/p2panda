@@ -15,7 +15,7 @@ use p2panda_auth::traits::{
     AuthGraph, GroupStore, IdentityHandle as AuthIdentityHandle, Operation as AuthMessage,
     OperationId as AuthOperationId, Ordering as AuthOrdering,
 };
-use p2panda_core::{Hash, Operation, PrivateKey, PublicKey};
+use p2panda_core::{Hash, PrivateKey, PublicKey};
 use p2panda_encryption::crypto::{SecretKey, XAeadNonce};
 use p2panda_encryption::data_scheme::{
     ControlMessage as EncryptionControlMessage, DirectMessage as EncryptionDirectMessageGeneric,
@@ -148,34 +148,34 @@ impl<'de> Deserialize<'de> for KeyRegistryState {
 // ~~~~~~~~~~~~~~~~
 
 // TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
-pub type AuthResolver = GroupResolver<ActorId, OperationId, Message>;
+pub type AuthResolver<C> = GroupResolver<ActorId, OperationId, Message<C>>;
 
-pub type AuthGroup<GS> = Group<ActorId, OperationId, AuthResolver, Orderer<GS>, GS>;
+pub type AuthGroup<C, GS> = Group<ActorId, OperationId, AuthResolver<C>, Orderer<C, GS>, GS>;
 
-pub type AuthGroupState<GS> =
-    AuthGroupStateGeneric<ActorId, OperationId, AuthResolver, Orderer<GS>, GS>;
+pub type AuthGroupState<C, GS> =
+    AuthGroupStateGeneric<ActorId, OperationId, AuthResolver<C>, Orderer<C, GS>, GS>;
 
 // TODO: This will probably be removed soon?
-pub type AuthGroupStateInner = GroupStateInner<ActorId, OperationId, Message>;
+pub type AuthGroupStateInner<C> = GroupStateInner<ActorId, OperationId, Message<C>>;
 
 pub type AuthControlMessage = GroupControlMessage<ActorId, OperationId>;
 
-pub type EncryptionGroupState<GS> = EncryptionGroupStateGeneric<
+pub type EncryptionGroupState<C, GS> = EncryptionGroupStateGeneric<
     ActorId,
     OperationId,
     KeyRegistry,
     EncryptionGroupManager,
     KeyManager,
-    Orderer<GS>,
+    Orderer<C, GS>,
 >;
 
-pub type EncryptionGroupError<GS> = EncryptionGroupErrorGeneric<
+pub type EncryptionGroupError<C, GS> = EncryptionGroupErrorGeneric<
     ActorId,
     OperationId,
     KeyRegistry,
     EncryptionGroupManager,
     KeyManager,
-    Orderer<GS>,
+    Orderer<C, GS>,
 >;
 
 pub type EncryptionDirectMessage =
@@ -239,8 +239,8 @@ impl GroupMembership<ActorId, OperationId> for EncryptionGroupManager {
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct Orderer<GS> {
-    _marker: PhantomData<GS>,
+pub struct Orderer<C, GS> {
+    _marker: PhantomData<(C, GS)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -248,16 +248,17 @@ pub struct OrdererState {
     my_id: ActorId,
 }
 
-impl<GS> AuthOrdering<ActorId, OperationId, AuthControlMessage> for Orderer<GS>
+impl<C, GS> AuthOrdering<ActorId, OperationId, AuthControlMessage> for Orderer<C, GS>
 where
+    C: fmt::Debug + Clone + 'static,
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     type State = OrdererState;
 
-    type Message = Message;
+    type Message = Message<C>;
 
-    type Error = DocumentError<GS>;
+    type Error = DocumentError<C, GS>;
 
     fn next_message(
         y: Self::State,
@@ -285,12 +286,12 @@ where
     }
 }
 
-impl<GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<GS> {
+impl<C, GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<C, GS> {
     type State = OrdererState;
 
     type Error = Infallible;
 
-    type Message = Message;
+    type Message = Message<C>;
 
     fn next_control_message(
         y: Self::State,
@@ -333,12 +334,48 @@ impl<GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Or
     }
 }
 
+// ~~~~~~~~~~~~~~
+// Fake Operation
+// ~~~~~~~~~~~~~~
+
+#[derive(Clone, Debug)]
+pub struct FakeHeader {
+    public_key: PublicKey,
+    extensions: DocumentExtensions,
+}
+
+#[derive(Clone, Debug)]
+pub struct FakeOperation<C> {
+    header: FakeHeader,
+    body: DocumentBody<C>,
+    hash: Hash,
+}
+
+#[derive(Clone, Debug)]
+pub enum DocumentControlMessage<C> {
+    Create {
+        initial_members: Vec<(ActorId, Access<C>)>,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct DocumentBody<C> {
+    control_message: DocumentControlMessage<C>,
+    direct_messages: Vec<EncryptionDirectMessage>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DocumentExtensions {
+    version: u64,
+    document_id: ActorId,
+}
+
 // ~~~~~~~
 // Message
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub enum Message {
+pub enum Message<C> {
     PreAuth {
         sender: ActorId,
         document_id: ActorId,
@@ -349,10 +386,13 @@ pub enum Message {
         control_message: EncryptionControlMessage<ActorId>,
         direct_messages: Vec<EncryptionDirectMessage>,
     },
-    Signed(Operation<()>),
+    Signed(FakeOperation<C>),
 }
 
-impl AuthMessage<ActorId, OperationId, AuthControlMessage> for Message {
+impl<C> AuthMessage<ActorId, OperationId, AuthControlMessage> for Message<C>
+where
+    C: Clone,
+{
     fn id(&self) -> OperationId {
         match self {
             Message::Signed(operation) => OperationId(operation.hash),
@@ -368,20 +408,42 @@ impl AuthMessage<ActorId, OperationId, AuthControlMessage> for Message {
         }
     }
 
-    fn dependencies(&self) -> &Vec<OperationId> {
-        todo!()
+    fn dependencies(&self) -> Vec<OperationId> {
+        vec![]
     }
 
-    fn previous(&self) -> &Vec<OperationId> {
-        todo!()
+    fn previous(&self) -> Vec<OperationId> {
+        vec![]
     }
 
-    fn payload(&self) -> &AuthControlMessage {
-        todo!()
+    fn payload(&self) -> AuthControlMessage {
+        let message = match self {
+            Message::Signed(operation) => match operation.body.control_message {
+                DocumentControlMessage::Create {
+                    ref initial_members,
+                } => AuthControlMessage::GroupAction {
+                    group_id: operation.header.extensions.document_id,
+                    action: GroupAction::Create {
+                        // TODO: Question how to bring back the group member type (individual or
+                        // sub group) back here from the message.
+                        //
+                        // We could encode it in the message, but it would still need to be checked
+                        // anyhow an receiving.
+                        //
+                        // Probably we want to ask the universe state here and resolve the types.
+                        initial_members: erase_generic_hack(&define_group_type_hack(
+                            initial_members,
+                        )),
+                    },
+                },
+            },
+            _ => unreachable!(),
+        };
+        message
     }
 }
 
-impl EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Message {
+impl<C> EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Message<C> {
     fn id(&self) -> OperationId {
         match self {
             Message::PreAuth { .. } => unreachable!(),
@@ -417,32 +479,35 @@ impl EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Message
 // "universe". Finally the user can "commit" the changed state of the universe to the database.
 pub struct Document<C, GS>
 where
+    C: fmt::Debug + Clone + 'static,
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     id: ActorId,
     universe: Universe<C, GS>,
     _marker: PhantomData<C>,
 }
 
-pub struct DocumentState<GS>
+pub struct DocumentState<C, GS>
 where
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
-    auth_state: AuthGroupState<GS>,
-    encryption_state: EncryptionGroupState<GS>,
+    auth_state: AuthGroupState<C, GS>,
+    encryption_state: EncryptionGroupState<C, GS>,
 }
 
 impl<C, GS> Document<C, GS>
 where
     // TODO: Clone and Debug bound for both RS and GS is maybe not necessary?
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + Clone + fmt::Debug,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + Clone + fmt::Debug + 'static,
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + Clone + fmt::Debug + 'static,
 {
     pub(crate) async fn create(
         universe_owned: Universe<C, GS>,
-        initial_members: &[(GroupMember<ActorId>, Access<()>)],
-    ) -> Result<(Document<C, GS>, DocumentState<GS>), DocumentError<GS>> {
+        initial_members: &[(GroupMember<ActorId>, Access<C>)],
+    ) -> Result<(Document<C, GS>, DocumentState<C, GS>), DocumentError<C, GS>> {
         let universe = universe_owned.inner.read().await;
 
         // TODO: Here something happens with deriving a group id.
@@ -459,7 +524,7 @@ where
             let control_message = AuthControlMessage::GroupAction {
                 group_id: document_id,
                 action: GroupAction::Create {
-                    initial_members: initial_members.to_vec(),
+                    initial_members: erase_generic_hack(initial_members),
                 },
             };
 
@@ -495,19 +560,46 @@ where
             (y_ii, pre)
         };
 
-        println!("{:?}", auth_pre_message);
-        println!("{:?}", encryption_pre_message);
+        let Message::PreAuth { document_id, .. } = auth_pre_message else {
+            unreachable!("method will always return a pre-auth message");
+        };
 
-        // let (auth_state, pre_message) = {
-        //     // TODO: Create & sign p2panda operation here.
-        //     // let operation = ...
-        //
-        //     let y_ii = AuthGroup::process(y_i, &pre).unwrap();
-        //
-        //     // TODO: Process encryption group as well.
-        //
-        //     y_ii
-        // };
+        let Message::PreEncryption {
+            direct_messages, ..
+        } = encryption_pre_message
+        else {
+            unreachable!("method will always return a pre-encryption message");
+        };
+
+        // TODO: Use real p2panda operations with extensions here & sign them.
+        let operation = {
+            let initial_members = erase_group_type(initial_members);
+
+            Message::Signed(FakeOperation {
+                header: FakeHeader {
+                    public_key: universe.my_id.0,
+                    extensions: DocumentExtensions {
+                        version: 1,
+                        document_id,
+                    },
+                },
+                body: DocumentBody {
+                    control_message: DocumentControlMessage::Create { initial_members },
+                    direct_messages,
+                },
+                hash: Hash::from_bytes(universe.rng.random_array()?),
+            })
+        };
+
+        let auth_state = {
+            let y_ii = AuthGroup::process(auth_state, &operation).unwrap();
+            y_ii
+        };
+
+        // TODO
+        // We don't process encryption state here as this happened inside the method already. We
+        // don't ack our own messages, on top the DGM is anyhow noop, so we can accept sending
+        // "pre" messages in the encryption process flow (TBC?).
 
         drop(universe);
 
@@ -530,7 +622,7 @@ where
         _group_id: ActorId,
         _group_store_state: GS::State,
         _orderer: OrdererState,
-    ) -> Result<AuthGroupState<GS>, DocumentError<GS>> {
+    ) -> Result<AuthGroupState<C, GS>, DocumentError<C, GS>> {
         todo!()
     }
 
@@ -542,7 +634,7 @@ where
         &self,
         added: GroupMember<ActorId>,
         access: Access<()>,
-    ) -> Result<(), DocumentError<GS>> {
+    ) -> Result<(), DocumentError<C, GS>> {
         // TODO: Basic checks here? Is this member already part of the group, do we try to add
         // ourselves, etc.?
 
@@ -581,20 +673,6 @@ where
     }
 }
 
-fn secret_members(members: &[(GroupMember<ActorId>, Access<()>)]) -> Vec<ActorId> {
-    members
-        .iter()
-        .filter_map(|(member, access)| match access {
-            Access::Pull => None,
-            Access::Read | Access::Write { .. } | Access::Manage => match member {
-                GroupMember::Individual(id) => Some(id),
-                GroupMember::Group { id } => Some(id),
-            },
-        })
-        .cloned()
-        .collect()
-}
-
 // ~~~~~~~~
 // Universe
 // ~~~~~~~~
@@ -608,7 +686,8 @@ pub enum UniverseMessage {
 
 pub struct InnerUniverse<C, GS>
 where
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     pub(crate) my_id: ActorId,
 
@@ -617,10 +696,10 @@ where
     pub(crate) identity_secret: SecretKey,
 
     // Here we have _all_ groups EXCEPT "root groups" / documents.
-    pub(crate) groups: HashMap<ActorId, AuthGroupState<GS>>,
+    pub(crate) groups: HashMap<ActorId, AuthGroupState<C, GS>>,
 
     // Here we have all "root groups" / documents, no "sub groups".
-    pub(crate) documents: HashMap<ActorId, DocumentState<GS>>,
+    pub(crate) documents: HashMap<ActorId, DocumentState<C, GS>>,
 
     // Key bundles.
     pub(crate) pki: KeyRegistryState,
@@ -641,22 +720,24 @@ where
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
 pub struct Universe<C, GS>
 where
+    C: fmt::Debug + Clone + 'static,
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
 }
 
 impl<C, GS> Universe<C, GS>
 where
+    C: fmt::Debug + Clone + 'static,
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug + Clone,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     pub fn new(
         private_key: PrivateKey,
         store: GS,
         group_store_state: GS::State,
-    ) -> Result<Self, UniverseError<GS>> {
+    ) -> Result<Self, UniverseError<C, GS>> {
         // ... observes messages on the network (scoped by topic id)
 
         // Orderer comes here!
@@ -725,8 +806,8 @@ where
 
     pub async fn create_document(
         &mut self,
-        initial_members: &[(GroupMember<ActorId>, Access<()>)],
-    ) -> Result<Document<C, GS>, UniverseError<GS>> {
+        initial_members: &[(GroupMember<ActorId>, Access<C>)],
+    ) -> Result<Document<C, GS>, UniverseError<C, GS>> {
         let (document, y_doc) = Document::create(self.clone(), initial_members).await?;
 
         let mut inner = self.inner.write().await;
@@ -754,7 +835,8 @@ where
 
 impl<C, GS> Clone for Universe<C, GS>
 where
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    C: fmt::Debug + Clone,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -764,22 +846,24 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum UniverseError<GS>
+pub enum UniverseError<C, GS>
 where
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     #[error("")]
-    Document(#[from] DocumentError<GS>),
+    Document(#[from] DocumentError<C, GS>),
 
     #[error(transparent)]
     Rng(#[from] RngError),
 }
 
 #[derive(Debug, Error)]
-pub enum DocumentError<GS>
+pub enum DocumentError<C, GS>
 where
+    C: fmt::Debug + Clone + 'static,
     // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
-    GS: GroupStore<ActorId, AuthGroupStateInner> + fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
     #[error("tried to access a document {0} which is not known to us")]
     UnknownDocument(ActorId),
@@ -788,12 +872,85 @@ where
     KeyManager(#[from] KeyManagerError),
 
     #[error("encryption group failed: {0}")]
-    EncryptionGroup(#[from] EncryptionGroupError<GS>),
+    EncryptionGroup(#[from] EncryptionGroupError<C, GS>),
+
+    #[error(transparent)]
+    Rng(#[from] RngError),
     // TODO: We're hiding the error message here.
     // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
     // overflows Rust.
     // #[error("group error occurred")]
     // Group(GroupError<ActorId, OperationId, AuthResolver, Orderer<GS>, GS>),
+}
+
+fn secret_members<C>(members: &[(GroupMember<ActorId>, Access<C>)]) -> Vec<ActorId> {
+    members
+        .iter()
+        .filter_map(|(member, access)| match access {
+            Access::Pull => None,
+            Access::Read | Access::Write { .. } | Access::Manage => match member {
+                GroupMember::Individual(id) => Some(id),
+                GroupMember::Group { id } => Some(id),
+            },
+        })
+        .cloned()
+        .collect()
+}
+
+fn erase_group_type<C>(members: &[(GroupMember<ActorId>, Access<C>)]) -> Vec<(ActorId, Access<C>)>
+where
+    C: Clone,
+{
+    members
+        .iter()
+        .map(|(member, access)| {
+            let member = match member {
+                GroupMember::Individual(id) => id,
+                GroupMember::Group { id } => id,
+            };
+            (member.to_owned(), access.to_owned())
+        })
+        .collect()
+}
+
+fn define_group_type_hack<C>(
+    members: &[(ActorId, Access<C>)],
+) -> Vec<(GroupMember<ActorId>, Access<C>)>
+where
+    C: Clone,
+{
+    members
+        .iter()
+        .map(|(member, access)| {
+            (
+                GroupMember::Individual(member.to_owned()),
+                access.to_owned(),
+            )
+        })
+        .collect()
+}
+
+// TODO: Manually erasing C generic here ..
+fn erase_generic_hack<C>(
+    members: &[(GroupMember<ActorId>, Access<C>)],
+) -> Vec<(GroupMember<ActorId>, Access<()>)> {
+    members
+        .iter()
+        .map(|(member, access)| {
+            (
+                member.to_owned(),
+                match access {
+                    Access::Pull => Access::Pull,
+                    Access::Read => Access::Read,
+                    Access::Write { .. } => Access::Write {
+                        conditions: Some(()),
+                    },
+                    Access::Manage => Access::Manage,
+                },
+            )
+        })
+        .collect::<Vec<(GroupMember<ActorId>, Access<()>)>>()
+        .to_vec()
 }
 
 #[cfg(test)]
@@ -819,24 +976,25 @@ mod tests {
         }
     }
 
-    impl GroupStore<ActorId, AuthGroupStateInner> for SqliteStore {
+    impl GroupStore<ActorId, AuthGroupStateInner<Conditions>> for SqliteStore {
         type State = ();
 
         type Error = Infallible;
 
         // TODO: No writes here.
         fn insert(
-            _y: Self::State,
+            y: Self::State,
             _id: &ActorId,
-            _group: &AuthGroupStateInner,
+            _group: &AuthGroupStateInner<Conditions>,
         ) -> Result<Self::State, Self::Error> {
-            todo!()
+            // TODO: Noop
+            Ok(y)
         }
 
         fn get(
             _y: &Self::State,
             _id: &ActorId,
-        ) -> Result<Option<AuthGroupStateInner>, Self::Error> {
+        ) -> Result<Option<AuthGroupStateInner<Conditions>>, Self::Error> {
             todo!()
         }
     }
