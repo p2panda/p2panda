@@ -1,14 +1,15 @@
+#![allow(unused)]
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::{self, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use p2panda_auth::group::resolver::GroupResolver;
 use p2panda_auth::group::{
-    Group, GroupAction, GroupControlMessage, GroupMember, GroupState as AuthGroupStateGeneric,
-    GroupStateInner,
+    Group as AuthGroupGeneric, GroupAction, GroupControlMessage, GroupMember,
+    GroupState as AuthGroupStateGeneric, GroupStateInner,
 };
 use p2panda_auth::group_crdt::Access;
 use p2panda_auth::traits::{
@@ -24,16 +25,18 @@ use p2panda_encryption::data_scheme::{
 };
 use p2panda_encryption::traits::{
     GroupMembership, GroupMessage as EncryptionMessage, GroupMessageType,
-    IdentityHandle as EncryptionIdentityHandle, IdentityRegistry,
-    OperationId as EncryptionOperationId, Ordering as EncryptionOrdering, PreKeyRegistry,
+    IdentityHandle as EncryptionIdentityHandle, IdentityManager, IdentityRegistry,
+    OperationId as EncryptionOperationId, Ordering as EncryptionOrdering, PreKeyManager,
+    PreKeyRegistry,
 };
 use p2panda_encryption::{
-    KeyManager, KeyManagerError, KeyRegistry as KeyRegistryInner,
-    KeyRegistryState as KeyRegistryStateInner, Lifetime, LongTermKeyBundle, Rng, RngError,
+    KeyManager as KeyManagerInner, KeyManagerError, KeyManagerState as KeyManagerStateInner,
+    KeyRegistry as KeyRegistryInner, KeyRegistryState as KeyRegistryStateInner, Lifetime,
+    LongTermKeyBundle, Rng, RngError,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 // ~~~~~~~~~~
 // Core types
@@ -66,9 +69,107 @@ impl AuthOperationId for OperationId {}
 
 impl EncryptionOperationId for OperationId {}
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Key manager & registry wrappers
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~
+// Key manager wrapper
+// ~~~~~~~~~~~~~~~~~~~
+
+// Variant of `KeyManager` which can be shared across threads.
+#[derive(Clone, Debug)]
+pub struct KeyManager;
+
+impl KeyManager {
+    pub fn init(
+        identity_secret: &SecretKey,
+        lifetime: Lifetime,
+        rng: &Rng,
+    ) -> Result<KeyManagerState, KeyManagerError> {
+        let inner = KeyManagerInner::init(identity_secret, lifetime, rng)?;
+        Ok(KeyManagerState {
+            inner: Arc::new(Mutex::new(Some(inner))),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct KeyManagerState {
+    inner: Arc<Mutex<Option<KeyManagerStateInner>>>,
+}
+
+impl IdentityManager<KeyManagerState> for KeyManager {
+    fn identity_secret(y: &KeyManagerState) -> &SecretKey {
+        // TODO: Can't return a mutex guard here.
+        todo!()
+    }
+}
+
+impl PreKeyManager for KeyManager {
+    type State = KeyManagerState;
+
+    type Error = KeyManagerError;
+
+    fn prekey_secret(y: &Self::State) -> &SecretKey {
+        // TODO: Can't return a mutex guard here.
+        todo!()
+    }
+
+    fn rotate_prekey(
+        y: Self::State,
+        lifetime: Lifetime,
+        rng: &Rng,
+    ) -> Result<Self::State, Self::Error> {
+        let mut inner = y.inner.lock().unwrap();
+        let y_inner = inner.take().expect("inner state");
+        let y_inner_ii = KeyManagerInner::rotate_prekey(y_inner, lifetime, rng)?;
+        *inner = Some(y_inner_ii);
+        drop(inner);
+        Ok(y)
+    }
+
+    fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
+        let inner = y.inner.lock().unwrap();
+        KeyManagerInner::prekey_bundle(inner.as_ref().expect("inner state"))
+    }
+
+    fn generate_onetime_bundle(
+        y: Self::State,
+        rng: &Rng,
+    ) -> Result<(Self::State, p2panda_encryption::OneTimeKeyBundle), Self::Error> {
+        unreachable!("no onetime pre-keys used in data encryption scheme")
+    }
+
+    fn use_onetime_secret(
+        y: Self::State,
+        id: p2panda_encryption::OneTimePreKeyId,
+    ) -> Result<(Self::State, Option<SecretKey>), Self::Error> {
+        unreachable!("no onetime pre-keys used in data encryption scheme")
+    }
+}
+
+impl Serialize for KeyManagerState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let inner = self.inner.lock().unwrap();
+        inner.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyManagerState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let inner = KeyManagerStateInner::deserialize(deserializer)?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(Some(inner))),
+        })
+    }
+}
+
+// ~~~~~~~~~~~~~~~~~~~~
+// Key registry wrapper
+// ~~~~~~~~~~~~~~~~~~~~
 
 // Variant of `KeyRegistry` which can be shared across threads.
 #[derive(Clone, Debug)]
@@ -96,7 +197,7 @@ impl PreKeyRegistry<ActorId, LongTermKeyBundle> for KeyRegistry {
         y: Self::State,
         id: &ActorId,
     ) -> Result<(Self::State, Option<LongTermKeyBundle>), Self::Error> {
-        let mut inner = y.inner.blocking_lock();
+        let mut inner = y.inner.lock().unwrap();
         let y_inner = inner.take().expect("inner key registry state to be given");
         let Ok((y_inner_ii, bundle)) = KeyRegistryInner::key_bundle(y_inner, id);
         *inner = Some(y_inner_ii);
@@ -112,7 +213,7 @@ impl IdentityRegistry<ActorId, KeyRegistryState> for KeyRegistry {
         y: &KeyRegistryState,
         id: &ActorId,
     ) -> Result<Option<p2panda_encryption::crypto::PublicKey>, Self::Error> {
-        let inner = y.inner.blocking_lock();
+        let inner = y.inner.lock().unwrap();
         let y_inner = inner
             .as_ref()
             .expect("inner key registry state to be given");
@@ -126,7 +227,7 @@ impl Serialize for KeyRegistryState {
     where
         S: serde::Serializer,
     {
-        let inner = self.inner.blocking_lock();
+        let inner = self.inner.lock().unwrap();
         inner.serialize(serializer)
     }
 }
@@ -150,7 +251,8 @@ impl<'de> Deserialize<'de> for KeyRegistryState {
 // TODO: Making the resolver generic causes an type cycle overflow, so we "hardcode" it here for now.
 pub type AuthResolver<C> = GroupResolver<ActorId, OperationId, Message<C>>;
 
-pub type AuthGroup<C, GS> = Group<ActorId, OperationId, AuthResolver<C>, Orderer<C, GS>, GS>;
+pub type AuthGroup<C, GS> =
+    AuthGroupGeneric<ActorId, OperationId, AuthResolver<C>, Orderer<C, GS>, GS>;
 
 pub type AuthGroupState<C, GS> =
     AuthGroupStateGeneric<ActorId, OperationId, AuthResolver<C>, Orderer<C, GS>, GS>;
@@ -186,16 +288,10 @@ pub type EncryptionDirectMessage =
 // ~~~~~~~~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct EncryptionGroupManager {}
+pub struct EncryptionGroupManager;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptionGroupManagerState {}
-
-impl EncryptionGroupManagerState {
-    pub fn init() -> Self {
-        Self {}
-    }
-}
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct EncryptionGroupManagerState;
 
 impl GroupMembership<ActorId, OperationId> for EncryptionGroupManager {
     type State = EncryptionGroupManagerState;
@@ -203,30 +299,29 @@ impl GroupMembership<ActorId, OperationId> for EncryptionGroupManager {
     type Error = Infallible;
 
     fn create(_my_id: ActorId, _initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
-        // TODO: Noop?
-        Ok(EncryptionGroupManagerState::init())
+        Ok(EncryptionGroupManagerState::default())
     }
 
-    fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
-        todo!()
+    fn from_welcome(_my_id: ActorId, y: Self::State) -> Result<Self::State, Self::Error> {
+        Ok(y)
     }
 
     fn add(
-        _y: Self::State,
+        y: Self::State,
         _adder: ActorId,
         _added: ActorId,
         _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
-        todo!()
+        Ok(y)
     }
 
     fn remove(
-        _y: Self::State,
+        y: Self::State,
         _remover: ActorId,
         _removed: &ActorId,
         _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
-        todo!()
+        Ok(y)
     }
 
     fn members(_y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
@@ -469,6 +564,30 @@ impl<C> EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Mess
     }
 }
 
+// ~~~~~
+// Group
+// ~~~~~
+
+pub struct Group<C, GS>
+where
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
+{
+    id: ActorId,
+    universe: Universe<C, GS>,
+    _marker: PhantomData<C>,
+}
+
+impl<C, GS> Group<C, GS>
+where
+    C: fmt::Debug + Clone + 'static,
+    GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
+{
+    pub fn id(&self) -> ActorId {
+        self.id
+    }
+}
+
 // ~~~~~~~~
 // Document
 // ~~~~~~~~
@@ -537,19 +656,12 @@ where
         let (encryption_state, encryption_pre_message) = {
             // Every document gets their own key manager, the identity secret is the same (cloned)
             // but the pre-key will be different across documents.
-            let my_keys = KeyManager::init(
-                &universe.identity_secret,
-                // TODO: Make lifetime configurable.
-                Lifetime::default(),
-                &universe.rng,
-            )?;
-
             let y = EncryptionGroup::init(
                 universe.my_id,
-                my_keys,
+                universe.my_keys.clone(), // TODO: Make key manager RCed
                 universe.pki.clone(),
-                universe.dgm.clone(),
-                universe.orderer.clone(),
+                universe.dgm.clone(),     // TODO: Make DGM RCed?
+                universe.orderer.clone(), // TODO: Make orderer RCed
             );
 
             // Compute set of members who are part of the encryption group.
@@ -695,6 +807,8 @@ where
 
     pub(crate) identity_secret: SecretKey,
 
+    pub(crate) my_keys: KeyManagerState,
+
     // Here we have _all_ groups EXCEPT "root groups" / documents.
     pub(crate) groups: HashMap<ActorId, AuthGroupState<C, GS>>,
 
@@ -779,18 +893,25 @@ where
 
         let my_id = ActorId(private_key.public_key());
 
-        // TODO: Secret key should be persisted and not newly generated every time.
         let identity_secret = SecretKey::from_rng(&rng)?;
 
-        let dgm = EncryptionGroupManagerState::init();
+        let dgm = EncryptionGroupManagerState::default();
 
         let orderer = OrdererState { my_id };
+
+        let my_keys = KeyManager::init(
+            &identity_secret,
+            // TODO: Make lifetime configurable.
+            Lifetime::default(),
+            &rng,
+        )?;
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
                 my_id,
                 private_key,
                 identity_secret,
+                my_keys,
                 groups: HashMap::new(),
                 documents: HashMap::new(),
                 pki: KeyRegistry::init(),
@@ -802,6 +923,11 @@ where
                 _marker: PhantomData,
             })),
         })
+    }
+
+    pub async fn id(&self) -> ActorId {
+        let inner = self.inner.read().await;
+        inner.my_id
     }
 
     pub async fn create_document(
@@ -816,8 +942,18 @@ where
         Ok(document)
     }
 
-    pub fn create_group(&self) {
-        // TODO
+    pub async fn create_group(
+        &mut self,
+        initial_members: &[(GroupMember<ActorId>, Access<C>)],
+    ) -> Result<Group<C, GS>, UniverseError<C, GS>> {
+        todo!();
+
+        // let (group, y_group) = Group::create(self.clone(), initial_members).await?;
+        //
+        // let mut inner = self.inner.write().await;
+        // inner.groups.insert(group.id(), y_group);
+        //
+        // Ok(group)
     }
 
     pub fn process(&self) {
@@ -851,8 +987,11 @@ where
     C: fmt::Debug + Clone + 'static,
     GS: GroupStore<ActorId, AuthGroupStateInner<C>> + fmt::Debug + Clone + 'static,
 {
-    #[error("")]
+    #[error(transparent)]
     Document(#[from] DocumentError<C, GS>),
+
+    #[error(transparent)]
+    KeyManager(#[from] KeyManagerError),
 
     #[error(transparent)]
     Rng(#[from] RngError),
@@ -871,7 +1010,7 @@ where
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 
-    #[error("encryption group failed: {0}")]
+    #[error(transparent)]
     EncryptionGroup(#[from] EncryptionGroupError<C, GS>),
 
     #[error(transparent)]
@@ -962,6 +1101,8 @@ mod tests {
     use std::convert::Infallible;
 
     // use p2panda_auth::group::resolver::GroupResolver;
+    use p2panda_auth::group::GroupMember;
+    use p2panda_auth::group_crdt::Access;
     use p2panda_auth::traits::GroupStore;
     use p2panda_core::PrivateKey;
 
@@ -1010,10 +1151,22 @@ mod tests {
         // TODO: Make resolver generic again.
         // let resolver = GroupResolver::default();
 
+        // A "universe" holding all state for alice's laptop!
         let mut universe =
             Universe::<Conditions, SqliteStore>::new(private_key, store, ()).unwrap();
 
-        let _document = universe.create_document(&[]).await.unwrap();
+        let alice = universe
+            .create_group(&[(GroupMember::Individual(universe.id().await), Access::Manage)])
+            .await
+            .unwrap();
+
+        let document = universe
+            .create_document(&[(
+                GroupMember::Group { id: alice.id() },
+                Access::Write { conditions: None },
+            )])
+            .await
+            .unwrap();
 
         // TODO: Later we want to do this (after a user action or processing).
         // universe.write(&mut tx).await.unwrap();
