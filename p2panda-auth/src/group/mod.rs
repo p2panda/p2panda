@@ -66,6 +66,18 @@ pub enum GroupMember<ID> {
     Group { id: ID },
 }
 
+impl<ID> GroupMember<ID>
+where
+    ID: Copy,
+{
+    pub fn id(&self) -> ID {
+        match self {
+            GroupMember::Individual(id) => *id,
+            GroupMember::Group { id, .. } => *id,
+        }
+    }
+}
+
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be applied to a group.
@@ -786,6 +798,7 @@ where
 
         // Apply every operation.
         for operation in y.inner.operations {
+            println!("{:?}", operation);
             let id = operation.id();
             let actor = operation.sender();
             let control_message = operation.payload();
@@ -795,8 +808,12 @@ where
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y.inner.group_id, group_id);
 
-            // Sanity check: the first operation must be a create.
-            assert!(!create_found && !control_message.is_create());
+            // Sanity check: the first operation must be a create and all other operations must not be.
+            if create_found {
+                assert!(!control_message.is_create())
+            } else {
+                assert!(control_message.is_create())
+            }
 
             create_found = true;
 
