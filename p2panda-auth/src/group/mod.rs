@@ -686,8 +686,12 @@ where
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y_i.group_id, group_id);
 
-            // Sanity check: the first operation must be a create.
-            assert!(!create_found && !control_message.is_create());
+            // Sanity check: the first operation must be a create and all other operations must not be.
+            if create_found {
+                assert!(!control_message.is_create())
+            } else {
+                assert!(control_message.is_create())
+            }
 
             create_found = true;
 
