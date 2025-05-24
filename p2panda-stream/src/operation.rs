@@ -63,7 +63,8 @@ where
                             // We observe a gap in the log and therefore can't validate the
                             // backlink yet.
                             OperationError::SeqNumNonIncremental(expected, given) => {
-                                return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, given - expected))
+                                let (result, overflow) = given.overflowing_sub(expected);
+                                return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, if overflow { expected } else { result }));
                             }
                             _ => unreachable!("other error cases have been handled before"),
                         }
