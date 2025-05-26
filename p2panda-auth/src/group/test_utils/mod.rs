@@ -12,7 +12,7 @@ pub use partial_ord::*;
 
 use crate::traits::{IdentityHandle, OperationId};
 
-use super::{Group, GroupState, GroupStateInner, resolver::GroupResolver};
+use super::{Group, GroupState, resolver::GroupResolver};
 
 impl IdentityHandle for char {}
 impl OperationId for u32 {}
@@ -25,11 +25,7 @@ pub type GenericTestResolver<ORD, GS> = GroupResolver<MemberId, MessageId, ORD, 
 pub type GenericTestGroup<RS, ORD, GS> = Group<MemberId, MessageId, RS, ORD, GS>;
 pub type GenericTestGroupState<RS, ORD, GS> = GroupState<MemberId, MessageId, RS, ORD, GS>;
 
-pub type TestResolver =
-    GenericTestResolver<TestOrderer, TestGroupStore<MemberId, TestGroupStateInner>>;
-pub type TestGroup =
-    GenericTestGroup<TestResolver, TestOrderer, TestGroupStore<MemberId, TestGroupStateInner>>;
+pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore<MemberId>>;
+pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
 pub type TestGroupState =
-    GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId, TestGroupStateInner>>;
-pub type TestGroupStateInner =
-    GroupStateInner<MemberId, MessageId, TestOperation<MemberId, MessageId>>;
+    GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
