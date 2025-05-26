@@ -14,7 +14,7 @@ impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {

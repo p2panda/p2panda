@@ -6,15 +6,16 @@ use std::error::Error;
 /// operations cause conflicts which require special handling.
 ///
 /// The generic parameter S is the state of the CRDT itself.
-pub trait Resolver<S, MSG> {
+pub trait Resolver<MSG> {
+    type State;
     type Error: Error;
 
     // Check if this message requires that a full state re-build takes place. This would usually
     // be due to concurrent operations arriving which require special handling.
-    fn rebuild_required(y: &S, msg: &MSG) -> bool;
+    fn rebuild_required(y: &Self::State, msg: &MSG) -> bool;
 
     // Process all operations and update internal state as required.
     //
     // This could include updating any internal filter object.
-    fn process(y: S) -> Result<S, Self::Error>;
+    fn process(y: Self::State) -> Result<Self::State, Self::Error>;
 }
