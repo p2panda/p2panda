@@ -216,7 +216,8 @@ where
 
 /// The state of a group, the local actor id, as well as state objects for the global
 /// group store and orderer.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct GroupState<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle,
@@ -245,8 +246,11 @@ where
     OP: OperationId + Ord,
     RS: Resolver<ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    // TODO: we only need clone on the orderer state for when we're constructing a new state in
+    // new_from_inner, look again if we can remove this bound once GroupStateInner is removed.
     ORD::State: Clone,
     GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    // TODO: same as above, try and remove later.
     GS::State: Clone,
 {
     /// Instantiate a new group state.
