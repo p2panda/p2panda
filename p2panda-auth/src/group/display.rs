@@ -19,7 +19,6 @@ where
     ORD::State: Clone,
     ORD::Message: Clone,
     GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
-    GS::State: Clone,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
     pub fn display(&self) -> String {

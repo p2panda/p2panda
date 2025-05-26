@@ -5,7 +5,7 @@ use rand::rngs::StdRng;
 
 use crate::group::GroupState;
 use crate::group::test_utils::{
-    Network, TestGroup, TestGroupState, TestGroupStoreState, TestOrdererState,
+    Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
 };
 use crate::group_crdt::Access;
 use crate::traits::AuthGraph;
@@ -16,10 +16,10 @@ use super::{GroupAction, GroupControlMessage, GroupMember};
 #[test]
 fn basic_group() {
     let alice = 'A';
-    let group_store_y = TestGroupStoreState::default();
+    let store = TestGroupStore::default();
     let rng = StdRng::from_os_rng();
-    let orderer_y = TestOrdererState::new(alice, group_store_y.clone(), rng);
-    let group_y = TestGroupState::new(alice, alice, group_store_y, orderer_y);
+    let orderer_y = TestOrdererState::new(alice, store.clone(), rng);
+    let group_y = TestGroupState::new(alice, alice, store, orderer_y);
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
@@ -161,25 +161,20 @@ fn nested_groups() {
     let alice_team_group = 'T';
 
     // The group store is shared state across all group instances.
-    let group_store_y = TestGroupStoreState::default();
+    let store = TestGroupStore::default();
     let rng = StdRng::from_os_rng();
-    let alice_orderer_y = TestOrdererState::new(alice, group_store_y.clone(), rng);
+    let alice_orderer_y = TestOrdererState::new(alice, store.clone(), rng);
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
         alice,
         alice_devices_group,
-        group_store_y.clone(),
+        store.clone(),
         alice_orderer_y.clone(),
     );
 
     // One team group instance.
-    let team_group_y = GroupState::new(
-        alice,
-        alice_team_group,
-        group_store_y.clone(),
-        alice_orderer_y,
-    );
+    let team_group_y = GroupState::new(alice, alice_team_group, store.clone(), alice_orderer_y);
 
     // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
     let control_message_001 = GroupControlMessage::GroupAction {
