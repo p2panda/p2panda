@@ -49,10 +49,7 @@ where
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
         for operation in &self.operations {
-            graph.add_node((
-                Some(operation.id()),
-                self.format_operation(&root, operation),
-            ));
+            graph.add_node((Some(operation.id()), self.format_operation(operation)));
 
             let (operation_idx, _) = graph
                 .node_references()
@@ -81,7 +78,7 @@ where
                 ..
             } = operation.payload()
             {
-                for (member, access) in initial_members {
+                for (member, _) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
                 }
             }
@@ -122,7 +119,7 @@ where
         graph
     }
 
-    fn format_operation(&self, root: &Self, operation: &ORD::Message) -> String {
+    fn format_operation(&self, operation: &ORD::Message) -> String {
         let control_message = operation.payload();
         let mut s = String::new();
 
