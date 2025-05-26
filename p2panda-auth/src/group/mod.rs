@@ -186,11 +186,11 @@ where
     /// Operation graph for this group.
     pub graph: DiGraphMap<OP, ()>,
 
-    /// All groups known to this instance.
-    pub group_store_y: GS::State,
-
     /// State for the orderer.
     pub orderer_y: ORD::State,
+
+    /// All groups known to this instance.
+    pub group_store: GS,
 
     _phantom: PhantomData<RS>,
 }
@@ -204,7 +204,7 @@ where
     GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>>,
 {
     /// Instantiate a new group state.
-    fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
+    fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
             group_id,
@@ -212,7 +212,7 @@ where
             operations: Default::default(),
             ignore: Default::default(),
             graph: Default::default(),
-            group_store_y,
+            group_store,
             orderer_y,
             _phantom: PhantomData,
         }
@@ -458,7 +458,9 @@ where
         &self,
         id: ID,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        let y = GS::get(&self.group_store_y, &id)
+        let y = self
+            .group_store
+            .get(&id)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
         // We expect that groups are created and correctly present in the store before we process
@@ -520,9 +522,6 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Debug,
     ORD::Message: Clone,
     GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Debug,
-    // TODO: we clone group store state once in the code below (line 649), if we can work around
-    // that by adjusting the API then we could also remove this (final) Clone bound on state.
-    GS::State: Clone,
 {
     type State = GroupState<ID, OP, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP>;
@@ -629,7 +628,8 @@ where
         y.operations.push(operation.clone());
 
         // Update the group in the store.
-        y.group_store_y = GS::insert(y.group_store_y.clone(), &group_id, &y)
+        y.group_store
+            .insert(&group_id, &y)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
         Ok(y)

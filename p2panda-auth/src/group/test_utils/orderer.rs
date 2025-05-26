@@ -14,7 +14,7 @@ use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
     GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
-    TestGroupStore, TestGroupStoreState,
+    TestGroupStore,
 };
 
 #[derive(Debug, Error)]
@@ -28,17 +28,17 @@ pub struct TestOrdererState {
 #[derive(Clone, Debug)]
 pub struct TestOrdererStateInner {
     pub my_id: MemberId,
-    pub group_store_y: TestGroupStoreState<GroupId>,
+    pub group_store: TestGroupStore<GroupId>,
     pub orderer_y: PartialOrdererState<MessageId>,
     pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId>>,
     pub rng: StdRng,
 }
 
 impl TestOrdererState {
-    pub fn new(my_id: MemberId, group_store_y: TestGroupStoreState<GroupId>, rng: StdRng) -> Self {
+    pub fn new(my_id: MemberId, group_store: TestGroupStore<GroupId>, rng: StdRng) -> Self {
         let inner = TestOrdererStateInner {
             my_id,
-            group_store_y,
+            group_store,
             messages: Default::default(),
             orderer_y: PartialOrdererState::default(),
             rng,
@@ -81,13 +81,13 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
             let mut group_y = TestGroupState::new(
                 y_inner.my_id,
                 group_id,
-                y_inner.group_store_y.clone(),
+                y_inner.group_store.clone(),
                 y.clone(),
             );
 
             // If this isn't a create message, retrieve the current group state from the store.
             if !control_message.is_create() {
-                let y = TestGroupStore::get(&y_inner.group_store_y, &group_id)
+                let y = TestGroupStore::get(&y_inner.group_store, &group_id)
                     .expect("get group state from store")
                     .expect("group exists");
                 group_y = y;
