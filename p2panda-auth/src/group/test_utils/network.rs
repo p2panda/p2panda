@@ -234,9 +234,17 @@ impl Network {
 
     pub fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
         let member = self.members.get(member).expect("member exists");
-        let group_y =
-            TestGroupStore::get(&member.group_store_y, group_id).expect("group state exists");
-        group_y.unwrap()
+        let group_y = TestGroupStore::get(&member.group_store_y, group_id).unwrap();
+
+        match group_y {
+            Some(group_y) => group_y,
+            None => TestGroupState::new(
+                member.id,
+                *group_id,
+                member.group_store_y.clone(),
+                member.orderer_y.clone(),
+            ),
+        }
     }
 
     fn set_y(&mut self, y: TestGroupState) {
