@@ -611,7 +611,7 @@ where
                     operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
-                    action,
+                    &action,
                 )?;
             }
             // No action required as revokes would have triggered a rebuild in the previous step.
@@ -738,7 +738,7 @@ where
                     id,
                     GroupMember::Individual(actor),
                     &previous_operations,
-                    action,
+                    &action,
                 )?,
                 // No action required as revokes were already processed and the `ignore` field populated.
                 GroupControlMessage::Revoke { .. } => y_i,

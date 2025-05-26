@@ -106,7 +106,7 @@ where
                     .node_references()
                     .find(|(_, (op, _))| {
                         if let Some(op) = op {
-                            op == previous
+                            *op == previous
                         } else {
                             false
                         }
@@ -139,7 +139,7 @@ where
         if !previous.is_empty() {
             s += &format!(
                 "<TR><TD>previous</TD><TD>{}</TD></TR>",
-                self.format_dependencies(previous)
+                self.format_dependencies(&previous)
             );
         }
         let mut dependencies = operation.dependencies().clone();
@@ -269,7 +269,7 @@ where
     fn add_member_to_graph(
         &self,
         operation_idx: NodeIndex,
-        member: &GroupMember<ID>,
+        member: GroupMember<ID>,
         root: Self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
@@ -279,7 +279,7 @@ where
                 graph.add_edge(operation_idx, idx, "member".to_string());
             }
             GroupMember::Group { id } => {
-                let sub_group = self.get_sub_group(*id).unwrap();
+                let sub_group = self.get_sub_group(id).unwrap();
                 graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
 
                 let create_operation = sub_group

@@ -230,15 +230,15 @@ where
         self.sender
     }
 
-    fn dependencies(&self) -> &Vec<OP> {
-        &self.dependencies
+    fn dependencies(&self) -> Vec<OP> {
+        self.dependencies.clone()
     }
 
-    fn previous(&self) -> &Vec<OP> {
-        &self.previous
+    fn previous(&self) -> Vec<OP> {
+        self.previous.clone()
     }
 
-    fn payload(&self) -> &GroupControlMessage<ID, OP> {
-        &self.payload
+    fn payload(&self) -> GroupControlMessage<ID, OP> {
+        self.payload.clone()
     }
 }
