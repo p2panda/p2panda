@@ -14,6 +14,7 @@ use crate::traits::{
     AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
 
+#[cfg(test)]
 mod display;
 mod resolver;
 #[cfg(test)]
