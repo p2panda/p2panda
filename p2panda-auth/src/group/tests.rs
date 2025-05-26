@@ -641,7 +641,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
 #[test]
 fn transitive_members() {
     let rng = StdRng::from_os_rng();
-    let (network, operations) = test_groups(rng);
+    let (network, _) = test_groups(rng);
 
     let expected_bob_devices_group_direct_members = vec![
         (GroupMember::Individual(BOB), Access::Manage),

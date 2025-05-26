@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+#![allow(dead_code)]
 
 use std::error::Error;
 
-use crate::traits::Ordering;
-
-use super::{IdentityHandle, OperationId};
+use crate::traits::{IdentityHandle, OperationId, Ordering};
 
 /// Interface for implementing an "auth graph".
 ///

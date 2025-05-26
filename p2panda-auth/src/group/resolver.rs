@@ -54,13 +54,11 @@ where
                 // Any revoke message requires a re-build.
                 true
             }
-            GroupControlMessage::GroupAction { action, .. } => {
+            GroupControlMessage::GroupAction { .. } => {
                 if is_concurrent {
-                    match action {
-                        // TODO: Implement logic for detecting when concurrent actions should
-                        // trigger a re-build.
-                        _ => false,
-                    }
+                    // TODO: Implement logic for detecting when concurrent actions should
+                    // trigger a re-build.
+                    false
                 } else {
                     false
                 }
