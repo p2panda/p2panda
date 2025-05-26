@@ -12,11 +12,14 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 
 impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
-    ID: IdentityHandle + Display + Ord,
-    OP: OperationId + Display + Ord,
+    ID: IdentityHandle + Ord + Display,
+    OP: OperationId + Ord + Display,
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
+    ORD::State: Clone,
+    ORD::Message: Clone,
+    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Clone + Debug,
+    GS::State: Clone,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
     pub fn display(&self) -> String {

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error;
-use std::fmt::Debug;
 
-use crate::traits::{Ordering, Resolver};
+use crate::traits::Ordering;
 
 use super::{IdentityHandle, OperationId};
 
@@ -19,11 +18,10 @@ use super::{IdentityHandle, OperationId};
 pub trait AuthGraph<ID, OP, RS, ORD>
 where
     ID: IdentityHandle,
-    OP: OperationId + Ord,
-    RS: Clone + Resolver<ORD::Message>,
-    ORD: Clone + Ordering<ID, OP, Self::Action>,
+    OP: OperationId,
+    ORD: Ordering<ID, OP, Self::Action>,
 {
-    type State: Clone + Debug;
+    type State;
     type Action;
     type Error: Error;
 

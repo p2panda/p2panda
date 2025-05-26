@@ -25,8 +25,11 @@ impl<ID, OP, ORD, GS> Resolver<ORD::Message> for GroupResolver<ID, OP, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
+    ORD::Message: Clone,
+    ORD::State: Clone,
+    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Clone + Debug,
+    GS::State: Clone,
 {
     type State = GroupState<ID, OP, Self, ORD, GS>;
     type Error = GroupResolverError;
@@ -102,6 +105,6 @@ mod tests {
                 GroupStateInner<MemberId, MessageId, TestOperation<MemberId, MessageId>>,
             >,
         > = AuthGroupState::new('A', 'B', store_y, orderer_y);
-        let _group_y_i = AuthGroup::rebuild(&group_y).unwrap();
+        let _group_y_i = AuthGroup::rebuild(group_y).unwrap();
     }
 }

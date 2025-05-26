@@ -177,8 +177,7 @@ where
 pub struct GroupStateInner<ID, OP, MSG>
 where
     ID: IdentityHandle,
-    OP: OperationId + Ord,
-    MSG: Clone,
+    OP: OperationId,
 {
     // ID of the group.
     pub group_id: ID,
@@ -202,7 +201,6 @@ impl<ID, OP, MSG> GroupStateInner<ID, OP, MSG>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    MSG: Clone,
 {
     pub fn new(group_id: ID) -> Self {
         GroupStateInner {
@@ -221,8 +219,7 @@ where
 pub struct GroupState<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle,
-    OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
+    OP: OperationId,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
@@ -243,11 +240,13 @@ where
 
 impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Display + Ord,
-    RS: Resolver<ORD::Message> + Clone + Debug,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    ORD::State: Clone,
+    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    GS::State: Clone,
 {
     /// Instantiate a new group state.
     fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
@@ -270,7 +269,12 @@ where
     /// easier to instantiate a new group state which will have the same actor id, orderer state
     /// and store state but different inner group state.
     fn new_from_inner(&self, inner: GroupStateInner<ID, OP, ORD::Message>) -> Self {
-        let mut state = self.clone();
+        let mut state = Self::new(
+            self.my_id,
+            self.inner.group_id,
+            self.group_store_y.clone(),
+            self.orderer_y.clone(),
+        );
         state.inner = inner;
         state
     }
@@ -573,10 +577,13 @@ pub struct Group<ID, OP, RS, ORD, GS> {
 impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
-    OP: OperationId + Display + Ord,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    OP: OperationId + Ord + Display,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Debug,
+    ORD::State: Clone,
+    ORD::Message: Clone,
+    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Debug,
+    GS::State: Clone,
 {
     type State = GroupState<ID, OP, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP>;
@@ -657,7 +664,7 @@ where
             y.inner.operations.push(operation.clone());
 
             // Perform the re-build and return the new state.
-            return Self::rebuild(&y);
+            return Self::rebuild(y);
         }
 
         // Compute the members state by applying the new operation to it's claimed "previous"
@@ -699,10 +706,13 @@ where
 impl<ID, OP, RS, ORD, GS> Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
-    OP: OperationId + Display + Ord,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
+    OP: OperationId + Ord + Display,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Debug,
+    ORD::State: Clone,
+    ORD::Message: Clone,
+    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Debug,
+    GS::State: Clone,
 {
     /// Apply an action to a single group state.
     fn apply_action(
@@ -766,11 +776,11 @@ where
     }
 
     fn rebuild(
-        y: &GroupState<ID, OP, RS, ORD, GS>,
+        y: GroupState<ID, OP, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
         // Process the group state with the provided resolver. This will populate the set of
         // messages which should be ignored when applying group control messages.
-        let y = RS::process(y.clone()).map_err(|error| GroupError::ResolverError(error))?;
+        let y = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
         // Re-build the group state.
         let mut y_i = GroupState::new(
