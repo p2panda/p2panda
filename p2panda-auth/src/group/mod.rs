@@ -26,7 +26,7 @@ pub enum GroupError<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message>,
+    RS: Resolver<ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
@@ -222,7 +222,7 @@ pub struct GroupState<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<Self, ORD::Message>,
+    RS: Resolver<ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
@@ -245,7 +245,7 @@ impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
+    RS: Resolver<ORD::Message> + Clone + Debug,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
@@ -574,7 +574,7 @@ impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, 
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
@@ -700,7 +700,7 @@ impl<ID, OP, RS, ORD, GS> Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {

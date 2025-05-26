@@ -17,21 +17,21 @@ pub enum GroupResolverError {}
 
 /// Resolver for group membership auth graph.
 #[derive(Clone, Debug, Default)]
-pub struct GroupResolver<ID, OP, MSG> {
-    _phantom: PhantomData<(ID, OP, MSG)>,
+pub struct GroupResolver<ID, OP, ORD, GS> {
+    _phantom: PhantomData<(ID, OP, ORD, GS)>,
 }
 
-impl<ID, OP, ORD, GS> Resolver<GroupState<ID, OP, Self, ORD, GS>, ORD::Message>
-    for GroupResolver<ID, OP, ORD::Message>
+impl<ID, OP, ORD, GS> Resolver<ORD::Message> for GroupResolver<ID, OP, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
+    type State = GroupState<ID, OP, Self, ORD, GS>;
     type Error = GroupResolverError;
 
-    fn rebuild_required(y: &GroupState<ID, OP, Self, ORD, GS>, operation: &ORD::Message) -> bool {
+    fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
         let control_message = operation.payload();
 
         // Sanity check.
@@ -67,10 +67,41 @@ where
         }
     }
 
-    fn process(
-        y: GroupState<ID, OP, Self, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
+    fn process(y: Self::State) -> Result<Self::State, Self::Error> {
         // TODO: Implement resolver logic.
         Ok(y)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    use crate::group::resolver::GroupResolver;
+    use crate::group::test_utils::{
+        MemberId, MessageId, TestGroupStore, TestGroupStoreState, TestOperation, TestOrderer,
+        TestOrdererState, TestResolver,
+    };
+    use crate::group::{Group, GroupState, GroupStateInner};
+
+    #[test]
+    fn trait_definition_not_recursive() {
+        type AuthResolver<ORD, GS> = GroupResolver<MemberId, MessageId, ORD, GS>;
+        type AuthGroup<ORD, GS> = Group<MemberId, MessageId, AuthResolver<ORD, GS>, ORD, GS>;
+        type AuthGroupState<RS, ORD, GS> = GroupState<MemberId, MessageId, RS, ORD, GS>;
+
+        let rng = StdRng::from_os_rng();
+        let store_y = TestGroupStoreState::default();
+        let orderer_y = TestOrdererState::new('A', store_y.clone(), rng);
+        let group_y: AuthGroupState<
+            TestResolver,
+            TestOrderer,
+            TestGroupStore<
+                MemberId,
+                GroupStateInner<MemberId, MessageId, TestOperation<MemberId, MessageId>>,
+            >,
+        > = AuthGroupState::new('A', 'B', store_y, orderer_y);
+        let _group_y_i = AuthGroup::rebuild(&group_y).unwrap();
     }
 }

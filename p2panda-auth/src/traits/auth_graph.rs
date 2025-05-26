@@ -20,7 +20,7 @@ pub trait AuthGraph<ID, OP, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Clone + Resolver<Self::State, ORD::Message>,
+    RS: Clone + Resolver<ORD::Message>,
     ORD: Clone + Ordering<ID, OP, Self::Action>,
 {
     type State: Clone + Debug;
