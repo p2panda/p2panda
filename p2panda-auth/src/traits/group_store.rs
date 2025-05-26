@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error;
-use std::fmt::Debug;
 
 use super::IdentityHandle;
 
@@ -10,8 +9,7 @@ pub trait GroupStore<ID, G>
 where
     ID: IdentityHandle,
 {
-    type State: Clone + Debug;
-
+    type State;
     type Error: Error;
 
     /// Insert a group state into the store.

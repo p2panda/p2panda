@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error;
-use std::fmt::Debug;
 
 use super::Operation;
 
@@ -9,10 +8,8 @@ use super::Operation;
 ///
 /// Messages have a sender id, a unique identifier and a generic payload.
 pub trait Ordering<ID, OP, P> {
-    type State: Clone + Debug;
-
-    type Message: Clone + Debug + Operation<ID, OP, P>;
-
+    type State;
+    type Message: Operation<ID, OP, P>;
     type Error: Error;
 
     /// Create a next message with generic payload based on current local state, relevant
