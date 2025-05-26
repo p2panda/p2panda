@@ -9,10 +9,10 @@ use thiserror::Error;
 
 use crate::traits::{GroupStore, IdentityHandle};
 
-use super::TestGroupStateInner;
+use super::TestGroupState;
 
 #[derive(Debug, Clone)]
-pub struct TestGroupStoreState<ID, G>(Rc<RefCell<HashMap<ID, G>>>)
+pub struct TestGroupStoreState<ID>(Rc<RefCell<HashMap<ID, TestGroupState>>>)
 where
     ID: IdentityHandle;
 
@@ -20,11 +20,11 @@ where
 pub enum GroupStoreError {}
 
 #[derive(Clone, Debug)]
-pub struct TestGroupStore<ID, G> {
-    phantom: PhantomData<(ID, G)>,
+pub struct TestGroupStore<ID> {
+    phantom: PhantomData<ID>,
 }
 
-impl<ID> Default for TestGroupStoreState<ID, TestGroupStateInner>
+impl<ID> Default for TestGroupStoreState<ID>
 where
     ID: IdentityHandle,
 {
@@ -33,22 +33,19 @@ where
     }
 }
 
-impl GroupStore<char, TestGroupStateInner> for TestGroupStore<char, TestGroupStateInner> {
-    type State = TestGroupStoreState<char, TestGroupStateInner>;
+impl GroupStore<char> for TestGroupStore<char> {
+    type State = TestGroupStoreState<char>;
+    type Group = TestGroupState;
 
     type Error = GroupStoreError;
 
-    fn get(y: &Self::State, id: &char) -> Result<Option<TestGroupStateInner>, Self::Error> {
+    fn get(y: &Self::State, id: &char) -> Result<Option<Self::Group>, Self::Error> {
         let store = y.0.borrow();
-        let inner = store.get(id);
-        Ok(inner.cloned())
+        let group_y = store.get(id);
+        Ok(group_y.cloned())
     }
 
-    fn insert(
-        y: Self::State,
-        id: &char,
-        group: &TestGroupStateInner,
-    ) -> Result<Self::State, Self::Error> {
+    fn insert(y: Self::State, id: &char, group: &Self::Group) -> Result<Self::State, Self::Error> {
         {
             let mut store = y.0.borrow_mut();
             store.insert(*id, group.clone());

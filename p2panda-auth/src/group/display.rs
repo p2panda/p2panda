@@ -7,7 +7,7 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState, GroupStateInner};
+use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
@@ -18,7 +18,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Message: Clone,
-    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Clone + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
     GS::State: Clone,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
@@ -48,7 +48,7 @@ where
         root: Self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
-        for operation in &self.inner.operations {
+        for operation in &self.operations {
             graph.add_node((
                 Some(operation.id()),
                 self.format_operation(&root, operation),
@@ -286,7 +286,6 @@ where
                 graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
 
                 let create_operation = sub_group
-                    .inner
                     .operations
                     .first()
                     .expect("create operation exists");

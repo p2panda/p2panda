@@ -9,8 +9,6 @@ use thiserror::Error;
 use crate::group::{GroupControlMessage, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
-use super::GroupStateInner;
-
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
 pub enum GroupResolverError {}
@@ -28,7 +26,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
-    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>> + Clone + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, Self, ORD, GS>> + Debug,
     GS::State: Clone,
 {
     type State = GroupState<ID, OP, Self, ORD, GS>;
@@ -38,7 +36,7 @@ where
         let control_message = operation.payload();
 
         // Sanity check.
-        if control_message.group_id() != y.inner.group_id {
+        if control_message.group_id() != y.group_id {
             panic!();
         }
 
@@ -83,10 +81,10 @@ mod tests {
 
     use crate::group::resolver::GroupResolver;
     use crate::group::test_utils::{
-        MemberId, MessageId, TestGroupStore, TestGroupStoreState, TestOperation, TestOrderer,
-        TestOrdererState, TestResolver,
+        MemberId, MessageId, TestGroupStore, TestGroupStoreState, TestOrderer, TestOrdererState,
+        TestResolver,
     };
-    use crate::group::{Group, GroupState, GroupStateInner};
+    use crate::group::{Group, GroupState};
 
     #[test]
     fn trait_definition_not_recursive() {
@@ -97,14 +95,8 @@ mod tests {
         let rng = StdRng::from_os_rng();
         let store_y = TestGroupStoreState::default();
         let orderer_y = TestOrdererState::new('A', store_y.clone(), rng);
-        let group_y: AuthGroupState<
-            TestResolver,
-            TestOrderer,
-            TestGroupStore<
-                MemberId,
-                GroupStateInner<MemberId, MessageId, TestOperation<MemberId, MessageId>>,
-            >,
-        > = AuthGroupState::new('A', 'B', store_y, orderer_y);
+        let group_y: AuthGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId>> =
+            AuthGroupState::new('A', 'B', store_y, orderer_y);
         let _group_y_i = AuthGroup::rebuild(group_y).unwrap();
     }
 }

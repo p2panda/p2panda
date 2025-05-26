@@ -11,8 +11,8 @@ use crate::group_crdt::Access;
 use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStateInner, TestGroupStore,
-    TestGroupStoreState, TestOperation, TestOrderer, TestOrdererState,
+    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestGroupStoreState,
+    TestOperation, TestOrderer, TestOrdererState,
 };
 
 pub struct Network {
@@ -23,7 +23,7 @@ pub struct Network {
 
 pub struct NetworkMember {
     id: MemberId,
-    group_store_y: TestGroupStoreState<MemberId, TestGroupStateInner>,
+    group_store_y: TestGroupStoreState<MemberId>,
     orderer_y: TestOrdererState,
 }
 
@@ -234,27 +234,16 @@ impl Network {
 
     pub fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
         let member = self.members.get(member).expect("member exists");
-
-        let group_y = TestGroupState::new(
-            member.id,
-            *group_id,
-            member.group_store_y.clone(),
-            member.orderer_y.clone(),
-        );
-
-        let group_y_inner = TestGroupStore::get(&member.group_store_y, group_id).unwrap();
-
-        match group_y_inner {
-            Some(group_y_inner) => group_y.new_from_inner(group_y_inner),
-            None => group_y,
-        }
+        let group_y =
+            TestGroupStore::get(&member.group_store_y, group_id).expect("group state exists");
+        group_y.unwrap()
     }
 
     fn set_y(&mut self, y: TestGroupState) {
         let member = self.members.get_mut(&y.my_id).expect("member exists");
 
         let group_store_y =
-            TestGroupStore::insert(member.group_store_y.clone(), &y.id(), &y.inner).unwrap();
+            TestGroupStore::insert(member.group_store_y.clone(), &y.id(), &y).unwrap();
         member.group_store_y = group_store_y;
     }
 }

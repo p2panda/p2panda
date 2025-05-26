@@ -17,19 +17,6 @@ pub struct PartialOrderer<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> PartialOrderer<T>
-where
-    T: PartialEq + Eq + StdHash,
-{
-    pub fn init() -> PartialOrdererState<T> {
-        PartialOrdererState {
-            ready: HashSet::new(),
-            ready_queue: VecDeque::new(),
-            pending: HashMap::new(),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PartialOrdererState<T>
 where
