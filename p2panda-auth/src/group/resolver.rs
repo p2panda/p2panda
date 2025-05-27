@@ -15,20 +15,21 @@ pub enum GroupResolverError {}
 
 /// Resolver for group membership auth graph.
 #[derive(Clone, Debug, Default)]
-pub struct GroupResolver<ID, OP, ORD, GS> {
-    _phantom: PhantomData<(ID, OP, ORD, GS)>,
+pub struct GroupResolver<ID, OP, C, ORD, GS> {
+    _phantom: PhantomData<(ID, OP, C, ORD, GS)>,
 }
 
-impl<ID, OP, ORD, GS> Resolver<ORD::Message> for GroupResolver<ID, OP, ORD, GS>
+impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for GroupResolver<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, Self, ORD, GS>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, Self, ORD, GS>> + Debug,
 {
-    type State = GroupState<ID, OP, Self, ORD, GS>;
+    type State = GroupState<ID, OP, C, Self, ORD, GS>;
     type Error = GroupResolverError;
 
     fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
@@ -84,9 +85,9 @@ mod tests {
 
     #[test]
     fn trait_definition_not_recursive() {
-        type AuthResolver<ORD, GS> = GroupResolver<MemberId, MessageId, ORD, GS>;
-        type AuthGroup<ORD, GS> = Group<MemberId, MessageId, AuthResolver<ORD, GS>, ORD, GS>;
-        type AuthGroupState<RS, ORD, GS> = GroupState<MemberId, MessageId, RS, ORD, GS>;
+        type AuthResolver<ORD, GS> = GroupResolver<MemberId, MessageId, (), ORD, GS>;
+        type AuthGroup<ORD, GS> = Group<MemberId, MessageId, (), AuthResolver<ORD, GS>, ORD, GS>;
+        type AuthGroupState<RS, ORD, GS> = GroupState<MemberId, MessageId, (), RS, ORD, GS>;
 
         let rng = StdRng::from_os_rng();
         let store = TestGroupStore::default();

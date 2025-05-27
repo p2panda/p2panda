@@ -10,15 +10,16 @@ use petgraph::visit::IntoNodeReferences;
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
-impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Clone + Debug,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Clone + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
     pub fn display(&self) -> String {
@@ -161,7 +162,7 @@ where
         s
     }
 
-    fn format_control_message(&self, message: &GroupControlMessage<ID, OP>) -> String {
+    fn format_control_message(&self, message: &GroupControlMessage<ID, OP, C>) -> String {
         let mut s = String::new();
         s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
 
