@@ -13,8 +13,7 @@ use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
-    TestGroupStore,
+    Conditions, GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState, TestGroupStore
 };
 
 #[derive(Debug, Error)]
@@ -30,7 +29,7 @@ pub struct TestOrdererStateInner {
     pub my_id: MemberId,
     pub group_store: TestGroupStore<GroupId>,
     pub orderer_y: PartialOrdererState<MessageId>,
-    pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId>>,
+    pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId, Conditions>>,
     pub rng: StdRng,
 }
 
@@ -56,12 +55,12 @@ impl TestOrdererState {
 #[derive(Clone, Debug, Default)]
 pub struct TestOrderer {}
 
-impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for TestOrderer {
+impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>> for TestOrderer {
     type State = TestOrdererState;
 
     type Error = OrdererError;
 
-    type Message = TestOperation<MemberId, MessageId>;
+    type Message = TestOperation<MemberId, MessageId, Conditions>;
 
     /// Construct the next operation which should include meta-data required for establishing order
     /// between different operations.
@@ -71,7 +70,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
     /// group graph, and also the tips of any sub-group graphs.
     fn next_message(
         y: Self::State,
-        control_message: &GroupControlMessage<MemberId, MessageId>,
+        control_message: &GroupControlMessage<MemberId, MessageId, Conditions>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
         let group_id = control_message.group_id();
         let group_y = {
@@ -209,18 +208,19 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
 }
 
 #[derive(Clone, Debug)]
-pub struct TestOperation<ID, OP> {
+pub struct TestOperation<ID, OP, C> {
     pub id: OP,
     pub sender: ID,
     pub dependencies: Vec<OP>,
     pub previous: Vec<OP>,
-    pub payload: GroupControlMessage<ID, OP>,
+    pub payload: GroupControlMessage<ID, OP, C>,
 }
 
-impl<ID, OP> Operation<ID, OP, GroupControlMessage<ID, OP>> for TestOperation<ID, OP>
+impl<ID, OP, C> Operation<ID, OP, GroupControlMessage<ID, OP, C>> for TestOperation<ID, OP, C>
 where
     ID: Copy,
     OP: Copy,
+    C: Clone + Debug + PartialEq + PartialOrd,
 {
     fn id(&self) -> OP {
         self.id
@@ -238,7 +238,7 @@ where
         self.previous.clone()
     }
 
-    fn payload(&self) -> GroupControlMessage<ID, OP> {
+    fn payload(&self) -> GroupControlMessage<ID, OP, C> {
         self.payload.clone()
     }
 }

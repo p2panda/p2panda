@@ -26,13 +26,13 @@ pub mod test_utils;
 mod tests;
 
 #[derive(Debug, Error)]
-pub enum GroupError<ID, OP, RS, ORD, GS>
+pub enum GroupError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ORD::Message>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
 {
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
@@ -74,28 +74,28 @@ impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
 
 /// Actions which can be applied to a group.
 #[derive(Clone, Debug, PartialEq)]
-pub enum GroupAction<ID> {
+pub enum GroupAction<ID, C> {
     Create {
-        initial_members: Vec<(GroupMember<ID>, Access<()>)>,
+        initial_members: Vec<(GroupMember<ID>, Access<C>)>,
     },
     Add {
         member: GroupMember<ID>,
-        access: Access<()>,
+        access: Access<C>,
     },
     Remove {
         member: GroupMember<ID>,
     },
     Promote {
         member: GroupMember<ID>,
-        access: Access<()>,
+        access: Access<C>,
     },
     Demote {
         member: GroupMember<ID>,
-        access: Access<()>,
+        access: Access<C>,
     },
 }
 
-impl<ID> GroupAction<ID>
+impl<ID, C> GroupAction<ID, C>
 where
     ID: Copy,
 {
@@ -111,11 +111,11 @@ where
 /// should be applied. The other is a special message which can be used to "undo" a message which
 /// has been applied to the group in the past.
 #[derive(Clone, Debug)]
-pub enum GroupControlMessage<ID, OP> {
+pub enum GroupControlMessage<ID, OP, C> {
     /// An action to apply to the group state.
     GroupAction {
         group_id: ID,
-        action: GroupAction<ID>,
+        action: GroupAction<ID, C>,
     },
 
     /// A revoke message can be published in order to explicitly invalidate other messages already
@@ -133,7 +133,7 @@ pub enum GroupControlMessage<ID, OP> {
     Revoke { group_id: ID, id: OP },
 }
 
-impl<ID, OP> GroupControlMessage<ID, OP>
+impl<ID, OP, C> GroupControlMessage<ID, OP, C>
 where
     ID: Copy,
 {
@@ -161,11 +161,11 @@ where
 /// group store and orderer.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
-pub struct GroupState<ID, OP, RS, ORD, GS>
+pub struct GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID>,
 {
     // ID of the local actor.
@@ -175,7 +175,7 @@ where
     pub group_id: ID,
 
     /// Group state at every position in the operation graph.
-    pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, ()>>,
+    pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
 
     /// All operations processed by this group.
     ///
@@ -197,13 +197,14 @@ where
     _phantom: PhantomData<RS>,
 }
 
-impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
+    C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Message>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
 {
     /// Instantiate a new group state.
     fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
@@ -243,7 +244,7 @@ where
     }
 
     /// The current graph tips for this group and any sub-groups who are currently members.
-    fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, RS, ORD, GS>> {
+    fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
             if let GroupMember::Group(id) = member {
@@ -259,7 +260,7 @@ where
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
     /// state which represents the current state of the group.
-    pub fn current_state(&self) -> GroupMembersState<GroupMember<ID>, ()> {
+    pub fn current_state(&self) -> GroupMembersState<GroupMember<ID>, C> {
         let mut current_state = GroupMembersState::default();
         for state in self.heads() {
             // Unwrap as all "head" states should exist.
@@ -272,7 +273,7 @@ where
     fn state_at_inner(
         &self,
         dependencies: &mut HashSet<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<GroupMembersState<GroupMember<ID>, C>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut y = GroupMembersState::default();
         let mut visited = HashSet::new();
         for id in dependencies.iter() {
@@ -298,7 +299,7 @@ where
     pub fn state_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>, ()>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<GroupMembersState<GroupMember<ID>, C>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut dependencies = dependencies.clone();
         let state = self.state_at_inner(&mut dependencies)?;
 
@@ -315,7 +316,7 @@ where
     fn members_at_inner(
         &self,
         dependencies: &mut HashSet<OP>,
-    ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Vec<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let y = self.state_at_inner(dependencies)?;
         let members = y
             .members
@@ -336,7 +337,7 @@ where
     pub fn members_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> Result<Vec<(GroupMember<ID>, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Vec<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut dependencies = dependencies.clone();
         let members = self.members_at_inner(&mut dependencies)?;
 
@@ -353,8 +354,8 @@ where
     fn transitive_members_at_inner(
         &self,
         dependencies: &mut HashSet<OP>,
-    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
-        let mut members: HashMap<ID, Access<()>> = HashMap::new();
+    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
+        let mut members: HashMap<ID, Access<C>> = HashMap::new();
 
         // Get members of a group at a certain point in the groups history.
         for (member, root_access) in self.members_at_inner(dependencies)? {
@@ -414,7 +415,7 @@ where
     pub fn transitive_members_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut dependencies = dependencies.clone();
         let members = self.transitive_members_at_inner(&mut dependencies)?;
 
@@ -429,7 +430,7 @@ where
     }
 
     // Get all current members of the group.
-    pub fn members(&self) -> Vec<(GroupMember<ID>, Access<()>)> {
+    pub fn members(&self) -> Vec<(GroupMember<ID>, Access<C>)> {
         self.current_state()
             .members
             .into_iter()
@@ -449,7 +450,7 @@ where
     /// stateless "individual" members of a group, likely identified by a public key.
     pub fn transitive_members(
         &self,
-    ) -> Result<Vec<(ID, Access<()>)>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let heads = self.transitive_heads()?;
         let members = self.transitive_members_at(&heads)?;
         Ok(members)
@@ -459,7 +460,7 @@ where
     fn get_sub_group(
         &self,
         id: ID,
-    ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let y = self
             .group_store
             .get(&id)
@@ -477,8 +478,8 @@ where
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Group<ID, OP, RS, ORD, GS> {
-    _phantom: PhantomData<(ID, OP, RS, ORD, GS)>,
+pub struct Group<ID, OP, C, RS, ORD, GS> {
+    _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
 }
 
 /// Core auth protocol for maintaining group membership state in a distributed system. Group
@@ -516,18 +517,19 @@ pub struct Group<ID, OP, RS, ORD, GS> {
 ///   requires that all messages are processed in partial-order, but exactly how this is achieved
 ///   is not specified.
 /// - Group Store (GS): global store containing states for all known groups.
-impl<ID, OP, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Debug,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
 {
-    type State = GroupState<ID, OP, RS, ORD, GS>;
-    type Action = GroupControlMessage<ID, OP>;
-    type Error = GroupError<ID, OP, RS, ORD, GS>;
+    type State = GroupState<ID, OP, C, RS, ORD, GS>;
+    type Action = GroupControlMessage<ID, OP, C>;
+    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
 
     /// Prepare a next message/operation which should include all meta-data required for ordering
     /// auth group operations. An ORD implementation needs to guarantee that operations are
@@ -539,8 +541,10 @@ where
     fn prepare(
         mut y: Self::State,
         action: &Self::Action,
-    ) -> Result<(GroupState<ID, OP, RS, ORD, GS>, ORD::Message), GroupError<ID, OP, RS, ORD, GS>>
-    {
+    ) -> Result<
+        (GroupState<ID, OP, C, RS, ORD, GS>, ORD::Message),
+        GroupError<ID, OP, C, RS, ORD, GS>,
+    > {
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
@@ -565,7 +569,7 @@ where
     fn process(
         mut y: Self::State,
         operation: &ORD::Message,
-    ) -> Result<Self::State, GroupError<ID, OP, RS, ORD, GS>> {
+    ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
         let operation_id = operation.id();
         let actor = operation.sender();
         let control_message = operation.payload();
@@ -638,23 +642,24 @@ where
     }
 }
 
-impl<ID, OP, RS, ORD, GS> Group<ID, OP, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>> + Debug,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
 {
     /// Apply an action to a single group state.
     fn apply_action(
-        mut y: GroupState<ID, OP, RS, ORD, GS>,
+        mut y: GroupState<ID, OP, C, RS, ORD, GS>,
         id: OP,
         actor: GroupMember<ID>,
         previous: &HashSet<OP>,
-        action: &GroupAction<ID>,
-    ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
+        action: &GroupAction<ID, C>,
+    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         // Compute the members state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
@@ -709,8 +714,8 @@ where
     }
 
     fn rebuild(
-        y: GroupState<ID, OP, RS, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
+        y: GroupState<ID, OP, C, RS, ORD, GS>,
+    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         // Process the group state with the provided resolver. This will populate the set of
         // messages which should be ignored when applying group control messages.
         let mut y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;

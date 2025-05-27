@@ -6,17 +6,17 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember, Access};
+use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
 
 use super::{
-    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation,
-    TestOrderer, TestOrdererState,
+    Conditions, GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore,
+    TestOperation, TestOrderer, TestOrdererState,
 };
 
 pub struct Network {
     members: HashMap<MemberId, NetworkMember>,
-    queue: VecDeque<TestOperation<MemberId, MessageId>>,
+    queue: VecDeque<TestOperation<MemberId, MessageId, Conditions>>,
     rng: StdRng,
 }
 
@@ -142,7 +142,11 @@ impl Network {
         }
     }
 
-    fn member_process(&mut self, member_id: &char, operation: &TestOperation<char, u32>) {
+    fn member_process(
+        &mut self,
+        member_id: &MemberId,
+        operation: &TestOperation<MemberId, MessageId, Conditions>,
+    ) {
         // Do not process our own messages.
         if &operation.sender() == member_id {
             return;
