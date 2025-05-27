@@ -12,14 +12,21 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["auth", "access-control", "groups"]
 
+[features]
+default = []
+test-utils = ["rand"]
+
 [package.metadata.docs.rs]
 all-features = true
 
 [dependencies]
 petgraph = { version = "0.8.1", features = ["serde-1"] }
-rand = { version = "0.9.1", features = ["alloc"] }
+rand = { version = "0.9.1", features = ["alloc"], optional = true }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.12"
+
+[dev-dependencies]
+rand = { version = "0.9.1", features = ["alloc"] }
 
 [lints]
 workspace = true
