@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! `p2panda-encryption` provides decentralized, secure data- and message encryption for groups
+//! with post-compromise security and optional forward secrecy.
+//!
+//! The crate implements two different group key-agreement and encryption schemes for a whole range
+//! of use cases for applications which can't rely on a network connection.
+//!
+//! The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with
+//! a secret, symmetric key for a group (XChaCha20-Poly1305). This will be useful for building
+//! applications where users who enter a group late will still have access to previously created
+//! content, for example knowledge databases, wiki applications or a booking tool for rehearsal
+//! rooms. A member will not learn about any newly created data after removing them from the group
+//! since the key gets rotated on member removal. This should accommodate for many use-cases in p2p
+//! applications which rely on basic group encryption with post-compromise security (PCS) and
+//! forward secrecy (FS) during key agreement. Applications can optionally choose to remove
+//! encryption keys for forward secrecy if they desire so.
+//!
+//! The second scheme is **"Message Encryption"**, offering a forward-secure (FS) messaging
+//! ratchet, similar to Signal’s [Double Ratchet
+//! algorithm](https://en.m.wikipedia.org/wiki/Double_Ratchet_Algorithm). Since secret keys are
+//! always generated for each message, a user can not easily learn about previously created
+//! messages when getting hold of such key. We believe that the latter scheme will be used in more
+//! specialised applications, for example p2p group chats, as strong forward-secrecy comes with
+//! it's own UX requirements, but we are excited to offer a solution for both worlds, depending on
+//! the application's needs.
+//!
+//! More detail about the particular implementation and design choices of `p2panda-encryption` can
+//! be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
+mod crypto;
+#[cfg(any(test, feature = "data_scheme"))]
+pub mod data_scheme;
+mod key_bundle;
+mod key_manager;
+mod key_registry;
+#[cfg(any(test, feature = "message_scheme"))]
+pub mod message_scheme;
+#[cfg(any(test, feature = "test_utils"))]
+mod ordering;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
+pub mod traits;
+mod two_party;
+
+pub use crypto::{Rng, RngError};
+pub use key_bundle::{
+    Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId,
+};
+pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};
+pub use key_registry::{KeyRegistry, KeyRegistryState};
+pub use two_party::{
+    LongTermTwoParty, OneTimeTwoParty, TwoParty, TwoPartyCiphertext, TwoPartyError, TwoPartyMessage,
+};
