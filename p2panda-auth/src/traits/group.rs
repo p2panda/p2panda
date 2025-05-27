@@ -5,16 +5,16 @@ use std::error::Error;
 
 use crate::traits::{IdentityHandle, OperationId, Ordering};
 
-/// Interface for implementing an "auth graph".
+/// Interface for implementing an auth group.
 ///
-/// Auth graph is an operation-based CRDT with a "prepare" method which takes an operation and
-/// enriches it (based on local state) with meta-data required for processing locally, or
-/// remotely. And a "process" method for processing operations created locally or by remote peers.  
+/// Auth group interface contains a "prepare" method which takes an operation and enriches it
+/// (based on local state) with meta-data required for processing locally, or remotely. And a
+/// "process" method for processing operations created locally or by remote peers.  
 ///
 /// Generic parameter RS (resolver) allows for introducing custom logic which decides if
 /// operations should be included in any state-deriving process. This can include the handling of
 /// concurrent operations which would cause conflicting state changes.
-pub trait AuthGraph<ID, OP, RS, ORD>
+pub trait AuthGroup<ID, OP, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,

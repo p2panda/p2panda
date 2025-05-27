@@ -7,7 +7,7 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember, Access};
-use crate::traits::{AuthGraph, GroupStore, Operation, Ordering};
+use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
 
 use super::{
     GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation,
