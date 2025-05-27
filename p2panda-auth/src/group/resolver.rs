@@ -265,9 +265,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use petgraph::graph::DiGraph;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
-    use super::*;
+    use petgraph::graph::DiGraph;
+    use petgraph::prelude::DiGraphMap;
+
+    use crate::group::test_utils::Network;
+    use crate::group::{Access, GroupMember};
+    use crate::traits::OperationId;
+
+    use super::get_concurrent_bubbles;
 
     impl OperationId for &str {}
 
@@ -360,5 +368,69 @@ mod tests {
         for id in &["F", "H", "D", "C"] {
             assert!(bubble.contains(id));
         }
+    }
+
+    #[test]
+    fn mutual_removal_filter() {
+        let alice = 'A';
+        let bob = 'B';
+        let claire = 'C';
+
+        let group = '1';
+
+        let rng = StdRng::from_os_rng();
+
+        let mut network = Network::new([alice, bob, claire], rng);
+
+        // Alice creates a group with Alice, Bob and Cliare as managers..
+        network.create(
+            group,
+            alice,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // Everyone processes the operation.
+        network.process();
+
+        // Alice and Bob remove one another concurrently.
+        network.remove(alice, GroupMember::Individual(bob), group);
+        network.remove(bob, GroupMember::Individual(alice), group);
+
+        // Everyone processes these operations.
+        network.process();
+
+        // We expect Claire to be the only remaining group member.
+        let alice_members = network.members(&alice, &group);
+        assert_eq!(
+            alice_members,
+            vec![(GroupMember::Individual(claire), Access::Manage),]
+        );
+
+        let bob_members = network.members(&bob, &group);
+        assert_eq!(
+            bob_members,
+            vec![(GroupMember::Individual(claire), Access::Manage),]
+        );
+
+        let claire_members = network.members(&claire, &group);
+        assert_eq!(
+            claire_members,
+            vec![(GroupMember::Individual(claire), Access::Manage),]
+        );
+
+        // We expect the "ignore" operation set to be empty, indicating that no operations have
+        // been marked as invalid by the resolver.
+        let alice_filter = network.get_y(&alice, &group).inner.ignore;
+        assert!(alice_filter.is_empty());
+
+        let bob_filter = network.get_y(&bob, &group).inner.ignore;
+        assert!(bob_filter.is_empty());
+
+        let claire_filter = network.get_y(&claire, &group).inner.ignore;
+        assert!(claire_filter.is_empty());
     }
 }
