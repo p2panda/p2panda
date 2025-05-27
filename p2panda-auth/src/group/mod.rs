@@ -10,7 +10,8 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use thiserror::Error;
 
-use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
+pub use crate::group::resolver::{GroupResolver, GroupResolverError};
+pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
@@ -20,7 +21,7 @@ mod display;
 mod resolver;
 mod state;
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
@@ -667,9 +668,7 @@ where
             GroupAction::Add { member, access, .. } => {
                 state::add(members_y_copy, actor, member, access)
             }
-            GroupAction::Remove { member, .. } => {
-                state::remove(members_y_copy, actor, member)
-            }
+            GroupAction::Remove { member, .. } => state::remove(members_y_copy, actor, member),
             GroupAction::Promote { member, .. } => {
                 // TODO: need changes in the group_crdt api so that we can pass in the access
                 // level rather than only the conditions.

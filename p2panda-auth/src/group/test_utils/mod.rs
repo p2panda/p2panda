@@ -11,8 +11,8 @@ pub use orderer::*;
 pub use partial_ord::*;
 
 use crate::traits::{IdentityHandle, OperationId};
-
-use super::{Group, GroupState, resolver::GroupResolver};
+use crate::group::{Group, GroupState};
+use crate::group::resolver::GroupResolver;
 
 impl IdentityHandle for char {}
 impl OperationId for u32 {}
