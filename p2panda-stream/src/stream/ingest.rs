@@ -153,6 +153,16 @@ where
                     Ok((IngestResult::Complete(operation), _)) => {
                         return Poll::Ready(Some(Ok(operation)));
                     }
+                    Ok((IngestResult::Outdated(_), _)) => {
+                        // Ignore "outdated" operations. This can happen if we've processed an
+                        // operation which was removed concurrently by a newer one (via pruning) in
+                        // the same log.
+
+                        // In the next iteration we should prioritize the stream again.
+                        park_buffer = true;
+
+                        continue;
+                    }
                     Err(err) => {
                         // Ingest failed and we want the stream consumers to be aware of that.
                         return Poll::Ready(Some(Err(err)));
