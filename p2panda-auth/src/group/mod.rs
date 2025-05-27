@@ -16,11 +16,11 @@ use crate::traits::{
     AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 mod display;
 mod resolver;
 mod state;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 #[cfg(test)]
 mod tests;
@@ -160,7 +160,7 @@ where
 /// The state of a group, the local actor id, as well as state objects for the global
 /// group store and orderer.
 #[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(Clone))]
 pub struct GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
