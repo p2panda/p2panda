@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
-use crate::{LogId, LogStore, OperationStore};
+use crate::operations::{LogId, LogStore, OperationStore};
 
 type SeqNum = u64;
 type Timestamp = u64;
@@ -336,7 +336,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{LogStore, OperationStore};
+    use crate::operations::{LogStore, OperationStore};
 
     use super::MemoryStore;
 
