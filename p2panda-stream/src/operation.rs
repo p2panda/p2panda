@@ -63,8 +63,26 @@ where
                             // We observe a gap in the log and therefore can't validate the
                             // backlink yet.
                             OperationError::SeqNumNonIncremental(expected, given) => {
-                                let (result, overflow) = given.overflowing_sub(expected);
-                                return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, if overflow { expected } else { result }));
+                                // Overflows happen when the given operation is already "outdated"
+                                // and was pruned and our log grown in the meantime (thus "latest
+                                // operation" returns a higher sequence number). This is a race
+                                // condition which can occur in this async setting.
+                                //
+                                // We can safely ignore the operation here. It will _not_ be
+                                // persisted as it technically was pruned already, we will still
+                                // forward it to the application layer though. The application can
+                                // decide if it should ignore or handle the "outdated" operation.
+                                //
+                                // TODO(adz): This implementation would show undefined behaviour
+                                // when handling forks in pruned logs in presence of this race
+                                // condition. This is a rather edge case, but needs to be dealt
+                                // with.
+                                let (behind, overflow) = given.overflowing_sub(expected);
+                                if overflow {
+                                    return Ok(IngestResult::Outdated(operation))
+                                } else {
+                                    return Ok(IngestResult::Retry(operation.header, operation.body, header_bytes, behind));
+                                }
                             }
                             _ => unreachable!("other error cases have been handled before"),
                         }
@@ -120,6 +138,14 @@ pub enum IngestResult<E> {
     /// The number indicates how many operations we are lacking before we can attempt validation
     /// again.
     Retry(Header<E>, Option<Body>, Vec<u8>, u64),
+
+    /// Operation can be considered "outdated" as an "newer" operation in the log removed this
+    /// operation ("pruning") while we processed it.
+    ///
+    /// Applications usually want to ignore these operations as the latest operation will hold all
+    /// the state we need. Additionally we were also not able to correctly check its log integrity
+    /// anymore.
+    Outdated(Operation<E>),
 }
 
 /// Errors which can occur due to invalid operations or critical storage failures.
@@ -150,7 +176,7 @@ mod tests {
     use p2panda_store::MemoryStore;
 
     use crate::operation::{IngestResult, ingest_operation};
-    use crate::test_utils::Extensions;
+    use crate::test_utils::{Extensions, StreamName};
 
     #[tokio::test]
     async fn retry_result() {
@@ -196,5 +222,55 @@ mod tests {
 
         let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Retry(_, None, _, 11))));
+    }
+
+    #[tokio::test]
+    async fn ignore_outdated_pruned_operations() {
+        // Related issue: https://github.com/p2panda/p2panda/issues/711
+
+        let mut store = MemoryStore::<usize, Extensions>::new();
+        let private_key = PrivateKey::new();
+        let log_id = 1;
+
+        // 1. Create an advanced operation in a log which prunes all previous operations.
+        let mut header = Header {
+            public_key: private_key.public_key(),
+            version: 1,
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(Hash::new(b"mock operation")),
+            previous: vec![],
+            extensions: Some(Extensions {
+                stream_name: StreamName::new(private_key.public_key(), None),
+                prune_flag: true.into(),
+            }),
+        };
+        header.sign(&private_key);
+        let header_bytes = header.to_bytes();
+
+        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, true).await;
+        assert!(matches!(result, Ok(IngestResult::Complete(_))));
+
+        // 2. Create an operation which is from an "outdated" seq from before the log was pruned.
+        let mut header = Header {
+            public_key: private_key.public_key(),
+            version: 1,
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 0,
+            backlink: None,
+            previous: vec![],
+            extensions: None,
+        };
+        header.sign(&private_key);
+        let header_bytes = header.to_bytes();
+
+        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
+        assert!(matches!(result, Ok(IngestResult::Outdated(_))));
     }
 }
