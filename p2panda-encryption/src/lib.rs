@@ -6,51 +6,6 @@
 //! The crate implements two different group key-agreement and encryption schemes for a whole range
 //! of use cases for applications which can't rely on a network connection.
 //!
-//! ## Goals
-//!
-//! ### Strong Security Guarantees
-//!
-//! Key agreement in `p2panda-encryption` has strong forward-secrecy, while the security of the
-//! data itself depends on the encryption scheme used. The crate offers two different schemes:
-//!
-//! **Data Encryption** re-uses the same symmetric key known to the peer until a new key got
-//! introduced to the group, for example on member removal. Keys will stay in the network to allow
-//! decrypting older data, unless they are manually removed by the application.
-//!
-//! For **Message Encryption** peers agree on a ratchet secret which derives a new key for each
-//! message sent. After decrypting the ciphertext the key gets dropped for forward secrecy.
-//!
-//! ### Framework-independent
-//!
-//! This implementation is compatible with any data type, encoding format or transport, made for
-//! p2p applications which do not rely on constant internet connectivity.
-//!
-//! Similar to our other p2panda crates, we aim to make our implementation "framework independent"
-//! while providing optional "glue code" to integrate it in into the larger [p2panda
-//! ecosystem](https://p2panda.org). The latter offers a fully integrated stack which is
-//! feature-complete, tested and ready for use in secure, decentralized applications.
-//!
-//! ### Robustness in decentralized systems
-//!
-//! `p2panda-encryption` has been specifically designed to be robust when used in decentralized
-//! systems. It accounts for use in scenarios without guaranteed connectivity between members of
-//! the group and corner cases where group changes (adding, removing members etc.) take place
-//! concurrently. No centralised server is required for coordination of the group.
-//!
-//! ### Crash-resiliant
-//!
-//! Code in `p2panda-encryption` is expressed as pure functions where state is passed around until
-//! it gets finally "committed" into a persistance layer inside an atomic transaction. This allows
-//! fault-resiliant writes to any database and makes applications robust to not corrupt their
-//! state.
-//!
-//! ## Design
-//!
-//! More detail about the particular implementation and design choices of `p2panda-encryption` can
-//! be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
-//!
-//! ### Encryption Schemes
-//!
 //! The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with
 //! a secret, symmetric key for a group (XChaCha20-Poly1305). This will be useful for building
 //! applications where users who enter a group late will still have access to previously created
@@ -70,94 +25,8 @@
 //! it's own UX requirements, but we are excited to offer a solution for both worlds, depending on
 //! the application's needs.
 //!
-//! ### Secure key-agreement
-//!
-//! To encrypt any data towards a group we need to first securely and efficiently make all members
-//! of the group aware of the secret key which was used to encrypt the message. This takes place
-//! inside a "key agreement" protocol which is the heart of `p2panda-encryption`.
-//!
-//! Both schemes use the Two-Party Secure Messaging (2SM) Key Agreement Protocol as specified in
-//! the paper ["Key Agreement for Decentralized Secure Group Messaging with Strong Security
-//! Guarantees"](https://eprint.iacr.org/2020/1281.pdf>) (2020).
-//!
-//! During the initial 2SM "round" using X3DH the forward-secrecy is defined by the lifetime of the
-//! used pre-keys. For strong security guarantees it is recommended to use one-time pre-keys. If
-//! this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
-//! defined by the application.
-//!
-//! Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced
-//! by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy
-//! guarantees for each round, independent of the used pre-keys.
-//!
-//! ## Usage & integration
-//!
-//! There are two options to use `p2panda-encryption`. One is to use the fully integrated p2panda
-//! stack which gives an already complete and tested end-to-end solution for building secure,
-//! decentralized applications with p2panda data types. If you're interested in group encryption
-//! for your application but not building the "p2p backend", this is for you.
-//!
-//! The second option comes with more flexibility if you're interested in integrating group
-//! encryption into your custom p2p data-types and algorithms but also requires more care around
-//! message ordering (partial ordering), group management (CRDT), validation (additional checks
-//! around pre-key lifetimes, etc.) and authentication (signatures). Integrating such systems is
-//! not trivial because great care is required around correct message ordering, validation and
-//! authentication. We've tried to reduce the API surface for integrations into custom applications
-//! as much as possible. If you struggle, please [reach out](https://p2panda.org/#contact).
-//!
-//! To get an overview of what is required for a custom integration we recommended to check out
-//! the high-level APIs for [data encryption](crate::data_scheme::Group) and [message
-//! encryption](crate::message_scheme::Group).
-//!
-//! ## Security
-//!
-//! Encryption helps to prevent your data being readable by third parties but it can never
-//! guarantee full security, especially in decentralized, experimental networks.
-//!
-//! We can not recommend using this technology for high-risk use-cases when you can not guarantee
-//! full control over all devices and transport channels. We recommend
-//! [DeltaChat](https://delta.chat/en/) or good old [Signal](https://signal.org/) if you are
-//! concerned about legal implications of your work.
-//!
-//! ### Audit
-//!
-//! Until now this crate has not received a security audit yet.
-//!
-//! ### Meta-Data
-//!
-//! In the current implementation all group control messages are _not_ encrypted. While application
-//! data is fully protected, an adversary who got access to the network, will be able to observe
-//! control messages and reason about which members are inside the group. The cryptographic
-//! identities in the group are not necessarily connected to any concrete persons but can reveal
-//! enough meta-data.
-//!
-//! We're working on a variant of `p2panda-encryption` where even control messages, sender and
-//! recipient info are encrypted. This unfortunately comes with worse performance and special UX
-//! requirements but we still believe there is a use-case for smaller groups.
-//!
-//! ### Post-Quantum
-//!
-//! While a future of post-quantum computers seems far, `p2panda-encryption` is not secure against
-//! so called harvest-now-decrypt-later (HNDL) quantum adversaries as we're not using any
-//! post-quantum-ready cryptography.
-//!
-//! ## Credits
-//!
-//! We have been particularly inspired by the ["Key Agreement for Decentralized Secure Group
-//! Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf) (DCGKA)
-//! paper by Matthew Weidner, Martin Kleppmann, Daniel Hugenroth and Alastair R. Beresford
-//! (published in 2021) which is the first paper we are aware of which introduces a PCS and FS
-//! encryption scheme with a local-first mindset. On top there's already an almost complete [Java
-//! implementation](https://github.com/trvedata/key-agreement) of the paper, which helped with
-//! realising our Rust version.
-//!
-//! The paper formed the initial starting point of our work. In particular, we followed the
-//! Double-Ratchet "Message Encryption" scheme with some improvements around managing group
-//! membership. We also carried over some of the ideas in the paper to accommodate for the simpler
-//! "Data Encryption" approach.
-//!
-//! Our implementation uses Signal's [X3DH](https://signal.org/docs/specifications/x3dh)
-//! key-agreement for initial rounds. This includes Signal's work around the
-//! [XEdDSA](https://signal.org/docs/specifications/xeddsa) signature schemes.
+//! More detail about the particular implementation and design choices of `p2panda-encryption` can
+//! be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
 mod crypto;
 #[cfg(any(test, feature = "data_scheme"))]
 pub mod data_scheme;
