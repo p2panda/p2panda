@@ -25,43 +25,6 @@ pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Error)]
-pub enum GroupError<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
-{
-    #[error("duplicate operation {0} processed in group {1}")]
-    DuplicateOperation(OP, ID),
-
-    #[error("error occurred applying state change action")]
-    StateChangeError(GroupMembershipError<GroupMember<ID>>),
-
-    #[error("expected sub-group {0} to exist in the store")]
-    MissingSubGroup(ID),
-
-    #[error("resolver error: {0}")]
-    ResolverError(RS::Error),
-
-    #[error("ordering error: {0}")]
-    OrderingError(ORD::Error),
-
-    #[error("group store error: {0}")]
-    GroupStoreError(GS::Error),
-
-    #[error("states {0:?} not found in group {1}")]
-    StatesNotFound(Vec<OP>, ID),
-
-    #[error("expected dependencies {0:?} not found in group {1}")]
-    DependenciesNotFound(Vec<OP>, ID),
-
-    #[error("operation for group {0} processed in group {1}")]
-    IncorrectGroupId(ID, ID),
-}
-
 /// A group member which can be a single stateless individual, or a stateful group. In both cases
 /// the member identifier is the same generic ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -749,4 +712,41 @@ where
 
         Ok(y_i)
     }
+}
+
+#[derive(Debug, Error)]
+pub enum GroupError<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
+{
+    #[error("duplicate operation {0} processed in group {1}")]
+    DuplicateOperation(OP, ID),
+
+    #[error("error occurred applying state change action")]
+    StateChangeError(GroupMembershipError<GroupMember<ID>>),
+
+    #[error("expected sub-group {0} to exist in the store")]
+    MissingSubGroup(ID),
+
+    #[error("resolver error: {0}")]
+    ResolverError(RS::Error),
+
+    #[error("ordering error: {0}")]
+    OrderingError(ORD::Error),
+
+    #[error("group store error: {0}")]
+    GroupStoreError(GS::Error),
+
+    #[error("states {0:?} not found in group {1}")]
+    StatesNotFound(Vec<OP>, ID),
+
+    #[error("expected dependencies {0:?} not found in group {1}")]
+    DependenciesNotFound(Vec<OP>, ID),
+
+    #[error("operation for group {0} processed in group {1}")]
+    IncorrectGroupId(ID, ID),
 }
