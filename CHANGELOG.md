@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
+- Trait definitions for atomic write transactions [#755](https://github.com/p2panda/p2panda/pull/755)
 
 ## [0.3.1] - 14/04/2025
 
