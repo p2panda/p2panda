@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 - `p2panda-auth`: decentralised group management and authorization [#757](https://github.com/p2panda/p2panda/issues/757) 🥞
 - `p2panda-encryption`: decentralized data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
+- Trait definitions for atomic write transactions [#755](https://github.com/p2panda/p2panda/pull/755)
 
 ## [0.3.1] - 14/04/2025
 
