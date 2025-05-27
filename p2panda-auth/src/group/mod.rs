@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
-    AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
+    AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
 
 #[cfg(test)]
@@ -504,7 +504,7 @@ pub struct Group<ID, OP, RS, ORD, GS> {
 /// Group membership rules are checked when an action is applied to the previous state, read more
 /// in the `group_crdt` module.
 ///
-/// This is an implementation of the `AuthGraph` trait which requires a `prepare` and `process`
+/// This is an implementation of the `AuthGroup` trait which requires a `prepare` and `process`
 /// method. This implementation allows for providing several generic parameters which allows for
 /// integration into different systems and customization of how group change conflicts are
 /// handled.
@@ -515,7 +515,7 @@ pub struct Group<ID, OP, RS, ORD, GS> {
 ///   requires that all messages are processed in partial-order, but exactly how this is achieved
 ///   is not specified.
 /// - Group Store (GS): global store containing states for all known groups.
-impl<ID, OP, RS, ORD, GS> AuthGraph<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
+impl<ID, OP, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for Group<ID, OP, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,

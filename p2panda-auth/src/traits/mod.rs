@@ -3,13 +3,13 @@
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
-mod auth_graph;
+mod group;
 mod group_store;
 mod operation;
 mod ordering;
 mod resolver;
 
-pub use auth_graph::AuthGraph;
+pub use group::AuthGroup;
 pub use group_store::GroupStore;
 pub use operation::Operation;
 pub use ordering::Ordering;

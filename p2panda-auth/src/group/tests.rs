@@ -8,7 +8,7 @@ use crate::group::Access;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
 };
-use crate::traits::AuthGraph;
+use crate::traits::AuthGroup;
 
 use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};
