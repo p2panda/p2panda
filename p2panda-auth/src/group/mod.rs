@@ -553,14 +553,6 @@ where
             Err(_) => panic!(),
         };
 
-        // Queue the operation in the orderer.
-        //
-        // Even though we know the operation is ready for processing (ordering dependencies are
-        // met), we need to queue it so that the orderer progresses to the correct state.
-        //
-        // TODO: maybe this should rather happen inside ORD::next_message?
-        let ordering_y =
-            ORD::queue(ordering_y, &operation).map_err(|error| GroupError::OrderingError(error))?;
         y.orderer_y = ordering_y;
         Ok((y, operation))
     }

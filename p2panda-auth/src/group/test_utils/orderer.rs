@@ -13,7 +13,8 @@ use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
-    Conditions, GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState, TestGroupStore
+    Conditions, GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
+    TestGroupStore,
 };
 
 #[derive(Debug, Error)]
@@ -55,7 +56,9 @@ impl TestOrdererState {
 #[derive(Clone, Debug, Default)]
 pub struct TestOrderer {}
 
-impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>> for TestOrderer {
+impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
+    for TestOrderer
+{
     type State = TestOrdererState;
 
     type Error = OrdererError;
@@ -158,7 +161,16 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
             payload: control_message.clone(),
         };
 
-        Ok((y, operation))
+        // Queue the operation in the orderer.
+        //
+        // Even though we know the operation is ready for processing (ordering dependencies are
+        // met), we need to queue it so that the orderer progresses to the correct state.
+        // 
+        // TODO: we should rather update the orderer state directly as this method (next_message) is
+        // always called locally and we can assume that our own messages are processed immediately.
+        let y_i = TestOrderer::queue(y, &operation)?;
+
+        Ok((y_i, operation))
     }
 
     fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
