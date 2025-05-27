@@ -108,7 +108,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
         if let GroupControlMessage::GroupAction {
             action:
                 GroupAction::Add {
-                    member: GroupMember::Group { id },
+                    member: GroupMember::Group(id),
                     ..
                 },
             ..
@@ -130,7 +130,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId>> for
         } = control_message
         {
             for (member, _) in initial_members {
-                if let GroupMember::Group { id } = member {
+                if let GroupMember::Group(id) = member {
                     let sub_group = group_y.get_sub_group(*id).expect("sub-group exists");
                     dependencies.extend(
                         &sub_group

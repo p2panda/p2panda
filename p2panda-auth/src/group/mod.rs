@@ -67,7 +67,7 @@ where
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum GroupMember<ID> {
     Individual(ID),
-    Group { id: ID },
+    Group(ID),
 }
 
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
@@ -246,7 +246,7 @@ where
     fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
-            if let GroupMember::Group { id } = member {
+            if let GroupMember::Group(id) = member {
                 let sub_group = self.get_sub_group(id)?;
                 transitive_heads.extend(sub_group.transitive_heads()?);
             }
@@ -363,7 +363,7 @@ where
                     // If this is an individual member, then add them straight to the members map.
                     members.insert(id, root_access.clone());
                 }
-                GroupMember::Group { id } => {
+                GroupMember::Group(id) => {
                     // If this is a sub-group member, then get the sub-group state from the store
                     // and recurse into the group passing the dependencies set which identify the
                     // particular states we're interested in.
