@@ -4,10 +4,10 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use crate::group::GroupState;
+use crate::group::Access;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
 };
-use crate::group_crdt::Access;
 use crate::traits::AuthGraph;
 
 use super::test_utils::MessageId;

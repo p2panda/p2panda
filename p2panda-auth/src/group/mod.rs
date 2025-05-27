@@ -10,7 +10,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use thiserror::Error;
 
-use crate::group_crdt::{self, Access, GroupMembersState, GroupMembershipError, MemberState};
+use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGraph, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
@@ -18,6 +18,7 @@ use crate::traits::{
 #[cfg(test)]
 mod display;
 mod resolver;
+mod state;
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]
@@ -262,7 +263,7 @@ where
         for state in self.heads() {
             // Unwrap as all "head" states should exist.
             let state = self.states.get(&state).unwrap();
-            current_state = group_crdt::merge(state.clone(), current_state);
+            current_state = state::merge(state.clone(), current_state);
         }
         current_state
     }
@@ -280,7 +281,7 @@ where
                 continue;
             };
             // Merge all dependency states from this group together.
-            y = group_crdt::merge(previous_y.clone(), y);
+            y = state::merge(previous_y.clone(), y);
             visited.insert(*id);
         }
 
@@ -664,18 +665,20 @@ where
         let members_y_copy = members_y.clone();
         let members_y_i = match action.clone() {
             GroupAction::Add { member, access, .. } => {
-                group_crdt::add(members_y_copy, actor, member, access)
+                state::add(members_y_copy, actor, member, access)
             }
-            GroupAction::Remove { member, .. } => group_crdt::remove(members_y_copy, actor, member),
+            GroupAction::Remove { member, .. } => {
+                state::remove(members_y_copy, actor, member)
+            }
             GroupAction::Promote { member, .. } => {
                 // TODO: need changes in the group_crdt api so that we can pass in the access
                 // level rather than only the conditions.
-                group_crdt::promote(members_y_copy, actor, member, None)
+                state::promote(members_y_copy, actor, member, None)
             }
             GroupAction::Demote { member, .. } => {
                 // TODO: need changes in the group_crdt api so that we can pass in the access
                 // level rather than only the conditions.
-                group_crdt::demote(members_y_copy, actor, member, None)
+                state::demote(members_y_copy, actor, member, None)
             }
             GroupAction::Create { initial_members } => {
                 let members = initial_members
