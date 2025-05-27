@@ -13,8 +13,8 @@ use thiserror::Error;
 use p2panda_core::cbor::{DecodeError, EncodeError, encode_cbor};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
+use crate::operations::{LogId, LogStore, OperationStore};
 use crate::sqlite::models::{LogHeightRow, OperationRow, RawOperationRow};
-use crate::{LogId, LogStore, OperationStore};
 
 #[derive(Debug, Error)]
 pub enum SqliteStoreError {
