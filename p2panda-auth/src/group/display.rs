@@ -176,7 +176,7 @@ where
                             GroupMember::Individual(id) => {
                                 s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
                             }
-                            GroupMember::Group { id } => {
+                            GroupMember::Group(id) => {
                                 s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                             }
                         }
@@ -188,7 +188,7 @@ where
                         GroupMember::Individual(id) => {
                             s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
                         }
-                        GroupMember::Group { id } => {
+                        GroupMember::Group(id) => {
                             s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                         }
                     }
@@ -199,9 +199,7 @@ where
                         GroupMember::Individual(id) => {
                             s += &format!("<TR><TD>individual : {}</TD></TR>", id)
                         }
-                        GroupMember::Group { id } => {
-                            s += &format!("<TR><TD>group : {}</TD></TR>", id)
-                        }
+                        GroupMember::Group(id) => s += &format!("<TR><TD>group : {}</TD></TR>", id),
                     }
                 }
                 GroupAction::Promote { member, access } => {
@@ -210,7 +208,7 @@ where
                         GroupMember::Individual(id) => {
                             s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
                         }
-                        GroupMember::Group { id } => {
+                        GroupMember::Group(id) => {
                             s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                         }
                     }
@@ -221,7 +219,7 @@ where
                         GroupMember::Individual(id) => {
                             s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
                         }
-                        GroupMember::Group { id } => {
+                        GroupMember::Group(id) => {
                             s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                         }
                     }
@@ -277,7 +275,7 @@ where
                 let idx = graph.add_node((None, format!("<<TABLE BGCOLOR=\"bisque\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\"><TR><TD>individual</TD><TD>{id}</TD></TR></TABLE>>")));
                 graph.add_edge(operation_idx, idx, "member".to_string());
             }
-            GroupMember::Group { id } => {
+            GroupMember::Group(id) => {
                 let sub_group = self.get_sub_group(id).unwrap();
                 graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
 

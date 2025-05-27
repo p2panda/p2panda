@@ -3,8 +3,8 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-use crate::group::GroupState;
 use crate::group::Access;
+use crate::group::GroupState;
 use crate::group::test_utils::{
     Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
 };
@@ -232,9 +232,7 @@ fn nested_groups() {
     let control_message_003 = GroupControlMessage::GroupAction {
         group_id: team_group_y.id(),
         action: GroupAction::Add {
-            member: GroupMember::Group {
-                id: devices_group_y.id(),
-            },
+            member: GroupMember::Group(devices_group_y.id()),
             access: Access::Read,
         },
     };
@@ -249,12 +247,7 @@ fn nested_groups() {
         members,
         vec![
             (GroupMember::Individual(alice), Access::Manage),
-            (
-                GroupMember::Group {
-                    id: alice_devices_group
-                },
-                Access::Read
-            )
+            (GroupMember::Group(alice_devices_group), Access::Read)
         ]
     );
 
@@ -354,9 +347,7 @@ fn multi_user() {
     // And adds it to the teams group.
     network.add(
         alice,
-        GroupMember::Group {
-            id: alice_devices_group,
-        },
+        GroupMember::Group(alice_devices_group),
         alice_team_group,
         Access::Manage,
     );
@@ -373,7 +364,7 @@ fn multi_user() {
             (GroupMember::Individual('A'), Access::Manage),
             (GroupMember::Individual('B'), Access::Manage),
             (GroupMember::Individual('C'), Access::Read),
-            (GroupMember::Group { id: 'D' }, Access::Manage)
+            (GroupMember::Group('D'), Access::Manage)
         ]
     );
     assert_eq!(alice_members, bob_members);
@@ -608,9 +599,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
 
     let id = network.add(
         CHARLIE,
-        GroupMember::Group {
-            id: BOB_DEVICES_GROUP,
-        },
+        GroupMember::Group(BOB_DEVICES_GROUP),
         CHARLIE_TEAM_GROUP,
         Access::Manage,
     );
@@ -620,9 +609,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
 
     let id = network.add(
         ALICE,
-        GroupMember::Group {
-            id: CHARLIE_TEAM_GROUP,
-        },
+        GroupMember::Group(CHARLIE_TEAM_GROUP),
         ALICE_ORG_GROUP,
         Access::Write { conditions: None },
     );
@@ -656,12 +643,7 @@ fn transitive_members() {
     let expected_charlie_team_group_direct_members = vec![
         (GroupMember::Individual(CHARLIE), Access::Manage),
         (GroupMember::Individual(EDITH), Access::Read),
-        (
-            GroupMember::Group {
-                id: BOB_DEVICES_GROUP,
-            },
-            Access::Manage,
-        ),
+        (GroupMember::Group(BOB_DEVICES_GROUP), Access::Manage),
     ];
 
     let expected_charlie_team_group_transitive_members = vec![
@@ -675,9 +657,7 @@ fn transitive_members() {
     let expected_alice_org_group_direct_members = vec![
         (GroupMember::Individual(ALICE), Access::Manage),
         (
-            GroupMember::Group {
-                id: CHARLIE_TEAM_GROUP,
-            },
+            GroupMember::Group(CHARLIE_TEAM_GROUP),
             Access::Write { conditions: None },
         ),
     ];
