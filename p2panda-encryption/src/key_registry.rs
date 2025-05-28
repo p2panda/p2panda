@@ -26,7 +26,7 @@ where
 {
     identities: HashMap<ID, PublicKey>,
     onetime_bundles: HashMap<ID, Vec<OneTimeKeyBundle>>,
-    longterm_bundles: HashMap<ID, Vec<LongTermKeyBundle>>,
+    longterm_bundles: HashMap<ID, LongTermKeyBundle>,
 }
 
 impl<ID> KeyRegistry<ID>
@@ -53,10 +53,7 @@ where
             // Sanity check.
             assert_eq!(&existing, key_bundle.identity_key());
         }
-        y.longterm_bundles
-            .entry(id)
-            .and_modify(|bundles| bundles.push(key_bundle.clone()))
-            .or_insert(vec![key_bundle]);
+        y.longterm_bundles.insert(id, key_bundle);
         y
     }
 
@@ -108,13 +105,10 @@ where
     type Error = Infallible;
 
     fn key_bundle(
-        mut y: Self::State,
+        y: Self::State,
         id: &ID,
     ) -> Result<(Self::State, Option<LongTermKeyBundle>), Self::Error> {
-        let bundle = y
-            .longterm_bundles
-            .get_mut(id)
-            .and_then(|bundles| bundles.pop());
+        let bundle = y.longterm_bundles.get(id).cloned();
         Ok((y, bundle))
     }
 }
