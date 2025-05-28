@@ -555,57 +555,50 @@ where
             return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        // The resolver implementation contains the logic which determines when rebuilds are
-        // required.
-        //
-        // TODO: before performing this check we want to actually apply the operation to the
-        // group. This will allow us to handle any validation which occur at that point already.
-        if RS::rebuild_required(&y, operation) {
-            // Add all new operations to the graph and operations vec.
-            y.graph.add_node(operation.id());
-            for previous in previous_operations {
-                y.graph.add_edge(previous, operation.id(), ());
-            }
-            y.operations.push(operation.clone());
-
-            // Perform the re-build and return the new state.
-            return Self::rebuild(y);
-        }
-
-        // Compute the members state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         //
         // This method validates that the actor has permission to perform the action.
-        match control_message {
-            GroupControlMessage::GroupAction { action, .. } => {
-                y = Self::apply_action(
-                    y,
-                    operation_id,
-                    GroupMember::Individual(actor),
-                    &previous_operations,
-                    &action,
-                )?;
-            }
-            // No action required as revokes would have triggered a rebuild in the previous step.
-            //
+        //
+        // Do not update the state if the attempt to apply the action fails.
+        let mut y_i = match control_message {
+            // TODO: either here or inside apply_action we need to account for expected errors
+            // which might occur when attempting to apply state change actions. For example, if an
+            // author is not known about, it might be because they have been concurrently removed.
+            // In this case we want to recover from the error, even if the state has not changed.
+            GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
+                y,
+                operation_id,
+                GroupMember::Individual(actor),
+                &previous_operations,
+                &action,
+            )?,
             // TODO: we could bake in revoke support here if we want to keep it as a core feature
             // (on top of any provided Resolver).
-            GroupControlMessage::Revoke { .. } => (),
-        }
+            GroupControlMessage::Revoke { .. } => unimplemented!(),
+        };
 
-        // Add the new operation to the group states' graph and operations vec.
-        y.graph.add_node(operation_id);
+        // Add the new operation to the group state graph and operations vec, even if the action
+        // was not applied due to an error in the underlying group CRDT.
+        y_i.graph.add_node(operation_id);
         for previous in previous_operations {
-            y.graph.add_edge(previous, operation_id, ());
+            y_i.graph.add_edge(previous, operation_id, ());
         }
-        y.operations.push(operation.clone());
+        y_i.operations.push(operation.clone());
 
         // Update the group in the store.
-        y.group_store
-            .insert(&group_id, &y)
+        y_i.group_store
+            .insert(&group_id, &y_i)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
-        Ok(y)
+        // The resolver implementation contains the logic which determines when rebuilds are
+        // required.
+        if RS::rebuild_required(&y_i, &operation) {
+            // Perform the re-build and return the new state.
+            return Self::rebuild(y_i);
+        }
+
+        Ok(y_i)
     }
 }
 
@@ -627,7 +620,7 @@ where
         previous: &HashSet<OP>,
         action: &GroupAction<ID, C>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        // Compute the members state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
@@ -655,7 +648,7 @@ where
         }
         .map_err(|error| GroupError::StateChangeError(error))?;
 
-        // Only add the resulting members state to the states map if the operation isn't
+        // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.ignore.contains(&id) {
             y.states.insert(id, members_y_i);
