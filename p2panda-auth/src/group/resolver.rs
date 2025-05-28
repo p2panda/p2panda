@@ -372,6 +372,16 @@ mod tests {
 
     #[test]
     fn mutual_removal_filter() {
+        //       A
+        //     /   \
+        //    B     C
+        //
+        // Node A: create the group
+        // Node B: Alice removes Bob
+        // Node C: Bob removes Alice
+        //
+        // We expect both removals to be processed (not filtered).
+
         let alice = 'A';
         let bob = 'B';
         let claire = 'C';
@@ -382,7 +392,7 @@ mod tests {
 
         let mut network = Network::new([alice, bob, claire], rng);
 
-        // Alice creates a group with Alice, Bob and Cliare as managers..
+        // Alice creates a group with Alice, Bob and Claire as managers.
         network.create(
             group,
             alice,
@@ -432,5 +442,193 @@ mod tests {
 
         let claire_filter = network.get_y(&claire, &group).inner.ignore;
         assert!(claire_filter.is_empty());
+    }
+
+    #[test]
+    fn demote_add_filter() {
+        //       A
+        //     /   \
+        //    B     C
+        //
+        // Node A: create the group
+        // Node B: Alice demotes Bob to Write
+        // Node C: Bob adds Dave
+        //
+        // We expect the addition of Dave (node C) to be filtered.
+
+        let alice = 'A';
+        let bob = 'B';
+        let claire = 'C';
+        let dave = 'D';
+
+        let group = '1';
+
+        let rng = StdRng::from_os_rng();
+
+        let mut network = Network::new([alice, bob, claire], rng);
+
+        // Alice creates a group with Alice, Bob and Claire as managers.
+        network.create(
+            group,
+            alice,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // Everyone processes the operation.
+        network.process();
+
+        // Alice demotes Bob.
+        network.demote(
+            alice,
+            GroupMember::Individual(bob),
+            group,
+            Access::Write { conditions: None },
+        );
+
+        // Bob adds Dave concurrently.
+        network.add(bob, GroupMember::Individual(dave), group, Access::Read);
+
+        // Everyone processes these operations.
+        network.process();
+
+        // The demote operation should have been applied.
+        // The add operation should have been filtered.
+
+        // TODO: Assertions fail.
+        // Bob has the expected membership state but Alice and Claire do not.
+
+        // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
+        let alice_members = network.members(&alice, &group);
+        assert_eq!(
+            alice_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        let bob_members = network.members(&bob, &group);
+        assert_eq!(
+            bob_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        let claire_members = network.members(&claire, &group);
+        assert_eq!(
+            claire_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        // TODO: Assertions fail.
+        // Bob has one operation in the filter but Alice and Claire do not.
+        // Bob has successfully filtered the self-authored operation which adds Dave.
+        //
+        // The concurrent bubbles are somehow not being recognised by Alice and Claire
+        // (`get_concurrent_bubbles()` returns an empty HashMap).
+
+        // We expect the "ignore" operation set to be empty, indicating that no operations have
+        // been marked as invalid by the resolver.
+        let alice_filter = network.get_y(&alice, &group).inner.ignore;
+        assert!(alice_filter.is_empty());
+
+        let bob_filter = network.get_y(&bob, &group).inner.ignore;
+        assert!(bob_filter.is_empty());
+
+        let claire_filter = network.get_y(&claire, &group).inner.ignore;
+        assert!(claire_filter.is_empty());
+    }
+
+    #[test]
+    fn remove_dependencies_filter() {
+        //       A
+        //     /   \
+        //    B     C
+        //           \
+        //            D
+        //
+        // Node A: create the group
+        // Node B: Alice removes Bob
+        // Node C: Bob adds Claire
+        // Node D: Claire adds Dave
+        //
+        // We expect the addition of Claire (node C) and Dave (node D) to be filtered.
+        // Alice should be the only member of the group after processing.
+
+        let alice = 'A';
+        let bob = 'B';
+        let claire = 'C';
+        let dave = 'D';
+
+        let group = '1';
+
+        let rng = StdRng::from_os_rng();
+
+        let mut network = Network::new([alice, bob], rng);
+
+        // Alice creates a group with Alice and Bob as managers.
+        network.create(
+            group,
+            alice,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+            ],
+        );
+
+        // Everyone processes the operation.
+        network.process();
+
+        // Alice removes Bob.
+        network.remove(alice, GroupMember::Individual(bob), group);
+
+        // Bob adds Claire concurrently.
+        network.add(bob, GroupMember::Individual(claire), group, Access::Manage);
+
+        // Claire adds Dave concurrently.
+        network.add(claire, GroupMember::Individual(dave), group, Access::Manage);
+
+        // Everyone processes these operations.
+        network.process();
+
+        // We expect Alice to be the only remaining group member.
+        let alice_members = network.members(&alice, &group);
+        assert_eq!(
+            alice_members,
+            vec![(GroupMember::Individual(alice), Access::Manage),]
+        );
+
+        let bob_members = network.members(&bob, &group);
+        assert_eq!(
+            bob_members,
+            vec![(GroupMember::Individual(alice), Access::Manage),]
+        );
+
+        let claire_members = network.members(&claire, &group);
+        assert_eq!(
+            claire_members,
+            vec![(GroupMember::Individual(alice), Access::Manage),]
+        );
     }
 }
