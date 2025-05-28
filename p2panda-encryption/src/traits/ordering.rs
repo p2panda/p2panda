@@ -20,8 +20,6 @@
 use std::error::Error;
 use std::fmt::Debug;
 
-use serde::{Deserialize, Serialize};
-
 use crate::crypto::xchacha20::XAeadNonce;
 #[cfg(any(test, feature = "data_scheme"))]
 use crate::data_scheme::{self, GroupSecretId};
@@ -55,7 +53,7 @@ pub trait Ordering<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
 {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + Debug;
 
     type Error: Error;
 
