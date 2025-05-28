@@ -1013,7 +1013,11 @@ where
 // ~~~~~~~~
 
 pub struct UniverseConfig {
+    // This is when a key bundle gets considered expired and thus invalid.
     pre_key_lifetime: Duration,
+
+    // We rotate our own pre keys after this duration, to allow some time between peers receiving
+    // our new one and the old one expiring.
     pre_key_rotate_after: Duration,
 }
 
@@ -1021,7 +1025,7 @@ impl Default for UniverseConfig {
     fn default() -> Self {
         Self {
             pre_key_lifetime: Duration::from_secs(60 * 60 * 24 * 90), // 90 days
-            pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 7), // 7 days
+            pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 60), // 60 days
         }
     }
 }
@@ -1096,46 +1100,6 @@ where
         store: GS,
         rng: Rng,
     ) -> Result<Self, UniverseError<C, GS>> {
-        // ... observes messages on the network (scoped by topic id)
-
-        // Orderer comes here!
-        //
-        // - It needs to be here, right at the beginning, it knows about multiple documents
-        // - TODO: Can it even be _outside_ all of this? Shouldn't the orderer be part of
-        // `p2panda-stream`?
-
-        // Router comes here!
-        //
-        // "routing logic" draft:
-        // Is group control message or document control message?
-        //    If group control message: Is it related to any documents I'm part of?
-        //       If yes, route it to the regarding document processors
-        //       In any case, always route it to the regarding group processor
-        //   If document control message: Are you part of the document?
-        //       If not, keep it around and wait
-        //       If yes, route it to the regarding document processor
-        //
-        // Directing every control message to the regarding document(s).
-        // - this means that the router needs to understand which document relates to what groups ..
-        // - If we are already inside the group (via CREATE or ADD), then the router forwards it
-        // directly to the regarding documents. If NOT, then the router keeps them, and re-plays the
-        // whole graph when we're welcomed
-        // - In any case, if you're not inside any group, we're still processing them for establishing
-        // group state (outside of documents / encryption).
-
-        // Key Registry
-        //
-        // - We also observe published key bundle messages in the network. If they're not expired we
-        // also store them in some sort of key registry.
-
-        // Validation?
-        //
-        // - Extra rules around what to process first
-
-        let dgm = EncryptionGroupManagerState::default();
-
-        let orderer = OrdererState { my_id };
-
         // Generate pre keys with configured lifetime.
         let my_keys = {
             let identity_secret = SecretKey::from_rng(&rng)?;
@@ -1152,6 +1116,10 @@ where
 
         // Add ourselves to "individuals" address book.
         let individuals = HashSet::from_iter([my_id]);
+
+        // Establish initial states.
+        let dgm = EncryptionGroupManagerState::default();
+        let orderer = OrdererState { my_id };
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
@@ -1241,6 +1209,42 @@ where
     }
 
     pub fn process(&mut self, operation: &FakeOperation<C>) -> Result<(), UniverseError<C, GS>> {
+        // ... observes messages on the network (scoped by topic id)
+
+        // Orderer comes here!
+        //
+        // - It needs to be here, right at the beginning, it knows about multiple documents
+        // - TODO: Can it even be _outside_ all of this? Shouldn't the orderer be part of
+        // `p2panda-stream`?
+
+        // Router comes here!
+        //
+        // "routing logic" draft:
+        // Is group control message or document control message?
+        //    If group control message: Is it related to any documents I'm part of?
+        //       If yes, route it to the regarding document processors
+        //       In any case, always route it to the regarding group processor
+        //   If document control message: Are you part of the document?
+        //       If not, keep it around and wait
+        //       If yes, route it to the regarding document processor
+        //
+        // Directing every control message to the regarding document(s).
+        // - this means that the router needs to understand which document relates to what groups ..
+        // - If we are already inside the group (via CREATE or ADD), then the router forwards it
+        // directly to the regarding documents. If NOT, then the router keeps them, and re-plays the
+        // whole graph when we're welcomed
+        // - In any case, if you're not inside any group, we're still processing them for establishing
+        // group state (outside of documents / encryption).
+
+        // Key Registry
+        //
+        // - We also observe published key bundle messages in the network. If they're not expired we
+        // also store them in some sort of key registry.
+
+        // Validation?
+        //
+        // - Extra rules around what to process first
+
         todo!()
     }
 
