@@ -111,11 +111,12 @@ use std::fmt::{self, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use p2panda_auth::group::{
     Access, Group as AuthGroupGeneric, GroupAction,
-    GroupControlMessage as AuthControlMessageGeneric, GroupMember, GroupResolver,
-    GroupState as AuthGroupStateGeneric,
+    GroupControlMessage as AuthControlMessageGeneric, GroupError as AuthGroupErrorGeneric,
+    GroupMember, GroupResolver, GroupState as AuthGroupStateGeneric,
 };
 use p2panda_auth::traits::{
     AuthGroup as AuthGroupTrait, GroupStore, IdentityHandle as AuthIdentityHandle,
@@ -130,14 +131,14 @@ use p2panda_encryption::data_scheme::{
 };
 use p2panda_encryption::traits::{
     GroupMembership, GroupMessage as EncryptionMessage, GroupMessageType,
-    IdentityHandle as EncryptionIdentityHandle, IdentityManager, IdentityRegistry,
+    IdentityHandle as EncryptionIdentityHandle, IdentityManager, IdentityRegistry, KeyBundle,
     OperationId as EncryptionOperationId, Ordering as EncryptionOrdering, PreKeyManager,
     PreKeyRegistry,
 };
 use p2panda_encryption::{
-    KeyManager as KeyManagerInner, KeyManagerError, KeyManagerState as KeyManagerStateInner,
-    KeyRegistry as KeyRegistryInner, KeyRegistryState as KeyRegistryStateInner, Lifetime,
-    LongTermKeyBundle, Rng, RngError,
+    KeyBundleError, KeyManager as KeyManagerInner, KeyManagerError,
+    KeyManagerState as KeyManagerStateInner, KeyRegistry as KeyRegistryInner,
+    KeyRegistryState as KeyRegistryStateInner, Lifetime, LongTermKeyBundle, Rng, RngError,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -286,6 +287,19 @@ impl KeyRegistry {
             inner: Arc::new(Mutex::new(Some(KeyRegistryInner::init()))),
         }
     }
+
+    pub fn add_key_bundle(
+        mut y: KeyRegistryState,
+        id: ActorId,
+        key_bundle: LongTermKeyBundle,
+    ) -> KeyRegistryState {
+        let mut inner = y.inner.lock().unwrap();
+        let y_inner = inner.take().expect("inner key registry state to be given");
+        let y_inner_ii = KeyRegistryInner::add_longterm_bundle(y_inner, id, key_bundle);
+        *inner = Some(y_inner_ii);
+        drop(inner);
+        y
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -362,6 +376,9 @@ pub type AuthGroupState<C, GS> =
     AuthGroupStateGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
 
 pub type AuthControlMessage<C> = AuthControlMessageGeneric<ActorId, OperationId, C>;
+
+pub type AuthGroupError<C, GS> =
+    AuthGroupErrorGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
 
 pub type EncryptionGroupState<C, GS> = EncryptionGroupStateGeneric<
     ActorId,
@@ -464,7 +481,7 @@ where
             y,
             Message::PreAuth {
                 sender,
-                document_id: control_message.group_id(),
+                actor_id: control_message.group_id(),
                 control_message: control_message.to_owned(),
             },
         ))
@@ -564,6 +581,9 @@ pub enum DocumentControlMessage<C> {
 // to be checked when we receive a message.
 #[derive(Clone, Debug)]
 pub enum DocumentBody<C> {
+    Member {
+        key_bundle: LongTermKeyBundle,
+    },
     Group {
         control_message: GroupControlMessage<C>,
     },
@@ -576,7 +596,9 @@ pub enum DocumentBody<C> {
 #[derive(Clone, Debug)]
 pub struct DocumentExtensions {
     version: u64,
-    document_id: ActorId,
+
+    // TODO: What are the semantics here?
+    actor_id: ActorId,
 }
 
 // ~~~~~~~
@@ -587,7 +609,7 @@ pub struct DocumentExtensions {
 pub enum Message<C> {
     PreAuth {
         sender: ActorId,
-        document_id: ActorId,
+        actor_id: ActorId,
         control_message: AuthControlMessage<C>,
     },
     PreEncryption {
@@ -643,7 +665,7 @@ where
                 } => match control_message {
                     GroupControlMessage::Create { initial_members } => {
                         AuthControlMessage::GroupAction {
-                            group_id: operation.header.extensions.document_id,
+                            group_id: operation.header.extensions.actor_id,
                             action: GroupAction::Create {
                                 initial_members: initial_members.to_vec(),
                             },
@@ -656,13 +678,14 @@ where
                 } => match control_message {
                     DocumentControlMessage::Create { initial_members } => {
                         AuthControlMessage::GroupAction {
-                            group_id: operation.header.extensions.document_id,
+                            group_id: operation.header.extensions.actor_id,
                             action: GroupAction::Create {
                                 initial_members: initial_members.to_vec(),
                             },
                         }
                     }
                 },
+                _ => unreachable!(),
             },
             _ => unreachable!(),
         };
@@ -726,17 +749,17 @@ where
         let universe = universe_owned.inner.read().await;
 
         // TODO: Here something happens with deriving a group id.
-        let document_id = ActorId(PrivateKey::new().public_key());
+        let group_id = ActorId(PrivateKey::new().public_key());
 
         let y = AuthGroupState::new(
             universe.my_id,
-            document_id,
+            group_id,
             universe.store.clone(),
             universe.orderer.clone(),
         );
 
         let control_message = AuthControlMessage::GroupAction {
-            group_id: document_id,
+            group_id: group_id,
             action: GroupAction::Create {
                 initial_members: initial_members.to_vec(),
             },
@@ -752,7 +775,7 @@ where
                     public_key: universe.my_id.0,
                     extensions: DocumentExtensions {
                         version: 1,
-                        document_id,
+                        actor_id: group_id,
                     },
                 },
                 body: DocumentBody::Group {
@@ -771,7 +794,7 @@ where
 
         Ok((
             Group {
-                id: document_id,
+                id: group_id,
                 universe: universe_owned,
                 _marker: PhantomData,
             },
@@ -858,14 +881,22 @@ where
             );
 
             // Compute set of members who are part of the encryption group.
-            let initial_members = secret_members(&initial_members);
+            let initial_members = secret_members(
+                // TODO: Can't handle error right now.
+                auth_state
+                    .transitive_members()
+                    .expect("not sure how to handle this error"),
+            );
+
+            // TODO: Check if all pre keys for these initial members are not expired & given
+            // (otherwise calling "create" will error).
 
             let (y_ii, pre) = EncryptionGroup::create(y, initial_members, &universe.rng)?;
 
             (y_ii, pre)
         };
 
-        let Message::PreAuth { document_id, .. } = auth_pre_message else {
+        let Message::PreAuth { actor_id, .. } = auth_pre_message else {
             unreachable!("method will always return a pre-auth message");
         };
 
@@ -883,7 +914,7 @@ where
                     public_key: universe.my_id.0,
                     extensions: DocumentExtensions {
                         version: 1,
-                        document_id,
+                        actor_id,
                     },
                 },
                 body: DocumentBody::Document {
@@ -980,6 +1011,26 @@ where
 // Universe
 // ~~~~~~~~
 
+pub struct UniverseConfig {
+    pre_key_lifetime: Duration,
+    pre_key_rotate_after: Duration,
+}
+
+impl Default for UniverseConfig {
+    fn default() -> Self {
+        Self {
+            pre_key_lifetime: Duration::from_secs(60 * 60 * 24 * 90), // 90 days
+            pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 7), // 7 days
+        }
+    }
+}
+
+impl UniverseConfig {
+    pub fn lifetime(&self) -> Lifetime {
+        Lifetime::new(self.pre_key_lifetime.as_secs())
+    }
+}
+
 // Messages we can see on the network inside a "universe" (app scope usually).
 pub enum UniverseMessage {
     KeyBundle,
@@ -994,14 +1045,17 @@ where
 {
     pub(crate) my_id: ActorId,
 
-    pub(crate) private_key: PrivateKey,
-
-    pub(crate) identity_secret: SecretKey,
+    pub(crate) config: UniverseConfig,
 
     pub(crate) my_keys: KeyManagerState,
 
-    // Here we have all "leafes" aka, actual "devices" with private keys.
-    pub(crate) members: HashMap<ActorId, ()>,
+    pub(crate) my_keys_rotated_at: u64, // UNIX timestamp in secs
+
+    // Here we have all "leaves" aka, actual "devices" owning private keys.
+    //
+    // If we observed an individual we also have their key bundle. It could be that it expired some
+    // time later though and that we need a new one after a while.
+    pub(crate) individuals: HashSet<ActorId>,
 
     // Here we have _all_ groups EXCEPT "root groups" / documents.
     pub(crate) groups: HashMap<ActorId, AuthGroupState<C, GS>>,
@@ -1019,8 +1073,6 @@ where
     pub(crate) dgm: EncryptionGroupManagerState,
 
     pub(crate) rng: Rng,
-
-    _marker: PhantomData<C>,
 }
 
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
@@ -1037,7 +1089,12 @@ where
     C: fmt::Debug + Clone + PartialOrd + 'static,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
-    pub fn new(private_key: PrivateKey, store: GS) -> Result<Self, UniverseError<C, GS>> {
+    pub fn new(
+        my_id: ActorId,
+        config: UniverseConfig,
+        store: GS,
+        rng: Rng,
+    ) -> Result<Self, UniverseError<C, GS>> {
         // ... observes messages on the network (scoped by topic id)
 
         // Orderer comes here!
@@ -1074,42 +1131,41 @@ where
         //
         // - Extra rules around what to process first
 
-        // TODO: Allow seedable rng for test environments.
-        let rng = Rng::default();
-
-        let my_id = ActorId(private_key.public_key());
-
-        let identity_secret = SecretKey::from_rng(&rng)?;
-
         let dgm = EncryptionGroupManagerState::default();
 
         let orderer = OrdererState { my_id };
 
-        let my_keys = KeyManager::init(
-            &identity_secret,
-            // TODO: Make lifetime configurable.
-            Lifetime::default(),
-            &rng,
-        )?;
+        // Generate pre keys with configured lifetime.
+        let my_keys = {
+            let identity_secret = SecretKey::from_rng(&rng)?;
+            KeyManager::init(&identity_secret, config.lifetime(), &rng)?
+        };
+        let my_keys_rotated_at = now();
 
-        // Add ourselves to "members" address book.
-        let members = HashMap::from_iter([(my_id, ())]);
+        // Register our own pre keys.
+        let pki = {
+            let key_bundle = KeyManager::prekey_bundle(&my_keys);
+            let y = KeyRegistry::init();
+            KeyRegistry::add_key_bundle(y, my_id, key_bundle)
+        };
+
+        // Add ourselves to "individuals" address book.
+        let individuals = HashSet::from_iter([my_id]);
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
                 my_id,
-                private_key,
-                identity_secret,
+                config,
                 my_keys,
-                members,
+                my_keys_rotated_at,
+                individuals,
                 groups: HashMap::new(),
                 documents: HashMap::new(),
-                pki: KeyRegistry::init(),
+                pki,
                 store,
                 orderer,
                 dgm,
                 rng,
-                _marker: PhantomData,
             })),
         })
     }
@@ -1147,7 +1203,45 @@ where
         Ok((group, operation))
     }
 
+    pub async fn key_bundle_expired(&self) -> bool {
+        let inner = self.inner.read().await;
+        now() - inner.my_keys_rotated_at <= inner.config.pre_key_rotate_after.as_secs()
+    }
+
+    pub async fn key_bundle(&mut self) -> Result<FakeOperation<C>, UniverseError<C, GS>> {
+        let mut inner = self.inner.write().await;
+
+        // Automatically rotate pre key when it reached critical expiry date.
+        if now() - inner.my_keys_rotated_at <= inner.config.pre_key_rotate_after.as_secs() {
+            // This mutates the state internally.
+            KeyManager::rotate_prekey(inner.my_keys.clone(), inner.config.lifetime(), &inner.rng)?;
+        }
+
+        let key_bundle = KeyManager::prekey_bundle(&inner.my_keys);
+
+        // Register our own key bundle.
+        inner.pki = KeyRegistry::add_key_bundle(inner.pki.clone(), inner.my_id, key_bundle.clone());
+
+        // TODO: Properly create and sign operations here.
+        Ok(FakeOperation {
+            header: FakeHeader {
+                public_key: inner.my_id.0,
+                extensions: DocumentExtensions {
+                    version: 1,
+                    actor_id: inner.my_id,
+                },
+            },
+            body: DocumentBody::Member { key_bundle },
+            hash: Hash::from_bytes(inner.rng.random_array()?),
+        })
+    }
+
     pub fn process(&self) {
+        // TODO
+    }
+
+    async fn register_key_bundle(&mut self, actor_id: ActorId, key_bundle: LongTermKeyBundle) {
+        let mut inner = self.inner.write().await;
         // TODO
     }
 
@@ -1161,7 +1255,7 @@ where
         for (id, access) in initial_members {
             if inner.groups.contains_key(id) {
                 result.push((GroupMember::Group(*id), access.clone()));
-            } else if inner.members.contains_key(id) {
+            } else if inner.individuals.contains(id) {
                 result.push((GroupMember::Individual(*id), access.clone()));
             } else if inner.documents.contains_key(id) {
                 return Err(UniverseError::DocumentIsNotMember(*id));
@@ -1229,14 +1323,15 @@ where
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 
+    // TODO: Requires C to implement Display?
+    // TODO: Causes infinite cycle ..?
+    // #[error(transparent)]
+    // AuthGroup(#[from] AuthGroupError<C, GS>),
     #[error(transparent)]
     EncryptionGroup(#[from] EncryptionGroupError<C, GS>),
 
     #[error(transparent)]
     Rng(#[from] RngError),
-    // TODO: We're hiding the error message here.
-    // #[error("group error occurred")]
-    // Group(GroupError<ActorId, OperationId, AuthResolver, Orderer<GS>, GS>),
 }
 
 #[derive(Debug, Error)]
@@ -1245,14 +1340,21 @@ pub enum GroupError {
     Rng(#[from] RngError),
 }
 
-fn secret_members<C>(members: &Vec<(GroupMember<ActorId>, Access<C>)>) -> Vec<ActorId> {
+fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
     members
-        .iter()
-        .filter_map(|(member, access)| match access {
+        .into_iter()
+        .filter_map(|(id, access)| match access {
             Access::Pull => None,
-            Access::Read | Access::Write { .. } | Access::Manage => Some(member.id().to_owned()),
+            Access::Read | Access::Write { .. } | Access::Manage => Some(id),
         })
         .collect()
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("SystemTime before UNIX EPOCH!")
+        .as_secs()
 }
 
 #[cfg(test)]
@@ -1266,12 +1368,12 @@ mod tests {
     use std::convert::Infallible;
     use std::rc::Rc;
 
-    // use p2panda_auth::group::resolver::GroupResolver;
     use p2panda_auth::group::{Access, GroupMember};
     use p2panda_auth::traits::GroupStore;
     use p2panda_core::PrivateKey;
+    use p2panda_encryption::Rng;
 
-    use super::{ActorId, AuthGroupState, Universe};
+    use super::{ActorId, AuthGroupState, Universe, UniverseConfig};
 
     #[derive(Debug, Clone)]
     pub struct SqliteStore(Rc<RefCell<HashMap<ActorId, AuthGroupState<Conditions, Self>>>>);
@@ -1310,16 +1412,26 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
+        let rng = Rng::default();
+
         let store = SqliteStore::new();
 
+        let config = UniverseConfig::default();
+
         let private_key = PrivateKey::new();
+        let my_id = ActorId(private_key.public_key());
 
         // TODO: Make resolver generic again.
         // let resolver = GroupResolver::default();
 
         // A "universe" holding all state for alice's laptop!
-        let mut universe = Universe::<Conditions, SqliteStore>::new(private_key, store).unwrap();
-        let mut alice_laptop_id = universe.id().await;
+        let mut universe =
+            Universe::<Conditions, SqliteStore>::new(my_id, config, store, rng).unwrap();
+        let alice_laptop_id = universe.id().await;
+
+        if universe.key_bundle_expired().await {
+            let operation_0 = universe.key_bundle().await.unwrap();
+        }
 
         let (alice, operation_1) = universe
             .create_group(&[(alice_laptop_id, Access::Manage)])
