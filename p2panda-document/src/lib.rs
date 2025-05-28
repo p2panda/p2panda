@@ -113,8 +113,9 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
 use p2panda_auth::group::{
-    Access, Group as AuthGroupGeneric, GroupAction, GroupControlMessage, GroupMember,
-    GroupResolver, GroupState as AuthGroupStateGeneric,
+    Access, Group as AuthGroupGeneric, GroupAction,
+    GroupControlMessage as AuthControlMessageGeneric, GroupMember, GroupResolver,
+    GroupState as AuthGroupStateGeneric,
 };
 use p2panda_auth::traits::{
     AuthGroup as AuthGroupTrait, GroupStore, IdentityHandle as AuthIdentityHandle,
@@ -360,7 +361,7 @@ pub type AuthGroup<C, GS> =
 pub type AuthGroupState<C, GS> =
     AuthGroupStateGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
 
-pub type AuthControlMessage<C> = GroupControlMessage<ActorId, OperationId, C>;
+pub type AuthControlMessage<C> = AuthControlMessageGeneric<ActorId, OperationId, C>;
 
 pub type EncryptionGroupState<C, GS> = EncryptionGroupStateGeneric<
     ActorId,
@@ -446,7 +447,6 @@ pub struct OrdererState {
 impl<C, GS> AuthOrdering<ActorId, OperationId, AuthControlMessage<C>> for Orderer<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     type State = OrdererState;
@@ -547,16 +547,30 @@ pub struct FakeOperation<C> {
 }
 
 #[derive(Clone, Debug)]
-pub enum DocumentControlMessage<C> {
+pub enum GroupControlMessage<C> {
     Create {
-        initial_members: Vec<(ActorId, Access<C>)>,
+        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct DocumentBody<C> {
-    control_message: DocumentControlMessage<C>,
-    direct_messages: Vec<EncryptionDirectMessage>,
+pub enum DocumentControlMessage<C> {
+    Create {
+        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+    },
+}
+
+// TODO: We can't trust that the set group member type (individual or group) is correct, this needs
+// to be checked when we receive a message.
+#[derive(Clone, Debug)]
+pub enum DocumentBody<C> {
+    Group {
+        control_message: GroupControlMessage<C>,
+    },
+    Document {
+        control_message: DocumentControlMessage<C>,
+        direct_messages: Vec<EncryptionDirectMessage>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -582,6 +596,16 @@ pub enum Message<C> {
         direct_messages: Vec<EncryptionDirectMessage>,
     },
     Signed(FakeOperation<C>),
+}
+
+impl<C> Message<C> {
+    pub fn operation(self) -> Option<FakeOperation<C>> {
+        match self {
+            Message::PreAuth { .. } => None,
+            Message::PreEncryption { .. } => None,
+            Message::Signed(operation) => Some(operation),
+        }
+    }
 }
 
 impl<C> AuthMessage<ActorId, OperationId, AuthControlMessage<C>> for Message<C>
@@ -613,21 +637,31 @@ where
 
     fn payload(&self) -> AuthControlMessage<C> {
         let message = match self {
-            Message::Signed(operation) => match operation.body.control_message {
-                DocumentControlMessage::Create {
-                    ref initial_members,
-                } => AuthControlMessage::GroupAction {
-                    group_id: operation.header.extensions.document_id,
-                    action: GroupAction::Create {
-                        // TODO: Question how to bring back the group member type (individual or
-                        // sub group) back here from the message.
-                        //
-                        // We could encode it in the message, but it would still need to be checked
-                        // anyhow an receiving.
-                        //
-                        // Probably we want to ask the universe state here and resolve the types.
-                        initial_members: define_group_type_hack(initial_members),
-                    },
+            Message::Signed(operation) => match operation.body {
+                DocumentBody::Group {
+                    ref control_message,
+                } => match control_message {
+                    GroupControlMessage::Create { initial_members } => {
+                        AuthControlMessage::GroupAction {
+                            group_id: operation.header.extensions.document_id,
+                            action: GroupAction::Create {
+                                initial_members: initial_members.to_vec(),
+                            },
+                        }
+                    }
+                },
+                DocumentBody::Document {
+                    ref control_message,
+                    ..
+                } => match control_message {
+                    DocumentControlMessage::Create { initial_members } => {
+                        AuthControlMessage::GroupAction {
+                            group_id: operation.header.extensions.document_id,
+                            action: GroupAction::Create {
+                                initial_members: initial_members.to_vec(),
+                            },
+                        }
+                    }
                 },
             },
             _ => unreachable!(),
@@ -684,6 +718,69 @@ where
     pub fn id(&self) -> ActorId {
         self.id
     }
+
+    pub(crate) async fn create(
+        universe_owned: Universe<C, GS>,
+        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+    ) -> Result<(Group<C, GS>, AuthGroupState<C, GS>, FakeOperation<C>), GroupError> {
+        let universe = universe_owned.inner.read().await;
+
+        // TODO: Here something happens with deriving a group id.
+        let document_id = ActorId(PrivateKey::new().public_key());
+
+        let y = AuthGroupState::new(
+            universe.my_id,
+            document_id,
+            universe.store.clone(),
+            universe.orderer.clone(),
+        );
+
+        let control_message = AuthControlMessage::GroupAction {
+            group_id: document_id,
+            action: GroupAction::Create {
+                initial_members: initial_members.to_vec(),
+            },
+        };
+
+        // TODO: We can't handle the error yet
+        let (y_i, pre) = AuthGroup::prepare(y, &control_message).unwrap();
+
+        // TODO: Use real p2panda operations with extensions here & sign them.
+        let message = {
+            Message::Signed(FakeOperation {
+                header: FakeHeader {
+                    public_key: universe.my_id.0,
+                    extensions: DocumentExtensions {
+                        version: 1,
+                        document_id,
+                    },
+                },
+                body: DocumentBody::Group {
+                    control_message: GroupControlMessage::Create {
+                        initial_members: initial_members.to_vec(),
+                    },
+                },
+                hash: Hash::from_bytes(universe.rng.random_array()?),
+            })
+        };
+
+        // TODO: We can't handle the error yet
+        let y_ii = AuthGroup::process(y_i, &message).unwrap();
+
+        drop(universe);
+
+        Ok((
+            Group {
+                id: document_id,
+                universe: universe_owned,
+                _marker: PhantomData,
+            },
+            y_ii,
+            message
+                .operation()
+                .expect("operation should exist at this stage"),
+        ))
+    }
 }
 
 // ~~~~~~~~
@@ -697,7 +794,6 @@ where
 pub struct Document<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     id: ActorId,
@@ -716,15 +812,14 @@ where
 
 impl<C, GS> Document<C, GS>
 where
-    // TODO: Clone and Debug bound for both RS and GS is maybe not necessary?
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + Clone + fmt::Debug,
     C: fmt::Debug + Clone + PartialOrd + 'static,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     pub(crate) async fn create(
         universe_owned: Universe<C, GS>,
-        initial_members: &[(GroupMember<ActorId>, Access<C>)],
-    ) -> Result<(Document<C, GS>, DocumentState<C, GS>), DocumentError<C, GS>> {
+        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+    ) -> Result<(Document<C, GS>, DocumentState<C, GS>, FakeOperation<C>), DocumentError<C, GS>>
+    {
         let universe = universe_owned.inner.read().await;
 
         // TODO: Here something happens with deriving a group id.
@@ -763,7 +858,7 @@ where
             );
 
             // Compute set of members who are part of the encryption group.
-            let initial_members = secret_members(initial_members);
+            let initial_members = secret_members(&initial_members);
 
             let (y_ii, pre) = EncryptionGroup::create(y, initial_members, &universe.rng)?;
 
@@ -782,9 +877,7 @@ where
         };
 
         // TODO: Use real p2panda operations with extensions here & sign them.
-        let operation = {
-            let initial_members = erase_group_type(initial_members);
-
+        let message = {
             Message::Signed(FakeOperation {
                 header: FakeHeader {
                     public_key: universe.my_id.0,
@@ -793,7 +886,7 @@ where
                         document_id,
                     },
                 },
-                body: DocumentBody {
+                body: DocumentBody::Document {
                     control_message: DocumentControlMessage::Create { initial_members },
                     direct_messages,
                 },
@@ -802,7 +895,7 @@ where
         };
 
         let auth_state = {
-            let y_ii = AuthGroup::process(auth_state, &operation).unwrap();
+            let y_ii = AuthGroup::process(auth_state, &message).unwrap();
             y_ii
         };
 
@@ -823,6 +916,9 @@ where
                 auth_state,
                 encryption_state,
             },
+            message
+                .operation()
+                .expect("operation should exist at this stage"),
         ))
     }
 
@@ -864,7 +960,6 @@ where
                 },
             };
 
-            // TODO: Clone bound on RS and ORD in `prepare` is confusing.
             // TODO: Prepare should not queue the operation for us (we don't need it inside the
             // orderer).
             // TODO: We can't handle the error yet (see `DocumentError`).
@@ -905,6 +1000,9 @@ where
 
     pub(crate) my_keys: KeyManagerState,
 
+    // Here we have all "leafes" aka, actual "devices" with private keys.
+    pub(crate) members: HashMap<ActorId, ()>,
+
     // Here we have _all_ groups EXCEPT "root groups" / documents.
     pub(crate) groups: HashMap<ActorId, AuthGroupState<C, GS>>,
 
@@ -929,7 +1027,6 @@ where
 pub struct Universe<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
@@ -938,7 +1035,6 @@ where
 impl<C, GS> Universe<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug + Clone,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     pub fn new(private_key: PrivateKey, store: GS) -> Result<Self, UniverseError<C, GS>> {
@@ -996,12 +1092,16 @@ where
             &rng,
         )?;
 
+        // Add ourselves to "members" address book.
+        let members = HashMap::from_iter([(my_id, ())]);
+
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
                 my_id,
                 private_key,
                 identity_secret,
                 my_keys,
+                members,
                 groups: HashMap::new(),
                 documents: HashMap::new(),
                 pki: KeyRegistry::init(),
@@ -1021,32 +1121,56 @@ where
 
     pub async fn create_document(
         &mut self,
-        initial_members: &[(GroupMember<ActorId>, Access<C>)],
-    ) -> Result<Document<C, GS>, UniverseError<C, GS>> {
-        let (document, y_doc) = Document::create(self.clone(), initial_members).await?;
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<(Document<C, GS>, FakeOperation<C>), UniverseError<C, GS>> {
+        let initial_members = self.identify_actor_types(initial_members).await?;
+
+        let (document, y_doc, operation) = Document::create(self.clone(), initial_members).await?;
 
         let mut inner = self.inner.write().await;
         inner.documents.insert(document.id(), y_doc);
 
-        Ok(document)
+        Ok((document, operation))
     }
 
     pub async fn create_group(
         &mut self,
-        initial_members: &[(GroupMember<ActorId>, Access<C>)],
-    ) -> Result<Group<C, GS>, UniverseError<C, GS>> {
-        todo!();
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<(Group<C, GS>, FakeOperation<C>), UniverseError<C, GS>> {
+        let initial_members = self.identify_actor_types(initial_members).await?;
 
-        // let (group, y_group) = Group::create(self.clone(), initial_members).await?;
-        //
-        // let mut inner = self.inner.write().await;
-        // inner.groups.insert(group.id(), y_group);
-        //
-        // Ok(group)
+        let (group, y_group, operation) = Group::create(self.clone(), initial_members).await?;
+
+        let mut inner = self.inner.write().await;
+        inner.groups.insert(group.id(), y_group);
+
+        Ok((group, operation))
     }
 
     pub fn process(&self) {
         // TODO
+    }
+
+    async fn identify_actor_types(
+        &self,
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<Vec<(GroupMember<ActorId>, Access<C>)>, UniverseError<C, GS>> {
+        let inner = self.inner.read().await;
+        let mut result = Vec::with_capacity(initial_members.len());
+
+        for (id, access) in initial_members {
+            if inner.groups.contains_key(id) {
+                result.push((GroupMember::Group(*id), access.clone()));
+            } else if inner.members.contains_key(id) {
+                result.push((GroupMember::Individual(*id), access.clone()));
+            } else if inner.documents.contains_key(id) {
+                return Err(UniverseError::DocumentIsNotMember(*id));
+            } else {
+                return Err(UniverseError::UnknownActor(*id));
+            }
+        }
+
+        Ok(result)
     }
 }
 
@@ -1068,6 +1192,21 @@ where
     C: fmt::Debug + Clone + PartialOrd + 'static,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
+    #[error("documents like {0} can not be members of groups")]
+    DocumentIsNotMember(ActorId),
+
+    // This happens if our universe did not observe the key bundle for this member yet or a create
+    // message for a group.
+    //
+    // Or the actor id is simply not existant.
+    #[error(
+        "actor {0} is unknown and can not be added. we might be missing key bundles or a group creation"
+    )]
+    UnknownActor(ActorId),
+
+    #[error(transparent)]
+    Group(#[from] GroupError),
+
     #[error(transparent)]
     Document(#[from] DocumentError<C, GS>),
 
@@ -1082,7 +1221,6 @@ where
 pub enum DocumentError<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    // RS: Resolver<AuthGroupState<RS, GS>, Message> + fmt::Debug,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
     #[error("tried to access a document {0} which is not known to us")]
@@ -1097,45 +1235,22 @@ where
     #[error(transparent)]
     Rng(#[from] RngError),
     // TODO: We're hiding the error message here.
-    // TODO: Having the resolver type mentioned in this error causes an infinite cycle which
-    // overflows Rust.
     // #[error("group error occurred")]
     // Group(GroupError<ActorId, OperationId, AuthResolver, Orderer<GS>, GS>),
 }
 
-fn secret_members<C>(members: &[(GroupMember<ActorId>, Access<C>)]) -> Vec<ActorId> {
+#[derive(Debug, Error)]
+pub enum GroupError {
+    #[error(transparent)]
+    Rng(#[from] RngError),
+}
+
+fn secret_members<C>(members: &Vec<(GroupMember<ActorId>, Access<C>)>) -> Vec<ActorId> {
     members
         .iter()
         .filter_map(|(member, access)| match access {
             Access::Pull => None,
             Access::Read | Access::Write { .. } | Access::Manage => Some(member.id().to_owned()),
-        })
-        .collect()
-}
-
-fn erase_group_type<C>(members: &[(GroupMember<ActorId>, Access<C>)]) -> Vec<(ActorId, Access<C>)>
-where
-    C: Clone,
-{
-    members
-        .iter()
-        .map(|(member, access)| (member.id().to_owned(), access.to_owned()))
-        .collect()
-}
-
-fn define_group_type_hack<C>(
-    members: &[(ActorId, Access<C>)],
-) -> Vec<(GroupMember<ActorId>, Access<C>)>
-where
-    C: Clone,
-{
-    members
-        .iter()
-        .map(|(member, access)| {
-            (
-                GroupMember::Individual(member.to_owned()),
-                access.to_owned(),
-            )
         })
         .collect()
 }
@@ -1146,7 +1261,10 @@ mod tests {
     // Group Store
     // ~~~~~~~~~~~
 
+    use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::convert::Infallible;
+    use std::rc::Rc;
 
     // use p2panda_auth::group::resolver::GroupResolver;
     use p2panda_auth::group::{Access, GroupMember};
@@ -1156,11 +1274,11 @@ mod tests {
     use super::{ActorId, AuthGroupState, Universe};
 
     #[derive(Debug, Clone)]
-    pub struct SqliteStore;
+    pub struct SqliteStore(Rc<RefCell<HashMap<ActorId, AuthGroupState<Conditions, Self>>>>);
 
     impl SqliteStore {
         pub fn new() -> Self {
-            Self {}
+            Self(Rc::new(RefCell::new(HashMap::new())))
         }
     }
 
@@ -1169,12 +1287,22 @@ mod tests {
 
         type Error = Infallible;
 
+        // TODO: Should be an atomic write transaction instead.
         fn insert(&self, id: &ActorId, group: &Self::Group) -> Result<(), Self::Error> {
-            todo!()
+            {
+                let mut store = self.0.borrow_mut();
+                // TODO: We've enabled the `test_utils` flag right now to make this cloning work.
+                // That should not be required as soon as `insert` gets removed from the store and
+                // we use atomic transactions instead.
+                store.insert(*id, group.clone());
+            }
+            Ok(())
         }
 
         fn get(&self, id: &ActorId) -> Result<Option<Self::Group>, Self::Error> {
-            todo!()
+            let store = self.0.borrow();
+            let group_y = store.get(id);
+            Ok(group_y.cloned())
         }
     }
 
@@ -1191,21 +1319,20 @@ mod tests {
 
         // A "universe" holding all state for alice's laptop!
         let mut universe = Universe::<Conditions, SqliteStore>::new(private_key, store).unwrap();
+        let mut alice_laptop_id = universe.id().await;
 
-        let alice = universe
-            .create_group(&[(GroupMember::Individual(universe.id().await), Access::Manage)])
+        let (alice, operation_1) = universe
+            .create_group(&[(alice_laptop_id, Access::Manage)])
             .await
             .unwrap();
 
-        let document = universe
-            .create_document(&[(
-                GroupMember::Group(alice.id()),
-                Access::Write { conditions: None },
-            )])
+        let (document, operation_2) = universe
+            .create_document(&[(alice.id(), Access::Write { conditions: None })])
             .await
             .unwrap();
 
         // TODO: Later we want to do this (after a user action or processing).
+        // operation_1.write(&mut tx).await.unwrap();
         // universe.write(&mut tx).await.unwrap();
         // tx.commit().await.unwrap();
     }
