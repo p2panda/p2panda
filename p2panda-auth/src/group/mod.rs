@@ -192,7 +192,7 @@ where
     OP: OperationId + Ord,
     MSG: Clone,
 {
-    // ID of the group.
+    /// ID of the group.
     pub group_id: ID,
 
     /// Group state at every position in the operation graph.
