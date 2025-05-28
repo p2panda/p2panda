@@ -9,11 +9,21 @@ use thiserror::Error;
 use crate::group::{GroupControlMessage, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
-use super::{GroupAction, GroupStateInner};
+use super::GroupAction;
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
-pub enum GroupResolverError {}
+pub enum GroupResolverError<ID, OP>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+{
+    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
+    MissingOperation(OP),
+
+    #[error("operation for group {0} processed in group {1}")]
+    IncorrectGroupId(ID, ID),
+}
 
 /// Resolver for group membership auth graph.
 #[derive(Clone, Debug, Default)]
@@ -32,26 +42,30 @@ where
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug,
 {
     type State = GroupState<ID, OP, C, Self, ORD, GS>;
-    type Error = GroupResolverError;
+    type Error = GroupResolverError<ID, OP>;
 
-    fn rebuild_required(y: &Self::State, operation: &ORD::Message) -> bool {
+    fn rebuild_required(
+        y: &GroupState<ID, OP, C, Self, ORD, GS>,
+        operation: &ORD::Message,
+    ) -> Result<bool, GroupResolverError<ID, OP>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
         let _actor = operation.sender();
 
         // Sanity check.
-        if control_message.group_id() != y.group_id {
-            panic!();
+        if y.group_id != group_id {
+            // The operation is not intended for this group.
+            return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        let is_concurrent = !get_concurrent_operations(&y.inner.graph, operation.id()).is_empty();
+        let is_concurrent = !get_concurrent_operations(&y.graph, operation.id()).is_empty();
 
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
                 // Any revoke message requires a re-build.
-                true
+                Ok(true)
             }
-            GroupControlMessage::GroupAction { .. } => {
+            GroupControlMessage::GroupAction { action, .. } => {
                 if is_concurrent {
                     match action {
                         GroupAction::Remove { member: _ } => {
@@ -61,7 +75,7 @@ where
                             //    branch && they actually were an admin.
                             // 2) ..?
 
-                            true
+                            Ok(true)
                         }
                         GroupAction::Demote {
                             member: _,
@@ -75,17 +89,17 @@ where
                             //    && they performed an admin action.
                             // 3) ..?
 
-                            true
+                            Ok(true)
                         }
                         _ => {
                             // TODO: Check if there are any concurrent actions which invalidate this
                             // action. If there are we could actually invalidate it immediately,
                             // maybe this method should return a state object as well as the boolean.
-                            false
+                            Ok(false)
                         }
                     }
                 } else {
-                    false
+                    Ok(false)
                 }
             }
         }
@@ -118,29 +132,27 @@ where
     /// If Alice demotes Bob (from admin), then Bob is no longer an admin and shouldn't be able to
     /// perform any actions concurrently.
     fn process(
-        mut y: GroupState<ID, OP, Self, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, Self, ORD, GS>, Self::Error> {
+        mut y: GroupState<ID, OP, C, Self, ORD, GS>,
+    ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
         let mut filter: HashSet<OP> = Default::default();
 
-        let bubbles = get_concurrent_bubbles(&y.inner.graph);
+        let bubbles = get_concurrent_bubbles(&y.graph);
 
         for (operation_id, bubble) in bubbles {
-            let Some(operation) = y.inner.operations.iter().find(|op| op.id() == operation_id)
-            else {
-                // TODO: Error: Operation is expected to exist.
-                panic!()
+            let Some(operation) = y.operations.iter().find(|op| op.id() == operation_id) else {
+                return Err(GroupResolverError::MissingOperation(operation_id));
             };
 
             // Iterate over all concurrent operations in the bubble.
             for concurrent_operation_id in &bubble {
                 let Some(concurrent_operation) = y
-                    .inner
                     .operations
                     .iter()
                     .find(|op| op.id() == *concurrent_operation_id)
                 else {
-                    // TODO: Error: Operation is expected to exist.
-                    panic!()
+                    return Err(GroupResolverError::MissingOperation(
+                        *concurrent_operation_id,
+                    ));
                 };
 
                 if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
@@ -204,14 +216,14 @@ where
                 // filtered operations in their `previous` field. Add those dependent operations to the
                 // filter.
                 for previous_operation in concurrent_operation.previous() {
-                    if filter.contains(previous_operation) {
+                    if filter.contains(&previous_operation) {
                         filter.insert(*concurrent_operation_id);
                     }
                 }
             }
         }
 
-        y.inner.ignore = filter;
+        y.ignore = filter;
 
         Ok(y)
     }
@@ -264,8 +276,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
@@ -433,13 +445,13 @@ mod tests {
 
         // We expect the "ignore" operation set to be empty, indicating that no operations have
         // been marked as invalid by the resolver.
-        let alice_filter = network.get_y(&alice, &group).inner.ignore;
+        let alice_filter = network.get_y(&alice, &group).ignore;
         assert!(alice_filter.is_empty());
 
-        let bob_filter = network.get_y(&bob, &group).inner.ignore;
+        let bob_filter = network.get_y(&bob, &group).ignore;
         assert!(bob_filter.is_empty());
 
-        let claire_filter = network.get_y(&claire, &group).inner.ignore;
+        let claire_filter = network.get_y(&claire, &group).ignore;
         assert!(claire_filter.is_empty());
     }
 
@@ -549,13 +561,13 @@ mod tests {
 
         // We expect the "ignore" operation set to be empty, indicating that no operations have
         // been marked as invalid by the resolver.
-        let alice_filter = network.get_y(&alice, &group).inner.ignore;
+        let alice_filter = network.get_y(&alice, &group).ignore;
         assert!(alice_filter.is_empty());
 
-        let bob_filter = network.get_y(&bob, &group).inner.ignore;
+        let bob_filter = network.get_y(&bob, &group).ignore;
         assert!(bob_filter.is_empty());
 
-        let claire_filter = network.get_y(&claire, &group).inner.ignore;
+        let claire_filter = network.get_y(&claire, &group).ignore;
         assert!(claire_filter.is_empty());
     }
 

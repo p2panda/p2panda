@@ -598,7 +598,7 @@ where
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        if RS::rebuild_required(&y_i, &operation) {
+        if RS::rebuild_required(&y_i, &operation).map_err(|error| GroupError::ResolverError(error))? {
             // Perform the re-build and return the new state.
             return Self::rebuild(y_i);
         }
