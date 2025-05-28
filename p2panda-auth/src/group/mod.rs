@@ -655,45 +655,34 @@ where
             return Err(GroupError::IncorrectGroupId(group_id, y.inner.group_id));
         }
 
-        // The resolver implementation contains the logic which determines when rebuilds are
-        // required.
-        //
-        // TODO: before performing this check we want to actually apply the operation to the
-        // group. This will allow us to handle any validation which occur at that point already.
-        if RS::rebuild_required(&y, &operation) {
-            // Add all new operations to the graph and operations vec.
-            y.inner.graph.add_node(operation.id());
-            for previous in previous_operations {
-                y.inner.graph.add_edge(previous, operation.id(), ());
-            }
-            y.inner.operations.push(operation.clone());
-
-            // Perform the re-build and return the new state.
-            return Self::rebuild(&y);
-        }
-
-        // Compute the members state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         //
         // This method validates that the actor has permission to perform the action.
+        //
+        // Do not update the state if the attempt to apply the action fails.
         match control_message {
             GroupControlMessage::GroupAction { action, .. } => {
-                y = Self::apply_action(
-                    y,
+                let y_i = y.clone();
+                if let Ok(y_i_result) = Self::apply_action(
+                    y_i,
                     operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     action,
-                )?;
+                ) {
+                    y = y_i_result;
+                }
             }
             // No action required as revokes would have triggered a rebuild in the previous step.
             //
             // TODO: we could bake in revoke support here if we want to keep it as a core feature
             // (on top of any provided Resolver).
             GroupControlMessage::Revoke { .. } => (),
-        }
+        };
 
-        // Add the new operation to the group states' graph and operations vec.
+        // Add the new operation to the group state graph and operations vec, even if the action
+        // was not applied due to an error in the underlying group CRDT.
         y.inner.graph.add_node(operation_id);
         for previous in previous_operations {
             y.inner.graph.add_edge(previous, operation_id, ());
@@ -703,6 +692,13 @@ where
         // Update the group in the store.
         y.group_store_y = GS::insert(y.group_store_y, &group_id, &y.inner)
             .map_err(|error| GroupError::GroupStoreError(error))?;
+
+        // The resolver implementation contains the logic which determines when rebuilds are
+        // required.
+        if RS::rebuild_required(&y, &operation) {
+            // Perform the re-build and return the new state.
+            return Self::rebuild(&y);
+        }
 
         Ok(y)
     }
@@ -724,7 +720,7 @@ where
         previous: &HashSet<OP>,
         action: &GroupAction<ID>,
     ) -> Result<GroupState<ID, OP, RS, ORD, GS>, GroupError<ID, OP, RS, ORD, GS>> {
-        // Compute the members state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
@@ -767,7 +763,7 @@ where
         }
         .map_err(|error| GroupError::StateChangeError(error))?;
 
-        // Only add the resulting members state to the states map if the operation isn't
+        // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.inner.ignore.contains(&id) {
             y.inner.states.insert(id, members_y_i);
