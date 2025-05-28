@@ -168,7 +168,8 @@ mod two_party;
 
 pub use crypto::{Rng, RngError};
 pub use key_bundle::{
-    Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId,
+    KeyBundleError, Lifetime, LifetimeError, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey,
+    OneTimePreKeyId,
 };
 pub use key_manager::{KeyManager, KeyManagerError, KeyManagerState};
 pub use key_registry::{KeyRegistry, KeyRegistryState};
