@@ -111,6 +111,52 @@ impl Network {
         operation_id
     }
 
+    pub fn demote(
+        &mut self,
+        demoter: MemberId,
+        demoted: GroupMember<MemberId>,
+        group_id: GroupId,
+        access: Access<()>,
+    ) -> MessageId {
+        let y = self.get_y(&demoter, &group_id);
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Demote {
+                member: demoted,
+                access,
+            },
+        };
+        let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
+        self.queue.push_back(operation);
+        self.set_y(y_ii);
+        operation_id
+    }
+
+    pub fn promote(
+        &mut self,
+        promoter: MemberId,
+        promoted: GroupMember<MemberId>,
+        group_id: GroupId,
+        access: Access<()>,
+    ) -> MessageId {
+        let y = self.get_y(&promoter, &group_id);
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: promoted,
+                access,
+            },
+        };
+        let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
+        self.queue.push_back(operation);
+        self.set_y(y_ii);
+        operation_id
+    }
+
     pub fn process_ooo(&mut self) {
         if self.queue.is_empty() {
             return;
