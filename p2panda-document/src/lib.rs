@@ -288,7 +288,7 @@ impl KeyRegistry {
         }
     }
 
-    pub fn add_key_bundle(
+    pub fn register_key_bundle(
         mut y: KeyRegistryState,
         id: ActorId,
         key_bundle: LongTermKeyBundle,
@@ -556,6 +556,7 @@ pub struct FakeHeader {
     extensions: DocumentExtensions,
 }
 
+// TODO: Should we only use trait interfaces to be generic over the actual data type?
 #[derive(Clone, Debug)]
 pub struct FakeOperation<C> {
     header: FakeHeader,
@@ -1146,7 +1147,7 @@ where
         let pki = {
             let key_bundle = KeyManager::prekey_bundle(&my_keys);
             let y = KeyRegistry::init();
-            KeyRegistry::add_key_bundle(y, my_id, key_bundle)
+            KeyRegistry::register_key_bundle(y, my_id, key_bundle)
         };
 
         // Add ourselves to "individuals" address book.
@@ -1205,14 +1206,15 @@ where
 
     pub async fn key_bundle_expired(&self) -> bool {
         let inner = self.inner.read().await;
-        now() - inner.my_keys_rotated_at <= inner.config.pre_key_rotate_after.as_secs()
+        now() - inner.my_keys_rotated_at > inner.config.pre_key_rotate_after.as_secs()
     }
 
     pub async fn key_bundle(&mut self) -> Result<FakeOperation<C>, UniverseError<C, GS>> {
         let mut inner = self.inner.write().await;
 
         // Automatically rotate pre key when it reached critical expiry date.
-        if now() - inner.my_keys_rotated_at <= inner.config.pre_key_rotate_after.as_secs() {
+        if now() - inner.my_keys_rotated_at > inner.config.pre_key_rotate_after.as_secs() {
+            inner.my_keys_rotated_at = now();
             // This mutates the state internally.
             KeyManager::rotate_prekey(inner.my_keys.clone(), inner.config.lifetime(), &inner.rng)?;
         }
@@ -1220,9 +1222,11 @@ where
         let key_bundle = KeyManager::prekey_bundle(&inner.my_keys);
 
         // Register our own key bundle.
-        inner.pki = KeyRegistry::add_key_bundle(inner.pki.clone(), inner.my_id, key_bundle.clone());
+        inner.pki =
+            KeyRegistry::register_key_bundle(inner.pki.clone(), inner.my_id, key_bundle.clone());
 
         // TODO: Properly create and sign operations here.
+        // TODO: Should this be a trait interface for signing and creating operations?
         Ok(FakeOperation {
             header: FakeHeader {
                 public_key: inner.my_id.0,
@@ -1236,13 +1240,22 @@ where
         })
     }
 
-    pub fn process(&self) {
-        // TODO
+    pub fn process(&mut self, operation: &FakeOperation<C>) -> Result<(), UniverseError<C, GS>> {
+        todo!()
     }
 
-    async fn register_key_bundle(&mut self, id: ActorId, key_bundle: LongTermKeyBundle) {
+    async fn register_key_bundle(
+        &mut self,
+        id: ActorId,
+        key_bundle: LongTermKeyBundle,
+    ) -> Result<(), UniverseError<C, GS>> {
+        // Reject expired and invalid key bundles.
+        key_bundle.verify()?;
+
         let mut inner = self.inner.write().await;
-        inner.pki = KeyRegistry::add_key_bundle(inner.pki.clone(), id, key_bundle);
+        inner.pki = KeyRegistry::register_key_bundle(inner.pki.clone(), id, key_bundle);
+
+        Ok(())
     }
 
     async fn identify_actor_types(
@@ -1306,6 +1319,9 @@ where
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
+
+    #[error(transparent)]
+    KeyBundle(#[from] KeyBundleError),
 
     #[error(transparent)]
     Rng(#[from] RngError),
@@ -1413,40 +1429,61 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
-        let rng = Rng::default();
-
-        let store = SqliteStore::new();
-
-        let config = UniverseConfig::default();
-
-        let private_key = PrivateKey::new();
-        let my_id = ActorId(private_key.public_key());
-
         // TODO: Make resolver generic again.
         // let resolver = GroupResolver::default();
 
+        // ----------------
+
         // A "universe" holding all state for alice's laptop!
-        let mut universe =
-            Universe::<Conditions, SqliteStore>::new(my_id, config, store, rng).unwrap();
-        let alice_laptop_id = universe.id().await;
+        let mut alice_universe = {
+            let rng = Rng::default();
+            let store = SqliteStore::new();
+            let config = UniverseConfig::default();
 
-        if universe.key_bundle_expired().await {
-            let operation_0 = universe.key_bundle().await.unwrap();
-        }
+            let private_key = PrivateKey::new();
+            let my_id = ActorId(private_key.public_key());
 
-        let (alice, operation_1) = universe
+            Universe::<Conditions, SqliteStore>::new(my_id, config, store, rng).unwrap()
+        };
+        let alice_laptop_id = alice_universe.id().await;
+
+        // Another one!
+        let mut bob_universe = {
+            let rng = Rng::default();
+            let store = SqliteStore::new();
+            let config = UniverseConfig::default();
+
+            let private_key = PrivateKey::new();
+            let my_id = ActorId(private_key.public_key());
+
+            Universe::<Conditions, SqliteStore>::new(my_id, config, store, rng).unwrap()
+        };
+        let bob_smartphone_id = bob_universe.id().await;
+
+        // ----------------
+
+        let alice_operation_0 = alice_universe.key_bundle().await.unwrap();
+
+        let (alice, alice_operation_1) = alice_universe
             .create_group(&[(alice_laptop_id, Access::Manage)])
             .await
             .unwrap();
 
-        let (document, operation_2) = universe
+        let (document, alice_operation_2) = alice_universe
             .create_document(&[(alice.id(), Access::Write { conditions: None })])
             .await
             .unwrap();
 
+        // ----------------
+
+        bob_universe.process(&alice_operation_0);
+
+        // ----------------
+
         // TODO: Later we want to do this (after a user action or processing).
         // operation_1.write(&mut tx).await.unwrap();
         // universe.write(&mut tx).await.unwrap();
+        // etc.
         // tx.commit().await.unwrap();
     }
 }
