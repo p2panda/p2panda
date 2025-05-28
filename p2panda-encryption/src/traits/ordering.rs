@@ -53,7 +53,7 @@ pub trait Ordering<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
 {
-    type State: Clone + Debug;
+    type State;
 
     type Error: Error;
 

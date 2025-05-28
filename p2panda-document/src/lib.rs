@@ -140,6 +140,7 @@ use p2panda_encryption::{
     KeyManagerState as KeyManagerStateInner, KeyRegistry as KeyRegistryInner,
     KeyRegistryState as KeyRegistryStateInner, Lifetime, LongTermKeyBundle, Rng, RngError,
 };
+use p2panda_stream::partial::{PartialOrder, PartialOrderStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -369,35 +370,35 @@ impl<'de> Deserialize<'de> for KeyRegistryState {
 // Auth group types
 // ~~~~~~~~~~~~~~~~
 
-pub type AuthResolver<C, GS> = GroupResolver<ActorId, OperationId, C, Orderer<C, GS>, GS>;
+pub type AuthResolver<C, ORS, GRS> = GroupResolver<ActorId, OperationId, C, Orderer<C, ORS>, GRS>;
 
-pub type AuthGroup<C, GS> =
-    AuthGroupGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
+pub type AuthGroup<C, ORS, GRS> =
+    AuthGroupGeneric<ActorId, OperationId, C, AuthResolver<C, ORS, GRS>, Orderer<C, ORS>, GRS>;
 
-pub type AuthGroupState<C, GS> =
-    AuthGroupStateGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
+pub type AuthGroupState<C, ORS, GRS> =
+    AuthGroupStateGeneric<ActorId, OperationId, C, AuthResolver<C, ORS, GRS>, Orderer<C, ORS>, GRS>;
 
 pub type AuthControlMessage<C> = AuthControlMessageGeneric<ActorId, OperationId, C>;
 
-pub type AuthGroupError<C, GS> =
-    AuthGroupErrorGeneric<ActorId, OperationId, C, AuthResolver<C, GS>, Orderer<C, GS>, GS>;
+pub type AuthGroupError<C, ORS, GRS> =
+    AuthGroupErrorGeneric<ActorId, OperationId, C, AuthResolver<C, ORS, GRS>, Orderer<C, ORS>, GRS>;
 
-pub type EncryptionGroupState<C, GS> = EncryptionGroupStateGeneric<
+pub type EncryptionGroupState<C, S> = EncryptionGroupStateGeneric<
     ActorId,
     OperationId,
     KeyRegistry,
     EncryptionGroupManager,
     KeyManager,
-    Orderer<C, GS>,
+    Orderer<C, S>,
 >;
 
-pub type EncryptionGroupError<C, GS> = EncryptionGroupErrorGeneric<
+pub type EncryptionGroupError<C, S> = EncryptionGroupErrorGeneric<
     ActorId,
     OperationId,
     KeyRegistry,
     EncryptionGroupManager,
     KeyManager,
-    Orderer<C, GS>,
+    Orderer<C, S>,
 >;
 
 pub type EncryptionDirectMessage =
@@ -454,262 +455,58 @@ impl GroupMembership<ActorId, OperationId> for EncryptionGroupManager {
 // ~~~~~~~
 
 #[derive(Clone, Debug)]
-pub struct Orderer<C, GS> {
-    _marker: PhantomData<(C, GS)>,
-}
-
-impl<C, GS> Orderer<C, GS>
-where
-    GS: OrdererStore<OperationId>,
-{
-    pub fn init(my_id: ActorId, store: GS) -> OrdererState<C, GS> {
-        OrdererState {
-            my_id,
-            orderer: GenericOrderer::new(store),
-            delta: Arc::new(Mutex::new(Some(OrdererDelta::new()))),
-            _marker: PhantomData,
-        }
-    }
+pub struct Orderer<C, S> {
+    _marker: PhantomData<(C, S)>,
 }
 
 #[derive(Clone, Debug)]
-pub struct OrdererState<C, GS> {
+pub struct OrdererState<C, S>
+where
+    S: PartialOrderStore<OperationId> + Clone,
+{
     // This value will never change, so it's fine to just clone it.
     my_id: ActorId,
-
-    // Read-only access to underlying store, can be cloned as well.
-    orderer: GenericOrderer<OperationId, GS>,
-
-    // This is where we temporarily write changed state into memory, this needs to be RC-counted
-    // and mutable.
-    delta: Arc<Mutex<Option<OrdererDelta<OperationId>>>>,
-
+    inner: PartialOrder<OperationId, S>,
     _marker: PhantomData<C>,
 }
 
-// "Rules" for transactional persistance layer design:
-//
-// Reads can not depend on "pending writes" coming from the final database layer. An
-// implementation needs to check the "in memory" state before and then ask the database for every
-// read. This makes code more complex but allows an performant look-up before hitting more
-// "expensive" layers (similar to caching).
-//
-// Orderer design:
-//
-// 1. `Orderer` is an interface implementing the algorithm to check dependencies etc., it needs
-//    access to a readable store to get state and maintains a "delta" object, sometimes
-//    manipulating it's state
-// 2. `OrdererDelta` represents the changes which need to be written to a store
-// 3. `OrdererStore` defines the "read" methods
-pub type Dependencies<T> = HashSet<(T, Vec<T>)>;
-
-pub trait OrdererStore<T>
+impl<C, S> OrdererState<C, S>
 where
-    T: PartialEq + Eq + StdHash,
+    S: PartialOrderStore<OperationId> + Clone,
 {
-    type Error: std::error::Error;
-
-    /// Returns `true` of all the passed items are present in the ready list.
-    fn ready(&self, dependencies: &[T]) -> impl Future<Output = Result<bool, Self::Error>>;
-
-    /// Take the next ready item where all dependencies are met and which was not "consumed" yet.
-    fn get_next_consumable(&self) -> impl Future<Output = Result<Option<T>, Self::Error>>;
-
-    /// Get all pending items which directly depend on the given one.
-    fn get_next_pending(
-        &self,
-        item: &T,
-    ) -> impl Future<Output = Result<Option<Dependencies<T>>, Self::Error>>;
-}
-
-#[derive(Clone, Debug)]
-pub struct GenericOrderer<T, S> {
-    store: S,
-    _marker: PhantomData<T>,
-}
-
-#[derive(Debug)]
-pub struct OrdererDelta<T>
-where
-    T: PartialEq + Eq + StdHash,
-{
-    /// Mark items in this set as "ready".
-    mark_ready: HashSet<T>,
-
-    /// Mark items in this set as "pending".
-    mark_pending: HashMap<T, HashSet<(T, Vec<T>)>>,
-
-    /// Item transitioned from "pending" to "ready" state.
-    remove_pending: HashSet<T>,
-
-    /// "Ready" items which can be consumed for further processing.
-    mark_consumable: VecDeque<T>,
-
-    /// "Ready" items that have been consumed.
-    remove_consumed: HashSet<T>,
-}
-
-impl<T> OrdererDelta<T>
-where
-    T: PartialEq + Eq + StdHash,
-{
-    pub fn new() -> Self {
+    pub fn init(my_id: ActorId, store: S) -> Self {
         Self {
-            mark_ready: HashSet::new(),
-            mark_pending: HashMap::new(),
-            remove_pending: HashSet::new(),
-            mark_consumable: VecDeque::new(),
-            remove_consumed: HashSet::new(),
-        }
-    }
-}
-
-impl<T, S> GenericOrderer<T, S>
-where
-    T: Clone + PartialEq + Eq + StdHash,
-    S: OrdererStore<T>,
-{
-    pub fn new(store: S) -> Self {
-        Self {
-            store,
+            my_id,
+            inner: PartialOrder::new(store),
             _marker: PhantomData,
         }
     }
 
     pub async fn process(
-        &self,
-        y: OrdererDelta<T>,
-        item: T,
-        dependencies: &[T],
-    ) -> Result<OrdererDelta<T>, S::Error> {
-        if !self.ready(&y, dependencies).await? {
-            let y_i = self.mark_pending(y, &item, dependencies).await?;
-            return Ok(y_i);
-        }
-
-        let y_i = Self::mark_ready(y, item.clone());
-
-        // We added a new ready item to the store so now we want to process any pending items which
-        // depend on it as they may now have transitioned into a ready state.
-        let y_ii = self.process_pending(y_i, &item).await?;
-
-        Ok(y_ii)
+        &mut self,
+        item: OperationId,
+        dependencies: &[OperationId],
+    ) -> Result<(), S::Error> {
+        self.inner.process(item, dependencies).await?;
+        Ok(())
     }
 
-    pub async fn next(
-        &self,
-        mut y: OrdererDelta<T>,
-    ) -> Result<(OrdererDelta<T>, Option<T>), S::Error> {
-        if let Some(ready_item) = y.mark_consumable.pop_front() {
-            y.remove_consumed.insert(ready_item.clone());
-            Ok((y, Some(ready_item)))
-        } else {
-            let result = self.store.get_next_consumable().await?;
-            if let Some(ref ready_item) = result {
-                y.remove_consumed.insert(ready_item.clone());
-            }
-            Ok((y, result))
-        }
-    }
-
-    async fn ready(&self, y: &OrdererDelta<T>, dependencies: &[T]) -> Result<bool, S::Error> {
-        if !dependencies.iter().any(|dep| !y.mark_ready.contains(dep)) {
-            Ok(true)
-        } else {
-            self.store.ready(dependencies).await
-        }
-    }
-
-    fn mark_ready(mut y: OrdererDelta<T>, item: T) -> OrdererDelta<T> {
-        if y.mark_ready.insert(item.clone()) {
-            y.mark_consumable.push_back(item);
-        }
-        y
-    }
-
-    async fn mark_pending(
-        &self,
-        mut y: OrdererDelta<T>,
-        item: &T,
-        dependencies: &[T],
-    ) -> Result<OrdererDelta<T>, S::Error> {
-        for (index, dep) in dependencies.iter().enumerate() {
-            if y.mark_ready.contains(dep) {
-                continue;
-            }
-
-            if self.store.ready(&dependencies[index..index + 1]).await? {
-                continue;
-            }
-
-            let dependents = y.mark_pending.entry(dep.clone()).or_default();
-            dependents.insert((item.clone(), dependencies.to_vec()));
-        }
-
-        Ok(y)
-    }
-
-    async fn get_next_pending(
-        &self,
-        y: &OrdererDelta<T>,
-        item: &T,
-    ) -> Result<Option<Dependencies<T>>, S::Error> {
-        if let Some(result) = y.mark_pending.get(item) {
-            Ok(Some(result.clone())) // TODO: Hard to remove the clone here ..
-        } else {
-            let result = self.store.get_next_pending(item).await?;
-            Ok(result)
-        }
-    }
-
-    fn remove_pending(mut y: OrdererDelta<T>, item: T) -> OrdererDelta<T> {
-        y.mark_pending.remove(&item);
-        y.remove_pending.insert(item.clone());
-        y
-    }
-
-    async fn process_pending(
-        &self,
-        y: OrdererDelta<T>,
-        item: &T,
-    ) -> Result<OrdererDelta<T>, S::Error> {
-        // Get all items which depend on the passed item.
-        let Some(dependents) = self.get_next_pending(&y, item).await? else {
-            return Ok(y);
-        };
-
-        // For each dependent check if it has all it's dependencies met, if not then we do nothing
-        // as it is still in a pending state.
-        let mut y_loop = y;
-        for (next_item, next_deps) in dependents {
-            if !self.ready(&y_loop, &next_deps).await? {
-                continue;
-            }
-
-            y_loop = Self::mark_ready(y_loop, next_item.clone());
-
-            // Recurse down the dependency graph by now checking any pending items which depend on
-            // the current item.
-            y_loop = Box::pin(self.process_pending(y_loop, &next_item)).await?;
-        }
-
-        // Finally remove this item from the pending items queue.
-        let y_i = Self::remove_pending(y_loop, item.clone());
-
-        Ok(y_i)
+    pub async fn next(&mut self) -> Result<Option<OperationId>, S::Error> {
+        let result = self.inner.next().await?;
+        Ok(result)
     }
 }
 
-impl<C, GS> AuthOrdering<ActorId, OperationId, AuthControlMessage<C>> for Orderer<C, GS>
+impl<C, S> AuthOrdering<ActorId, OperationId, AuthControlMessage<C>> for Orderer<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: PartialOrderStore<OperationId> + Clone,
 {
-    type State = OrdererState<C, GS>;
+    type State = OrdererState<C, S>;
 
     type Message = Message<C>;
 
-    type Error = DocumentError<C, GS>;
+    type Error = DocumentError;
 
     fn next_message(
         y: Self::State,
@@ -739,12 +536,12 @@ where
     }
 }
 
-impl<C, GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<C, GS>
+impl<C, S> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<C, S>
 where
     C: fmt::Debug + Clone,
-    GS: fmt::Debug + Clone,
+    S: PartialOrderStore<OperationId> + Clone + fmt::Debug,
 {
-    type State = OrdererState<C, GS>;
+    type State = OrdererState<C, S>;
 
     type Error = Infallible;
 
@@ -810,6 +607,12 @@ pub struct FakeOperation<C> {
     hash: Hash,
 }
 
+impl<C> FakeOperation<C> {
+    pub fn id(&self) -> OperationId {
+        OperationId(self.hash)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum GroupControlMessage<C> {
     Create {
@@ -846,6 +649,16 @@ pub struct DocumentExtensions {
 
     // TODO: What are the semantics here?
     actor_id: ActorId,
+}
+
+// This is a sketch towards the new "OperationStore" for p2panda with only read-only methods.
+pub trait OperationStore<C> {
+    type Error: std::error::Error;
+
+    fn get_operation(
+        &self,
+        id: &Hash,
+    ) -> impl Future<Output = Result<Option<FakeOperation<C>>, Self::Error>>;
 }
 
 // ~~~~~~~
@@ -970,29 +783,33 @@ impl<C> EncryptionMessage<ActorId, OperationId, EncryptionGroupManager> for Mess
 // Group
 // ~~~~~
 
-pub struct Group<C, GS>
+pub struct Group<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: GroupStore<ActorId> + PartialOrderStore<OperationId> + OperationStore<C>,
 {
     id: ActorId,
-    universe: Universe<C, GS>,
+    universe: Universe<C, S>,
     _marker: PhantomData<C>,
 }
 
-impl<C, GS> Group<C, GS>
+impl<C, S> Group<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: GroupStore<ActorId>
+        + PartialOrderStore<OperationId>
+        + OperationStore<C>
+        + Clone
+        + fmt::Debug,
 {
     pub fn id(&self) -> ActorId {
         self.id
     }
 
     pub(crate) async fn create(
-        universe_owned: Universe<C, GS>,
+        universe_owned: Universe<C, S>,
         initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<(Group<C, GS>, AuthGroupState<C, GS>, FakeOperation<C>), GroupError> {
+    ) -> Result<(Group<C, S>, AuthGroupState<C, S, S>, FakeOperation<C>), GroupError> {
         let universe = universe_owned.inner.read().await;
 
         // TODO: Here something happens with deriving a group id.
@@ -1061,35 +878,38 @@ where
 // access to the "universe". This allows us to build a nice API where the users can handle objects
 // like groups or documents independently while we internally handle all state inside the
 // "universe". Finally the user can "commit" the changed state of the universe to the database.
-pub struct Document<C, GS>
+pub struct Document<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: GroupStore<ActorId> + PartialOrderStore<OperationId> + OperationStore<C>,
 {
     id: ActorId,
-    universe: Universe<C, GS>,
+    universe: Universe<C, S>,
     _marker: PhantomData<C>,
 }
 
-pub struct DocumentState<C, GS>
+pub struct DocumentState<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: GroupStore<ActorId> + PartialOrderStore<OperationId> + Clone + fmt::Debug,
 {
-    auth_state: AuthGroupState<C, GS>,
-    encryption_state: EncryptionGroupState<C, GS>,
+    auth_state: AuthGroupState<C, S, S>,
+    encryption_state: EncryptionGroupState<C, S>,
 }
 
-impl<C, GS> Document<C, GS>
+impl<C, S> Document<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: GroupStore<ActorId>
+        + PartialOrderStore<OperationId>
+        + OperationStore<C>
+        + Clone
+        + fmt::Debug,
 {
     pub(crate) async fn create(
-        universe_owned: Universe<C, GS>,
+        universe_owned: Universe<C, S>,
         initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<(Document<C, GS>, DocumentState<C, GS>, FakeOperation<C>), DocumentError<C, GS>>
-    {
+    ) -> Result<(Document<C, S>, DocumentState<C, S>, FakeOperation<C>), DocumentError> {
         let universe = universe_owned.inner.read().await;
 
         // TODO: Here something happens with deriving a group id.
@@ -1138,7 +958,7 @@ where
             // TODO: Check if all pre keys for these initial members are not expired & given
             // (otherwise calling "create" will error).
 
-            let (y_ii, pre) = EncryptionGroup::create(y, initial_members, &universe.rng)?;
+            let (y_ii, pre) = EncryptionGroup::create(y, initial_members, &universe.rng).unwrap();
 
             (y_ii, pre)
         };
@@ -1204,8 +1024,8 @@ where
     pub(crate) fn from_welcome(
         &self,
         _group_id: ActorId,
-        _orderer: OrdererState<C, GS>,
-    ) -> Result<AuthGroupState<C, GS>, DocumentError<C, GS>> {
+        _orderer: OrdererState<C, S>,
+    ) -> Result<AuthGroupState<C, S, S>, DocumentError> {
         todo!()
     }
 
@@ -1221,7 +1041,7 @@ where
         &self,
         added: GroupMember<ActorId>,
         access: Access<C>,
-    ) -> Result<(), DocumentError<C, GS>> {
+    ) -> Result<(), DocumentError> {
         // TODO: Basic checks here? Is this member already part of the group, do we try to add
         // ourselves, etc.?
 
@@ -1286,17 +1106,14 @@ impl UniverseConfig {
     }
 }
 
-// Messages we can see on the network inside a "universe" (app scope usually).
-pub enum UniverseMessage {
-    KeyBundle,
-    Group,
-    Document,
-}
-
-pub struct InnerUniverse<C, GS>
+pub struct InnerUniverse<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: PartialOrderStore<OperationId>
+        + GroupStore<ActorId>
+        + OperationStore<C>
+        + Clone
+        + fmt::Debug,
 {
     pub(crate) my_id: ActorId,
 
@@ -1313,17 +1130,17 @@ where
     pub(crate) individuals: HashSet<ActorId>,
 
     // Here we have _all_ groups EXCEPT "root groups" / documents.
-    pub(crate) groups: HashMap<ActorId, AuthGroupState<C, GS>>,
+    pub(crate) groups: HashMap<ActorId, AuthGroupState<C, S, S>>,
 
     // Here we have all "root groups" / documents, no "sub groups".
-    pub(crate) documents: HashMap<ActorId, DocumentState<C, GS>>,
+    pub(crate) documents: HashMap<ActorId, DocumentState<C, S>>,
 
-    // Key bundles.
+    // Key bundles from us and other peers.
     pub(crate) pki: KeyRegistryState,
 
-    pub(crate) store: GS,
+    pub(crate) store: S,
 
-    pub(crate) orderer: OrdererState<C, GS>,
+    pub(crate) orderer: OrdererState<C, S>,
 
     pub(crate) dgm: EncryptionGroupManagerState,
 
@@ -1331,29 +1148,34 @@ where
 }
 
 // "App Universe", that's the "orchestrator" managing multiple documents and groups.
-pub struct Universe<C, GS>
+#[derive(Clone)]
+pub struct Universe<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    S: PartialOrderStore<OperationId>
+        + GroupStore<ActorId>
+        + OperationStore<C>
+        + fmt::Debug
+        + Clone,
 {
-    pub(crate) inner: Arc<RwLock<InnerUniverse<C, GS>>>,
+    pub(crate) inner: Arc<RwLock<InnerUniverse<C, S>>>,
 }
 
-impl<C, GS> Universe<C, GS>
+impl<C, S> Universe<C, S>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>>
-        + OrdererStore<OperationId>
-        + Clone
+    S: PartialOrderStore<OperationId>
+        + GroupStore<ActorId>
+        + OperationStore<C>
         + fmt::Debug
-        + 'static,
+        + Clone,
 {
     pub fn new(
         my_id: ActorId,
         config: UniverseConfig,
-        store: GS,
+        store: S,
         rng: Rng,
-    ) -> Result<Self, UniverseError<C, GS>> {
+    ) -> Result<Self, UniverseError> {
         // Generate pre keys with configured lifetime.
         let my_keys = {
             let identity_secret = SecretKey::from_rng(&rng)?;
@@ -1373,7 +1195,7 @@ where
 
         // Establish initial states.
         let dgm = EncryptionGroupManagerState::default();
-        let orderer = Orderer::<C, GS>::init(my_id, store.clone());
+        let orderer = OrdererState::<C, S>::init(my_id, store.clone());
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
@@ -1401,10 +1223,12 @@ where
     pub async fn create_document(
         &mut self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Document<C, GS>, FakeOperation<C>), UniverseError<C, GS>> {
-        let initial_members = self.identify_actor_types(initial_members).await?;
+    ) -> Result<(Document<C, S>, FakeOperation<C>), UniverseError> {
+        let initial_members = self.identify_actor_types(initial_members).await.unwrap();
 
-        let (document, y_doc, operation) = Document::create(self.clone(), initial_members).await?;
+        let (document, y_doc, operation) = Document::create(self.clone(), initial_members)
+            .await
+            .unwrap();
 
         let mut inner = self.inner.write().await;
         inner.documents.insert(document.id(), y_doc);
@@ -1415,10 +1239,11 @@ where
     pub async fn create_group(
         &mut self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<C, GS>, FakeOperation<C>), UniverseError<C, GS>> {
-        let initial_members = self.identify_actor_types(initial_members).await?;
+    ) -> Result<(Group<C, S>, FakeOperation<C>), UniverseError> {
+        let initial_members = self.identify_actor_types(initial_members).await.unwrap();
 
-        let (group, y_group, operation) = Group::create(self.clone(), initial_members).await?;
+        let (group, y_group, operation) =
+            Group::create(self.clone(), initial_members).await.unwrap();
 
         let mut inner = self.inner.write().await;
         inner.groups.insert(group.id(), y_group);
@@ -1431,7 +1256,7 @@ where
         now() - inner.my_keys_rotated_at > inner.config.pre_key_rotate_after.as_secs()
     }
 
-    pub async fn key_bundle(&mut self) -> Result<FakeOperation<C>, UniverseError<C, GS>> {
+    pub async fn key_bundle(&mut self) -> Result<FakeOperation<C>, UniverseError> {
         let mut inner = self.inner.write().await;
 
         // Automatically rotate pre key when it reached critical expiry date.
@@ -1464,9 +1289,12 @@ where
 
     pub async fn process(
         &mut self,
+        // TODO: Take in full operation or just id and then load it from store?
         operation: &FakeOperation<C>,
-    ) -> Result<(), UniverseError<C, GS>> {
+    ) -> Result<(), UniverseError> {
         // ... observes messages on the network (scoped by topic id)
+
+        let mut inner = self.inner.write().await;
 
         // Orderer comes here!
         //
@@ -1474,48 +1302,81 @@ where
         // - TODO: Can it even be _outside_ all of this? Shouldn't the orderer be part of
         // `p2panda-stream`?
 
-        // Router comes here!
-        //
-        // "routing logic" draft:
-        // Is group control message or document control message?
-        //    If group control message: Is it related to any documents I'm part of?
-        //       If yes, route it to the regarding document processors
-        //       In any case, always route it to the regarding group processor
-        //   If document control message: Are you part of the document?
-        //       If not, keep it around and wait
-        //       If yes, route it to the regarding document processor
-        //
-        // Directing every control message to the regarding document(s).
-        // - this means that the router needs to understand which document relates to what groups ..
-        // - If we are already inside the group (via CREATE or ADD), then the router forwards it
-        // directly to the regarding documents. If NOT, then the router keeps them, and re-plays the
-        // whole graph when we're welcomed
-        // - In any case, if you're not inside any group, we're still processing them for establishing
-        // group state (outside of documents / encryption).
+        let operation_id = operation.id();
 
-        // Key Registry
-        //
-        // - We also observe published key bundle messages in the network. If they're not expired we
-        // also store them in some sort of key registry.
+        inner.orderer.process(operation_id, &[]).await.unwrap();
 
-        // Validation?
-        //
-        // - Extra rules around what to process first
+        // Check if there's any correctly ordered messages ready to-be processed.
+        loop {
+            let result = inner.orderer.next().await.unwrap();
+
+            println!("{:?}", result);
+
+            let Some(ready_operation_id) = result else {
+                break;
+            };
+
+            let operation = inner
+                .store
+                .get_operation(&ready_operation_id.0)
+                .await
+                .unwrap();
+
+            let Some(operation) = operation else {
+                return Err(UniverseError::InconsistentOperationStore(
+                    ready_operation_id,
+                ));
+            };
+
+            // Router comes here!
+            //
+            // "routing logic" draft:
+            // Is group control message or document control message?
+            //    If group control message: Is it related to any documents I'm part of?
+            //       If yes, route it to the regarding document processors
+            //       In any case, always route it to the regarding group processor
+            //   If document control message: Are you part of the document?
+            //       If not, keep it around and wait
+            //       If yes, route it to the regarding document processor
+            //
+            // Directing every control message to the regarding document(s).
+            // - this means that the router needs to understand which document relates to what
+            // groups ..
+            // - If we are already inside the group (via CREATE or ADD), then the router forwards
+            // it directly to the regarding documents. If NOT, then the router keeps them, and
+            // re-plays the whole graph when we're welcomed
+            // - In any case, if you're not inside any group, we're still processing them for
+            // establishing group state (outside of documents / encryption).
+
+            match operation.body {
+                DocumentBody::Member { key_bundle } => todo!(),
+                DocumentBody::Group { control_message } => todo!(),
+                DocumentBody::Document {
+                    control_message,
+                    direct_messages,
+                } => todo!(),
+            }
+
+            // Key Registry
+            //
+            // - We also observe published key bundle messages in the network. If they're not expired we
+            // also store them in some sort of key registry.
+
+            // Validation?
+            //
+            // - Extra rules around what to process first
+        }
 
         // Dispatch events
 
-        let mut inner = self.inner.write().await;
-
-        // inner.orderer
-
-        todo!()
+        Ok(())
     }
 
     async fn register_key_bundle(
         &mut self,
         id: ActorId,
         key_bundle: LongTermKeyBundle,
-    ) -> Result<(), UniverseError<C, GS>> {
+    ) -> Result<(), UniverseError> {
         // Reject expired and invalid key bundles.
         key_bundle.verify()?;
 
@@ -1528,7 +1389,7 @@ where
     async fn identify_actor_types(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<Vec<(GroupMember<ActorId>, Access<C>)>, UniverseError<C, GS>> {
+    ) -> Result<Vec<(GroupMember<ActorId>, Access<C>)>, UniverseError> {
         let inner = self.inner.read().await;
         let mut result = Vec::with_capacity(initial_members.len());
 
@@ -1548,24 +1409,8 @@ where
     }
 }
 
-impl<C, GS> Clone for Universe<C, GS>
-where
-    C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
 #[derive(Debug, Error)]
-pub enum UniverseError<C, GS>
-where
-    C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
-{
+pub enum UniverseError {
     #[error("documents like {0} can not be members of groups")]
     DocumentIsNotMember(ActorId),
 
@@ -1578,12 +1423,22 @@ where
     )]
     UnknownActor(ActorId),
 
+    // This happens if we didn't store the operation before processing it. This can still be in
+    // memory, but the store needs to be able to handle this.
+    #[error("cant process unknown operation with id {0}, it's unknown to the operation store")]
+    InconsistentOperationStore(OperationId),
+
     #[error(transparent)]
     Group(#[from] GroupError),
 
-    #[error(transparent)]
-    Document(#[from] DocumentError<C, GS>),
-
+    // #[error(transparent)]
+    // Document(#[from] DocumentError<C, S>),
+    //
+    // #[error("orderer store failed: {0}")]
+    // OrdererStore(<S as OrdererStore<OperationId>>::Error),
+    //
+    // #[error("operation store failed: {0}")]
+    // OperationStore(<S as OperationStore<C>>::Error),
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 
@@ -1595,27 +1450,22 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum DocumentError<C, GS>
-where
-    C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
-{
+pub enum DocumentError {
     #[error("tried to access a document {0} which is not known to us")]
     UnknownDocument(ActorId),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 
-    #[error(transparent)]
-    EncryptionGroup(#[from] EncryptionGroupError<C, GS>),
-
+    // #[error(transparent)]
+    // EncryptionGroup(#[from] EncryptionGroupError<C, ORS>),
     #[error(transparent)]
     Rng(#[from] RngError),
     //
     // TODO: Requires C to implement Display?
     // TODO: Causes infinite cycle ..?
     // #[error(transparent)]
-    // AuthGroup(#[from] AuthGroupError<C, GS>),
+    // AuthGroup(#[from] AuthGroupError<C, S>),
 }
 
 #[derive(Debug, Error)]
@@ -1643,71 +1493,91 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    // ~~~~~~~~~~~
-    // Group Store
-    // ~~~~~~~~~~~
-
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::convert::Infallible;
     use std::rc::Rc;
+    use std::sync::Arc;
 
     use p2panda_auth::group::{Access, GroupMember};
-    use p2panda_auth::traits::GroupStore;
-    use p2panda_core::PrivateKey;
+    use p2panda_auth::traits::GroupStore as GroupStoreTrait;
+    use p2panda_core::{Hash, PrivateKey};
     use p2panda_encryption::Rng;
+    use p2panda_stream::partial::PartialOrderStore;
+    use tokio::sync::RwLock;
+
+    use crate::OrdererDelta;
 
     use super::{
-        ActorId, AuthGroupState, Dependencies, OperationId, OrdererStore, Universe, UniverseConfig,
+        ActorId, AuthGroupState, FakeOperation, OperationId, OperationStore as OperationStoreTrait,
+        Universe, UniverseConfig,
     };
 
-    #[derive(Debug, Clone)]
-    pub struct SqliteStore(Rc<RefCell<HashMap<ActorId, AuthGroupState<Conditions, Self>>>>);
+    // ~~~~~~~~~~~~
+    // SQLite Store
+    // ~~~~~~~~~~~~
 
-    impl SqliteStore {
-        pub fn new() -> Self {
-            Self(Rc::new(RefCell::new(HashMap::new())))
+    // This is the persistance layer on the file-system. We can implement all read-only traits on
+    // it.
+
+    pub struct SqliteStore;
+
+    impl PartialOrderStore<OperationId> for SqliteStore {
+        type Error = Infallible;
+
+        async fn mark_ready(&mut self, key: OperationId) -> Result<bool, Self::Error> {
+            todo!()
+        }
+
+        async fn mark_pending(
+            &mut self,
+            key: OperationId,
+            dependencies: Vec<OperationId>,
+        ) -> Result<bool, Self::Error> {
+            todo!()
+        }
+
+        async fn get_next_pending(
+            &self,
+            key: OperationId,
+        ) -> Result<Option<std::collections::HashSet<(OperationId, Vec<OperationId>)>>, Self::Error>
+        {
+            todo!()
+        }
+
+        async fn take_next_ready(&mut self) -> Result<Option<OperationId>, Self::Error> {
+            todo!()
+        }
+
+        async fn remove_pending(&mut self, key: OperationId) -> Result<bool, Self::Error> {
+            todo!()
+        }
+
+        async fn ready(&self, keys: &[OperationId]) -> Result<bool, Self::Error> {
+            todo!()
         }
     }
 
-    impl OrdererStore<OperationId> for SqliteStore {
+    impl OperationStoreTrait<Conditions> for SqliteStore {
         type Error = Infallible;
 
-        fn ready(
+        fn get_operation(
             &self,
-            dependencies: &[OperationId],
-        ) -> impl Future<Output = Result<bool, Self::Error>> {
-            async { todo!() }
-        }
-
-        fn get_next_consumable(
-            &self,
-        ) -> impl Future<Output = Result<Option<OperationId>, Self::Error>> {
-            async { todo!() }
-        }
-
-        fn get_next_pending(
-            &self,
-            item: &OperationId,
-        ) -> impl Future<Output = Result<Option<Dependencies<OperationId>>, Self::Error>> {
-            async { todo!() }
+            id: &p2panda_core::Hash,
+        ) -> impl Future<Output = Result<Option<FakeOperation<Conditions>>, Self::Error>> {
+            // TODO
+            async { Ok(None) }
         }
     }
 
-    impl GroupStore<ActorId> for SqliteStore {
-        type Group = AuthGroupState<Conditions, Self>;
+    impl GroupStoreTrait<ActorId> for SqliteStore {
+        type Group = AuthGroupState<Conditions, Self, Self>;
 
         type Error = Infallible;
 
-        // TODO: Should be an atomic write transaction instead.
         fn insert(&self, id: &ActorId, group: &Self::Group) -> Result<(), Self::Error> {
-            {
-                let mut store = self.0.borrow_mut();
-                // TODO: We've enabled the `test_utils` flag right now to make this cloning work.
-                // That should not be required as soon as `insert` gets removed from the store and
-                // we use atomic transactions instead.
-                store.insert(*id, group.clone());
-            }
+            // TODO: Should be an atomic write transaction instead. This will be removed soon and
+            // stays as an NOOP until then.
             Ok(())
         }
 
@@ -1718,6 +1588,171 @@ mod tests {
         }
     }
 
+    // ~~~~~~~~~~~~~~~~
+    // In-Memory Stores
+    // ~~~~~~~~~~~~~~~~
+
+    // We can implement the same store traits for an in-memory type as well, which allows us to
+    // handle objects which are not written to the database yet (but will at one point). We can
+    // still link to the internal SQLite store as a fallback for reads.
+
+    // TODO: This struct should implement WriteToStore.
+    #[derive(Clone, Debug)]
+    struct OperationStore<S>
+    where
+        S: OperationStoreTrait<Conditions>,
+    {
+        // Some place where we can store in-memory operations. These then get written to the store
+        // as part of the WriteToStore implementation.
+        operations: Arc<RwLock<HashMap<Hash, FakeOperation<Conditions>>>>,
+
+        // Some place where we can read queries on persisted (file system) operations.
+        store: S,
+    }
+
+    impl<S> OperationStore<S>
+    where
+        S: OperationStoreTrait<Conditions>,
+    {
+        pub fn new(store: S) -> Self {
+            Self {
+                operations: Arc::new(RwLock::new(HashMap::new())),
+                store,
+            }
+        }
+
+        pub async fn insert_operation(&self, operation: FakeOperation<Conditions>) {
+            let mut operations = self.operations.write().await;
+            operations.insert(operation.id().0, operation);
+        }
+    }
+
+    impl<S> OperationStoreTrait<Conditions> for OperationStore<S>
+    where
+        S: OperationStoreTrait<Conditions>,
+    {
+        type Error = S::Error;
+
+        async fn get_operation(
+            &self,
+            id: &Hash,
+        ) -> Result<Option<FakeOperation<Conditions>>, Self::Error> {
+            let operations = self.operations.read().await;
+            match operations.get(id) {
+                Some(operation) => Ok(Some(operation.to_owned())),
+                None => self.store.get_operation(id).await,
+            }
+        }
+    }
+
+    // ======
+
+    #[derive(Clone, Debug)]
+    struct GroupStore<C, S>
+    where
+        S: GroupStoreTrait<ActorId>,
+    {
+        groups: Arc<RwLock<HashMap<ActorId, AuthGroupState<C, Self>>>>,
+        store: S,
+    }
+
+    impl<C, S> GroupStore<C, S>
+    where
+        S: GroupStoreTrait<ActorId>,
+    {
+        pub fn new(store: S) -> Self {
+            Self {
+                groups: Arc::new(RwLock::new(HashMap::new())),
+                store,
+            }
+        }
+
+        pub async fn insert_group(&self, id: ActorId, group: AuthGroupState<C, Self>) {
+            let mut groups = self.groups.write().await;
+            groups.insert(id, group);
+        }
+    }
+
+    impl<C, S> GroupStoreTrait<ActorId> for GroupStore<C, S>
+    where
+        S: GroupStoreTrait<Conditions>,
+    {
+        type Group = AuthGroupState<C, Self>;
+
+        type Error = S::Error;
+
+        fn insert(&self, id: &ActorId, group: &Self::Group) -> Result<(), Self::Error> {
+            // TODO: We've enabled the `test_utils` flag right now to make this cloning work.
+            // That should not be required as soon as `insert` gets removed from the store and
+            // we use atomic transactions instead.
+            self.insert_group(*id, group.clone());
+            Ok(())
+        }
+
+        // TODO: Trait method should probably be async.
+        // TODO: Maybe explicit `get_group` name is better.
+        fn get(&self, id: &ActorId) -> Result<Option<Self::Group>, Self::Error> {
+            let groups = self.groups.blocking_read();
+            match groups.get(id) {
+                Some(group) => Ok(Some(group)),
+                None => self.store.get(id),
+            }
+        }
+    }
+
+    // ======
+
+    #[derive(Clone, Debug)]
+    struct OrdererStore<S>
+    where
+        S: OrdererStoreTrait<OperationId>,
+    {
+        delta: Arc<RwLock<OrdererDelta<OperationId>>>,
+        store: S,
+    }
+
+    impl<S> OrdererStore<S>
+    where
+        S: OrdererStoreTrait<OperationId>,
+    {
+        pub fn new(store: S) -> Self {
+            Self {
+                delta: Arc::new(RwLock::new(OrdererDelta::new())),
+                store,
+            }
+        }
+    }
+
+    impl<S> OrdererStoreTrait<OperationId> for OrdererStore<S> {
+        type Error = Infallible;
+
+        async fn ready(&self, dependencies: &[OperationId]) -> Result<bool, Self::Error> {
+            todo!()
+        }
+
+        async fn get_next_consumable(&self) -> Result<Option<OperationId>, Self::Error> {
+            todo!()
+        }
+
+        async fn get_next_pending(
+            &self,
+            item: &OperationId,
+        ) -> Result<Option<Dependencies<OperationId>>, Self::Error> {
+            todo!()
+        }
+    }
+
+    // ~~~~~~~~~~~~~
+    // Create & Sign
+    // ~~~~~~~~~~~~~
+
+    // TODO: Do we need an interface here to create & sign operations?
+
+    // ~~~~~~~~~~~~~~
+    // High-Level API
+    // ~~~~~~~~~~~~~~
+
+    // We don't play with conditions (yet).
     type Conditions = ();
 
     #[tokio::test]
@@ -1769,7 +1804,7 @@ mod tests {
 
         // ----------------
 
-        bob_universe.process(&alice_operation_0);
+        bob_universe.process(&alice_operation_0).await.unwrap();
 
         // ----------------
 

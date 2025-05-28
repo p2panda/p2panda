@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
-
-use crate::partial::PartialOrderError;
 
 /// Trait defining a store API for handling ready and pending dependencies.
 ///
@@ -17,31 +16,26 @@ pub trait PartialOrderStore<K>
 where
     K: Clone + Copy + StdHash + PartialEq + Eq,
 {
+    type Error: std::error::Error;
+
     /// Add an item to the store which has all it's dependencies met already. If this is the first
     /// time the item has been added it should also be pushed to the end of a "ready" queue.
-    async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError>;
+    async fn mark_ready(&mut self, key: K) -> Result<bool, Self::Error>;
 
     /// Add an item which does not have all it's dependencies met yet.
-    async fn mark_pending(
-        &mut self,
-        key: K,
-        dependencies: Vec<K>,
-    ) -> Result<bool, PartialOrderError>;
+    async fn mark_pending(&mut self, key: K, dependencies: Vec<K>) -> Result<bool, Self::Error>;
 
     /// Get all pending items which directly depend on the given key.
-    async fn get_next_pending(
-        &self,
-        key: K,
-    ) -> Result<Option<HashSet<(K, Vec<K>)>>, PartialOrderError>;
+    async fn get_next_pending(&self, key: K) -> Result<Option<HashSet<(K, Vec<K>)>>, Self::Error>;
 
     /// Take the next ready item from the ready queue.
-    async fn take_next_ready(&mut self) -> Result<Option<K>, PartialOrderError>;
+    async fn take_next_ready(&mut self) -> Result<Option<K>, Self::Error>;
 
     /// Remove all items from the pending queue which depend on the passed key.
-    async fn remove_pending(&mut self, key: K) -> Result<bool, PartialOrderError>;
+    async fn remove_pending(&mut self, key: K) -> Result<bool, Self::Error>;
 
     /// Returns `true` of all the passed keys are present in the ready list.
-    async fn ready(&self, keys: &[K]) -> Result<bool, PartialOrderError>;
+    async fn ready(&self, keys: &[K]) -> Result<bool, Self::Error>;
 }
 
 /// Memory implementation of the `PartialOrderStore` trait.
@@ -66,7 +60,9 @@ impl<K> PartialOrderStore<K> for MemoryStore<K>
 where
     K: Clone + Copy + Debug + StdHash + PartialEq + Eq,
 {
-    async fn mark_ready(&mut self, key: K) -> Result<bool, PartialOrderError> {
+    type Error = Infallible;
+
+    async fn mark_ready(&mut self, key: K) -> Result<bool, Self::Error> {
         let result = self.ready.insert(key);
         if result {
             self.ready_queue.push_back(key);
@@ -74,11 +70,7 @@ where
         Ok(result)
     }
 
-    async fn mark_pending(
-        &mut self,
-        key: K,
-        dependencies: Vec<K>,
-    ) -> Result<bool, PartialOrderError> {
+    async fn mark_pending(&mut self, key: K, dependencies: Vec<K>) -> Result<bool, Self::Error> {
         let insert_occured = false;
         for dep_key in &dependencies {
             if self.ready.contains(dep_key) {
@@ -92,22 +84,19 @@ where
         Ok(insert_occured)
     }
 
-    async fn get_next_pending(
-        &self,
-        key: K,
-    ) -> Result<Option<HashSet<(K, Vec<K>)>>, PartialOrderError> {
+    async fn get_next_pending(&self, key: K) -> Result<Option<HashSet<(K, Vec<K>)>>, Self::Error> {
         Ok(self.pending.get(&key).cloned())
     }
 
-    async fn take_next_ready(&mut self) -> Result<Option<K>, PartialOrderError> {
+    async fn take_next_ready(&mut self) -> Result<Option<K>, Self::Error> {
         Ok(self.ready_queue.pop_front())
     }
 
-    async fn remove_pending(&mut self, key: K) -> Result<bool, PartialOrderError> {
+    async fn remove_pending(&mut self, key: K) -> Result<bool, Self::Error> {
         Ok(self.pending.remove(&key).is_some())
     }
 
-    async fn ready(&self, dependencies: &[K]) -> Result<bool, PartialOrderError> {
+    async fn ready(&self, dependencies: &[K]) -> Result<bool, Self::Error> {
         let deps_set = HashSet::from_iter(dependencies.iter().cloned());
         let result = self.ready.is_superset(&deps_set);
         Ok(result)
