@@ -1240,9 +1240,9 @@ where
         // TODO
     }
 
-    async fn register_key_bundle(&mut self, actor_id: ActorId, key_bundle: LongTermKeyBundle) {
+    async fn register_key_bundle(&mut self, id: ActorId, key_bundle: LongTermKeyBundle) {
         let mut inner = self.inner.write().await;
-        // TODO
+        inner.pki = KeyRegistry::add_key_bundle(inner.pki.clone(), id, key_bundle);
     }
 
     async fn identify_actor_types(
@@ -1323,15 +1323,16 @@ where
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 
-    // TODO: Requires C to implement Display?
-    // TODO: Causes infinite cycle ..?
-    // #[error(transparent)]
-    // AuthGroup(#[from] AuthGroupError<C, GS>),
     #[error(transparent)]
     EncryptionGroup(#[from] EncryptionGroupError<C, GS>),
 
     #[error(transparent)]
     Rng(#[from] RngError),
+    //
+    // TODO: Requires C to implement Display?
+    // TODO: Causes infinite cycle ..?
+    // #[error(transparent)]
+    // AuthGroup(#[from] AuthGroupError<C, GS>),
 }
 
 #[derive(Debug, Error)]
@@ -1353,7 +1354,7 @@ fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("SystemTime before UNIX EPOCH!")
+        .expect("system time before unix epoch")
         .as_secs()
 }
 
