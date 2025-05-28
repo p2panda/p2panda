@@ -13,7 +13,17 @@ use super::{GroupAction, GroupStateInner};
 
 // TODO: introduce all error types.
 #[derive(Debug, Error)]
-pub enum GroupResolverError {}
+pub enum GroupResolverError<ID, OP>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+{
+    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
+    MissingOperation(OP),
+
+    #[error("operation for group {0} processed in group {1}")]
+    IncorrectGroupId(ID, ID),
+}
 
 /// Resolver for group membership auth graph.
 #[derive(Clone, Debug, Default)]
@@ -29,16 +39,23 @@ where
     ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
     GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
 {
-    type Error = GroupResolverError;
+    type Error = GroupResolverError<ID, OP>;
 
-    fn rebuild_required(y: &GroupState<ID, OP, Self, ORD, GS>, operation: &ORD::Message) -> bool {
+    fn rebuild_required(
+        y: &GroupState<ID, OP, Self, ORD, GS>,
+        operation: &ORD::Message,
+    ) -> Result<bool, GroupResolverError<ID, OP>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
         let _actor = operation.sender();
 
         // Sanity check.
         if y.inner.group_id != group_id {
-            panic!()
+            // The operation is not intended for this group.
+            return Err(GroupResolverError::IncorrectGroupId(
+                group_id,
+                y.inner.group_id,
+            ));
         }
 
         let is_concurrent = !get_concurrent_operations(&y.inner.graph, operation.id()).is_empty();
@@ -46,7 +63,7 @@ where
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
                 // Any revoke message requires a re-build.
-                true
+                Ok(true)
             }
             GroupControlMessage::GroupAction { action, .. } => {
                 if is_concurrent {
@@ -58,7 +75,7 @@ where
                             //    branch && they actually were an admin.
                             // 2) ..?
 
-                            true
+                            Ok(true)
                         }
                         GroupAction::Demote {
                             member: _,
@@ -72,17 +89,17 @@ where
                             //    && they performed an admin action.
                             // 3) ..?
 
-                            true
+                            Ok(true)
                         }
                         _ => {
                             // TODO: Check if there are any concurrent actions which invalidate this
                             // action. If there are we could actually invalidate it immediately,
                             // maybe this method should return a state object as well as the boolean.
-                            false
+                            Ok(false)
                         }
                     }
                 } else {
-                    false
+                    Ok(false)
                 }
             }
         }
@@ -124,8 +141,7 @@ where
         for (operation_id, bubble) in bubbles {
             let Some(operation) = y.inner.operations.iter().find(|op| op.id() == operation_id)
             else {
-                // TODO: Error: Operation is expected to exist.
-                panic!()
+                return Err(GroupResolverError::MissingOperation(operation_id));
             };
 
             // Iterate over all concurrent operations in the bubble.
@@ -136,8 +152,9 @@ where
                     .iter()
                     .find(|op| op.id() == *concurrent_operation_id)
                 else {
-                    // TODO: Error: Operation is expected to exist.
-                    panic!()
+                    return Err(GroupResolverError::MissingOperation(
+                        *concurrent_operation_id,
+                    ));
                 };
 
                 if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
