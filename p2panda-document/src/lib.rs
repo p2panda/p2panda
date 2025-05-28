@@ -105,7 +105,7 @@
 //!         - Probably need to establish a "waiting room" for failed document messages. We have a
 //!         concrete error type when this happens (MissingPreKeys)
 #![allow(unused)]
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::Infallible;
 use std::fmt::{self, Display};
 use std::hash::Hash as StdHash;
@@ -223,6 +223,8 @@ impl PreKeyManager for KeyManager {
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<Self::State, Self::Error> {
+        // TODO: All of these blocking operations might disturb the async runtime (which might be
+        // in the same thread) ..
         let mut inner = y.inner.lock().unwrap();
         let y_inner = inner.take().expect("inner state");
         let y_inner_ii = KeyManagerInner::rotate_prekey(y_inner, lifetime, rng)?;
@@ -456,9 +458,246 @@ pub struct Orderer<C, GS> {
     _marker: PhantomData<(C, GS)>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OrdererState {
+impl<C, GS> Orderer<C, GS>
+where
+    GS: OrdererStore<OperationId>,
+{
+    pub fn init(my_id: ActorId, store: GS) -> OrdererState<C, GS> {
+        OrdererState {
+            my_id,
+            orderer: GenericOrderer::new(store),
+            delta: Arc::new(Mutex::new(Some(OrdererDelta::new()))),
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct OrdererState<C, GS> {
+    // This value will never change, so it's fine to just clone it.
     my_id: ActorId,
+
+    // Read-only access to underlying store, can be cloned as well.
+    orderer: GenericOrderer<OperationId, GS>,
+
+    // This is where we temporarily write changed state into memory, this needs to be RC-counted
+    // and mutable.
+    delta: Arc<Mutex<Option<OrdererDelta<OperationId>>>>,
+
+    _marker: PhantomData<C>,
+}
+
+// "Rules" for transactional persistance layer design:
+//
+// Reads can not depend on "pending writes" coming from the final database layer. An
+// implementation needs to check the "in memory" state before and then ask the database for every
+// read. This makes code more complex but allows an performant look-up before hitting more
+// "expensive" layers (similar to caching).
+//
+// Orderer design:
+//
+// 1. `Orderer` is an interface implementing the algorithm to check dependencies etc., it needs
+//    access to a readable store to get state and maintains a "delta" object, sometimes
+//    manipulating it's state
+// 2. `OrdererDelta` represents the changes which need to be written to a store
+// 3. `OrdererStore` defines the "read" methods
+pub type Dependencies<T> = HashSet<(T, Vec<T>)>;
+
+pub trait OrdererStore<T>
+where
+    T: PartialEq + Eq + StdHash,
+{
+    type Error: std::error::Error;
+
+    /// Returns `true` of all the passed items are present in the ready list.
+    fn ready(&self, dependencies: &[T]) -> impl Future<Output = Result<bool, Self::Error>>;
+
+    /// Take the next ready item where all dependencies are met and which was not "consumed" yet.
+    fn get_next_consumable(&self) -> impl Future<Output = Result<Option<T>, Self::Error>>;
+
+    /// Get all pending items which directly depend on the given one.
+    fn get_next_pending(
+        &self,
+        item: &T,
+    ) -> impl Future<Output = Result<Option<Dependencies<T>>, Self::Error>>;
+}
+
+#[derive(Clone, Debug)]
+pub struct GenericOrderer<T, S> {
+    store: S,
+    _marker: PhantomData<T>,
+}
+
+#[derive(Debug)]
+pub struct OrdererDelta<T>
+where
+    T: PartialEq + Eq + StdHash,
+{
+    /// Mark items in this set as "ready".
+    mark_ready: HashSet<T>,
+
+    /// Mark items in this set as "pending".
+    mark_pending: HashMap<T, HashSet<(T, Vec<T>)>>,
+
+    /// Item transitioned from "pending" to "ready" state.
+    remove_pending: HashSet<T>,
+
+    /// "Ready" items which can be consumed for further processing.
+    mark_consumable: VecDeque<T>,
+
+    /// "Ready" items that have been consumed.
+    remove_consumed: HashSet<T>,
+}
+
+impl<T> OrdererDelta<T>
+where
+    T: PartialEq + Eq + StdHash,
+{
+    pub fn new() -> Self {
+        Self {
+            mark_ready: HashSet::new(),
+            mark_pending: HashMap::new(),
+            remove_pending: HashSet::new(),
+            mark_consumable: VecDeque::new(),
+            remove_consumed: HashSet::new(),
+        }
+    }
+}
+
+impl<T, S> GenericOrderer<T, S>
+where
+    T: Clone + PartialEq + Eq + StdHash,
+    S: OrdererStore<T>,
+{
+    pub fn new(store: S) -> Self {
+        Self {
+            store,
+            _marker: PhantomData,
+        }
+    }
+
+    pub async fn process(
+        &self,
+        y: OrdererDelta<T>,
+        item: T,
+        dependencies: &[T],
+    ) -> Result<OrdererDelta<T>, S::Error> {
+        if !self.ready(&y, dependencies).await? {
+            let y_i = self.mark_pending(y, &item, dependencies).await?;
+            return Ok(y_i);
+        }
+
+        let y_i = Self::mark_ready(y, item.clone());
+
+        // We added a new ready item to the store so now we want to process any pending items which
+        // depend on it as they may now have transitioned into a ready state.
+        let y_ii = self.process_pending(y_i, &item).await?;
+
+        Ok(y_ii)
+    }
+
+    pub async fn next(
+        &self,
+        mut y: OrdererDelta<T>,
+    ) -> Result<(OrdererDelta<T>, Option<T>), S::Error> {
+        if let Some(ready_item) = y.mark_consumable.pop_front() {
+            y.remove_consumed.insert(ready_item.clone());
+            Ok((y, Some(ready_item)))
+        } else {
+            let result = self.store.get_next_consumable().await?;
+            if let Some(ref ready_item) = result {
+                y.remove_consumed.insert(ready_item.clone());
+            }
+            Ok((y, result))
+        }
+    }
+
+    async fn ready(&self, y: &OrdererDelta<T>, dependencies: &[T]) -> Result<bool, S::Error> {
+        if !dependencies.iter().any(|dep| !y.mark_ready.contains(dep)) {
+            Ok(true)
+        } else {
+            self.store.ready(dependencies).await
+        }
+    }
+
+    fn mark_ready(mut y: OrdererDelta<T>, item: T) -> OrdererDelta<T> {
+        if y.mark_ready.insert(item.clone()) {
+            y.mark_consumable.push_back(item);
+        }
+        y
+    }
+
+    async fn mark_pending(
+        &self,
+        mut y: OrdererDelta<T>,
+        item: &T,
+        dependencies: &[T],
+    ) -> Result<OrdererDelta<T>, S::Error> {
+        for (index, dep) in dependencies.iter().enumerate() {
+            if y.mark_ready.contains(dep) {
+                continue;
+            }
+
+            if self.store.ready(&dependencies[index..index + 1]).await? {
+                continue;
+            }
+
+            let dependents = y.mark_pending.entry(dep.clone()).or_default();
+            dependents.insert((item.clone(), dependencies.to_vec()));
+        }
+
+        Ok(y)
+    }
+
+    async fn get_next_pending(
+        &self,
+        y: &OrdererDelta<T>,
+        item: &T,
+    ) -> Result<Option<Dependencies<T>>, S::Error> {
+        if let Some(result) = y.mark_pending.get(item) {
+            Ok(Some(result.clone())) // TODO: Hard to remove the clone here ..
+        } else {
+            let result = self.store.get_next_pending(item).await?;
+            Ok(result)
+        }
+    }
+
+    fn remove_pending(mut y: OrdererDelta<T>, item: T) -> OrdererDelta<T> {
+        y.mark_pending.remove(&item);
+        y.remove_pending.insert(item.clone());
+        y
+    }
+
+    async fn process_pending(
+        &self,
+        y: OrdererDelta<T>,
+        item: &T,
+    ) -> Result<OrdererDelta<T>, S::Error> {
+        // Get all items which depend on the passed item.
+        let Some(dependents) = self.get_next_pending(&y, item).await? else {
+            return Ok(y);
+        };
+
+        // For each dependent check if it has all it's dependencies met, if not then we do nothing
+        // as it is still in a pending state.
+        let mut y_loop = y;
+        for (next_item, next_deps) in dependents {
+            if !self.ready(&y_loop, &next_deps).await? {
+                continue;
+            }
+
+            y_loop = Self::mark_ready(y_loop, next_item.clone());
+
+            // Recurse down the dependency graph by now checking any pending items which depend on
+            // the current item.
+            y_loop = Box::pin(self.process_pending(y_loop, &next_item)).await?;
+        }
+
+        // Finally remove this item from the pending items queue.
+        let y_i = Self::remove_pending(y_loop, item.clone());
+
+        Ok(y_i)
+    }
 }
 
 impl<C, GS> AuthOrdering<ActorId, OperationId, AuthControlMessage<C>> for Orderer<C, GS>
@@ -466,7 +705,7 @@ where
     C: fmt::Debug + Clone + PartialOrd + 'static,
     GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
 {
-    type State = OrdererState;
+    type State = OrdererState<C, GS>;
 
     type Message = Message<C>;
 
@@ -488,18 +727,24 @@ where
     }
 
     fn queue(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
+        // TODO: Noop?
         Ok(y)
     }
 
     fn next_ready_message(
         y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
+        // TODO: Noop?
         Ok((y, None))
     }
 }
 
-impl<C, GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<C, GS> {
-    type State = OrdererState;
+impl<C, GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for Orderer<C, GS>
+where
+    C: fmt::Debug + Clone,
+    GS: fmt::Debug + Clone,
+{
+    type State = OrdererState<C, GS>;
 
     type Error = Infallible;
 
@@ -530,7 +775,8 @@ impl<C, GS> EncryptionOrdering<ActorId, OperationId, EncryptionGroupManager> for
         todo!()
     }
 
-    fn queue(_y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
+    fn queue(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
+        // TODO: Noop?
         todo!()
     }
 
@@ -877,8 +1123,8 @@ where
                 universe.my_id,
                 universe.my_keys.clone(), // TODO: Make key manager RCed
                 universe.pki.clone(),
-                universe.dgm.clone(),     // TODO: Make DGM RCed?
-                universe.orderer.clone(), // TODO: Make orderer RCed
+                universe.dgm.clone(), // TODO: Make DGM RCed?
+                universe.orderer.clone(),
             );
 
             // Compute set of members who are part of the encryption group.
@@ -958,13 +1204,17 @@ where
     pub(crate) fn from_welcome(
         &self,
         _group_id: ActorId,
-        _orderer: OrdererState,
+        _orderer: OrdererState<C, GS>,
     ) -> Result<AuthGroupState<C, GS>, DocumentError<C, GS>> {
         todo!()
     }
 
     pub fn id(&self) -> ActorId {
         self.id
+    }
+
+    pub fn members(&self) {
+        // TODO
     }
 
     pub async fn add(
@@ -1073,7 +1323,7 @@ where
 
     pub(crate) store: GS,
 
-    pub(crate) orderer: OrdererState,
+    pub(crate) orderer: OrdererState<C, GS>,
 
     pub(crate) dgm: EncryptionGroupManagerState,
 
@@ -1092,7 +1342,11 @@ where
 impl<C, GS> Universe<C, GS>
 where
     C: fmt::Debug + Clone + PartialOrd + 'static,
-    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>> + Clone + fmt::Debug + 'static,
+    GS: GroupStore<ActorId, Group = AuthGroupState<C, GS>>
+        + OrdererStore<OperationId>
+        + Clone
+        + fmt::Debug
+        + 'static,
 {
     pub fn new(
         my_id: ActorId,
@@ -1119,7 +1373,7 @@ where
 
         // Establish initial states.
         let dgm = EncryptionGroupManagerState::default();
-        let orderer = OrdererState { my_id };
+        let orderer = Orderer::<C, GS>::init(my_id, store.clone());
 
         Ok(Self {
             inner: Arc::new(RwLock::new(InnerUniverse {
@@ -1208,7 +1462,10 @@ where
         })
     }
 
-    pub fn process(&mut self, operation: &FakeOperation<C>) -> Result<(), UniverseError<C, GS>> {
+    pub async fn process(
+        &mut self,
+        operation: &FakeOperation<C>,
+    ) -> Result<(), UniverseError<C, GS>> {
         // ... observes messages on the network (scoped by topic id)
 
         // Orderer comes here!
@@ -1244,6 +1501,12 @@ where
         // Validation?
         //
         // - Extra rules around what to process first
+
+        // Dispatch events
+
+        let mut inner = self.inner.write().await;
+
+        // inner.orderer
 
         todo!()
     }
@@ -1394,7 +1657,9 @@ mod tests {
     use p2panda_core::PrivateKey;
     use p2panda_encryption::Rng;
 
-    use super::{ActorId, AuthGroupState, Universe, UniverseConfig};
+    use super::{
+        ActorId, AuthGroupState, Dependencies, OperationId, OrdererStore, Universe, UniverseConfig,
+    };
 
     #[derive(Debug, Clone)]
     pub struct SqliteStore(Rc<RefCell<HashMap<ActorId, AuthGroupState<Conditions, Self>>>>);
@@ -1402,6 +1667,30 @@ mod tests {
     impl SqliteStore {
         pub fn new() -> Self {
             Self(Rc::new(RefCell::new(HashMap::new())))
+        }
+    }
+
+    impl OrdererStore<OperationId> for SqliteStore {
+        type Error = Infallible;
+
+        fn ready(
+            &self,
+            dependencies: &[OperationId],
+        ) -> impl Future<Output = Result<bool, Self::Error>> {
+            async { todo!() }
+        }
+
+        fn get_next_consumable(
+            &self,
+        ) -> impl Future<Output = Result<Option<OperationId>, Self::Error>> {
+            async { todo!() }
+        }
+
+        fn get_next_pending(
+            &self,
+            item: &OperationId,
+        ) -> impl Future<Output = Result<Option<Dependencies<OperationId>>, Self::Error>> {
+            async { todo!() }
         }
     }
 
