@@ -143,10 +143,10 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    // ID of the local actor.
+    /// ID of the local actor.
     pub my_id: ID,
 
-    // ID of the group.
+    /// ID of the group.
     pub group_id: ID,
 
     /// Group state at every position in the operation graph.
