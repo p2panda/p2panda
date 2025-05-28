@@ -78,7 +78,7 @@ where
                 ..
             } = operation.payload()
             {
-                for (member, access) in initial_members {
+                for (member, _access) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
                 }
             }
@@ -119,7 +119,7 @@ where
         graph
     }
 
-    fn format_operation(&self, root: &Self, operation: &ORD::Message) -> String {
+    fn format_operation(&self, _root: &Self, operation: &ORD::Message) -> String {
         let control_message = operation.payload();
         let mut s = String::new();
 
@@ -152,11 +152,11 @@ where
         }
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_control_message(&control_message)
+            self.format_control_message(control_message)
         );
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_members(&operation)
+            self.format_members(operation)
         );
         s += "</TABLE>>";
         s
