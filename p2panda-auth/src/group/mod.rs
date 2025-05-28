@@ -643,15 +643,15 @@ where
         if y.inner
             .operations
             .iter()
-            .map(|op| op.id())
-            .find(|id| id == &operation_id)
+            .find(|op| op.id() == operation_id)
             .is_some()
         {
+            // The operation has already been processed.
             return Err(GroupError::DuplicateOperation(operation_id, group_id));
         }
 
         if y.inner.group_id != group_id {
-            // This operation is not intended for this group.
+            // The operation is not intended for this group.
             return Err(GroupError::IncorrectGroupId(group_id, y.inner.group_id));
         }
 
@@ -795,8 +795,8 @@ where
         // Apply every operation.
         for operation in y.inner.operations {
             println!("{:?}", operation);
-            let id = operation.id();
             let actor = operation.sender();
+            let operation_id = operation.id();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
             let previous_operations = HashSet::from_iter(operation.previous().clone());
@@ -816,7 +816,7 @@ where
             y_i = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
                     y_i,
-                    id,
+                    operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     action,
