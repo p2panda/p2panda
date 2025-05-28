@@ -78,7 +78,7 @@ where
                 ..
             } = operation.payload()
             {
-                for (member, _) in initial_members {
+                for (member, _access) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
                 }
             }
@@ -156,7 +156,7 @@ where
         );
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_members(&operation)
+            self.format_members(operation)
         );
         s += "</TABLE>>";
         s
