@@ -40,7 +40,7 @@ where
     pub fn id(&self) -> ID {
         match self {
             GroupMember::Individual(id) => *id,
-            GroupMember::Group { id, .. } => *id,
+            GroupMember::Group(id) => *id,
         }
     }
 }
@@ -500,7 +500,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     type State = GroupState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
@@ -546,12 +546,17 @@ where
         // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
         // processing here in the groups api then there should probably be a hashset of operations
         // ids maintained on the struct for efficient lookup.
-        if y.operations.iter().any(|op| op.id() == operation_id) {
+        if y.operations
+            .iter()
+            .find(|op| op.id() == operation_id)
+            .is_some()
+        {
+            // The operation has already been processed.
             return Err(GroupError::DuplicateOperation(operation_id, group_id));
         }
 
         if y.group_id != group_id {
-            // This operation is not intended for this group.
+            // The operation is not intended for this group.
             return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
         }
 
@@ -610,7 +615,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Apply an action to a single group state.
     fn apply_action(
@@ -663,21 +668,27 @@ where
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         // Process the group state with the provided resolver. This will populate the set of
         // messages which should be ignored when applying group control messages.
-        let mut y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
+        let y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
-        let mut create_found = false;
+        let mut y_ii = GroupState::new(
+            y_i.my_id,
+            y_i.group_id,
+            y_i.group_store.clone(),
+            y_i.orderer_y,
+        );
 
         // Apply every operation.
-        let operations = y_i.operations.clone();
+        let operations = y_i.operations;
+        let mut create_found = false;
         for operation in operations {
-            let id = operation.id();
             let actor = operation.sender();
+            let operation_id = operation.id();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
             let previous_operations = HashSet::from_iter(operation.previous().clone());
 
             // Sanity check: we should only apply operations for this group.
-            assert_eq!(y_i.group_id, group_id);
+            assert_eq!(y_ii.group_id, group_id);
 
             // Sanity check: the first operation must be a create and all other operations must not be.
             if create_found {
@@ -688,23 +699,21 @@ where
 
             create_found = true;
 
-            y_i = match control_message {
+            y_ii = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
-                    y_i,
-                    id,
+                    y_ii,
+                    operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     &action,
                 )?,
-                // No action required as revokes were already processed and the `ignore` field populated.
-                GroupControlMessage::Revoke { .. } => y_i,
+                // TODO: revoke messages are not supported yet, either implement support or remove
+                // this message variant.
+                GroupControlMessage::Revoke { .. } => unimplemented!(),
             };
-
-            // Push the operation into the new states' operation vec.
-            y_i.operations.push(operation);
         }
 
-        Ok(y_i)
+        Ok(y_ii)
     }
 }
 

@@ -125,7 +125,6 @@ where
         let bubbles = get_concurrent_bubbles(&y.inner.graph);
 
         for (operation_id, bubble) in bubbles {
-            // TODO: Consider keeping a HashMap in memory to optimise lookup.
             let Some(operation) = y.inner.operations.iter().find(|op| op.id() == operation_id)
             else {
                 // TODO: Error: Operation is expected to exist.
