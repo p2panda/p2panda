@@ -22,6 +22,7 @@ mod resolver;
 mod state;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
+#[cfg(test)]
 mod tests;
 
 /// A group member which can be a single stateless individual, or a stateful group. In both cases
@@ -30,6 +31,15 @@ mod tests;
 pub enum GroupMember<ID> {
     Individual(ID),
     Group(ID),
+}
+
+impl<ID> GroupMember<ID> {
+    pub fn id(&self) -> &ID {
+        match self {
+            GroupMember::Individual(id) => id,
+            GroupMember::Group(id) => id,
+        }
+    }
 }
 
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
@@ -169,7 +179,7 @@ where
     GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
 {
     /// Instantiate a new group state.
-    fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
             group_id,
@@ -177,60 +187,7 @@ where
             operations: Default::default(),
             ignore: Default::default(),
             graph: Default::default(),
-<<<<<<< HEAD
             group_store,
-=======
-        }
-    }
-}
-
-/// The state of a group, the local actor id, as well as state objects for the global
-/// group store and orderer.
-#[derive(Clone, Debug)]
-pub struct GroupState<ID, OP, RS, ORD, GS>
-where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
-    RS: Resolver<Self, ORD::Message>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
-{
-    // ID of the local actor.
-    pub my_id: ID,
-
-    // The inner group state.
-    pub inner: GroupStateInner<ID, OP, ORD::Message>,
-
-    /// All groups known to this instance.
-    pub group_store_y: GS::State,
-
-    /// State for the orderer.
-    pub orderer_y: ORD::State,
-
-    _phantom: PhantomData<RS>,
-}
-
-impl<ID, OP, RS, ORD, GS> GroupState<ID, OP, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Display + Ord,
-    RS: Resolver<GroupState<ID, OP, RS, ORD, GS>, ORD::Message> + Clone + Debug,
-    ORD: Clone + Debug + Ordering<ID, OP, GroupControlMessage<ID, OP>>,
-    GS: Clone + Debug + GroupStore<ID, GroupStateInner<ID, OP, ORD::Message>>,
-{
-    /// Instantiate a new group state.
-    pub fn new(my_id: ID, group_id: ID, group_store_y: GS::State, orderer_y: ORD::State) -> Self {
-        Self {
-            my_id,
-            inner: GroupStateInner {
-                group_id,
-                states: Default::default(),
-                operations: Default::default(),
-                ignore: Default::default(),
-                graph: Default::default(),
-            },
-            group_store_y,
->>>>>>> b98c6733 (Jam)
             orderer_y,
             _phantom: PhantomData,
         }

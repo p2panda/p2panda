@@ -250,11 +250,7 @@ where
         self.previous.clone()
     }
 
-<<<<<<< HEAD
     fn payload(&self) -> GroupControlMessage<ID, OP, C> {
-=======
-    fn payload(&self) -> GroupControlMessage<ID, OP> {
->>>>>>> fe5e5b95 (Owned return types in p2panda-auth message trait)
         self.payload.clone()
     }
 }
