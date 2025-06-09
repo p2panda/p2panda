@@ -598,7 +598,9 @@ where
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        if RS::rebuild_required(&y_i, &operation).map_err(|error| GroupError::ResolverError(error))? {
+        if RS::rebuild_required(&y_i, &operation)
+            .map_err(|error| GroupError::ResolverError(error))?
+        {
             // Perform the re-build and return the new state.
             return Self::rebuild(y_i);
         }
@@ -676,11 +678,12 @@ where
             y_i.group_store.clone(),
             y_i.orderer_y,
         );
+        y_ii.ignore = y_i.ignore;
+        y_ii.graph = y_i.graph;
 
         // Apply every operation.
-        let operations = y_i.operations;
         let mut create_found = false;
-        for operation in operations {
+        for operation in y_i.operations {
             let actor = operation.sender();
             let operation_id = operation.id();
             let control_message = operation.payload();
@@ -711,6 +714,9 @@ where
                 // this message variant.
                 GroupControlMessage::Revoke { .. } => unimplemented!(),
             };
+
+            // Push the operation to the group state.
+            y_ii.operations.push(operation);
         }
 
         Ok(y_ii)
