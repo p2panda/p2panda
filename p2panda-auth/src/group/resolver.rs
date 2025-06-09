@@ -60,6 +60,11 @@ where
 
         let is_concurrent = !get_concurrent_operations(&y.graph, operation.id()).is_empty();
 
+        // @TODO: Think we need to check here if there is a concurrent operation which means
+        //        _this_ operation should be filtered out. eg. there is a concurrent "remove" of
+        //        Bob and this operation is an "add" authored by Bob. Believe this is why at least
+        //        one of the tests is failing.
+
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
                 // Any revoke message requires a re-build.
@@ -179,7 +184,9 @@ where
                                     // The removed member is concurrently removing the remover.
                                     if member.id() == operation.sender() {
                                         // Do not filter.
-                                        println!("removed member is concurrently removing remover; no filtering");
+                                        println!(
+                                            "removed member is concurrently removing remover; no filtering"
+                                        );
                                     } else {
                                         filter.insert(*concurrent_operation_id);
                                     }
@@ -626,44 +633,23 @@ mod tests {
         // Bob has the expected membership state but Alice and Claire do not.
 
         // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
+        let expected_members = vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (
+                GroupMember::Individual(bob),
+                Access::Write { conditions: None },
+            ),
+            (GroupMember::Individual(claire), Access::Manage),
+        ];
+
         let alice_members = network.members(&alice, &group);
-        assert_eq!(
-            alice_members,
-            vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
-            ]
-        );
+        assert_eq!(alice_members, expected_members);
 
         let bob_members = network.members(&bob, &group);
-        assert_eq!(
-            bob_members,
-            vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
-            ]
-        );
+        assert_eq!(bob_members, expected_members);
 
         let claire_members = network.members(&claire, &group);
-        assert_eq!(
-            claire_members,
-            vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
-            ]
-        );
+        assert_eq!(claire_members, expected_members);
 
         // TODO: Assertions fail.
         // Bob has one operation in the filter but Alice and Claire do not.
