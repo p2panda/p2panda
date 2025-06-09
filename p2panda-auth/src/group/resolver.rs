@@ -137,6 +137,7 @@ where
         let mut filter: HashSet<OP> = Default::default();
 
         let bubbles = get_concurrent_bubbles(&y.graph);
+        println!("bubbles: {:?}", bubbles);
 
         for (operation_id, bubble) in bubbles {
             let Some(operation) = y.operations.iter().find(|op| op.id() == operation_id) else {
@@ -166,6 +167,8 @@ where
                         member: removed_member,
                     } = action
                     {
+                        println!("processing removal of {:?}", removed_member);
+
                         if concurrent_operation.sender() == removed_member.id()
                             && !operation.previous().contains(concurrent_operation_id)
                         {
@@ -176,6 +179,7 @@ where
                                     // The removed member is concurrently removing the remover.
                                     if member.id() == operation.sender() {
                                         // Do not filter.
+                                        println!("removed member is concurrently removing remover; no filtering");
                                     } else {
                                         filter.insert(*concurrent_operation_id);
                                     }
@@ -196,6 +200,8 @@ where
                         ..
                     } = action
                     {
+                        println!("processing demotion of {:?}", demoted_member);
+
                         if concurrent_operation.sender() == demoted_member.id()
                             && !operation.previous().contains(concurrent_operation_id)
                         {
@@ -217,6 +223,7 @@ where
                 // filter.
                 for previous_operation in concurrent_operation.previous() {
                     if filter.contains(&previous_operation) {
+                        println!("filtering a dependent action");
                         filter.insert(*concurrent_operation_id);
                     }
                 }
@@ -456,6 +463,112 @@ mod tests {
     }
 
     #[test]
+    fn demote_remove_filter() {
+        //       A
+        //     /   \
+        //    B     C
+        //
+        // Node A: create the group
+        // Node B: Alice demotes Bob to Write
+        // Node C: Bob removes Claire
+        //
+        // We expect the removal of Claire (node C) to be filtered.
+
+        let alice = 'A';
+        let bob = 'B';
+        let claire = 'C';
+
+        let group = '1';
+
+        let rng = StdRng::from_os_rng();
+
+        let mut network = Network::new([alice, bob, claire], rng);
+
+        // Alice creates a group with Alice, Bob and Claire as managers.
+        network.create(
+            group,
+            alice,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // Everyone processes the operation.
+        network.process();
+
+        // Alice demotes Bob.
+        network.demote(
+            alice,
+            GroupMember::Individual(bob),
+            group,
+            Access::Write { conditions: None },
+        );
+
+        // Bob removes Claire concurrently.
+        network.remove(bob, GroupMember::Individual(claire), group);
+
+        // Everyone processes these operations.
+        network.process();
+
+        // The demote operation should have been applied.
+        // The remove operation should have been filtered.
+
+        // TODO: Assertions fail.
+        // Bob has the expected membership state but Alice and Claire do not.
+
+        // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
+        let alice_members = network.members(&alice, &group);
+        assert_eq!(
+            alice_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        let bob_members = network.members(&bob, &group);
+        assert_eq!(
+            bob_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        let claire_members = network.members(&claire, &group);
+        assert_eq!(
+            claire_members,
+            vec![
+                (GroupMember::Individual(alice), Access::Manage),
+                (
+                    GroupMember::Individual(bob),
+                    Access::Write { conditions: None }
+                ),
+                (GroupMember::Individual(claire), Access::Manage),
+            ]
+        );
+
+        // We expect the "ignore" operation set to contain a single operation ID.
+        // The ID should be the same across all members.
+        let alice_filter = network.get_y(&alice, &group).ignore;
+        let bob_filter = network.get_y(&bob, &group).ignore;
+        let claire_filter = network.get_y(&claire, &group).ignore;
+        assert_eq!(alice_filter.len(), 1);
+        assert_eq!(alice_filter, bob_filter);
+        assert_eq!(bob_filter, claire_filter);
+    }
+
+    #[test]
     fn demote_add_filter() {
         //       A
         //     /   \
@@ -476,7 +589,7 @@ mod tests {
 
         let rng = StdRng::from_os_rng();
 
-        let mut network = Network::new([alice, bob, claire], rng);
+        let mut network = Network::new([alice, bob, claire, dave], rng);
 
         // Alice creates a group with Alice, Bob and Claire as managers.
         network.create(
@@ -596,7 +709,7 @@ mod tests {
 
         let rng = StdRng::from_os_rng();
 
-        let mut network = Network::new([alice, bob], rng);
+        let mut network = Network::new([alice, bob, claire, dave], rng);
 
         // Alice creates a group with Alice and Bob as managers.
         network.create(
