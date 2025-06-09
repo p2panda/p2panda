@@ -33,10 +33,7 @@ pub enum GroupMember<ID> {
     Group(ID),
 }
 
-impl<ID> GroupMember<ID>
-where
-    ID: Copy,
-{
+impl<ID: Copy> GroupMember<ID> {
     pub fn id(&self) -> ID {
         match self {
             GroupMember::Individual(id) => *id,
@@ -182,7 +179,7 @@ where
     GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
 {
     /// Instantiate a new group state.
-    fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
             my_id,
             group_id,
