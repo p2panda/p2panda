@@ -123,6 +123,7 @@ struct Member {
     members: Vec<GroupMember<MemberId>>,
     my_id: MemberId,
     group: Option<TestGroupState>,
+    queue: VecDeque<(Suggestion, TestOperation<MemberId, MessageId, ()>)>,
 }
 
 impl Member {
@@ -427,16 +428,12 @@ fuzz_target!(|seed: [u8; 32]| {
                         Some(group_states[id].clone())
                     }
                 },
+                queue: VecDeque::new(),
             },
         );
     }
 
     drop(group_states);
-
-    // Based on our deterministic state machines we can now generate `n` group operations for each
-    // member and test the integrity and robustness of the group by processing these suggested
-    // operations and comparing the resulting group state with the expected values from the state
-    // machine.
 
     println!("\n==============================");
     println!("group created [group_creator={}]", group_creator);
@@ -494,41 +491,49 @@ fuzz_target!(|seed: [u8; 32]| {
                     continue;
                 }
 
+                // Get the member.
                 let member = members.get_mut(member_id).expect("member exists");
 
-                //                 if let GroupControlMessage::GroupAction {
-                //                     group_id,
-                //                     action: GroupAction::Add { member, .. }
-                //                 } = message.payload
-                //                 {
-                //                     if member.id() == *member_id {
-                //                         member.queue
-                //
-                //                     }
-                //                 }
-                //
-                //                 if !member.is_active() {
-                //                     member.queue.push(message.clone());
-                //                 } else {
-                match member.process_remote(&message) {
-                    Ok(_) => {
-                        if let Suggestion::Invalid(operation) = suggestion {
-                            panic!(
-                                "expected error when processing remote message from invalid operation '{}'",
-                                operation
-                            )
+                // Is this operation adding the (currently removed or inactive) member to the group.
+                let mut joined = false;
+                if let GroupControlMessage::GroupAction {
+                    action: GroupAction::Add { member, .. },
+                    ..
+                } = &message.payload
+                {
+                    joined = member.id() == *member_id;
+                }
+
+                // Push this new operation to the member's local queue.
+                member
+                    .queue
+                    .push_back((suggestion.clone(), message.clone()));
+
+                // Process the members local queue if the member is to-be-joined or already an
+                // active member.
+                if joined || member.is_active() {
+                    while let Some((suggestion, message)) = member.queue.pop_front() {
+                        match member.process_remote(&message) {
+                            Ok(_) => {
+                                if let Suggestion::Invalid(operation) = suggestion {
+                                    panic!(
+                                        "expected error when processing remote message from invalid operation '{}'",
+                                        operation
+                                    )
+                                }
+                            }
+                            Err(err) => {
+                                if let Suggestion::Valid(operation) = suggestion {
+                                    panic!(
+                                        "unexpected error when processing remote message from valid operation member={} '{}':\n{}",
+                                        member.id(),
+                                        operation,
+                                        err
+                                    )
+                                }
+                            }
                         }
                     }
-                    Err(err) => {
-                        if let Suggestion::Valid(operation) = suggestion {
-                            panic!(
-                                "unexpected error when processing remote message from valid operation member={} '{}':\n{}",
-                                member.id(),
-                                operation,
-                                err
-                            )
-                        }
-                    } // }
                 }
             }
         }
