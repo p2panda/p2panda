@@ -534,7 +534,7 @@ where
 
     /// Process an operation created locally or received from a remote peer.
     fn process(
-        mut y: Self::State,
+        y: Self::State,
         operation: &ORD::Message,
     ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
         let operation_id = operation.id();
@@ -546,11 +546,7 @@ where
         // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
         // processing here in the groups api then there should probably be a hashset of operations
         // ids maintained on the struct for efficient lookup.
-        if y.operations
-            .iter()
-            .find(|op| op.id() == operation_id)
-            .is_some()
-        {
+        if y.operations.iter().any(|op| op.id() == operation_id) {
             // The operation has already been processed.
             return Err(GroupError::DuplicateOperation(operation_id, group_id));
         }
@@ -598,7 +594,7 @@ where
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        if RS::rebuild_required(&y_i, &operation)
+        if RS::rebuild_required(&y_i, operation)
             .map_err(|error| GroupError::ResolverError(error))?
         {
             // Perform the re-build and return the new state.
@@ -635,29 +631,28 @@ where
             y.state_at(previous)?
         };
 
-        let members_y_copy = members_y.clone();
-        let members_y_i = match action.clone() {
-            GroupAction::Add { member, access, .. } => {
-                state::add(members_y_copy, actor, member, access)
-            }
-            GroupAction::Remove { member, .. } => state::remove(members_y_copy, actor, member),
-            GroupAction::Promote { member, .. } => {
-                // TODO: need changes in the group_crdt api so that we can pass in the access
-                // level rather than only the conditions.
-                state::promote(members_y_copy, actor, member, None)
-            }
-            GroupAction::Demote { member, .. } => {
-                // TODO: need changes in the group_crdt api so that we can pass in the access
-                // level rather than only the conditions.
-                state::demote(members_y_copy, actor, member, None)
-            }
-            GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
-        }
-        .map_err(|error| GroupError::StateChangeError(error))?;
-
         // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.ignore.contains(&id) {
+            let members_y_i = match action.clone() {
+                GroupAction::Add { member, access, .. } => {
+                    state::add(members_y, actor, member, access)
+                }
+                GroupAction::Remove { member, .. } => state::remove(members_y, actor, member),
+                GroupAction::Promote { member, .. } => {
+                    // TODO: need changes in the group_crdt api so that we can pass in the access
+                    // level rather than only the conditions.
+                    state::promote(members_y, actor, member, None)
+                }
+                GroupAction::Demote { member, .. } => {
+                    // TODO: need changes in the group_crdt api so that we can pass in the access
+                    // level rather than only the conditions.
+                    state::demote(members_y, actor, member, None)
+                }
+                GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
+            }
+            .map_err(|error| GroupError::StateChangeError(error))?;
+
             y.states.insert(id, members_y_i);
         } else {
             y.states.insert(id, members_y);

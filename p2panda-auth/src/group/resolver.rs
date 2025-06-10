@@ -50,7 +50,7 @@ where
     ) -> Result<bool, GroupResolverError<ID, OP>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
-        let _actor = operation.sender();
+        let actor = operation.sender();
 
         // Sanity check.
         if y.group_id != group_id {
@@ -58,12 +58,8 @@ where
             return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        let is_concurrent = !get_concurrent_operations(&y.graph, operation.id()).is_empty();
-
-        // @TODO: Think we need to check here if there is a concurrent operation which means
-        //        _this_ operation should be filtered out. eg. there is a concurrent "remove" of
-        //        Bob and this operation is an "add" authored by Bob. Believe this is why at least
-        //        one of the tests is failing.
+        // Compare graph tips (heads) with `previous` of current operation.
+        let is_concurrent = y.heads().into_iter().collect::<Vec<_>>() != operation.previous();
 
         match operation.payload() {
             GroupControlMessage::Revoke { .. } => {
@@ -97,9 +93,45 @@ where
                             Ok(true)
                         }
                         _ => {
-                            // TODO: Check if there are any concurrent actions which invalidate this
-                            // action. If there are we could actually invalidate it immediately,
-                            // maybe this method should return a state object as well as the boolean.
+                            // Get concurrent operations.
+                            // Look at each one and see if there's a demote or remove which affects
+                            // the author of the current operation we're looking at.
+                            // - If yes, then we return `true` here.
+                            let concurrent_operations =
+                                get_concurrent_operations(&y.graph, operation.id());
+
+                            for concurrent_operation_id in concurrent_operations {
+                                let Some(concurrent_operation) = y
+                                    .operations
+                                    .iter()
+                                    .find(|op| op.id() == concurrent_operation_id)
+                                else {
+                                    // TODO: Proper error.
+                                    panic!()
+                                };
+
+                                // Is there a remove or demote that targets the author of the
+                                // operation we're currently processing.
+                                match concurrent_operation.payload() {
+                                    GroupControlMessage::GroupAction { action, .. } => match action
+                                    {
+                                        GroupAction::Remove { member } => {
+                                            if member.id() == actor {
+                                                return Ok(true);
+                                            }
+                                        }
+                                        GroupAction::Demote { member, access: _ } => {
+                                            if member.id() == actor {
+                                                return Ok(true);
+                                            }
+                                        }
+                                        _ => (),
+                                    },
+                                    // Revoke is not yet supported.
+                                    _ => unimplemented!(),
+                                }
+                            }
+
                             Ok(false)
                         }
                     }
@@ -140,6 +172,12 @@ where
         mut y: GroupState<ID, OP, C, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
         let mut filter: HashSet<OP> = Default::default();
+        let operations: HashMap<OP, ORD::Message> = y
+            .operations
+            .clone()
+            .into_iter()
+            .map(|op| (op.id(), op))
+            .collect();
 
         let bubbles = get_concurrent_bubbles(&y.graph);
         println!("bubbles: {:?}", bubbles);
@@ -172,11 +210,10 @@ where
                         member: removed_member,
                     } = action
                     {
+                        // TODO: Make this into proper logging statements (probably `debug` level).
                         println!("processing removal of {:?}", removed_member);
 
-                        if concurrent_operation.sender() == removed_member.id()
-                            && !operation.previous().contains(concurrent_operation_id)
-                        {
+                        if concurrent_operation.sender() == removed_member.id() {
                             if let GroupControlMessage::GroupAction { action, .. } =
                                 concurrent_operation.payload()
                             {
@@ -209,9 +246,7 @@ where
                     {
                         println!("processing demotion of {:?}", demoted_member);
 
-                        if concurrent_operation.sender() == demoted_member.id()
-                            && !operation.previous().contains(concurrent_operation_id)
-                        {
+                        if concurrent_operation.sender() == demoted_member.id() {
                             if let GroupControlMessage::GroupAction { .. } =
                                 concurrent_operation.payload()
                             {
@@ -237,13 +272,108 @@ where
             }
         }
 
+        let mut invalid_operations = HashSet::new();
+
+        for invalid_operation_id in &filter {
+            // TODO: Error...
+            let invalid_operation = operations.get(invalid_operation_id).unwrap();
+            invalid_dependent_operations::<ID, OP, C, ORD>(
+                &y.graph,
+                &operations,
+                *invalid_operation_id,
+                invalid_operation.sender(),
+                &mut invalid_operations,
+            );
+        }
+
+        println!("invalid_operations: {:?}", invalid_operations);
+
+        filter.extend(invalid_operations);
+
         y.ignore = filter;
 
         Ok(y)
     }
 }
 
+// TODO: Document properly.
+//
+// TODO: Before invalidating dependent operations we need to check that the affected member has not
+// been readded by another member concurrently or otherwise. Implement this later...
+//
+// When we find an invalid operation we want to find any dependent operations and see if any of
+// those are now invalid. We need to do this recursively until no more dependent operations are
+// found.
+//
+// We do this once for every filtered operation.
+//
+// Dependent operations are all successors of the target operation.
+fn invalid_dependent_operations<ID, OP, C, ORD>(
+    graph: &DiGraphMap<OP, ()>,
+    operations: &HashMap<OP, ORD::Message>,
+    target: OP,
+    target_author: ID,
+    invalid_operations: &mut HashSet<OP>,
+) where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Display + Ord,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD::Message: Clone,
+    ORD::State: Clone,
+{
+    let mut dfs = Dfs::new(graph, target);
+    while let Some(dependent_operation_id) = dfs.next(&graph) {
+        let dependent_operation = operations.get(&dependent_operation_id).unwrap();
+        if dependent_operation.sender() == target_author {
+            if let GroupControlMessage::GroupAction { action, .. } = dependent_operation.payload() {
+                if let GroupAction::Add {
+                    member: added_member,
+                    ..
+                } = action
+                {
+                    println!(
+                        "filtering dependent add operation: {}",
+                        dependent_operation_id
+                    );
+
+                    invalid_operations.insert(dependent_operation_id);
+
+                    invalid_dependent_operations::<ID, OP, C, ORD>(
+                        graph,
+                        operations,
+                        dependent_operation.id(),
+                        added_member.id(),
+                        invalid_operations,
+                    );
+                }
+
+                if let GroupAction::Promote {
+                    member: prmoted_member,
+                    ..
+                } = action
+                {
+                    println!(
+                        "filtering dependent promote operation: {}",
+                        dependent_operation_id
+                    );
+
+                    invalid_operations.insert(dependent_operation_id);
+
+                    invalid_dependent_operations::<ID, OP, C, ORD>(
+                        graph,
+                        operations,
+                        dependent_operation.id(),
+                        prmoted_member.id(),
+                        invalid_operations,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /// Walk the graph and identify the set of concurrent operations for each node.
+// TODO: Consider removing the `get_` prefix.
 fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
 where
     OP: OperationId + Display + Ord,
@@ -263,6 +393,7 @@ where
 /// Return any operations concurrent with the given target operation.
 ///
 /// An operation is concurrent if it is not a predecessor or successor of the target operation.
+// TODO: Consider removing the `get_` prefix.
 fn get_concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId + Display + Ord,
@@ -290,15 +421,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
 
-    use crate::group::test_utils::Network;
-    use crate::group::{Access, GroupMember};
-    use crate::traits::OperationId;
+    use crate::group::test_utils::{
+        Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
+    };
+    use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
+    use crate::traits::{AuthGroup, OperationId};
 
     use super::get_concurrent_bubbles;
 
@@ -522,9 +655,6 @@ mod tests {
         // The demote operation should have been applied.
         // The remove operation should have been filtered.
 
-        // TODO: Assertions fail.
-        // Bob has the expected membership state but Alice and Claire do not.
-
         // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
         let alice_members = network.members(&alice, &group);
         assert_eq!(
@@ -629,9 +759,6 @@ mod tests {
         // The demote operation should have been applied.
         // The add operation should have been filtered.
 
-        // TODO: Assertions fail.
-        // Bob has the expected membership state but Alice and Claire do not.
-
         // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
         let expected_members = vec![
             (GroupMember::Individual(alice), Access::Manage),
@@ -651,23 +778,15 @@ mod tests {
         let claire_members = network.members(&claire, &group);
         assert_eq!(claire_members, expected_members);
 
-        // TODO: Assertions fail.
-        // Bob has one operation in the filter but Alice and Claire do not.
-        // Bob has successfully filtered the self-authored operation which adds Dave.
-        //
-        // The concurrent bubbles are somehow not being recognised by Alice and Claire
-        // (`get_concurrent_bubbles()` returns an empty HashMap).
-
-        // We expect the "ignore" operation set to be empty, indicating that no operations have
-        // been marked as invalid by the resolver.
+        // We expect each filter to contain a single operation: the addition of Dave.
         let alice_filter = network.get_y(&alice, &group).ignore;
-        assert!(alice_filter.is_empty());
+        assert_eq!(alice_filter.len(), 1);
 
         let bob_filter = network.get_y(&bob, &group).ignore;
-        assert!(bob_filter.is_empty());
+        assert_eq!(bob_filter.len(), 1);
 
         let claire_filter = network.get_y(&claire, &group).ignore;
-        assert!(claire_filter.is_empty());
+        assert_eq!(claire_filter.len(), 1);
     }
 
     #[test]
@@ -678,7 +797,7 @@ mod tests {
         //           \
         //            D
         //
-        // Node A: create the group
+        // Node A: create the group with Alice and Bob as managers
         // Node B: Alice removes Bob
         // Node C: Bob adds Claire
         // Node D: Claire adds Dave
@@ -686,59 +805,122 @@ mod tests {
         // We expect the addition of Claire (node C) and Dave (node D) to be filtered.
         // Alice should be the only member of the group after processing.
 
+        let group_id = '1';
+
         let alice = 'A';
         let bob = 'B';
         let claire = 'C';
         let dave = 'D';
 
-        let group = '1';
+        let mut rng = StdRng::from_os_rng();
 
-        let rng = StdRng::from_os_rng();
+        let alice_store = TestGroupStore::default();
+        let alice_orderer_y =
+            TestOrdererState::new(alice, alice_store.clone(), StdRng::from_rng(&mut rng));
+        // TODO: Do we maybe want to switch the position of the args `alice` and `group_id`?
+        let alice_group_y = TestGroupState::new(alice, group_id, alice_store, alice_orderer_y);
 
-        let mut network = Network::new([alice, bob, claire, dave], rng);
+        let bob_store = TestGroupStore::default();
+        let bob_orderer_y =
+            TestOrdererState::new(bob, bob_store.clone(), StdRng::from_rng(&mut rng));
+        let bob_group_y = TestGroupState::new(bob, group_id, bob_store, bob_orderer_y);
 
-        // Alice creates a group with Alice and Bob as managers.
-        network.create(
-            group,
-            alice,
-            vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-            ],
-        );
+        let claire_store = TestGroupStore::default();
+        let claire_orderer_y =
+            TestOrdererState::new(claire, claire_store.clone(), StdRng::from_rng(&mut rng));
+        let claire_group_y = TestGroupState::new(claire, group_id, claire_store, claire_orderer_y);
 
-        // Everyone processes the operation.
-        network.process();
+        // Create group with alice and bob as initial admin members.
+        let control_message_001 = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Create {
+                initial_members: vec![
+                    (GroupMember::Individual(alice), Access::Manage),
+                    (GroupMember::Individual(bob), Access::Manage),
+                ],
+            },
+        };
+        let (alice_group_y, operation_001) =
+            TestGroup::prepare(alice_group_y, &control_message_001).unwrap();
+        let alice_group_y = TestGroup::process(alice_group_y, &operation_001).unwrap();
+        let bob_group_y = TestGroup::process(bob_group_y, &operation_001).unwrap();
+        let claire_group_y = TestGroup::process(claire_group_y, &operation_001).unwrap();
+
+        let mut members = alice_group_y.members();
+        members.sort();
+        let expected_members = vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (GroupMember::Individual(bob), Access::Manage),
+        ];
+        assert_eq!(members, expected_members);
 
         // Alice removes Bob.
-        network.remove(alice, GroupMember::Individual(bob), group);
+        let control_message_002 = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(bob),
+            },
+        };
 
-        // Bob adds Claire concurrently.
-        network.add(bob, GroupMember::Individual(claire), group, Access::Manage);
+        let (alice_group_y, operation_002) =
+            TestGroup::prepare(alice_group_y, &control_message_002).unwrap();
+        // Only Alice processes this operation.
+        let alice_group_y = TestGroup::process(alice_group_y, &operation_002).unwrap();
 
-        // Claire adds Dave concurrently.
-        network.add(claire, GroupMember::Individual(dave), group, Access::Manage);
+        let mut members = alice_group_y.members();
+        members.sort();
+        let expected_members = vec![(GroupMember::Individual(alice), Access::Manage)];
+        assert_eq!(members, expected_members);
 
-        // Everyone processes these operations.
-        network.process();
+        // Bob adds claire with manage access.
+        let control_message_003 = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(claire),
+                access: Access::Manage,
+            },
+        };
+        let (bob_group_y, operation_003) =
+            TestGroup::prepare(bob_group_y, &control_message_003).unwrap();
+        let bob_group_y = TestGroup::process(bob_group_y, &operation_003).unwrap();
+        let claire_group_y = TestGroup::process(claire_group_y, &operation_003).unwrap();
 
-        // We expect Alice to be the only remaining group member.
-        let alice_members = network.members(&alice, &group);
-        assert_eq!(
-            alice_members,
-            vec![(GroupMember::Individual(alice), Access::Manage),]
-        );
+        let mut members = bob_group_y.members();
+        members.sort();
+        let expected_members = vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (GroupMember::Individual(bob), Access::Manage),
+            (GroupMember::Individual(claire), Access::Manage),
+        ];
+        assert_eq!(members, expected_members);
 
-        let bob_members = network.members(&bob, &group);
-        assert_eq!(
-            bob_members,
-            vec![(GroupMember::Individual(alice), Access::Manage),]
-        );
+        // Claire adds Dave with read access.
+        let control_message_004 = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        };
+        let (claire_group_y, operation_004) =
+            TestGroup::prepare(claire_group_y, &control_message_004).unwrap();
+        let claire_group_y = TestGroup::process(claire_group_y, &operation_004).unwrap();
+        let bob_group_y = TestGroup::process(bob_group_y, &operation_004).unwrap();
 
-        let claire_members = network.members(&claire, &group);
-        assert_eq!(
-            claire_members,
-            vec![(GroupMember::Individual(alice), Access::Manage),]
-        );
+        let mut members = bob_group_y.members();
+        members.sort();
+        let expected_members = vec![
+            (GroupMember::Individual(alice), Access::Manage),
+            (GroupMember::Individual(bob), Access::Manage),
+            (GroupMember::Individual(claire), Access::Manage),
+            (GroupMember::Individual(dave), Access::Read),
+        ];
+        assert_eq!(members, expected_members);
+
+        // Now everyone processes the operations from the concurrent branch.
+        let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
+        let alice_group_y = TestGroup::process(alice_group_y, &operation_004).unwrap();
+        let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
+        let claire_group_y = TestGroup::process(claire_group_y, &operation_002).unwrap();
     }
 }
