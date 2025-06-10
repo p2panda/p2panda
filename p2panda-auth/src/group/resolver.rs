@@ -6,7 +6,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
 use thiserror::Error;
 
-use crate::group::{GroupControlMessage, GroupState};
+use crate::group::{Access, GroupControlMessage, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::GroupAction;
@@ -50,7 +50,6 @@ where
     ) -> Result<bool, GroupResolverError<ID, OP>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
-        let actor = operation.sender();
 
         // Sanity check.
         if y.group_id != group_id {
@@ -58,88 +57,7 @@ where
             return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        // Compare graph tips (heads) with `previous` of current operation.
-        let is_concurrent = y.heads().into_iter().collect::<Vec<_>>() != operation.previous();
-
-        match operation.payload() {
-            GroupControlMessage::Revoke { .. } => {
-                // Any revoke message requires a re-build.
-                Ok(true)
-            }
-            GroupControlMessage::GroupAction { action, .. } => {
-                if is_concurrent {
-                    match action {
-                        GroupAction::Remove { member: _ } => {
-                            // Optional optimization to avoid unnecessary re-builds, only return
-                            // true if:
-                            // 1) The removed member performed an admin action in any concurrent
-                            //    branch && they actually were an admin.
-                            // 2) ..?
-
-                            Ok(true)
-                        }
-                        GroupAction::Demote {
-                            member: _,
-                            access: _,
-                        } => {
-                            // Optional optimizations to avoid unnecessary re-builds, only return
-                            // true if:
-                            // 1) The demoted member was previously an admin && they performed an
-                            //    admin action in a concurrent branch.
-                            // 2) The demoted member was promoted to admin in a concurrent branch
-                            //    && they performed an admin action.
-                            // 3) ..?
-
-                            Ok(true)
-                        }
-                        _ => {
-                            // Get concurrent operations.
-                            // Look at each one and see if there's a demote or remove which affects
-                            // the author of the current operation we're looking at.
-                            // - If yes, then we return `true` here.
-                            let concurrent_operations =
-                                get_concurrent_operations(&y.graph, operation.id());
-
-                            for concurrent_operation_id in concurrent_operations {
-                                let Some(concurrent_operation) = y
-                                    .operations
-                                    .iter()
-                                    .find(|op| op.id() == concurrent_operation_id)
-                                else {
-                                    // TODO: Proper error.
-                                    panic!()
-                                };
-
-                                // Is there a remove or demote that targets the author of the
-                                // operation we're currently processing.
-                                match concurrent_operation.payload() {
-                                    GroupControlMessage::GroupAction { action, .. } => match action
-                                    {
-                                        GroupAction::Remove { member } => {
-                                            if member.id() == actor {
-                                                return Ok(true);
-                                            }
-                                        }
-                                        GroupAction::Demote { member, access: _ } => {
-                                            if member.id() == actor {
-                                                return Ok(true);
-                                            }
-                                        }
-                                        _ => (),
-                                    },
-                                    // Revoke is not yet supported.
-                                    _ => unimplemented!(),
-                                }
-                            }
-
-                            Ok(false)
-                        }
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
-        }
+        Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
     }
 
     /// Resolve group membership by processing all concurrent operations in the graph.
@@ -182,103 +100,66 @@ where
         let bubbles = get_concurrent_bubbles(&y.graph);
         println!("bubbles: {:?}", bubbles);
 
-        for (operation_id, bubble) in bubbles {
-            let Some(operation) = y.operations.iter().find(|op| op.id() == operation_id) else {
-                return Err(GroupResolverError::MissingOperation(operation_id));
+        let mut invalid_operations = HashSet::new();
+        let mut mutual_removes = HashSet::new();
+
+        for (target_operation_id, bubble) in bubbles {
+            let Some(target_operation) = operations.get(&target_operation_id) else {
+                return Err(GroupResolverError::MissingOperation(target_operation_id));
             };
 
-            // Iterate over all concurrent operations in the bubble.
+            // Does the target operation remove or demote a manager member?
+            let removed_author = y.removed_manager(target_operation);
+
+            // If no then continue here onto the next concurrent bubble as no action is required.
+            let Some(removed_author) = removed_author else {
+                continue;
+            };
+
+            // Iterate over every operation in the bubble and filter out any from the author
+            // removed by the target operation.
             for concurrent_operation_id in &bubble {
-                let Some(concurrent_operation) = y
-                    .operations
-                    .iter()
-                    .find(|op| op.id() == *concurrent_operation_id)
-                else {
+                let Some(concurrent_operation) = operations.get(&concurrent_operation_id) else {
                     return Err(GroupResolverError::MissingOperation(
                         *concurrent_operation_id,
                     ));
                 };
 
-                if let GroupControlMessage::GroupAction { action, .. } = operation.payload() {
-                    // Process a remove action.
-                    //
-                    // Iterate over all actions that occurred concurrent to the remove and identify
-                    // those authored by the removed member. Filter any action by the removed member,
-                    // as long as it's 1) not a predecessor of the remove operation, and 2) not a
-                    // mutual removal (removal of the remover by the removed member).
-                    if let GroupAction::Remove {
-                        member: removed_member,
-                    } = action
-                    {
-                        // TODO: Make this into proper logging statements (probably `debug` level).
-                        println!("processing removal of {:?}", removed_member);
+                // If this concurrent operation is _not_ authored by the "target author" then we
+                // can continue to the next concurrent operation without taking any action.
+                if concurrent_operation.sender() != removed_author {
+                    continue;
+                }
 
-                        if concurrent_operation.sender() == removed_member.id() {
-                            if let GroupControlMessage::GroupAction { action, .. } =
-                                concurrent_operation.payload()
-                            {
-                                if let GroupAction::Remove { member } = action {
-                                    // The removed member is concurrently removing the remover.
-                                    if member.id() == operation.sender() {
-                                        // Do not filter.
-                                        println!(
-                                            "removed member is concurrently removing remover; no filtering"
-                                        );
-                                    } else {
-                                        filter.insert(*concurrent_operation_id);
-                                    }
-                                } else {
-                                    filter.insert(*concurrent_operation_id);
-                                }
-                            }
-                        }
-                    }
+                // Does this concurrent operation remove or demote an admin member?
+                let concurrent_removed_admin = y.removed_manager(concurrent_operation);
 
-                    // Process a demote action.
-                    //
-                    // Iterate over all actions that occurred concurrent to the demote and identify
-                    // those authored by the demoted member. Filter any action by the demoted member,
-                    // as long as it's not a predecessor of the demote operation.
-                    if let GroupAction::Demote {
-                        member: demoted_member,
-                        ..
-                    } = action
-                    {
-                        println!("processing demotion of {:?}", demoted_member);
-
-                        if concurrent_operation.sender() == demoted_member.id() {
-                            if let GroupControlMessage::GroupAction { .. } =
-                                concurrent_operation.payload()
-                            {
-                                filter.insert(*concurrent_operation_id);
-                            }
-                        }
+                if let Some(concurrent_removed_admin) = concurrent_removed_admin {
+                    // The removed member is concurrently removing the remover.
+                    if concurrent_removed_admin == target_operation.sender() {
+                        // We don't want to filter out mutual remove/demote operations, but we
+                        // still want to filter any dependent operations for both (mutually)
+                        // removed members.
+                        //
+                        // The "target" operations are included when collecting invalid dependent
+                        // operations, we record mutual remove operations here and then remove
+                        // them from the filter later.
+                        mutual_removes.insert(target_operation_id);
+                        mutual_removes.insert(*concurrent_operation_id);
+                        continue;
                     }
                 }
 
-                // TODO(glyph): I'm not confident that the placement of this is correct.
-                //
-                // Process a dependent action.
-                //
-                // Iterate over all concurrent operations in the bubble, finding any which include
-                // filtered operations in their `previous` field. Add those dependent operations to the
-                // filter.
-                for previous_operation in concurrent_operation.previous() {
-                    if filter.contains(&previous_operation) {
-                        println!("filtering a dependent action");
-                        filter.insert(*concurrent_operation_id);
-                    }
-                }
+                // Add the concurrent operation to our filter.
+                filter.insert(*concurrent_operation_id);
             }
         }
 
-        let mut invalid_operations = HashSet::new();
-
+        // For all filtered operations recursively invalidate any dependent operations.
         for invalid_operation_id in &filter {
             // TODO: Error...
             let invalid_operation = operations.get(invalid_operation_id).unwrap();
-            invalid_dependent_operations::<ID, OP, C, ORD>(
-                &y.graph,
+            y.invalid_dependent_operations(
                 &operations,
                 *invalid_operation_id,
                 invalid_operation.sender(),
@@ -286,9 +167,8 @@ where
             );
         }
 
-        println!("invalid_operations: {:?}", invalid_operations);
-
         filter.extend(invalid_operations);
+        filter.retain(|op| !mutual_removes.contains(op));
 
         y.ignore = filter;
 
@@ -296,77 +176,116 @@ where
     }
 }
 
-// TODO: Document properly.
-//
-// TODO: Before invalidating dependent operations we need to check that the affected member has not
-// been readded by another member concurrently or otherwise. Implement this later...
-//
-// When we find an invalid operation we want to find any dependent operations and see if any of
-// those are now invalid. We need to do this recursively until no more dependent operations are
-// found.
-//
-// We do this once for every filtered operation.
-//
-// Dependent operations are all successors of the target operation.
-fn invalid_dependent_operations<ID, OP, C, ORD>(
-    graph: &DiGraphMap<OP, ()>,
-    operations: &HashMap<OP, ORD::Message>,
-    target: OP,
-    target_author: ID,
-    invalid_operations: &mut HashSet<OP>,
-) where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Display + Ord,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
-    ORD::Message: Clone,
-    ORD::State: Clone,
+impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
 {
-    let mut dfs = Dfs::new(graph, target);
-    while let Some(dependent_operation_id) = dfs.next(&graph) {
-        let dependent_operation = operations.get(&dependent_operation_id).unwrap();
-        if dependent_operation.sender() == target_author {
-            if let GroupControlMessage::GroupAction { action, .. } = dependent_operation.payload() {
-                if let GroupAction::Add {
-                    member: added_member,
-                    ..
-                } = action
-                {
-                    println!(
-                        "filtering dependent add operation: {}",
-                        dependent_operation_id
-                    );
+    fn removed_manager(&self, operation: &ORD::Message) -> Option<ID> {
+        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
+            // Revoke operations not yet supported.
+            unimplemented!()
+        };
 
-                    invalid_operations.insert(dependent_operation_id);
+        let removed_or_demoted_member = match action {
+            GroupAction::Remove { member } => member,
+            GroupAction::Demote { member, ref access } => {
+                // If the demoted access level is still "manage" then the manager was not removed.
+                if access == &Access::Manage {
+                    return None;
+                };
+                member
+            }
+            _ => return None,
+        };
 
-                    invalid_dependent_operations::<ID, OP, C, ORD>(
-                        graph,
-                        operations,
-                        dependent_operation.id(),
-                        added_member.id(),
-                        invalid_operations,
-                    );
-                }
+        // We only need to react to a filtered demote operation if the target author
+        // did have admin access but now doesn't.
+        let was_manager = self
+            .state_at(&HashSet::from_iter(operation.previous()))
+            .expect("state exists for all operations")
+            .managers()
+            .contains(&removed_or_demoted_member);
 
-                if let GroupAction::Promote {
-                    member: prmoted_member,
-                    ..
-                } = action
-                {
-                    println!(
-                        "filtering dependent promote operation: {}",
-                        dependent_operation_id
-                    );
+        if was_manager {
+            Some(removed_or_demoted_member.id())
+        } else {
+            None
+        }
+    }
 
-                    invalid_operations.insert(dependent_operation_id);
+    fn added_manager(&self, operation: &ORD::Message) -> Option<(OP, ID)> {
+        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
+            // Revoke operations not yet supported.
+            unimplemented!()
+        };
 
-                    invalid_dependent_operations::<ID, OP, C, ORD>(
-                        graph,
-                        operations,
-                        dependent_operation.id(),
-                        prmoted_member.id(),
-                        invalid_operations,
-                    )
-                }
+        let (added_or_promoted_to_manager, access) = match action {
+            GroupAction::Add { member, access } => (member, access),
+            GroupAction::Promote { member, access } => (member, access),
+            _ => return None,
+        };
+
+        // We only need to react to a members which were _not_ managers but now are.
+        let was_manager = self
+            .state_at(&HashSet::from_iter(operation.previous()))
+            .expect("state exists for all operations")
+            .managers()
+            .contains(&added_or_promoted_to_manager);
+
+        if !was_manager && access == Access::Manage {
+            Some((operation.id(), added_or_promoted_to_manager.id()))
+        } else {
+            None
+        }
+    }
+
+    // TODO: Document properly.
+    //
+    // TODO: Before invalidating dependent operations we need to check that the affected member has not
+    // been readded by another member concurrently or otherwise. Implement this later...
+    //
+    // When we find an invalid operation we want to find any dependent operations and see if any of
+    // those are now invalid. We need to do this recursively until no more dependent operations are
+    // found.
+    //
+    // We do this once for every filtered operation.
+    //
+    // Dependent operations are all successors of the target operation.
+    fn invalid_dependent_operations(
+        &self,
+        operations: &HashMap<OP, ORD::Message>,
+        target: OP,
+        target_author: ID,
+        invalid_operations: &mut HashSet<OP>,
+    ) {
+        let mut dfs = Dfs::new(&self.graph, target);
+        while let Some(dependent_operation_id) = dfs.next(&self.graph) {
+            let dependent_operation = operations.get(&dependent_operation_id).unwrap();
+
+            if dependent_operation.sender() != target_author {
+            //    // TODO: if this operation is someone else adding back the target author then //
+            //    break out of the search as we don't want to invalidate any more operations.
+            //  
+            //    if let Some((_, added_manager)) = self.added_manager(dependent_operation) { if
+            //        added_manager == target_author { break; } }
+
+                continue;
+            }
+
+            invalid_operations.insert(dependent_operation_id);
+
+            if let Some((operation_id, added_manager)) = self.added_manager(dependent_operation) {
+                self.invalid_dependent_operations(
+                    operations,
+                    operation_id,
+                    added_manager,
+                    invalid_operations,
+                );
             }
         }
     }
@@ -919,8 +838,8 @@ mod tests {
 
         // Now everyone processes the operations from the concurrent branch.
         let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_004).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_002).unwrap();
+        TestGroup::process(alice_group_y, &operation_004).unwrap();
+        TestGroup::process(bob_group_y, &operation_002).unwrap();
+        TestGroup::process(claire_group_y, &operation_002).unwrap();
     }
 }

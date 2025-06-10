@@ -534,7 +534,7 @@ where
 
     /// Process an operation created locally or received from a remote peer.
     fn process(
-        y: Self::State,
+        mut y: Self::State,
         operation: &ORD::Message,
     ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
         let operation_id = operation.id();
@@ -556,41 +556,40 @@ where
             return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        // Compute the member's state by applying the new operation to it's claimed "previous"
-        // state.
-        //
-        // This method validates that the actor has permission to perform the action.
-        //
-        // Do not update the state if the attempt to apply the action fails.
-        let mut y_i = match control_message {
-            // TODO: either here or inside apply_action we need to account for expected errors
-            // which might occur when attempting to apply state change actions. For example, if an
-            // author is not known about, it might be because they have been concurrently removed.
-            // In this case we want to recover from the error, even if the state has not changed.
-            GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
-                y,
-                operation_id,
-                GroupMember::Individual(actor),
-                &previous_operations,
-                &action,
-            )?,
-            // TODO: we could bake in revoke support here if we want to keep it as a core feature
-            // (on top of any provided Resolver).
-            GroupControlMessage::Revoke { .. } => unimplemented!(),
-        };
-
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        let rebuild_required = RS::rebuild_required(&y_i, operation)
+        let rebuild_required = RS::rebuild_required(&y, operation)
             .map_err(|error| GroupError::ResolverError(error))?;
 
-        // Add the new operation to the group state graph and operations vec, even if the action
-        // was not applied due to an error in the underlying group CRDT.
-        y_i.graph.add_node(operation_id);
-        for previous in previous_operations {
-            y_i.graph.add_edge(previous, operation_id, ());
+        // Add the new operation to the group state graph and operations vec.
+        y.graph.add_node(operation_id);
+        for previous in &previous_operations {
+            y.graph.add_edge(*previous, operation_id, ());
         }
-        y_i.operations.push(operation.clone());
+        y.operations.push(operation.clone());
+
+        let y_i = if rebuild_required {
+            Self::rebuild(y)?
+        } else {
+            // Compute the member's state by applying the new operation to it's claimed "previous"
+            // state.
+            //
+            // This method validates that the actor has permission to perform the action.
+            //
+            // Do not update the state if the attempt to apply the action fails.
+            match control_message {
+                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
+                    y,
+                    operation_id,
+                    GroupMember::Individual(actor),
+                    &previous_operations,
+                    &action,
+                )?,
+                // TODO: we could bake in revoke support here if we want to keep it as a core feature
+                // (on top of any provided Resolver).
+                GroupControlMessage::Revoke { .. } => unimplemented!(),
+            }
+        };
 
         // Update the group in the store.
         y_i.group_store
