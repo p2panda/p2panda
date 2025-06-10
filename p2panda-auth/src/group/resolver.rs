@@ -421,8 +421,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
