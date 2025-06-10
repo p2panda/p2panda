@@ -579,6 +579,11 @@ where
             GroupControlMessage::Revoke { .. } => unimplemented!(),
         };
 
+        // The resolver implementation contains the logic which determines when rebuilds are
+        // required.
+        let rebuild_required = RS::rebuild_required(&y_i, operation)
+            .map_err(|error| GroupError::ResolverError(error))?;
+
         // Add the new operation to the group state graph and operations vec, even if the action
         // was not applied due to an error in the underlying group CRDT.
         y_i.graph.add_node(operation_id);
@@ -592,11 +597,7 @@ where
             .insert(&group_id, &y_i)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
-        // The resolver implementation contains the logic which determines when rebuilds are
-        // required.
-        if RS::rebuild_required(&y_i, operation)
-            .map_err(|error| GroupError::ResolverError(error))?
-        {
+        if rebuild_required {
             // Perform the re-build and return the new state.
             return Self::rebuild(y_i);
         }
