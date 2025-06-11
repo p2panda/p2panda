@@ -126,7 +126,11 @@ where
         let color = if control_message.is_create() {
             "bisque"
         } else {
-            "grey"
+            if self.ignore.contains(&operation.id()) {
+                "red"
+            } else {
+                "grey"
+            }
         };
 
         s += &format!(
