@@ -57,7 +57,12 @@ where
             return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
+        // TODO: for now rebuild on every operation, there are some tricky edge-cases which I'm
+        // not sure how to handle yet. In particular when operations which should be filtered due
+        // to being a dependent operation (of a filtered operation), it's quite hard to detect
+        // this, if we want to do it efficiently we probably need to keep some more state around.
+        // Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
+        Ok(true)
     }
 
     /// Resolve group membership by processing all concurrent operations in the graph.
