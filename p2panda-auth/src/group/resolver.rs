@@ -272,11 +272,13 @@ where
             let dependent_operation = operations.get(&dependent_operation_id).unwrap();
 
             if dependent_operation.sender() != target_author {
-                //    // TODO: if this operation is someone else adding back the target author then //
-                //    break out of the search as we don't want to invalidate any more operations.
-                //
-                //    if let Some((_, added_manager)) = self.added_manager(dependent_operation) { if
-                //        added_manager == target_author { break; } }
+                // If this operation is someone else adding back the target author then break out
+                // of the search as we don't want to invalidate any more operations.
+                if let Some((_, added_manager)) = self.added_manager(dependent_operation) {
+                    if added_manager == target_author && target != dependent_operation.id() {
+                        break;
+                    }
+                }
 
                 continue;
             }
