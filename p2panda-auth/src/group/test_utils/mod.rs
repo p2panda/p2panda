@@ -11,7 +11,7 @@ pub use orderer::*;
 pub use partial_ord::*;
 
 use crate::group::resolver::GroupResolver;
-use crate::group::{Group, GroupState};
+use crate::group::{Group, GroupError, GroupState};
 use crate::traits::{IdentityHandle, OperationId};
 
 impl IdentityHandle for char {}
@@ -26,8 +26,12 @@ pub type GenericTestResolver<ORD, GS> = GroupResolver<MemberId, MessageId, Condi
 pub type GenericTestGroup<RS, ORD, GS> = Group<MemberId, MessageId, Conditions, RS, ORD, GS>;
 pub type GenericTestGroupState<RS, ORD, GS> =
     GroupState<MemberId, MessageId, Conditions, RS, ORD, GS>;
+pub type GenericTestGroupError<RS, ORD, GS> =
+    GroupError<MemberId, MessageId, Conditions, RS, ORD, GS>;
 
 pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore<MemberId>>;
 pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
 pub type TestGroupState =
     GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
+pub type TestGroupError =
+    GenericTestGroupError<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
