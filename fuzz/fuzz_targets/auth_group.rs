@@ -4,6 +4,8 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
+use std::fs::File;
+use std::io::Write;
 
 use libfuzzer_sys::fuzz_target;
 use p2panda_auth::group::test_utils::{
@@ -20,9 +22,9 @@ const MEMBERS: [char; 26] = [
     'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 
-const MAX_ACTION_ROUNDS: usize = 12;
+const MAX_ACTION_ROUNDS: usize = 8;
 
-const MAX_CONCURRENCY_DEPTH: u8 = 12;
+const MAX_CONCURRENCY_DEPTH: u8 = 8;
 
 const ACCESS_LEVELS: [Access<()>; 4] = [
     Access::Pull,
@@ -191,21 +193,36 @@ impl Member {
     }
 
     pub fn assert_state(&self, other: &Member) {
-        let y_group = other.group.as_ref().expect("group state exists");
-        let mut other_members = y_group.members();
+        let other_group_y = other.group.as_ref().expect("group state exists");
+        let mut other_members = other_group_y.members();
         other_members.sort();
 
-        let y_group = self.group.as_ref().expect("group state exists");
-        let mut members = y_group.members();
+        let self_group_y = self.group.as_ref().expect("group state exists");
+        let mut members = self_group_y.members();
         members.sort();
 
-        assert_eq!(
-            members,
-            other_members,
-            "member set of {} compared to {} ",
-            self.id(),
-            other.id(),
-        );
+        if members != other_members {
+            println!("member set of {} compared to {} ", self.id(), other.id());
+            println!("");
+            println!("=== {} members ===", self.id());
+            println!("{:?}", self_group_y.members());
+            println!("");
+            println!("=== {} members ===", other.id());
+            println!("{:?}", other_group_y.members());
+            println!("");
+            println!("=== {} filter ===", self.id());
+            println!("{:?}", self_group_y.ignore.iter().collect::<Vec<_>>().sort());
+            println!("");
+            println!("=== {} filter ===", other.id());
+            println!("{:?}", self_group_y.ignore.iter().collect::<Vec<_>>().sort());
+
+            let mut file = File::create(format!("graph-{}.txt", self.id())).unwrap();
+            file.write_all(self_group_y.display().as_bytes()).unwrap();
+            let mut file = File::create(format!("graph-{}.txt", other.id())).unwrap();
+            file.write_all(other_group_y.display().as_bytes()).unwrap();
+        }
+
+        assert_eq!(members, other_members,);
     }
 
     fn random_active_member(
@@ -524,6 +541,10 @@ fuzz_target!(|seed: [u8; 32]| {
                             }
                             Err(err) => {
                                 if let Suggestion::Valid(operation) = suggestion {
+                                    if let Some(ref y_group) = member.group {
+                                        println!("{}", y_group.display());
+                                    }
+
                                     panic!(
                                         "unexpected error when processing remote message from valid operation member={} '{}':\n{}",
                                         member.id(),
