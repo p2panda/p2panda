@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
 use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{Dfs, Reversed};
+use petgraph::visit::{DfsPostOrder, Reversed};
 use thiserror::Error;
 
 use crate::group::{Access, GroupControlMessage, GroupState};
@@ -113,10 +113,8 @@ where
             };
 
             // Does the target operation remove or demote a manager member?
-            let removed_author = y.removed_manager(target_operation);
-
-            // If no then continue here onto the next concurrent bubble as no action is required.
-            let Some(removed_author) = removed_author else {
+            let removed_manager = y.removed_manager(target_operation);
+            let Some(removed_manager) = removed_manager else {
                 continue;
             };
 
@@ -131,7 +129,7 @@ where
 
                 // If this concurrent operation is _not_ authored by the "target author" then we
                 // can continue to the next concurrent operation without taking any action.
-                if concurrent_operation.sender() != removed_author {
+                if concurrent_operation.sender() != removed_manager {
                     continue;
                 }
 
@@ -148,27 +146,19 @@ where
                         // The "target" operations are included when collecting invalid dependent
                         // operations, we record mutual remove operations here and then remove
                         // them from the filter later.
-                        mutual_removes.insert(target_operation_id);
                         mutual_removes.insert(*concurrent_operation_id);
-                        continue;
                     }
                 }
 
                 // Add the concurrent operation to our filter.
                 filter.insert(*concurrent_operation_id);
+                y.invalid_dependent_operations(
+                    &operations,
+                    *concurrent_operation_id,
+                    concurrent_operation.sender(),
+                    &mut invalid_operations,
+                );
             }
-        }
-
-        // For all filtered operations recursively invalidate any dependent operations.
-        for invalid_operation_id in &filter {
-            // TODO: Error...
-            let invalid_operation = operations.get(invalid_operation_id).unwrap();
-            y.invalid_dependent_operations(
-                &operations,
-                *invalid_operation_id,
-                invalid_operation.sender(),
-                &mut invalid_operations,
-            );
         }
 
         filter.extend(invalid_operations);
@@ -267,7 +257,7 @@ where
         target_author: ID,
         invalid_operations: &mut HashSet<OP>,
     ) {
-        let mut dfs = Dfs::new(&self.graph, target);
+        let mut dfs = DfsPostOrder::new(&self.graph, target);
         while let Some(dependent_operation_id) = dfs.next(&self.graph) {
             let dependent_operation = operations.get(&dependent_operation_id).unwrap();
 
@@ -325,7 +315,7 @@ where
 {
     // Get all successors.
     let mut successors = HashSet::new();
-    let mut dfs = Dfs::new(&graph, target);
+    let mut dfs = DfsPostOrder::new(&graph, target);
     while let Some(nx) = dfs.next(&graph) {
         successors.insert(nx);
     }
@@ -333,7 +323,7 @@ where
     // Get all predecessors.
     let mut predecessors = HashSet::new();
     let reversed = Reversed(graph);
-    let mut dfs_rev = Dfs::new(&reversed, target);
+    let mut dfs_rev = DfsPostOrder::new(&reversed, target);
     while let Some(nx) = dfs_rev.next(&reversed) {
         predecessors.insert(nx);
     }
