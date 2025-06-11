@@ -102,7 +102,7 @@ where
             .map(|op| (op.id(), op))
             .collect();
 
-        let bubbles = get_concurrent_bubbles(&y.graph);
+        let bubbles = concurrent_bubbles(&y.graph);
 
         let mut invalid_operations = HashSet::new();
         let mut mutual_removes = HashSet::new();
@@ -121,7 +121,7 @@ where
             // Iterate over every operation in the bubble and filter out any from the author
             // removed by the target operation.
             for concurrent_operation_id in &bubble {
-                let Some(concurrent_operation) = operations.get(&concurrent_operation_id) else {
+                let Some(concurrent_operation) = operations.get(concurrent_operation_id) else {
                     return Err(GroupResolverError::MissingOperation(
                         *concurrent_operation_id,
                     ));
@@ -288,15 +288,14 @@ where
 }
 
 /// Walk the graph and identify the set of concurrent operations for each node.
-// TODO: Consider removing the `get_` prefix.
-fn get_concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
+fn concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
 where
     OP: OperationId + Display + Ord,
 {
     let mut bubbles = HashMap::new();
 
     graph.nodes().for_each(|target| {
-        let concurrent_operations = get_concurrent_operations(graph, target);
+        let concurrent_operations = concurrent_operations(graph, target);
         if !concurrent_operations.is_empty() {
             bubbles.insert(target, concurrent_operations);
         }
@@ -308,8 +307,7 @@ where
 /// Return any operations concurrent with the given target operation.
 ///
 /// An operation is concurrent if it is not a predecessor or successor of the target operation.
-// TODO: Consider removing the `get_` prefix.
-fn get_concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
+fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId + Display + Ord,
 {
@@ -336,8 +334,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
@@ -348,12 +346,12 @@ mod tests {
     use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
     use crate::traits::{AuthGroup, OperationId};
 
-    use super::get_concurrent_bubbles;
+    use super::concurrent_bubbles;
 
     impl OperationId for &str {}
 
     #[test]
-    fn concurrent_bubbles() {
+    fn concurrent_bubbles_are_identified() {
         //       A
         //     /   \
         //    B     C
@@ -396,7 +394,7 @@ mod tests {
         ]);
 
         let graph_map = DiGraphMap::from_graph(graph);
-        let concurrent_bubbles = get_concurrent_bubbles(&graph_map);
+        let concurrent_bubbles = concurrent_bubbles(&graph_map);
 
         assert_eq!(concurrent_bubbles.len(), 7);
 
