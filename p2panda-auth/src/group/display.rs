@@ -138,7 +138,7 @@ where
         );
         s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
-        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.sender());
+        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
         let previous = operation.previous();
         if !previous.is_empty() {
             s += &format!(

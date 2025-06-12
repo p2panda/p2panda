@@ -9,8 +9,8 @@ pub trait Operation<ID, OP, P> {
     /// Id of this operation.
     fn id(&self) -> OP;
 
-    /// Id of the sender of this operation.
-    fn sender(&self) -> ID;
+    /// ID of the author of this operation.
+    fn author(&self) -> ID;
 
     /// Other operation dependencies.
     fn dependencies(&self) -> Vec<OP>;
