@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
@@ -11,7 +13,6 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 
 use super::GroupAction;
 
-// TODO: introduce all error types.
 #[derive(Debug, Error)]
 pub enum GroupResolverError<ID, OP>
 where
@@ -334,8 +335,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
