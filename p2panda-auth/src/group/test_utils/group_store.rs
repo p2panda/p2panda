@@ -7,10 +7,8 @@ use std::rc::Rc;
 
 use thiserror::Error;
 
-use crate::group::test_utils::{Conditions, MemberId, MessageId, TestOrderer, TestResolver};
-use crate::traits::GroupStore;
-
-use super::TestGroupState;
+use crate::group::test_utils::TestGroupState;
+use crate::traits::{GroupStore, IdentityHandle};
 
 #[derive(Debug, Error)]
 pub enum GroupStoreError {}

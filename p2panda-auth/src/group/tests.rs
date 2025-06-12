@@ -14,15 +14,16 @@ use super::{GroupAction, GroupControlMessage, GroupMember};
 
 #[test]
 fn basic_group() {
+    let group_id = '1';
     let alice = 'A';
     let store = TestGroupStore::default();
     let rng = StdRng::from_os_rng();
     let orderer_y = TestOrdererState::new(alice, store.clone(), rng);
-    let group_y = TestGroupState::new(alice, alice, store, orderer_y);
+    let group_y = TestGroupState::new(group_id, alice, store, orderer_y);
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Create {
             initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
         },
@@ -40,7 +41,7 @@ fn basic_group() {
     // Add bob with read access.
     let bob = 'B';
     let control_message_002 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(bob),
             access: Access::Read,
@@ -62,7 +63,7 @@ fn basic_group() {
     // Add claire with write access.
     let claire = 'C';
     let control_message_003 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(claire),
             access: Access::Write { conditions: None },
@@ -87,7 +88,7 @@ fn basic_group() {
 
     // Promote claire to admin.
     let control_message_004 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Promote {
             member: GroupMember::Individual(claire),
             access: Access::Manage,
@@ -109,7 +110,7 @@ fn basic_group() {
 
     // Demote bob to poll access.
     let control_message_005 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Demote {
             member: GroupMember::Individual(bob),
             access: Access::Pull,
@@ -131,7 +132,7 @@ fn basic_group() {
 
     // Remove bob.
     let control_message_006 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Remove {
             member: GroupMember::Individual(bob),
         },
@@ -166,14 +167,14 @@ fn nested_groups() {
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
-        alice,
         alice_devices_group,
+        alice,
         store.clone(),
         alice_orderer_y.clone(),
     );
 
     // One team group instance.
-    let team_group_y = GroupState::new(alice, alice_team_group, store.clone(), alice_orderer_y);
+    let team_group_y = GroupState::new(alice_team_group, alice, store.clone(), alice_orderer_y);
 
     // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
     let control_message_001 = GroupControlMessage::GroupAction {

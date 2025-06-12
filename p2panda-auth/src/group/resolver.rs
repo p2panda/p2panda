@@ -727,7 +727,7 @@ mod tests {
         // We expect the addition of Claire (node C) and Dave (node D) to be filtered.
         // Alice should be the only member of the group after processing.
 
-        let group_id = '1';
+        let group = '1';
 
         let alice = 'A';
         let bob = 'B';
@@ -739,22 +739,21 @@ mod tests {
         let alice_store = TestGroupStore::default();
         let alice_orderer_y =
             TestOrdererState::new(alice, alice_store.clone(), StdRng::from_rng(&mut rng));
-        // TODO: Do we maybe want to switch the position of the args `alice` and `group_id`?
-        let alice_group_y = TestGroupState::new(alice, group_id, alice_store, alice_orderer_y);
+        let alice_group_y = TestGroupState::new(group, alice, alice_store, alice_orderer_y);
 
         let bob_store = TestGroupStore::default();
         let bob_orderer_y =
             TestOrdererState::new(bob, bob_store.clone(), StdRng::from_rng(&mut rng));
-        let bob_group_y = TestGroupState::new(bob, group_id, bob_store, bob_orderer_y);
+        let bob_group_y = TestGroupState::new(group, bob, bob_store, bob_orderer_y);
 
         let claire_store = TestGroupStore::default();
         let claire_orderer_y =
             TestOrdererState::new(claire, claire_store.clone(), StdRng::from_rng(&mut rng));
-        let claire_group_y = TestGroupState::new(claire, group_id, claire_store, claire_orderer_y);
+        let claire_group_y = TestGroupState::new(group, claire, claire_store, claire_orderer_y);
 
         // Create group with alice and bob as initial admin members.
         let control_message_001 = GroupControlMessage::GroupAction {
-            group_id,
+            group_id: group,
             action: GroupAction::Create {
                 initial_members: vec![
                     (GroupMember::Individual(alice), Access::Manage),
@@ -778,7 +777,7 @@ mod tests {
 
         // Alice removes Bob.
         let control_message_002 = GroupControlMessage::GroupAction {
-            group_id,
+            group_id: group,
             action: GroupAction::Remove {
                 member: GroupMember::Individual(bob),
             },
@@ -796,7 +795,7 @@ mod tests {
 
         // Bob adds claire with manage access.
         let control_message_003 = GroupControlMessage::GroupAction {
-            group_id,
+            group_id: group,
             action: GroupAction::Add {
                 member: GroupMember::Individual(claire),
                 access: Access::Manage,
@@ -818,7 +817,7 @@ mod tests {
 
         // Claire adds Dave with read access.
         let control_message_004 = GroupControlMessage::GroupAction {
-            group_id,
+            group_id: group,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
                 access: Access::Read,

@@ -143,11 +143,11 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    /// ID of the local actor.
-    pub my_id: ID,
-
     /// ID of the group.
     pub group_id: ID,
+
+    /// ID of the local actor.
+    pub my_id: ID,
 
     /// Group state at every position in the operation graph.
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
@@ -182,10 +182,10 @@ where
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
-    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    pub fn new(group_id: ID, my_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
-            my_id,
             group_id,
+            my_id,
             states: Default::default(),
             operations: Default::default(),
             ignore: Default::default(),
@@ -668,8 +668,8 @@ where
         let y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
         let mut y_ii = GroupState::new(
-            y_i.my_id,
             y_i.group_id,
+            y_i.my_id,
             y_i.group_store.clone(),
             y_i.orderer_y,
         );

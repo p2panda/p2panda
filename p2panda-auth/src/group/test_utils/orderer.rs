@@ -81,8 +81,8 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 
             // Instantiate a new group.
             let mut group_y = TestGroupState::new(
-                y_inner.my_id,
                 group_id,
+                y_inner.my_id,
                 y_inner.group_store.clone(),
                 y.clone(),
             );
