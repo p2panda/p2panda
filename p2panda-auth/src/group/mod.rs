@@ -538,7 +538,7 @@ where
         operation: &ORD::Message,
     ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
         let operation_id = operation.id();
-        let actor = operation.sender();
+        let actor = operation.author();
         let control_message = operation.payload();
         let previous_operations = HashSet::from_iter(operation.previous().clone());
         let group_id = control_message.group_id();
@@ -679,7 +679,7 @@ where
         // Apply every operation.
         let mut create_found = false;
         for operation in y_i.operations {
-            let actor = operation.sender();
+            let actor = operation.author();
             let operation_id = operation.id();
             let control_message = operation.payload();
             let group_id = control_message.group_id();

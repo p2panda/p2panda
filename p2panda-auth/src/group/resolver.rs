@@ -134,7 +134,7 @@ where
 
                 // If this concurrent operation is _not_ authored by the "target author" then we
                 // can continue to the next concurrent operation without taking any action.
-                if concurrent_operation.sender() != removed_manager {
+                if concurrent_operation.author() != removed_manager {
                     continue;
                 }
 
@@ -143,7 +143,7 @@ where
 
                 if let Some(concurrent_removed_admin) = concurrent_removed_admin {
                     // The removed member is concurrently removing the remover.
-                    if concurrent_removed_admin == target_operation.sender() {
+                    if concurrent_removed_admin == target_operation.author() {
                         // We don't want to filter out mutual remove/demote operations, but we
                         // still want to filter any dependent operations for both (mutually)
                         // removed members.
@@ -160,7 +160,7 @@ where
                 y.invalid_dependent_operations(
                     &operations,
                     *concurrent_operation_id,
-                    concurrent_operation.sender(),
+                    concurrent_operation.author(),
                     &mut invalid_operations,
                 );
             }
@@ -272,7 +272,7 @@ where
 
             // If this operation is someone else adding back the target author then break out
             // of the search as we don't want to invalidate any more operations.
-            if dependent_operation.sender() != target_author {
+            if dependent_operation.author() != target_author {
                 if let Some((_, added_manager)) = self.added_manager(dependent_operation) {
                     if added_manager == target_author && target != dependent_operation.id() {
                         break;
@@ -343,8 +343,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;

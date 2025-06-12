@@ -194,7 +194,7 @@ impl Network {
         operation: &TestOperation<MemberId, MessageId, Conditions>,
     ) {
         // Do not process our own messages.
-        if &operation.sender() == member_id {
+        if &operation.author() == member_id {
             return;
         }
 
@@ -212,7 +212,7 @@ impl Network {
                 break;
             };
 
-            if &operation.sender() == member_id {
+            if &operation.author() == member_id {
                 continue;
             }
 
