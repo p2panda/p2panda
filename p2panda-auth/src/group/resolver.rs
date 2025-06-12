@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Group state resolver implementation.
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
@@ -58,17 +60,19 @@ where
             return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        // TODO: for now rebuild on every operation, there are some tricky edge-cases which I'm
-        // not sure how to handle yet. In particular when operations which should be filtered due
-        // to being a dependent operation (of a filtered operation), it's quite hard to detect
+        // let is_concurrent = y.heads().into_iter().collect::<Vec<_>>() != operation.previous();
+        // Ok(is_concurrent)
+
+        // TODO(sam): for now rebuild on every operation, there are some tricky edge-cases which
+        // I'm not sure how to handle yet. In particular when operations which should be filtered
+        // due to being a dependent operation (of a filtered operation), it's quite hard to detect
         // this, if we want to do it efficiently we probably need to keep some more state around.
-        // Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
         Ok(true)
     }
 
     /// Resolve group membership by processing all concurrent operations in the graph.
     ///
-    /// The following ruleset is applied when chosing which operations to "filter":
+    /// The following ruleset is applied when choosing which operations to "filter":
     ///
     /// 1) Mutual removals
     ///
@@ -76,8 +80,8 @@ where
     /// the group. We imagine further implementations taking different approaches, like
     /// resolving by seniority, hash id, quorum or some other parameter.
     ///
-    /// If a mutual removal has occurred, we want to retain the removal operations but
-    /// filter all concurrent operations performed by the removed members.
+    /// If a mutual removal occurs, the removal operations are retained but all concurrent
+    /// operations performed by the removed members are filtered.
     ///
     /// 2) Re-adding member concurrently
     ///
@@ -86,12 +90,12 @@ where
     ///
     /// 3) Removed admin performing concurrent actions
     ///
-    /// If Alice removes Bob, then Bob shouldn't be able to perform any actions concurrently.
+    /// If Alice removes Bob, all of Bob's concurrent actions are filtered.
     ///
     /// 4) Demoted admin performing concurrent actions
     ///
-    /// If Alice demotes Bob (from admin), then Bob is no longer an admin and shouldn't be able to
-    /// perform any actions concurrently.
+    /// If Alice demotes Bob (from admin), Bob is no longer an admin and all of his concurrent
+    /// actions are filtered.
     fn process(
         mut y: GroupState<ID, OP, C, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
@@ -180,6 +184,8 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
 {
+    /// If the given operation is an action which removes a member or demotes a manager, return the
+    /// ID of the target member.
     fn removed_manager(&self, operation: &ORD::Message) -> Option<ID> {
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
@@ -187,6 +193,8 @@ where
         };
 
         let removed_or_demoted_member = match action {
+            // TODO(glyph): I think we should `return Some(member)` here, otherwise it is never
+            // returned (because it doesn't meet the `was_manager` check below.
             GroupAction::Remove { member } => member,
             GroupAction::Demote { member, ref access } => {
                 // If the demoted access level is still "manage" then the manager was not removed.
@@ -262,9 +270,9 @@ where
         while let Some(dependent_operation_id) = dfs.next(&self.graph) {
             let dependent_operation = operations.get(&dependent_operation_id).unwrap();
 
+            // If this operation is someone else adding back the target author then break out
+            // of the search as we don't want to invalidate any more operations.
             if dependent_operation.sender() != target_author {
-                // If this operation is someone else adding back the target author then break out
-                // of the search as we don't want to invalidate any more operations.
                 if let Some((_, added_manager)) = self.added_manager(dependent_operation) {
                     if added_manager == target_author && target != dependent_operation.id() {
                         break;
@@ -335,8 +343,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use petgraph::graph::DiGraph;
     use petgraph::prelude::DiGraphMap;
