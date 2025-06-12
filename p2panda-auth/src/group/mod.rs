@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// #![allow(clippy::type_complexity)]
-// #![allow(dead_code)]
+#![allow(clippy::type_complexity)]
+#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
