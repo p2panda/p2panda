@@ -578,13 +578,27 @@ where
             //
             // Do not update the state if the attempt to apply the action fails.
             match control_message {
-                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
+                GroupControlMessage::GroupAction { action, .. } => match Self::apply_action(
                     y,
                     operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     &action,
-                )?,
+                ) {
+                    StateChangeResult::Ok { state } => state,
+                    StateChangeResult::Noop { state, error } => {
+                        // TODO: introduce debug logging.
+                        println!(
+                            "operation {operation_id} invalidated during group state rebuild: {error:?}"
+                        );
+                        state
+                    }
+                    StateChangeResult::Filtered { state } => {
+                        // Operations can't be filtered out before they were processed.
+                        unreachable!()
+                    }
+                },
+
                 // TODO: we could bake in revoke support here if we want to keep it as a core feature
                 // (on top of any provided Resolver).
                 GroupControlMessage::Revoke { .. } => unimplemented!(),
@@ -605,6 +619,32 @@ where
     }
 }
 
+/// Return types expected from applying an action to group state.
+enum StateChangeResult<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD::Message: Clone,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+{
+    /// Action was applied an no error occured.
+    Ok {
+        state: GroupState<ID, OP, C, RS, ORD, GS>,
+    },
+    /// Action was not applied because it failed internal validation.
+    Noop {
+        state: GroupState<ID, OP, C, RS, ORD, GS>,
+        error: GroupMembershipError<GroupMember<ID>>,
+    },
+    /// Action was not applied because it has been filtered out.
+    Filtered {
+        state: GroupState<ID, OP, C, RS, ORD, GS>,
+    },
+}
+
 impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
@@ -622,42 +662,66 @@ where
         actor: GroupMember<ID>,
         previous: &HashSet<OP>,
         action: &GroupAction<ID, C>,
-    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
+    ) -> StateChangeResult<ID, OP, C, RS, ORD, GS> {
         // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
         } else {
-            y.state_at(previous)?
+            y.state_at(previous).expect("all previous states exist")
         };
 
         // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.ignore.contains(&id) {
-            let members_y_i = match action.clone() {
+            let result = match action.clone() {
                 GroupAction::Add { member, access, .. } => {
-                    state::add(members_y, actor, member, access)
+                    state::add(members_y.clone(), actor, member, access)
                 }
-                GroupAction::Remove { member, .. } => state::remove(members_y, actor, member),
+                GroupAction::Remove { member, .. } => {
+                    state::remove(members_y.clone(), actor, member)
+                }
                 GroupAction::Promote { member, .. } => {
                     // TODO: need changes in the group_crdt api so that we can pass in the access
                     // level rather than only the conditions.
-                    state::promote(members_y, actor, member, None)
+                    state::promote(members_y.clone(), actor, member, None)
                 }
                 GroupAction::Demote { member, .. } => {
                     // TODO: need changes in the group_crdt api so that we can pass in the access
                     // level rather than only the conditions.
-                    state::demote(members_y, actor, member, None)
+                    state::demote(members_y.clone(), actor, member, None)
                 }
                 GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
-            }
-            .map_err(|error| GroupError::StateChangeError(error))?;
+            };
 
-            y.states.insert(id, members_y_i);
+            match result {
+                Ok(members_y_i) => y.states.insert(id, members_y_i),
+                Err(err) => {
+                    // Errors occur here because the member attempting to perform an action
+                    // doesn't have a suitable access level, or that the action itself is invalid
+                    // (eg. promoting a non-existent member).
+                    //
+                    // 1) We expect some errors to occur when when intentionally filtered out
+                    //    actions cause later operations to become invalid.
+                    //
+                    // 2) Operations arriving from the network which are invalid due to buggy
+                    //    implementations or malicious behavior.
+                    //
+                    // In both cases it's critical that the action does not cause any state
+                    // change. In the later, we also want to inform networking layers that a peer
+                    // in the group is behaving suspiciously.
+                    y.states.insert(id, members_y);
+                    return StateChangeResult::Noop {
+                        state: y,
+                        error: err,
+                    };
+                }
+            };
         } else {
             y.states.insert(id, members_y);
+            return StateChangeResult::Filtered { state: y };
         }
-        Ok(y)
+        StateChangeResult::Ok { state: y }
     }
 
     fn rebuild(
@@ -698,13 +762,31 @@ where
             create_found = true;
 
             y_ii = match control_message {
-                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
-                    y_ii,
-                    operation_id,
-                    GroupMember::Individual(actor),
-                    &previous_operations,
-                    &action,
-                )?,
+                GroupControlMessage::GroupAction { action, .. } => {
+                    match Self::apply_action(
+                        y_ii,
+                        operation_id,
+                        GroupMember::Individual(actor),
+                        &previous_operations,
+                        &action,
+                    ) {
+                        StateChangeResult::Ok { state } => state,
+                        StateChangeResult::Noop { state, error } => {
+                            // TODO: introduce debug logging.
+                            println!(
+                                "operation {operation_id} invalidated during group state rebuild: {error:?}"
+                            );
+                            state
+                        }
+                        StateChangeResult::Filtered { state } => {
+                            // TODO: introduce debug logging.
+                            println!(
+                                "operation {operation_id} filtered out during group state rebuild"
+                            );
+                            state
+                        }
+                    }
+                }
                 // TODO: revoke messages are not supported yet, either implement support or remove
                 // this message variant.
                 GroupControlMessage::Revoke { .. } => unimplemented!(),
@@ -730,8 +812,8 @@ where
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
 
-    #[error("error occurred applying state change action")]
-    StateChangeError(GroupMembershipError<GroupMember<ID>>),
+    #[error("state change error processing operation {0}: {1:?}")]
+    StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 
     #[error("expected sub-group {0} to exist in the store")]
     MissingSubGroup(ID),
