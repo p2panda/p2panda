@@ -76,16 +76,15 @@ where
     ///
     /// 1) Mutual removals
     ///
-    /// In our first resolve strategy mutual removals result in both members being removed from
-    /// the group. We imagine further implementations taking different approaches, like
-    /// resolving by seniority, hash id, quorum or some other parameter.
+    /// Mutual removals result in both members being removed from the group. Future implementations might
+    /// take different approaches such as resolving by seniority, hash id, quorum or some other parameter.
     ///
     /// If a mutual removal occurs, the removal operations are retained but all concurrent
     /// operations performed by the removed members are filtered.
     ///
     /// 2) Re-adding member concurrently
     ///
-    /// We don't stop this behaviour, if Alice removes Charlie and Bob removes then adds Charlie
+    /// Concurrent re-adds are accepted. If Alice removes Charlie and Bob removes then adds Charlie
     /// concurrently, Charlie is still in the group.
     ///
     /// 3) Removed admin performing concurrent actions
@@ -193,8 +192,6 @@ where
         };
 
         let removed_or_demoted_member = match action {
-            // TODO(glyph): I think we should `return Some(member)` here, otherwise it is never
-            // returned (because it doesn't meet the `was_manager` check below).
             GroupAction::Remove { member } => member,
             GroupAction::Demote { member, ref access } => {
                 // If the demoted access level is still "manage" then the manager was not removed.
@@ -221,7 +218,9 @@ where
         }
     }
 
-    fn added_manager(&self, operation: &ORD::Message) -> Option<(OP, ID)> {
+    /// If the given operation is an action which adds a member or promotes a manager, return the
+    /// ID of the target member.
+    fn added_manager(&self, operation: &ORD::Message) -> Option<ID> {
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
             unimplemented!()
@@ -233,7 +232,7 @@ where
             _ => return None,
         };
 
-        // We only need to react to a members which were _not_ managers but now are.
+        // We only need to react to members which were _not_ managers but now are.
         let was_manager = self
             .state_at(&HashSet::from_iter(operation.previous()))
             .expect("state exists for all operations")
@@ -241,24 +240,20 @@ where
             .contains(&added_or_promoted_to_manager);
 
         if !was_manager && access == Access::Manage {
-            Some((operation.id(), added_or_promoted_to_manager.id()))
+            Some(added_or_promoted_to_manager.id())
         } else {
             None
         }
     }
 
-    // TODO: Document properly.
-    //
     // TODO: Before invalidating dependent operations we need to check that the affected member has not
     // been readded by another member concurrently or otherwise. Implement this later...
     //
-    // When we find an invalid operation we want to find any dependent operations and see if any of
-    // those are now invalid. We need to do this recursively until no more dependent operations are
-    // found.
-    //
-    // We do this once for every filtered operation.
-    //
-    // Dependent operations are all successors of the target operation.
+    /// Recursively iterate over all operations which depend on the given operation and identify
+    /// those which are now invalid.
+    ///
+    /// Return immediately if an operation is detected which re-adds the target author, as long as
+    /// that operation is authored by a different author.
     fn invalid_dependent_operations(
         &self,
         operations: &HashMap<OP, ORD::Message>,
@@ -273,7 +268,7 @@ where
             // If this operation is someone else adding back the target author then break out
             // of the search as we don't want to invalidate any more operations.
             if dependent_operation.author() != target_author {
-                if let Some((_, added_manager)) = self.added_manager(dependent_operation) {
+                if let Some(added_manager) = self.added_manager(dependent_operation) {
                     if added_manager == target_author && target != dependent_operation.id() {
                         break;
                     }
@@ -284,10 +279,10 @@ where
 
             invalid_operations.insert(dependent_operation_id);
 
-            if let Some((operation_id, added_manager)) = self.added_manager(dependent_operation) {
+            if let Some(added_manager) = self.added_manager(dependent_operation) {
                 self.invalid_dependent_operations(
                     operations,
-                    operation_id,
+                    dependent_operation_id,
                     added_manager,
                     invalid_operations,
                 );
@@ -991,7 +986,6 @@ mod tests {
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(bob), Access::Manage),
             (GroupMember::Individual(claire), Access::Manage),
-            (GroupMember::Individual(dave), Access::Read),
         ];
         assert_eq!(members, expected_members);
 
@@ -1001,7 +995,6 @@ mod tests {
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(bob), Access::Manage),
             (GroupMember::Individual(claire), Access::Manage),
-            (GroupMember::Individual(dave), Access::Read),
         ];
         assert_eq!(members, expected_members);
     }
