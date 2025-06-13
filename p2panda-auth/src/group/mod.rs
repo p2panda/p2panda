@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+
 #![allow(clippy::type_complexity)]
 #![allow(dead_code)]
 
@@ -31,6 +32,18 @@ mod tests;
 pub enum GroupMember<ID> {
     Individual(ID),
     Group(ID),
+}
+
+impl<ID> GroupMember<ID>
+where
+    ID: Copy,
+{
+    pub fn id(&self) -> ID {
+        match self {
+            GroupMember::Individual(id) => *id,
+            GroupMember::Group(id) => *id,
+        }
+    }
 }
 
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
@@ -131,11 +144,11 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID>,
 {
-    // ID of the local actor.
-    pub my_id: ID,
-
-    // ID of the group.
+    /// ID of the group.
     pub group_id: ID,
+
+    /// ID of the local actor.
+    pub my_id: ID,
 
     /// Group state at every position in the operation graph.
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
@@ -170,10 +183,10 @@ where
     GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
 {
     /// Instantiate a new group state.
-    fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    fn new(group_id: ID, my_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
-            my_id,
             group_id,
+            my_id,
             states: Default::default(),
             operations: Default::default(),
             ignore: Default::default(),
@@ -488,7 +501,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
 {
     type State = GroupState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
@@ -526,7 +539,7 @@ where
         operation: &ORD::Message,
     ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
         let operation_id = operation.id();
-        let actor = operation.sender();
+        let actor = operation.author();
         let control_message = operation.payload();
         let previous_operations = HashSet::from_iter(operation.previous().clone());
         let group_id = control_message.group_id();
@@ -535,65 +548,61 @@ where
         // processing here in the groups api then there should probably be a hashset of operations
         // ids maintained on the struct for efficient lookup.
         if y.operations.iter().any(|op| op.id() == operation_id) {
+            // The operation has already been processed.
             return Err(GroupError::DuplicateOperation(operation_id, group_id));
         }
 
         if y.group_id != group_id {
-            // This operation is not intended for this group.
+            // The operation is not intended for this group.
             return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
         }
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        //
-        // TODO: before performing this check we want to actually apply the operation to the
-        // group. This will allow us to handle any validation which occur at that point already.
-        if RS::rebuild_required(&y, operation) {
-            // Add all new operations to the graph and operations vec.
-            y.graph.add_node(operation.id());
-            for previous in previous_operations {
-                y.graph.add_edge(previous, operation.id(), ());
-            }
-            y.operations.push(operation.clone());
+        let rebuild_required = RS::rebuild_required(&y, operation)
+            .map_err(|error| GroupError::ResolverError(error))?;
 
-            // Perform the re-build and return the new state.
-            return Self::rebuild(y);
+        // Add the new operation to the group state graph and operations vec.
+        y.graph.add_node(operation_id);
+        for previous in &previous_operations {
+            y.graph.add_edge(*previous, operation_id, ());
         }
+        y.operations.push(operation.clone());
 
-        // Compute the members state by applying the new operation to it's claimed "previous"
-        // state.
-        //
-        // This method validates that the actor has permission to perform the action.
-        match control_message {
-            GroupControlMessage::GroupAction { action, .. } => {
-                y = Self::apply_action(
+        let y_i = if rebuild_required {
+            Self::rebuild(y)?
+        } else {
+            // Compute the member's state by applying the new operation to it's claimed "previous"
+            // state.
+            //
+            // This method validates that the actor has permission to perform the action.
+            //
+            // Do not update the state if the attempt to apply the action fails.
+            match control_message {
+                GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
                     y,
                     operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     &action,
-                )?;
+                )?,
+                // TODO: we could bake in revoke support here if we want to keep it as a core feature
+                // (on top of any provided Resolver).
+                GroupControlMessage::Revoke { .. } => unimplemented!(),
             }
-            // No action required as revokes would have triggered a rebuild in the previous step.
-            //
-            // TODO: we could bake in revoke support here if we want to keep it as a core feature
-            // (on top of any provided Resolver).
-            GroupControlMessage::Revoke { .. } => (),
-        }
-
-        // Add the new operation to the group states' graph and operations vec.
-        y.graph.add_node(operation_id);
-        for previous in previous_operations {
-            y.graph.add_edge(previous, operation_id, ());
-        }
-        y.operations.push(operation.clone());
+        };
 
         // Update the group in the store.
-        y.group_store
-            .insert(&group_id, &y)
+        y_i.group_store
+            .insert(&group_id, &y_i)
             .map_err(|error| GroupError::GroupStoreError(error))?;
 
-        Ok(y)
+        if rebuild_required {
+            // Perform the re-build and return the new state.
+            return Self::rebuild(y_i);
+        }
+
+        Ok(y_i)
     }
 }
 
@@ -605,7 +614,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
 {
     /// Apply an action to a single group state.
     fn apply_action(
@@ -615,7 +624,7 @@ where
         previous: &HashSet<OP>,
         action: &GroupAction<ID, C>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        // Compute the members state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "previous"
         // state.
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
@@ -623,44 +632,43 @@ where
             y.state_at(previous)?
         };
 
-        let members_y_copy = members_y.clone();
-        let members_y_i = match action.clone() {
-            GroupAction::Add { member, access, .. } => {
-                state::add(members_y_copy, actor, member, access)
-            }
-            GroupAction::Remove { member, .. } => state::remove(members_y_copy, actor, member),
-            GroupAction::Promote { member, .. } => {
-                // TODO: need changes in the group_crdt api so that we can pass in the access
-                // level rather than only the conditions.
-                state::promote(members_y_copy, actor, member, None)
-            }
-            GroupAction::Demote { member, .. } => {
-                // TODO: need changes in the group_crdt api so that we can pass in the access
-                // level rather than only the conditions.
-                state::demote(members_y_copy, actor, member, None)
-            }
-            GroupAction::Create { initial_members } => {
-                let members = initial_members
-                    .iter()
-                    .map(|(member, access)| {
-                        (
-                            *member,
-                            MemberState {
-                                member_counter: 1,
-                                access: access.clone(),
-                                access_counter: 0,
-                            },
-                        )
-                    })
-                    .collect::<HashMap<_, _>>();
-                Ok(GroupMembersState { members })
-            }
-        }
-        .map_err(|error| GroupError::StateChangeError(error))?;
-
-        // Only add the resulting members state to the states map if the operation isn't
+        // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.ignore.contains(&id) {
+            let members_y_i = match action.clone() {
+                GroupAction::Add { member, access, .. } => {
+                    state::add(members_y, actor, member, access)
+                }
+                GroupAction::Remove { member, .. } => state::remove(members_y, actor, member),
+                GroupAction::Promote { member, .. } => {
+                    // TODO: need changes in the group_crdt api so that we can pass in the access
+                    // level rather than only the conditions.
+                    state::promote(members_y, actor, member, None)
+                }
+                GroupAction::Demote { member, .. } => {
+                    // TODO: need changes in the group_crdt api so that we can pass in the access
+                    // level rather than only the conditions.
+                    state::demote(members_y, actor, member, None)
+                }
+                GroupAction::Create { initial_members } => {
+                    let members = initial_members
+                        .iter()
+                        .map(|(member, access)| {
+                            (
+                                *member,
+                                MemberState {
+                                    member_counter: 1,
+                                    access: access.clone(),
+                                    access_counter: 0,
+                                },
+                            )
+                        })
+                        .collect::<HashMap<_, _>>();
+                    Ok(GroupMembersState { members })
+                }
+            }
+            .map_err(|error| GroupError::StateChangeError(error))?;
+
             y.states.insert(id, members_y_i);
         } else {
             y.states.insert(id, members_y);
@@ -673,44 +681,56 @@ where
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         // Process the group state with the provided resolver. This will populate the set of
         // messages which should be ignored when applying group control messages.
-        let mut y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
+        let y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
 
-        let mut create_found = false;
+        let mut y_ii = GroupState::new(
+            y_i.group_id,
+            y_i.my_id,
+            y_i.group_store.clone(),
+            y_i.orderer_y,
+        );
+        y_ii.ignore = y_i.ignore;
+        y_ii.graph = y_i.graph;
 
         // Apply every operation.
-        let operations = y_i.operations.clone();
-        for operation in operations {
-            let id = operation.id();
-            let actor = operation.sender();
+        let mut create_found = false;
+        for operation in y_i.operations {
+            let actor = operation.author();
+            let operation_id = operation.id();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
             let previous_operations = HashSet::from_iter(operation.previous().clone());
 
             // Sanity check: we should only apply operations for this group.
-            assert_eq!(y_i.group_id, group_id);
+            assert_eq!(y_ii.group_id, group_id);
 
-            // Sanity check: the first operation must be a create.
-            assert!(!create_found && !control_message.is_create());
+            // Sanity check: the first operation must be a create and all other operations must not be.
+            if create_found {
+                assert!(!control_message.is_create())
+            } else {
+                assert!(control_message.is_create())
+            }
 
             create_found = true;
 
-            y_i = match control_message {
+            y_ii = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => Self::apply_action(
-                    y_i,
-                    id,
+                    y_ii,
+                    operation_id,
                     GroupMember::Individual(actor),
                     &previous_operations,
                     &action,
                 )?,
-                // No action required as revokes were already processed and the `ignore` field populated.
-                GroupControlMessage::Revoke { .. } => y_i,
+                // TODO: revoke messages are not supported yet, either implement support or remove
+                // this message variant.
+                GroupControlMessage::Revoke { .. } => unimplemented!(),
             };
 
-            // Push the operation into the new states' operation vec.
-            y_i.operations.push(operation);
+            // Push the operation to the group state.
+            y_ii.operations.push(operation);
         }
 
-        Ok(y_i)
+        Ok(y_ii)
     }
 }
 

@@ -81,8 +81,8 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 
             // Instantiate a new group.
             let mut group_y = TestGroupState::new(
-                y_inner.my_id,
                 group_id,
+                y_inner.my_id,
                 y_inner.group_store.clone(),
                 y.clone(),
             );
@@ -155,7 +155,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
         // Construct the actual operation.
         let operation = TestOperation {
             id: next_id,
-            sender: y.my_id(),
+            author: y.my_id(),
             dependencies: dependencies.into_iter().collect::<Vec<_>>(),
             previous: previous.into_iter().collect::<Vec<_>>(),
             payload: control_message.clone(),
@@ -222,7 +222,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 #[derive(Clone, Debug)]
 pub struct TestOperation<ID, OP, C> {
     pub id: OP,
-    pub sender: ID,
+    pub author: ID,
     pub dependencies: Vec<OP>,
     pub previous: Vec<OP>,
     pub payload: GroupControlMessage<ID, OP, C>,
@@ -238,8 +238,8 @@ where
         self.id
     }
 
-    fn sender(&self) -> ID {
-        self.sender
+    fn author(&self) -> ID {
+        self.author
     }
 
     fn dependencies(&self) -> Vec<OP> {

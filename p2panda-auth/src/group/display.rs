@@ -78,7 +78,7 @@ where
                 ..
             } = operation.payload()
             {
-                for (member, _) in initial_members {
+                for (member, _access) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
                 }
             }
@@ -126,7 +126,11 @@ where
         let color = if control_message.is_create() {
             "bisque"
         } else {
-            "grey"
+            if self.ignore.contains(&operation.id()) {
+                "red"
+            } else {
+                "grey"
+            }
         };
 
         s += &format!(
@@ -134,7 +138,7 @@ where
         );
         s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
-        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.sender());
+        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
         let previous = operation.previous();
         if !previous.is_empty() {
             s += &format!(
@@ -156,7 +160,7 @@ where
         );
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_members(&operation)
+            self.format_members(operation)
         );
         s += "</TABLE>>";
         s
