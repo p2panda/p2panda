@@ -19,7 +19,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
     pub fn display(&self) -> String {

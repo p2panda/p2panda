@@ -5,10 +5,10 @@ mod network;
 mod orderer;
 mod partial_ord;
 
-pub use group_store::TestGroupStore;
 pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
+pub use crate::group::test_utils::group_store::TestGroupStore;
 
 use crate::group::resolver::GroupResolver;
 use crate::group::{Group, GroupState};
@@ -27,7 +27,6 @@ pub type GenericTestGroup<RS, ORD, GS> = Group<MemberId, MessageId, Conditions, 
 pub type GenericTestGroupState<RS, ORD, GS> =
     GroupState<MemberId, MessageId, Conditions, RS, ORD, GS>;
 
-pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore<MemberId>>;
-pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
-pub type TestGroupState =
-    GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId>>;
+pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore>;
+pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore>;
+pub type TestGroupState = GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore>;

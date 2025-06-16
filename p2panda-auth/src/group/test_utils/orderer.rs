@@ -13,7 +13,7 @@ use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{GroupStore, Operation, Ordering};
 
 use super::{
-    Conditions, GroupId, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
+    Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStore,
 };
 
@@ -28,14 +28,14 @@ pub struct TestOrdererState {
 #[derive(Clone, Debug)]
 pub struct TestOrdererStateInner {
     pub my_id: MemberId,
-    pub group_store: TestGroupStore<GroupId>,
+    pub group_store: TestGroupStore,
     pub orderer_y: PartialOrdererState<MessageId>,
     pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId, Conditions>>,
     pub rng: StdRng,
 }
 
 impl TestOrdererState {
-    pub fn new(my_id: MemberId, group_store: TestGroupStore<GroupId>, rng: StdRng) -> Self {
+    pub fn new(my_id: MemberId, group_store: TestGroupStore, rng: StdRng) -> Self {
         let inner = TestOrdererStateInner {
             my_id,
             group_store,

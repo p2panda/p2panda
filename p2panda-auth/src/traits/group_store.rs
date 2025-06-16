@@ -2,19 +2,31 @@
 
 use std::error::Error;
 
+use crate::{
+    group::{GroupControlMessage, GroupState},
+    traits::{OperationId, Ordering},
+};
+
 use super::IdentityHandle;
 
 /// API for global group store.
-pub trait GroupStore<ID>
+pub trait GroupStore<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
+    OP: OperationId,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    Self: Sized,
 {
-    type Group;
     type Error: Error;
 
     /// Insert a group state into the store.
-    fn insert(&self, id: &ID, group: &Self::Group) -> Result<(), Self::Error>;
+    fn insert(
+        &self,
+        id: &ID,
+        group: &GroupState<ID, OP, C, RS, ORD, Self>,
+    ) -> Result<(), Self::Error>;
 
     /// Get a group's state from the store.
-    fn get(&self, id: &ID) -> Result<Option<Self::Group>, Self::Error>;
+    #[allow(clippy::type_complexity)]
+    fn get(&self, id: &ID) -> Result<Option<GroupState<ID, OP, C, RS, ORD, Self>>, Self::Error>;
 }

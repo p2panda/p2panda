@@ -27,7 +27,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, Self, ORD, GS>> + Debug,
+    GS: GroupStore<ID, OP, C, Self, ORD> + Debug,
 {
     type State = GroupState<ID, OP, C, Self, ORD, GS>;
     type Error = GroupResolverError;
@@ -79,7 +79,7 @@ mod tests {
 
     use crate::group::resolver::GroupResolver;
     use crate::group::test_utils::{
-        MemberId, MessageId, TestGroupStore, TestOrderer, TestOrdererState, TestResolver,
+        MemberId, MessageId, TestGroupStore, TestOrderer, TestOrdererState, TestResolver
     };
     use crate::group::{Group, GroupState};
 
@@ -92,7 +92,7 @@ mod tests {
         let rng = StdRng::from_os_rng();
         let store = TestGroupStore::default();
         let orderer_y = TestOrdererState::new('A', store.clone(), rng);
-        let group_y: AuthGroupState<TestResolver, TestOrderer, TestGroupStore<MemberId>> =
+        let group_y: AuthGroupState<TestResolver, TestOrderer, TestGroupStore> =
             AuthGroupState::new('A', 'B', store.clone(), orderer_y);
         let _group_y_i = AuthGroup::rebuild(group_y).unwrap();
     }

@@ -129,7 +129,7 @@ where
     ID: IdentityHandle,
     OP: OperationId,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
-    GS: GroupStore<ID>,
+    GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     // ID of the local actor.
     pub my_id: ID,
@@ -167,7 +167,7 @@ where
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
     pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
@@ -488,7 +488,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     type State = GroupState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
@@ -605,7 +605,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Apply an action to a single group state.
     fn apply_action(
@@ -721,7 +721,7 @@ where
     OP: OperationId + Ord,
     RS: Resolver<ORD::Message>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>>,
+    GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),

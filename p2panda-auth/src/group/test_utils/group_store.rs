@@ -7,7 +7,8 @@ use std::rc::Rc;
 
 use thiserror::Error;
 
-use crate::traits::{GroupStore, IdentityHandle};
+use crate::{traits::{GroupStore}};
+use crate::group::test_utils::{Conditions, MemberId, MessageId, TestOrderer, TestResolver};
 
 use super::TestGroupState;
 
@@ -15,31 +16,27 @@ use super::TestGroupState;
 pub enum GroupStoreError {}
 
 #[derive(Clone, Debug)]
-pub struct TestGroupStore<ID>(Rc<RefCell<HashMap<ID, TestGroupState>>>)
-where
-    ID: IdentityHandle;
+pub struct TestGroupStore(Rc<RefCell<HashMap<MemberId, TestGroupState>>>);
 
-impl<ID> Default for TestGroupStore<ID>
-where
-    ID: IdentityHandle,
+impl Default for TestGroupStore
 {
     fn default() -> Self {
         Self(Rc::new(RefCell::new(HashMap::new())))
     }
 }
 
-impl GroupStore<char> for TestGroupStore<char> {
-    type Group = TestGroupState;
-
+impl GroupStore<MemberId, MessageId, Conditions, TestResolver, TestOrderer>
+    for TestGroupStore
+{
     type Error = GroupStoreError;
 
-    fn get(&self, id: &char) -> Result<Option<Self::Group>, Self::Error> {
+    fn get(&self, id: &char) -> Result<Option<TestGroupState>, Self::Error> {
         let store = self.0.borrow();
         let group_y = store.get(id);
         Ok(group_y.cloned())
     }
 
-    fn insert(&self, id: &char, group: &Self::Group) -> Result<(), Self::Error> {
+    fn insert(&self, id: &char, group: &TestGroupState) -> Result<(), Self::Error> {
         {
             let mut store = self.0.borrow_mut();
             store.insert(*id, group.clone());

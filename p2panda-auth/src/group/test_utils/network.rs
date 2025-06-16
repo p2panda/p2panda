@@ -22,7 +22,7 @@ pub struct Network {
 
 pub struct NetworkMember {
     id: MemberId,
-    group_store: TestGroupStore<MemberId>,
+    group_store: TestGroupStore,
     orderer_y: TestOrdererState,
 }
 
