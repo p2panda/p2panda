@@ -14,7 +14,7 @@ keywords = ["auth", "access-control", "groups"]
 
 [features]
 default = []
-test-utils = ["rand"]
+test_utils = ["rand"]
 
 [package.metadata.docs.rs]
 all-features = true
