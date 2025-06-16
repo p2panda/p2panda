@@ -6,11 +6,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
-use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{DfsPostOrder, Reversed};
+use petgraph::visit::DfsPostOrder;
 use thiserror::Error;
 
-use crate::group::{Access, GroupControlMessage, GroupState};
+use crate::group::graph::{concurrent_bubbles, has_path};
+use crate::group::{Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::GroupAction;
@@ -42,7 +42,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
-    GS: GroupStore<ID, OP, C, Self, ORD> + Debug,
+    GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
     type State = GroupState<ID, OP, C, Self, ORD, GS>;
     type Error = GroupResolverError<ID, OP>;
@@ -60,14 +60,8 @@ where
             return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        // let is_concurrent = y.heads().into_iter().collect::<Vec<_>>() != operation.previous();
-        // Ok(is_concurrent)
-
-        // TODO(sam): for now rebuild on every operation, there are some tricky edge-cases which
-        // I'm not sure how to handle yet. In particular when operations which should be filtered
-        // due to being a dependent operation (of a filtered operation), it's quite hard to detect
-        // this, if we want to do it efficiently we probably need to keep some more state around.
-        Ok(true)
+        // We only need to rebuild the graph if this operation is concurrent.
+        Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
     }
 
     /// Resolve group membership by processing all concurrent operations in the graph.
@@ -98,6 +92,10 @@ where
     fn process(
         mut y: GroupState<ID, OP, C, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
+        // Start by draining the existing filter and re-building all states.
+        y.ignore.drain();
+        let mut y = Group::rebuild(y).expect("no errors when re-building a group");
+
         let mut filter: HashSet<OP> = Default::default();
         let operations: HashMap<OP, ORD::Message> = y
             .operations
@@ -106,69 +104,107 @@ where
             .map(|op| (op.id(), op))
             .collect();
 
-        let bubbles = concurrent_bubbles(&y.graph);
-
-        let mut invalid_operations = HashSet::new();
         let mut mutual_removes = HashSet::new();
 
-        for (target_operation_id, bubble) in bubbles {
+        let mut bubbles = concurrent_bubbles(&y.graph);
+
+        let root = y.root();
+        let mut dfs = DfsPostOrder::new(&y.graph, root);
+        let mut visited = HashSet::new();
+        while let Some(target_operation_id) = dfs.next(&y.graph) {
             let Some(target_operation) = operations.get(&target_operation_id) else {
                 return Err(GroupResolverError::MissingOperation(target_operation_id));
             };
 
+            let bubble = bubbles
+                .iter()
+                .find(|bubble| bubble.contains(&target_operation_id))
+                .cloned();
+
+            visited.insert(target_operation_id);
+
             // Does the target operation remove or demote a manager member?
             let removed_manager = y.removed_manager(target_operation);
-            let Some(removed_manager) = removed_manager else {
-                continue;
-            };
 
-            // Iterate over every operation in the bubble and filter out any from the author
-            // removed by the target operation.
-            for concurrent_operation_id in &bubble {
-                let Some(concurrent_operation) = operations.get(concurrent_operation_id) else {
-                    return Err(GroupResolverError::MissingOperation(
-                        *concurrent_operation_id,
-                    ));
-                };
+            if let (Some(removed_manager), Some(bubble)) = (removed_manager, &bubble) {
+                for bubble_operation_id in bubble.iter() {
+                    // If there's a path between the bubble and target operation, then it's not
+                    // concurrent, so we don't need to do anything.
+                    if has_path(&y.graph, *bubble_operation_id, target_operation_id) {
+                        continue;
+                    }
 
-                // If this concurrent operation is _not_ authored by the "target author" then we
-                // can continue to the next concurrent operation without taking any action.
-                if concurrent_operation.author() != removed_manager {
-                    continue;
-                }
+                    let Some(bubble_operation) = operations.get(&bubble_operation_id) else {
+                        return Err(GroupResolverError::MissingOperation(*bubble_operation_id));
+                    };
 
-                // Does this concurrent operation remove or demote an admin member?
-                let concurrent_removed_admin = y.removed_manager(concurrent_operation);
+                    // If this concurrent operation is _not_ authored by the "target author" then we
+                    // can continue to the next concurrent operation without taking any action.
+                    if bubble_operation.author() != removed_manager {
+                        continue;
+                    }
 
-                if let Some(concurrent_removed_admin) = concurrent_removed_admin {
-                    // The removed member is concurrently removing the remover.
-                    if concurrent_removed_admin == target_operation.author() {
-                        // We don't want to filter out mutual remove/demote operations, but we
-                        // still want to filter any dependent operations for both (mutually)
-                        // removed members.
-                        //
-                        // The "target" operations are included when collecting invalid dependent
-                        // operations, we record mutual remove operations here and then remove
-                        // them from the filter later.
-                        mutual_removes.insert(*concurrent_operation_id);
+                    // Add the concurrent operation to our filter.
+                    filter.insert(*bubble_operation_id);
+
+                    // Does this concurrent operation remove or demote an admin member?
+                    if let Some(concurrent_removed_admin) = y.removed_manager(bubble_operation) {
+                        // The removed member is concurrently removing the remover.
+                        if concurrent_removed_admin == target_operation.author() {
+                            // We don't want to filter out mutual remove/demote operations, but we
+                            // still want to filter any dependent operations for both (mutually)
+                            // removed members.
+                            //
+                            // The "target" operations are included when collecting invalid dependent
+                            // operations, we record mutual remove operations here and then remove
+                            // them from the filter later.
+                            mutual_removes.insert(*bubble_operation_id);
+                        }
                     }
                 }
+            }
 
-                // Add the concurrent operation to our filter.
-                filter.insert(*concurrent_operation_id);
-                y.invalid_dependent_operations(
-                    &operations,
-                    *concurrent_operation_id,
-                    concurrent_operation.author(),
-                    &mut invalid_operations,
-                );
+            match bubble {
+                Some(bubble) => {
+                    if bubble.is_subset(&visited) {
+                        let mut filter_tmp = filter.clone();
+                        filter_tmp.retain(|op: &OP| !mutual_removes.contains(op));
+                        y.ignore = filter_tmp;
+                        y = Group::rebuild(y).expect("no errors when re-building a group");
+
+                        // Remove the visited bubble.
+                        bubbles.retain(|b| *b != bubble);
+
+                        // Drain visited.
+                        visited.drain();
+                    }
+                }
+                None => {
+                    y = match target_operation.payload() {
+                        GroupControlMessage::GroupAction { action, .. } => {
+                            let previous_operations =
+                                HashSet::from_iter(target_operation.previous().clone());
+                            match Group::apply_action(
+                                y,
+                                target_operation.id(),
+                                GroupMember::Individual(target_operation.author()),
+                                &previous_operations,
+                                &action,
+                            ) {
+                                StateChangeResult::Ok { state } => state,
+                                StateChangeResult::Noop { state, .. } => state,
+                                StateChangeResult::Filtered { state } => state,
+                            }
+                        }
+                        GroupControlMessage::Revoke { .. } => unimplemented!(),
+                    };
+                    visited.drain();
+                }
             }
         }
 
-        filter.extend(invalid_operations);
-        filter.retain(|op| !mutual_removes.contains(op));
-
-        y.ignore = filter;
+        // Sanity check: all bubbles should be visited completely.
+        assert!(bubbles.is_empty(), "{:?}", bubbles);
 
         Ok(y)
     }
@@ -181,7 +217,7 @@ where
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Message> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
     /// If the given operation is an action which removes a member or demotes a manager, return the
     /// ID of the target member.
@@ -193,18 +229,12 @@ where
 
         let removed_or_demoted_member = match action {
             GroupAction::Remove { member } => member,
-            GroupAction::Demote { member, ref access } => {
-                // If the demoted access level is still "manage" then the manager was not removed.
-                if access == &Access::Manage {
-                    return None;
-                };
-                member
-            }
+            GroupAction::Demote { member, .. } => member,
             _ => return None,
         };
 
-        // We only need to react to a filtered demote operation if the target author
-        // did have admin access but now doesn't.
+        // We only need to react to a filtered demote operation if the target author did have
+        // admin access but now doesn't.
         let was_manager = self
             .state_at(&HashSet::from_iter(operation.previous()))
             .expect("state exists for all operations")
@@ -218,122 +248,23 @@ where
         }
     }
 
-    /// If the given operation is an action which adds a member or promotes a manager, return the
-    /// ID of the target member.
-    fn added_manager(&self, operation: &ORD::Message) -> Option<ID> {
-        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
-            // Revoke operations not yet supported.
-            unimplemented!()
-        };
+    fn root(&self) -> OP {
+        self.operations
+            .iter()
+            .find(|operation| {
+                let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
+                    // Revoke operations not yet supported.
+                    unimplemented!()
+                };
 
-        let (added_or_promoted_to_manager, access) = match action {
-            GroupAction::Add { member, access } => (member, access),
-            GroupAction::Promote { member, access } => (member, access),
-            _ => return None,
-        };
-
-        // We only need to react to members which were _not_ managers but now are.
-        let was_manager = self
-            .state_at(&HashSet::from_iter(operation.previous()))
-            .expect("state exists for all operations")
-            .managers()
-            .contains(&added_or_promoted_to_manager);
-
-        if !was_manager && access == Access::Manage {
-            Some(added_or_promoted_to_manager.id())
-        } else {
-            None
-        }
-    }
-
-    // TODO: Before invalidating dependent operations we need to check that the affected member has not
-    // been readded by another member concurrently or otherwise. Implement this later...
-    //
-    /// Recursively iterate over all operations which depend on the given operation and identify
-    /// those which are now invalid.
-    ///
-    /// Return immediately if an operation is detected which re-adds the target author, as long as
-    /// that operation is authored by a different author.
-    fn invalid_dependent_operations(
-        &self,
-        operations: &HashMap<OP, ORD::Message>,
-        target: OP,
-        target_author: ID,
-        invalid_operations: &mut HashSet<OP>,
-    ) {
-        let mut dfs = DfsPostOrder::new(&self.graph, target);
-        while let Some(dependent_operation_id) = dfs.next(&self.graph) {
-            let dependent_operation = operations.get(&dependent_operation_id).unwrap();
-
-            // If this operation is someone else adding back the target author then break out
-            // of the search as we don't want to invalidate any more operations.
-            if dependent_operation.author() != target_author {
-                if let Some(added_manager) = self.added_manager(dependent_operation) {
-                    if added_manager == target_author && target != dependent_operation.id() {
-                        break;
-                    }
+                match action {
+                    GroupAction::Create { .. } => true,
+                    _ => false,
                 }
-
-                continue;
-            }
-
-            invalid_operations.insert(dependent_operation_id);
-
-            if let Some(added_manager) = self.added_manager(dependent_operation) {
-                self.invalid_dependent_operations(
-                    operations,
-                    dependent_operation_id,
-                    added_manager,
-                    invalid_operations,
-                );
-            }
-        }
+            })
+            .expect("at least one create operation")
+            .id()
     }
-}
-
-/// Walk the graph and identify the set of concurrent operations for each node.
-fn concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> HashMap<OP, HashSet<OP>>
-where
-    OP: OperationId + Display + Ord,
-{
-    let mut bubbles = HashMap::new();
-
-    graph.nodes().for_each(|target| {
-        let concurrent_operations = concurrent_operations(graph, target);
-        if !concurrent_operations.is_empty() {
-            bubbles.insert(target, concurrent_operations);
-        }
-    });
-
-    bubbles
-}
-
-/// Return any operations concurrent with the given target operation.
-///
-/// An operation is concurrent if it is not a predecessor or successor of the target operation.
-fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
-where
-    OP: OperationId + Display + Ord,
-{
-    // Get all successors.
-    let mut successors = HashSet::new();
-    let mut dfs = DfsPostOrder::new(&graph, target);
-    while let Some(nx) = dfs.next(&graph) {
-        successors.insert(nx);
-    }
-
-    // Get all predecessors.
-    let mut predecessors = HashSet::new();
-    let reversed = Reversed(graph);
-    let mut dfs_rev = DfsPostOrder::new(&reversed, target);
-    while let Some(nx) = dfs_rev.next(&reversed) {
-        predecessors.insert(nx);
-    }
-
-    let relatives: HashSet<_> = successors.union(&predecessors).cloned().collect();
-
-    // Collect all operations which are not successors or predecessors.
-    graph.nodes().filter(|n| !relatives.contains(n)).collect()
 }
 
 #[cfg(test)]
@@ -341,109 +272,13 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    use petgraph::graph::DiGraph;
-    use petgraph::prelude::DiGraphMap;
-
     use crate::group::test_utils::{
         Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
     };
     use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
     use crate::traits::{AuthGroup, OperationId};
 
-    use super::concurrent_bubbles;
-
     impl OperationId for &str {}
-
-    #[test]
-    fn concurrent_bubbles_are_identified() {
-        //       A
-        //     /   \
-        //    B     C
-        //   / \     \
-        //  D   E     F
-        //   \ /     /
-        //    G     H
-        //     \   /
-        //       I
-        //       |
-        //       J
-
-        let mut graph = DiGraph::new();
-
-        // Add nodes A–M.
-        let a = graph.add_node("A"); // 0
-        let b = graph.add_node("B"); // 1
-        let c = graph.add_node("C"); // 2
-        let d = graph.add_node("D"); // 3
-        let e = graph.add_node("E"); // 4
-        let f = graph.add_node("F"); // 5
-        let g = graph.add_node("G"); // 6
-        let h = graph.add_node("H"); // 7
-        let i = graph.add_node("I"); // 8
-        let j = graph.add_node("J"); // 9
-
-        // Add edges.
-        graph.extend_with_edges(&[
-            (a, b),
-            (a, c),
-            (b, d),
-            (b, e),
-            (d, g),
-            (e, g),
-            (c, f),
-            (f, h),
-            (h, i),
-            (g, i),
-            (i, j),
-        ]);
-
-        let graph_map = DiGraphMap::from_graph(graph);
-        let concurrent_bubbles = concurrent_bubbles(&graph_map);
-
-        assert_eq!(concurrent_bubbles.len(), 7);
-
-        // "D": {"F", "H", "C", "E"}
-        let bubble = concurrent_bubbles.get("D").unwrap();
-        for id in &["F", "H", "C", "E"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "F": {"B", "D", "G", "E"}
-        let bubble = concurrent_bubbles.get("F").unwrap();
-        for id in &["B", "D", "G", "E"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "G": {"F", "H", "C"}
-        let bubble = concurrent_bubbles.get("G").unwrap();
-        for id in &["F", "H", "C"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "H": {"D", "E", "G", "B"}
-        let bubble = concurrent_bubbles.get("H").unwrap();
-        for id in &["D", "E", "G", "B"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "B": {"C", "F", "H"}
-        let bubble = concurrent_bubbles.get("B").unwrap();
-        for id in &["C", "F", "H"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "C": {"B", "G", "D", "E"
-        let bubble = concurrent_bubbles.get("C").unwrap();
-        for id in &["B", "G", "D", "E"] {
-            assert!(bubble.contains(id));
-        }
-
-        // "E": {"F", "H", "D", "C"}
-        let bubble = concurrent_bubbles.get("E").unwrap();
-        for id in &["F", "H", "D", "C"] {
-            assert!(bubble.contains(id));
-        }
-    }
 
     #[test]
     fn mutual_removal_filter() {
@@ -708,16 +543,16 @@ mod tests {
 
     #[test]
     fn remove_dependencies_filter() {
-        //       A
+        //       1
         //     /   \
-        //    B     C
+        //    2     3
         //           \
-        //            D
+        //            4
         //
-        // Node A: create the group with Alice and Bob as managers
-        // Node B: Alice removes Bob
-        // Node C: Bob adds Claire
-        // Node D: Claire adds Dave
+        // Node 1: create the group with Alice and Bob as managers
+        // Node 2: Alice removes Bob
+        // Node 3: Bob adds Claire
+        // Node 4: Claire adds Dave
         //
         // We expect the addition of Claire (node C) and Dave (node D) to be filtered.
         // Alice should be the only member of the group after processing.
@@ -835,9 +670,12 @@ mod tests {
 
         // Now everyone processes the operations from the concurrent branch.
         let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
-        TestGroup::process(alice_group_y, &operation_004).unwrap();
-        TestGroup::process(bob_group_y, &operation_002).unwrap();
-        TestGroup::process(claire_group_y, &operation_002).unwrap();
+        let alice_group_y = TestGroup::process(alice_group_y, &operation_004).unwrap();
+        let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
+        let claire_group_y = TestGroup::process(claire_group_y, &operation_002).unwrap();
+
+        assert_eq!(alice_group_y.members(), bob_group_y.members());
+        assert_eq!(alice_group_y.members(), claire_group_y.members());
     }
 
     #[test]
