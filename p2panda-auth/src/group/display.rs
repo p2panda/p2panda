@@ -7,7 +7,7 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState};
+use crate::group::{Group, GroupAction, GroupControlMessage, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
@@ -121,15 +121,26 @@ where
 
     fn format_operation(&self, operation: &ORD::Message) -> String {
         let control_message = operation.payload();
+        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
+            // Revoke operations not yet supported.
+            unimplemented!()
+        };
+
         let mut s = String::new();
 
         let color = if control_message.is_create() {
             "bisque"
         } else {
-            if self.ignore.contains(&operation.id()) {
-                "red"
-            } else {
-                "grey"
+            match Group::apply_action(
+                self.clone(),
+                operation.id(),
+                GroupMember::Individual(operation.sender()),
+                &HashSet::from_iter(operation.previous()),
+                &action,
+            ) {
+                super::StateChangeResult::Ok { .. } => "grey",
+                super::StateChangeResult::Noop { .. } => "darkorange",
+                super::StateChangeResult::Filtered { .. } => "red",
             }
         };
 
