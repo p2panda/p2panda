@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-#![allow(dead_code)]
 
+use crate::traits::Operation;
 use std::error::Error;
-
-use super::Operation;
 
 /// Interface for processing messages which have particular ordering requirements.
 ///

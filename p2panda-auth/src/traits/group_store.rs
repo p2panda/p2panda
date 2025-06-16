@@ -2,12 +2,8 @@
 
 use std::error::Error;
 
-use crate::{
-    group::{GroupControlMessage, GroupState},
-    traits::{OperationId, Ordering},
-};
-
-use super::IdentityHandle;
+use crate::group::{GroupControlMessage, GroupState};
+use crate::traits::{IdentityHandle, OperationId, Ordering};
 
 /// API for global group store.
 pub trait GroupStore<ID, OP, C, RS, ORD>
