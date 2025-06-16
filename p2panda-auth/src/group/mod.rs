@@ -722,7 +722,7 @@ where
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut y_i = GroupState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
+        let mut y_i = GroupState::new( y.group_id,y.my_id, y.group_store.clone(), y.orderer_y);
         y_i.ignore = y.ignore;
         y_i.graph = y.graph;
 
