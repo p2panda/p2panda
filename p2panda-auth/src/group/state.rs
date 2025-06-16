@@ -3,7 +3,7 @@
 //! Group membership CRDT.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
 use thiserror::Error;
@@ -38,6 +38,19 @@ pub enum Access<C> {
     Read,
     Write { conditions: Option<C> },
     Manage,
+}
+
+impl<C> Display for Access<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Access::Pull => "pull",
+            Access::Read => "read",
+            Access::Write { .. } => "write",
+            Access::Manage => "manage",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Clone, Debug)]
