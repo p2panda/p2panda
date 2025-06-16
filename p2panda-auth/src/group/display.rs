@@ -134,7 +134,7 @@ where
             match Group::apply_action(
                 self.clone(),
                 operation.id(),
-                GroupMember::Individual(operation.sender()),
+                GroupMember::Individual(operation.author()),
                 &HashSet::from_iter(operation.previous()),
                 &action,
             ) {
