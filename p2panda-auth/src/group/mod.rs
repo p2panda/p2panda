@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-#![allow(clippy::type_complexity)]
-#![allow(dead_code)]
+// #![allow(clippy::type_complexity)]
+// #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
@@ -639,22 +639,7 @@ where
                 // level rather than only the conditions.
                 state::demote(members_y_copy, actor, member, None)
             }
-            GroupAction::Create { initial_members } => {
-                let members = initial_members
-                    .iter()
-                    .map(|(member, access)| {
-                        (
-                            *member,
-                            MemberState {
-                                member_counter: 1,
-                                access: access.clone(),
-                                access_counter: 0,
-                            },
-                        )
-                    })
-                    .collect::<HashMap<_, _>>();
-                Ok(GroupMembersState { members })
-            }
+            GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
         }
         .map_err(|error| GroupError::StateChangeError(error))?;
 
