@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - `p2panda-encryption`: decentralized data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
+- Introduce core group CRDT for auth [#748](https://github.com/p2panda/p2panda/pull/748)
 
 ## [0.3.1] - 14/04/2025
 
