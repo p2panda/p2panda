@@ -18,6 +18,7 @@ use crate::traits::{
 
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
+mod graph;
 mod resolver;
 mod state;
 #[cfg(any(test, feature = "test_utils"))]
@@ -569,7 +570,9 @@ where
         y.operations.push(operation.clone());
 
         let y_i = if rebuild_required {
-            Self::rebuild(y)?
+            // Process the group state with the provided resolver. This will populate the set of
+            // messages which should be ignored when applying group control messages.
+            RS::process(y).map_err(|error| GroupError::ResolverError(error))?
         } else {
             // Compute the member's state by applying the new operation to it's claimed "previous"
             // state.
@@ -586,14 +589,11 @@ where
                     &action,
                 ) {
                     StateChangeResult::Ok { state } => state,
-                    StateChangeResult::Noop { state, error } => {
+                    StateChangeResult::Noop { state, .. } => {
                         // TODO: introduce debug logging.
-                        println!(
-                            "operation {operation_id} invalidated during group state rebuild: {error:?}"
-                        );
                         state
                     }
-                    StateChangeResult::Filtered { state } => {
+                    StateChangeResult::Filtered { .. } => {
                         // Operations can't be filtered out before they were processed.
                         unreachable!()
                     }
@@ -609,11 +609,6 @@ where
         y_i.group_store
             .insert(&group_id, &y_i)
             .map_err(|error| GroupError::GroupStoreError(error))?;
-
-        if rebuild_required {
-            // Perform the re-build and return the new state.
-            return Self::rebuild(y_i);
-        }
 
         Ok(y_i)
     }
@@ -727,22 +722,13 @@ where
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        // Process the group state with the provided resolver. This will populate the set of
-        // messages which should be ignored when applying group control messages.
-        let y_i = RS::process(y).map_err(|error| GroupError::ResolverError(error))?;
-
-        let mut y_ii = GroupState::new(
-            y_i.group_id,
-            y_i.my_id,
-            y_i.group_store.clone(),
-            y_i.orderer_y,
-        );
-        y_ii.ignore = y_i.ignore;
-        y_ii.graph = y_i.graph;
+        let mut y_i = GroupState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
+        y_i.ignore = y.ignore;
+        y_i.graph = y.graph;
 
         // Apply every operation.
         let mut create_found = false;
-        for operation in y_i.operations {
+        for operation in y.operations {
             let actor = operation.author();
             let operation_id = operation.id();
             let control_message = operation.payload();
@@ -750,7 +736,7 @@ where
             let previous_operations = HashSet::from_iter(operation.previous().clone());
 
             // Sanity check: we should only apply operations for this group.
-            assert_eq!(y_ii.group_id, group_id);
+            assert_eq!(y_i.group_id, group_id);
 
             // Sanity check: the first operation must be a create and all other operations must not be.
             if create_found {
@@ -761,28 +747,22 @@ where
 
             create_found = true;
 
-            y_ii = match control_message {
+            y_i = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => {
                     match Self::apply_action(
-                        y_ii,
+                        y_i,
                         operation_id,
                         GroupMember::Individual(actor),
                         &previous_operations,
                         &action,
                     ) {
                         StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { state, error } => {
+                        StateChangeResult::Noop { state, .. } => {
                             // TODO: introduce debug logging.
-                            println!(
-                                "operation {operation_id} invalidated during group state rebuild: {error:?}"
-                            );
                             state
                         }
                         StateChangeResult::Filtered { state } => {
                             // TODO: introduce debug logging.
-                            println!(
-                                "operation {operation_id} filtered out during group state rebuild"
-                            );
                             state
                         }
                     }
@@ -793,10 +773,10 @@ where
             };
 
             // Push the operation to the group state.
-            y_ii.operations.push(operation);
+            y_i.operations.push(operation);
         }
 
-        Ok(y_ii)
+        Ok(y_i)
     }
 }
 
