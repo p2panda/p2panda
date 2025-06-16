@@ -623,7 +623,7 @@ where
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, Group = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Action was applied an no error occured.
     Ok {
