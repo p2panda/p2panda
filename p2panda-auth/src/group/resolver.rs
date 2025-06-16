@@ -79,7 +79,7 @@ mod tests {
 
     use crate::group::resolver::GroupResolver;
     use crate::group::test_utils::{
-        MemberId, MessageId, TestGroupStore, TestOrderer, TestOrdererState, TestResolver
+        MemberId, MessageId, TestGroupStore, TestOrderer, TestOrdererState, TestResolver,
     };
     use crate::group::{Group, GroupState};
 

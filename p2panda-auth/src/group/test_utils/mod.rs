@@ -5,10 +5,10 @@ mod network;
 mod orderer;
 mod partial_ord;
 
+pub use crate::group::test_utils::group_store::TestGroupStore;
 pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
-pub use crate::group::test_utils::group_store::TestGroupStore;
 
 use crate::group::resolver::GroupResolver;
 use crate::group::{Group, GroupState};

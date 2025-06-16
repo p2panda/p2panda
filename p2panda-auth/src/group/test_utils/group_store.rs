@@ -7,8 +7,8 @@ use std::rc::Rc;
 
 use thiserror::Error;
 
-use crate::{traits::{GroupStore}};
 use crate::group::test_utils::{Conditions, MemberId, MessageId, TestOrderer, TestResolver};
+use crate::traits::GroupStore;
 
 use super::TestGroupState;
 
@@ -18,16 +18,13 @@ pub enum GroupStoreError {}
 #[derive(Clone, Debug)]
 pub struct TestGroupStore(Rc<RefCell<HashMap<MemberId, TestGroupState>>>);
 
-impl Default for TestGroupStore
-{
+impl Default for TestGroupStore {
     fn default() -> Self {
         Self(Rc::new(RefCell::new(HashMap::new())))
     }
 }
 
-impl GroupStore<MemberId, MessageId, Conditions, TestResolver, TestOrderer>
-    for TestGroupStore
-{
+impl GroupStore<MemberId, MessageId, Conditions, TestResolver, TestOrderer> for TestGroupStore {
     type Error = GroupStoreError;
 
     fn get(&self, id: &char) -> Result<Option<TestGroupState>, Self::Error> {
