@@ -134,7 +134,7 @@ where
                         continue;
                     }
 
-                    let Some(bubble_operation) = operations.get(&bubble_operation_id) else {
+                    let Some(bubble_operation) = operations.get(bubble_operation_id) else {
                         return Err(GroupResolverError::MissingOperation(*bubble_operation_id));
                     };
 
@@ -257,10 +257,7 @@ where
                     unimplemented!()
                 };
 
-                match action {
-                    GroupAction::Create { .. } => true,
-                    _ => false,
-                }
+                matches!(action, GroupAction::Create { .. })
             })
             .expect("at least one create operation")
             .id()
