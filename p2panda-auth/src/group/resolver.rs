@@ -708,22 +708,26 @@ mod tests {
         //       1
         //     /   \
         //    2     4
-        //   /
-        //  3
+        //    |     |
+        //    3     |
+        //     \   /
+        //       5
         //
         // Node 1: create the group with Alice, Bob and Claire as managers
         // Node 2: Alice removes Bob
         // Node 3: Alice re-adds Bob
-        // Node D: Bob adds Dave
+        // Node 4: Bob adds Dave
+        // Node 5: Bob adds Eve
         //
-        // We expect the filter to be empty.
-        // Alice, Bob, Claire and Dave should all be members of the group after processing.
+        // Filtered: [4]
+        // Final members: [Alice, Bob, Claire, Eve]
 
         let group_id = 'G';
         let alice = 'A';
         let bob = 'B';
         let claire = 'C';
         let dave = 'D';
+        let eve = 'E';
 
         let mut rng = StdRng::from_os_rng();
 
@@ -740,7 +744,6 @@ mod tests {
         );
 
         let bob_group = from_create(group_id, bob, &op_create, &mut rng);
-        let claire_group = from_create(group_id, claire, &op_create, &mut rng);
 
         assert_members(
             &alice_group,
@@ -776,7 +779,6 @@ mod tests {
 
         // 4: Bob adds Dave
         let (bob_group, op_add_dave) = add_member(bob_group, group_id, dave, Access::Read);
-        let claire_group = sync(claire_group, &[op_add_dave.clone()]);
 
         assert_members(
             &bob_group,
@@ -789,18 +791,22 @@ mod tests {
         );
 
         // Everyone processes the concurrent operations
-        let _ = sync(alice_group, &[op_add_dave.clone()]);
+        let alice_group = sync(alice_group, &[op_add_dave.clone()]);
         let bob_group = sync(bob_group, &[op_remove_bob.clone(), op_readd_bob.clone()]);
-        let claire_group = sync(claire_group, &[op_remove_bob, op_readd_bob]);
+
+        // Bob adds Eve
+        let (bob_group, op_add_eve) = add_member(bob_group, group_id, eve, Access::Read);
+        let alice_group = sync(alice_group, &[op_add_eve.clone()]);
 
         // Final assertions: All 4 members should be present
         let expected = vec![
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(bob), Access::Manage),
             (GroupMember::Individual(claire), Access::Manage),
+            (GroupMember::Individual(eve), Access::Read),
         ];
 
-        assert_members(&claire_group, &expected);
+        assert_members(&alice_group, &expected);
         assert_members(&bob_group, &expected);
     }
 
@@ -810,7 +816,7 @@ mod tests {
         //
         //       1
         //     /   \
-        //    2     3 
+        //    2     3
         //     \   /
         //       4
         //       |
