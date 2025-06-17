@@ -10,7 +10,7 @@ use petgraph::visit::DfsPostOrder;
 use thiserror::Error;
 
 use crate::group::graph::{concurrent_bubbles, has_path};
-use crate::group::{Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult};
+use crate::group::{Access, Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::GroupAction;
@@ -236,10 +236,9 @@ where
         // We only need to react to a filtered demote operation if the target author did have
         // admin access but now doesn't.
         let was_manager = self
-            .state_at(&HashSet::from_iter(operation.previous()))
+            .transitive_members_at(&HashSet::from_iter(operation.dependencies()))
             .expect("state exists for all operations")
-            .managers()
-            .contains(&removed_or_demoted_member);
+            .contains(&(removed_or_demoted_member.id(), Access::Manage));
 
         if was_manager {
             Some(removed_or_demoted_member.id())
