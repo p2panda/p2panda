@@ -702,6 +702,7 @@ mod tests {
         assert_members(&bob_group, &expected_members);
         assert_members(&claire_group, &expected_members);
     }
+
     #[test]
     fn remove_readd_dependencies_filter() {
         //       1
@@ -801,5 +802,123 @@ mod tests {
 
         assert_members(&claire_group, &expected);
         assert_members(&bob_group, &expected);
+    }
+
+    #[test]
+    fn two_bubbles() {
+        // Graph structure:
+        //
+        //       1
+        //     /   \
+        //    2     3 
+        //     \   /
+        //       4
+        //       |
+        //       5
+        //     /   \
+        //    6     8
+        //    |
+        //    7
+        //
+        // 1: Alice creates group with initial members Alice (admin) & Bob (admin)
+        // 2: Alice removes Bob
+        // 3: Bob adds Claire
+        // 4: Alice adds Dave (admin)
+        // 5: Dave adds Eve
+        // 6: Alice adds Frank
+        // 7: Frank adds Grace
+        // 8: Dave removes Alice
+        //
+        // Filtered (due to concurrent removal): [3, 6, 7]
+
+        let group_id = '0';
+        let alice = 'A';
+        let bob = 'B';
+        let claire = 'C';
+        let dave = 'D';
+        let eve = 'E';
+        let frank = 'F';
+        let grace = 'G';
+
+        let mut rng = StdRng::from_os_rng();
+
+        // 1: Create initial group with Alice and Bob
+        let (alice_group, op_create) = create_group(
+            group_id,
+            alice,
+            vec![(alice, Access::Manage), (bob, Access::Manage)],
+            &mut rng,
+        );
+
+        // Initialize all member groups from the create operation
+        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
+        let dave_group = from_create(group_id, dave, &op_create, &mut rng);
+        let frank_group = from_create(group_id, frank, &op_create, &mut rng);
+
+        assert_members(
+            &alice_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+            ],
+        );
+
+        // 2: Alice removes Bob
+        let (alice_group, op_remove_bob) = remove_member(alice_group, group_id, bob);
+
+        // 3: Bob adds Claire (concurrent with 2)
+        let (_bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::Read);
+
+        // Alice processes Bob's operation
+        let alice_group = sync(alice_group, &[op_add_claire.clone()]);
+
+        // 4: Alice adds Dave (merges states 2 & 3)
+        let (alice_group, op_add_dave) = add_member(alice_group, group_id, dave, Access::Manage);
+
+        // New member Dave syncs state
+        let dave_group = sync(
+            dave_group,
+            &[
+                op_remove_bob.clone(),
+                op_add_claire.clone(),
+                op_add_dave.clone(),
+            ],
+        );
+
+        // 5: Dave adds Eve (depends on 4)
+        let (dave_group, op_add_eve) = add_member(dave_group, group_id, eve, Access::Read);
+
+        let alice_group = sync(alice_group, &[op_add_eve.clone()]);
+
+        // 6: Alice adds Frank (concurrent with 8)
+        let (_alice_group, op_add_frank) = add_member(alice_group, group_id, frank, Access::Pull);
+
+        let frank_group = sync(
+            frank_group,
+            &[
+                op_remove_bob.clone(),
+                op_add_claire.clone(),
+                op_add_dave.clone(),
+                op_add_eve.clone(),
+                op_add_frank.clone(),
+            ],
+        );
+
+        // 7: Frank adds Grace (concurrent with 8)
+        let (_, op_add_grace) = add_member(frank_group, group_id, grace, Access::Read);
+
+        // 8: Dave removes Alice (concurrently with 6 & 7)
+        let (dave_group, _op_remove_alice) = remove_member(dave_group, group_id, alice);
+
+        let dave_group = sync(dave_group, &[op_add_frank.clone(), op_add_grace.clone()]);
+
+        let expected_members = vec![
+            (GroupMember::Individual(dave), Access::Manage),
+            (GroupMember::Individual(eve), Access::Read),
+        ];
+
+        let mut dave_members = dave_group.members();
+        dave_members.sort();
+        assert_eq!(expected_members, dave_members);
     }
 }
