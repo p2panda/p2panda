@@ -10,13 +10,13 @@ use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
 
 use super::{
-    Conditions, GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore,
-    TestOperation, TestOrderer, TestOrdererState,
+    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation,
+    TestOrderer, TestOrdererState,
 };
 
 pub struct Network {
     members: HashMap<MemberId, NetworkMember>,
-    queue: VecDeque<TestOperation<MemberId, MessageId, Conditions>>,
+    queue: VecDeque<TestOperation>,
     rng: StdRng,
 }
 
@@ -188,11 +188,7 @@ impl Network {
         }
     }
 
-    fn member_process(
-        &mut self,
-        member_id: &MemberId,
-        operation: &TestOperation<MemberId, MessageId, Conditions>,
-    ) {
+    fn member_process(&mut self, member_id: &MemberId, operation: &TestOperation) {
         // Do not process our own messages.
         if &operation.author() == member_id {
             return;

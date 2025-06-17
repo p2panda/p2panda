@@ -270,7 +270,7 @@ mod tests {
     use rand::rngs::StdRng;
 
     use crate::group::test_utils::{
-        Network, TestGroup, TestGroupState, TestGroupStore, TestOrdererState,
+        Network, TestGroup, TestGroupState, TestGroupStore, TestOperation, TestOrdererState,
     };
     use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
     use crate::traits::{AuthGroup, OperationId};
@@ -538,24 +538,98 @@ mod tests {
         assert_eq!(claire_filter.len(), 1);
     }
 
+    fn from_create(
+        group_id: char,
+        actor_id: char,
+        op_create: &TestOperation,
+        rng: &mut StdRng,
+    ) -> TestGroupState {
+        let store = TestGroupStore::default();
+        let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
+        let group = TestGroupState::new(group_id, actor_id, store, orderer);
+        TestGroup::process(group, op_create).unwrap()
+    }
+
+    fn create_group(
+        group_id: char,
+        actor_id: char,
+        members: Vec<(char, Access<()>)>,
+        rng: &mut StdRng,
+    ) -> (TestGroupState, TestOperation) {
+        let store = TestGroupStore::default();
+        let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
+        let group = TestGroupState::new(group_id, actor_id, store, orderer);
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Create {
+                initial_members: members
+                    .into_iter()
+                    .map(|(id, access)| (GroupMember::Individual(id), access))
+                    .collect(),
+            },
+        };
+        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+        let group = TestGroup::process(group, &op).unwrap();
+        (group, op)
+    }
+
+    fn add_member(
+        group: TestGroupState,
+        group_id: char,
+        member: char,
+        access: Access<()>,
+    ) -> (TestGroupState, TestOperation) {
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(member),
+                access,
+            },
+        };
+        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+        let group = TestGroup::process(group, &op).unwrap();
+        (group, op)
+    }
+
+    fn remove_member(
+        group: TestGroupState,
+        group_id: char,
+        member: char,
+    ) -> (TestGroupState, TestOperation) {
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(member),
+            },
+        };
+        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+        let group = TestGroup::process(group, &op).unwrap();
+        (group, op)
+    }
+
+    fn sync(group: TestGroupState, ops: &[TestOperation]) -> TestGroupState {
+        ops.iter()
+            .fold(group, |g, op| TestGroup::process(g, op).unwrap())
+    }
+
+    fn assert_members(group: &TestGroupState, expected: &[(GroupMember<char>, Access<()>)]) {
+        let mut actual = group.members();
+        let mut expected = expected.to_vec();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn remove_dependencies_filter() {
+        // Tree structure:
         //       1
         //     /   \
         //    2     3
         //           \
         //            4
-        //
-        // Node 1: create the group with Alice and Bob as managers
-        // Node 2: Alice removes Bob
-        // Node 3: Bob adds Claire
-        // Node 4: Claire adds Dave
-        //
-        // We expect the addition of Claire (node C) and Dave (node D) to be filtered.
-        // Alice should be the only member of the group after processing.
 
-        let group = '1';
-
+        let group_id = '1';
         let alice = 'A';
         let bob = 'B';
         let claire = 'C';
@@ -563,136 +637,88 @@ mod tests {
 
         let mut rng = StdRng::from_os_rng();
 
-        let alice_store = TestGroupStore::default();
-        let alice_orderer_y =
-            TestOrdererState::new(alice, alice_store.clone(), StdRng::from_rng(&mut rng));
-        let alice_group_y = TestGroupState::new(group, alice, alice_store, alice_orderer_y);
+        // Create initial group with Alice and Bob
+        let (alice_group, op_create) = create_group(
+            group_id,
+            alice,
+            vec![(alice, Access::Manage), (bob, Access::Manage)],
+            &mut rng,
+        );
 
-        let bob_store = TestGroupStore::default();
-        let bob_orderer_y =
-            TestOrdererState::new(bob, bob_store.clone(), StdRng::from_rng(&mut rng));
-        let bob_group_y = TestGroupState::new(group, bob, bob_store, bob_orderer_y);
+        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
+        let claire_group = from_create(group_id, claire, &op_create, &mut rng);
 
-        let claire_store = TestGroupStore::default();
-        let claire_orderer_y =
-            TestOrdererState::new(claire, claire_store.clone(), StdRng::from_rng(&mut rng));
-        let claire_group_y = TestGroupState::new(group, claire, claire_store, claire_orderer_y);
+        assert_members(
+            &alice_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+            ],
+        );
 
-        // Create group with alice and bob as initial admin members.
-        let control_message_001 = GroupControlMessage::GroupAction {
-            group_id: group,
-            action: GroupAction::Create {
-                initial_members: vec![
-                    (GroupMember::Individual(alice), Access::Manage),
-                    (GroupMember::Individual(bob), Access::Manage),
-                ],
-            },
-        };
-        let (alice_group_y, operation_001) =
-            TestGroup::prepare(alice_group_y, &control_message_001).unwrap();
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_001).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_001).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_001).unwrap();
+        // Alice removes Bob
+        let (alice_group, op_remove_bob) = remove_member(alice_group, group_id, bob);
 
-        let mut members = alice_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
+        assert_members(
+            &alice_group,
+            &[(GroupMember::Individual(alice), Access::Manage)],
+        );
 
-        // Alice removes Bob.
-        let control_message_002 = GroupControlMessage::GroupAction {
-            group_id: group,
-            action: GroupAction::Remove {
-                member: GroupMember::Individual(bob),
-            },
-        };
+        // Bob (in his own branch) adds Claire
+        let (bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::Manage);
+        let claire_group = sync(claire_group, &[op_add_claire.clone()]);
 
-        let (alice_group_y, operation_002) =
-            TestGroup::prepare(alice_group_y, &control_message_002).unwrap();
-        // Only Alice processes this operation.
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_002).unwrap();
+        assert_members(
+            &bob_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
 
-        let mut members = alice_group_y.members();
-        members.sort();
+        // Claire adds Dave
+        let (claire_group, op_add_dave) = add_member(claire_group, group_id, dave, Access::Read);
+        let bob_group = sync(bob_group, &[op_add_dave.clone()]);
+
+        assert_members(
+            &bob_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(dave), Access::Read),
+            ],
+        );
+
+        // Merge branches: everyone sees each other's operations
+        let alice_group = sync(alice_group, &[op_add_claire.clone(), op_add_dave.clone()]);
+        let bob_group = sync(bob_group, &[op_remove_bob.clone()]);
+        let claire_group = sync(claire_group, &[op_remove_bob.clone()]);
+
         let expected_members = vec![(GroupMember::Individual(alice), Access::Manage)];
-        assert_eq!(members, expected_members);
 
-        // Bob adds claire with manage access.
-        let control_message_003 = GroupControlMessage::GroupAction {
-            group_id: group,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(claire),
-                access: Access::Manage,
-            },
-        };
-        let (bob_group_y, operation_003) =
-            TestGroup::prepare(bob_group_y, &control_message_003).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_003).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_003).unwrap();
-
-        let mut members = bob_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
-
-        // Claire adds Dave with read access.
-        let control_message_004 = GroupControlMessage::GroupAction {
-            group_id: group,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(dave),
-                access: Access::Read,
-            },
-        };
-        let (claire_group_y, operation_004) =
-            TestGroup::prepare(claire_group_y, &control_message_004).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_004).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_004).unwrap();
-
-        let mut members = bob_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-            (GroupMember::Individual(dave), Access::Read),
-        ];
-        assert_eq!(members, expected_members);
-
-        // Now everyone processes the operations from the concurrent branch.
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_004).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_002).unwrap();
-
-        assert_eq!(alice_group_y.members(), bob_group_y.members());
-        assert_eq!(alice_group_y.members(), claire_group_y.members());
+        assert_members(&alice_group, &expected_members);
+        assert_members(&bob_group, &expected_members);
+        assert_members(&claire_group, &expected_members);
     }
-
     #[test]
     fn remove_readd_dependencies_filter() {
-        //       A
+        //       1
         //     /   \
-        //    B     D
+        //    2     4
         //   /
-        //  C
+        //  3
         //
-        // Node A: create the group with Alice, Bob and Claire as managers
-        // Node B: Alice removes Bob
-        // Node C: Alice re-adds Bob
+        // Node 1: create the group with Alice, Bob and Claire as managers
+        // Node 2: Alice removes Bob
+        // Node 3: Alice re-adds Bob
         // Node D: Bob adds Dave
         //
         // We expect the filter to be empty.
         // Alice, Bob, Claire and Dave should all be members of the group after processing.
 
-        let group_id = '1';
-
+        let group_id = 'G';
         let alice = 'A';
         let bob = 'B';
         let claire = 'C';
@@ -700,137 +726,80 @@ mod tests {
 
         let mut rng = StdRng::from_os_rng();
 
-        let alice_store = TestGroupStore::default();
-        let alice_orderer_y =
-            TestOrdererState::new(alice, alice_store.clone(), StdRng::from_rng(&mut rng));
-        let alice_group_y = TestGroupState::new(group_id, alice, alice_store, alice_orderer_y);
-
-        let bob_store = TestGroupStore::default();
-        let bob_orderer_y =
-            TestOrdererState::new(bob, bob_store.clone(), StdRng::from_rng(&mut rng));
-        let bob_group_y = TestGroupState::new(group_id, bob, bob_store, bob_orderer_y);
-
-        let claire_store = TestGroupStore::default();
-        let claire_orderer_y =
-            TestOrdererState::new(claire, claire_store.clone(), StdRng::from_rng(&mut rng));
-        let claire_group_y = TestGroupState::new(group_id, claire, claire_store, claire_orderer_y);
-
-        // A: Create group with alice, bob and claire as initial admin members.
-        let control_message_001 = GroupControlMessage::GroupAction {
+        // 1: Alice creates group with Alice, Bob, Claire
+        let (alice_group, op_create) = create_group(
             group_id,
-            action: GroupAction::Create {
-                initial_members: vec![
-                    (GroupMember::Individual(alice), Access::Manage),
-                    (GroupMember::Individual(bob), Access::Manage),
-                    (GroupMember::Individual(claire), Access::Manage),
-                ],
-            },
-        };
-        let (alice_group_y, operation_001) =
-            TestGroup::prepare(alice_group_y, &control_message_001).unwrap();
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_001).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_001).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_001).unwrap();
+            alice,
+            vec![
+                (alice, Access::Manage),
+                (bob, Access::Manage),
+                (claire, Access::Manage),
+            ],
+            &mut rng,
+        );
 
-        let mut members = alice_group_y.members();
-        members.sort();
-        let expected_members = vec![
+        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
+        let claire_group = from_create(group_id, claire, &op_create, &mut rng);
+
+        assert_members(
+            &alice_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // 2: Alice removes Bob
+        let (alice_group, op_remove_bob) = remove_member(alice_group, group_id, bob);
+
+        assert_members(
+            &alice_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // 3: Alice re-adds Bob
+        let (alice_group, op_readd_bob) = add_member(alice_group, group_id, bob, Access::Manage);
+
+        assert_members(
+            &alice_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+            ],
+        );
+
+        // 4: Bob adds Dave
+        let (bob_group, op_add_dave) = add_member(bob_group, group_id, dave, Access::Read);
+        let claire_group = sync(claire_group, &[op_add_dave.clone()]);
+
+        assert_members(
+            &bob_group,
+            &[
+                (GroupMember::Individual(alice), Access::Manage),
+                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(dave), Access::Read),
+            ],
+        );
+
+        // Everyone processes the concurrent operations
+        let _ = sync(alice_group, &[op_add_dave.clone()]);
+        let bob_group = sync(bob_group, &[op_remove_bob.clone(), op_readd_bob.clone()]);
+        let claire_group = sync(claire_group, &[op_remove_bob, op_readd_bob]);
+
+        // Final assertions: All 4 members should be present
+        let expected = vec![
             (GroupMember::Individual(alice), Access::Manage),
             (GroupMember::Individual(bob), Access::Manage),
             (GroupMember::Individual(claire), Access::Manage),
         ];
-        assert_eq!(members, expected_members);
 
-        // B: Alice removes Bob.
-        let control_message_002 = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Remove {
-                member: GroupMember::Individual(bob),
-            },
-        };
-
-        let (alice_group_y, operation_002) =
-            TestGroup::prepare(alice_group_y, &control_message_002).unwrap();
-        // Only Alice processes this operation.
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_002).unwrap();
-
-        let mut members = alice_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
-
-        // C: Alice re-adds Bob.
-        let control_message_003 = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(bob),
-                access: Access::Manage,
-            },
-        };
-
-        let (alice_group_y, operation_003) =
-            TestGroup::prepare(alice_group_y, &control_message_003).unwrap();
-        // Only Alice processes this operation.
-        let alice_group_y = TestGroup::process(alice_group_y, &operation_003).unwrap();
-
-        let mut members = alice_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
-
-        // D: Bob adds Dave with read access.
-        let control_message_004 = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(dave),
-                access: Access::Read,
-            },
-        };
-        let (bob_group_y, operation_004) =
-            TestGroup::prepare(bob_group_y, &control_message_004).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_004).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_004).unwrap();
-
-        let mut members = bob_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-            (GroupMember::Individual(dave), Access::Read),
-        ];
-        assert_eq!(members, expected_members);
-
-        // Now everyone processes the operations from the concurrent branch.
-        TestGroup::process(alice_group_y, &operation_004).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_002).unwrap();
-        let bob_group_y = TestGroup::process(bob_group_y, &operation_003).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_002).unwrap();
-        let claire_group_y = TestGroup::process(claire_group_y, &operation_003).unwrap();
-
-        let mut members = claire_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
-
-        let mut members = bob_group_y.members();
-        members.sort();
-        let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-        ];
-        assert_eq!(members, expected_members);
+        assert_members(&claire_group, &expected);
+        assert_members(&bob_group, &expected);
     }
 }

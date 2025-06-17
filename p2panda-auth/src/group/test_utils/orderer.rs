@@ -30,7 +30,7 @@ pub struct TestOrdererStateInner {
     pub my_id: MemberId,
     pub group_store: TestGroupStore,
     pub orderer_y: PartialOrdererState<MessageId>,
-    pub messages: HashMap<MessageId, TestOperation<MemberId, MessageId, Conditions>>,
+    pub messages: HashMap<MessageId, TestOperation>,
     pub rng: StdRng,
 }
 
@@ -63,7 +63,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 
     type Error = OrdererError;
 
-    type Message = TestOperation<MemberId, MessageId, Conditions>;
+    type Message = TestOperation;
 
     /// Construct the next operation which should include meta-data required for establishing order
     /// between different operations.
@@ -220,37 +220,32 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 }
 
 #[derive(Clone, Debug)]
-pub struct TestOperation<ID, OP, C> {
-    pub id: OP,
-    pub author: ID,
-    pub dependencies: Vec<OP>,
-    pub previous: Vec<OP>,
-    pub payload: GroupControlMessage<ID, OP, C>,
+pub struct TestOperation {
+    pub id: u32,
+    pub author: char,
+    pub dependencies: Vec<u32>,
+    pub previous: Vec<u32>,
+    pub payload: GroupControlMessage<char, u32, ()>,
 }
 
-impl<ID, OP, C> Operation<ID, OP, GroupControlMessage<ID, OP, C>> for TestOperation<ID, OP, C>
-where
-    ID: Copy,
-    OP: Copy,
-    C: Clone + Debug + PartialEq + PartialOrd,
-{
-    fn id(&self) -> OP {
+impl Operation<char, u32, GroupControlMessage<char, u32, ()>> for TestOperation {
+    fn id(&self) -> u32 {
         self.id
     }
 
-    fn author(&self) -> ID {
+    fn author(&self) -> char {
         self.author
     }
 
-    fn dependencies(&self) -> Vec<OP> {
+    fn dependencies(&self) -> Vec<u32> {
         self.dependencies.clone()
     }
 
-    fn previous(&self) -> Vec<OP> {
+    fn previous(&self) -> Vec<u32> {
         self.previous.clone()
     }
 
-    fn payload(&self) -> GroupControlMessage<ID, OP, C> {
+    fn payload(&self) -> GroupControlMessage<char, u32, ()> {
         self.payload.clone()
     }
 }
