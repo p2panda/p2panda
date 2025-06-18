@@ -310,11 +310,11 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     access: Access<C>,
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&promoted) {
-        let new_state = match member.access {
-            Access::Pull => modify(state, promoter, promoted, access)?,
-            Access::Read => modify(state, promoter, promoted, access)?,
-            Access::Write { .. } => modify(state, promoter, promoted, access)?,
-            Access::Manage => state,
+        // No action is required if the member is already set to the highest access level.
+        let new_state = if member.is_manager() {
+            state
+        } else {
+            modify(state, promoter, promoted, access)?
         };
 
         Ok(new_state)
@@ -323,7 +323,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     }
 }
 
-/// Demote a group member by a single access level.
+/// Demote a group member to the given access level.
 ///
 /// No modification will occur if the demoted member already has `Pull` access. In that case, the
 /// given state is returned unchanged.
@@ -336,14 +336,14 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     demoter: ID,
     demoted: ID,
-    conditions: Option<C>,
+    access: Access<C>,
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&demoted) {
-        let new_state = match member.access {
-            Access::Pull => state,
-            Access::Read => modify(state, demoter, demoted, Access::Pull)?,
-            Access::Write { .. } => modify(state, demoter, demoted, Access::Read)?,
-            Access::Manage => modify(state, demoter, demoted, Access::Write { conditions })?,
+        // No action is required if the member is already set to the lowest access level.
+        let new_state = if member.is_puller() {
+            state
+        } else {
+            modify(state, demoter, demoted, access)?
         };
 
         Ok(new_state)
@@ -478,7 +478,7 @@ mod tests {
         assert!(bob_state.is_writer());
 
         // Alice demotes Bob to Read access.
-        let group_y = demote(group_y.clone(), alice, bob, None).unwrap();
+        let group_y = demote(group_y.clone(), alice, bob, Access::Read).unwrap();
 
         // Alice promotes Bob to Manage access.
         let group_y = modify(group_y, alice, bob, AccessLevel::Manage).unwrap();
@@ -711,7 +711,7 @@ mod tests {
         let group_y = create(&initial_members);
 
         // Daphne demotes Charlie...
-        let result = demote(group_y.clone(), daphne, charlie, None);
+        let result = demote(group_y.clone(), daphne, charlie, Access::Pull);
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -720,7 +720,7 @@ mod tests {
         ));
 
         // Bob demotes Charlie...
-        let result = demote(group_y.clone(), bob, charlie, None);
+        let result = demote(group_y.clone(), bob, charlie, Access::Pull);
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -729,7 +729,7 @@ mod tests {
         ));
 
         // Alice demotes Daphne...
-        let result = demote(group_y.clone(), alice, daphne, None);
+        let result = demote(group_y.clone(), alice, daphne, Access::Read);
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -741,7 +741,7 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice demotes Charlie...
-        let result = demote(group_y.clone(), alice, charlie, None);
+        let result = demote(group_y.clone(), alice, charlie, Access::Pull);
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -750,7 +750,7 @@ mod tests {
         ));
 
         // Charlie demotes Bob...
-        let result = demote(group_y, charlie, bob, None);
+        let result = demote(group_y, charlie, bob, Access::Pull);
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -852,7 +852,7 @@ mod tests {
         let group_y_ii = promote(group_y_i.clone(), alice, charlie, Access::Read).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, None).unwrap();
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::Pull).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i, group_y_ii);
@@ -891,19 +891,13 @@ mod tests {
         let group_y_i = promote(group_y.clone(), alice, charlie, Access::Read).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_i = demote(group_y_i.clone(), alice, charlie, None).unwrap();
+        let group_y_i = demote(group_y_i.clone(), alice, charlie, Access::Pull).unwrap();
 
         // Alice promotes Charlie.
         let group_y_ii = modify(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_ii = demote(
-            group_y_ii.clone(),
-            alice,
-            charlie,
-            Some("requirement".to_string()),
-        )
-        .unwrap();
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::Read).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i.clone(), group_y_ii.clone());
