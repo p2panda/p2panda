@@ -712,15 +712,11 @@ where
                 GroupAction::Remove { member, .. } => {
                     state::remove(members_y.clone(), member_id, member)
                 }
-                GroupAction::Promote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::promote(members_y.clone(), member_id, member, None)
+                GroupAction::Promote { member, access } => {
+                    state::promote(members_y.clone(), member_id, member, access)
                 }
-                GroupAction::Demote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::demote(members_y.clone(), member_id, member, None)
+                GroupAction::Demote { member, access } => {
+                    state::demote(members_y.clone(), member_id, member, access)
                 }
                 GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
             };
