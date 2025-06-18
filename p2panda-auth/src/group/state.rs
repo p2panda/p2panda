@@ -294,7 +294,7 @@ pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     Ok(state)
 }
 
-/// Promote a group member by a single access level.
+/// Promote a group member to the given access level.
 ///
 /// No modification will occur if the promoted member already has `Manage` access. In that case, the
 /// given state is returned unchanged.
@@ -307,13 +307,13 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     promoter: ID,
     promoted: ID,
-    conditions: Option<C>,
+    access: Access<C>,
 ) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     if let Some(member) = state.members.get(&promoted) {
         let new_state = match member.access {
-            Access::Pull => modify(state, promoter, promoted, Access::Read)?,
-            Access::Read => modify(state, promoter, promoted, Access::Write { conditions })?,
-            Access::Write { .. } => modify(state, promoter, promoted, Access::Manage)?,
+            Access::Pull => modify(state, promoter, promoted, access)?,
+            Access::Read => modify(state, promoter, promoted, access)?,
+            Access::Write { .. } => modify(state, promoter, promoted, access)?,
             Access::Manage => state,
         };
 
@@ -462,7 +462,15 @@ mod tests {
         let group_y = create(&initial_members);
 
         // Alice promotes Bob to Write access.
-        let group_y = promote(group_y, alice, bob, Some("requirement".to_string())).unwrap();
+        let group_y = promote(
+            group_y,
+            alice,
+            bob,
+            AccessLevel::Write {
+                conditions: Some("requirement".to_string()),
+            },
+        )
+        .unwrap();
 
         let group_y_clone = group_y.clone();
 
@@ -627,7 +635,7 @@ mod tests {
         let group_y = create(&initial_members);
 
         // Daphne promotes Charlie...
-        let result = promote(group_y.clone(), daphne, charlie, None);
+        let result = promote(group_y.clone(), daphne, charlie, Access::Manage);
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -636,7 +644,14 @@ mod tests {
         ));
 
         // Bob promotes Charlie...
-        let result = promote(group_y.clone(), bob, charlie, None);
+        let result = promote(
+            group_y.clone(),
+            bob,
+            charlie,
+            AccessLevel::Write {
+                conditions: Some("paw".to_string()),
+            },
+        );
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -645,7 +660,7 @@ mod tests {
         ));
 
         // Alice promotes Daphne...
-        let result = promote(group_y.clone(), alice, daphne, None);
+        let result = promote(group_y.clone(), alice, daphne, AccessLevel::Read);
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -657,7 +672,7 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice promotes Charlie...
-        let result = promote(group_y.clone(), alice, charlie, None);
+        let result = promote(group_y.clone(), alice, charlie, Access::Pull);
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -666,7 +681,7 @@ mod tests {
         ));
 
         // Charlie promotes Bob...
-        let result = promote(group_y, charlie, bob, None);
+        let result = promote(group_y, charlie, bob, Access::Manage);
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -834,7 +849,7 @@ mod tests {
         let group_y_i = create(&initial_members);
 
         // Alice promotes Charlie.
-        let group_y_ii = promote(group_y_i.clone(), alice, charlie, None).unwrap();
+        let group_y_ii = promote(group_y_i.clone(), alice, charlie, Access::Read).unwrap();
 
         // Alice demotes Charlie.
         let group_y_ii = demote(group_y_ii.clone(), alice, charlie, None).unwrap();
@@ -873,7 +888,7 @@ mod tests {
         let group_y = create(&initial_members);
 
         // Alice promotes Charlie.
-        let group_y_i = promote(group_y.clone(), alice, charlie, None).unwrap();
+        let group_y_i = promote(group_y.clone(), alice, charlie, Access::Read).unwrap();
 
         // Alice demotes Charlie.
         let group_y_i = demote(group_y_i.clone(), alice, charlie, None).unwrap();
