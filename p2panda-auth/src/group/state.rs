@@ -327,7 +327,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     }
 }
 
-/// Demote a group member to the given level.
+/// Demote a group member to the given access level.
 ///
 /// The actor performing the demotion must be an active member of the group with manager access.
 /// The demoted identity must also be an active member of the group. Failure to meet these
@@ -899,16 +899,8 @@ mod tests {
         // Alice promotes Charlie to Manage access.
         let group_y_ii = modify(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
 
-        // Alice demotes Charlie to Write access.
-        let group_y_ii = demote(
-            group_y_ii.clone(),
-            alice,
-            charlie,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
-        )
-        .unwrap();
+        // Alice demotes Charlie to Read access.
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, AccessLevel::Read).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i.clone(), group_y_ii.clone());
