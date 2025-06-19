@@ -238,8 +238,7 @@ impl Network {
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
-            .members_at(&previous.clone().into_iter().collect::<HashSet<_>>())
-            .unwrap();
+            .members_at(&previous.clone().into_iter().collect::<HashSet<_>>());
         members.sort();
         members
     }

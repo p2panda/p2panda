@@ -239,7 +239,7 @@ where
         // admin access but now doesn't.
         let was_manager = self
             .transitive_members_at(&HashSet::from_iter(operation.dependencies()))
-            .expect("state exists for all operations")
+            .expect("get transitive members")
             .contains(&(removed_or_demoted_member.id(), Access::Manage));
 
         if was_manager {

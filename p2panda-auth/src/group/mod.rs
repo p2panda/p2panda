@@ -246,12 +246,8 @@ where
         current_state
     }
 
-    fn state_at_inner(
-        &self,
-        dependencies: &mut HashSet<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>, C>, GroupError<ID, OP, C, RS, ORD, GS>> {
+    fn state_at_inner(&self, dependencies: &HashSet<OP>) -> GroupMembersState<GroupMember<ID>, C> {
         let mut y = GroupMembersState::default();
-        let mut visited = HashSet::new();
         for id in dependencies.iter() {
             let Some(previous_y) = self.states.get(id) else {
                 // We might be in a sub-group here processing dependencies which don't exist in
@@ -260,40 +256,21 @@ where
             };
             // Merge all dependency states from this group together.
             y = state::merge(previous_y.clone(), y);
-            visited.insert(*id);
         }
 
-        // remove all visited states from the dependencies set.
-        for id in visited {
-            dependencies.remove(&id);
-        }
-
-        Ok(y)
+        y
     }
 
     /// Get the state of a group at a certain point in it's history.
-    pub fn state_at(
-        &self,
-        dependencies: &HashSet<OP>,
-    ) -> Result<GroupMembersState<GroupMember<ID>, C>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut dependencies = dependencies.clone();
-        let state = self.state_at_inner(&mut dependencies)?;
-
-        if !dependencies.is_empty() {
-            return Err(GroupError::StatesNotFound(
-                dependencies.into_iter().collect::<Vec<_>>(),
-                self.id(),
-            ));
-        }
-
-        Ok(state)
+    pub fn state_at(&self, dependencies: &HashSet<OP>) -> GroupMembersState<GroupMember<ID>, C> {
+        self.state_at_inner(dependencies)
     }
 
     fn members_at_inner(
         &self,
-        dependencies: &mut HashSet<OP>,
-    ) -> Result<Vec<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let y = self.state_at_inner(dependencies)?;
+        dependencies: &HashSet<OP>,
+    ) -> Vec<(GroupMember<ID>, Access<C>)> {
+        let y = self.state_at_inner(dependencies);
         let members = y
             .members
             .into_iter()
@@ -306,35 +283,25 @@ where
             })
             .collect::<Vec<_>>();
 
-        Ok(members)
+        members
     }
 
     /// Get the group members at a certain point in groups history.
     pub fn members_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> Result<Vec<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut dependencies = dependencies.clone();
-        let members = self.members_at_inner(&mut dependencies)?;
-
-        if !dependencies.is_empty() {
-            return Err(GroupError::DependenciesNotFound(
-                dependencies.into_iter().collect::<Vec<_>>(),
-                self.id(),
-            ));
-        }
-
-        Ok(members)
+    ) -> Vec<(GroupMember<ID>, Access<C>)> {
+        self.members_at_inner(dependencies)
     }
 
     fn transitive_members_at_inner(
         &self,
-        dependencies: &mut HashSet<OP>,
+        dependencies: &HashSet<OP>,
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut members: HashMap<ID, Access<C>> = HashMap::new();
 
         // Get members of a group at a certain point in the groups history.
-        for (member, root_access) in self.members_at_inner(dependencies)? {
+        for (member, root_access) in self.members_at_inner(dependencies) {
             match member {
                 GroupMember::Individual(id) => {
                     // If this is an individual member, then add them straight to the members map.
@@ -392,16 +359,7 @@ where
         &self,
         dependencies: &HashSet<OP>,
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut dependencies = dependencies.clone();
-        let members = self.transitive_members_at_inner(&mut dependencies)?;
-
-        if !dependencies.is_empty() {
-            return Err(GroupError::DependenciesNotFound(
-                dependencies.into_iter().collect::<Vec<_>>(),
-                self.id(),
-            ));
-        }
-
+        let members = self.transitive_members_at_inner(&dependencies)?;
         Ok(members)
     }
 
@@ -663,7 +621,7 @@ where
         let members_y = if previous.is_empty() {
             GroupMembersState::default()
         } else {
-            y.state_at(previous).expect("all previous states exist")
+            y.state_at(previous)
         };
 
         // Only add the resulting member's state to the states map if the operation isn't
