@@ -613,15 +613,15 @@ where
         mut y: GroupState<ID, OP, C, RS, ORD, GS>,
         id: OP,
         actor: GroupMember<ID>,
-        previous: &HashSet<OP>,
+        dependencies: &HashSet<OP>,
         action: &GroupAction<ID, C>,
     ) -> StateChangeResult<ID, OP, C, RS, ORD, GS> {
-        // Compute the member's state by applying the new operation to it's claimed "previous"
+        // Compute the member's state by applying the new operation to it's claimed "dependencies"
         // state.
-        let members_y = if previous.is_empty() {
+        let members_y = if dependencies.is_empty() {
             GroupMembersState::default()
         } else {
-            y.state_at(previous)
+            y.state_at(dependencies)
         };
 
         // Only add the resulting member's state to the states map if the operation isn't
@@ -691,7 +691,7 @@ where
             let operation_id = operation.id();
             let control_message = operation.payload();
             let group_id = control_message.group_id();
-            let previous_operations = HashSet::from_iter(operation.previous().clone());
+            let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
             // Sanity check: we should only apply operations for this group.
             assert_eq!(y_i.group_id, group_id);
@@ -711,7 +711,7 @@ where
                         y_i,
                         operation_id,
                         GroupMember::Individual(actor),
-                        &previous_operations,
+                        &dependencies,
                         &action,
                     ) {
                         StateChangeResult::Ok { state } => state,
