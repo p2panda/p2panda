@@ -14,7 +14,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Clone + Debug + PartialEq + PartialOrd + Ord,
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
@@ -25,6 +25,8 @@ where
     pub fn display(&self) -> String {
         let mut graph = DiGraph::new();
         graph = self.add_nodes_and_previous_edges(self.clone(), graph);
+
+        graph.add_node((None, self.format_final_members()));
 
         let dag_graphviz = Dot::with_attr_getters(
             &graph,
@@ -173,6 +175,21 @@ where
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
             self.format_members(operation)
         );
+        s += "</TABLE>>";
+        s
+    }
+
+    fn format_final_members(&self) -> String {
+        let mut s = String::new();
+        s += &format!(
+            "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">");
+
+        let mut members = self.transitive_members().unwrap();
+        members.sort();
+        s += "<TR><TD>GROUP MEMBERS</TD></TR>";
+        for (id, access) in members {
+            s += &format!("<TR><TD> {} : {} </TD></TR>", id, access);
+        }
         s += "</TABLE>>";
         s
     }
