@@ -169,7 +169,7 @@ impl Network {
             for id in &member_ids {
                 // Shuffle messages in the queue for each member.
                 self.shuffle();
-                self.member_process(&id, &operation)
+                self.member_process(id, &operation)
             }
         }
     }
@@ -183,7 +183,7 @@ impl Network {
 
         while let Some(operation) = self.queue.pop_front() {
             for id in &member_ids {
-                self.member_process(&id, &operation)
+                self.member_process(id, &operation)
             }
         }
     }
@@ -197,7 +197,7 @@ impl Network {
         let control_message = operation.payload();
         let mut group_id = control_message.group_id();
         let mut y = self.get_y(member_id, &group_id);
-        let orderer_y = TestOrderer::queue(y.orderer_y.clone(), &operation).unwrap();
+        let orderer_y = TestOrderer::queue(y.orderer_y.clone(), operation).unwrap();
 
         loop {
             let (orderer_y, result) = TestOrderer::next_ready_message(orderer_y.clone()).unwrap();
@@ -234,10 +234,10 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        previous: &Vec<MessageId>,
+        dependencies: &[MessageId],
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
-        let mut members = group_y.members_at(&previous.clone().into_iter().collect::<HashSet<_>>());
+        let mut members = group_y.members_at(&dependencies.iter().copied().collect::<HashSet<_>>());
         members.sort();
         members
     }
@@ -259,11 +259,11 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        dependencies: &Vec<MessageId>,
+        dependencies: &[MessageId],
     ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
-            .transitive_members_at(&dependencies.clone().into_iter().collect::<HashSet<_>>())
+            .transitive_members_at(&dependencies.iter().copied().collect::<HashSet<_>>())
             .expect("get transitive members");
         members.sort();
         members

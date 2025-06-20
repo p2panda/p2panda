@@ -181,9 +181,7 @@ where
 
     fn format_final_members(&self) -> String {
         let mut s = String::new();
-        s += &format!(
-            "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">"
-        );
+        s += "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">";
 
         let mut members = self.transitive_members().unwrap();
         members.sort();
