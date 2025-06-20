@@ -574,7 +574,7 @@ where
     ORD::Message: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    /// Action was applied an no error occured.
+    /// Action was applied an no error occurred.
     Ok {
         state: GroupState<ID, OP, C, RS, ORD, GS>,
     },
@@ -648,12 +648,12 @@ where
                     // 1) We expect some errors to occur when when intentionally filtered out
                     //    actions cause later operations to become invalid.
                     //
-                    // 2) Operations arriving from the network which are invalid due to buggy
-                    //    implementations or malicious behavior.
+                    // 2) Operations which other peers accepted into their graph _before_
+                    //    receiving some concurrent operation which caused them to be invalid.
                     //
                     // In both cases it's critical that the action does not cause any state
-                    // change. In the later, we also want to inform networking layers that a peer
-                    // in the group is behaving suspiciously.
+                    // change, however we do want to accept them into our graph so as to ensure
+                    // consistency consistency across peers.
                     y.states.insert(id, members_y);
                     return StateChangeResult::Noop {
                         state: y,
