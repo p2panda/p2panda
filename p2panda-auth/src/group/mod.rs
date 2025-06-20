@@ -10,7 +10,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use thiserror::Error;
 
-pub use crate::group::resolver::{StrongRemove, GroupResolverError};
+pub use crate::group::resolver::{GroupResolverError, StrongRemove};
 pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
@@ -266,13 +266,9 @@ where
         self.state_at_inner(dependencies)
     }
 
-    fn members_at_inner(
-        &self,
-        dependencies: &HashSet<OP>,
-    ) -> Vec<(GroupMember<ID>, Access<C>)> {
+    fn members_at_inner(&self, dependencies: &HashSet<OP>) -> Vec<(GroupMember<ID>, Access<C>)> {
         let y = self.state_at_inner(dependencies);
-        let members = y
-            .members
+        y.members
             .into_iter()
             .filter_map(|(id, state)| {
                 if state.is_member() {
@@ -281,16 +277,11 @@ where
                     None
                 }
             })
-            .collect::<Vec<_>>();
-
-        members
+            .collect::<Vec<_>>()
     }
 
     /// Get the group members at a certain point in groups history.
-    pub fn members_at(
-        &self,
-        dependencies: &HashSet<OP>,
-    ) -> Vec<(GroupMember<ID>, Access<C>)> {
+    pub fn members_at(&self, dependencies: &HashSet<OP>) -> Vec<(GroupMember<ID>, Access<C>)> {
         self.members_at_inner(dependencies)
     }
 
@@ -359,7 +350,7 @@ where
         &self,
         dependencies: &HashSet<OP>,
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let members = self.transitive_members_at_inner(&dependencies)?;
+        let members = self.transitive_members_at_inner(dependencies)?;
         Ok(members)
     }
 

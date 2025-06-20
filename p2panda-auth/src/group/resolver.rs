@@ -32,7 +32,7 @@ where
 }
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
-/// 
+///
 /// Concurrent operations are identified and processed, any which should be invalidated are
 /// added to the operation filter and not applied to the group state. Once an operation has
 /// been filtered, any operations which depended on any resulting state will not be applied to
@@ -131,7 +131,7 @@ where
         // from the filter later.
         let mut mutual_removes = HashSet::new();
 
-        // Get all bubbles of concurrency. 
+        // Get all bubbles of concurrency.
         //
         // A concurrency bubble is a set of operations from the group graph which share some
         // concurrency. Multiple bubbles can occur in the same graph.
@@ -141,7 +141,7 @@ where
         let mut dfs = DfsPostOrder::new(&y.graph, root);
         let mut visited = HashSet::new();
 
-        // Traverse the graph visiting the operations in topological order. 
+        // Traverse the graph visiting the operations in topological order.
         while let Some(target_operation_id) = dfs.next(&y.graph) {
             let Some(target_operation) = operations.get(&target_operation_id) else {
                 return Err(GroupResolverError::MissingOperation(target_operation_id));
