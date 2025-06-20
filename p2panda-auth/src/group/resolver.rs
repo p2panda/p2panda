@@ -10,7 +10,9 @@ use petgraph::visit::DfsPostOrder;
 use thiserror::Error;
 
 use crate::group::graph::{concurrent_bubbles, has_path};
-use crate::group::{Access, Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult};
+use crate::group::{
+    Access, Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult,
+};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::GroupAction;
