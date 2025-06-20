@@ -10,7 +10,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use thiserror::Error;
 
-pub use crate::group::resolver::{GroupResolver, GroupResolverError};
+pub use crate::group::resolver::{StrongRemove, GroupResolverError};
 pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,

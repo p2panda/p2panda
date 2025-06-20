@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Group state resolver implementation.
+//! Strong remove group resolver implementation.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -17,6 +17,7 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 
 use super::GroupAction;
 
+/// Group resolver error.
 #[derive(Debug, Error)]
 pub enum GroupResolverError<ID, OP>
 where
@@ -30,13 +31,50 @@ where
     IncorrectGroupId(ID, ID),
 }
 
-/// Resolver for group membership auth graph.
+/// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
+/// 
+/// Concurrent operations are identified and processed, any which should be invalidated are
+/// added to the operation filter and not applied to the group state. Once an operation has
+/// been filtered, any operations which depended on any resulting state will not be applied to
+/// group state either. Ruleset for Concurrent Operations
+///
+/// The following ruleset is applied when choosing which operations to "filter" when concurrent
+/// operations are processed. It can be assumed that the behavior is equivalent for an admin
+/// member being removed, or demoted from admin to a lower access level.
+///
+/// 1) Removals
+///
+/// If a removal has occurred, filter any concurrent operations by the removed member, as long
+/// as it's 1) not a predecessor of the remove operation, and 2) not a mutual removal (removal
+/// of the remover by the removed member).
+///
+/// 2) Mutual removals
+///
+/// Mutual removals result in both members being removed from the group, and any dependent
+/// concurrent branches are not applied to group state. We imagine further implementations
+/// taking different approaches, like resolving by seniority, hash id, quorum or some other
+/// parameter.
+///
+/// If a mutual removal has occurred, we want to retain the removal operations but filter all
+/// concurrent operations performed by the removed members (keeping predecessors of the
+/// remove).
+///
+/// 3) Re-adding member concurrently
+///
+/// If Alice removes Charlie and Bob removes then adds Charlie concurrently, Charlie is still
+/// in the group. However, if Charlie performed any concurrent actions, these will be filtered
+/// along with any dependent operations.
+///
+/// 4) Filtering of dependent operations
+///
+/// When an operation is "explicitly" filtered it may cause dependent operations to become
+/// invalid, these operations will not be applied to the group state.
 #[derive(Clone, Debug, Default)]
-pub struct GroupResolver<ID, OP, C, ORD, GS> {
+pub struct StrongRemove<ID, OP, C, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, ORD, GS)>,
 }
 
-impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for GroupResolver<ID, OP, C, ORD, GS>
+impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Display + Ord,
@@ -49,6 +87,7 @@ where
     type State = GroupState<ID, OP, C, Self, ORD, GS>;
     type Error = GroupResolverError<ID, OP>;
 
+    /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
         y: &GroupState<ID, OP, C, Self, ORD, GS>,
         operation: &ORD::Message,
@@ -63,42 +102,24 @@ where
         }
 
         // We only need to rebuild the graph if this operation is concurrent.
+        //
+        // @TODO: we can also check if this is a demote or remove operation.
         Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
     }
 
-    /// Resolve group membership by processing all concurrent operations in the graph.
-    ///
-    /// The following ruleset is applied when choosing which operations to "filter":
-    ///
-    /// 1) Mutual removals
-    ///
-    /// Mutual removals result in both members being removed from the group. Future implementations might
-    /// take different approaches such as resolving by seniority, hash id, quorum or some other parameter.
-    ///
-    /// If a mutual removal occurs, the removal operations are retained but all concurrent
-    /// operations performed by the removed members are filtered.
-    ///
-    /// 2) Re-adding member concurrently
-    ///
-    /// Concurrent re-adds are accepted. If Alice removes Charlie and Bob removes then adds Charlie
-    /// concurrently, Charlie is still in the group.
-    ///
-    /// 3) Removed admin performing concurrent actions
-    ///
-    /// If Alice removes Bob, all of Bob's concurrent actions are filtered.
-    ///
-    /// 4) Demoted admin performing concurrent actions
-    ///
-    /// If Alice demotes Bob (from admin), Bob is no longer an admin and all of his concurrent
-    /// actions are filtered.
+    /// Process the group operation graph, producing a new filter and re-building all state
+    /// accordingly.
     fn process(
         mut y: GroupState<ID, OP, C, Self, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
         // Start by draining the existing filter and re-building all states.
         y.ignore.drain();
         let mut y = Group::rebuild(y).expect("no errors when re-building a group");
-
         let mut filter: HashSet<OP> = Default::default();
+
+        // Construct an operation map for easy look-up.
+        //
+        // @TODO: make operations a map on group state struct.
         let operations: HashMap<OP, ORD::Message> = y
             .operations
             .clone()
@@ -106,13 +127,21 @@ where
             .map(|op| (op.id(), op))
             .collect();
 
+        // Keep track of mutual removes (which occur in one bubble) so that we can exclude these
+        // from the filter later.
         let mut mutual_removes = HashSet::new();
 
+        // Get all bubbles of concurrency. 
+        //
+        // A concurrency bubble is a set of operations from the group graph which share some
+        // concurrency. Multiple bubbles can occur in the same graph.
         let mut bubbles = concurrent_bubbles(&y.graph);
 
         let root = y.root();
         let mut dfs = DfsPostOrder::new(&y.graph, root);
         let mut visited = HashSet::new();
+
+        // Traverse the graph visiting the operations in topological order. 
         while let Some(target_operation_id) = dfs.next(&y.graph) {
             let Some(target_operation) = operations.get(&target_operation_id) else {
                 return Err(GroupResolverError::MissingOperation(target_operation_id));
@@ -125,9 +154,11 @@ where
 
             visited.insert(target_operation_id);
 
-            // Does the target operation remove or demote a manager member?
             let removed_manager = y.removed_manager(target_operation);
 
+            // If this operation removes/demotes a member with manager rights _and_ it is part of
+            // a concurrency bubble then we need to check the bubble for any operations which
+            // should be filtered.
             if let (Some(removed_manager), Some(bubble)) = (removed_manager, &bubble) {
                 for bubble_operation_id in bubble.iter() {
                     // If there's a path between the bubble and target operation, then it's not
@@ -151,15 +182,9 @@ where
 
                     // Does this concurrent operation remove or demote an admin member?
                     if let Some(concurrent_removed_admin) = y.removed_manager(bubble_operation) {
-                        // The removed member is concurrently removing the remover.
+                        // The removed member is concurrently removing the remover, this
+                        // is a "mutual remove".
                         if concurrent_removed_admin == target_operation.author() {
-                            // We don't want to filter out mutual remove/demote operations, but we
-                            // still want to filter any dependent operations for both (mutually)
-                            // removed members.
-                            //
-                            // The "target" operations are included when collecting invalid dependent
-                            // operations, we record mutual remove operations here and then remove
-                            // them from the filter later.
                             mutual_removes.insert(*bubble_operation_id);
                         }
                     }
@@ -168,13 +193,20 @@ where
 
             match bubble {
                 Some(bubble) => {
+                    // If "bubble" is a sub-set of "visited" then we have visited all operations
+                    // in this bubble and we should now re-calculate group state using the newly
+                    // produced filter.
+                    //
+                    // This step is required so that as we traverse further into the graph we're
+                    // making decisions based on state computed _after_ we resolved any earlier
+                    // bubbles.
                     if bubble.is_subset(&visited) {
                         let mut filter_tmp = filter.clone();
                         filter_tmp.retain(|op: &OP| !mutual_removes.contains(op));
                         y.ignore = filter_tmp;
                         y = Group::rebuild(y).expect("no errors when re-building a group");
 
-                        // Remove the visited bubble.
+                        // Remove the visited bubble from the bubbles set.
                         bubbles.retain(|b| *b != bubble);
 
                         // Drain visited.
@@ -184,13 +216,15 @@ where
                 None => {
                     y = match target_operation.payload() {
                         GroupControlMessage::GroupAction { action, .. } => {
-                            let previous_operations =
-                                HashSet::from_iter(target_operation.previous().clone());
+                            let dependencies =
+                                HashSet::from_iter(target_operation.dependencies().clone());
+
+                            // As we weren't in a bubble we can directly apply this action.
                             match Group::apply_action(
                                 y,
                                 target_operation.id(),
                                 GroupMember::Individual(target_operation.author()),
-                                &previous_operations,
+                                &dependencies,
                                 &action,
                             ) {
                                 StateChangeResult::Ok { state } => state,
@@ -221,7 +255,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
-    /// If the given operation is an action which removes a member or demotes a manager, return the
+    /// If the given operation is an action which removes or demotes a manager member, return the
     /// ID of the target member.
     fn removed_manager(&self, operation: &ORD::Message) -> Option<ID> {
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
@@ -249,6 +283,7 @@ where
         }
     }
 
+    /// Get the root create operation for this graph.
     fn root(&self) -> OP {
         self.operations
             .iter()
