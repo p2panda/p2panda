@@ -5,7 +5,7 @@ use std::error::Error;
 
 /// Interface for processing messages which have particular ordering requirements.
 ///
-/// Messages have a sender id, a unique identifier and a generic payload.
+/// Messages have an author id, a unique identifier and a generic payload.
 pub trait Ordering<ID, OP, P> {
     type State;
     type Message: Operation<ID, OP, P>;
