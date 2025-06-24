@@ -3,16 +3,20 @@
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
+mod dgm;
 mod group;
 mod group_store;
 mod operation;
 mod ordering;
+mod query;
 mod resolver;
 
+pub use dgm::GroupMembership;
 pub use group::AuthGroup;
 pub use group_store::GroupStore;
 pub use operation::Operation;
 pub use ordering::Ordering;
+pub use query::GroupMembershipQuery;
 pub use resolver::Resolver;
 
 /// Handle to identify a group member.
