@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// TODO(glyph): This module really needs to be aggressively split into smaller modules:
+//
+// src/group/member.rs
+// src/group/action.rs
+// src/group/control_message.rs
+// src/group/auth_group.rs
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -11,9 +18,11 @@ use thiserror::Error;
 pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
-    AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
+    AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
+    Resolver,
 };
 
+pub mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
 mod graph;
@@ -142,11 +151,11 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    /// ID of the group.
-    pub group_id: ID,
-
     /// ID of the local actor.
     pub my_id: ID,
+
+    /// ID of the group.
+    pub group_id: ID,
 
     /// Group state at every position in the operation graph.
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
@@ -355,7 +364,8 @@ where
         Ok(members)
     }
 
-    // Get all current members of the group.
+    // TODO: Consider moving this to the query trait.
+    /// Get all current members of the group.
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access<C>)> {
         self.current_state()
             .members
@@ -471,6 +481,86 @@ where
     }
 }
 
+impl<ID, OP, C, RS, ORD, GS> GroupMembershipQuery<ID, OP, C> for GroupState<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
+{
+    type State = GroupState<ID, OP, C, RS, ORD, GS>;
+
+    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
+
+    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
+        let current_state = y.current_state();
+
+        let member_state = current_state
+            .members
+            // TODO(glyph): Hmm...we're ignoring the Group variant here but that seems like an
+            // oversight. Surely we want the access level for the `member`, regardless of whether
+            // it's a group or an individual.
+            .get(&GroupMember::Individual(*member))
+            // TODO: Errors.
+            .unwrap();
+
+        Ok(member_state.access.clone())
+    }
+
+    fn members(y: &Self::State, viewer: &ID) -> Result<HashSet<ID>, Self::Error> {
+        let current_state = y.current_state();
+
+        let members = current_state
+            .members()
+            .iter()
+            .map(|member| match member {
+                GroupMember::Individual(id) => id.to_owned(),
+                GroupMember::Group(id) => id.to_owned(),
+            })
+            .collect();
+
+        Ok(members)
+    }
+
+    fn is_member(y: &Self::State, possible_member: &ID) -> bool {
+        y.current_state()
+            .members()
+            .contains(&GroupMember::Individual(*possible_member))
+            || y.current_state()
+                .members()
+                .contains(&GroupMember::Group(*possible_member))
+    }
+
+    fn is_puller(y: &Self::State, member: &ID) -> bool {
+        // TODO(glyph): This feels very clumsy...
+        //
+        // I want to query `puller` state for the member but the members returned by
+        // `current_state` are all wrapped in `GroupMember` which doesn't implement a `is_puller`
+        // convenience method. I'd really rather not have to match on both variants each time
+        // (`Individual` and `Group`).
+
+        todo!()
+    }
+
+    fn is_reader(y: &Self::State, member: &ID) -> bool {
+        todo!()
+    }
+
+    fn is_writer(y: &Self::State, member: &ID) -> bool {
+        todo!()
+    }
+
+    fn was_member(y: &Self::State, possible_member: &ID) -> bool {
+        todo!()
+    }
+
+    fn is_manager(y: &Self::State, member: &ID) -> bool {
+        todo!()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Group<ID, OP, C, RS, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
@@ -480,18 +570,19 @@ pub struct Group<ID, OP, C, RS, ORD, GS> {
 /// members can be assigned different access levels, where only a sub-set of members can mutate
 /// the state of the group itself.
 ///
-/// The core data type is an Acyclic Directed Graph of `GroupControlMessage`s. Messages contain
+/// The core data type is a Directed Acyclic Graph of `GroupControlMessage`s. Messages contain
 /// group control messages which mutate the previous group state. Messages refer to the "previous"
-/// state (set of graph tips) which the action they contain should be applied to, these references
+/// state (set of graph tips) which the action they contain should be applied to; these references
 /// make up the edges in the graph. Additionally, messages have a set of "dependencies" which
-/// messages which could be part of any auth sub-group.
+/// could be part of any auth sub-group.
 ///
 /// A requirement of the protocol is that all messages are processed in partial-order. When using
 /// a dependency graph structure (as is the case in this implementation) it is possible to achieve
-/// this by only processing a message once all it's dependencies have themselves been processed.
+/// partial-ordering by only processing a message once all it's dependencies have themselves been
+/// processed.
 ///
 /// Group state is maintained using a state-based CRDT `GroupMembersState`. Every time a message
-/// is processed, a new state is generated and added to the map of all states. When a new messages
+/// is processed, a new state is generated and added to the map of all states. When a new message
 /// is received, it's "previous" state is calculated and then the message applied, resulting in a
 /// new state. This approach allows one to use the state-based CRDT `merge` method to combine
 /// states from any points in the group history into a new state. This property is what allows us
@@ -943,4 +1034,8 @@ where
 
     #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
     MissingOperation(OP),
+
+    // TODO(glyph): I don't think this variant should live here. Maybe another error type?
+    #[error("state not found for group member {0} in group {1}")]
+    MemberNotFound(ID, ID),
 }
