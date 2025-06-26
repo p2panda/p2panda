@@ -218,6 +218,7 @@ where
     }
 
     /// The current graph tips for this group and any sub-groups who are currently members.
+    #[allow(clippy::type_complexity)]
     fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
@@ -283,6 +284,7 @@ where
         self.members_at_inner(dependencies)
     }
 
+    #[allow(clippy::type_complexity)]
     fn transitive_members_at_inner(
         &self,
         dependencies: &HashSet<OP>,
@@ -344,6 +346,7 @@ where
     ///
     /// This method recurses into all sub-groups collecting all "tip" members, which are the
     /// stateless "individual" members of a group, likely identified by a public key.
+    #[allow(clippy::type_complexity)]
     pub fn transitive_members_at(
         &self,
         dependencies: &HashSet<OP>,
@@ -371,6 +374,7 @@ where
     ///
     /// This method recurses into all sub-groups collecting all "tip" members, which are the
     /// stateless "individual" members of a group, likely identified by a public key.
+    #[allow(clippy::type_complexity)]
     pub fn transitive_members(
         &self,
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
@@ -380,6 +384,7 @@ where
     }
 
     /// Get a sub group from the group store.
+    #[allow(clippy::type_complexity)]
     fn get_sub_group(
         &self,
         id: ID,
@@ -579,6 +584,10 @@ where
     /// Action was not applied because it failed internal validation.
     Noop {
         state: GroupState<ID, OP, C, RS, ORD, GS>,
+        // @TODO: errors occurring here will be logged or reported to higher layers, but we will
+        // not react to them inside of the groups module in any other way. Until this
+        // logging/reporting is implemented the error is not used.
+        #[allow(unused)]
         error: GroupMembershipError<GroupMember<ID>>,
     },
     /// Action was not applied because it has been filtered out.
@@ -666,6 +675,7 @@ where
         StateChangeResult::Ok { state: y }
     }
 
+    #[allow(clippy::type_complexity)]
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
