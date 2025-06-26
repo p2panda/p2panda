@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO(glyph): This module really needs to be aggressively split into smaller modules:
+// TODO(glyph): I'd love to see this module split into smaller modules to make it easier to
+// understand the various components and how they're related. Right now it feels a bit overwhelming
+// to navigate.
 //
 // src/group/member.rs
 // src/group/action.rs
@@ -41,14 +43,12 @@ pub enum GroupMember<ID> {
     Group(ID),
 }
 
-impl<ID> GroupMember<ID>
-where
-    ID: Copy,
-{
-    pub fn id(&self) -> ID {
+impl<ID> GroupMember<ID> {
+    /// Return the ID of a group member.
+    fn id(&self) -> &ID {
         match self {
-            GroupMember::Individual(id) => *id,
-            GroupMember::Group(id) => *id,
+            GroupMember::Individual(id) => id,
+            GroupMember::Group(id) => id,
         }
     }
 }
@@ -364,7 +364,6 @@ where
         Ok(members)
     }
 
-    // TODO: Consider moving this to the query trait.
     /// Get all current members of the group.
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access<C>)> {
         self.current_state()
@@ -499,65 +498,52 @@ where
 
         let member_state = current_state
             .members
-            // TODO(glyph): Hmm...we're ignoring the Group variant here but that seems like an
-            // oversight. Surely we want the access level for the `member`, regardless of whether
-            // it's a group or an individual.
-            .get(&GroupMember::Individual(*member))
-            // TODO: Errors.
-            .unwrap();
+            .into_iter()
+            .find(|(member_id, _state)| member_id.id() == member);
 
-        Ok(member_state.access.clone())
+        if let Some(state) = member_state {
+            Ok(state.1.access)
+        } else {
+            Err(GroupError::MemberNotFound(y.group_id, *member))
+        }
     }
 
-    fn members(y: &Self::State, viewer: &ID) -> Result<HashSet<ID>, Self::Error> {
+    fn member_ids(y: &Self::State) -> HashSet<ID> {
         let current_state = y.current_state();
 
-        let members = current_state
+        current_state
             .members()
             .iter()
-            .map(|member| match member {
-                GroupMember::Individual(id) => id.to_owned(),
-                GroupMember::Group(id) => id.to_owned(),
-            })
-            .collect();
-
-        Ok(members)
+            .map(|member| member.id().to_owned())
+            .collect()
     }
 
-    fn is_member(y: &Self::State, possible_member: &ID) -> bool {
-        y.current_state()
-            .members()
-            .contains(&GroupMember::Individual(*possible_member))
-            || y.current_state()
-                .members()
-                .contains(&GroupMember::Group(*possible_member))
+    fn is_member(y: &Self::State, member: &ID) -> bool {
+        let current_state = y.current_state();
+
+        let member_state = current_state
+            .members
+            .into_iter()
+            .find(|(member_id, _state)| member_id.id() == member);
+
+        member_state.is_some()
     }
 
     fn is_puller(y: &Self::State, member: &ID) -> bool {
-        // TODO(glyph): This feels very clumsy...
-        //
-        // I want to query `puller` state for the member but the members returned by
-        // `current_state` are all wrapped in `GroupMember` which doesn't implement a `is_puller`
-        // convenience method. I'd really rather not have to match on both variants each time
-        // (`Individual` and `Group`).
-
-        todo!()
+        // TODO(glyph): Would we rather propagate the error (`MemberNotFound`)?
+        matches!(GroupState::access(y, member), Ok(Access::Pull))
     }
 
     fn is_reader(y: &Self::State, member: &ID) -> bool {
-        todo!()
+        matches!(GroupState::access(y, member), Ok(Access::Read))
     }
 
     fn is_writer(y: &Self::State, member: &ID) -> bool {
-        todo!()
-    }
-
-    fn was_member(y: &Self::State, possible_member: &ID) -> bool {
-        todo!()
+        matches!(GroupState::access(y, member), Ok(Access::Write { .. }))
     }
 
     fn is_manager(y: &Self::State, member: &ID) -> bool {
-        todo!()
+        matches!(GroupState::access(y, member), Ok(Access::Manage))
     }
 }
 
