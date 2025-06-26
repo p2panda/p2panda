@@ -9,8 +9,8 @@ use crate::group::{
     Access, Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState,
 };
 use crate::traits::{
-    AuthGroup, GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, OperationId,
-    Ordering, Resolver,
+    AuthGroup, GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation,
+    OperationId, Ordering, Resolver,
 };
 
 #[derive(Debug, Error)]
@@ -46,10 +46,34 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    // TODO: Do we want to store state here or go purely functional?
-    // If not here, where? Then we're probably passing the responsibility to the user to hold it
-    // somewhere appropriate. This will likely become clearer during integration work.
+    /// ID of the local actor.
+    my_id: ID,
+
+    /// Store for all locally-known groups.
+    store: GS,
+
+    /// Message orderer state.
+    orderer: ORD::State,
+
     _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
+}
+
+impl<ID, OP, C, RS, ORD, GS> GroupManager<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, OP, C, RS, ORD>,
+{
+    pub fn init(my_id: ID, store: GS, orderer: ORD::State) -> Self {
+        Self {
+            _phantom: PhantomData,
+            my_id,
+            store,
+            orderer,
+        }
+    }
 }
 
 impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C, GS, ORD>
@@ -59,29 +83,27 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
+    ORD::State: Clone,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     type State = GroupState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
     type Error = GroupManagerError<ID, OP, C, RS, ORD, GS>;
 
-    fn init(
-        my_id: ID,
-        group_id: ID,
-        store: GS,
-        orderer: ORD::State,
-    ) -> Result<Self::State, Self::Error> {
-        let y = GroupState::new(my_id, group_id, store, orderer);
-
-        Ok(y)
-    }
-
     fn create(
-        y: Self::State,
+        &self,
+        group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        let y = GroupState::new(
+            self.my_id,
+            group_id,
+            self.store.clone(),
+            self.orderer.clone(),
+        );
+
         let action = GroupControlMessage::GroupAction {
             group_id: y.group_id,
             action: GroupAction::Create { initial_members },
@@ -94,9 +116,16 @@ where
     }
 
     fn create_from_remote(
-        y: Self::State,
+        &self,
         remote_operation: ORD::Message,
     ) -> Result<Self::State, Self::Error> {
+        let y = GroupState::new(
+            self.my_id,
+            remote_operation.payload().group_id(),
+            self.store.clone(),
+            self.orderer.clone(),
+        );
+
         let y = Group::process(y, &remote_operation)?;
 
         Ok(y)
