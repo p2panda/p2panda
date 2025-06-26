@@ -16,26 +16,22 @@ where
     type Action;
     type Error: Error;
 
-    /// Initialise the group state.
-    fn init(
-        my_id: ID,
-        group_id: ID,
-        store: GS,
-        orderer: ORD::State,
-    ) -> Result<Self::State, Self::Error>;
-
     /// Creates a new group, returning the updated state and the creation operation message.
+    ///
+    /// The group state must first be initialised by calling `init()` before this function is
+    /// called.
     fn create(
-        y: Self::State,
+        &self,
+        group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
     ) -> Result<(Self::State, ORD::Message), Self::Error>;
 
     /// Initialise the group by processing a remotely-authored `create` message.
     ///
     /// The group state must first be initialised by calling `init()` before this function is
-    /// called. The `group_id` can be extracted from the operation itself.
+    /// called. The `group_id` is extracted from the operation itself.
     fn create_from_remote(
-        y: Self::State,
+        &self,
         remote_operation: ORD::Message,
     ) -> Result<Self::State, Self::Error>;
 
