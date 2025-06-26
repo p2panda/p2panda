@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::Debug;
-
-use serde::{Deserialize, Serialize};
 
 use crate::group::{Access, GroupMember};
 use crate::traits::{IdentityHandle, OperationId, Ordering};
-
-// TODO: Maybe `GroupApi` or `GroupQuery...` something something.
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
 pub trait GroupMembership<ID, OP, C, GS, ORD>
@@ -18,31 +12,37 @@ where
     OP: OperationId,
     ORD: Ordering<ID, OP, Self::Action>,
 {
-    //type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
     type State;
     type Action;
     type Error: Error;
 
-    // TODO(glyph): Do we have any concept of destroying a group?
+    /// Initialise the group state.
+    fn init(
+        my_id: ID,
+        group_id: ID,
+        store: GS,
+        orderer: ORD::State,
+    ) -> Result<Self::State, Self::Error>;
 
     /// Creates a new group, returning the updated state and the creation operation message.
     fn create(
-        my_id: ID,
-        group_id: ID,
+        y: Self::State,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-        store: GS,
-        orderer: ORD::State,
     ) -> Result<(Self::State, ORD::Message), Self::Error>;
 
-    // TODO: Sometimes we want to "create" a group that was started elsewhere (from another peer).
-    // `from_welcome()` or `from_message()` or something...
-    // Need to think about this..
-    // Two-step process or one?
-    //
-    // Initialise the group by processing a remotely-authored `create` message.
-    //fn create_from_remote()
+    /// Initialise the group by processing a remotely-authored `create` message.
+    ///
+    /// The group state must first be initialised by calling `init()` before this function is
+    /// called. The `group_id` can be extracted from the operation itself.
+    fn create_from_remote(
+        y: Self::State,
+        remote_operation: ORD::Message,
+    ) -> Result<Self::State, Self::Error>;
 
-    /// Adds a member to the group.
+    /// Add a member to the group.
+    ///
+    /// The updated state is returned, as well as the `add` operation. The operation should be
+    /// shared with remote peers so they can update their group state accordingly.
     fn add(
         y: Self::State,
         adder: ID,
