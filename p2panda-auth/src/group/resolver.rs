@@ -11,7 +11,8 @@ use thiserror::Error;
 
 use crate::group::graph::{concurrent_bubbles, has_path};
 use crate::group::{
-    Access, Group, GroupControlMessage, GroupMember, GroupState, StateChangeResult,
+    Access, Group, GroupControlMessage, GroupMember, GroupMembershipError, GroupState,
+    StateChangeResult,
 };
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
@@ -29,6 +30,9 @@ where
 
     #[error("operation for group {0} processed in group {1}")]
     IncorrectGroupId(ID, ID),
+
+    #[error("state change error processing operation {0}: {1:?}")]
+    StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 }
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
@@ -145,6 +149,38 @@ where
         while let Some(target_operation_id) = dfs.next(&y.graph) {
             let Some(target_operation) = operations.get(&target_operation_id) else {
                 return Err(GroupResolverError::MissingOperation(target_operation_id));
+            };
+
+            // Verify that each operation is valid in it's own "branch", this check occurs before
+            // any bubble filtering is applied. We assert that the author of the operation did
+            // indeed have the correct access to append an operation to the graph according to
+            // their claimed previous state.
+            let dependencies = HashSet::from_iter(target_operation.dependencies().clone());
+            y = match target_operation.payload() {
+                GroupControlMessage::GroupAction { action, .. } => {
+                    match Group::apply_action(
+                        y,
+                        target_operation.id(),
+                        GroupMember::Individual(target_operation.author()),
+                        &dependencies,
+                        &action,
+                    ) {
+                        StateChangeResult::Ok { state } => state,
+                        StateChangeResult::Noop { error, .. } => {
+                            return Err(GroupResolverError::StateChangeError(
+                                target_operation.id(),
+                                error,
+                            ));
+                        }
+                        StateChangeResult::Filtered { state } => {
+                            // TODO: introduce debug logging.
+                            state
+                        }
+                    }
+                }
+                // TODO: revoke messages are not supported yet, either implement support or remove
+                // this message variant.
+                GroupControlMessage::Revoke { .. } => unimplemented!(),
             };
 
             let bubble = bubbles
@@ -933,7 +969,7 @@ mod tests {
         let alice_group = sync(alice_group, &[op_add_eve.clone()]);
 
         // 6: Alice adds Frank (concurrent with 8)
-        let (_alice_group, op_add_frank) = add_member(alice_group, group_id, frank, Access::Pull);
+        let (_alice_group, op_add_frank) = add_member(alice_group, group_id, frank, Access::Manage);
 
         let frank_group = sync(
             frank_group,

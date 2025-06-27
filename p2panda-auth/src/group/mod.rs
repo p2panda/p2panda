@@ -541,9 +541,8 @@ where
                     &action,
                 ) {
                     StateChangeResult::Ok { state } => state,
-                    StateChangeResult::Noop { state, .. } => {
-                        // TODO: introduce debug logging.
-                        state
+                    StateChangeResult::Noop { error, .. } => {
+                        return Err(GroupError::StateChangeError(operation_id, error));
                     }
                     StateChangeResult::Filtered { .. } => {
                         // Operations can't be filtered out before they were processed.
@@ -715,6 +714,10 @@ where
                     ) {
                         StateChangeResult::Ok { state } => state,
                         StateChangeResult::Noop { state, .. } => {
+                            // We don't error here as during re-build we expect some operations to
+                            // fail if they've been transitively invalidated by a change in
+                            // filter.
+                            //
                             // TODO: introduce debug logging.
                             state
                         }
