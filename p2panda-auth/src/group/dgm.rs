@@ -111,18 +111,21 @@ where
 
     /// Create a group.
     ///
-    /// The caller of this method should ensure that the given `group_id` is unique. The set of
-    /// initial members must not be empty; failure to meet these conditions will result in an error.
-    /// Group updates will not be possible if the group is not created with at least one manager,
-    /// since `Manage` access is required to perform any group state modifications.
+    /// The creator of the group is automatically added as a manager.
+    ///
+    /// The caller of this method must ensure that the given `group_id` is unique; failure to meet
+    /// this condition will result in an error.
     fn create(
         &self,
         group_id: ID,
-        initial_members: Vec<(GroupMember<ID>, Access<C>)>,
+        members: Vec<(GroupMember<ID>, Access<C>)>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        if initial_members.is_empty() {
-            return Err(GroupManagerError::EmptyGroup);
-        }
+        // The creator of the group is automatically added as a manager.
+        let creator = (GroupMember::Individual(self.my_id), Access::Manage);
+
+        let mut initial_members = Vec::new();
+        initial_members.push(creator);
+        initial_members.extend(members);
 
         // TODO: Understand exactly what happens if two groups are created with the same
         // `group_id`. Does an error occur? If so, where and when?
