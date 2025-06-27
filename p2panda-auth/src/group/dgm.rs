@@ -204,14 +204,16 @@ where
 
     /// Remove a group member.
     ///
-    /// The `remover` must be a manager and the `removed` identity must already be a member of
-    /// the group; failure to meet these conditions will result in an error.
+    /// A member may remove themself, even if they are not a manager. In order to remove any other
+    /// member, the `remover` must be a manager and the `removed` identity must already be a member
+    /// of the group; failure to meet these conditions will result in an error.
     fn remove(
         y: Self::State,
         remover: ID,
         removed: ID,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        if !Self::State::is_manager(&y, &remover) {
+        // A member may remove themself, even if they're not a manager.
+        if remover != removed && !Self::State::is_manager(&y, &remover) {
             let remover_access = Self::State::access(&y, &remover)?;
             return Err(GroupManagerError::InsufficientAccess(
                 remover,
