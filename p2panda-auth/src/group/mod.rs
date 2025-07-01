@@ -403,6 +403,72 @@ where
 
         Ok(y)
     }
+
+    /// Get the maximum given access level for an actor at a certain point in the auth graph.
+    ///
+    /// An actor can be a direct individual member of a group, or a transitive member via a
+    /// sub-group. This is a helper method which finds the hightest access level a member has and
+    /// returns the group member which gives this actor the found access level.
+    ///
+    /// The passed dependencies array tells us which position in the graph to look at.
+    #[allow(clippy::type_complexity)]
+    pub fn max_access_identity(
+        &self,
+        actor: ID,
+        dependencies: &HashSet<OP>,
+    ) -> Result<Option<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
+        let mut access_levels = Vec::new();
+
+        // Get members of a group at a certain point in the groups history.
+        for (member, root_access) in self.members_at(dependencies) {
+            match member {
+                // If this is an individual matching the actor then push it to the access levels
+                // vector.
+                GroupMember::Individual(id) => {
+                    if id == actor {
+                        access_levels.push((member, root_access));
+                    }
+                }
+                // If this is a group, then look into all transitive members to find any matches
+                // to the passed actor id.
+                GroupMember::Group(id) => {
+                    let sub_group = self.get_sub_group(id)?;
+                    if let Some((_, transitive_access)) = sub_group
+                        // @TODO: we would prefer to call transitive_members() here so as to
+                        //        account for the most recent sub-group state we know about. To do
+                        //        this we first need to adjust how sub-group states are attached
+                        //        to the root group graph.
+                        .transitive_members_at(dependencies)
+                        .unwrap()
+                        .iter()
+                        .find(|(member, _)| *member == actor)
+                    {
+                        // The actual access can't be greater than the access which was originally
+                        // given to the sub-group.
+                        let actual_access = if transitive_access < &root_access {
+                            transitive_access.clone()
+                        } else {
+                            root_access.clone()
+                        };
+                        access_levels.push((member, actual_access));
+                    }
+                }
+            }
+        }
+
+        let mut max_access: Option<(GroupMember<ID>, Access<C>)> = None;
+        for (id, access) in access_levels {
+            match max_access.clone() {
+                Some((_, prev_access)) => {
+                    if prev_access < access {
+                        max_access = Some((id, access))
+                    }
+                }
+                None => max_access = Some((id, access)),
+            }
+        }
+        Ok(max_access)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
