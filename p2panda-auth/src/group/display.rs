@@ -7,7 +7,7 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
-use crate::group::{Group, GroupAction, GroupControlMessage, GroupMember, GroupState};
+use crate::group::{Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
@@ -24,7 +24,12 @@ where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd + Ord,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Clone
+        + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Message: Clone,
@@ -151,10 +156,12 @@ where
             match Group::apply_action(
                 self.clone(),
                 operation.id(),
-                GroupMember::Individual(operation.author()),
+                operation.author(),
                 &HashSet::from_iter(operation.dependencies()),
                 &action,
-            ) {
+            )
+            .expect("critical error when applying state change")
+            {
                 super::StateChangeResult::Ok { .. } => OP_OK_NODE,
                 super::StateChangeResult::Noop { .. } => OP_NOOP_NODE,
                 super::StateChangeResult::Filtered { .. } => OP_FILTER_NODE,

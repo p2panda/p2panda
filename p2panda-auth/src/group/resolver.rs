@@ -6,34 +6,13 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
-use petgraph::visit::DfsPostOrder;
-use thiserror::Error;
+use petgraph::algo::toposort;
 
 use crate::group::graph::{concurrent_bubbles, has_path};
-use crate::group::{
-    Access, Group, GroupControlMessage, GroupMember, GroupMembershipError, GroupState,
-    StateChangeResult,
-};
+use crate::group::{Access, Group, GroupControlMessage, GroupError, GroupState, StateChangeResult};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 use super::GroupAction;
-
-/// Group resolver error.
-#[derive(Debug, Error)]
-pub enum GroupResolverError<ID, OP>
-where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
-{
-    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
-    MissingOperation(OP),
-
-    #[error("operation for group {0} processed in group {1}")]
-    IncorrectGroupId(ID, ID),
-
-    #[error("state change error processing operation {0}: {1:?}")]
-    StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
-}
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
 ///
@@ -80,35 +59,35 @@ pub struct StrongRemove<ID, OP, C, ORD, GS> {
 
 impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD, GS>
 where
-    ID: IdentityHandle + Display,
+    ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Clone + Debug + PartialEq + PartialOrd + Ord,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
     type State = GroupState<ID, OP, C, Self, ORD, GS>;
-    type Error = GroupResolverError<ID, OP>;
+    type Error = GroupError<ID, OP, C, Self, ORD, GS>;
 
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
         y: &GroupState<ID, OP, C, Self, ORD, GS>,
         operation: &ORD::Message,
-    ) -> Result<bool, GroupResolverError<ID, OP>> {
+    ) -> Result<bool, Self::Error> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
 
         // Sanity check.
         if y.group_id != group_id {
             // The operation is not intended for this group.
-            return Err(GroupResolverError::IncorrectGroupId(group_id, y.group_id));
+            return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
         }
 
+        let transitive_heads = y.transitive_heads().unwrap();
+
         // We only need to rebuild the graph if this operation is concurrent.
-        //
-        // @TODO: we can also check if this is a demote or remove operation.
-        Ok(y.heads().into_iter().collect::<Vec<_>>() != operation.previous())
+        Ok(transitive_heads.into_iter().collect::<Vec<_>>() != operation.dependencies())
     }
 
     /// Process the group operation graph, producing a new filter and re-building all state
@@ -141,46 +120,15 @@ where
         // concurrency. Multiple bubbles can occur in the same graph.
         let mut bubbles = concurrent_bubbles(&y.graph);
 
-        let root = y.root();
-        let mut dfs = DfsPostOrder::new(&y.graph, root);
+        let topo_sort = toposort(&y.graph, None).unwrap();
+        let mut topo_sort_iter = topo_sort.into_iter();
+        // let mut dfs = DfsPostOrder::new(&y.graph, root);
         let mut visited = HashSet::new();
 
         // Traverse the graph visiting the operations in topological order.
-        while let Some(target_operation_id) = dfs.next(&y.graph) {
+        while let Some(target_operation_id) = topo_sort_iter.next() {
             let Some(target_operation) = operations.get(&target_operation_id) else {
-                return Err(GroupResolverError::MissingOperation(target_operation_id));
-            };
-
-            // Verify that each operation is valid in it's own "branch", this check occurs before
-            // any bubble filtering is applied. We assert that the author of the operation did
-            // indeed have the correct access to append an operation to the graph according to
-            // their claimed previous state.
-            let dependencies = HashSet::from_iter(target_operation.dependencies().clone());
-            y = match target_operation.payload() {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    match Group::apply_action(
-                        y,
-                        target_operation.id(),
-                        GroupMember::Individual(target_operation.author()),
-                        &dependencies,
-                        &action,
-                    ) {
-                        StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { error, .. } => {
-                            return Err(GroupResolverError::StateChangeError(
-                                target_operation.id(),
-                                error,
-                            ));
-                        }
-                        StateChangeResult::Filtered { state } => {
-                            // TODO: introduce debug logging.
-                            state
-                        }
-                    }
-                }
-                // TODO: revoke messages are not supported yet, either implement support or remove
-                // this message variant.
-                GroupControlMessage::Revoke { .. } => unimplemented!(),
+                return Err(GroupError::MissingOperation(target_operation_id));
             };
 
             let bubble = bubbles
@@ -204,7 +152,7 @@ where
                     }
 
                     let Some(bubble_operation) = operations.get(bubble_operation_id) else {
-                        return Err(GroupResolverError::MissingOperation(*bubble_operation_id));
+                        return Err(GroupError::MissingOperation(*bubble_operation_id));
                     };
 
                     // If this concurrent operation is _not_ authored by the "target author" then we
@@ -241,7 +189,6 @@ where
                         filter_tmp.retain(|op: &OP| !mutual_removes.contains(op));
                         y.ignore = filter_tmp;
                         y = Group::rebuild(y).expect("no errors when re-building a group");
-
                         // Remove the visited bubble from the bubbles set.
                         bubbles.retain(|b| *b != bubble);
 
@@ -256,15 +203,22 @@ where
                                 HashSet::from_iter(target_operation.dependencies().clone());
 
                             // As we weren't in a bubble we can directly apply this action.
-                            match Group::apply_action(
+                            let result = Group::apply_action(
                                 y,
                                 target_operation.id(),
-                                GroupMember::Individual(target_operation.author()),
+                                target_operation.author(),
                                 &dependencies,
                                 &action,
-                            ) {
+                            )?;
+
+                            match result {
                                 StateChangeResult::Ok { state } => state,
-                                StateChangeResult::Noop { state, .. } => state,
+                                StateChangeResult::Noop { error, .. } => {
+                                    return Err(GroupError::StateChangeError(
+                                        target_operation.id(),
+                                        error,
+                                    ));
+                                }
                                 StateChangeResult::Filtered { state } => state,
                             }
                         }
@@ -305,8 +259,9 @@ where
             _ => return None,
         };
 
-        // We only need to react to a filtered demote operation if the target author did have
-        // admin access but now doesn't.
+        // @TODO: either remove this step (and check for mutual removes on all remove/demote
+        // operations) or re-build graph state beforehand to in order to correctly handle
+        // certain edge-cases. 
         let was_manager = self
             .transitive_members_at(&HashSet::from_iter(operation.dependencies()))
             .expect("get transitive members")
@@ -317,22 +272,6 @@ where
         } else {
             None
         }
-    }
-
-    /// Get the root create operation for this graph.
-    fn root(&self) -> OP {
-        self.operations
-            .iter()
-            .find(|operation| {
-                let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
-                    // Revoke operations not yet supported.
-                    unimplemented!()
-                };
-
-                matches!(action, GroupAction::Create { .. })
-            })
-            .expect("at least one create operation")
-            .id()
     }
 }
 

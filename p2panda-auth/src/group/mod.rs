@@ -5,10 +5,10 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 use petgraph::prelude::DiGraphMap;
-use petgraph::visit::NodeIndexable;
+use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
-pub use crate::group::resolver::{GroupResolverError, StrongRemove};
+pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
     AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
@@ -176,8 +176,8 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    RS: Resolver<ORD::Message> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
@@ -516,7 +516,11 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
@@ -559,7 +563,8 @@ where
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
-        let previous_operations = HashSet::from_iter(operation.previous().clone());
+        let previous_operations = operation.previous();
+        let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
 
         // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
@@ -577,10 +582,10 @@ where
 
         // The resolver implementation contains the logic which determines when rebuilds are
         // required.
-        let rebuild_required = RS::rebuild_required(&y, operation)
-            .map_err(|error| GroupError::ResolverError(error))?;
+        let rebuild_required = RS::rebuild_required(&y, operation)?;
 
-        // Add the new operation to the group state graph and operations vec.
+        // Add the new operation to the group state graph and operations vec. We validate it in
+        // the following steps.
         y.graph.add_node(operation_id);
         for previous in &previous_operations {
             y.graph.add_edge(*previous, operation_id, ());
@@ -588,36 +593,36 @@ where
         y.operations.push(operation.clone());
 
         let y_i = if rebuild_required {
+            // Validate a concurrent operation against it's previous states.
+            //
+            // To do this we need to prune the graph to only include predecessor operations,
+            // re-calculate the filter, and re-build all states.
+            y = Group::validate_concurrent_action(y, &operation)?;
+
             // Process the group state with the provided resolver. This will populate the set of
-            // messages which should be ignored when applying group control messages.
-            RS::process(y).map_err(|error| GroupError::ResolverError(error))?
+            // messages which should be ignored when applying group management actions and also
+            // rebuilds the group state (including the new operation).
+            RS::process(y)?
         } else {
-            // Compute the member's state by applying the new operation to it's claimed "previous"
+            // Compute the member's state by applying the new operation to the current group
             // state.
             //
             // This method validates that the actor has permission to perform the action.
-            //
-            // Do not update the state if the attempt to apply the action fails.
             match control_message {
-                GroupControlMessage::GroupAction { action, .. } => match Self::apply_action(
-                    y,
-                    operation_id,
-                    GroupMember::Individual(actor),
-                    &previous_operations,
-                    &action,
-                ) {
-                    StateChangeResult::Ok { state } => state,
-                    StateChangeResult::Noop { error, .. } => {
-                        return Err(GroupError::StateChangeError(operation_id, error));
+                GroupControlMessage::GroupAction { action, .. } => {
+                    match Self::apply_action(y, operation_id, actor, &dependencies, &action)? {
+                        StateChangeResult::Ok { state } => state,
+                        StateChangeResult::Noop { error, .. } => {
+                            return Err(GroupError::StateChangeError(operation_id, error));
+                        }
+                        StateChangeResult::Filtered { .. } => {
+                            // Operations can't be filtered out before they were processed.
+                            unreachable!()
+                        }
                     }
-                    StateChangeResult::Filtered { .. } => {
-                        // Operations can't be filtered out before they were processed.
-                        unreachable!()
-                    }
-                },
+                }
 
-                // TODO: we could bake in revoke support here if we want to keep it as a core feature
-                // (on top of any provided Resolver).
+                // TODO: Remove if we don't want to support revoke yet.
                 GroupControlMessage::Revoke { .. } => unimplemented!(),
             }
         };
@@ -666,7 +671,11 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Message: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
@@ -675,10 +684,10 @@ where
     fn apply_action(
         mut y: GroupState<ID, OP, C, RS, ORD, GS>,
         id: OP,
-        actor: GroupMember<ID>,
+        actor: ID,
         dependencies: &HashSet<OP>,
         action: &GroupAction<ID, C>,
-    ) -> StateChangeResult<ID, OP, C, RS, ORD, GS> {
+    ) -> Result<StateChangeResult<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         // Compute the member's state by applying the new operation to it's claimed "dependencies"
         // state.
         let members_y = if dependencies.is_empty() {
@@ -687,25 +696,32 @@ where
             y.state_at(dependencies)
         };
 
+        // Get the maximum access level for this actor.
+        let max_access = y.max_access_identity(actor, &dependencies)?;
+        let member_id = match max_access {
+            Some((id, _)) => id,
+            None => GroupMember::Individual(actor),
+        };
+
         // Only add the resulting member's state to the states map if the operation isn't
         // flagged to be ignored.
         if !y.ignore.contains(&id) {
             let result = match action.clone() {
                 GroupAction::Add { member, access, .. } => {
-                    state::add(members_y.clone(), actor, member, access)
+                    state::add(members_y.clone(), member_id, member, access)
                 }
                 GroupAction::Remove { member, .. } => {
-                    state::remove(members_y.clone(), actor, member)
+                    state::remove(members_y.clone(), member_id, member)
                 }
                 GroupAction::Promote { member, .. } => {
                     // TODO: need changes in the group_crdt api so that we can pass in the access
                     // level rather than only the conditions.
-                    state::promote(members_y.clone(), actor, member, None)
+                    state::promote(members_y.clone(), member_id, member, None)
                 }
                 GroupAction::Demote { member, .. } => {
                     // TODO: need changes in the group_crdt api so that we can pass in the access
                     // level rather than only the conditions.
-                    state::demote(members_y.clone(), actor, member, None)
+                    state::demote(members_y.clone(), member_id, member, None)
                 }
                 GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
             };
@@ -727,17 +743,17 @@ where
                     // change, however we do want to accept them into our graph so as to ensure
                     // consistency consistency across peers.
                     y.states.insert(id, members_y);
-                    return StateChangeResult::Noop {
+                    return Ok(StateChangeResult::Noop {
                         state: y,
                         error: err,
-                    };
+                    });
                 }
             };
         } else {
             y.states.insert(id, members_y);
-            return StateChangeResult::Filtered { state: y };
+            return Ok(StateChangeResult::Filtered { state: y });
         }
-        StateChangeResult::Ok { state: y }
+        Ok(StateChangeResult::Ok { state: y })
     }
 
     /// Validate an action by applying it to the group state build to it's previous pointers.
@@ -825,13 +841,19 @@ where
         Ok(y_i)
     }
 
+    /// Rebuild the group state.
+    ///
+    /// This method assumes that a new filter has already calculated and added to the group state.
+    /// No graph traversal occurs, all operations are simply iterated over and applied to the
+    /// group state if they are not explicitly filtered. Errors resulting from "no-op" operations
+    /// (operations which became invalid because they are transitively dependent on filtered
+    /// operations) are expected and therefore not propagated further.
     #[allow(clippy::type_complexity)]
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut y_i = GroupState::new(y.group_id, y.my_id, y.group_store.clone(), y.orderer_y);
         y_i.ignore = y.ignore;
-        y_i.graph = y.graph;
 
         // Apply every operation.
         let mut create_found = false;
@@ -856,32 +878,27 @@ where
 
             y_i = match control_message {
                 GroupControlMessage::GroupAction { action, .. } => {
-                    match Self::apply_action(
-                        y_i,
-                        operation_id,
-                        GroupMember::Individual(actor),
-                        &dependencies,
-                        &action,
-                    ) {
+                    match Self::apply_action(y_i, operation_id, actor, &dependencies, &action)? {
                         StateChangeResult::Ok { state } => state,
                         StateChangeResult::Noop { state, .. } => {
                             // We don't error here as during re-build we expect some operations to
                             // fail if they've been transitively invalidated by a change in
                             // filter.
-                            //
-                            // TODO: introduce debug logging.
                             state
                         }
-                        StateChangeResult::Filtered { state } => {
-                            // TODO: introduce debug logging.
-                            state
-                        }
+                        StateChangeResult::Filtered { state } => state,
                     }
                 }
                 // TODO: revoke messages are not supported yet, either implement support or remove
                 // this message variant.
                 GroupControlMessage::Revoke { .. } => unimplemented!(),
             };
+
+            // Add the new operation to the group state graph and operations vec.
+            y_i.graph.add_node(operation_id);
+            for previous in &operation.previous() {
+                y_i.graph.add_edge(*previous, operation_id, ());
+            }
 
             // Push the operation to the group state.
             y_i.operations.push(operation);
@@ -909,9 +926,6 @@ where
     #[error("expected sub-group {0} to exist in the store")]
     MissingSubGroup(ID),
 
-    #[error("resolver error: {0}")]
-    ResolverError(RS::Error),
-
     #[error("ordering error: {0}")]
     OrderingError(ORD::Error),
 
@@ -926,4 +940,7 @@ where
 
     #[error("operation for group {0} processed in group {1}")]
     IncorrectGroupId(ID, ID),
+
+    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
+    MissingOperation(OP),
 }
