@@ -740,6 +740,91 @@ where
         StateChangeResult::Ok { state: y }
     }
 
+    /// Validate an action by applying it to the group state build to it's previous pointers.
+    ///
+    /// When processing an new operation we need to validate that the contained action is valid
+    /// before including it in the graph. By valid we mean that the author who composed the action
+    /// had authority to perform the claimed action, and that the action fulfils all group change
+    /// requirements. To check this we need to re-build the group state to the operations claimed
+    /// "previous" state. This process involves pruning any operations which are not predecessors
+    /// of the new operation resolving the group state again.
+    ///
+    /// This is a relatively expensive computation and should only be used when a re-build is
+    /// actually required.
+    fn validate_concurrent_action(
+        mut y: GroupState<ID, OP, C, RS, ORD, GS>,
+        operation: &ORD::Message,
+    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
+        // Keep hold of original operations and graph.
+        let last_graph = y.graph.clone();
+        let last_ignore = y.ignore.clone();
+        let last_states = y.states.clone();
+        let last_operations = y.operations.clone();
+
+        // Collect predecessors of the new operation.
+        let mut predecessors = HashSet::new();
+        for previous in operation.previous() {
+            let reversed = Reversed(&y.graph);
+            let mut dfs_rev = DfsPostOrder::new(&reversed, previous);
+            while let Some(id) = dfs_rev.next(&reversed) {
+                predecessors.insert(id);
+            }
+        }
+
+        // Remove all other nodes from the graph.
+        let to_remove: Vec<_> = y
+            .graph
+            .node_identifiers()
+            .filter(|n| !predecessors.contains(n))
+            .collect();
+
+        for node in &to_remove {
+            y.graph.remove_node(*node);
+        }
+
+        y.operations
+            .retain(|operation| to_remove.iter().all(|remove| remove != &operation.id()));
+
+        y = RS::process(y)?;
+
+        let dependencies = HashSet::from_iter(operation.dependencies().clone());
+
+        let mut y_i = match operation.payload() {
+            GroupControlMessage::GroupAction { action, .. } => {
+                // println!("apply action during validate");
+                match Group::apply_action(
+                    y,
+                    operation.id(),
+                    operation.author(),
+                    &dependencies,
+                    &action,
+                )? {
+                    StateChangeResult::Ok { state, .. } => state,
+                    StateChangeResult::Noop { error, .. } => {
+                        // If a no-op occurs here then we should reject this operation, as the
+                        // author is trying to perform an invalid action, even from their
+                        // "point-of-view".
+                        return Err(GroupError::StateChangeError(operation.id(), error));
+                    }
+                    StateChangeResult::Filtered { state, .. } => {
+                        // TODO: introduce debug logging.
+                        state
+                    }
+                }
+            }
+            // TODO: revoke messages are not supported yet, either implement support or remove
+            // this message variant.
+            GroupControlMessage::Revoke { .. } => unimplemented!(),
+        };
+
+        y_i.graph = last_graph;
+        y_i.ignore = last_ignore;
+        y_i.states = last_states;
+        y_i.operations = last_operations;
+
+        Ok(y_i)
+    }
+
     #[allow(clippy::type_complexity)]
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
