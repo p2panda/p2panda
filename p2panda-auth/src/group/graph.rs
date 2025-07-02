@@ -1,5 +1,5 @@
 use petgraph::graphmap::DiGraphMap;
-use petgraph::visit::{Dfs, DfsPostOrder, Reversed};
+use petgraph::visit::{Dfs, Reversed};
 use std::collections::HashSet;
 
 use crate::traits::OperationId;
@@ -53,7 +53,7 @@ where
 {
     // Get all successors.
     let mut successors = HashSet::new();
-    let mut dfs = DfsPostOrder::new(&graph, target);
+    let mut dfs = Dfs::new(&graph, target);
     while let Some(nx) = dfs.next(&graph) {
         successors.insert(nx);
     }
@@ -61,7 +61,7 @@ where
     // Get all predecessors.
     let mut predecessors = HashSet::new();
     let reversed = Reversed(graph);
-    let mut dfs_rev = DfsPostOrder::new(&reversed, target);
+    let mut dfs_rev = Dfs::new(&reversed, target);
     while let Some(nx) = dfs_rev.next(&reversed) {
         predecessors.insert(nx);
     }
