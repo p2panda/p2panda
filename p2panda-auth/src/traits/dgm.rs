@@ -6,10 +6,14 @@ use crate::group::{Access, GroupMember};
 use crate::traits::{IdentityHandle, OperationId, Ordering};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait GroupMembership<ID, OP, C, GS, ORD>
+pub trait GroupMembership<ID, OP, C, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
+    // TODO: Do we strictly need the orderer here? Could it rather be a generic message?
+    // We might not actually need to know anything about the message type, only in the `Orderer`.
+    // In the _implementation_ we'd say it's an `ORD::Message` but not here (move that knowledge
+    // into the implementation.
     ORD: Ordering<ID, OP, Self::Action>,
 {
     type State;
@@ -32,6 +36,12 @@ where
     /// called. The `group_id` is extracted from the operation itself.
     fn create_from_remote(
         &self,
+        remote_operation: ORD::Message,
+    ) -> Result<Self::State, Self::Error>;
+
+    /// Process a remotely-authored group action message.
+    fn receive_from_remote(
+        y: Self::State,
         remote_operation: ORD::Message,
     ) -> Result<Self::State, Self::Error>;
 
