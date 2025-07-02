@@ -516,6 +516,10 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
+    // @TODO: This is a very verbose trait bound. It would be nice to make this a trait alias but
+    // this feature is not supported in stable Rust yet. Creating a sub-trait is an option but
+    // this introduces it's own down sides. It also might be a sign that there should be better
+    // type separation between the Group and Resolver, this could be a good refactor later.
     RS: Resolver<
             ORD::Message,
             State = GroupState<ID, OP, C, RS, ORD, GS>,
