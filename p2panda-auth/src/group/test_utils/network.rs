@@ -10,13 +10,13 @@ use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
 
 use super::{
-    Conditions, GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore,
-    TestOperation, TestOrderer, TestOrdererState,
+    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation,
+    TestOrderer, TestOrdererState,
 };
 
 pub struct Network {
     members: HashMap<MemberId, NetworkMember>,
-    queue: VecDeque<TestOperation<MemberId, MessageId, Conditions>>,
+    queue: VecDeque<TestOperation>,
     rng: StdRng,
 }
 
@@ -111,6 +111,52 @@ impl Network {
         operation_id
     }
 
+    pub fn demote(
+        &mut self,
+        demoter: MemberId,
+        demoted: GroupMember<MemberId>,
+        group_id: GroupId,
+        access: Access<()>,
+    ) -> MessageId {
+        let y = self.get_y(&demoter, &group_id);
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Demote {
+                member: demoted,
+                access,
+            },
+        };
+        let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
+        self.queue.push_back(operation);
+        self.set_y(y_ii);
+        operation_id
+    }
+
+    pub fn promote(
+        &mut self,
+        promoter: MemberId,
+        promoted: GroupMember<MemberId>,
+        group_id: GroupId,
+        access: Access<()>,
+    ) -> MessageId {
+        let y = self.get_y(&promoter, &group_id);
+        let control_message = GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: promoted,
+                access,
+            },
+        };
+        let (y_i, operation) = TestGroup::prepare(y, &control_message).unwrap();
+        let y_ii = TestGroup::process(y_i, &operation).unwrap();
+        let operation_id = operation.id();
+        self.queue.push_back(operation);
+        self.set_y(y_ii);
+        operation_id
+    }
+
     pub fn process_ooo(&mut self) {
         if self.queue.is_empty() {
             return;
@@ -123,7 +169,7 @@ impl Network {
             for id in &member_ids {
                 // Shuffle messages in the queue for each member.
                 self.shuffle();
-                self.member_process(&id, &operation)
+                self.member_process(id, &operation)
             }
         }
     }
@@ -137,25 +183,21 @@ impl Network {
 
         while let Some(operation) = self.queue.pop_front() {
             for id in &member_ids {
-                self.member_process(&id, &operation)
+                self.member_process(id, &operation)
             }
         }
     }
 
-    fn member_process(
-        &mut self,
-        member_id: &MemberId,
-        operation: &TestOperation<MemberId, MessageId, Conditions>,
-    ) {
+    fn member_process(&mut self, member_id: &MemberId, operation: &TestOperation) {
         // Do not process our own messages.
-        if &operation.sender() == member_id {
+        if &operation.author() == member_id {
             return;
         }
 
         let control_message = operation.payload();
         let mut group_id = control_message.group_id();
         let mut y = self.get_y(member_id, &group_id);
-        let orderer_y = TestOrderer::queue(y.orderer_y.clone(), &operation).unwrap();
+        let orderer_y = TestOrderer::queue(y.orderer_y.clone(), operation).unwrap();
 
         loop {
             let (orderer_y, result) = TestOrderer::next_ready_message(orderer_y.clone()).unwrap();
@@ -166,7 +208,7 @@ impl Network {
                 break;
             };
 
-            if &operation.sender() == member_id {
+            if &operation.author() == member_id {
                 continue;
             }
 
@@ -192,12 +234,10 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        previous: &Vec<MessageId>,
+        dependencies: &[MessageId],
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
-        let mut members = group_y
-            .members_at(&previous.clone().into_iter().collect::<HashSet<_>>())
-            .unwrap();
+        let mut members = group_y.members_at(&dependencies.iter().copied().collect::<HashSet<_>>());
         members.sort();
         members
     }
@@ -219,11 +259,11 @@ impl Network {
         &self,
         member: &MemberId,
         group_id: &GroupId,
-        dependencies: &Vec<MessageId>,
+        dependencies: &[MessageId],
     ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
-            .transitive_members_at(&dependencies.clone().into_iter().collect::<HashSet<_>>())
+            .transitive_members_at(&dependencies.iter().copied().collect::<HashSet<_>>())
             .expect("get transitive members");
         members.sort();
         members
@@ -242,8 +282,8 @@ impl Network {
         match group_y {
             Some(group_y) => group_y,
             None => TestGroupState::new(
-                member.id,
                 *group_id,
+                member.id,
                 member.group_store.clone(),
                 member.orderer_y.clone(),
             ),

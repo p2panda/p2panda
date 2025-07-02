@@ -7,15 +7,29 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupState};
+use crate::group::{Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+
+const OP_FILTER_NODE: &str = "#E63C3F";
+const OP_OK_NODE: &str = "#BFC6C77F";
+const OP_NOOP_NODE: &str = "#FFA142";
+const OP_ROOT_NODE: &str = "#EDD7B17F";
+const INDIVIDUAL_NODE: &str = "#EDD7B17F";
+const ADD_MEMBER_EDGE: &str = "#0091187F";
+const PREVIOUS_EDGE: &str = "#000000";
+const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
 impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Clone + Debug,
+    C: Clone + Debug + PartialEq + PartialOrd + Ord,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Clone
+        + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Message: Clone,
@@ -26,21 +40,29 @@ where
         let mut graph = DiGraph::new();
         graph = self.add_nodes_and_previous_edges(self.clone(), graph);
 
+        graph.add_node((None, self.format_final_members()));
+
         let dag_graphviz = Dot::with_attr_getters(
             &graph,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, edge| {
                 let weight = edge.weight();
-                if weight == "previous" || weight == "member" || weight == "sub group" {
-                    return format!("label = \"{}\"", weight);
+                if weight == "previous" {
+                    return format!("color=\"{PREVIOUS_EDGE}\", penwidth = 2.0");
                 }
 
-                format!("label = \"{}\", constraint = false", weight)
+                if weight == "member" || weight == "sub group" {
+                    return format!("color=\"{ADD_MEMBER_EDGE}\", penwidth = 2.0");
+                }
+
+                format!("constraint = false, color=\"{DEPENDENCIES_EDGE}\", penwidth = 2.0")
             },
             &|_, (_, (_, s))| format!("label = {}", s),
         );
 
-        format!("{:?}", dag_graphviz)
+        let mut s = format!("{:?}", dag_graphviz);
+        s = s.replace("digraph {", "digraph {\n    splines=polyline\n");
+        s
     }
 
     fn add_nodes_and_previous_edges(
@@ -78,7 +100,7 @@ where
                 ..
             } = operation.payload()
             {
-                for (member, _) in initial_members {
+                for (member, _access) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
                 }
             }
@@ -121,12 +143,29 @@ where
 
     fn format_operation(&self, operation: &ORD::Message) -> String {
         let control_message = operation.payload();
+        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
+            // Revoke operations not yet supported.
+            unimplemented!()
+        };
+
         let mut s = String::new();
 
         let color = if control_message.is_create() {
-            "bisque"
+            OP_ROOT_NODE
         } else {
-            "grey"
+            match Group::apply_action(
+                self.clone(),
+                operation.id(),
+                operation.author(),
+                &HashSet::from_iter(operation.dependencies()),
+                &action,
+            )
+            .expect("critical error when applying state change")
+            {
+                super::StateChangeResult::Ok { .. } => OP_OK_NODE,
+                super::StateChangeResult::Noop { .. } => OP_NOOP_NODE,
+                super::StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
+            }
         };
 
         s += &format!(
@@ -134,7 +173,7 @@ where
         );
         s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
-        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.sender());
+        s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
         let previous = operation.previous();
         if !previous.is_empty() {
             s += &format!(
@@ -142,8 +181,7 @@ where
                 self.format_dependencies(&previous)
             );
         }
-        let mut dependencies = operation.dependencies().clone();
-        dependencies.retain(|id| !previous.contains(id));
+        let dependencies = operation.dependencies().clone();
         if !dependencies.is_empty() {
             s += &format!(
                 "<TR><TD>dependencies</TD><TD>{}</TD></TR>",
@@ -156,8 +194,22 @@ where
         );
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_members(&operation)
+            self.format_members(operation)
         );
+        s += "</TABLE>>";
+        s
+    }
+
+    fn format_final_members(&self) -> String {
+        let mut s = String::new();
+        s += "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">";
+
+        let mut members = self.transitive_members().unwrap();
+        members.sort();
+        s += "<TR><TD>GROUP MEMBERS</TD></TR>";
+        for (id, access) in members {
+            s += &format!("<TR><TD> {} : {} </TD></TR>", id, access);
+        }
         s += "</TABLE>>";
         s
     }
@@ -273,28 +325,47 @@ where
     ) -> DiGraph<(Option<OP>, String), String> {
         match member {
             GroupMember::Individual(id) => {
-                let idx = graph.add_node((None, format!("<<TABLE BGCOLOR=\"bisque\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\"><TR><TD>individual</TD><TD>{id}</TD></TR></TABLE>>")));
+                let table = format!(
+                    "<<TABLE BGCOLOR=\"{INDIVIDUAL_NODE}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\"><TR><TD>individual</TD><TD>{id}</TD></TR></TABLE>>"
+                );
+                let idx = match graph.node_references().find(|(_, (_, t))| t == &table) {
+                    Some((idx, _)) => idx,
+                    None => graph.add_node((None, table)),
+                };
                 graph.add_edge(operation_idx, idx, "member".to_string());
             }
             GroupMember::Group(id) => {
                 let sub_group = self.get_sub_group(id).unwrap();
-                graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
-
                 let create_operation = sub_group
                     .operations
                     .first()
                     .expect("create operation exists");
 
-                let (create_operation_idx, _) = graph
-                    .node_references()
-                    .find(|(_, (op, _))| {
-                        if let Some(op) = op {
-                            *op == create_operation.id()
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
+                let create_node = graph.node_references().find(|(_, (op, _))| {
+                    if let Some(op) = op {
+                        *op == create_operation.id()
+                    } else {
+                        false
+                    }
+                });
+
+                let create_operation_idx = match create_node {
+                    Some((idx, _)) => idx,
+                    None => {
+                        graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
+                        let (idx, _) = graph
+                            .node_references()
+                            .find(|(_, (op, _))| {
+                                if let Some(op) = op {
+                                    *op == create_operation.id()
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap();
+                        idx
+                    }
+                };
 
                 graph.add_edge(operation_idx, create_operation_idx, "sub group".to_string());
             }
