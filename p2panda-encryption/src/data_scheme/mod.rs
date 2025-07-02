@@ -56,9 +56,9 @@
 //!
 //! ## Key bundles
 //!
-//! For initial key agreement peers need to publish key bundles into the network to allow others to
-//! invite them into groups. For the "Data Encryption" scheme we're using long-term pre-keys with
-//! lifetimes specified by the application.
+//! For initial key agreement (X3DH) peers need to publish key bundles into the network to allow
+//! others to invite them into groups. For the "Data Encryption" scheme we're using long-term
+//! pre-keys with lifetimes specified by the application.
 //!
 //! More on key bundles can be read [here](crate::key_bundle).
 //!
@@ -87,7 +87,7 @@ mod tests;
 
 pub use data::{decrypt_data, encrypt_data};
 pub use dcgka::{ControlMessage, DirectMessage, DirectMessageContent, DirectMessageType};
-pub use group::{EncryptionGroup, EncryptionGroupError, GroupOutput, GroupResult, GroupState};
+pub use group::{EncryptionGroup, GroupError, GroupOutput, GroupResult, GroupState};
 pub use group_secret::{
     GROUP_SECRET_SIZE, GroupSecret, GroupSecretError, GroupSecretId, SecretBundle,
     SecretBundleState,

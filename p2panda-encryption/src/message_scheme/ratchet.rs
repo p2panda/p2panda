@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Encryption and decryption ratches with lost or out-of-order messages.
 use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
@@ -9,12 +10,16 @@ use crate::crypto::Secret;
 use crate::crypto::aead::AeadNonce;
 use crate::crypto::hkdf::{HkdfError, hkdf};
 
+/// 256-bit secret message key.
 pub const MESSAGE_KEY_SIZE: usize = 32;
 
+/// Secret message key.
 pub type RatchetKey = Secret<MESSAGE_KEY_SIZE>;
 
+/// AEAD nonce to encrypt message.
 pub type RatchetNonce = AeadNonce;
 
+/// AEAD parameters to encrypt message.
 pub type RatchetKeyMaterial = (RatchetKey, RatchetNonce);
 
 /// Key generation of message ratchet.

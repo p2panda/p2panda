@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! API to manage groups using the “Data Encryption” scheme and process remote control messages.
+//! API to manage groups using the "Data Encryption" scheme and process remote control- and
+//! application messages.
 #![allow(clippy::type_complexity)]
 use std::collections::{HashSet, VecDeque};
 use std::marker::PhantomData;
@@ -24,7 +25,7 @@ use crate::traits::{
     IdentityRegistry, OperationId, Ordering, PreKeyManager, PreKeyRegistry,
 };
 
-/// API to manage groups using the “Data Encryption” scheme and process remote control messages.
+/// API to manage groups using the "Data Encryption" scheme and process remote control messages.
 pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
@@ -88,7 +89,7 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if y.is_welcomed {
-            return Err(EncryptionGroupError::GroupAlreadyEstablished);
+            return Err(GroupError::GroupAlreadyEstablished);
         }
 
         // Generate new group secret.
@@ -101,8 +102,7 @@ where
         let (mut y_i, message) = Self::process_local(y, pre, Some(group_secret))?;
 
         // Set our own "create" as the "welcome" message.
-        let y_orderer_i =
-            ORD::set_welcome(y_i.orderer, &message).map_err(EncryptionGroupError::Orderer)?;
+        let y_orderer_i = ORD::set_welcome(y_i.orderer, &message).map_err(GroupError::Orderer)?;
         y_i.orderer = y_orderer_i;
         y_i.is_welcomed = true;
 
@@ -116,11 +116,11 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(EncryptionGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         if y.my_id == added {
-            return Err(EncryptionGroupError::NotAddOurselves);
+            return Err(GroupError::NotAddOurselves);
         }
 
         // Add a new member to the group.
@@ -137,7 +137,7 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(EncryptionGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         // Generate new group secret.
@@ -156,7 +156,7 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(EncryptionGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         // Generate new group secret.
@@ -190,7 +190,7 @@ where
         }) = message_content
         {
             if y.is_welcomed {
-                return Err(EncryptionGroupError::GroupAlreadyEstablished);
+                return Err(GroupError::GroupAlreadyEstablished);
             }
 
             if initial_members.contains(&y.my_id) {
@@ -205,7 +205,7 @@ where
             }
         }
 
-        let y_orderer_i = ORD::queue(y.orderer, message).map_err(EncryptionGroupError::Orderer)?;
+        let y_orderer_i = ORD::queue(y.orderer, message).map_err(GroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         if !y.is_welcomed && !is_create_or_welcome {
@@ -218,8 +218,7 @@ where
         if !y.is_welcomed && is_create_or_welcome {
             // We've received a "create" or "add" (welcome) message for us and can join the group
             // now.
-            let y_orderer_i =
-                ORD::set_welcome(y.orderer, message).map_err(EncryptionGroupError::Orderer)?;
+            let y_orderer_i = ORD::set_welcome(y.orderer, message).map_err(GroupError::Orderer)?;
             y.orderer = y_orderer_i;
         }
 
@@ -232,7 +231,7 @@ where
         // Check if there's any correctly ordered messages ready to-be processed.
         loop {
             let (y_orderer_next, result) =
-                ORD::next_ready_message(y_loop.orderer).map_err(EncryptionGroupError::Orderer)?;
+                ORD::next_ready_message(y_loop.orderer).map_err(GroupError::Orderer)?;
             y_loop.orderer = y_orderer_next;
 
             let Some(message) = result else {
@@ -280,11 +279,11 @@ where
         rng: &Rng,
     ) -> GroupResult<ORD::Message, ID, OP, PKI, DGM, KMG, ORD> {
         if !y.is_welcomed {
-            return Err(EncryptionGroupError::GroupNotYetEstablished);
+            return Err(GroupError::GroupNotYetEstablished);
         }
 
         let Some(group_secret) = y.secrets.latest() else {
-            return Err(EncryptionGroupError::NoGroupSecretAvailable);
+            return Err(GroupError::NoGroupSecretAvailable);
         };
 
         // Encrypt application data.
@@ -294,7 +293,7 @@ where
         // Determine parameters for to-be-published application message.
         let (y_orderer_i, message) =
             ORD::next_application_message(y.orderer, secret_id, nonce, ciphertext)
-                .map_err(EncryptionGroupError::Orderer)?;
+                .map_err(GroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         Ok((y, message))
@@ -303,7 +302,7 @@ where
     /// Returns a list of all current members in this group from our perspective.
     pub fn members(
         y: &GroupState<ID, OP, PKI, DGM, KMG, ORD>,
-    ) -> Result<HashSet<ID>, EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>> {
+    ) -> Result<HashSet<ID>, GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
         let members = Dcgka::members(&y.dcgka)?;
         Ok(members)
     }
@@ -333,7 +332,7 @@ where
         // Determine parameters for to-be-published control message.
         let (y_orderer_i, message) =
             ORD::next_control_message(y.orderer, &output.control_message, &output.direct_messages)
-                .map_err(EncryptionGroupError::Orderer)?;
+                .map_err(GroupError::Orderer)?;
         y.orderer = y_orderer_i;
 
         // Process control message locally to update our state.
@@ -442,7 +441,7 @@ where
         group_secret: &GroupSecret,
         plaintext: &[u8],
         rng: &Rng,
-    ) -> Result<(XAeadNonce, Vec<u8>), EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>> {
+    ) -> Result<(XAeadNonce, Vec<u8>), GroupError<ID, OP, PKI, DGM, KMG, ORD>> {
         let nonce: XAeadNonce = rng.random_array()?;
         let ciphertext = encrypt_data(plaintext, group_secret, nonce)?;
         Ok((nonce, ciphertext))
@@ -456,20 +455,17 @@ where
         ciphertext: Vec<u8>,
     ) -> GroupResult<Vec<u8>, ID, OP, PKI, DGM, KMG, ORD> {
         let Some(group_secret) = y.secrets.get(&group_secret_id) else {
-            return Err(EncryptionGroupError::UnknownGroupSecret(hex::encode(
-                group_secret_id,
-            )));
+            return Err(GroupError::UnknownGroupSecret(hex::encode(group_secret_id)));
         };
         let plaintext = decrypt_data(&ciphertext, group_secret, nonce)?;
         Ok((y, plaintext))
     }
 }
 
-pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> = Result<
-    (GroupState<ID, OP, PKI, DGM, KMG, ORD>, T),
-    EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>,
->;
+pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
+    Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
 
+/// Result from processing a remote message or calling a local group operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupOutput<ID, OP, DGM, ORD>
 where
@@ -487,7 +483,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum EncryptionGroupError<ID, OP, PKI, DGM, KMG, ORD>
+pub enum GroupError<ID, OP, PKI, DGM, KMG, ORD>
 where
     PKI: IdentityRegistry<ID, PKI::State> + PreKeyRegistry<ID, LongTermKeyBundle>,
     DGM: GroupMembership<ID, OP>,
@@ -532,7 +528,7 @@ mod tests {
     use crate::data_scheme::test_utils::network::init_group_state;
     use crate::traits::{GroupMembership, Ordering};
 
-    use super::{EncryptionGroup, EncryptionGroupError};
+    use super::{EncryptionGroup, GroupError};
 
     pub fn assert_payload<ID, OP, DGM, ORD>(
         messages: &[GroupOutput<ID, OP, DGM, ORD>],
@@ -608,7 +604,7 @@ mod tests {
         // Charlie can not decrypt the latest message anymore.
         assert!(matches!(
             EncryptionGroup::receive(y_charlie, &alice_message_2),
-            Err(EncryptionGroupError::UnknownGroupSecret(_))
+            Err(GroupError::UnknownGroupSecret(_))
         ));
     }
 }

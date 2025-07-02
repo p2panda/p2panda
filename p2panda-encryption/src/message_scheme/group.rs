@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! API to manage groups using the "Message Encryption" scheme and process remote control- and
+//! application messages.
 #![allow(clippy::type_complexity)]
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash as StdHash;
@@ -30,7 +32,7 @@ pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
 
-/// Group state for "message encryption" scheme. Serializable for persistence.
+/// Group state for "Message Encryption" scheme. Serializable for persistence.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupState<ID, OP, PKI, DGM, KMG, ORD>
@@ -482,6 +484,7 @@ where
 pub type GroupResult<T, ID, OP, PKI, DGM, KMG, ORD> =
     Result<(GroupState<ID, OP, PKI, DGM, KMG, ORD>, T), GroupError<ID, OP, PKI, DGM, KMG, ORD>>;
 
+/// Result from processing a remote message or calling a local group operation.
 #[derive(Clone, Default)]
 pub struct GroupOutput<ID, OP, DGM, ORD>
 where
@@ -516,6 +519,7 @@ where
     }
 }
 
+/// Dispatched event after processing a group message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupEvent<ID, OP, DGM, ORD>
 where
@@ -532,6 +536,7 @@ where
     RemovedOurselves,
 }
 
+/// Configuration for the message ratchets used in this group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupConfig {
     /// This parameter defines how many incoming messages can be skipped. This is useful if the

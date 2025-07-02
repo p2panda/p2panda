@@ -1427,7 +1427,7 @@ impl NextSeed {
     }
 }
 
-/// Chain secrets for the "outer" key-agreement ratchet.
+/// Chain secret for the "outer" key-agreement ratchet.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct ChainSecret(Secret<RATCHET_KEY_SIZE>);
@@ -1477,6 +1477,7 @@ impl From<UpdateSecret> for ChainSecret {
     }
 }
 
+/// Chain secret for the "inner" message ratchet.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct UpdateSecret(Secret<RATCHET_KEY_SIZE>);
