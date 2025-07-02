@@ -5,6 +5,8 @@ use rand::rngs::StdRng;
 
 use crate::group::Access;
 use crate::group::Group;
+use crate::group::GroupError;
+use crate::group::GroupMembershipError;
 use crate::group::GroupState;
 use crate::group::test_utils::TestGroupStore;
 use crate::group::test_utils::TestOperation;
@@ -870,7 +872,6 @@ fn members_at() {
         members_by_all_known_operations
     );
 }
-
 #[test]
 fn error_cases() {
     let group_id = '0';
@@ -882,7 +883,7 @@ fn error_cases() {
 
     let mut rng = StdRng::from_os_rng();
 
-    let (y, _) = create_group(
+    let (y_i, _) = create_group(
         group_id,
         alice,
         vec![
@@ -893,7 +894,7 @@ fn error_cases() {
         &mut rng,
     );
 
-    let previous: Vec<u32> = y.heads().into_iter().collect();
+    let previous: Vec<u32> = y_i.heads().into_iter().collect();
 
     // AlreadyAdded
     let op = TestOperation {
@@ -909,11 +910,17 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_i.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyAdded(GroupMember::Individual('B'))
+        ))
+    ));
 
-    // Remove claire so we can test AlreadyRemoved error types.
-    let y = Group::process(
-        y,
+    // Remove claire so we can test AlreadyRemoved
+    let y_ii = Group::process(
+        y_i,
         &TestOperation {
             id: 2,
             author: alice,
@@ -929,12 +936,14 @@ fn error_cases() {
     )
     .unwrap();
 
+    let previous: Vec<u32> = y_ii.heads().into_iter().collect();
+
     // AlreadyRemoved
     let op = TestOperation {
         id: 3,
         author: alice,
-        dependencies: y.heads().into_iter().collect(),
-        previous: y.heads().into_iter().collect(),
+        dependencies: previous.clone(),
+        previous: previous.clone(),
         payload: GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Remove {
@@ -942,7 +951,13 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyRemoved(GroupMember::Individual('C'))
+        ))
+    ));
 
     // InsufficientAccess
     let op = TestOperation {
@@ -958,11 +973,17 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InsufficientAccess(GroupMember::Individual('B'))
+        ))
+    ));
 
-    // InactiveActor
-    Group::process(
-        y.clone(),
+    // Remove bob so we can test InactiveActor
+    let y_iii = Group::process(
+        y_ii,
         &TestOperation {
             id: 5,
             author: alice,
@@ -978,11 +999,14 @@ fn error_cases() {
     )
     .unwrap();
 
+    let previous: Vec<u32> = y_iii.heads().into_iter().collect();
+
+    // InactiveActor
     let op = TestOperation {
         id: 6,
         author: bob,
-        dependencies: y.heads().into_iter().collect(),
-        previous: y.heads().into_iter().collect(),
+        dependencies: previous.clone(),
+        previous: previous.clone(),
         payload: GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Add {
@@ -991,14 +1015,20 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveActor(GroupMember::Individual('B'))
+        ))
+    ));
 
     // InactiveMember
     let op = TestOperation {
         id: 7,
         author: alice,
-        dependencies: y.heads().into_iter().collect(),
-        previous: y.heads().into_iter().collect(),
+        dependencies: previous.clone(),
+        previous: previous.clone(),
         payload: GroupControlMessage::GroupAction {
             group_id,
             action: GroupAction::Promote {
@@ -1007,7 +1037,13 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveMember(GroupMember::Individual('C'))
+        ))
+    ));
 
     // UnrecognisedActor
     let op = TestOperation {
@@ -1023,7 +1059,13 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedActor(GroupMember::Individual('E'))
+        ))
+    ));
 
     // UnrecognisedMember
     let op = TestOperation {
@@ -1039,9 +1081,14 @@ fn error_cases() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedMember(GroupMember::Individual('E'))
+        ))
+    ));
 }
-
 #[test]
 fn error_cases_resolver() {
     let group_id = '0';
@@ -1050,11 +1097,10 @@ fn error_cases_resolver() {
     let claire = 'C';
     let dave = 'D';
     let eve = 'E';
-    let flora: char = 'F';
 
     let mut rng = StdRng::from_os_rng();
 
-    let (y, _) = create_group(
+    let (y_i, _) = create_group(
         group_id,
         alice,
         vec![
@@ -1065,26 +1111,30 @@ fn error_cases_resolver() {
         &mut rng,
     );
 
-    let previous: Vec<u32> = y.heads().into_iter().collect();
+    let previous: Vec<u32> = y_i.heads().into_iter().collect();
 
-    // Perform one operation which will be concurrent to all others so that we test error cases
-    // when the resolver is used internally.
-    let op = TestOperation {
-        id: 0,
-        author: alice,
-        dependencies: previous.clone(),
-        previous: previous.clone(),
-        payload: GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(flora),
-                access: Access::Read,
-            },
-        },
-    };
-    let y = Group::process(y.clone(), &op).unwrap();
+    // Remove all current members and all all non-members as managers in a concurrent branch.
+    let (mut y_ii, _) = remove_member(y_i, group_id, bob);
+    (y_ii, _) = remove_member(y_ii, group_id, claire);
+    (y_ii, _) = add_member(y_ii, group_id, dave, Access::Manage);
+    (y_ii, _) = add_member(y_ii, group_id, eve, Access::Manage);
+    (y_ii, _) = remove_member(y_ii, group_id, alice);
 
-    // AlreadyAdded
+    let mut members = y_ii.members();
+    members.sort();
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual(dave), Access::Manage),
+            (GroupMember::Individual(eve), Access::Manage)
+        ]
+    );
+
+    // All the following operations are appended into the group operation graph into a branch
+    // concurrent to all the previous group changes. This means they should be validated against
+    // state which does not include those changes (even though they are the "current" state).
+
+    // AlreadyAdded (bob)
     let op = TestOperation {
         id: 1,
         author: alice,
@@ -1098,9 +1148,15 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyAdded(GroupMember::Individual('B'))
+        ))
+    ));
 
-    // Remove claire so we can test AlreadyRemoved error types.
+    // Remove claire
     let op = TestOperation {
         id: 2,
         author: alice,
@@ -1113,12 +1169,12 @@ fn error_cases_resolver() {
             },
         },
     };
-    let y = Group::process(y, &op).unwrap();
+    let y_iii = Group::process(y_ii.clone(), &op).unwrap();
 
-    // New previous to be used for all other operations.
+    // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
     let previous = vec![op.id];
 
-    // AlreadyRemoved
+    // AlreadyRemoved (claire)
     let op = TestOperation {
         id: 3,
         author: alice,
@@ -1131,9 +1187,15 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyRemoved(GroupMember::Individual('C'))
+        ))
+    ));
 
-    // InsufficientAccess
+    // InsufficientAccess (bob tries to add dave)
     let op = TestOperation {
         id: 4,
         author: bob,
@@ -1147,26 +1209,33 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InsufficientAccess(GroupMember::Individual('B'))
+        ))
+    ));
 
-    // InactiveActor
-    Group::process(
-        y.clone(),
-        &TestOperation {
-            id: 5,
-            author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
-                group_id,
-                action: GroupAction::Remove {
-                    member: GroupMember::Individual(bob),
-                },
+    // Remove bob
+    let op = TestOperation {
+        id: 5,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(bob),
             },
         },
-    )
-    .unwrap();
+    };
+    let y_iv = Group::process(y_iii.clone(), &op).unwrap();
 
+    // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
+    let previous = vec![op.id];
+
+    // InactiveActor (bob tries to add dave)
     let op = TestOperation {
         id: 6,
         author: bob,
@@ -1180,9 +1249,15 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveActor(GroupMember::Individual('B'))
+        ))
+    ));
 
-    // InactiveMember
+    // InactiveMember (claire promoted)
     let op = TestOperation {
         id: 7,
         author: alice,
@@ -1196,9 +1271,15 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveMember(GroupMember::Individual('C'))
+        ))
+    ));
 
-    // UnrecognisedActor
+    // UnrecognisedActor (eve tries to add dave)
     let op = TestOperation {
         id: 8,
         author: eve,
@@ -1212,9 +1293,15 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedActor(GroupMember::Individual('E'))
+        ))
+    ));
 
-    // UnrecognisedMember
+    // UnrecognisedMember (alice promotes eve)
     let op = TestOperation {
         id: 9,
         author: alice,
@@ -1228,5 +1315,11 @@ fn error_cases_resolver() {
             },
         },
     };
-    assert!(Group::process(y.clone(), &op).is_err());
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedMember(GroupMember::Individual('E'))
+        ))
+    ));
 }
