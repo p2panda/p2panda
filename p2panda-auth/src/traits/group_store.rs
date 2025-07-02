@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// TODO: Rename this module from `group_store.rs` to `store.rs`.
+
 use std::error::Error;
+use std::fmt::Display;
 
 use crate::group::{GroupControlMessage, GroupState};
 use crate::traits::{IdentityHandle, OperationId, Ordering};
@@ -13,7 +16,7 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     Self: Sized,
 {
-    type Error: Error;
+    type Error: Error + Display;
 
     /// Insert a group state into the store.
     fn insert(
