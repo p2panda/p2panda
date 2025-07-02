@@ -10,7 +10,7 @@ pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
 
-use crate::group::resolver::GroupResolver;
+use crate::group::resolver::StrongRemove;
 use crate::group::{Group, GroupState};
 use crate::traits::{IdentityHandle, OperationId};
 
@@ -22,7 +22,7 @@ pub type GroupId = char;
 pub type MessageId = u32;
 pub type Conditions = ();
 
-pub type GenericTestResolver<ORD, GS> = GroupResolver<MemberId, MessageId, Conditions, ORD, GS>;
+pub type GenericTestResolver<ORD, GS> = StrongRemove<MemberId, MessageId, Conditions, ORD, GS>;
 pub type GenericTestGroup<RS, ORD, GS> = Group<MemberId, MessageId, Conditions, RS, ORD, GS>;
 pub type GenericTestGroupState<RS, ORD, GS> =
     GroupState<MemberId, MessageId, Conditions, RS, ORD, GS>;

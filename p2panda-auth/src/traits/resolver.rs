@@ -12,7 +12,7 @@ pub trait Resolver<MSG> {
 
     // Check if this message requires that a full state re-build takes place. This would usually
     // be due to concurrent operations arriving which require special handling.
-    fn rebuild_required(y: &Self::State, msg: &MSG) -> bool;
+    fn rebuild_required(y: &Self::State, msg: &MSG) -> Result<bool, Self::Error>;
 
     // Process all operations and update internal state as required.
     //
