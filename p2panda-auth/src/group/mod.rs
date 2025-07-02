@@ -539,10 +539,7 @@ where
     fn prepare(
         mut y: Self::State,
         action: &Self::Action,
-    ) -> Result<
-        (GroupState<ID, OP, C, RS, ORD, GS>, ORD::Message),
-        GroupError<ID, OP, C, RS, ORD, GS>,
-    > {
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
@@ -556,10 +553,7 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
-    fn process(
-        mut y: Self::State,
-        operation: &ORD::Message,
-    ) -> Result<Self::State, GroupError<ID, OP, C, RS, ORD, GS>> {
+    fn process(mut y: Self::State, operation: &ORD::Message) -> Result<Self::State, Self::Error> {
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
