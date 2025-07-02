@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
 ]
-description = "Decentralized secure data- and message encryption for groups with post-compromise security and optional forward secrecy"
+description = "Decentralized data- and message encryption for groups with post-compromise security and optional forward secrecy"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
