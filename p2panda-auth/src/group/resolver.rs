@@ -120,15 +120,13 @@ where
         // concurrency. Multiple bubbles can occur in the same graph.
         let mut bubbles = concurrent_bubbles(&y.graph);
 
-        let topo_sort = toposort(&y.graph, None).unwrap();
-        let mut topo_sort_iter = topo_sort.into_iter();
-        // let mut dfs = DfsPostOrder::new(&y.graph, root);
+        let topo_sort = toposort(&y.graph, None).expect("group operation sets can be ordered topologically");
         let mut visited = HashSet::new();
 
         // Traverse the graph visiting the operations in topological order.
-        while let Some(target_operation_id) = topo_sort_iter.next() {
+        for target_operation_id in topo_sort.iter() {
             let Some(target_operation) = operations.get(&target_operation_id) else {
-                return Err(GroupError::MissingOperation(target_operation_id));
+                return Err(GroupError::MissingOperation(*target_operation_id));
             };
 
             let bubble = bubbles
@@ -136,7 +134,7 @@ where
                 .find(|bubble| bubble.contains(&target_operation_id))
                 .cloned();
 
-            visited.insert(target_operation_id);
+            visited.insert(*target_operation_id);
 
             let removed_manager = y.removed_manager(target_operation);
 
@@ -147,7 +145,7 @@ where
                 for bubble_operation_id in bubble.iter() {
                     // If there's a path between the bubble and target operation, then it's not
                     // concurrent, so we don't need to do anything.
-                    if has_path(&y.graph, *bubble_operation_id, target_operation_id) {
+                    if has_path(&y.graph, *bubble_operation_id, *target_operation_id) {
                         continue;
                     }
 
