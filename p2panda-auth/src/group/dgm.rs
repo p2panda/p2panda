@@ -345,3 +345,152 @@ where
         Ok((y, operation))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    use crate::group::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
+
+    use super::*;
+
+    const ALICE: char = 'A';
+    const BOB: char = 'B';
+    const CLAIRE: char = 'C';
+    const DAVE: char = 'D';
+
+    const MY_ID: char = 'T';
+    const GROUP_ID: char = 'G';
+
+    // Initialise the group manager and create a group with three initial members.
+    fn setup() -> TestGroupState {
+        let rng = StdRng::from_os_rng();
+
+        let store = TestGroupStore::default();
+        let orderer = TestOrdererState::new(MY_ID, store.clone(), rng);
+
+        let initial_members = [
+            (GroupMember::Individual(ALICE), Access::Manage),
+            (GroupMember::Individual(BOB), Access::Read),
+            (
+                GroupMember::Individual(CLAIRE),
+                Access::Write { conditions: None },
+            ),
+        ]
+        .to_vec();
+
+        let group = GroupManager::init(MY_ID, store, orderer);
+
+        let (group_y, _operation) = group.create(GROUP_ID, initial_members).unwrap();
+
+        group_y
+    }
+
+    // The following tests are all focused on ensuring correct validation and returned error
+    // variants. `Group::prepare()` and `Group::process()` are tested elsewhere and are therefore
+    // excluded from explicit testing here.
+    #[test]
+    fn add_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        assert!(matches!(
+            GroupManager::add(y.clone(), BOB, DAVE, Access::Pull),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+
+        // Claire is already a group member.
+        assert!(matches!(
+            GroupManager::add(y, ALICE, CLAIRE, Access::Pull),
+            Err(GroupManagerError::GroupMember(CLAIRE, GROUP_ID))
+        ));
+    }
+
+    #[test]
+    fn remove_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        assert!(matches!(
+            GroupManager::remove(y.clone(), BOB, CLAIRE),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::remove(y, ALICE, DAVE),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+    }
+
+    #[test]
+    fn promote_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        assert!(matches!(
+            GroupManager::promote(y.clone(), BOB, CLAIRE, Access::Manage),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::promote(y.clone(), ALICE, DAVE, Access::Read),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+
+        // Bob already has `Read` access.
+        assert!(matches!(
+            GroupManager::promote(y, ALICE, BOB, Access::Read),
+            Err(GroupManagerError::SameAccessLevel(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+    }
+
+    #[test]
+    fn demote_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        assert!(matches!(
+            GroupManager::demote(y.clone(), BOB, CLAIRE, Access::Pull),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::demote(y.clone(), ALICE, DAVE, Access::Read),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+
+        // Bob already has `Read` access.
+        assert!(matches!(
+            GroupManager::demote(y, ALICE, BOB, Access::Read),
+            Err(GroupManagerError::SameAccessLevel(
+                BOB,
+                Access::Read,
+                GROUP_ID
+            ))
+        ));
+    }
+}
