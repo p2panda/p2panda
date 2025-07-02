@@ -46,6 +46,8 @@ pub enum GroupMember<ID> {
 
 impl<ID> GroupMember<ID> {
     /// Return the ID of a group member.
+    // This method is not currently used; we're silencing the clippy warning for now.
+    #[allow(dead_code)]
     fn id(&self) -> &ID {
         match self {
             GroupMember::Individual(id) => id,
@@ -349,6 +351,7 @@ where
                 }
             }
         }
+
         Ok(members.into_iter().collect())
     }
 
@@ -390,6 +393,7 @@ where
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let heads = self.transitive_heads()?;
         let members = self.transitive_members_at(&heads)?;
+
         Ok(members)
     }
 
@@ -495,56 +499,63 @@ where
     type Error = GroupError<ID, OP, C, RS, ORD, GS>;
 
     fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
-        let current_state = y.current_state();
-
-        let member_state = current_state
-            .members
+        let member_state = y
+            .transitive_members()?
             .into_iter()
-            .find(|(member_id, _state)| member_id.id() == member);
+            .find(|(member_id, _state)| member_id == member);
 
         if let Some(state) = member_state {
-            Ok(state.1.access)
+            let access = state.1.to_owned();
+
+            Ok(access)
         } else {
             Err(GroupError::MemberNotFound(y.group_id, *member))
         }
     }
 
-    fn member_ids(y: &Self::State) -> HashSet<ID> {
-        let current_state = y.current_state();
-
-        current_state
-            .members()
-            .iter()
-            .map(|member| member.id().to_owned())
-            .collect()
-    }
-
-    fn is_member(y: &Self::State, member: &ID) -> bool {
-        let current_state = y.current_state();
-
-        let member_state = current_state
-            .members
+    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error> {
+        let member_ids = y
+            .transitive_members()?
             .into_iter()
-            .find(|(member_id, _state)| member_id.id() == member);
+            .map(|(member_id, _state)| member_id)
+            .collect();
 
-        member_state.is_some()
+        Ok(member_ids)
     }
 
-    fn is_puller(y: &Self::State, member: &ID) -> bool {
-        // TODO(glyph): Would we rather propagate the error (`MemberNotFound`)?
-        matches!(GroupState::access(y, member), Ok(Access::Pull))
+    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let member_state = y
+            .transitive_members()?
+            .into_iter()
+            .find(|(member_id, _state)| member_id == member);
+
+        let is_member = member_state.is_some();
+
+        Ok(is_member)
     }
 
-    fn is_reader(y: &Self::State, member: &ID) -> bool {
-        matches!(GroupState::access(y, member), Ok(Access::Read))
+    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_puller = matches!(GroupState::access(y, member)?, Access::Pull);
+
+        Ok(is_puller)
     }
 
-    fn is_writer(y: &Self::State, member: &ID) -> bool {
-        matches!(GroupState::access(y, member), Ok(Access::Write { .. }))
+    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_reader = matches!(GroupState::access(y, member)?, Access::Read);
+
+        Ok(is_reader)
     }
 
-    fn is_manager(y: &Self::State, member: &ID) -> bool {
-        matches!(GroupState::access(y, member), Ok(Access::Manage))
+    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_writer = matches!(GroupState::access(y, member)?, Access::Write { .. });
+
+        Ok(is_writer)
+    }
+
+    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_manager = matches!(GroupState::access(y, member)?, Access::Manage);
+
+        Ok(is_manager)
     }
 }
 
