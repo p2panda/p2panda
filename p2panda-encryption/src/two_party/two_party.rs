@@ -41,9 +41,9 @@ use crate::two_party::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
 /// has been used. In the case of a newer secret being used, all "previous" secret keys will be
 /// dropped.
 ///
-/// ## Forward-secrecy
+/// ## Forward secrecy
 ///
-/// During the initial 2SM "round" using X3DH the forward-secrecy is defined by the lifetime of the
+/// During the initial 2SM "round" using X3DH the forward secrecy is defined by the lifetime of the
 /// used pre-keys. For strong security guarantees it is recommended to use one-time pre-keys. If
 /// this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime
 /// defined by the application.
@@ -584,7 +584,7 @@ mod tests {
             OneTimeTwoParty::receive(alice_2sm, alice_manager, message_3).unwrap();
 
         // Alice removed the used secret key of this message (2) and all previous secrets as well
-        // (1) for forward-secrecy.
+        // (1) for forward secrecy.
         assert_eq!(alice_2sm.our_secret_keys.len(), 0);
         assert_eq!(alice_2sm.our_min_key_index, 3);
         assert_eq!(alice_2sm.our_next_key_index, 3);

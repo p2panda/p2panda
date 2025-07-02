@@ -14,7 +14,7 @@
 //! ## Forward secrecy
 //!
 //! Some applications might have very strong forward secrecy requirements and only allow "one-time"
-//! pre-keys per group. This means that we can only establish a Forward-Secure (FS) communication
+//! pre-keys per group. This means that we can only establish a Forward Secure (FS) communication
 //! channel with a peer if we reliably made sure to only use the pre-key exactly once. This is hard
 //! to guarantee in a decentralised setting. If we don’t care about very strong FS we can ease up
 //! on that requirement a little bit and tolerate re-use with longer-living pre-keys which get

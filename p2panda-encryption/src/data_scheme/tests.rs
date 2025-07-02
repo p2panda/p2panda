@@ -134,7 +134,7 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(bob_group_secret_0) = output.group_secret else {
+    let GroupSecretOutput::Secret(bob_group_secret_0) = output else {
         panic!("expected group secret");
     };
     let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_0.clone());
@@ -189,7 +189,7 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Bundle(charlie_secret_bundle_0) = output.group_secret else {
+    let GroupSecretOutput::Bundle(charlie_secret_bundle_0) = output else {
         panic!("expected group secret bundle");
     };
     let charlie_bundle = SecretBundle::extend(charlie_bundle, charlie_secret_bundle_0.clone());
@@ -216,7 +216,7 @@ fn group_operations() {
         },
     )
     .unwrap();
-    assert_eq!(output.group_secret, GroupSecretOutput::None);
+    assert_eq!(output, GroupSecretOutput::None);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~
     // Alice updates the group
@@ -269,7 +269,7 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(bob_group_secret_1) = output.group_secret else {
+    let GroupSecretOutput::Secret(bob_group_secret_1) = output else {
         panic!("expected group secret");
     };
     let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_1.clone());
@@ -299,7 +299,7 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(charlie_group_secret_1) = output.group_secret else {
+    let GroupSecretOutput::Secret(charlie_group_secret_1) = output else {
         panic!("expected group secret");
     };
     let charlie_bundle = SecretBundle::insert(charlie_bundle, charlie_group_secret_1.clone());
@@ -363,7 +363,7 @@ fn group_operations() {
     )
     .unwrap();
 
-    let GroupSecretOutput::Secret(bob_group_secret_2) = output.group_secret else {
+    let GroupSecretOutput::Secret(bob_group_secret_2) = output else {
         panic!("expected group secret");
     };
     let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_2.clone());

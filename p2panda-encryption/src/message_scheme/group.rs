@@ -25,7 +25,7 @@ use crate::traits::{
     PreKeyManager, PreKeyRegistry,
 };
 
-/// Group encryption scheme for messaging with strong security guarantees.
+/// API to manage groups using the "Message Encryption" scheme with strong security guarantees.
 pub struct MessageGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }

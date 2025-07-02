@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Methods to create and maintain multiple secrets known by a group which are used to encrypt and decrypt data.
 use std::collections::HashMap;
 use std::collections::hash_map::{IntoIter, Iter, Keys, Values};
 use std::fmt;
@@ -34,7 +35,7 @@ pub type Timestamp = u64;
 /// Secret known by a group which is used to encrypt and decrypt data.
 ///
 /// Group secrets can be used multiple times and are dropped never or manually by the application,
-/// thus providing a weaker forward-secrecy than p2panda's "message encryption" scheme.
+/// thus providing a weaker forward secrecy than p2panda's "message encryption" scheme.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupSecret(Secret<GROUP_SECRET_SIZE>, Timestamp);
 
@@ -99,7 +100,7 @@ impl StdHash for GroupSecret {
 /// to the bundle when a group got updated, a member was added or removed.
 ///
 /// Secrets inside the bundle can be removed if the application considers them due, otherwise
-/// a bundle will grow in size and no forward-secrecy is given.
+/// a bundle will grow in size and no forward secrecy is given.
 #[derive(Debug)]
 pub struct SecretBundle;
 

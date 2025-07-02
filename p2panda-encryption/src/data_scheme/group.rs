@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! API to manage groups using the “Data Encryption” scheme and process remote control messages.
 #![allow(clippy::type_complexity)]
 use std::collections::{HashSet, VecDeque};
 use std::marker::PhantomData;
@@ -23,23 +24,7 @@ use crate::traits::{
     IdentityRegistry, OperationId, Ordering, PreKeyManager, PreKeyRegistry,
 };
 
-/// Data encryption for groups.
-///
-/// This "Data Encryption" scheme allows peers to encrypt any data with a secret, symmetric key for
-/// a group. This will be useful for building applications where users who enter a group late will
-/// still have access to previously created content, for example private knowledge or wiki
-/// applications or a booking tool for rehearsal rooms.
-///
-/// A member will not learn about any newly created data after removing them from the group since
-/// the key gets rotated on member removal or manual key update. This should accommodate for many
-/// use-cases in p2p applications which rely on basic group encryption with post-compromise
-/// security (PCS) and forward secrecy (FS) during key agreement.
-///
-/// Implementors need to bring their own data types and
-/// [ordering](crate::traits::ordering::MessageOrdering) implementations.
-///
-/// Applications can remove group secrets for forward secrecy based on their own logic. For
-/// removing group secrets implementors can use the [`EncryptionGroup::update_secrets`] method.
+/// API to manage groups using the “Data Encryption” scheme and process remote control messages.
 pub struct EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG, ORD)>,
 }
@@ -438,7 +423,7 @@ where
         y.dcgka = y_dcgka_i;
 
         // Add newly learned group secrets to our bundle.
-        y.secrets = match output.group_secret {
+        y.secrets = match output {
             GroupSecretOutput::Secret(group_secret) => {
                 SecretBundle::insert(y.secrets, group_secret)
             }
@@ -448,19 +433,8 @@ where
             GroupSecretOutput::None => y.secrets,
         };
 
-        if let Some(output_control_message) = output.control_message {
-            // Determine parameters for to-be-published control message.
-            let (y_orderer_i, output_message) = ORD::next_control_message(
-                y.orderer,
-                &output_control_message,
-                &output.direct_messages,
-            )
-            .map_err(EncryptionGroupError::Orderer)?;
-            y.orderer = y_orderer_i;
-            Ok((y, Some(output_message)))
-        } else {
-            Ok((y, None))
-        }
+        // Processing remote control messages never results in new messages.
+        Ok((y, None))
     }
 
     /// Encrypt message by using the latest known group secret and a random nonce.

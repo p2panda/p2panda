@@ -82,7 +82,7 @@ impl RatchetSecret {
 ///
 /// Developers can and should set bounds to how much a decryption ratchet can tolerate messages
 /// arriving out of order, that is, into the "future" and into the "past". Setting these "window"
-/// limits has implications for the forward-secrecy of an application as unused keys stay around
+/// limits has implications for the forward secrecy of an application as unused keys stay around
 /// for a while. A setting should be picked wisely based on the network's reliability to deliver
 /// and order messages and security requirements.
 #[derive(Debug)]

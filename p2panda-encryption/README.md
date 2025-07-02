@@ -60,7 +60,7 @@ The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt
 
 A member will not learn about any newly created data after removing them from the group since the key gets rotated on member removal. This should accommodate for many use-cases in p2p applications which rely on basic group encryption with post-compromise security (PCS) and forward secrecy (FS) during key agreement. Applications can optionally choose to remove encryption keys for forward secrecy if they desire so.
 
-The second scheme is **"Message Encryption"**, offering a forward-secure (FS) messaging ratchet, similar to Signal's [Double Ratchet algorithm](https://en.wikipedia.org/wiki/Double_Ratchet_Algorithm). Since secret keys are always generated for each message, a user can not easily learn about previously created messages when getting hold of such key. We believe that the latter scheme will be used in more specialised applications, for example p2p group chats, as strong forward-secrecy comes with it's own UX requirements, but we are excited to offer a solution for both worlds, depending on the application's needs.
+The second scheme is **"Message Encryption"**, offering a forward secure (FS) messaging ratchet, similar to Signal's [Double Ratchet algorithm](https://en.wikipedia.org/wiki/Double_Ratchet_Algorithm). Since secret keys are always generated for each message, a user can not easily learn about previously created messages when getting hold of such key. We believe that the latter scheme will be used in more specialised applications, for example p2p group chats, as strong forward secrecy comes with it's own UX requirements, but we are excited to offer a solution for both worlds, depending on the application's needs.
 
 ### Key bundles and pre-keys
 

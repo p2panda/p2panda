@@ -1,5 +1,88 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "message
+//! encryption" scheme with strong forward secrecy and post-compromise security.
+//!
+//! ## Protocol
+//!
+//! DCGKA generates a sequence of update secrets for each group member, which are used as input to
+//! a ratchet to encrypt/decrypt application messages sent by that member. Only group members learn
+//! these update secrets, and fresh secrets are generated every time a user is added or removed, or
+//! a PCS update is requested. The DCGKA protocol ensures that all users observe the same sequence
+//! of update secrets for each group member, regardless of the order in which concurrent messages
+//! are received.
+//!
+//! ```text
+//!                ┌────────────────────────────────────────────────┐
+//!                │                 "Outer" Ratchet                │
+//!   Alice        ├────────────────────────────────────────────────┤
+//!     │          │                                                │
+//!     │          │                         Previous Chain Secret  │
+//!     │          │                               for Bob          │
+//! Delivered      │                                                │
+//!  via 2SM       │                                  │             │
+//!     │          │                                  │             │
+//!     │          │                                  │             │   ┌─────┐
+//!     ▼          │                                  │ ◄───────────┼───│"Ack"│
+//!   ┌────┐       │                                  │             │   └─────┘
+//!   │Seed├───────│──►  HKDF                         │             │
+//!   └────┘       │      │           Bob             │             │
+//!                │      │     ┌─────────────┐       │             │
+//!                │      ├───► │Member Secret├───────┼─► HKDF ─────┼──► Update Secret
+//!                │      │     └─────────────┘       │             │        │
+//!                │      │                           ▼             │        │
+//!                │      │         Charlie          HKDF           │        │
+//!                │      │     ┌─────────────┐       │             │        │
+//!                │      ├───► │Member Secret├─...   │             │        ▼
+//!                │      │     └─────────────┘       │             │ ┌───────────────┐
+//!                │      │                           │             │ │Message Ratchet│
+//!                │      │           ...             │             │ └───────────────┘
+//!                │      │     ┌─────────────┐       │             │
+//!                │      └───► │Member Secret├─...   │             │
+//!                │            └─────────────┘       │             │
+//!                │                                  │             │
+//!                │                                  ▼             │
+//!                │                           New Chain Secret     │
+//!                │                                  │             │
+//!                │                                  │             │
+//!                │                                  ▼  ...        │
+//!                │                                                │
+//!                └────────────────────────────────────────────────┘
+//! ```
+//!
+//! To initiate a PCS update, a user generates a fresh random value called a seed secret, and sends
+//! it to each other group member via a two-party secure channel, like in Sender Keys. On receiving
+//! a seed secret, a group member deterministically derives from it an update secret for the
+//! sender's ratchet, and also an update secret for its own ratchet. Moreover, the recipient
+//! broadcasts an unencrypted acknowledgment to the group indicating that it has applied the
+//! update. Every recipient of the acknowledgment then updates not only the ratchet for the sender
+//! of the original update, but also the ratchet for the sender of the acknowledgment. Thus, after
+//! one seed secret has been disseminated via n - 1 two-party messages, and confirmed via n - 1
+//! broadcast acknowledgments, each group member has derived an update secret from it and updated
+//! their ratchet.
+//!
+//! ## Credits
+//!
+//! The implementation follows the DCGKA protocol specified in the paper: "Key Agreement for
+//! Decentralized Secure Group Messaging with Strong Security Guarantees" by Matthew Weidner,
+//! Martin Kleppmann, Daniel Hugenroth, Alastair R. Beresford (2020).
+//!
+//! <https://eprint.iacr.org/2020/1281.pdf>
+//!
+//! Some adjustments have been made to the version in the paper:
+//!
+//! * Renamed `process` to `process_remote`.
+//! * Added `rng` as an argument to most methods.
+//! * `seq` is taken care of _outside_ of this implementation. Methods return control messages
+//!   which need to be manually assigned a "seq", that is a vector clock, hash, seq_num or similar.
+//! * After calling a group operation "create", "add", "remove" or "update" the user needs to process
+//!   the output themselves by calling `process_local`. This allows a user of the API to correctly
+//!   craft a `seq` for their control messages (see point above).
+//! * Instead of sending the history of control messages in "welcome" messages we send the
+//!   "processed" and potentially garbage-collected CRDT state of DGM. This also allows
+//!   implementations where control messages are encrypted as well.
+//! * We're not recording the "add" control message to the history before sending a "welcome"
+//!   message after adding a member, the receiver of the "welcome" message needs to add themselves.
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -20,88 +103,7 @@ use crate::two_party::{TwoParty, TwoPartyError, TwoPartyMessage, TwoPartyState};
 const RATCHET_KEY_SIZE: usize = 32;
 
 /// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "message
-/// encryption" scheme with strong forward-secrecy and post-compromise security.
-///
-/// ## Protocol
-///
-/// DCGKA generates a sequence of update secrets for each group member, which are used as input to
-/// a ratchet to encrypt/decrypt application messages sent by that member. Only group members learn
-/// these update secrets, and fresh secrets are generated every time a user is added or removed, or
-/// a PCS update is requested. The DCGKA protocol ensures that all users observe the same sequence
-/// of update secrets for each group member, regardless of the order in which concurrent messages
-/// are received.
-///
-/// ```text
-///                ┌────────────────────────────────────────────────┐
-///                │                 "Outer" Ratchet                │
-///   Alice        ├────────────────────────────────────────────────┤
-///     │          │                                                │
-///     │          │                         Previous Chain Secret  │
-///     │          │                               for Bob          │
-/// Delivered      │                                                │
-///  via 2SM       │                                  │             │
-///     │          │                                  │             │
-///     │          │                                  │             │   ┌─────┐
-///     ▼          │                                  │ ◄───────────┼───│"Ack"│
-///   ┌────┐       │                                  │             │   └─────┘
-///   │Seed├───────│──►  HKDF                         │             │
-///   └────┘       │      │           Bob             │             │
-///                │      │     ┌─────────────┐       │             │
-///                │      ├───► │Member Secret├───────┼─► HKDF ─────┼──► Update Secret
-///                │      │     └─────────────┘       │             │        │
-///                │      │                           ▼             │        │
-///                │      │         Charlie          HKDF           │        │
-///                │      │     ┌─────────────┐       │             │        │
-///                │      ├───► │Member Secret├─...   │             │        ▼
-///                │      │     └─────────────┘       │             │ ┌───────────────┐
-///                │      │                           │             │ │Message Ratchet│
-///                │      │           ...             │             │ └───────────────┘
-///                │      │     ┌─────────────┐       │             │
-///                │      └───► │Member Secret├─...   │             │
-///                │            └─────────────┘       │             │
-///                │                                  │             │
-///                │                                  ▼             │
-///                │                           New Chain Secret     │
-///                │                                  │             │
-///                │                                  │             │
-///                │                                  ▼  ...        │
-///                │                                                │
-///                └────────────────────────────────────────────────┘
-/// ```
-///
-/// To initiate a PCS update, a user generates a fresh random value called a seed secret, and sends
-/// it to each other group member via a two-party secure channel, like in Sender Keys. On receiving
-/// a seed secret, a group member deterministically derives from it an update secret for the
-/// sender's ratchet, and also an update secret for its own ratchet. Moreover, the recipient
-/// broadcasts an unencrypted acknowledgment to the group indicating that it has applied the
-/// update. Every recipient of the acknowledgment then updates not only the ratchet for the sender
-/// of the original update, but also the ratchet for the sender of the acknowledgment. Thus, after
-/// one seed secret has been disseminated via n - 1 two-party messages, and confirmed via n - 1
-/// broadcast acknowledgments, each group member has derived an update secret from it and updated
-/// their ratchet.
-///
-/// ## Credits
-///
-/// The implementation follows the DCGKA protocol specified in the paper: "Key Agreement for
-/// Decentralized Secure Group Messaging with Strong Security Guarantees" by Matthew Weidner,
-/// Martin Kleppmann, Daniel Hugenroth, Alastair R. Beresford (2020).
-///
-/// <https://eprint.iacr.org/2020/1281.pdf>
-///
-/// Some adjustments have been made to the version in the paper:
-///
-/// * Renamed `process` to `process_remote`.
-/// * Added `rng` as an argument to most methods.
-/// * `seq` is taken care of _outside_ of this implementation. Methods return control messages
-///   which need to be manually assigned a "seq", that is a vector clock, hash, seq_num or similar.
-/// * After calling a group operation "create", "add", "remove" or "update" the user needs to process
-///   the output themselves by calling `process_local`. This allows a user of the API to correctly
-///   craft a `seq` for their control messages (see point above).
-/// * Instead of sending the history of control messages in "welcome" messages we send the
-///   "processed" and potentially garbage-collected CRDT state of DGM. This also allows
-///   implementations where control messages are encrypted as well.
-/// * We're not recording the "add" control message to the history before sending a "welcome"
-///   message after adding a member, the receiver of the "welcome" message needs to add themselves.
+/// encryption" scheme with strong forward secrecy and post-compromise security.
 pub struct Dcgka<ID, OP, PKI, DGM, KMG> {
     _marker: PhantomData<(ID, OP, PKI, DGM, KMG)>,
 }
@@ -1251,6 +1253,7 @@ impl<ID, OP> Display for ControlMessage<ID, OP> {
     }
 }
 
+/// Arguments required to process a group operation received from another member.
 #[derive(Clone, Debug)]
 pub struct ProcessInput<ID, OP, DGM>
 where

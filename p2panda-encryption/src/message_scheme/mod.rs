@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Message encryption for groups with post-compromise security and strong forward-secrecy using
+//! Message encryption for groups with post-compromise security and strong forward secrecy using
 //! a double ratchet algorithm.
 pub mod dcgka;
 pub mod group;

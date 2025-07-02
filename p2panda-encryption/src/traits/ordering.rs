@@ -85,7 +85,7 @@ where
 }
 
 /// Ordering protocol for p2panda's "message encryption" scheme. Extra care is required here, since
-/// the strong forward-secrecy guarantees makes ordering more strict.
+/// the strong forward secrecy guarantees makes ordering more strict.
 ///
 /// When publishing a message peers need to make sure to provide the following information:
 ///
