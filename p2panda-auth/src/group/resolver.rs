@@ -279,11 +279,12 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    use crate::group::test_utils::{
-        Network, TestGroup, TestGroupState, TestGroupStore, TestOperation, TestOrdererState,
+    use crate::group::test_utils::Network;
+    use crate::group::tests::{
+        add_member, assert_members, create_group, from_create, remove_member, sync,
     };
-    use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
-    use crate::traits::{AuthGroup, OperationId};
+    use crate::group::{Access, GroupMember};
+    use crate::traits::OperationId;
 
     impl OperationId for &str {}
 
@@ -546,88 +547,6 @@ mod tests {
 
         let claire_filter = network.get_y(&claire, &group).ignore;
         assert_eq!(claire_filter.len(), 1);
-    }
-
-    fn from_create(
-        group_id: char,
-        actor_id: char,
-        op_create: &TestOperation,
-        rng: &mut StdRng,
-    ) -> TestGroupState {
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
-        let group = TestGroupState::new(group_id, actor_id, store, orderer);
-        TestGroup::process(group, op_create).unwrap()
-    }
-
-    fn create_group(
-        group_id: char,
-        actor_id: char,
-        members: Vec<(char, Access<()>)>,
-        rng: &mut StdRng,
-    ) -> (TestGroupState, TestOperation) {
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
-        let group = TestGroupState::new(group_id, actor_id, store, orderer);
-        let control_message = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Create {
-                initial_members: members
-                    .into_iter()
-                    .map(|(id, access)| (GroupMember::Individual(id), access))
-                    .collect(),
-            },
-        };
-        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
-        let group = TestGroup::process(group, &op).unwrap();
-        (group, op)
-    }
-
-    fn add_member(
-        group: TestGroupState,
-        group_id: char,
-        member: char,
-        access: Access<()>,
-    ) -> (TestGroupState, TestOperation) {
-        let control_message = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(member),
-                access,
-            },
-        };
-        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
-        let group = TestGroup::process(group, &op).unwrap();
-        (group, op)
-    }
-
-    fn remove_member(
-        group: TestGroupState,
-        group_id: char,
-        member: char,
-    ) -> (TestGroupState, TestOperation) {
-        let control_message = GroupControlMessage::GroupAction {
-            group_id,
-            action: GroupAction::Remove {
-                member: GroupMember::Individual(member),
-            },
-        };
-        let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
-        let group = TestGroup::process(group, &op).unwrap();
-        (group, op)
-    }
-
-    fn sync(group: TestGroupState, ops: &[TestOperation]) -> TestGroupState {
-        ops.iter()
-            .fold(group, |g, op| TestGroup::process(g, op).unwrap())
-    }
-
-    fn assert_members(group: &TestGroupState, expected: &[(GroupMember<char>, Access<()>)]) {
-        let mut actual = group.members();
-        let mut expected = expected.to_vec();
-        actual.sort();
-        expected.sort();
-        assert_eq!(actual, expected);
     }
 
     #[test]
