@@ -73,8 +73,10 @@ pub struct TwoParty<KMG, KB> {
     _marker: PhantomData<(KMG, KB)>,
 }
 
+/// 2SM protocol with one-time pre-keys.
 pub type OneTimeTwoParty = TwoParty<KeyManager, OneTimeKeyBundle>;
 
+/// 2SM protocol with long-term pre-keys (with a specified lifetime).
 pub type LongTermTwoParty = TwoParty<KeyManager, LongTermKeyBundle>;
 
 /// State of 2SM session between two members.

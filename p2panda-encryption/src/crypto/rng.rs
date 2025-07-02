@@ -46,6 +46,7 @@ impl Rng {
     }
 }
 
+/// Critical errors which can occur using a CSPRNG.
 #[derive(Debug, Error)]
 pub enum RngError {
     #[error("rng lock is poisoned")]

@@ -2,6 +2,9 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use crate::Rng;
+use crate::key_manager::KeyManager;
+use crate::key_registry::KeyRegistry;
 use crate::message_scheme::GroupError;
 use crate::message_scheme::group::{GroupConfig, GroupEvent, GroupState, MessageGroup};
 use crate::message_scheme::test_utils::dcgka::init_dcgka_state;
@@ -9,7 +12,6 @@ use crate::message_scheme::test_utils::dgm::AckedTestDgm;
 use crate::message_scheme::test_utils::ordering::{ForwardSecureOrderer, TestMessage};
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::ForwardSecureGroupMessage;
-use crate::{KeyManager, KeyRegistry, Rng};
 
 pub type TestGroupState = GroupState<
     MemberId,

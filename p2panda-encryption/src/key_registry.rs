@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Maintain public key material of other members.
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -8,8 +9,8 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::x25519::PublicKey;
+use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle};
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
-use crate::{LongTermKeyBundle, OneTimeKeyBundle};
 
 /// Key registry to maintain public key material of other members we've collected.
 #[derive(Clone, Debug)]

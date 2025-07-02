@@ -2,7 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::Rng;
 use crate::crypto::x25519::SecretKey;
+use crate::key_bundle::Lifetime;
+use crate::key_manager::KeyManager;
+use crate::key_registry::KeyRegistry;
 use crate::message_scheme::dcgka::{
     ControlMessage, Dcgka, DcgkaState, DirectMessage, DirectMessageType, OperationOutput,
     ProcessOutput, UpdateSecret,
@@ -10,7 +14,6 @@ use crate::message_scheme::dcgka::{
 use crate::message_scheme::test_utils::dgm::AckedTestDgm;
 use crate::test_utils::{MemberId, MessageId};
 use crate::traits::{AckedGroupMembership, PreKeyManager};
-use crate::{KeyManager, KeyRegistry, Lifetime, Rng};
 
 pub type TestDcgkaState = DcgkaState<
     MemberId,

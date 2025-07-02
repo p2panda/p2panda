@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Maintain our own secret key material.
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
