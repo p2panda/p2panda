@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Strong remove group resolver implementation.
-
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};

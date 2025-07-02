@@ -1,10 +1,13 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use std::collections::HashSet;
+
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
-use std::collections::HashSet;
 
 use crate::traits::OperationId;
 
-pub fn concurrent_bubble<OP>(
+fn concurrent_bubble<OP>(
     graph: &DiGraphMap<OP, ()>,
     target: OP,
     processed: &mut HashSet<OP>,
