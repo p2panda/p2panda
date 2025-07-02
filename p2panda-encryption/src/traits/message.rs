@@ -29,8 +29,8 @@ where
     /// Unique identifier of the sender of this message.
     fn sender(&self) -> ID;
 
-    /// Returns if this is a control- or application message.
-    fn message_type(&self) -> GroupMessageType<ID>;
+    /// Returns content of either a control- or application message.
+    fn content(&self) -> GroupMessageContent<ID>;
 
     /// Returns optional list of direct messages.
     fn direct_messages(&self) -> Vec<data_scheme::DirectMessage<ID, OP, DGM>>;
@@ -38,7 +38,7 @@ where
 
 #[cfg(any(test, feature = "data_scheme"))]
 #[derive(Debug)]
-pub enum GroupMessageType<ID> {
+pub enum GroupMessageContent<ID> {
     /// Control message managing encryption group.
     Control(data_scheme::ControlMessage<ID>),
 
@@ -56,7 +56,7 @@ pub enum GroupMessageType<ID> {
 }
 
 #[cfg(any(test, feature = "data_scheme"))]
-impl<ID> Display for GroupMessageType<ID> {
+impl<ID> Display for GroupMessageContent<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -89,7 +89,7 @@ where
     fn sender(&self) -> ID;
 
     /// Returns data required to manage group encryption and receive decrypted application messages.
-    fn encryption_content(&self) -> ForwardSecureMessageContent<ID, OP>;
+    fn content(&self) -> ForwardSecureMessageContent<ID, OP>;
 
     /// Returns optional list of direct messages.
     ///

@@ -12,7 +12,7 @@ use crate::data_scheme::test_utils::ordering::{MessageOrderer, TestMessage};
 use crate::key_manager::KeyManager;
 use crate::key_registry::KeyRegistry;
 use crate::test_utils::{MemberId, MessageId};
-use crate::traits::{GroupMessage, GroupMessageType};
+use crate::traits::{GroupMessage, GroupMessageContent};
 
 pub type TestGroupState = GroupState<
     MemberId,
@@ -139,8 +139,8 @@ impl Network {
                 }
 
                 // Update set of removed members if any.
-                if let GroupMessageType::Control(ControlMessage::Remove { removed }) =
-                    message.message_type()
+                if let GroupMessageContent::Control(ControlMessage::Remove { removed }) =
+                    message.content()
                 {
                     self.removed_members.insert(removed);
                 }

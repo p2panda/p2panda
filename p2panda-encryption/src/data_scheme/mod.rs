@@ -54,6 +54,14 @@
 //! For stronger forward secrecy guarantees have a look at the ["Message
 //! Encryption"](crate::message_scheme) scheme.
 //!
+//! ## Key bundles
+//!
+//! For initial key agreement peers need to publish key bundles into the network to allow others to
+//! invite them into groups. For the "Data Encryption" scheme we're using long-term pre-keys with
+//! lifetimes specified by the application.
+//!
+//! More on key bundles can be read [here](crate::key_bundle).
+//!
 //! ## Usage
 //!
 //! Check out the [`EncryptionGroup`] API for establishing and maintaining groups using the "Data

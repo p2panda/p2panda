@@ -63,6 +63,9 @@ pub trait AckedGroupMembership<ID, OP> {
     fn is_remove(y: &Self::State, operation_id: OP) -> bool;
 }
 
+/// Decentralised group membership (DGM) algorithm.
+///
+/// This is the DGM interface for p2panda's "data encryption" scheme.
 #[cfg(any(test, feature = "data_scheme"))]
 pub trait GroupMembership<ID, OP> {
     type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;

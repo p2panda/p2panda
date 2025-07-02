@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Maintain public key material of other members.
+//! Manager for public key material of other members.
 //!
 //! Peers should actively look for fresh key bundles in the network, check for invalid or expired
 //! ones and automatically choose the latest for groups.

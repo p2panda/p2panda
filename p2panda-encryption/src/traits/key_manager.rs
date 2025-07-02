@@ -9,10 +9,12 @@ use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
 use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKeyId};
 
+/// Manages our own identity secret.
 pub trait IdentityManager<Y> {
     fn identity_secret(y: &Y) -> &SecretKey;
 }
 
+/// Manages our own pre-key secrets to generate public key bundles.
 pub trait PreKeyManager {
     type State: Debug + Serialize + for<'a> Deserialize<'a>;
 

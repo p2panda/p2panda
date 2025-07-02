@@ -10,7 +10,7 @@ use crate::crypto::xchacha20::XAeadNonce;
 use crate::data_scheme::{ControlMessage, DirectMessage, GroupSecretId};
 use crate::ordering::{Orderer, OrdererError, OrdererState};
 use crate::test_utils::{MemberId, MessageId};
-use crate::traits::{GroupMembership, GroupMessage, GroupMessageType, Ordering};
+use crate::traits::{GroupMembership, GroupMessage, GroupMessageContent, Ordering};
 
 /// Orderer for testing the "data encryption" group APIs.
 ///
@@ -181,7 +181,7 @@ where
         });
 
         if let Some(ref message) = message {
-            if let GroupMessageType::Control(_) = message.message_type() {
+            if let GroupMessageContent::Control(_) = message.content() {
                 // Mark messages as "last seen" so we can mention the "previous" ones as soon
                 // as we publish a message ourselves.
                 y.previous.insert(message.sender(), message.id());
@@ -234,20 +234,20 @@ where
         self.sender
     }
 
-    fn message_type(&self) -> GroupMessageType<MemberId> {
+    fn content(&self) -> GroupMessageContent<MemberId> {
         match &self.content {
             TestMessageContent::Application {
                 ciphertext,
                 group_secret_id,
                 nonce,
-            } => GroupMessageType::Application {
+            } => GroupMessageContent::Application {
                 group_secret_id: *group_secret_id,
                 nonce: *nonce,
                 ciphertext: ciphertext.to_vec(),
             },
             TestMessageContent::System {
                 control_message, ..
-            } => GroupMessageType::Control(control_message.clone()),
+            } => GroupMessageContent::Control(control_message.clone()),
         }
     }
 

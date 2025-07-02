@@ -22,7 +22,7 @@ pub use key_registry::{IdentityRegistry, PreKeyRegistry};
 #[cfg(any(test, feature = "message_scheme"))]
 pub use message::{ForwardSecureGroupMessage, ForwardSecureMessageContent};
 #[cfg(any(test, feature = "data_scheme"))]
-pub use message::{GroupMessage, GroupMessageType};
+pub use message::{GroupMessage, GroupMessageContent};
 #[cfg(any(test, feature = "message_scheme"))]
 pub use ordering::ForwardSecureOrdering;
 #[cfg(any(test, feature = "data_scheme"))]

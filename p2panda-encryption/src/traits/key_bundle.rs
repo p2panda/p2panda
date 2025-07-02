@@ -3,6 +3,7 @@
 use crate::crypto::x25519::PublicKey;
 use crate::key_bundle::{KeyBundleError, OneTimePreKeyId};
 
+/// Key bundle holding data to establish a X3DH key-agreement.
 pub trait KeyBundle {
     fn identity_key(&self) -> &PublicKey;
 

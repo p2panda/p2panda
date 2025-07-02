@@ -189,7 +189,7 @@ where
         // messages.
         let members_pre = Self::members(&y)?;
 
-        let message_type = message.encryption_content();
+        let message_type = message.content();
         let is_established = y.ratchet.is_some();
         let mut is_create_or_welcome = false;
 
@@ -348,7 +348,7 @@ where
         message: &ORD::Message,
         rng: &Rng,
     ) -> GroupResult<Option<GroupEvent<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
-        match message.encryption_content() {
+        match message.content() {
             ForwardSecureMessageContent::Control(control_message) => {
                 let direct_message = message
                     .direct_messages()

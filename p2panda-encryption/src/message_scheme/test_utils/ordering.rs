@@ -206,16 +206,14 @@ where
                 // This is a naive implementation where we assume that every member processed every
                 // control message after one round and where every message points at _every_
                 // previously created message.
-                if let ForwardSecureMessageContent::Control { .. } = message.encryption_content() {
+                if let ForwardSecureMessageContent::Control { .. } = message.content() {
                     if welcome.previous.contains(&message.id()) {
                         continue;
                     }
                 }
 
                 // Application messages can be ignored if before or concurrent to welcome.
-                if let ForwardSecureMessageContent::Application { .. } =
-                    message.encryption_content()
-                {
+                if let ForwardSecureMessageContent::Application { .. } = message.content() {
                     if !message.previous.contains(&welcome.id()) {
                         continue;
                     }
@@ -270,7 +268,7 @@ where
         self.sender
     }
 
-    fn encryption_content(&self) -> ForwardSecureMessageContent<MemberId, MessageId> {
+    fn content(&self) -> ForwardSecureMessageContent<MemberId, MessageId> {
         match &self.content {
             TestMessageContent::Application {
                 ciphertext,

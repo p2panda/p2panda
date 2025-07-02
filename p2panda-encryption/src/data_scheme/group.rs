@@ -20,7 +20,7 @@ use crate::data_scheme::group_secret::{
 };
 use crate::key_bundle::LongTermKeyBundle;
 use crate::traits::{
-    GroupMembership, GroupMessage, GroupMessageType, IdentityHandle, IdentityManager,
+    GroupMembership, GroupMessage, GroupMessageContent, IdentityHandle, IdentityManager,
     IdentityRegistry, OperationId, Ordering, PreKeyManager, PreKeyRegistry,
 };
 
@@ -180,14 +180,14 @@ where
         mut y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
     ) -> GroupResult<Vec<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
-        let message_type = message.message_type();
+        let message_content = message.content();
         let mut is_create_or_welcome = false;
 
         // Accept "create" control messages if we haven't established our state yet and if we are
         // part of the initial members set.
-        if let GroupMessageType::Control(ControlMessage::Create {
+        if let GroupMessageContent::Control(ControlMessage::Create {
             ref initial_members,
-        }) = message_type
+        }) = message_content
         {
             if y.is_welcomed {
                 return Err(EncryptionGroupError::GroupAlreadyEstablished);
@@ -199,7 +199,7 @@ where
         }
 
         // Accept "add" control messages if we are being added by it.
-        if let GroupMessageType::Control(ControlMessage::Add { added }) = message_type {
+        if let GroupMessageContent::Control(ControlMessage::Add { added }) = message_content {
             if !y.is_welcomed && added == y.my_id {
                 is_create_or_welcome = true;
             }
@@ -239,11 +239,11 @@ where
                 break;
             };
 
-            match message.message_type() {
-                GroupMessageType::Control(_) => {
+            match message.content() {
+                GroupMessageContent::Control(_) => {
                     control_messages.push_back(message);
                 }
-                GroupMessageType::Application { .. } => {
+                GroupMessageContent::Application { .. } => {
                     application_messages.push_back(message);
                 }
             }
@@ -361,8 +361,8 @@ where
         y: GroupState<ID, OP, PKI, DGM, KMG, ORD>,
         message: &ORD::Message,
     ) -> GroupResult<Option<GroupOutput<ID, OP, DGM, ORD>>, ID, OP, PKI, DGM, KMG, ORD> {
-        match message.message_type() {
-            GroupMessageType::Control(control_message) => {
+        match message.content() {
+            GroupMessageContent::Control(control_message) => {
                 let direct_message = message
                     .direct_messages()
                     .into_iter()
@@ -392,7 +392,7 @@ where
                     Ok((y_i, output.map(|msg| GroupOutput::Control(msg))))
                 }
             }
-            GroupMessageType::Application {
+            GroupMessageContent::Application {
                 group_secret_id,
                 ciphertext,
                 nonce,
