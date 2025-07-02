@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Decentralized secure data- and message encryption for groups</strong>
+  <strong>Decentralized data- and message encryption for groups</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -24,29 +24,31 @@
 
 `p2panda-encryption` provides decentralized, secure data- and message encryption for groups with post-compromise security and optional forward secrecy.
 
-The crate implements two different group key-agreement and encryption schemes for a whole range of use cases for applications which can't rely on a network connection.
+The crate implements two different group key-agreement and encryption schemes for a whole range of use cases for applications which can't rely on a stable network connection or centralised coordination.
 
 ## Goals
 
-### Strong Security Guarantees
+### Strong security guarantees
 
-Key agreement in `p2panda-encryption` has strong forward-secrecy, while the security of the data itself depends on the encryption scheme used. The crate offers two different schemes:
+Key agreement in `p2panda-encryption` provides strong forward secrecy, while the security of the data itself depends on the encryption scheme used. The crate offers two different encryption schemes:
 
-**Data Encryption** re-uses the same symmetric key known to the peer until a new key got introduced to the group, for example on member removal. Keys will stay in the network to allow decrypting older data, unless they are manually removed by the application.
+**Data Encryption** re-uses the same symmetric key known to the peer until a new key got introduced to the group, for example on member removal. Keys will stay in the network to allow decrypting older data, unless they are manually removed by the application for optional forward secrecy.
 
-For **Message Encryption** peers agree on a ratchet secret which derives a new key for each message sent. After decrypting the ciphertext the key gets dropped for forward secrecy.
+For **Message Encryption** peers agree on a secret to establish a [message ratchet](https://en.wikipedia.org/wiki/Double_Ratchet_Algorithm) per member, deriving a new key for each message sent. After decrypting the ciphertext of the message the key gets dropped for forward secrecy.
 
 ### Framework-independent
 
 This implementation is compatible with any data type, encoding format or transport, made for p2p applications which do not rely on constant internet connectivity.
 
-Similar to our other p2panda crates, we aim to make our implementation "framework independent" while providing optional "glue code" to integrate it in into the larger [p2panda ecosystem](https://p2panda.org). The latter offers a fully integrated stack which is feature-complete, tested and ready for use in secure, decentralized applications.
+Similar to our other p2panda crates, we aim to make our implementation "framework independent" while providing optional "glue code" to integrate it in into the larger [p2panda ecosystem](https://p2panda.org).
+
+We're currently working on a high-level, easy to use, integration layer which combines `p2panda-auth` and `p2panda-encryption` into a feature-complete and tested solution with authenticated roles and group management, nested groups, multi-device support, atomic transactions, message ordering and validation.
 
 ### Robustness in decentralized systems
 
 `p2panda-encryption` has been specifically designed to be robust when used in decentralized systems. It accounts for use in scenarios without guaranteed connectivity between members of the group and corner cases where group changes (adding, removing members etc.) take place concurrently. No centralised server is required for coordination of the group.
 
-The code in this crate is expressed as pure functions where state is passed around until it gets finally "committed" into a persistance layer inside an atomic transaction. This allows fault-resiliant writes to any database and makes applications robust to not corrupt their state on crashes.
+The code in this crate is expressed as [pure functions](https://en.wikipedia.org/wiki/Pure_function) where state is passed around until it gets finally "committed" into a persistance layer inside an atomic transaction. This allows fault-resiliant writes to any database and makes applications robust to not corrupt their state on crashes.
 
 ## Design
 
@@ -54,41 +56,51 @@ More detail about the particular implementation and design choices of `p2panda-e
 
 ### Encryption Schemes
 
-The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with a secret, symmetric key for a group (XChaCha20-Poly1305). This will be useful for building applications where users who enter a group late will still have access to previously created content, for example knowledge databases, wiki applications or a booking tool for rehearsal rooms. A member will not learn about any newly created data after removing them from the group since the key gets rotated on member removal. This should accommodate for many use-cases in p2p applications which rely on basic group encryption with post-compromise security (PCS) and forward secrecy (FS) during key agreement. Applications can optionally choose to remove encryption keys for forward secrecy if they desire so.
+The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with a secret, symmetric key for a group (using XChaCha20-Poly1305). This will be useful for building applications where users who enter a group late will still have access to previously created content, for example knowledge databases, wiki applications or a booking tool for rehearsal rooms.
 
-The second scheme is **"Message Encryption"**, offering a forward-secure (FS) messaging ratchet, similar to Signal’s [Double Ratchet algorithm](https://en.m.wikipedia.org/wiki/Double_Ratchet_Algorithm). Since secret keys are always generated for each message, a user can not easily learn about previously created messages when getting hold of such key. We believe that the latter scheme will be used in more specialised applications, for example p2p group chats, as strong forward-secrecy comes with it's own UX requirements, but we are excited to offer a solution for both worlds, depending on the application's needs.
+A member will not learn about any newly created data after removing them from the group since the key gets rotated on member removal. This should accommodate for many use-cases in p2p applications which rely on basic group encryption with post-compromise security (PCS) and forward secrecy (FS) during key agreement. Applications can optionally choose to remove encryption keys for forward secrecy if they desire so.
+
+The second scheme is **"Message Encryption"**, offering a forward-secure (FS) messaging ratchet, similar to Signal's [Double Ratchet algorithm](https://en.wikipedia.org/wiki/Double_Ratchet_Algorithm). Since secret keys are always generated for each message, a user can not easily learn about previously created messages when getting hold of such key. We believe that the latter scheme will be used in more specialised applications, for example p2p group chats, as strong forward-secrecy comes with it's own UX requirements, but we are excited to offer a solution for both worlds, depending on the application's needs.
+
+### Key bundles and pre-keys
+
+Key bundles are published into the network by peers including identity- and pre-keys which can be used by other peers to invite them into an encrypted group.
+
+Pre-keys are used during the initial [X3DG](https://signal.org/docs/specifications/x3dh/) key agreement between two peers and can be limited to be used only once or for a specified lifetime for forward secrecy.
 
 ### Secure key-agreement
 
-To encrypt any data towards a group we need to first securely and efficiently make all members of the group aware of the secret key which was used to encrypt the message. This takes place inside a "key agreement" protocol which is the heart of `p2panda-encryption`.
+To encrypt any data towards a group we need to first securely and efficiently make all members of the group aware of the secret key which will be used to encrypt the message. This takes place inside a key agreement protocol.
 
-Both schemes use the Two-Party Secure Messaging (2SM) Key Agreement Protocol as specified in the paper ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf>) (2020).
+Both encryption schemes use the Two-Party Secure Messaging (2SM) Key Agreement Protocol as specified in the paper ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf>) (2020).
 
-During the initial 2SM "round" using X3DH the forward-secrecy is defined by the lifetime of the used pre-keys. For strong security guarantees it is recommended to use one-time pre-keys. If this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime defined by the application.
+During the initial 2SM "round" (via X3DH) the forward secrecy is defined by the lifetime of the used pre-keys. For strong security guarantees it is recommended to use one-time pre-keys. If this requirement can be relaxed it is possible to use long-term pre-keys, with a lifetime defined by the application.
 
-Each subsequent 2SM HPKE round uses exactly one secret key, which is then dropped and replaced by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy guarantees for each round, independent of the used pre-keys.
+Each subsequent 2SM round (via HPKE) uses exactly one secret key, which is then dropped and replaced by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy guarantees for each round, independent of the initially used pre-keys.
+
+2SM is optimized to fastly allow a group to learn about a new group secret (for example after a member removal or group compromise) in `O(n)` steps where `n` is the number of members.
 
 ## Usage & integration
 
-There are two options to use `p2panda-encryption`. One is to use the fully integrated p2panda stack which gives an already complete and tested end-to-end solution for building secure, decentralized applications with p2panda data types. If you're interested in group encryption for your application but not building the "p2p backend", this is for you.
+There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives an already complete and tested end-to-end solution for building secure, decentralized applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
 
-The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering (partial ordering), group management (CRDT), validation (additional checks around pre-key lifetimes, etc.) and authentication (signatures). Integrating such systems is not trivial because great care is required around correct message ordering, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you struggle, please [reach out](https://p2panda.org/#contact).
+The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering, group management, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you still struggle, please [reach out](https://p2panda.org/#contact).
 
 To get an overview of what is required for a custom integration we recommended to check out the high-level APIs for [data encryption](crate::data_scheme::Group) and [message encryption](crate::message_scheme::Group).
 
 ## Security
 
-Encryption helps to prevent your data being readable by third parties but it can never guarantee full security, especially in decentralized, experimental networks.
+End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevents third parties to read your application data but it can never guarantee full security, especially in decentralized, experimental networks.
 
-We can not recommend using this technology for high-risk use-cases when you can not guarantee full control over all devices and transport channels.
+We can currently _not_ recommend using this technology for high-risk use-cases when you can not guarantee full control over all devices and transport channels.
 
 ### Audit
 
-Until now this crate has not received a security audit yet.
+Until this point this crate has not received a security audit yet.
 
 ### Meta-Data
 
-In the current implementation all group control messages are _not_ encrypted. While application data is fully protected, an adversary who got access to the network, will be able to observe control messages and reason about which members are inside the group. The cryptographic identities in the group are not necessarily connected to any concrete persons but can reveal enough meta-data.
+In the current implementation all group control messages are _not_ encrypted. While application data is fully protected, an adversary who got access to the network, will be able to observe control messages and reason about which members are inside the group. The cryptographic identities in the group are not necessarily connected to any concrete persons but can potentially reveal enough meta-data.
 
 We're working on a variant of `p2panda-encryption` where even control messages, sender and recipient info are encrypted. This unfortunately comes with worse performance and special UX requirements but we still believe there is a use-case for smaller groups.
 
