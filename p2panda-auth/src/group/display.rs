@@ -328,7 +328,7 @@ where
                 let table = format!(
                     "<<TABLE BGCOLOR=\"{INDIVIDUAL_NODE}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\"><TR><TD>individual</TD><TD>{id}</TD></TR></TABLE>>"
                 );
-                let idx = match graph.node_references().find(|(idx, (_, t))| t == &table) {
+                let idx = match graph.node_references().find(|(_, (_, t))| t == &table) {
                     Some((idx, _)) => idx,
                     None => graph.add_node((None, table)),
                 };

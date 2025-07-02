@@ -120,18 +120,19 @@ where
         // concurrency. Multiple bubbles can occur in the same graph.
         let mut bubbles = concurrent_bubbles(&y.graph);
 
-        let topo_sort = toposort(&y.graph, None).expect("group operation sets can be ordered topologically");
+        let topo_sort =
+            toposort(&y.graph, None).expect("group operation sets can be ordered topologically");
         let mut visited = HashSet::new();
 
         // Traverse the graph visiting the operations in topological order.
         for target_operation_id in topo_sort.iter() {
-            let Some(target_operation) = operations.get(&target_operation_id) else {
+            let Some(target_operation) = operations.get(target_operation_id) else {
                 return Err(GroupError::MissingOperation(*target_operation_id));
             };
 
             let bubble = bubbles
                 .iter()
-                .find(|bubble| bubble.contains(&target_operation_id))
+                .find(|bubble| bubble.contains(target_operation_id))
                 .cloned();
 
             visited.insert(*target_operation_id);
@@ -259,7 +260,7 @@ where
 
         // @TODO: either remove this step (and check for mutual removes on all remove/demote
         // operations) or re-build graph state beforehand to in order to correctly handle
-        // certain edge-cases. 
+        // certain edge-cases.
         let was_manager = self
             .transitive_members_at(&HashSet::from_iter(operation.dependencies()))
             .expect("get transitive members")

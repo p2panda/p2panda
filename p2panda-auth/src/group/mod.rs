@@ -595,7 +595,7 @@ where
             //
             // To do this we need to prune the graph to only include predecessor operations,
             // re-calculate the filter, and re-build all states.
-            y = Group::validate_concurrent_action(y, &operation)?;
+            y = Group::validate_concurrent_action(y, operation)?;
 
             // Process the group state with the provided resolver. This will populate the set of
             // messages which should be ignored when applying group management actions and also
@@ -679,6 +679,7 @@ where
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Apply an action to a single group state.
+    #[allow(clippy::type_complexity)]
     fn apply_action(
         mut y: GroupState<ID, OP, C, RS, ORD, GS>,
         id: OP,
@@ -695,7 +696,7 @@ where
         };
 
         // Get the maximum access level for this actor.
-        let max_access = y.max_access_identity(actor, &dependencies)?;
+        let max_access = y.max_access_identity(actor, dependencies)?;
         let member_id = match max_access {
             Some((id, _)) => id,
             None => GroupMember::Individual(actor),
@@ -765,6 +766,7 @@ where
     ///
     /// This is a relatively expensive computation and should only be used when a re-build is
     /// actually required.
+    #[allow(clippy::type_complexity)]
     fn validate_concurrent_action(
         mut y: GroupState<ID, OP, C, RS, ORD, GS>,
         operation: &ORD::Message,
