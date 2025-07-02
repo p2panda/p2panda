@@ -93,7 +93,7 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C, GS, ORD>
+impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C, ORD>
     for GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
@@ -113,8 +113,8 @@ where
     ///
     /// The creator of the group is automatically added as a manager.
     ///
-    /// The caller of this method must ensure that the given `group_id` is unique; failure to meet
-    /// this condition will result in an error.
+    /// The caller of this method must ensure that the given `group_id` is globally unique. For
+    /// example, using a collision-resistant hash.
     fn create(
         &self,
         group_id: ID,
@@ -126,9 +126,6 @@ where
         let mut initial_members = Vec::new();
         initial_members.push(creator);
         initial_members.extend(members);
-
-        // TODO: Understand exactly what happens if two groups are created with the same
-        // `group_id`. Does an error occur? If so, where and when?
 
         let y = GroupState::new(
             self.my_id,
@@ -153,13 +150,29 @@ where
         &self,
         remote_operation: ORD::Message,
     ) -> Result<Self::State, Self::Error> {
+        let group_id = remote_operation.payload().group_id();
+
         let y = GroupState::new(
             self.my_id,
-            remote_operation.payload().group_id(),
+            group_id,
             self.store.clone(),
             self.orderer.clone(),
         );
 
+        let y = Group::process(y, &remote_operation)?;
+
+        Ok(y)
+    }
+
+    /// Update the group by processing a remotely-authored action.
+    ///
+    /// The `group_id` of the given operation must be the same as that of the given `y`; failure to
+    /// meet this condition will result in an error.
+    fn receive_from_remote(
+        y: Self::State,
+        remote_operation: ORD::Message,
+    ) -> Result<Self::State, Self::Error> {
+        // Validation is performed internally by `process()`.
         let y = Group::process(y, &remote_operation)?;
 
         Ok(y)
@@ -175,7 +188,7 @@ where
         added: ID,
         access: Access<C>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        if !Self::State::is_manager(&y, &adder) {
+        if !Self::State::is_manager(&y, &adder)? {
             let adder_access = Self::State::access(&y, &adder)?;
             return Err(GroupManagerError::InsufficientAccess(
                 adder,
@@ -184,7 +197,7 @@ where
             ));
         }
 
-        if Self::State::is_member(&y, &added) {
+        if Self::State::is_member(&y, &added)? {
             return Err(GroupManagerError::GroupMember(added, y.group_id));
         }
 
@@ -204,16 +217,18 @@ where
 
     /// Remove a group member.
     ///
-    /// A member may remove themself, even if they are not a manager. In order to remove any other
-    /// member, the `remover` must be a manager and the `removed` identity must already be a member
-    /// of the group; failure to meet these conditions will result in an error.
+    /// The `remover` must be a manager and the `removed` identity must already be a member
+    /// of the group; failure to meet these conditions will result in an error. A member can only
+    /// remove themself from the group if they are a manager.
+    // TODO: Consider introducing self-removal for non-manager members:
+    //
+    // https://github.com/p2panda/p2panda/issues/759
     fn remove(
         y: Self::State,
         remover: ID,
         removed: ID,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        // A member may remove themself, even if they're not a manager.
-        if remover != removed && !Self::State::is_manager(&y, &remover) {
+        if !Self::State::is_manager(&y, &remover)? {
             let remover_access = Self::State::access(&y, &remover)?;
             return Err(GroupManagerError::InsufficientAccess(
                 remover,
@@ -222,7 +237,7 @@ where
             ));
         }
 
-        if !Self::State::is_member(&y, &removed) {
+        if !Self::State::is_member(&y, &removed)? {
             return Err(GroupManagerError::NotGroupMember(removed, y.group_id));
         }
 
@@ -242,7 +257,7 @@ where
     /// Promote a group member to the given access level.
     ///
     /// The `promoter` must be a manager and the `promoted` identity must already be a member of
-    /// the group; failure to meet thess conditions will result in an error. A redundant access
+    /// the group; failure to meet these conditions will result in an error. A redundant access
     /// level assignment will also result in an error; for example, if the `promoted` member
     /// currently has `Read` access and the given access is also `Read`.
     fn promote(
@@ -251,7 +266,7 @@ where
         promoted: ID,
         access: Access<C>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        if !Self::State::is_manager(&y, &promoter) {
+        if !Self::State::is_manager(&y, &promoter)? {
             let promoter_access = Self::State::access(&y, &promoter)?;
             return Err(GroupManagerError::InsufficientAccess(
                 promoter,
@@ -260,7 +275,7 @@ where
             ));
         }
 
-        if !Self::State::is_member(&y, &promoted) {
+        if !Self::State::is_member(&y, &promoted)? {
             return Err(GroupManagerError::NotGroupMember(promoted, y.group_id));
         }
 
@@ -297,7 +312,7 @@ where
         demoted: ID,
         access: Access<C>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        if !Self::State::is_manager(&y, &demoter) {
+        if !Self::State::is_manager(&y, &demoter)? {
             let demoter_access = Self::State::access(&y, &demoter)?;
             return Err(GroupManagerError::InsufficientAccess(
                 demoter,
@@ -306,7 +321,7 @@ where
             ));
         }
 
-        if !Self::State::is_member(&y, &demoted) {
+        if !Self::State::is_member(&y, &demoted)? {
             return Err(GroupManagerError::NotGroupMember(demoted, y.group_id));
         }
 
