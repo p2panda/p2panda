@@ -4,25 +4,112 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use crate::group::Access;
+use crate::group::Group;
+use crate::group::GroupError;
+use crate::group::GroupMembershipError;
 use crate::group::GroupState;
 use crate::group::test_utils::TestGroupStore;
+use crate::group::test_utils::TestOperation;
 use crate::group::test_utils::{Network, TestGroup, TestGroupState, TestOrdererState};
 use crate::traits::AuthGroup;
 
 use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
+pub(crate) fn from_create(
+    group_id: char,
+    actor_id: char,
+    op_create: &TestOperation,
+    rng: &mut StdRng,
+) -> TestGroupState {
+    let store = TestGroupStore::default();
+    let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
+    let group = TestGroupState::new(group_id, actor_id, store, orderer);
+    TestGroup::process(group, op_create).unwrap()
+}
+
+pub(crate) fn create_group(
+    group_id: char,
+    actor_id: char,
+    members: Vec<(char, Access<()>)>,
+    rng: &mut StdRng,
+) -> (TestGroupState, TestOperation) {
+    let store = TestGroupStore::default();
+    let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
+    let group = TestGroupState::new(group_id, actor_id, store, orderer);
+    let control_message = GroupControlMessage::GroupAction {
+        group_id,
+        action: GroupAction::Create {
+            initial_members: members
+                .into_iter()
+                .map(|(id, access)| (GroupMember::Individual(id), access))
+                .collect(),
+        },
+    };
+    let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+    let group = TestGroup::process(group, &op).unwrap();
+    (group, op)
+}
+
+pub(crate) fn add_member(
+    group: TestGroupState,
+    group_id: char,
+    member: char,
+    access: Access<()>,
+) -> (TestGroupState, TestOperation) {
+    let control_message = GroupControlMessage::GroupAction {
+        group_id,
+        action: GroupAction::Add {
+            member: GroupMember::Individual(member),
+            access,
+        },
+    };
+    let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+    let group = TestGroup::process(group, &op).unwrap();
+    (group, op)
+}
+
+pub(crate) fn remove_member(
+    group: TestGroupState,
+    group_id: char,
+    member: char,
+) -> (TestGroupState, TestOperation) {
+    let control_message = GroupControlMessage::GroupAction {
+        group_id,
+        action: GroupAction::Remove {
+            member: GroupMember::Individual(member),
+        },
+    };
+    let (group, op) = TestGroup::prepare(group, &control_message).unwrap();
+    let group = TestGroup::process(group, &op).unwrap();
+    (group, op)
+}
+
+pub(crate) fn sync(group: TestGroupState, ops: &[TestOperation]) -> TestGroupState {
+    ops.iter()
+        .fold(group, |g, op| TestGroup::process(g, op).unwrap())
+}
+
+pub(crate) fn assert_members(group: &TestGroupState, expected: &[(GroupMember<char>, Access<()>)]) {
+    let mut actual = group.members();
+    let mut expected = expected.to_vec();
+    actual.sort();
+    expected.sort();
+    assert_eq!(actual, expected);
+}
+
 #[test]
 fn basic_group() {
+    let group_id = '1';
     let alice = 'A';
     let store = TestGroupStore::default();
     let rng = StdRng::from_os_rng();
     let orderer_y = TestOrdererState::new(alice, store.clone(), rng);
-    let group_y = TestGroupState::new(alice, alice, store, orderer_y);
+    let group_y = TestGroupState::new(group_id, alice, store, orderer_y);
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Create {
             initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
         },
@@ -40,7 +127,7 @@ fn basic_group() {
     // Add bob with read access.
     let bob = 'B';
     let control_message_002 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(bob),
             access: Access::Read,
@@ -62,7 +149,7 @@ fn basic_group() {
     // Add claire with write access.
     let claire = 'C';
     let control_message_003 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(claire),
             access: Access::Write { conditions: None },
@@ -87,7 +174,7 @@ fn basic_group() {
 
     // Promote claire to admin.
     let control_message_004 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Promote {
             member: GroupMember::Individual(claire),
             access: Access::Manage,
@@ -109,7 +196,7 @@ fn basic_group() {
 
     // Demote bob to poll access.
     let control_message_005 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Demote {
             member: GroupMember::Individual(bob),
             access: Access::Pull,
@@ -131,7 +218,7 @@ fn basic_group() {
 
     // Remove bob.
     let control_message_006 = GroupControlMessage::GroupAction {
-        group_id: alice,
+        group_id,
         action: GroupAction::Remove {
             member: GroupMember::Individual(bob),
         },
@@ -166,14 +253,14 @@ fn nested_groups() {
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
-        alice,
         alice_devices_group,
+        alice,
         store.clone(),
         alice_orderer_y.clone(),
     );
 
     // One team group instance.
-    let team_group_y = GroupState::new(alice, alice_team_group, store.clone(), alice_orderer_y);
+    let team_group_y = GroupState::new(alice_team_group, alice, store.clone(), alice_orderer_y);
 
     // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
     let control_message_001 = GroupControlMessage::GroupAction {
@@ -784,4 +871,455 @@ fn members_at() {
         members_at_most_recent_heads,
         members_by_all_known_operations
     );
+}
+#[test]
+fn error_cases() {
+    let group_id = '0';
+    let alice = 'A';
+    let bob = 'B';
+    let claire = 'C';
+    let dave = 'D';
+    let eve = 'E';
+
+    let mut rng = StdRng::from_os_rng();
+
+    let (y_i, _) = create_group(
+        group_id,
+        alice,
+        vec![
+            (alice, Access::Manage),
+            (bob, Access::Read),
+            (claire, Access::Read),
+        ],
+        &mut rng,
+    );
+
+    let previous: Vec<u32> = y_i.heads().into_iter().collect();
+
+    // AlreadyAdded
+    let op = TestOperation {
+        id: 1,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(bob),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_i.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyAdded(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // Remove claire so we can test AlreadyRemoved
+    let y_ii = Group::process(
+        y_i,
+        &TestOperation {
+            id: 2,
+            author: alice,
+            dependencies: previous.clone(),
+            previous: previous.clone(),
+            payload: GroupControlMessage::GroupAction {
+                group_id,
+                action: GroupAction::Remove {
+                    member: GroupMember::Individual(claire),
+                },
+            },
+        },
+    )
+    .unwrap();
+
+    let previous: Vec<u32> = y_ii.heads().into_iter().collect();
+
+    // AlreadyRemoved
+    let op = TestOperation {
+        id: 3,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(claire),
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyRemoved(GroupMember::Individual('C'))
+        ))
+    ));
+
+    // InsufficientAccess
+    let op = TestOperation {
+        id: 4,
+        author: bob,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InsufficientAccess(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // Remove bob so we can test InactiveActor
+    let y_iii = Group::process(
+        y_ii,
+        &TestOperation {
+            id: 5,
+            author: alice,
+            dependencies: previous.clone(),
+            previous: previous.clone(),
+            payload: GroupControlMessage::GroupAction {
+                group_id,
+                action: GroupAction::Remove {
+                    member: GroupMember::Individual(bob),
+                },
+            },
+        },
+    )
+    .unwrap();
+
+    let previous: Vec<u32> = y_iii.heads().into_iter().collect();
+
+    // InactiveActor
+    let op = TestOperation {
+        id: 6,
+        author: bob,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveActor(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // InactiveMember
+    let op = TestOperation {
+        id: 7,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: GroupMember::Individual(claire),
+                access: Access::Write { conditions: None },
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveMember(GroupMember::Individual('C'))
+        ))
+    ));
+
+    // UnrecognisedActor
+    let op = TestOperation {
+        id: 8,
+        author: eve,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedActor(GroupMember::Individual('E'))
+        ))
+    ));
+
+    // UnrecognisedMember
+    let op = TestOperation {
+        id: 9,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: GroupMember::Individual(eve),
+                access: Access::Write { conditions: None },
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedMember(GroupMember::Individual('E'))
+        ))
+    ));
+}
+#[test]
+fn error_cases_resolver() {
+    let group_id = '0';
+    let alice = 'A';
+    let bob = 'B';
+    let claire = 'C';
+    let dave = 'D';
+    let eve = 'E';
+
+    let mut rng = StdRng::from_os_rng();
+
+    let (y_i, _) = create_group(
+        group_id,
+        alice,
+        vec![
+            (alice, Access::Manage),
+            (bob, Access::Read),
+            (claire, Access::Read),
+        ],
+        &mut rng,
+    );
+
+    let previous: Vec<u32> = y_i.heads().into_iter().collect();
+
+    // Remove all current members and all all non-members as managers in a concurrent branch.
+    let (mut y_ii, _) = remove_member(y_i, group_id, bob);
+    (y_ii, _) = remove_member(y_ii, group_id, claire);
+    (y_ii, _) = add_member(y_ii, group_id, dave, Access::Manage);
+    (y_ii, _) = add_member(y_ii, group_id, eve, Access::Manage);
+    (y_ii, _) = remove_member(y_ii, group_id, alice);
+
+    let mut members = y_ii.members();
+    members.sort();
+    assert_eq!(
+        members,
+        vec![
+            (GroupMember::Individual(dave), Access::Manage),
+            (GroupMember::Individual(eve), Access::Manage)
+        ]
+    );
+
+    // All the following operations are appended into the group operation graph into a branch
+    // concurrent to all the previous group changes. This means they should be validated against
+    // state which does not include those changes (even though they are the "current" state).
+
+    // AlreadyAdded (bob)
+    let op = TestOperation {
+        id: 1,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(bob),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_ii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyAdded(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // Remove claire
+    let op = TestOperation {
+        id: 2,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(claire),
+            },
+        },
+    };
+    let y_iii = Group::process(y_ii.clone(), &op).unwrap();
+
+    // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
+    let previous = vec![op.id];
+
+    // AlreadyRemoved (claire)
+    let op = TestOperation {
+        id: 3,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(claire),
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::AlreadyRemoved(GroupMember::Individual('C'))
+        ))
+    ));
+
+    // InsufficientAccess (bob tries to add dave)
+    let op = TestOperation {
+        id: 4,
+        author: bob,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iii.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InsufficientAccess(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // Remove bob
+    let op = TestOperation {
+        id: 5,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(bob),
+            },
+        },
+    };
+    let y_iv = Group::process(y_iii.clone(), &op).unwrap();
+
+    // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
+    let previous = vec![op.id];
+
+    // InactiveActor (bob tries to add dave)
+    let op = TestOperation {
+        id: 6,
+        author: bob,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveActor(GroupMember::Individual('B'))
+        ))
+    ));
+
+    // InactiveMember (claire promoted)
+    let op = TestOperation {
+        id: 7,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: GroupMember::Individual(claire),
+                access: Access::Write { conditions: None },
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::InactiveMember(GroupMember::Individual('C'))
+        ))
+    ));
+
+    // UnrecognisedActor (eve tries to add dave)
+    let op = TestOperation {
+        id: 8,
+        author: eve,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(dave),
+                access: Access::Read,
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedActor(GroupMember::Individual('E'))
+        ))
+    ));
+
+    // UnrecognisedMember (alice promotes eve)
+    let op = TestOperation {
+        id: 9,
+        author: alice,
+        dependencies: previous.clone(),
+        previous: previous.clone(),
+        payload: GroupControlMessage::GroupAction {
+            group_id,
+            action: GroupAction::Promote {
+                member: GroupMember::Individual(eve),
+                access: Access::Write { conditions: None },
+            },
+        },
+    };
+    assert!(matches!(
+        Group::process(y_iv.clone(), &op),
+        Err(GroupError::StateChangeError(
+            _,
+            GroupMembershipError::UnrecognisedMember(GroupMember::Individual('E'))
+        ))
+    ));
 }
