@@ -5,9 +5,12 @@
 use std::collections::VecDeque;
 
 use libfuzzer_sys::fuzz_target;
+use p2panda_encryption::Rng;
+use p2panda_encryption::key_bundle::Lifetime;
+use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::test_utils::crypto::SecretKey;
 use p2panda_encryption::traits::PreKeyManager;
-use p2panda_encryption::{KeyManager, Lifetime, OneTimeTwoParty, Rng, TwoPartyMessage};
+use p2panda_encryption::two_party::{OneTimeTwoParty, TwoPartyMessage};
 
 /// Max. number of messages in a member's inbox.
 const INBOX_CAPACITY: usize = 128;
