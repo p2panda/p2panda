@@ -37,7 +37,7 @@
 //!
 //! Extra care is required to keep the chain secrets, updating the "outer" ratchets in a strict, linearized
 //! order. Consult the [DCGKA](dcgka) module for more information.
-//! 
+//!
 //! ## Key bundles
 //!
 //! For initial key agreement (X3DH) peers need to publish key bundles into the network to allow
