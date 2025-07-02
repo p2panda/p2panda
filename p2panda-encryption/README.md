@@ -26,7 +26,9 @@
 
 The crate implements two different group key-agreement and encryption schemes for a whole range of use cases for applications which can't rely on a stable network connection or centralised coordination.
 
-## Goals
+More detail about the particular implementation and design choices of `p2panda-encryption` can be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
+
+## Features
 
 ### Strong security guarantees
 
@@ -52,11 +54,9 @@ The code in this crate is expressed as [pure functions](https://en.wikipedia.org
 
 ## Design
 
-More detail about the particular implementation and design choices of `p2panda-encryption` can be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
-
 ### Encryption Schemes
 
-The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with a secret, symmetric key for a group (using XChaCha20-Poly1305). This will be useful for building applications where users who enter a group late will still have access to previously created content, for example knowledge databases, wiki applications or a booking tool for rehearsal rooms.
+The first scheme we simply call **"Data Encryption"**, allowing peers to encrypt any data with a secret, symmetric key for a group. This will be useful for building applications where users who enter a group late will still have access to previously created content, for example knowledge databases, wiki applications or a booking tool for rehearsal rooms.
 
 A member will not learn about any newly created data after removing them from the group since the key gets rotated on member removal. This should accommodate for many use-cases in p2p applications which rely on basic group encryption with post-compromise security (PCS) and forward secrecy (FS) during key agreement. Applications can optionally choose to remove encryption keys for forward secrecy if they desire so.
 
@@ -82,17 +82,15 @@ Each subsequent 2SM round (via HPKE) uses exactly one secret key, which is then 
 
 ## Usage & integration
 
-There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives an already complete and tested end-to-end solution for building secure, decentralized applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
+There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives a tested end-to-end solution for building secure, decentralized applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
 
 The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering, group management, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you still struggle, please [reach out](https://p2panda.org/#contact).
 
-To get an overview of what is required for a custom integration we recommended to check out the high-level APIs for [data encryption](crate::data_scheme::Group) and [message encryption](crate::message_scheme::Group).
-
 ## Security
 
-End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevents third parties to read your application data but it can never guarantee full security, especially in decentralized, experimental networks.
+End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties to read your application data but they can never guarantee full security, especially in decentralized, experimental networks.
 
-We can currently _not_ recommend using this technology for high-risk use-cases when you can not guarantee full control over all devices and transport channels.
+We can currently _not_ recommend using this technology for high-risk use-cases when you can not fully guarantee control over all devices and transport channels.
 
 ### Audit
 
