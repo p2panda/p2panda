@@ -31,7 +31,6 @@ pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore>;
 pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore>;
 pub type TestGroupState = GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore>;
 
-
 /// During testing we want Ord to be implemented on Access so we can easily assert test cases
 /// involving collections of access levels.
 impl<C: Ord> Ord for Access<C> {
