@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// TODO(glyph): I'd love to see this module split into smaller modules to make it easier to
+// understand the various components and how they're related. Right now it feels a bit overwhelming
+// to navigate.
+//
+// src/group/member.rs
+// src/group/action.rs
+// src/group/control_message.rs
+// src/group/auth_group.rs
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -8,12 +17,15 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
+pub use crate::group::dgm::{GroupManager, GroupManagerError};
 pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
 use crate::traits::{
-    AuthGroup, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
+    AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
+    Resolver,
 };
 
+mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
 mod graph;
@@ -36,6 +48,7 @@ impl<ID> GroupMember<ID>
 where
     ID: Copy,
 {
+    /// Return the ID of a group member.
     pub fn id(&self) -> ID {
         match self {
             GroupMember::Individual(id) => *id,
@@ -142,11 +155,11 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    /// ID of the group.
-    pub group_id: ID,
-
     /// ID of the local actor.
     pub my_id: ID,
+
+    /// ID of the group.
+    pub group_id: ID,
 
     /// Group state at every position in the operation graph.
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
@@ -181,10 +194,10 @@ where
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
-    pub fn new(group_id: ID, my_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
-            group_id,
             my_id,
+            group_id,
             states: Default::default(),
             operations: Default::default(),
             ignore: Default::default(),
@@ -339,6 +352,7 @@ where
                 }
             }
         }
+
         Ok(members.into_iter().collect())
     }
 
@@ -355,7 +369,7 @@ where
         Ok(members)
     }
 
-    // Get all current members of the group.
+    /// Get all current members of the group.
     pub fn members(&self) -> Vec<(GroupMember<ID>, Access<C>)> {
         self.current_state()
             .members
@@ -380,6 +394,7 @@ where
     ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let heads = self.transitive_heads()?;
         let members = self.transitive_members_at(&heads)?;
+
         Ok(members)
     }
 
@@ -471,6 +486,80 @@ where
     }
 }
 
+impl<ID, OP, C, RS, ORD, GS> GroupMembershipQuery<ID, OP, C> for GroupState<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Message> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
+{
+    type State = GroupState<ID, OP, C, RS, ORD, GS>;
+
+    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
+
+    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
+        let member_state = y
+            .transitive_members()?
+            .into_iter()
+            .find(|(member_id, _state)| member_id == member);
+
+        if let Some(state) = member_state {
+            let access = state.1.to_owned();
+
+            Ok(access)
+        } else {
+            Err(GroupError::MemberNotFound(y.group_id, *member))
+        }
+    }
+
+    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error> {
+        let member_ids = y
+            .transitive_members()?
+            .into_iter()
+            .map(|(member_id, _state)| member_id)
+            .collect();
+
+        Ok(member_ids)
+    }
+
+    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let member_state = y
+            .transitive_members()?
+            .into_iter()
+            .find(|(member_id, _state)| member_id == member);
+
+        let is_member = member_state.is_some();
+
+        Ok(is_member)
+    }
+
+    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_puller = matches!(GroupState::access(y, member)?, Access::Pull);
+
+        Ok(is_puller)
+    }
+
+    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_reader = matches!(GroupState::access(y, member)?, Access::Read);
+
+        Ok(is_reader)
+    }
+
+    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_writer = matches!(GroupState::access(y, member)?, Access::Write { .. });
+
+        Ok(is_writer)
+    }
+
+    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+        let is_manager = matches!(GroupState::access(y, member)?, Access::Manage);
+
+        Ok(is_manager)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Group<ID, OP, C, RS, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
@@ -480,18 +569,19 @@ pub struct Group<ID, OP, C, RS, ORD, GS> {
 /// members can be assigned different access levels, where only a sub-set of members can mutate
 /// the state of the group itself.
 ///
-/// The core data type is an Acyclic Directed Graph of `GroupControlMessage`s. Messages contain
+/// The core data type is a Directed Acyclic Graph of `GroupControlMessage`s. Messages contain
 /// group control messages which mutate the previous group state. Messages refer to the "previous"
-/// state (set of graph tips) which the action they contain should be applied to, these references
+/// state (set of graph tips) which the action they contain should be applied to; these references
 /// make up the edges in the graph. Additionally, messages have a set of "dependencies" which
-/// messages which could be part of any auth sub-group.
+/// could be part of any auth sub-group.
 ///
 /// A requirement of the protocol is that all messages are processed in partial-order. When using
 /// a dependency graph structure (as is the case in this implementation) it is possible to achieve
-/// this by only processing a message once all it's dependencies have themselves been processed.
+/// partial-ordering by only processing a message once all it's dependencies have themselves been
+/// processed.
 ///
 /// Group state is maintained using a state-based CRDT `GroupMembersState`. Every time a message
-/// is processed, a new state is generated and added to the map of all states. When a new messages
+/// is processed, a new state is generated and added to the map of all states. When a new message
 /// is received, it's "previous" state is calculated and then the message applied, resulting in a
 /// new state. This approach allows one to use the state-based CRDT `merge` method to combine
 /// states from any points in the group history into a new state. This property is what allows us
@@ -712,15 +802,11 @@ where
                 GroupAction::Remove { member, .. } => {
                     state::remove(members_y.clone(), member_id, member)
                 }
-                GroupAction::Promote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::promote(members_y.clone(), member_id, member, None)
+                GroupAction::Promote { member, access } => {
+                    state::promote(members_y.clone(), member_id, member, access)
                 }
-                GroupAction::Demote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::demote(members_y.clone(), member_id, member, None)
+                GroupAction::Demote { member, access } => {
+                    state::demote(members_y.clone(), member_id, member, access)
                 }
                 GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
             };
@@ -852,7 +938,7 @@ where
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut y_i = GroupState::new(y.group_id, y.my_id, y.group_store.clone(), y.orderer_y);
+        let mut y_i = GroupState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
         y_i.ignore = y.ignore;
 
         // Apply every operation.
@@ -943,4 +1029,8 @@ where
 
     #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
     MissingOperation(OP),
+
+    // TODO(glyph): I don't think this variant should live here. Maybe another error type?
+    #[error("state not found for group member {0} in group {1}")]
+    MemberNotFound(ID, ID),
 }
