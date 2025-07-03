@@ -60,7 +60,7 @@ impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD,
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd + Ord,
+    C: Clone + Debug + PartialEq + PartialOrd,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
