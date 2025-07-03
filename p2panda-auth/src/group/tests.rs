@@ -111,7 +111,7 @@ fn basic_group() {
     let control_message_001 = GroupControlMessage::GroupAction {
         group_id,
         action: GroupAction::Create {
-            initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
+            initial_members: vec![(GroupMember::Individual(alice), Access::manage())],
         },
     };
     let (group_y, operation_001) = TestGroup::prepare(group_y, &control_message_001).unwrap();
@@ -121,7 +121,7 @@ fn basic_group() {
     members.sort();
     assert_eq!(
         members,
-        vec![(GroupMember::Individual(alice), Access::Manage)]
+        vec![(GroupMember::Individual(alice), Access::manage())]
     );
 
     // Add bob with read access.
@@ -130,7 +130,7 @@ fn basic_group() {
         group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(bob),
-            access: Access::Read,
+            access: Access::read(),
         },
     };
     let (group_y, operation_002) = TestGroup::prepare(group_y, &control_message_002).unwrap();
@@ -141,8 +141,8 @@ fn basic_group() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Read)
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::read())
         ]
     );
 
@@ -152,7 +152,7 @@ fn basic_group() {
         group_id,
         action: GroupAction::Add {
             member: GroupMember::Individual(claire),
-            access: Access::Write { conditions: None },
+            access: Access::write(),
         },
     };
     let (group_y, operation_003) = TestGroup::prepare(group_y, &control_message_003).unwrap();
@@ -163,11 +163,11 @@ fn basic_group() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Read),
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::read()),
             (
                 GroupMember::Individual(claire),
-                Access::Write { conditions: None }
+                Access::write()
             )
         ]
     );
@@ -177,7 +177,7 @@ fn basic_group() {
         group_id,
         action: GroupAction::Promote {
             member: GroupMember::Individual(claire),
-            access: Access::Manage,
+            access: Access::manage(),
         },
     };
     let (group_y, operation_004) = TestGroup::prepare(group_y, &control_message_004).unwrap();
@@ -188,9 +188,9 @@ fn basic_group() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Read),
-            (GroupMember::Individual(claire), Access::Manage)
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::read()),
+            (GroupMember::Individual(claire), Access::manage())
         ]
     );
 
@@ -199,7 +199,7 @@ fn basic_group() {
         group_id,
         action: GroupAction::Demote {
             member: GroupMember::Individual(bob),
-            access: Access::Pull,
+            access: Access::pull(),
         },
     };
     let (group_y, operation_005) = TestGroup::prepare(group_y, &control_message_005).unwrap();
@@ -210,9 +210,9 @@ fn basic_group() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Pull),
-            (GroupMember::Individual(claire), Access::Manage)
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::pull()),
+            (GroupMember::Individual(claire), Access::manage())
         ]
     );
 
@@ -231,8 +231,8 @@ fn basic_group() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage)
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(claire), Access::manage())
         ]
     );
 }
@@ -267,11 +267,11 @@ fn nested_groups() {
         group_id: devices_group_y.id(),
         action: GroupAction::Create {
             initial_members: vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(alice_laptop), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(alice_laptop), Access::manage()),
                 (
                     GroupMember::Individual(alice_mobile),
-                    Access::Write { conditions: None },
+                    Access::write(),
                 ),
             ],
         },
@@ -290,11 +290,11 @@ fn nested_groups() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(alice_laptop), Access::Manage),
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(alice_laptop), Access::manage()),
             (
                 GroupMember::Individual(alice_mobile),
-                Access::Write { conditions: None }
+                Access::write()
             ),
         ],
     );
@@ -303,7 +303,7 @@ fn nested_groups() {
     let control_message_002 = GroupControlMessage::GroupAction {
         group_id: team_group_y.id(),
         action: GroupAction::Create {
-            initial_members: vec![(GroupMember::Individual(alice), Access::Manage)],
+            initial_members: vec![(GroupMember::Individual(alice), Access::manage())],
         },
     };
 
@@ -319,7 +319,7 @@ fn nested_groups() {
         group_id: team_group_y.id(),
         action: GroupAction::Add {
             member: GroupMember::Group(devices_group_y.id()),
-            access: Access::Read,
+            access: Access::read(),
         },
     };
     let (team_group_y, operation_003) =
@@ -332,8 +332,8 @@ fn nested_groups() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Group(alice_devices_group), Access::Read)
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Group(alice_devices_group), Access::read())
         ]
     );
 
@@ -344,9 +344,9 @@ fn nested_groups() {
     assert_eq!(
         transitive_members,
         vec![
-            (alice, Access::Manage),
-            (alice_laptop, Access::Read),
-            (alice_mobile, Access::Read),
+            (alice, Access::manage()),
+            (alice_laptop, Access::read()),
+            (alice_mobile, Access::read()),
         ]
     );
 }
@@ -372,7 +372,7 @@ fn multi_user() {
     network.create(
         alice_team_group,
         alice,
-        vec![(GroupMember::Individual(alice), Access::Manage)],
+        vec![(GroupMember::Individual(alice), Access::manage())],
     );
 
     // And then adds bob as manager.
@@ -380,7 +380,7 @@ fn multi_user() {
         alice,
         GroupMember::Individual(bob),
         alice_team_group,
-        Access::Manage,
+        Access::manage(),
     );
 
     // Everyone processes these operations.
@@ -392,8 +392,8 @@ fn multi_user() {
     assert_eq!(
         alice_members,
         vec![
-            (GroupMember::Individual('A'), Access::Manage),
-            (GroupMember::Individual('B'), Access::Manage),
+            (GroupMember::Individual('A'), Access::manage()),
+            (GroupMember::Individual('B'), Access::manage()),
         ]
     );
     assert_eq!(alice_members, claire_members);
@@ -404,7 +404,7 @@ fn multi_user() {
     let claire_transitive_members = network.transitive_members(&claire, &alice_team_group);
     assert_eq!(
         alice_transitive_members,
-        vec![('A', Access::Manage), ('B', Access::Manage),]
+        vec![('A', Access::manage()), ('B', Access::manage()),]
     );
     assert_eq!(alice_transitive_members, bob_transitive_members);
     assert_eq!(alice_transitive_members, claire_transitive_members);
@@ -414,7 +414,7 @@ fn multi_user() {
         bob,
         GroupMember::Individual(claire),
         alice_team_group,
-        Access::Read,
+        Access::read(),
     );
 
     // Alice (concurrently) creates a devices group.
@@ -424,9 +424,9 @@ fn multi_user() {
         vec![
             (
                 GroupMember::Individual(alice_mobile),
-                Access::Write { conditions: None },
+                Access::write(),
             ),
-            (GroupMember::Individual(alice_laptop), Access::Manage),
+            (GroupMember::Individual(alice_laptop), Access::manage()),
         ],
     );
 
@@ -435,7 +435,7 @@ fn multi_user() {
         alice,
         GroupMember::Group(alice_devices_group),
         alice_team_group,
-        Access::Manage,
+        Access::manage(),
     );
 
     // Everyone processes these operations.
@@ -447,10 +447,10 @@ fn multi_user() {
     assert_eq!(
         alice_members,
         vec![
-            (GroupMember::Individual('A'), Access::Manage),
-            (GroupMember::Individual('B'), Access::Manage),
-            (GroupMember::Individual('C'), Access::Read),
-            (GroupMember::Group('D'), Access::Manage)
+            (GroupMember::Individual('A'), Access::manage()),
+            (GroupMember::Individual('B'), Access::manage()),
+            (GroupMember::Individual('C'), Access::read()),
+            (GroupMember::Group('D'), Access::manage())
         ]
     );
     assert_eq!(alice_members, bob_members);
@@ -462,11 +462,11 @@ fn multi_user() {
     assert_eq!(
         alice_transitive_members,
         vec![
-            ('A', Access::Manage),
-            ('B', Access::Manage),
-            ('C', Access::Read),
-            ('L', Access::Manage),
-            ('M', Access::Write { conditions: None })
+            ('A', Access::manage()),
+            ('B', Access::manage()),
+            ('C', Access::read()),
+            ('L', Access::manage()),
+            ('M', Access::write())
         ]
     );
     assert_eq!(alice_transitive_members, bob_transitive_members);
@@ -495,9 +495,9 @@ fn ooo() {
         friends_group,
         alice,
         vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::manage()),
+            (GroupMember::Individual(claire), Access::manage()),
         ],
     );
 
@@ -509,7 +509,7 @@ fn ooo() {
             alice,
             GroupMember::Individual(*friend),
             friends_group,
-            Access::Read,
+            Access::read(),
         );
     }
 
@@ -524,7 +524,7 @@ fn ooo() {
             bob,
             GroupMember::Individual(*friend),
             friends_group,
-            Access::Read,
+            Access::read(),
         );
     }
 
@@ -535,7 +535,7 @@ fn ooo() {
             claire,
             GroupMember::Individual(*friend),
             friends_group,
-            Access::Read,
+            Access::read(),
         );
     }
 
@@ -554,18 +554,18 @@ fn ooo() {
     assert_eq!(
         alice_members,
         vec![
-            (GroupMember::Individual('A'), Access::Manage),
-            (GroupMember::Individual('B'), Access::Manage),
-            (GroupMember::Individual('C'), Access::Manage),
-            // (GroupMember::Individual('D'), Access::Read),
-            (GroupMember::Individual('E'), Access::Read),
-            (GroupMember::Individual('F'), Access::Read),
-            // (GroupMember::Individual('G'), Access::Read),
-            (GroupMember::Individual('H'), Access::Read),
-            (GroupMember::Individual('I'), Access::Read),
-            // (GroupMember::Individual('J'), Access::Read),
-            (GroupMember::Individual('K'), Access::Read),
-            (GroupMember::Individual('L'), Access::Read),
+            (GroupMember::Individual('A'), Access::manage()),
+            (GroupMember::Individual('B'), Access::manage()),
+            (GroupMember::Individual('C'), Access::manage()),
+            // (GroupMember::Individual('D'), Access::read()),
+            (GroupMember::Individual('E'), Access::read()),
+            (GroupMember::Individual('F'), Access::read()),
+            // (GroupMember::Individual('G'), Access::read()),
+            (GroupMember::Individual('H'), Access::read()),
+            (GroupMember::Individual('I'), Access::read()),
+            // (GroupMember::Individual('J'), Access::read()),
+            (GroupMember::Individual('K'), Access::read()),
+            (GroupMember::Individual('L'), Access::read()),
         ]
     );
     assert_eq!(alice_members, claire_members);
@@ -587,14 +587,14 @@ fn add_remove_add() {
     network.create(
         friends_group,
         alice,
-        vec![(GroupMember::Individual(alice), Access::Manage)],
+        vec![(GroupMember::Individual(alice), Access::manage())],
     );
 
     network.add(
         alice,
         GroupMember::Individual(bob),
         friends_group,
-        Access::Read,
+        Access::read(),
     );
 
     network.remove(alice, GroupMember::Individual(bob), friends_group);
@@ -602,14 +602,14 @@ fn add_remove_add() {
     let members = network.members(&alice, &friends_group);
     assert_eq!(
         members,
-        vec![(GroupMember::Individual('A'), Access::Manage),]
+        vec![(GroupMember::Individual('A'), Access::manage()),]
     );
 
     network.add(
         alice,
         GroupMember::Individual(bob),
         friends_group,
-        Access::Read,
+        Access::read(),
     );
 
     network.process();
@@ -618,8 +618,8 @@ fn add_remove_add() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual('A'), Access::Manage),
-            (GroupMember::Individual('B'), Access::Read),
+            (GroupMember::Individual('A'), Access::manage()),
+            (GroupMember::Individual('B'), Access::read()),
         ]
     );
 }
@@ -645,10 +645,10 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         BOB_DEVICES_GROUP,
         BOB,
         vec![
-            (GroupMember::Individual(BOB), Access::Manage),
+            (GroupMember::Individual(BOB), Access::manage()),
             (
                 GroupMember::Individual(BOB_LAPTOP),
-                Access::Write { conditions: None },
+                Access::write(),
             ),
         ],
     );
@@ -658,7 +658,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         BOB,
         GroupMember::Individual(BOB_MOBILE),
         BOB_DEVICES_GROUP,
-        Access::Read,
+        Access::read(),
     );
     operations.push(id);
 
@@ -668,8 +668,8 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         CHARLIE_TEAM_GROUP,
         CHARLIE,
         vec![
-            (GroupMember::Individual(CHARLIE), Access::Manage),
-            (GroupMember::Individual(EDITH), Access::Read),
+            (GroupMember::Individual(CHARLIE), Access::manage()),
+            (GroupMember::Individual(EDITH), Access::read()),
         ],
     );
     operations.push(id);
@@ -677,7 +677,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
     let id = network.create(
         ALICE_ORG_GROUP,
         ALICE,
-        vec![(GroupMember::Individual(ALICE), Access::Manage)],
+        vec![(GroupMember::Individual(ALICE), Access::manage())],
     );
     operations.push(id);
 
@@ -687,7 +687,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         CHARLIE,
         GroupMember::Group(BOB_DEVICES_GROUP),
         CHARLIE_TEAM_GROUP,
-        Access::Manage,
+        Access::manage(),
     );
     operations.push(id);
 
@@ -697,7 +697,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         ALICE,
         GroupMember::Group(CHARLIE_TEAM_GROUP),
         ALICE_ORG_GROUP,
-        Access::Write { conditions: None },
+        Access::write(),
     );
     operations.push(id);
 
@@ -712,49 +712,49 @@ fn transitive_members() {
     let (network, _) = test_groups(rng);
 
     let expected_bob_devices_group_direct_members = vec![
-        (GroupMember::Individual(BOB), Access::Manage),
+        (GroupMember::Individual(BOB), Access::manage()),
         (
             GroupMember::Individual(BOB_LAPTOP),
-            Access::Write { conditions: None },
+            Access::write(),
         ),
-        (GroupMember::Individual(BOB_MOBILE), Access::Read),
+        (GroupMember::Individual(BOB_MOBILE), Access::read()),
     ];
 
     let expected_bob_devices_group_transitive_members = vec![
-        (BOB, Access::Manage),
-        (BOB_LAPTOP, Access::Write { conditions: None }),
-        (BOB_MOBILE, Access::Read),
+        (BOB, Access::manage()),
+        (BOB_LAPTOP, Access::write()),
+        (BOB_MOBILE, Access::read()),
     ];
 
     let expected_charlie_team_group_direct_members = vec![
-        (GroupMember::Individual(CHARLIE), Access::Manage),
-        (GroupMember::Individual(EDITH), Access::Read),
-        (GroupMember::Group(BOB_DEVICES_GROUP), Access::Manage),
+        (GroupMember::Individual(CHARLIE), Access::manage()),
+        (GroupMember::Individual(EDITH), Access::read()),
+        (GroupMember::Group(BOB_DEVICES_GROUP), Access::manage()),
     ];
 
     let expected_charlie_team_group_transitive_members = vec![
-        (BOB, Access::Manage),
-        (CHARLIE, Access::Manage),
-        (EDITH, Access::Read),
-        (BOB_LAPTOP, Access::Write { conditions: None }),
-        (BOB_MOBILE, Access::Read),
+        (BOB, Access::manage()),
+        (CHARLIE, Access::manage()),
+        (EDITH, Access::read()),
+        (BOB_LAPTOP, Access::write()),
+        (BOB_MOBILE, Access::read()),
     ];
 
     let expected_alice_org_group_direct_members = vec![
-        (GroupMember::Individual(ALICE), Access::Manage),
+        (GroupMember::Individual(ALICE), Access::manage()),
         (
             GroupMember::Group(CHARLIE_TEAM_GROUP),
-            Access::Write { conditions: None },
+            Access::write(),
         ),
     ];
 
     let expected_alice_org_group_transitive_members = vec![
-        (ALICE, Access::Manage),
-        (BOB, Access::Write { conditions: None }),
-        (CHARLIE, Access::Write { conditions: None }),
-        (EDITH, Access::Read),
-        (BOB_LAPTOP, Access::Write { conditions: None }),
-        (BOB_MOBILE, Access::Read),
+        (ALICE, Access::manage()),
+        (BOB, Access::write()),
+        (CHARLIE, Access::write()),
+        (EDITH, Access::read()),
+        (BOB_LAPTOP, Access::write()),
+        (BOB_MOBILE, Access::read()),
     ];
 
     let members = network.members(&BOB, &BOB_DEVICES_GROUP);
@@ -799,7 +799,7 @@ fn members_at() {
 
     // Initial state of the org group.
     let members = network.transitive_members_at(&ALICE, &ALICE_ORG_GROUP, &vec![create_org_op_id]);
-    assert_eq!(members, vec![(ALICE, Access::Manage)]);
+    assert_eq!(members, vec![(ALICE, Access::manage())]);
 
     // CHARLIE_TEAM was added but before BOB_DEVICES was added to the team.
     let members = network.transitive_members_at(
@@ -810,9 +810,9 @@ fn members_at() {
     assert_eq!(
         members,
         vec![
-            (ALICE, Access::Manage),
-            (CHARLIE, Access::Write { conditions: None }),
-            (EDITH, Access::Read)
+            (ALICE, Access::manage()),
+            (CHARLIE, Access::write()),
+            (EDITH, Access::read())
         ]
     );
 
@@ -829,11 +829,11 @@ fn members_at() {
     assert_eq!(
         members,
         vec![
-            (ALICE, Access::Manage),
-            (BOB, Access::Write { conditions: None }),
-            (CHARLIE, Access::Write { conditions: None }),
-            (EDITH, Access::Read),
-            (BOB_LAPTOP, Access::Write { conditions: None }),
+            (ALICE, Access::manage()),
+            (BOB, Access::write()),
+            (CHARLIE, Access::write()),
+            (EDITH, Access::read()),
+            (BOB_LAPTOP, Access::write()),
         ]
     );
 
@@ -850,12 +850,12 @@ fn members_at() {
     assert_eq!(
         members_at_most_recent_heads,
         vec![
-            (ALICE, Access::Manage),
-            (BOB, Access::Write { conditions: None }),
-            (CHARLIE, Access::Write { conditions: None }),
-            (EDITH, Access::Read),
-            (BOB_LAPTOP, Access::Write { conditions: None }),
-            (BOB_MOBILE, Access::Read),
+            (ALICE, Access::manage()),
+            (BOB, Access::write()),
+            (CHARLIE, Access::write()),
+            (EDITH, Access::read()),
+            (BOB_LAPTOP, Access::write()),
+            (BOB_MOBILE, Access::read()),
         ]
     );
 
@@ -887,9 +887,9 @@ fn error_cases() {
         alice,
         group_id,
         vec![
-            (alice, Access::Manage),
-            (bob, Access::Read),
-            (claire, Access::Read),
+            (alice, Access::manage()),
+            (bob, Access::read()),
+            (claire, Access::read()),
         ],
         &mut rng,
     );
@@ -906,7 +906,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(bob),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -969,7 +969,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1011,7 +1011,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1033,7 +1033,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(claire),
-                access: Access::Write { conditions: None },
+                access: Access::write(),
             },
         },
     };
@@ -1055,7 +1055,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1077,7 +1077,7 @@ fn error_cases() {
             group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(eve),
-                access: Access::Write { conditions: None },
+                access: Access::write(),
             },
         },
     };
@@ -1104,9 +1104,9 @@ fn error_cases_resolver() {
         alice,
         group_id,
         vec![
-            (alice, Access::Manage),
-            (bob, Access::Read),
-            (claire, Access::Read),
+            (alice, Access::manage()),
+            (bob, Access::read()),
+            (claire, Access::read()),
         ],
         &mut rng,
     );
@@ -1116,8 +1116,8 @@ fn error_cases_resolver() {
     // Remove all current members and all all non-members as managers in a concurrent branch.
     let (mut y_ii, _) = remove_member(y_i, group_id, bob);
     (y_ii, _) = remove_member(y_ii, group_id, claire);
-    (y_ii, _) = add_member(y_ii, group_id, dave, Access::Manage);
-    (y_ii, _) = add_member(y_ii, group_id, eve, Access::Manage);
+    (y_ii, _) = add_member(y_ii, group_id, dave, Access::manage());
+    (y_ii, _) = add_member(y_ii, group_id, eve, Access::manage());
     (y_ii, _) = remove_member(y_ii, group_id, alice);
 
     let mut members = y_ii.members();
@@ -1125,8 +1125,8 @@ fn error_cases_resolver() {
     assert_eq!(
         members,
         vec![
-            (GroupMember::Individual(dave), Access::Manage),
-            (GroupMember::Individual(eve), Access::Manage)
+            (GroupMember::Individual(dave), Access::manage()),
+            (GroupMember::Individual(eve), Access::manage())
         ]
     );
 
@@ -1144,7 +1144,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(bob),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1205,7 +1205,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1245,7 +1245,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1267,7 +1267,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(claire),
-                access: Access::Write { conditions: None },
+                access: Access::write(),
             },
         },
     };
@@ -1289,7 +1289,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(dave),
-                access: Access::Read,
+                access: Access::read(),
             },
         },
     };
@@ -1311,7 +1311,7 @@ fn error_cases_resolver() {
             group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(eve),
-                access: Access::Write { conditions: None },
+                access: Access::write(),
             },
         },
     };

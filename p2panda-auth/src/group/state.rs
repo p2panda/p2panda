@@ -54,19 +54,19 @@ where
     }
 
     pub fn is_puller(&self) -> bool {
-        self.access == Access::Pull
+        self.access.is_pull()
     }
 
     pub fn is_reader(&self) -> bool {
-        self.access == Access::Read
+        self.access.is_read()
     }
 
     pub fn is_writer(&self) -> bool {
-        self.access != Access::Pull && self.access != Access::Read && self.access != Access::Manage
+        self.access.is_write()
     }
 
     pub fn is_manager(&self) -> bool {
-        self.access == Access::Manage
+        self.access.is_manage()
     }
 }
 
@@ -844,7 +844,7 @@ mod tests {
         assert!(charlie_state.access_counter == 2);
 
         // We expect the access level to be Pull for Charlie.
-        assert!(charlie_state.access == Access::Pull);
+        assert!(charlie_state.is_puller());
     }
 
     #[test]
@@ -886,6 +886,6 @@ mod tests {
         let charlie_state = group_y.members.get(&charlie).unwrap();
 
         // We expect the access level to be Pull for Charlie.
-        assert!(charlie_state.access == Access::Pull);
+        assert!(charlie_state.is_puller());
     }
 }
