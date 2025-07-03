@@ -99,7 +99,11 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
