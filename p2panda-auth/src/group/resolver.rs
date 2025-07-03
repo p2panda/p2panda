@@ -398,12 +398,7 @@ mod tests {
         network.process();
 
         // Alice demotes Bob.
-        network.demote(
-            alice,
-            GroupMember::Individual(bob),
-            group,
-            Access::write(),
-        );
+        network.demote(alice, GroupMember::Individual(bob), group, Access::write());
 
         // Bob removes Claire concurrently.
         network.remove(bob, GroupMember::Individual(claire), group);
@@ -420,10 +415,7 @@ mod tests {
             alice_members,
             vec![
                 (GroupMember::Individual(alice), Access::manage()),
-                (
-                    GroupMember::Individual(bob),
-                    Access::write()
-                ),
+                (GroupMember::Individual(bob), Access::write()),
                 (GroupMember::Individual(claire), Access::manage()),
             ]
         );
@@ -433,10 +425,7 @@ mod tests {
             bob_members,
             vec![
                 (GroupMember::Individual(alice), Access::manage()),
-                (
-                    GroupMember::Individual(bob),
-                    Access::write()
-                ),
+                (GroupMember::Individual(bob), Access::write()),
                 (GroupMember::Individual(claire), Access::manage()),
             ]
         );
@@ -446,10 +435,7 @@ mod tests {
             claire_members,
             vec![
                 (GroupMember::Individual(alice), Access::manage()),
-                (
-                    GroupMember::Individual(bob),
-                    Access::write()
-                ),
+                (GroupMember::Individual(bob), Access::write()),
                 (GroupMember::Individual(claire), Access::manage()),
             ]
         );
@@ -502,12 +488,7 @@ mod tests {
         network.process();
 
         // Alice demotes Bob.
-        network.demote(
-            alice,
-            GroupMember::Individual(bob),
-            group,
-            Access::write(),
-        );
+        network.demote(alice, GroupMember::Individual(bob), group, Access::write());
 
         // Bob adds Dave concurrently.
         network.add(bob, GroupMember::Individual(dave), group, Access::read());
@@ -521,10 +502,7 @@ mod tests {
         // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
         let expected_members = vec![
             (GroupMember::Individual(alice), Access::manage()),
-            (
-                GroupMember::Individual(bob),
-                Access::write(),
-            ),
+            (GroupMember::Individual(bob), Access::write()),
             (GroupMember::Individual(claire), Access::manage()),
         ];
 
@@ -825,7 +803,8 @@ mod tests {
         let alice_group = sync(alice_group, &[op_add_eve.clone()]);
 
         // 6: Alice adds Frank (concurrent with 8)
-        let (_alice_group, op_add_frank) = add_member(alice_group, group_id, frank, Access::manage());
+        let (_alice_group, op_add_frank) =
+            add_member(alice_group, group_id, frank, Access::manage());
 
         let frank_group = sync(
             frank_group,

@@ -165,10 +165,7 @@ fn basic_group() {
         vec![
             (GroupMember::Individual(alice), Access::manage()),
             (GroupMember::Individual(bob), Access::read()),
-            (
-                GroupMember::Individual(claire),
-                Access::write()
-            )
+            (GroupMember::Individual(claire), Access::write())
         ]
     );
 
@@ -269,10 +266,7 @@ fn nested_groups() {
             initial_members: vec![
                 (GroupMember::Individual(alice), Access::manage()),
                 (GroupMember::Individual(alice_laptop), Access::manage()),
-                (
-                    GroupMember::Individual(alice_mobile),
-                    Access::write(),
-                ),
+                (GroupMember::Individual(alice_mobile), Access::write()),
             ],
         },
     };
@@ -292,10 +286,7 @@ fn nested_groups() {
         vec![
             (GroupMember::Individual(alice), Access::manage()),
             (GroupMember::Individual(alice_laptop), Access::manage()),
-            (
-                GroupMember::Individual(alice_mobile),
-                Access::write()
-            ),
+            (GroupMember::Individual(alice_mobile), Access::write()),
         ],
     );
 
@@ -422,10 +413,7 @@ fn multi_user() {
         alice_devices_group,
         alice,
         vec![
-            (
-                GroupMember::Individual(alice_mobile),
-                Access::write(),
-            ),
+            (GroupMember::Individual(alice_mobile), Access::write()),
             (GroupMember::Individual(alice_laptop), Access::manage()),
         ],
     );
@@ -646,10 +634,7 @@ fn test_groups(rng: StdRng) -> (Network, Vec<MessageId>) {
         BOB,
         vec![
             (GroupMember::Individual(BOB), Access::manage()),
-            (
-                GroupMember::Individual(BOB_LAPTOP),
-                Access::write(),
-            ),
+            (GroupMember::Individual(BOB_LAPTOP), Access::write()),
         ],
     );
     operations.push(id);
@@ -713,10 +698,7 @@ fn transitive_members() {
 
     let expected_bob_devices_group_direct_members = vec![
         (GroupMember::Individual(BOB), Access::manage()),
-        (
-            GroupMember::Individual(BOB_LAPTOP),
-            Access::write(),
-        ),
+        (GroupMember::Individual(BOB_LAPTOP), Access::write()),
         (GroupMember::Individual(BOB_MOBILE), Access::read()),
     ];
 
@@ -742,10 +724,7 @@ fn transitive_members() {
 
     let expected_alice_org_group_direct_members = vec![
         (GroupMember::Individual(ALICE), Access::manage()),
-        (
-            GroupMember::Group(CHARLIE_TEAM_GROUP),
-            Access::write(),
-        ),
+        (GroupMember::Group(CHARLIE_TEAM_GROUP), Access::write()),
     ];
 
     let expected_alice_org_group_transitive_members = vec![

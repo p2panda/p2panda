@@ -17,10 +17,10 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
+pub use crate::group::access::Access;
 pub use crate::group::dgm::{GroupManager, GroupManagerError};
 pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{GroupMembersState, GroupMembershipError, MemberState};
-pub use crate::group::access::Access;
 
 use crate::traits::{
     AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
