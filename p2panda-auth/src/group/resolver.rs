@@ -567,14 +567,14 @@ mod tests {
 
         // Create initial group with Alice and Bob
         let (alice_group, op_create) = create_group(
-            group_id,
             alice,
+            group_id,
             vec![(alice, Access::Manage), (bob, Access::Manage)],
             &mut rng,
         );
 
-        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
-        let claire_group = from_create(group_id, claire, &op_create, &mut rng);
+        let bob_group = from_create(bob, group_id, &op_create, &mut rng);
+        let claire_group = from_create(claire, group_id, &op_create, &mut rng);
 
         assert_members(
             &alice_group,
@@ -661,8 +661,8 @@ mod tests {
 
         // 1: Alice creates group with Alice, Bob, Claire
         let (alice_group, op_create) = create_group(
-            group_id,
             alice,
+            group_id,
             vec![
                 (alice, Access::Manage),
                 (bob, Access::Manage),
@@ -671,7 +671,7 @@ mod tests {
             &mut rng,
         );
 
-        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
+        let bob_group = from_create(bob, group_id, &op_create, &mut rng);
 
         assert_members(
             &alice_group,
@@ -778,16 +778,16 @@ mod tests {
 
         // 1: Create initial group with Alice and Bob
         let (alice_group, op_create) = create_group(
-            group_id,
             alice,
+            group_id,
             vec![(alice, Access::Manage), (bob, Access::Manage)],
             &mut rng,
         );
 
         // Initialize all member groups from the create operation
-        let bob_group = from_create(group_id, bob, &op_create, &mut rng);
-        let dave_group = from_create(group_id, dave, &op_create, &mut rng);
-        let frank_group = from_create(group_id, frank, &op_create, &mut rng);
+        let bob_group = from_create(bob, group_id, &op_create, &mut rng);
+        let dave_group = from_create(dave, group_id, &op_create, &mut rng);
+        let frank_group = from_create(frank, group_id, &op_create, &mut rng);
 
         assert_members(
             &alice_group,
