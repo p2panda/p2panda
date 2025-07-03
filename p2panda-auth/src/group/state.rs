@@ -3,7 +3,7 @@
 //! Group membership CRDT.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use thiserror::Error;
