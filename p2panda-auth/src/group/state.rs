@@ -8,6 +8,8 @@ use std::hash::Hash;
 
 use thiserror::Error;
 
+use crate::group::Access;
+
 #[derive(Debug, Error, PartialEq)]
 pub enum GroupMembershipError<ID> {
     #[error("attempted to add a member who is already active in the group: {0}")]
@@ -30,27 +32,6 @@ pub enum GroupMembershipError<ID> {
 
     #[error("member is not known to the group: {0}")]
     UnrecognisedMember(ID),
-}
-
-#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Access<C> {
-    Pull,
-    Read,
-    Write { conditions: Option<C> },
-    Manage,
-}
-
-impl<C> Display for Access<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Access::Pull => "pull",
-            Access::Read => "read",
-            Access::Write { .. } => "write",
-            Access::Manage => "manage",
-        };
-
-        write!(f, "{}", s)
-    }
 }
 
 #[derive(Clone, Debug)]
