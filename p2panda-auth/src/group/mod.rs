@@ -194,10 +194,10 @@ where
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
-    pub fn new(group_id: ID, my_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
+    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
         Self {
-            group_id,
             my_id,
+            group_id,
             states: Default::default(),
             operations: Default::default(),
             ignore: Default::default(),
@@ -802,15 +802,11 @@ where
                 GroupAction::Remove { member, .. } => {
                     state::remove(members_y.clone(), member_id, member)
                 }
-                GroupAction::Promote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::promote(members_y.clone(), member_id, member, None)
+                GroupAction::Promote { member, access } => {
+                    state::promote(members_y.clone(), member_id, member, access)
                 }
-                GroupAction::Demote { member, .. } => {
-                    // TODO: need changes in the group_crdt api so that we can pass in the access
-                    // level rather than only the conditions.
-                    state::demote(members_y.clone(), member_id, member, None)
+                GroupAction::Demote { member, access } => {
+                    state::demote(members_y.clone(), member_id, member, access)
                 }
                 GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
             };
@@ -942,7 +938,7 @@ where
     fn rebuild(
         y: GroupState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut y_i = GroupState::new(y.group_id, y.my_id, y.group_store.clone(), y.orderer_y);
+        let mut y_i = GroupState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
         y_i.ignore = y.ignore;
 
         // Apply every operation.

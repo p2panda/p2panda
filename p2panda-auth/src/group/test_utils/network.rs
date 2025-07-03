@@ -282,8 +282,8 @@ impl Network {
         match group_y {
             Some(group_y) => group_y,
             None => TestGroupState::new(
-                *group_id,
                 member.id,
+                *group_id,
                 member.group_store.clone(),
                 member.orderer_y.clone(),
             ),

@@ -17,26 +17,26 @@ use super::test_utils::MessageId;
 use super::{GroupAction, GroupControlMessage, GroupMember};
 
 pub(crate) fn from_create(
-    group_id: char,
     actor_id: char,
+    group_id: char,
     op_create: &TestOperation,
     rng: &mut StdRng,
 ) -> TestGroupState {
     let store = TestGroupStore::default();
     let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
-    let group = TestGroupState::new(group_id, actor_id, store, orderer);
+    let group = TestGroupState::new(actor_id, group_id, store, orderer);
     TestGroup::process(group, op_create).unwrap()
 }
 
 pub(crate) fn create_group(
-    group_id: char,
     actor_id: char,
+    group_id: char,
     members: Vec<(char, Access<()>)>,
     rng: &mut StdRng,
 ) -> (TestGroupState, TestOperation) {
     let store = TestGroupStore::default();
     let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
-    let group = TestGroupState::new(group_id, actor_id, store, orderer);
+    let group = TestGroupState::new(actor_id, group_id, store, orderer);
     let control_message = GroupControlMessage::GroupAction {
         group_id,
         action: GroupAction::Create {
@@ -105,7 +105,7 @@ fn basic_group() {
     let store = TestGroupStore::default();
     let rng = StdRng::from_os_rng();
     let orderer_y = TestOrdererState::new(alice, store.clone(), rng);
-    let group_y = TestGroupState::new(group_id, alice, store, orderer_y);
+    let group_y = TestGroupState::new(alice, group_id, store, orderer_y);
 
     // Create group with alice as initial admin member.
     let control_message_001 = GroupControlMessage::GroupAction {
@@ -253,14 +253,14 @@ fn nested_groups() {
 
     // One devices group instance.
     let devices_group_y = GroupState::new(
-        alice_devices_group,
         alice,
+        alice_devices_group,
         store.clone(),
         alice_orderer_y.clone(),
     );
 
     // One team group instance.
-    let team_group_y = GroupState::new(alice_team_group, alice, store.clone(), alice_orderer_y);
+    let team_group_y = GroupState::new(alice, alice_team_group, store.clone(), alice_orderer_y);
 
     // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
     let control_message_001 = GroupControlMessage::GroupAction {
@@ -884,8 +884,8 @@ fn error_cases() {
     let mut rng = StdRng::from_os_rng();
 
     let (y_i, _) = create_group(
-        group_id,
         alice,
+        group_id,
         vec![
             (alice, Access::Manage),
             (bob, Access::Read),
@@ -1101,8 +1101,8 @@ fn error_cases_resolver() {
     let mut rng = StdRng::from_os_rng();
 
     let (y_i, _) = create_group(
-        group_id,
         alice,
+        group_id,
         vec![
             (alice, Access::Manage),
             (bob, Access::Read),
