@@ -15,8 +15,7 @@ use crate::group::{
     GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
 };
 use crate::traits::{
-    AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
-    Resolver,
+    GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
 };
 
 /// Error types for GroupCrdt.
@@ -61,8 +60,8 @@ where
     MemberNotFound(ID, ID),
 }
 
-/// State object for `GroupCrdt` containing the operation graph and all incremental group states. 
-/// 
+/// State object for `GroupCrdt` containing the operation graph and all incremental group states.
+///
 /// Requires access to a global orderer and group store.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
@@ -422,7 +421,10 @@ where
     /// Query the current access level of the given member.
     ///
     /// The member is expected to be a "stateless" individual, not a "stateful" group.
-    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
+    fn access(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<Access<C>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         let member_state = y
             .transitive_members()?
             .into_iter()
@@ -438,7 +440,9 @@ where
     }
 
     /// Query group membership.
-    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error> {
+    fn member_ids(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+    ) -> Result<HashSet<ID>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         let member_ids = y
             .transitive_members()?
             .into_iter()
@@ -449,7 +453,10 @@ where
     }
 
     /// Return `true` if the given ID is an active member of the group.
-    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+    fn is_member(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         let member_state = y
             .transitive_members()?
             .into_iter()
@@ -461,28 +468,40 @@ where
     }
 
     /// Return `true` if the given member is currently assigned the `Pull` access level.
-    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+    fn is_puller(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         Ok(GroupCrdtState::access(y, member)?.is_pull())
     }
 
     /// Return `true` if the given member is currently assigned the `Read` access level.
-    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+    fn is_reader(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         Ok(GroupCrdtState::access(y, member)?.is_read())
     }
 
     /// Return `true` if the given member is currently assigned the `Write` access level.
-    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+    fn is_writer(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         Ok(GroupCrdtState::access(y, member)?.is_write())
     }
 
     /// Return `true` if the given member is currently assigned the `Manage` access level.
-    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
+    fn is_manager(
+        y: &GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        member: &ID,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         Ok(GroupCrdtState::access(y, member)?.is_manage())
     }
 }
 
-/// Core group CRDT for maintaining group membership state in a decentralized system. 
-/// 
+/// Core group CRDT for maintaining group membership state in a decentralized system.
+///
 /// Group members can be assigned different access levels, where only a sub-set of members can
 /// mutate the state of the group itself. Group members can be (immutable) individuals or
 /// (mutable) sub-groups.
@@ -523,7 +542,7 @@ pub struct GroupCrdt<ID, OP, C, RS, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
 }
 
-impl<ID, OP, C, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for GroupCrdt<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupCrdt<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
@@ -541,20 +560,19 @@ where
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
-    type Action = GroupControlMessage<ID, OP, C>;
-    type Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>;
-
     /// Prepare a next operation to be processed locally and sent to remote peers. An ORD
     /// implementation needs to ensure "previous" and "dependencies" are populated correctly so
     /// that a partial-order of all operations in the system can be established.
     ///
     /// The method `GroupCrdtState::heads` and `GroupCrdtState::transitive_heads` can be used to retrieve the
     /// operation ids of these operation dependencies.
-    fn prepare(
-        mut y: Self::State,
-        action: &Self::Action,
-    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
+    pub fn prepare(
+        mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        action: &GroupControlMessage<ID, OP, C>,
+    ) -> Result<
+        (GroupCrdtState<ID, OP, C, RS, ORD, GS>, ORD::Operation),
+        GroupCrdtError<ID, OP, C, RS, ORD, GS>,
+    > {
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
@@ -568,7 +586,11 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
-    fn process(mut y: Self::State, operation: &ORD::Operation) -> Result<Self::State, Self::Error> {
+    pub fn process(
+        mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        operation: &ORD::Operation,
+    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
+    {
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
@@ -640,49 +662,7 @@ where
 
         Ok(y_i)
     }
-}
 
-/// Return types expected from applying an action to group state.
-pub enum StateChangeResult<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Operation, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Operation: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
-{
-    /// Action was applied an no error occurred.
-    Ok {
-        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-    },
-    /// Action was not applied because it failed internal validation.
-    Noop {
-        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-        #[allow(unused)]
-        error: GroupMembershipError<GroupMember<ID>>,
-    },
-    /// Action was not applied because it has been filtered out.
-    Filtered {
-        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-    },
-}
-
-impl<ID, OP, C, RS, ORD, GS> GroupCrdt<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<
-            ORD::Operation,
-            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
-        > + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Operation: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
-{
     /// Apply an action to a single group state.
     #[allow(clippy::type_complexity)]
     pub(crate) fn apply_action(
@@ -912,6 +892,33 @@ where
     }
 }
 
+/// Return types expected from applying an action to group state.
+pub enum StateChangeResult<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<ORD::Operation, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD::Operation: Clone,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
+{
+    /// Action was applied an no error occurred.
+    Ok {
+        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+    },
+    /// Action was not applied because it failed internal validation.
+    Noop {
+        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+        #[allow(unused)]
+        error: GroupMembershipError<GroupMember<ID>>,
+    },
+    /// Action was not applied because it has been filtered out.
+    Filtered {
+        state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+    },
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 
@@ -927,7 +934,6 @@ pub(crate) mod tests {
         MessageId, Network, TestGroup, TestGroupState, TestGroupStore, TestOperation,
         TestOrdererState,
     };
-    use crate::traits::AuthGroup;
 
     pub(crate) fn from_create(
         actor_id: char,

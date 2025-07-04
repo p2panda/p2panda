@@ -21,11 +21,11 @@ use std::marker::PhantomData;
 
 use thiserror::Error;
 
-use crate::traits::{
-    AuthGroup, GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation,
-    OperationId, Ordering, Resolver,
-};
 use crate::Access;
+use crate::traits::{
+    GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId,
+    Ordering, Resolver,
+};
 
 #[derive(Debug, Error)]
 // TODO: Rename to `GroupError`.
@@ -372,8 +372,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use crate::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
 
