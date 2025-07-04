@@ -11,8 +11,7 @@ use thiserror::Error;
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{GroupStore, Operation, Ordering};
-
-use super::{
+use crate::test_utils::{
     Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStore,
 };

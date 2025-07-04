@@ -32,8 +32,6 @@ mod dgm;
 mod display;
 mod resolver;
 mod state;
-#[cfg(any(test, feature = "test_utils"))]
-pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
@@ -233,7 +231,7 @@ where
 
     /// The current graph tips for this group and any sub-groups who are currently members.
     #[allow(clippy::type_complexity)]
-    fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, C, RS, ORD, GS>> {
+    pub fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, C, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
         for (member, ..) in self.members() {
             if let GroupMember::Group(id) = member {
@@ -401,7 +399,7 @@ where
 
     /// Get a sub group from the group store.
     #[allow(clippy::type_complexity)]
-    fn get_sub_group(
+    pub(crate) fn get_sub_group(
         &self,
         id: ID,
     ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {

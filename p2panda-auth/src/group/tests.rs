@@ -8,13 +8,12 @@ use crate::group::Group;
 use crate::group::GroupError;
 use crate::group::GroupMembershipError;
 use crate::group::GroupState;
-use crate::group::test_utils::TestGroupStore;
-use crate::group::test_utils::TestOperation;
-use crate::group::test_utils::{Network, TestGroup, TestGroupState, TestOrdererState};
+use crate::test_utils::TestGroupStore;
+use crate::test_utils::TestOperation;
+use crate::test_utils::{Network, TestGroup, TestGroupState, TestOrdererState};
 use crate::traits::AuthGroup;
-
-use super::test_utils::MessageId;
-use super::{GroupAction, GroupControlMessage, GroupMember};
+use crate::test_utils::MessageId;
+use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 
 pub(crate) fn from_create(
     actor_id: char,

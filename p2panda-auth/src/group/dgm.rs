@@ -355,7 +355,7 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    use crate::group::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
+    use crate::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
 
     use super::*;
 

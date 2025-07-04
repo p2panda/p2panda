@@ -5,13 +5,13 @@ mod network;
 mod orderer;
 mod partial_ord;
 
-pub use crate::group::test_utils::group_store::TestGroupStore;
+pub use crate::test_utils::group_store::TestGroupStore;
 pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
 
-use crate::group::resolver::StrongRemove;
-use crate::group::{Access, Group, GroupState};
+use crate::group::{Group, GroupState, StrongRemove};
+use crate::Access;
 use crate::traits::{IdentityHandle, OperationId};
 
 impl IdentityHandle for char {}

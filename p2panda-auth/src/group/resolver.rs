@@ -278,7 +278,7 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    use crate::group::test_utils::Network;
+    use crate::test_utils::Network;
     use crate::group::tests::{
         add_member, assert_members, create_group, from_create, remove_member, sync,
     };
