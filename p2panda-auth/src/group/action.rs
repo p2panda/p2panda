@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::Access;
 use crate::group::GroupMember;
+use crate::Access;
 
 /// Actions for creating groups and modifying group membership.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,7 +30,7 @@ impl<ID, C> GroupAction<ID, C>
 where
     ID: Copy,
 {
-    /// Returns true if this is a create action.
+    /// Return `true` if this is a create action.
     pub fn is_create(&self) -> bool {
         matches!(self, GroupAction::Create { .. })
     }
