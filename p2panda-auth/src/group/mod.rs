@@ -17,14 +17,17 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
+pub use crate::group::access::Access;
 pub use crate::group::dgm::{GroupManager, GroupManagerError};
 pub use crate::group::resolver::StrongRemove;
-pub use crate::group::state::{Access, GroupMembersState, GroupMembershipError, MemberState};
+pub use crate::group::state::{GroupMembersState, GroupMembershipError, MemberState};
+
 use crate::traits::{
     AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
     Resolver,
 };
 
+mod access;
 mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
@@ -536,27 +539,19 @@ where
     }
 
     fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        let is_puller = matches!(GroupState::access(y, member)?, Access::Pull);
-
-        Ok(is_puller)
+        Ok(GroupState::access(y, member)?.is_pull())
     }
 
     fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        let is_reader = matches!(GroupState::access(y, member)?, Access::Read);
-
-        Ok(is_reader)
+        Ok(GroupState::access(y, member)?.is_read())
     }
 
     fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        let is_writer = matches!(GroupState::access(y, member)?, Access::Write { .. });
-
-        Ok(is_writer)
+        Ok(GroupState::access(y, member)?.is_write())
     }
 
     fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        let is_manager = matches!(GroupState::access(y, member)?, Access::Manage);
-
-        Ok(is_manager)
+        Ok(GroupState::access(y, member)?.is_manage())
     }
 }
 

@@ -125,7 +125,7 @@ where
         members: Vec<(GroupMember<ID>, Access<C>)>,
     ) -> Result<(Self::State, ORD::Message), Self::Error> {
         // The creator of the group is automatically added as a manager.
-        let creator = (GroupMember::Individual(self.my_id), Access::Manage);
+        let creator = (GroupMember::Individual(self.my_id), Access::manage());
 
         let mut initial_members = Vec::new();
         initial_members.push(creator);
@@ -375,12 +375,9 @@ mod tests {
         let orderer = TestOrdererState::new(MY_ID, store.clone(), rng);
 
         let initial_members = [
-            (GroupMember::Individual(ALICE), Access::Manage),
-            (GroupMember::Individual(BOB), Access::Read),
-            (
-                GroupMember::Individual(CLAIRE),
-                Access::Write { conditions: None },
-            ),
+            (GroupMember::Individual(ALICE), Access::manage()),
+            (GroupMember::Individual(BOB), Access::read()),
+            (GroupMember::Individual(CLAIRE), Access::write()),
         ]
         .to_vec();
 
@@ -399,18 +396,19 @@ mod tests {
         let y = setup();
 
         // Bob is not a manager.
+        let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::add(y.clone(), BOB, DAVE, Access::Pull),
+            GroupManager::add(y.clone(), BOB, DAVE, Access::pull()),
             Err(GroupManagerError::InsufficientAccess(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
 
         // Claire is already a group member.
         assert!(matches!(
-            GroupManager::add(y, ALICE, CLAIRE, Access::Pull),
+            GroupManager::add(y, ALICE, CLAIRE, Access::pull()),
             Err(GroupManagerError::GroupMember(CLAIRE, GROUP_ID))
         ));
     }
@@ -420,11 +418,12 @@ mod tests {
         let y = setup();
 
         // Bob is not a manager.
+        let _expected_access = <Access>::read();
         assert!(matches!(
             GroupManager::remove(y.clone(), BOB, CLAIRE),
             Err(GroupManagerError::InsufficientAccess(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
@@ -441,27 +440,29 @@ mod tests {
         let y = setup();
 
         // Bob is not a manager.
+        let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::promote(y.clone(), BOB, CLAIRE, Access::Manage),
+            GroupManager::promote(y.clone(), BOB, CLAIRE, Access::manage()),
             Err(GroupManagerError::InsufficientAccess(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
 
         // Dave is not a group member.
         assert!(matches!(
-            GroupManager::promote(y.clone(), ALICE, DAVE, Access::Read),
+            GroupManager::promote(y.clone(), ALICE, DAVE, Access::read()),
             Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
         ));
 
         // Bob already has `Read` access.
+        let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::promote(y, ALICE, BOB, Access::Read),
+            GroupManager::promote(y, ALICE, BOB, Access::read()),
             Err(GroupManagerError::SameAccessLevel(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
@@ -472,27 +473,29 @@ mod tests {
         let y = setup();
 
         // Bob is not a manager.
+        let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::demote(y.clone(), BOB, CLAIRE, Access::Pull),
+            GroupManager::demote(y.clone(), BOB, CLAIRE, Access::pull()),
             Err(GroupManagerError::InsufficientAccess(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
 
         // Dave is not a group member.
         assert!(matches!(
-            GroupManager::demote(y.clone(), ALICE, DAVE, Access::Read),
+            GroupManager::demote(y.clone(), ALICE, DAVE, Access::read()),
             Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
         ));
 
         // Bob already has `Read` access.
+        let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::demote(y, ALICE, BOB, Access::Read),
+            GroupManager::demote(y, ALICE, BOB, Access::read()),
             Err(GroupManagerError::SameAccessLevel(
                 BOB,
-                Access::Read,
+                _expected_access,
                 GROUP_ID
             ))
         ));
