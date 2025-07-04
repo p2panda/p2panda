@@ -23,8 +23,7 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId,
-    Ordering, Resolver,
+    Group, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
 };
 
 #[derive(Debug, Error)]
@@ -35,7 +34,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ORD::Operation>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error(transparent)]
@@ -77,7 +76,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ORD::Operation>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// ID of the local actor.
@@ -97,7 +96,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ORD::Operation>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// Initialise the `Group` state so that groups can be created and updated.
@@ -113,8 +112,7 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C, ORD>
-    for GroupManager<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, ORD> for GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
@@ -124,7 +122,7 @@ where
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,

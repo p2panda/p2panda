@@ -6,14 +6,14 @@ use std::error::Error;
 use std::fmt::Display;
 
 use crate::group::{GroupControlMessage, GroupCrdtState};
-use crate::traits::{IdentityHandle, OperationId, Ordering};
+use crate::traits::{IdentityHandle, OperationId, Orderer};
 
-/// API for global group store.
+/// Interface for interacting with a global group store.
 pub trait GroupStore<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     Self: Sized,
 {
     type Error: Error + Display;

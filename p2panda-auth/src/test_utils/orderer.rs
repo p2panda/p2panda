@@ -14,7 +14,7 @@ use crate::test_utils::{
     Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStore,
 };
-use crate::traits::{GroupStore, Operation, Ordering};
+use crate::traits::{GroupStore, Operation, Orderer};
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
@@ -55,7 +55,7 @@ impl TestOrdererState {
 #[derive(Clone, Debug, Default)]
 pub struct TestOrderer {}
 
-impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
+impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
     for TestOrderer
 {
     type State = TestOrdererState;

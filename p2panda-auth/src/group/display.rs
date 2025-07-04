@@ -9,9 +9,9 @@ use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
 use crate::group::{
-    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupCrdtError, GroupMember,
+    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember,
 };
-use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_OK_NODE: &str = "#BFC6C77F";
@@ -33,7 +33,7 @@ where
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Clone
         + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,

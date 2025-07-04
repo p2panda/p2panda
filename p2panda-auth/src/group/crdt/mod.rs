@@ -15,7 +15,7 @@ use crate::group::{
     GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
 };
 use crate::traits::{
-    GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver,
+    GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
 };
 
 /// Error types for GroupCrdt.
@@ -25,7 +25,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ORD::Operation>,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error("duplicate operation {0} processed in group {1}")]
@@ -69,7 +69,7 @@ pub struct GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// ID of the local actor.
@@ -107,7 +107,7 @@ where
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Operation> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
@@ -404,14 +404,13 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupMembershipQuery<ID, OP, C>
-    for GroupCrdtState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C> for GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Operation> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
@@ -556,7 +555,7 @@ where
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
@@ -899,7 +898,7 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Operation, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {

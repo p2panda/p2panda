@@ -12,7 +12,7 @@ use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::{
     GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult,
 };
-use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
 ///
@@ -62,7 +62,7 @@ where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
@@ -241,7 +241,7 @@ where
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ORD::Operation> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
     /// If the given operation is an action which removes or demotes a manager member, return the

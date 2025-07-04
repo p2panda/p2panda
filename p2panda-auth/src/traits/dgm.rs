@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
 use std::error::Error;
 
 use crate::Access;
 use crate::group::GroupMember;
-use crate::traits::{IdentityHandle, OperationId, Ordering};
+use crate::traits::{IdentityHandle, OperationId, Orderer};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait GroupMembership<ID, OP, C, ORD>
+pub trait Group<ID, OP, C, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
@@ -15,7 +16,7 @@ where
     // We might not actually need to know anything about the message type, only in the `Orderer`.
     // In the _implementation_ we'd say it's an `ORD::Operation` but not here (move that knowledge
     // into the implementation.
-    ORD: Ordering<ID, OP, Self::Action>,
+    ORD: Orderer<ID, OP, Self::Action>,
 {
     type State;
     type Action;
@@ -79,4 +80,33 @@ where
         demoted: ID,
         access: Access<C>,
     ) -> Result<(Self::State, ORD::Operation), Self::Error>;
+}
+
+/// Interface for querying group membership and access levels.
+pub trait GroupMembership<ID, OP, C> {
+    type State;
+    type Error: Error;
+
+    /// Query the current access level of the given member.
+    ///
+    /// The member is expected to be a "stateless" individual, not a "stateful" group.
+    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error>;
+
+    /// Query group membership.
+    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error>;
+
+    /// Return `true` if the given ID is an active member of the group.
+    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Pull` access level.
+    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Read` access level.
+    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Write` access level.
+    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Manage` access level.
+    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
 }
