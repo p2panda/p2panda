@@ -25,13 +25,15 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer,
 /// operations are processed. It can be assumed that the behavior is equivalent for an admin
 /// member being removed, or demoted from admin to a lower access level.
 ///
-/// 1) Removals
+/// ## Strong Remove Concurrency Rules
+/// 
+/// ### Removals
 ///
 /// If a removal has occurred, filter any concurrent operations by the removed member, as long
 /// as it's 1) not a predecessor of the remove operation, and 2) not a mutual removal (removal
 /// of the remover by the removed member).
 ///
-/// 2) Mutual removals
+/// ### Mutual removals
 ///
 /// Mutual removals result in both members being removed from the group, and any dependent
 /// concurrent branches are not applied to group state. We imagine further implementations
@@ -42,13 +44,13 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer,
 /// concurrent operations performed by the removed members (keeping predecessors of the
 /// remove).
 ///
-/// 3) Re-adding member concurrently
+/// ### Re-adding member concurrently
 ///
 /// If Alice removes Charlie and Bob removes then adds Charlie concurrently, Charlie is still
 /// in the group. However, if Charlie performed any concurrent actions, these will be filtered
 /// along with any dependent operations.
 ///
-/// 4) Filtering of dependent operations
+/// ### Filtering of transitively dependent operations
 ///
 /// When an operation is "explicitly" filtered it may cause dependent operations to become
 /// invalid, these operations will not be applied to the group state.
