@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-/// The four basic access levels which can be assigned to group members. Greater access levels are
+/// The four basic access levels which can be assigned to an actor. Greater access levels are
 /// assumed to also contain all lower ones.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AccessLevel {
@@ -19,6 +19,15 @@ pub enum AccessLevel {
     Manage,
 }
 
+/// A level of access with optional conditions which can be assigned to an actor.
+/// 
+/// Access can be used to understand the rights of an actor to perform actions (request data,
+/// write data, etc..) within a certain data set. Custom conditions can be defined by the user in
+/// order to introduce domain specific access boundaries or integrate with another access token.
+/// 
+/// For example, a condition to model access boundaries using paths could be introduced where
+/// having access to "/public" gives you access to "/public/stuff" and "/public/other/stuff" but
+/// not "/private" or "/private/stuff".
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq)]
 pub struct Access<C = ()> {
     pub conditions: Option<C>,
