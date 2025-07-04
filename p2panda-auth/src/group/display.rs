@@ -7,6 +7,7 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
+use crate::group::crdt::StateChangeResult;
 use crate::group::{Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
@@ -162,9 +163,9 @@ where
             )
             .expect("critical error when applying state change")
             {
-                super::StateChangeResult::Ok { .. } => OP_OK_NODE,
-                super::StateChangeResult::Noop { .. } => OP_NOOP_NODE,
-                super::StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
+                StateChangeResult::Ok { .. } => OP_OK_NODE,
+                StateChangeResult::Noop { .. } => OP_NOOP_NODE,
+                StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
             }
         };
 

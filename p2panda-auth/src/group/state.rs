@@ -8,7 +8,7 @@ use std::hash::Hash;
 
 use thiserror::Error;
 
-use crate::group::Access;
+use crate::Access;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum GroupMembershipError<ID> {
