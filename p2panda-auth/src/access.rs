@@ -49,6 +49,7 @@ impl<C> Display for Access<C> {
 }
 
 impl<C> Access<C> {
+    /// Pull access level.
     pub fn pull() -> Self {
         Self {
             level: AccessLevel::Pull,
@@ -56,6 +57,7 @@ impl<C> Access<C> {
         }
     }
 
+    /// Read access level.
     pub fn read() -> Self {
         Self {
             level: AccessLevel::Read,
@@ -63,6 +65,7 @@ impl<C> Access<C> {
         }
     }
 
+    /// Write access level.
     pub fn write() -> Self {
         Self {
             level: AccessLevel::Write,
@@ -70,6 +73,7 @@ impl<C> Access<C> {
         }
     }
 
+    /// Manage access level.
     pub fn manage() -> Self {
         Self {
             level: AccessLevel::Manage,
@@ -77,23 +81,28 @@ impl<C> Access<C> {
         }
     }
 
+    /// Attach conditions to an access level.
     pub fn with_conditions(mut self, conditions: C) -> Self {
         self.conditions = Some(conditions);
         self
     }
 
+    /// Access level is Pull.
     pub fn is_pull(&self) -> bool {
         matches!(self.level, AccessLevel::Pull)
     }
 
+    /// Access level is Read.
     pub fn is_read(&self) -> bool {
         matches!(self.level, AccessLevel::Read)
     }
 
+    /// Access level is Write.
     pub fn is_write(&self) -> bool {
         matches!(self.level, AccessLevel::Write)
     }
 
+    /// Access level is Manage.
     pub fn is_manage(&self) -> bool {
         matches!(self.level, AccessLevel::Manage)
     }
