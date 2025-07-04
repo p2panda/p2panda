@@ -23,7 +23,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd + Ord,
+    C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
             ORD::Message,
             State = GroupState<ID, OP, C, RS, ORD, GS>,
@@ -204,8 +204,7 @@ where
         let mut s = String::new();
         s += "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">";
 
-        let mut members = self.transitive_members().unwrap();
-        members.sort();
+        let members = self.transitive_members().unwrap();
         s += "<TR><TD>GROUP MEMBERS</TD></TR>";
         for (id, access) in members {
             s += &format!("<TR><TD> {} : {} </TD></TR>", id, access);

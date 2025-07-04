@@ -60,7 +60,7 @@ impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD,
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd + Ord,
+    C: Clone + Debug + PartialEq + PartialOrd,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
@@ -263,7 +263,7 @@ where
         let was_manager = self
             .transitive_members_at(&HashSet::from_iter(operation.dependencies()))
             .expect("get transitive members")
-            .contains(&(removed_or_demoted_member.id(), Access::Manage));
+            .contains(&(removed_or_demoted_member.id(), Access::manage()));
 
         if was_manager {
             Some(removed_or_demoted_member.id())
@@ -314,9 +314,9 @@ mod tests {
             group,
             alice,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
@@ -334,19 +334,19 @@ mod tests {
         let alice_members = network.members(&alice, &group);
         assert_eq!(
             alice_members,
-            vec![(GroupMember::Individual(claire), Access::Manage),]
+            vec![(GroupMember::Individual(claire), Access::manage()),]
         );
 
         let bob_members = network.members(&bob, &group);
         assert_eq!(
             bob_members,
-            vec![(GroupMember::Individual(claire), Access::Manage),]
+            vec![(GroupMember::Individual(claire), Access::manage()),]
         );
 
         let claire_members = network.members(&claire, &group);
         assert_eq!(
             claire_members,
-            vec![(GroupMember::Individual(claire), Access::Manage),]
+            vec![(GroupMember::Individual(claire), Access::manage()),]
         );
 
         // We expect the "ignore" operation set to be empty, indicating that no operations have
@@ -388,9 +388,9 @@ mod tests {
             group,
             alice,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
@@ -398,12 +398,7 @@ mod tests {
         network.process();
 
         // Alice demotes Bob.
-        network.demote(
-            alice,
-            GroupMember::Individual(bob),
-            group,
-            Access::Write { conditions: None },
-        );
+        network.demote(alice, GroupMember::Individual(bob), group, Access::write());
 
         // Bob removes Claire concurrently.
         network.remove(bob, GroupMember::Individual(claire), group);
@@ -419,12 +414,9 @@ mod tests {
         assert_eq!(
             alice_members,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::write()),
+                (GroupMember::Individual(claire), Access::manage()),
             ]
         );
 
@@ -432,12 +424,9 @@ mod tests {
         assert_eq!(
             bob_members,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::write()),
+                (GroupMember::Individual(claire), Access::manage()),
             ]
         );
 
@@ -445,12 +434,9 @@ mod tests {
         assert_eq!(
             claire_members,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (
-                    GroupMember::Individual(bob),
-                    Access::Write { conditions: None }
-                ),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::write()),
+                (GroupMember::Individual(claire), Access::manage()),
             ]
         );
 
@@ -492,9 +478,9 @@ mod tests {
             group,
             alice,
             vec![
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
@@ -502,15 +488,10 @@ mod tests {
         network.process();
 
         // Alice demotes Bob.
-        network.demote(
-            alice,
-            GroupMember::Individual(bob),
-            group,
-            Access::Write { conditions: None },
-        );
+        network.demote(alice, GroupMember::Individual(bob), group, Access::write());
 
         // Bob adds Dave concurrently.
-        network.add(bob, GroupMember::Individual(dave), group, Access::Read);
+        network.add(bob, GroupMember::Individual(dave), group, Access::read());
 
         // Everyone processes these operations.
         network.process();
@@ -520,12 +501,9 @@ mod tests {
 
         // We expect Alice (Manage), Bob (Write) and Claire (Manage) to be the only group members.
         let expected_members = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (
-                GroupMember::Individual(bob),
-                Access::Write { conditions: None },
-            ),
-            (GroupMember::Individual(claire), Access::Manage),
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::write()),
+            (GroupMember::Individual(claire), Access::manage()),
         ];
 
         let alice_members = network.members(&alice, &group);
@@ -569,7 +547,7 @@ mod tests {
         let (alice_group, op_create) = create_group(
             alice,
             group_id,
-            vec![(alice, Access::Manage), (bob, Access::Manage)],
+            vec![(alice, Access::manage()), (bob, Access::manage())],
             &mut rng,
         );
 
@@ -579,8 +557,8 @@ mod tests {
         assert_members(
             &alice_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
             ],
         );
 
@@ -589,33 +567,33 @@ mod tests {
 
         assert_members(
             &alice_group,
-            &[(GroupMember::Individual(alice), Access::Manage)],
+            &[(GroupMember::Individual(alice), Access::manage())],
         );
 
         // Bob (in his own branch) adds Claire
-        let (bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::Manage);
+        let (bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::manage());
         let claire_group = sync(claire_group, &[op_add_claire.clone()]);
 
         assert_members(
             &bob_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
         // Claire adds Dave
-        let (claire_group, op_add_dave) = add_member(claire_group, group_id, dave, Access::Read);
+        let (claire_group, op_add_dave) = add_member(claire_group, group_id, dave, Access::read());
         let bob_group = sync(bob_group, &[op_add_dave.clone()]);
 
         assert_members(
             &bob_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
-                (GroupMember::Individual(dave), Access::Read),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
+                (GroupMember::Individual(dave), Access::read()),
             ],
         );
 
@@ -624,7 +602,7 @@ mod tests {
         let bob_group = sync(bob_group, &[op_remove_bob.clone()]);
         let claire_group = sync(claire_group, &[op_remove_bob.clone()]);
 
-        let expected_members = vec![(GroupMember::Individual(alice), Access::Manage)];
+        let expected_members = vec![(GroupMember::Individual(alice), Access::manage())];
 
         assert_members(&alice_group, &expected_members);
         assert_members(&bob_group, &expected_members);
@@ -664,9 +642,9 @@ mod tests {
             alice,
             group_id,
             vec![
-                (alice, Access::Manage),
-                (bob, Access::Manage),
-                (claire, Access::Manage),
+                (alice, Access::manage()),
+                (bob, Access::manage()),
+                (claire, Access::manage()),
             ],
             &mut rng,
         );
@@ -676,9 +654,9 @@ mod tests {
         assert_members(
             &alice_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
@@ -688,33 +666,33 @@ mod tests {
         assert_members(
             &alice_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
         // 3: Alice re-adds Bob
-        let (alice_group, op_readd_bob) = add_member(alice_group, group_id, bob, Access::Manage);
+        let (alice_group, op_readd_bob) = add_member(alice_group, group_id, bob, Access::manage());
 
         assert_members(
             &alice_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
             ],
         );
 
         // 4: Bob adds Dave
-        let (bob_group, op_add_dave) = add_member(bob_group, group_id, dave, Access::Read);
+        let (bob_group, op_add_dave) = add_member(bob_group, group_id, dave, Access::read());
 
         assert_members(
             &bob_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
-                (GroupMember::Individual(claire), Access::Manage),
-                (GroupMember::Individual(dave), Access::Read),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
+                (GroupMember::Individual(claire), Access::manage()),
+                (GroupMember::Individual(dave), Access::read()),
             ],
         );
 
@@ -723,15 +701,15 @@ mod tests {
         let bob_group = sync(bob_group, &[op_remove_bob.clone(), op_readd_bob.clone()]);
 
         // Bob adds Eve
-        let (bob_group, op_add_eve) = add_member(bob_group, group_id, eve, Access::Read);
+        let (bob_group, op_add_eve) = add_member(bob_group, group_id, eve, Access::read());
         let alice_group = sync(alice_group, &[op_add_eve.clone()]);
 
         // Final assertions: All 4 members should be present
         let expected = vec![
-            (GroupMember::Individual(alice), Access::Manage),
-            (GroupMember::Individual(bob), Access::Manage),
-            (GroupMember::Individual(claire), Access::Manage),
-            (GroupMember::Individual(eve), Access::Read),
+            (GroupMember::Individual(alice), Access::manage()),
+            (GroupMember::Individual(bob), Access::manage()),
+            (GroupMember::Individual(claire), Access::manage()),
+            (GroupMember::Individual(eve), Access::read()),
         ];
 
         assert_members(&alice_group, &expected);
@@ -780,7 +758,7 @@ mod tests {
         let (alice_group, op_create) = create_group(
             alice,
             group_id,
-            vec![(alice, Access::Manage), (bob, Access::Manage)],
+            vec![(alice, Access::manage()), (bob, Access::manage())],
             &mut rng,
         );
 
@@ -792,8 +770,8 @@ mod tests {
         assert_members(
             &alice_group,
             &[
-                (GroupMember::Individual(alice), Access::Manage),
-                (GroupMember::Individual(bob), Access::Manage),
+                (GroupMember::Individual(alice), Access::manage()),
+                (GroupMember::Individual(bob), Access::manage()),
             ],
         );
 
@@ -801,13 +779,13 @@ mod tests {
         let (alice_group, op_remove_bob) = remove_member(alice_group, group_id, bob);
 
         // 3: Bob adds Claire (concurrent with 2)
-        let (_bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::Read);
+        let (_bob_group, op_add_claire) = add_member(bob_group, group_id, claire, Access::read());
 
         // Alice processes Bob's operation
         let alice_group = sync(alice_group, &[op_add_claire.clone()]);
 
         // 4: Alice adds Dave (merges states 2 & 3)
-        let (alice_group, op_add_dave) = add_member(alice_group, group_id, dave, Access::Manage);
+        let (alice_group, op_add_dave) = add_member(alice_group, group_id, dave, Access::manage());
 
         // New member Dave syncs state
         let dave_group = sync(
@@ -820,12 +798,13 @@ mod tests {
         );
 
         // 5: Dave adds Eve (depends on 4)
-        let (dave_group, op_add_eve) = add_member(dave_group, group_id, eve, Access::Read);
+        let (dave_group, op_add_eve) = add_member(dave_group, group_id, eve, Access::read());
 
         let alice_group = sync(alice_group, &[op_add_eve.clone()]);
 
         // 6: Alice adds Frank (concurrent with 8)
-        let (_alice_group, op_add_frank) = add_member(alice_group, group_id, frank, Access::Manage);
+        let (_alice_group, op_add_frank) =
+            add_member(alice_group, group_id, frank, Access::manage());
 
         let frank_group = sync(
             frank_group,
@@ -839,7 +818,7 @@ mod tests {
         );
 
         // 7: Frank adds Grace (concurrent with 8)
-        let (_, op_add_grace) = add_member(frank_group, group_id, grace, Access::Read);
+        let (_, op_add_grace) = add_member(frank_group, group_id, grace, Access::read());
 
         // 8: Dave removes Alice (concurrently with 6 & 7)
         let (dave_group, _op_remove_alice) = remove_member(dave_group, group_id, alice);
@@ -847,8 +826,8 @@ mod tests {
         let dave_group = sync(dave_group, &[op_add_frank.clone(), op_add_grace.clone()]);
 
         let expected_members = vec![
-            (GroupMember::Individual(dave), Access::Manage),
-            (GroupMember::Individual(eve), Access::Read),
+            (GroupMember::Individual(dave), Access::manage()),
+            (GroupMember::Individual(eve), Access::read()),
         ];
 
         let mut dave_members = dave_group.members();
