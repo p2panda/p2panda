@@ -557,6 +557,7 @@ where
     ///
     /// The method `GroupCrdtState::heads` and `GroupCrdtState::transitive_heads` can be used to retrieve the
     /// operation ids of these operation dependencies.
+    #[allow(clippy::type_complexity)]
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
         action: &GroupControlMessage<ID, OP, C>,
@@ -577,6 +578,7 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
+    #[allow(clippy::type_complexity)]
     pub fn process(
         mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
         operation: &ORD::Operation,
@@ -913,10 +915,9 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
-    use crate::Access;
     use crate::group::{
         GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember,
         GroupMembershipError,
@@ -925,6 +926,7 @@ pub(crate) mod tests {
         MessageId, Network, TestGroup, TestGroupState, TestGroupStore, TestOperation,
         TestOrdererState,
     };
+    use crate::Access;
 
     pub(crate) fn from_create(
         actor_id: char,

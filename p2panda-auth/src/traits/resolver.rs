@@ -23,6 +23,7 @@ where
     /// Process all operations and update internal state as required.
     ///
     /// This could include updating any internal filter object.
+    #[allow(clippy::type_complexity)]
     fn process(
         y: GroupCrdtState<ID, OP, C, Self, ORD, GS>,
     ) -> Result<GroupCrdtState<ID, OP, C, Self, ORD, GS>, GroupCrdtError<ID, OP, C, Self, ORD, GS>>;
