@@ -21,15 +21,15 @@ use std::marker::PhantomData;
 
 use thiserror::Error;
 
-use crate::traits::{
-    Group, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
-};
 use crate::Access;
+use crate::traits::{
+    Group as GroupTrait, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
+};
 
 #[derive(Debug, Error)]
 // TODO: Rename to `GroupError`.
 /// All possible errors that can occur when creating or updating a group.
-pub enum GroupManagerError<ID, OP, C, RS, ORD, GS>
+pub enum GroupError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -71,7 +71,7 @@ where
 /// `GroupError`. For example, attempting to remove a member who is not currently part of the
 /// group.
 // TODO: Rename to `Group`.
-pub struct GroupManager<ID, OP, C, RS, ORD, GS>
+pub struct Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -91,7 +91,7 @@ where
     _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupManager<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -112,7 +112,7 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, ORD> for GroupManager<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupTrait<ID, OP, C, ORD> for Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
@@ -125,7 +125,7 @@ where
 {
     type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
-    type Error = GroupManagerError<ID, OP, C, RS, ORD, GS>;
+    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
 
     /// Create a group.
     ///
@@ -208,7 +208,7 @@ where
     ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &adder)? {
             let adder_access = Self::State::access(&y, &adder)?;
-            return Err(GroupManagerError::InsufficientAccess(
+            return Err(GroupError::InsufficientAccess(
                 adder,
                 adder_access,
                 y.group_id,
@@ -216,7 +216,7 @@ where
         }
 
         if Self::State::is_member(&y, &added)? {
-            return Err(GroupManagerError::GroupMember(added, y.group_id));
+            return Err(GroupError::GroupMember(added, y.group_id));
         }
 
         let action = GroupControlMessage::GroupAction {
@@ -248,7 +248,7 @@ where
     ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &remover)? {
             let remover_access = Self::State::access(&y, &remover)?;
-            return Err(GroupManagerError::InsufficientAccess(
+            return Err(GroupError::InsufficientAccess(
                 remover,
                 remover_access,
                 y.group_id,
@@ -256,7 +256,7 @@ where
         }
 
         if !Self::State::is_member(&y, &removed)? {
-            return Err(GroupManagerError::NotGroupMember(removed, y.group_id));
+            return Err(GroupError::NotGroupMember(removed, y.group_id));
         }
 
         let action = GroupControlMessage::GroupAction {
@@ -286,7 +286,7 @@ where
     ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &promoter)? {
             let promoter_access = Self::State::access(&y, &promoter)?;
-            return Err(GroupManagerError::InsufficientAccess(
+            return Err(GroupError::InsufficientAccess(
                 promoter,
                 promoter_access,
                 y.group_id,
@@ -294,14 +294,12 @@ where
         }
 
         if !Self::State::is_member(&y, &promoted)? {
-            return Err(GroupManagerError::NotGroupMember(promoted, y.group_id));
+            return Err(GroupError::NotGroupMember(promoted, y.group_id));
         }
 
         // Prevent redundant access level assignment.
         if Self::State::access(&y, &promoted)? == access {
-            return Err(GroupManagerError::SameAccessLevel(
-                promoted, access, y.group_id,
-            ));
+            return Err(GroupError::SameAccessLevel(promoted, access, y.group_id));
         }
 
         let action = GroupControlMessage::GroupAction {
@@ -332,7 +330,7 @@ where
     ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &demoter)? {
             let demoter_access = Self::State::access(&y, &demoter)?;
-            return Err(GroupManagerError::InsufficientAccess(
+            return Err(GroupError::InsufficientAccess(
                 demoter,
                 demoter_access,
                 y.group_id,
@@ -340,13 +338,11 @@ where
         }
 
         if !Self::State::is_member(&y, &demoted)? {
-            return Err(GroupManagerError::NotGroupMember(demoted, y.group_id));
+            return Err(GroupError::NotGroupMember(demoted, y.group_id));
         }
 
         if Self::State::access(&y, &demoted)? == access {
-            return Err(GroupManagerError::SameAccessLevel(
-                demoted, access, y.group_id,
-            ));
+            return Err(GroupError::SameAccessLevel(demoted, access, y.group_id));
         }
 
         let action = GroupControlMessage::GroupAction {
@@ -366,8 +362,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use crate::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
 
@@ -395,7 +391,7 @@ mod tests {
         ]
         .to_vec();
 
-        let group = GroupManager::init(MY_ID, store, orderer);
+        let group = Group::init(MY_ID, store, orderer);
 
         let (group_y, _operation) = group.create(GROUP_ID, initial_members).unwrap();
 
@@ -412,8 +408,8 @@ mod tests {
         // Bob is not a manager.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::add(y.clone(), BOB, DAVE, Access::pull()),
-            Err(GroupManagerError::InsufficientAccess(
+            Group::add(y.clone(), BOB, DAVE, Access::pull()),
+            Err(GroupError::InsufficientAccess(
                 BOB,
                 _expected_access,
                 GROUP_ID
@@ -422,8 +418,8 @@ mod tests {
 
         // Claire is already a group member.
         assert!(matches!(
-            GroupManager::add(y, ALICE, CLAIRE, Access::pull()),
-            Err(GroupManagerError::GroupMember(CLAIRE, GROUP_ID))
+            Group::add(y, ALICE, CLAIRE, Access::pull()),
+            Err(GroupError::GroupMember(CLAIRE, GROUP_ID))
         ));
     }
 
@@ -434,8 +430,8 @@ mod tests {
         // Bob is not a manager.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::remove(y.clone(), BOB, CLAIRE),
-            Err(GroupManagerError::InsufficientAccess(
+            Group::remove(y.clone(), BOB, CLAIRE),
+            Err(GroupError::InsufficientAccess(
                 BOB,
                 _expected_access,
                 GROUP_ID
@@ -444,8 +440,8 @@ mod tests {
 
         // Dave is not a group member.
         assert!(matches!(
-            GroupManager::remove(y, ALICE, DAVE),
-            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+            Group::remove(y, ALICE, DAVE),
+            Err(GroupError::NotGroupMember(DAVE, GROUP_ID))
         ));
     }
 
@@ -456,8 +452,8 @@ mod tests {
         // Bob is not a manager.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::promote(y.clone(), BOB, CLAIRE, Access::manage()),
-            Err(GroupManagerError::InsufficientAccess(
+            Group::promote(y.clone(), BOB, CLAIRE, Access::manage()),
+            Err(GroupError::InsufficientAccess(
                 BOB,
                 _expected_access,
                 GROUP_ID
@@ -466,19 +462,15 @@ mod tests {
 
         // Dave is not a group member.
         assert!(matches!(
-            GroupManager::promote(y.clone(), ALICE, DAVE, Access::read()),
-            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+            Group::promote(y.clone(), ALICE, DAVE, Access::read()),
+            Err(GroupError::NotGroupMember(DAVE, GROUP_ID))
         ));
 
         // Bob already has `Read` access.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::promote(y, ALICE, BOB, Access::read()),
-            Err(GroupManagerError::SameAccessLevel(
-                BOB,
-                _expected_access,
-                GROUP_ID
-            ))
+            Group::promote(y, ALICE, BOB, Access::read()),
+            Err(GroupError::SameAccessLevel(BOB, _expected_access, GROUP_ID))
         ));
     }
 
@@ -489,8 +481,8 @@ mod tests {
         // Bob is not a manager.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::demote(y.clone(), BOB, CLAIRE, Access::pull()),
-            Err(GroupManagerError::InsufficientAccess(
+            Group::demote(y.clone(), BOB, CLAIRE, Access::pull()),
+            Err(GroupError::InsufficientAccess(
                 BOB,
                 _expected_access,
                 GROUP_ID
@@ -499,19 +491,15 @@ mod tests {
 
         // Dave is not a group member.
         assert!(matches!(
-            GroupManager::demote(y.clone(), ALICE, DAVE, Access::read()),
-            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+            Group::demote(y.clone(), ALICE, DAVE, Access::read()),
+            Err(GroupError::NotGroupMember(DAVE, GROUP_ID))
         ));
 
         // Bob already has `Read` access.
         let _expected_access = <Access>::read();
         assert!(matches!(
-            GroupManager::demote(y, ALICE, BOB, Access::read()),
-            Err(GroupManagerError::SameAccessLevel(
-                BOB,
-                _expected_access,
-                GROUP_ID
-            ))
+            Group::demote(y, ALICE, BOB, Access::read()),
+            Err(GroupError::SameAccessLevel(BOB, _expected_access, GROUP_ID))
         ));
     }
 }
