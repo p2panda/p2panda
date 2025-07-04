@@ -19,8 +19,8 @@ mod message;
 pub mod resolver;
 
 pub use action::GroupAction;
-pub use crdt::{Group, GroupError, GroupState, StateChangeResult};
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
+pub use crdt::{Group, GroupError, GroupState, StateChangeResult};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
 
