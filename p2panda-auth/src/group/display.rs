@@ -31,7 +31,7 @@ where
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    /// Print an auth group graph in DOT format for visualizing the group control message DAG.
+    /// Print an auth group graph in DOT format for visualizing the group operation DAG.
     pub fn display(&self) -> String {
         let mut graph = DiGraph::new();
         graph = self.add_nodes_and_previous_edges(self.clone(), graph);
