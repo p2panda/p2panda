@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 pub(crate) mod state;
 
 use std::collections::{HashMap, HashSet};
@@ -17,12 +19,13 @@ use crate::traits::{
     Resolver,
 };
 
+/// Error types for GroupCrdt.
 #[derive(Debug, Error)]
 pub enum GroupCrdtError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
+    RS: Resolver<ORD::Operation>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -58,8 +61,9 @@ where
     MemberNotFound(ID, ID),
 }
 
-/// The state of a group, the local actor id, as well as state objects for the global
-/// group store and orderer.
+/// State object for the group crdt containing the full operation graph and all incremental states
+/// for a single "root" group and any sub-groups. Requires access to a global orderer and group
+/// store.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupCrdtState<ID, OP, C, RS, ORD, GS>
@@ -81,7 +85,7 @@ where
     /// All operations processed by this group.
     ///
     /// Operations _must_ be kept in their partial-order (the order in which they were processed).
-    pub operations: Vec<ORD::Message>,
+    pub operations: Vec<ORD::Operation>,
 
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
@@ -103,7 +107,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
+    RS: Resolver<ORD::Operation> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
@@ -122,12 +126,12 @@ where
         }
     }
 
-    /// The id of this group.
+    /// Id of this group.
     pub fn id(&self) -> ID {
         self.group_id
     }
 
-    /// The current graph tips for this group.
+    /// Current tips for the group operation graph.
     pub fn heads(&self) -> HashSet<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
@@ -144,7 +148,7 @@ where
             .collect::<HashSet<_>>()
     }
 
-    /// The current graph tips for this group and any sub-groups who are currently members.
+    /// Current tips of the group operation graph including all sub-groups.
     #[allow(clippy::type_complexity)]
     pub fn transitive_heads(&self) -> Result<HashSet<OP>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
         let mut transitive_heads = self.heads();
@@ -158,7 +162,7 @@ where
         Ok(transitive_heads)
     }
 
-    /// The current state of this group.
+    /// Current state of this group.
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
     /// state which represents the current state of the group.
@@ -317,7 +321,8 @@ where
     pub(crate) fn get_sub_group(
         &self,
         id: ID,
-    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
+    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
+    {
         let y = self
             .group_store
             .get(&id)
@@ -406,7 +411,7 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
+    RS: Resolver<ORD::Operation> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
@@ -414,6 +419,9 @@ where
 
     type Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>;
 
+    /// Query the current access level of the given member.
+    ///
+    /// The member is expected to be a "stateless" individual, not a "stateful" group.
     fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
         let member_state = y
             .transitive_members()?
@@ -429,6 +437,7 @@ where
         }
     }
 
+    /// Query group membership.
     fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error> {
         let member_ids = y
             .transitive_members()?
@@ -439,6 +448,7 @@ where
         Ok(member_ids)
     }
 
+    /// Return `true` if the given ID is an active member of the group.
     fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
         let member_state = y
             .transitive_members()?
@@ -450,64 +460,69 @@ where
         Ok(is_member)
     }
 
+    /// Return `true` if the given member is currently assigned the `Pull` access level.
     fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
         Ok(GroupCrdtState::access(y, member)?.is_pull())
     }
 
+    /// Return `true` if the given member is currently assigned the `Read` access level.
     fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
         Ok(GroupCrdtState::access(y, member)?.is_read())
     }
 
+    /// Return `true` if the given member is currently assigned the `Write` access level.
     fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
         Ok(GroupCrdtState::access(y, member)?.is_write())
     }
 
+    /// Return `true` if the given member is currently assigned the `Manage` access level.
     fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
         Ok(GroupCrdtState::access(y, member)?.is_manage())
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct GroupCrdt<ID, OP, C, RS, ORD, GS> {
-    _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
-}
-
-/// Core auth protocol for maintaining group membership state in a distributed system. Group
-/// members can be assigned different access levels, where only a sub-set of members can mutate
-/// the state of the group itself.
+/// Core group CRDT for maintaining group membership state in a decentralized system. 
+/// 
+/// Group members can be assigned different access levels, where only a sub-set of members can
+/// mutate the state of the group itself. Group members can be (immutable) individuals or
+/// (mutable) sub-groups.
 ///
-/// The core data type is a Directed Acyclic Graph of `GroupControlMessage`s. Messages contain
-/// group control messages which mutate the previous group state. Messages refer to the "previous"
-/// state (set of graph tips) which the action they contain should be applied to; these references
-/// make up the edges in the graph. Additionally, messages have a set of "dependencies" which
-/// could be part of any auth sub-group.
+/// The core data type is a Directed Acyclic Graph of operations containing group management
+/// actions. Operations refer to the "previous" state (set of graph tips) which the action they
+/// contain should be applied to; these references make up the edges in the graph. Additionally,
+/// operations have a set of "dependencies" which could be part of any sub-group.
 ///
 /// A requirement of the protocol is that all messages are processed in partial-order. When using
 /// a dependency graph structure (as is the case in this implementation) it is possible to achieve
 /// partial-ordering by only processing a message once all it's dependencies have themselves been
 /// processed.
 ///
-/// Group state is maintained using a state-based CRDT `GroupMembersState`. Every time a message
-/// is processed, a new state is generated and added to the map of all states. When a new message
+/// Group state is maintained using the state object `GroupMembersState`. Every time an action is
+/// processed, a new state is generated and added to the map of all states. When a new operation
 /// is received, it's "previous" state is calculated and then the message applied, resulting in a
-/// new state. This approach allows one to use the state-based CRDT `merge` method to combine
-/// states from any points in the group history into a new state. This property is what allows us
-/// to process messages in partial- rather than total-order.
+/// new state.
 ///
 /// Group membership rules are checked when an action is applied to the previous state, read more
-/// in the `group_crdt` module.
+/// in the `crdt::state` module.
 ///
-/// This is an implementation of the `AuthGroup` trait which requires a `prepare` and `process`
-/// method. This implementation allows for providing several generic parameters which allows for
-/// integration into different systems and customization of how group change conflicts are
-/// handled.
+/// The struct has several generic parameters which allow users to specify their own core types
+/// and to customise behavior when handling concurrent changes when resolving a graph to it's
+/// final state.
 ///
-/// - Resolver (RS): contains logic for deciding when group state rebuilds are required, and how
-///   concurrent actions are handled.
-/// - Orderer (ORD): the orderer implements an approach to ordering messages, the protocol
-///   requires that all messages are processed in partial-order, but exactly how this is achieved
-///   is not specified.
-/// - Group Store (GS): global store containing states for all known groups.
+/// - ID : identifier for both an individual actor and group.
+/// - OP : identifier for an operation.
+/// - C  : conditions which restrict an access level.
+/// - RS : generic resolver which contains logic for deciding when group state rebuilds are
+///        required, and how concurrent actions are handled. See the `resolver` module for
+///        different implementations.
+/// - ORD: orderer which exposes an API for creating and processing operations with meta-data
+///        which allow them to be processed in partial order.
+/// - GS : global store containing states for all known groups.
+#[derive(Clone, Debug, Default)]
+pub struct GroupCrdt<ID, OP, C, RS, ORD, GS> {
+    _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
+}
+
 impl<ID, OP, C, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for GroupCrdt<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
@@ -518,29 +533,28 @@ where
     // this introduces it's own down sides. It also might be a sign that there should be better
     // type separation between the Group and Resolver, this could be a good refactor later.
     RS: Resolver<
-            ORD::Message,
+            ORD::Operation,
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
     type Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>;
 
-    /// Prepare a next message/operation which should include all meta-data required for ordering
-    /// auth group operations. An ORD implementation needs to guarantee that operations are
-    /// processed after any dependencies they have on the group graph they are part of, as well as
-    /// any sub-groups.
+    /// Prepare a next operation to be processed locally and sent to remote peers. An ORD
+    /// implementation needs to ensure "previous" and "dependencies" are populated correctly so
+    /// that a partial-order of all operations in the system can be established.
     ///
     /// The method `GroupCrdtState::heads` and `GroupCrdtState::transitive_heads` can be used to retrieve the
     /// operation ids of these operation dependencies.
     fn prepare(
         mut y: Self::State,
         action: &Self::Action,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
@@ -554,7 +568,7 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
-    fn process(mut y: Self::State, operation: &ORD::Message) -> Result<Self::State, Self::Error> {
+    fn process(mut y: Self::State, operation: &ORD::Operation) -> Result<Self::State, Self::Error> {
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
@@ -562,9 +576,6 @@ where
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
 
-        // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
-        // processing here in the groups api then there should probably be a hashset of operations
-        // ids maintained on the struct for efficient lookup.
         if y.operations.iter().any(|op| op.id() == operation_id) {
             // The operation has already been processed.
             return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
@@ -637,9 +648,9 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
+    RS: Resolver<ORD::Operation, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Action was applied an no error occurred.
@@ -649,9 +660,6 @@ where
     /// Action was not applied because it failed internal validation.
     Noop {
         state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-        // @TODO: errors occurring here will be logged or reported to higher layers, but we will
-        // not react to them inside of the groups module in any other way. Until this
-        // logging/reporting is implemented the error is not used.
         #[allow(unused)]
         error: GroupMembershipError<GroupMember<ID>>,
     },
@@ -667,12 +675,12 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
-            ORD::Message,
+            ORD::Operation,
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Apply an action to a single group state.
@@ -683,7 +691,8 @@ where
         actor: ID,
         dependencies: &HashSet<OP>,
         action: &GroupAction<ID, C>,
-    ) -> Result<StateChangeResult<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
+    ) -> Result<StateChangeResult<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
+    {
         // Compute the member's state by applying the new operation to it's claimed "dependencies"
         // state.
         let members_y = if dependencies.is_empty() {
@@ -762,8 +771,9 @@ where
     #[allow(clippy::type_complexity)]
     pub(crate) fn validate_concurrent_action(
         mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-        operation: &ORD::Message,
-    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
+        operation: &ORD::Operation,
+    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
+    {
         // Keep hold of original operations and graph.
         let last_graph = y.graph.clone();
         let last_ignore = y.ignore.clone();
@@ -844,7 +854,8 @@ where
     #[allow(clippy::type_complexity)]
     pub(crate) fn rebuild(
         y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>> {
+    ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
+    {
         let mut y_i = GroupCrdtState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
         y_i.ignore = y.ignore;
 
@@ -909,7 +920,7 @@ pub(crate) mod tests {
 
     use crate::Access;
     use crate::group::{
-        GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupCrdtError, GroupMember,
+        GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember,
         GroupMembershipError,
     };
     use crate::test_utils::{
