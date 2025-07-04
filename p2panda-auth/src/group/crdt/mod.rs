@@ -61,9 +61,9 @@ where
     MemberNotFound(ID, ID),
 }
 
-/// State object for the group crdt containing the full operation graph and all incremental states
-/// for a single "root" group and any sub-groups. Requires access to a global orderer and group
-/// store.
+/// State object for `GroupCrdt` containing the operation graph and all incremental group states. 
+/// 
+/// Requires access to a global orderer and group store.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupCrdtState<ID, OP, C, RS, ORD, GS>
