@@ -915,9 +915,10 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
+    use crate::Access;
     use crate::group::{
         GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember,
         GroupMembershipError,
@@ -926,7 +927,6 @@ pub(crate) mod tests {
         MessageId, Network, TestGroup, TestGroupState, TestGroupStore, TestOperation,
         TestOrdererState,
     };
-    use crate::Access;
 
     pub(crate) fn from_create(
         actor_id: char,
