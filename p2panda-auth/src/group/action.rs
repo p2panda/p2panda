@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{group::GroupMember};
 use crate::Access;
+use crate::group::GroupMember;
 
 /// Actions which can be applied to a group.
 #[derive(Clone, Debug, PartialEq)]

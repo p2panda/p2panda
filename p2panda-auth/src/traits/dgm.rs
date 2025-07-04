@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use crate::Access;
-use crate::group::{GroupMember};
+use crate::group::GroupMember;
 use crate::traits::{IdentityHandle, OperationId, Ordering};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.

@@ -10,11 +10,11 @@ use rand::rngs::StdRng;
 use thiserror::Error;
 
 use crate::group::{GroupAction, GroupControlMessage, GroupMember};
-use crate::traits::{GroupStore, Operation, Ordering};
 use crate::test_utils::{
     Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStore,
 };
+use crate::traits::{GroupStore, Operation, Ordering};
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
