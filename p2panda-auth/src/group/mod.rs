@@ -17,7 +17,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
-pub use crate::group::access::Access;
+use crate::access::Access;
 pub use crate::group::dgm::{GroupManager, GroupManagerError};
 pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{GroupMembersState, GroupMembershipError, MemberState};
@@ -27,7 +27,6 @@ use crate::traits::{
     Resolver,
 };
 
-mod access;
 mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;

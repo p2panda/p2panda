@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::error::Error;
 
-use crate::group::Access;
+use crate::Access;
 
 /// Interface for querying group membership and access levels.
 pub trait GroupMembershipQuery<ID, OP, C> {
