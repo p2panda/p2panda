@@ -19,7 +19,6 @@ use thiserror::Error;
 
 use crate::access::Access;
 pub use crate::group::dgm::{GroupManager, GroupManagerError};
-pub use crate::group::resolver::StrongRemove;
 pub use crate::group::state::{GroupMembersState, GroupMembershipError, MemberState};
 
 use crate::traits::{
@@ -30,7 +29,7 @@ use crate::traits::{
 mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
-mod resolver;
+pub mod resolver;
 mod state;
 #[cfg(test)]
 mod tests;

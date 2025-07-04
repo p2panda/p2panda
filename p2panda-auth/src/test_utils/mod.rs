@@ -10,7 +10,8 @@ pub use network::Network;
 pub use orderer::*;
 pub use partial_ord::*;
 
-use crate::group::{Group, GroupState, StrongRemove};
+use crate::group::resolver::StrongRemove;
+use crate::group::{Group, GroupState};
 use crate::Access;
 use crate::traits::{IdentityHandle, OperationId};
 
