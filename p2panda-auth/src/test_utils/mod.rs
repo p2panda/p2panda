@@ -31,16 +31,3 @@ pub type GenericTestGroupState<RS, ORD, GS> =
 pub type TestResolver = GenericTestResolver<TestOrderer, TestGroupStore>;
 pub type TestGroup = GenericTestGroup<TestResolver, TestOrderer, TestGroupStore>;
 pub type TestGroupState = GenericTestGroupState<TestResolver, TestOrderer, TestGroupStore>;
-
-/// During testing we want Ord to be implemented on Access so we can easily assert test cases
-/// involving collections of access levels.
-impl<C: Ord> Ord for Access<C> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let level_cmp = self.level.cmp(&other.level);
-        if level_cmp != std::cmp::Ordering::Equal {
-            level_cmp
-        } else {
-            self.conditions.cmp(&other.conditions)
-        }
-    }
-}
