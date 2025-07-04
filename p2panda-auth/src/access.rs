@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 
 /// The four basic access levels which can be assigned to an actor. Greater access levels are
@@ -20,15 +21,15 @@ pub enum AccessLevel {
 }
 
 /// A level of access with optional conditions which can be assigned to an actor.
-/// 
+///
 /// Access can be used to understand the rights of an actor to perform actions (request data,
 /// write data, etc..) within a certain data set. Custom conditions can be defined by the user in
 /// order to introduce domain specific access boundaries or integrate with another access token.
-/// 
+///
 /// For example, a condition to model access boundaries using paths could be introduced where
 /// having access to "/public" gives you access to "/public/stuff" and "/public/other/stuff" but
 /// not "/private" or "/private/stuff".
-#[derive(Clone, Debug, PartialEq, PartialOrd, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Access<C = ()> {
     pub conditions: Option<C>,
     pub level: AccessLevel,
@@ -98,6 +99,39 @@ impl<C> Access<C> {
     }
 }
 
+impl<C: PartialOrd> PartialOrd for Access<C> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self.conditions.as_ref(), other.conditions.as_ref()) {
+            // If self and other contain conditions compare them first.
+            (Some(self_cond), Some(other_cond)) => {
+                match self_cond.partial_cmp(other_cond) {
+                    // When conditions are equal or greater then fall back to comparing the access
+                    // level.
+                    Some(Ordering::Greater | Ordering::Equal) => {
+                        match self.level.cmp(&other.level) {
+                            Ordering::Less => Some(Ordering::Less),
+                            Ordering::Equal | Ordering::Greater => Some(Ordering::Greater),
+                        }
+                    }
+                    Some(Ordering::Less) => Some(Ordering::Less),
+                    None => None,
+                }
+            }
+            (None, Some(_)) => match self.level.cmp(&other.level) {
+                Ordering::Less => Some(Ordering::Less),
+                Ordering::Equal | Ordering::Greater => Some(Ordering::Greater),
+            },
+            _ => Some(self.level.cmp(&other.level)),
+        }
+    }
+}
+
+impl<C: PartialOrd + Eq> Ord for Access<C> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Less)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cmp::Ordering;
@@ -109,49 +143,23 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct PathCondition(String);
 
-    impl PartialOrd for Access<PathCondition> {
+    impl PartialOrd for PathCondition {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            match (self.conditions.as_ref(), other.conditions.as_ref()) {
-                // If both have path conditions compare if other is a sub-path of self and then
-                // additionally compare access levels.
-                (Some(self_path), Some(other_path)) => {
-                    let self_parts: Vec<_> =
-                        self_path.0.split('/').filter(|s| !s.is_empty()).collect();
-                    let other_parts: Vec<_> =
-                        other_path.0.split('/').filter(|s| !s.is_empty()).collect();
+            let self_parts: Vec<_> = self.0.split('/').filter(|s| !s.is_empty()).collect();
+            let other_parts: Vec<_> = other.0.split('/').filter(|s| !s.is_empty()).collect();
 
-                    let min_len = self_parts.len().min(other_parts.len());
-                    let is_prefix = self_parts[..min_len] == other_parts[..min_len];
+            let min_len = self_parts.len().min(other_parts.len());
+            let is_prefix = self_parts[..min_len] == other_parts[..min_len];
 
-                    if is_prefix {
-                        match self_parts.len().cmp(&other_parts.len()) {
-                            Ordering::Less => match self.level.cmp(&other.level) {
-                                Ordering::Less => Some(Ordering::Less),
-                                Ordering::Equal | Ordering::Greater => Some(Ordering::Greater),
-                            },
-                            Ordering::Equal => Some(self.level.cmp(&other.level)),
-                            Ordering::Greater => Some(Ordering::Less),
-                        }
-                    } else {
-                        None
-                    }
+            if is_prefix {
+                match self_parts.len().cmp(&other_parts.len()) {
+                    Ordering::Less => Some(Ordering::Greater),
+                    Ordering::Equal => Some(Ordering::Equal),
+                    Ordering::Greater => Some(Ordering::Less),
                 }
-                // If self has no conditions, but other does, then compare levels, if they are
-                // equal then return Ord::Greater as we don't have conditions (but they do) so our
-                // access is greater.
-                (None, Some(_)) => match self.level.cmp(&other.level) {
-                    Ordering::Less => Some(Ordering::Less),
-                    Ordering::Equal | Ordering::Greater => Some(Ordering::Greater),
-                },
-                // Fallback to level comparison
-                _ => Some(self.level.cmp(&other.level)),
+            } else {
+                None
             }
-        }
-    }
-
-    impl Ord for Access<PathCondition> {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.partial_cmp(other).unwrap_or(Ordering::Less)
         }
     }
 
@@ -183,44 +191,8 @@ mod tests {
     }
 
     /// Conditions containing an access expiry timestamp.
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialOrd, PartialEq, Eq)]
     struct ExpiryTimestamp(u64);
-
-    impl PartialOrd for Access<ExpiryTimestamp> {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            match (self.conditions.as_ref(), other.conditions.as_ref()) {
-                // If both self and other have an expiry then we should compare them followed by
-                // comparing levels.
-                (Some(self_expiry), Some(other_expiry)) => {
-                    if self_expiry.0 < other_expiry.0 {
-                        Some(Ordering::Less)
-                    } else {
-                        match self.level.cmp(&other.level) {
-                            Ordering::Less => Some(Ordering::Less),
-                            Ordering::Equal | Ordering::Greater => {
-                                Some(self_expiry.0.cmp(&other_expiry.0))
-                            }
-                        }
-                    }
-                }
-
-                // If self has no conditions, but other does, then compare levels, if they are
-                // equal then return Ord::Greater as we don't have conditions (but they do) so our
-                // access is greater.
-                (None, Some(_)) => match self.level.cmp(&other.level) {
-                    Ordering::Less => Some(Ordering::Less),
-                    Ordering::Equal | Ordering::Greater => Some(Ordering::Greater),
-                },
-                _ => Some(self.level.cmp(&other.level)),
-            }
-        }
-    }
-
-    impl Ord for Access<ExpiryTimestamp> {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.partial_cmp(other).unwrap_or(Ordering::Less)
-        }
-    }
 
     #[test]
     fn expiry_timestamp_access_ordering() {
