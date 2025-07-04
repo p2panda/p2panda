@@ -3,10 +3,12 @@
 //! Group membership CRDT.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use thiserror::Error;
+
+use crate::group::Access;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum GroupMembershipError<ID> {
@@ -32,27 +34,6 @@ pub enum GroupMembershipError<ID> {
     UnrecognisedMember(ID),
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Access<C> {
-    Pull,
-    Read,
-    Write { conditions: Option<C> },
-    Manage,
-}
-
-impl<C> Display for Access<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Access::Pull => "pull",
-            Access::Read => "read",
-            Access::Write { .. } => "write",
-            Access::Manage => "manage",
-        };
-
-        write!(f, "{}", s)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct MemberState<C> {
     pub(crate) member_counter: usize,
@@ -73,19 +54,19 @@ where
     }
 
     pub fn is_puller(&self) -> bool {
-        self.access == Access::Pull
+        self.access.is_pull()
     }
 
     pub fn is_reader(&self) -> bool {
-        self.access == Access::Read
+        self.access.is_read()
     }
 
     pub fn is_writer(&self) -> bool {
-        self.access != Access::Pull && self.access != Access::Read && self.access != Access::Manage
+        self.access.is_write()
     }
 
     pub fn is_manager(&self) -> bool {
-        self.access == Access::Manage
+        self.access.is_manage()
     }
 }
 
@@ -410,16 +391,11 @@ mod tests {
     fn create_add_remove() {
         // "Happy path" test for create, add and remove functions.
 
-        // @TODO(glyph): Is there a way to avoid this completely?
-        //
-        // Avoid having to annotate the conditions `C`.
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
 
-        let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
+        let initial_members = [(alice, Access::manage()), (bob, Access::read())];
 
         // Alice creates a group with Alice and Bob as members.
         let group_y = create(&initial_members);
@@ -435,9 +411,7 @@ mod tests {
             group_y,
             alice,
             charlie,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
+            Access::write().with_conditions("requirement".to_string()),
         )
         .unwrap();
 
@@ -451,12 +425,10 @@ mod tests {
 
     #[test]
     fn promote_demote_modify() {
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
 
-        let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
+        let initial_members = [(alice, Access::manage()), (bob, Access::read())];
 
         // Alice creates a group with Alice and Bob as members.
         let group_y = create(&initial_members);
@@ -466,9 +438,7 @@ mod tests {
             group_y,
             alice,
             bob,
-            AccessLevel::Write {
-                conditions: Some("requirement".to_string()),
-            },
+            Access::write().with_conditions("requirement".to_string()),
         )
         .unwrap();
 
@@ -478,10 +448,10 @@ mod tests {
         assert!(bob_state.is_writer());
 
         // Alice demotes Bob to Read access.
-        let group_y = demote(group_y.clone(), alice, bob, Access::Read).unwrap();
+        let group_y = demote(group_y.clone(), alice, bob, Access::read()).unwrap();
 
         // Alice promotes Bob to Manage access.
-        let group_y = modify(group_y, alice, bob, AccessLevel::Manage).unwrap();
+        let group_y = modify(group_y, alice, bob, Access::manage()).unwrap();
 
         let bob_state = group_y.members.get(&bob).unwrap();
         assert!(bob_state.is_manager());
@@ -491,20 +461,18 @@ mod tests {
     fn add_errors() {
         // "Unhappy path" test for add functions.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
         let daphne = 3;
 
-        let initial_members = [(alice, AccessLevel::Manage), (bob, AccessLevel::Read)];
+        let initial_members = [(alice, <Access>::manage()), (bob, Access::read())];
 
         // Alice creates a group with Alice and Bob as members.
         let group_y = create(&initial_members);
 
         // Charlie adds Daphne...
-        let result = add(group_y.clone(), charlie, daphne, AccessLevel::Read);
+        let result = add(group_y.clone(), charlie, daphne, Access::read());
 
         // ...but Charlie isn't known to the group (has never been a member).
         assert!(matches!(
@@ -513,7 +481,7 @@ mod tests {
         ));
 
         // Bob adds Daphne...
-        let result = add(group_y.clone(), bob, daphne, AccessLevel::Read);
+        let result = add(group_y.clone(), bob, daphne, Access::read());
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -522,7 +490,7 @@ mod tests {
         ));
 
         // Alice adds Bob...
-        let result = add(group_y.clone(), alice, bob, AccessLevel::Read);
+        let result = add(group_y.clone(), alice, bob, Access::read());
 
         // ...but Bob is already an active member.
         assert!(matches!(
@@ -534,7 +502,7 @@ mod tests {
         let group_y = remove(group_y, alice, bob).unwrap();
 
         // Bob adds Daphne...
-        let result = add(group_y, bob, daphne, AccessLevel::Read);
+        let result = add(group_y, bob, daphne, Access::read());
 
         // ...but Bob isn't an active member.
         assert!(matches!(
@@ -558,17 +526,15 @@ mod tests {
     fn remove_errors() {
         // "Unhappy path" test for remove functions.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
         let daphne = 3;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Read),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::read()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
@@ -618,24 +584,22 @@ mod tests {
     fn promote_errors() {
         // "Unhappy path" test for promote functions.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
         let daphne = 3;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Read),
+            (alice, Access::manage()),
+            (bob, Access::read()),
+            (charlie, Access::read()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
         let group_y = create(&initial_members);
 
         // Daphne promotes Charlie...
-        let result = promote(group_y.clone(), daphne, charlie, Access::Manage);
+        let result = promote(group_y.clone(), daphne, charlie, Access::manage());
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -648,9 +612,7 @@ mod tests {
             group_y.clone(),
             bob,
             charlie,
-            AccessLevel::Write {
-                conditions: Some("paw".to_string()),
-            },
+            Access::write().with_conditions("paw".to_string()),
         );
 
         // ...but Bob isn't a manager.
@@ -660,7 +622,7 @@ mod tests {
         ));
 
         // Alice promotes Daphne...
-        let result = promote(group_y.clone(), alice, daphne, AccessLevel::Read);
+        let result = promote(group_y.clone(), alice, daphne, Access::read());
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -672,7 +634,7 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice promotes Charlie...
-        let result = promote(group_y.clone(), alice, charlie, Access::Pull);
+        let result = promote(group_y.clone(), alice, charlie, Access::pull());
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -681,7 +643,7 @@ mod tests {
         ));
 
         // Charlie promotes Bob...
-        let result = promote(group_y, charlie, bob, Access::Manage);
+        let result = promote(group_y, charlie, bob, Access::manage());
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -694,24 +656,22 @@ mod tests {
     fn demote_errors() {
         // "Unhappy path" test for demote functions.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
         let daphne = 3;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Read),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::read()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
         let group_y = create(&initial_members);
 
         // Daphne demotes Charlie...
-        let result = demote(group_y.clone(), daphne, charlie, Access::Pull);
+        let result = demote(group_y.clone(), daphne, charlie, Access::pull());
 
         // ...but Daphne isn't known to the group (has never been a member).
         assert!(matches!(
@@ -720,7 +680,7 @@ mod tests {
         ));
 
         // Bob demotes Charlie...
-        let result = demote(group_y.clone(), bob, charlie, Access::Pull);
+        let result = demote(group_y.clone(), bob, charlie, Access::pull());
 
         // ...but Bob isn't a manager.
         assert!(matches!(
@@ -729,7 +689,7 @@ mod tests {
         ));
 
         // Alice demotes Daphne...
-        let result = demote(group_y.clone(), alice, daphne, Access::Read);
+        let result = demote(group_y.clone(), alice, daphne, Access::read());
 
         // ...but Daphne isn't a member.
         assert!(matches!(
@@ -741,7 +701,7 @@ mod tests {
         let group_y = remove(group_y, alice, charlie).unwrap();
 
         // Alice demotes Charlie...
-        let result = demote(group_y.clone(), alice, charlie, Access::Pull);
+        let result = demote(group_y.clone(), alice, charlie, Access::pull());
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -750,7 +710,7 @@ mod tests {
         ));
 
         // Charlie demotes Bob...
-        let result = demote(group_y, charlie, bob, Access::Pull);
+        let result = demote(group_y, charlie, bob, Access::pull());
 
         // ...but Charlie isn't a member.
         assert!(matches!(
@@ -764,24 +724,22 @@ mod tests {
         // A member is added in one group state but not the other.
         // We expect the post-merge state to include the member.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
         let daphne = 3;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Pull),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::pull()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
         let group_y_i = create(&initial_members);
 
         // Alice adds Daphne.
-        let group_y_ii = add(group_y_i.clone(), alice, daphne, AccessLevel::Read).unwrap();
+        let group_y_ii = add(group_y_i.clone(), alice, daphne, Access::read()).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i, group_y_ii);
@@ -794,16 +752,14 @@ mod tests {
         // A member exists in both group states but with different counters.
         // We expect the post-merge state to contain the higher of the two counters.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Pull),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::pull()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
@@ -813,7 +769,7 @@ mod tests {
         let group_y_ii = remove(group_y_i.clone(), alice, bob).unwrap();
 
         // Alice adds Bob.
-        let group_y_ii = add(group_y_ii, alice, bob, AccessLevel::Read).unwrap();
+        let group_y_ii = add(group_y_ii, alice, bob, Access::read()).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i, group_y_ii);
@@ -833,26 +789,24 @@ mod tests {
         // A member exists in both group states with equal counters but different access counters.
         // We expect the post-merge state to contain the higher of the two access counters.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Pull),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::pull()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
         let group_y_i = create(&initial_members);
 
         // Alice promotes Charlie.
-        let group_y_ii = promote(group_y_i.clone(), alice, charlie, Access::Read).unwrap();
+        let group_y_ii = promote(group_y_i.clone(), alice, charlie, Access::read()).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::Pull).unwrap();
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::pull()).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i, group_y_ii);
@@ -863,7 +817,7 @@ mod tests {
         assert!(charlie_state.access_counter == 2);
 
         // We expect the access level to be Pull for Charlie.
-        assert!(charlie_state.access == Access::Pull);
+        assert!(charlie_state.is_puller());
     }
 
     #[test]
@@ -872,32 +826,30 @@ mod tests {
         // but different access levels.
         // We expect the post-merge state to contain the lower of the two access levels.
 
-        type AccessLevel = Access<String>;
-
         let alice = 0;
         let bob = 1;
         let charlie = 2;
 
         let initial_members = [
-            (alice, AccessLevel::Manage),
-            (bob, AccessLevel::Read),
-            (charlie, AccessLevel::Pull),
+            (alice, <Access>::manage()),
+            (bob, Access::read()),
+            (charlie, Access::pull()),
         ];
 
         // Alice creates a group with Alice, Bob and Charlie as members.
         let group_y = create(&initial_members);
 
         // Alice promotes Charlie.
-        let group_y_i = promote(group_y.clone(), alice, charlie, Access::Read).unwrap();
+        let group_y_i = promote(group_y.clone(), alice, charlie, Access::read()).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_i = demote(group_y_i.clone(), alice, charlie, Access::Pull).unwrap();
+        let group_y_i = demote(group_y_i.clone(), alice, charlie, Access::pull()).unwrap();
 
         // Alice promotes Charlie.
-        let group_y_ii = modify(group_y.clone(), alice, charlie, AccessLevel::Manage).unwrap();
+        let group_y_ii = modify(group_y.clone(), alice, charlie, Access::manage()).unwrap();
 
         // Alice demotes Charlie.
-        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::Read).unwrap();
+        let group_y_ii = demote(group_y_ii.clone(), alice, charlie, Access::read()).unwrap();
 
         // Merge the states.
         let group_y = merge(group_y_i.clone(), group_y_ii.clone());
@@ -905,6 +857,6 @@ mod tests {
         let charlie_state = group_y.members.get(&charlie).unwrap();
 
         // We expect the access level to be Pull for Charlie.
-        assert!(charlie_state.access == Access::Pull);
+        assert!(charlie_state.is_puller());
     }
 }
