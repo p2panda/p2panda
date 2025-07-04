@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO(glyph): I'd love to see this module split into smaller modules to make it easier to
-// understand the various components and how they're related. Right now it feels a bit overwhelming
-// to navigate.
-//
-// src/group/member.rs
-// src/group/action.rs
-// src/group/control_message.rs
-// src/group/group.rs (previously dgm)
-// src/group/crdt.rs (containing GroupCrdtState and GroupOperationHandler)
+//! Group membership and authorisation.
 
 mod action;
 pub(crate) mod crdt;
@@ -20,7 +12,7 @@ pub mod resolver;
 
 pub use action::GroupAction;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
-pub use crdt::{GroupCrdt, GroupCrdtState, GroupCrdtError, StateChangeResult};
+pub use crdt::{GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
 
@@ -29,13 +21,15 @@ use std::marker::PhantomData;
 
 use thiserror::Error;
 
-use crate::Access;
 use crate::traits::{
     AuthGroup, GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation,
     OperationId, Ordering, Resolver,
 };
+use crate::Access;
 
 #[derive(Debug, Error)]
+// TODO: Rename to `GroupError`.
+/// All possible errors that can occur when creating or updating a group.
 pub enum GroupManagerError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
@@ -65,18 +59,19 @@ where
 
 /// Decentralised Group Management (DGM).
 ///
-/// The `GroupManager` provides a high-level interface for creating and updating groups. These
-/// groups provide a means for restricting access to application data and resources. Groups are
+/// The `Group` provides a high-level interface for creating and updating groups. These groups
+/// provide a means for restricting access to application data and resources. Groups are
 /// comprised of members, which may be individuals or groups, and are assigned a user-chosen
 /// identity. Each member is assigned a unique user-chosen identifier and access level. Access
 /// levels are used to enforce restrictions over access to data and the mutation of that data.
 /// They are also used to grant permissions which allow for mutating the group state by adding,
 /// removing and modifying the access level of other members.
 ///
-/// Each `GroupManager` method performs internal validation to ensure that the desired group
-/// action is valid in light of the current group state. Attempting to perform an invalid action
-/// results in a `GroupManagerError`. For example, attempting to remove a member who is not
-/// currently part of the group.
+/// Each `Group` method performs internal validation to ensure that the desired group action is
+/// valid in light of the current group state. Attempting to perform an invalid action results in a
+/// `GroupError`. For example, attempting to remove a member who is not currently part of the
+/// group.
+// TODO: Rename to `Group`.
 pub struct GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
@@ -88,7 +83,7 @@ where
     /// ID of the local actor.
     my_id: ID,
 
-    /// Store for all locally-known groups.
+    /// Store for all known groups.
     store: GS,
 
     /// Message orderer state.
@@ -105,6 +100,9 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
+    /// Initialise the `Group` state so that groups can be created and updated.
+    ///
+    /// Requires the identifier of the local actor, as well as a group store and orderer.
     pub fn init(my_id: ID, store: GS, orderer: ORD::State) -> Self {
         Self {
             _phantom: PhantomData,
@@ -374,8 +372,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use crate::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
 
