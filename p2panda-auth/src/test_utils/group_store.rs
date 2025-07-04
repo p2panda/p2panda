@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use thiserror::Error;
 
-use crate::group::test_utils::{
+use crate::test_utils::{
     Conditions, MemberId, MessageId, TestGroupState, TestOrderer, TestResolver,
 };
 use crate::traits::GroupStore;

@@ -6,7 +6,8 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
-use crate::group::{Access, GroupAction, GroupControlMessage, GroupMember};
+use crate::Access;
+use crate::group::{GroupAction, GroupControlMessage, GroupMember};
 use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
 
 use super::{
