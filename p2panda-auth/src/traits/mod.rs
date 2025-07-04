@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Traits describing interfaces required by generic parameters or for integration of p2panda-auth
-//! into other systems.
+//! Generic interfaces required by `p2panda-auth` data-types.
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
