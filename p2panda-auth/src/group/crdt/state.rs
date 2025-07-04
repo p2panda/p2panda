@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Core group membership state represented as a Causal Length CRDT (CL-CRDT).
+//!
+//! The approach used here was first described by Weihai Yu and Sigbjørn Rostad and in their paper
+//! titled 'A low-cost set CRDT based on causal lengths'.
+//!
+//! Yu, W. and Rostad, S. A Low-Cost Set CRDT Based on Causal Lengths. In Proceedings of the 7th
+//! Workshop on Principles and Practice of Consistency for Distributed Data (2020), Article no. 5,
+//! pp. 1-6.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
