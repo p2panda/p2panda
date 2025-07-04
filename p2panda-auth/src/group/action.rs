@@ -3,7 +3,7 @@
 use crate::Access;
 use crate::group::GroupMember;
 
-/// Actions which can be applied to a group.
+/// Actions for creating groups and modifying group membership.
 #[derive(Clone, Debug, PartialEq)]
 pub enum GroupAction<ID, C> {
     Create {
