@@ -30,7 +30,6 @@ use crate::traits::{
 mod dgm;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
-mod graph;
 mod resolver;
 mod state;
 #[cfg(any(test, feature = "test_utils"))]

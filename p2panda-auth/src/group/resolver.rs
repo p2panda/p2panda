@@ -7,7 +7,7 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use petgraph::algo::toposort;
 
-use crate::group::graph::{concurrent_bubbles, has_path};
+use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::{Access, Group, GroupControlMessage, GroupError, GroupState, StateChangeResult};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
