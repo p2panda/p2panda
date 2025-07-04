@@ -26,7 +26,7 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer,
 /// member being removed, or demoted from admin to a lower access level.
 ///
 /// ## Strong Remove Concurrency Rules
-/// 
+///
 /// ### Removals
 ///
 /// If a removal has occurred, filter any concurrent operations by the removed member, as long

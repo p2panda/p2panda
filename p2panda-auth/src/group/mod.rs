@@ -23,7 +23,8 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    Group as GroupTrait, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
+    Group as GroupTrait, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId,
+    Orderer, Resolver,
 };
 
 #[derive(Debug, Error)]
