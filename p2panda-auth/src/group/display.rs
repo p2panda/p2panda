@@ -8,9 +8,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
-use crate::group::{
-    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember,
-};
+use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
@@ -27,12 +25,7 @@ where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<
-            ORD::Operation,
-            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
-        > + Clone
-        + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Clone + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Operation: Clone,

@@ -24,7 +24,7 @@ pub enum GroupCrdtError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Operation>,
+    RS: Resolver<ID, OP, C, ORD, GS>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -106,7 +106,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Operation> + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
@@ -409,7 +409,7 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Operation> + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
@@ -546,15 +546,7 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    // @TODO: This is a very verbose trait bound. It would be nice to make this a trait alias but
-    // this feature is not supported in stable Rust yet. Creating a sub-trait is an option but
-    // this introduces it's own down sides. It also might be a sign that there should be better
-    // type separation between the Group and Resolver, this could be a good refactor later.
-    RS: Resolver<
-            ORD::Operation,
-            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
-        > + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
@@ -897,7 +889,7 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Operation, State = GroupCrdtState<ID, OP, C, RS, ORD, GS>> + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,

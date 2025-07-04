@@ -33,7 +33,7 @@ pub enum GroupManagerError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Operation>,
+    RS: Resolver<ID, OP, C, ORD, GS>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -75,7 +75,7 @@ pub struct GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Operation>,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -95,7 +95,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Operation>,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -117,11 +117,7 @@ where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<
-            ORD::Operation,
-            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
-        > + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,

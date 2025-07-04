@@ -57,7 +57,7 @@ pub struct StrongRemove<ID, OP, C, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, ORD, GS)>,
 }
 
-impl<ID, OP, C, ORD, GS> Resolver<ORD::Operation> for StrongRemove<ID, OP, C, ORD, GS>
+impl<ID, OP, C, ORD, GS> Resolver<ID, OP, C, ORD, GS> for StrongRemove<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
@@ -67,14 +67,11 @@ where
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
-    type State = GroupCrdtState<ID, OP, C, Self, ORD, GS>;
-    type Error = GroupCrdtError<ID, OP, C, Self, ORD, GS>;
-
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
         y: &GroupCrdtState<ID, OP, C, Self, ORD, GS>,
         operation: &ORD::Operation,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, Self, ORD, GS>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
 
@@ -94,7 +91,8 @@ where
     /// accordingly.
     fn process(
         mut y: GroupCrdtState<ID, OP, C, Self, ORD, GS>,
-    ) -> Result<GroupCrdtState<ID, OP, C, Self, ORD, GS>, Self::Error> {
+    ) -> Result<GroupCrdtState<ID, OP, C, Self, ORD, GS>, GroupCrdtError<ID, OP, C, Self, ORD, GS>>
+    {
         // Start by draining the existing filter and re-building all states.
         y.ignore.drain();
         let mut y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
@@ -240,7 +238,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Operation> + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
