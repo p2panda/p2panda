@@ -1,3 +1,5 @@
+pub(crate) mod state;
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -8,7 +10,7 @@ use thiserror::Error;
 
 use crate::access::Access;
 use crate::group::{
-    GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError, state,
+    GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
 };
 use crate::traits::{
     AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,

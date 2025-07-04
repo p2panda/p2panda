@@ -11,20 +11,18 @@
 // src/group/crdt.rs (containing GroupState and GroupOperationHandler)
 
 mod action;
-mod crdt;
+pub(crate) mod crdt;
 #[cfg(any(test, feature = "test_utils"))]
 mod display;
 mod member;
 mod message;
 pub mod resolver;
-pub(crate) mod state;
 
 pub use action::GroupAction;
 pub use crdt::{Group, GroupError, GroupState, StateChangeResult};
-// pub use dgm::{GroupManager, GroupManagerError};
+pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
-pub use state::{GroupMembersState, GroupMembershipError, MemberState};
 
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
