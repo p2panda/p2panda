@@ -28,14 +28,14 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
-            ORD::Message,
+            ORD::Operation,
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Clone
         + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Print an auth group graph in DOT format for visualizing the group control message DAG.
@@ -144,7 +144,7 @@ where
         graph
     }
 
-    fn format_operation(&self, operation: &ORD::Message) -> String {
+    fn format_operation(&self, operation: &ORD::Operation) -> String {
         let control_message = operation.payload();
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
@@ -286,7 +286,7 @@ where
         s
     }
 
-    fn format_members(&self, operation: &ORD::Message) -> String {
+    fn format_members(&self, operation: &ORD::Operation) -> String {
         let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
         dependencies.insert(operation.id());
         let mut members = self

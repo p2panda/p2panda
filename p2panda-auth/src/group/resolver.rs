@@ -57,13 +57,13 @@ pub struct StrongRemove<ID, OP, C, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, ORD, GS)>,
 }
 
-impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD, GS>
+impl<ID, OP, C, ORD, GS> Resolver<ORD::Operation> for StrongRemove<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
@@ -73,7 +73,7 @@ where
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
         y: &GroupCrdtState<ID, OP, C, Self, ORD, GS>,
-        operation: &ORD::Message,
+        operation: &ORD::Operation,
     ) -> Result<bool, Self::Error> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
@@ -103,7 +103,7 @@ where
         // Construct an operation map for easy look-up.
         //
         // @TODO: make operations a map on group state struct.
-        let operations: HashMap<OP, ORD::Message> = y
+        let operations: HashMap<OP, ORD::Operation> = y
             .operations
             .clone()
             .into_iter()
@@ -240,13 +240,13 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
+    RS: Resolver<ORD::Operation> + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
     /// If the given operation is an action which removes or demotes a manager member, return the
     /// ID of the target member.
-    fn removed_manager(&self, operation: &ORD::Message) -> Option<ID> {
+    fn removed_manager(&self, operation: &ORD::Operation) -> Option<ID> {
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
             unimplemented!()

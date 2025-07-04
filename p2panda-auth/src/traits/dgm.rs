@@ -13,7 +13,7 @@ where
     OP: OperationId,
     // TODO: Do we strictly need the orderer here? Could it rather be a generic message?
     // We might not actually need to know anything about the message type, only in the `Orderer`.
-    // In the _implementation_ we'd say it's an `ORD::Message` but not here (move that knowledge
+    // In the _implementation_ we'd say it's an `ORD::Operation` but not here (move that knowledge
     // into the implementation.
     ORD: Ordering<ID, OP, Self::Action>,
 {
@@ -29,7 +29,7 @@ where
         &self,
         group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Initialise the group by processing a remotely-authored `create` message.
     ///
@@ -37,13 +37,13 @@ where
     /// called. The `group_id` is extracted from the operation itself.
     fn create_from_remote(
         &self,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error>;
 
     /// Process a remotely-authored group action message.
     fn receive_from_remote(
         y: Self::State,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error>;
 
     /// Add a member to the group.
@@ -55,14 +55,14 @@ where
         adder: ID,
         added: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Removes a member from the group.
     fn remove(
         y: Self::State,
         remover: ID,
         removed: ID,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Promote a member to the given access level.
     fn promote(
@@ -70,7 +70,7 @@ where
         promoter: ID,
         promoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Demote a member to the given access level.
     fn demote(
@@ -78,5 +78,5 @@ where
         demoter: ID,
         demoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 }

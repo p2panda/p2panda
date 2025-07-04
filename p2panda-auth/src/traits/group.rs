@@ -31,11 +31,11 @@ where
     fn prepare(
         y: Self::State,
         action: &Self::Action,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Process a prepared operation.
     ///
     /// Both locally created and operations received from the network should be processed with this
     /// method.
-    fn process(y: Self::State, operation: &ORD::Message) -> Result<Self::State, Self::Error>;
+    fn process(y: Self::State, operation: &ORD::Operation) -> Result<Self::State, Self::Error>;
 }

@@ -34,7 +34,7 @@ pub enum GroupManagerError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
+    RS: Resolver<ORD::Operation>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -76,7 +76,7 @@ pub struct GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
+    RS: Resolver<ORD::Operation>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -96,7 +96,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupManager<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ORD::Message>,
+    RS: Resolver<ORD::Operation>,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
@@ -120,12 +120,12 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
-            ORD::Message,
+            ORD::Operation,
             State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
             Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
@@ -143,7 +143,7 @@ where
         &self,
         group_id: ID,
         members: Vec<(GroupMember<ID>, Access<C>)>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         // The creator of the group is automatically added as a manager.
         let creator = (GroupMember::Individual(self.my_id), Access::manage());
 
@@ -172,7 +172,7 @@ where
     /// Create a group by processing a remote operation.
     fn create_from_remote(
         &self,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error> {
         let group_id = remote_operation.payload().group_id();
 
@@ -194,7 +194,7 @@ where
     /// meet this condition will result in an error.
     fn receive_from_remote(
         y: Self::State,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error> {
         // Validation is performed internally by `process()`.
         let y = GroupCrdt::process(y, &remote_operation)?;
@@ -211,7 +211,7 @@ where
         adder: ID,
         added: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &adder)? {
             let adder_access = Self::State::access(&y, &adder)?;
             return Err(GroupManagerError::InsufficientAccess(
@@ -251,7 +251,7 @@ where
         y: Self::State,
         remover: ID,
         removed: ID,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &remover)? {
             let remover_access = Self::State::access(&y, &remover)?;
             return Err(GroupManagerError::InsufficientAccess(
@@ -289,7 +289,7 @@ where
         promoter: ID,
         promoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &promoter)? {
             let promoter_access = Self::State::access(&y, &promoter)?;
             return Err(GroupManagerError::InsufficientAccess(
@@ -335,7 +335,7 @@ where
         demoter: ID,
         demoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+    ) -> Result<(Self::State, ORD::Operation), Self::Error> {
         if !Self::State::is_manager(&y, &demoter)? {
             let demoter_access = Self::State::access(&y, &demoter)?;
             return Err(GroupManagerError::InsufficientAccess(
