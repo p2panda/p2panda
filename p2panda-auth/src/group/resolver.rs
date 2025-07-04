@@ -10,7 +10,7 @@ use petgraph::algo::toposort;
 use crate::Access;
 use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::{
-    Group, GroupAction, GroupControlMessage, GroupError, GroupState, StateChangeResult,
+    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult,
 };
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
@@ -67,12 +67,12 @@ where
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
-    type State = GroupState<ID, OP, C, Self, ORD, GS>;
-    type Error = GroupError<ID, OP, C, Self, ORD, GS>;
+    type State = GroupCrdtState<ID, OP, C, Self, ORD, GS>;
+    type Error = GroupCrdtError<ID, OP, C, Self, ORD, GS>;
 
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
-        y: &GroupState<ID, OP, C, Self, ORD, GS>,
+        y: &GroupCrdtState<ID, OP, C, Self, ORD, GS>,
         operation: &ORD::Message,
     ) -> Result<bool, Self::Error> {
         let control_message = operation.payload();
@@ -81,7 +81,7 @@ where
         // Sanity check.
         if y.group_id != group_id {
             // The operation is not intended for this group.
-            return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
+            return Err(GroupCrdtError::IncorrectGroupId(group_id, y.group_id));
         }
 
         let transitive_heads = y.transitive_heads().unwrap();
@@ -93,11 +93,11 @@ where
     /// Process the group operation graph, producing a new filter and re-building all state
     /// accordingly.
     fn process(
-        mut y: GroupState<ID, OP, C, Self, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
+        mut y: GroupCrdtState<ID, OP, C, Self, ORD, GS>,
+    ) -> Result<GroupCrdtState<ID, OP, C, Self, ORD, GS>, Self::Error> {
         // Start by draining the existing filter and re-building all states.
         y.ignore.drain();
-        let mut y = Group::rebuild(y).expect("no errors when re-building a group");
+        let mut y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
         let mut filter: HashSet<OP> = Default::default();
 
         // Construct an operation map for easy look-up.
@@ -127,7 +127,7 @@ where
         // Traverse the graph visiting the operations in topological order.
         for target_operation_id in topo_sort.iter() {
             let Some(target_operation) = operations.get(target_operation_id) else {
-                return Err(GroupError::MissingOperation(*target_operation_id));
+                return Err(GroupCrdtError::MissingOperation(*target_operation_id));
             };
 
             let bubble = bubbles
@@ -151,7 +151,7 @@ where
                     }
 
                     let Some(bubble_operation) = operations.get(bubble_operation_id) else {
-                        return Err(GroupError::MissingOperation(*bubble_operation_id));
+                        return Err(GroupCrdtError::MissingOperation(*bubble_operation_id));
                     };
 
                     // If this concurrent operation is _not_ authored by the "target author" then we
@@ -187,7 +187,7 @@ where
                         let mut filter_tmp = filter.clone();
                         filter_tmp.retain(|op: &OP| !mutual_removes.contains(op));
                         y.ignore = filter_tmp;
-                        y = Group::rebuild(y).expect("no errors when re-building a group");
+                        y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
                         // Remove the visited bubble from the bubbles set.
                         bubbles.retain(|b| *b != bubble);
 
@@ -202,7 +202,7 @@ where
                                 HashSet::from_iter(target_operation.dependencies().clone());
 
                             // As we weren't in a bubble we can directly apply this action.
-                            let result = Group::apply_action(
+                            let result = GroupCrdt::apply_action(
                                 y,
                                 target_operation.id(),
                                 target_operation.author(),
@@ -213,7 +213,7 @@ where
                             match result {
                                 StateChangeResult::Ok { state } => state,
                                 StateChangeResult::Noop { error, .. } => {
-                                    return Err(GroupError::StateChangeError(
+                                    return Err(GroupCrdtError::StateChangeError(
                                         target_operation.id(),
                                         error,
                                     ));
@@ -235,7 +235,7 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,

@@ -8,7 +8,7 @@
 // src/group/action.rs
 // src/group/control_message.rs
 // src/group/group.rs (previously dgm)
-// src/group/crdt.rs (containing GroupState and GroupOperationHandler)
+// src/group/crdt.rs (containing GroupCrdtState and GroupOperationHandler)
 
 mod action;
 pub(crate) mod crdt;
@@ -20,7 +20,7 @@ pub mod resolver;
 
 pub use action::GroupAction;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
-pub use crdt::{Group, GroupError, GroupState, StateChangeResult};
+pub use crdt::{GroupCrdt, GroupCrdtState, GroupCrdtError, StateChangeResult};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
 
@@ -45,7 +45,7 @@ where
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error(transparent)]
-    Group(#[from] GroupError<ID, OP, C, RS, ORD, GS>),
+    Group(#[from] GroupCrdtError<ID, OP, C, RS, ORD, GS>),
 
     #[error("group must be created with at least one initial member")]
     EmptyGroup,
@@ -123,15 +123,15 @@ where
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
             ORD::Message,
-            State = GroupState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::Message: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    type State = GroupState<ID, OP, C, RS, ORD, GS>;
+    type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
     type Action = GroupControlMessage<ID, OP, C>;
     type Error = GroupManagerError<ID, OP, C, RS, ORD, GS>;
 
@@ -153,7 +153,7 @@ where
         initial_members.push(creator);
         initial_members.extend(members);
 
-        let y = GroupState::new(
+        let y = GroupCrdtState::new(
             self.my_id,
             group_id,
             self.store.clone(),
@@ -165,8 +165,8 @@ where
             action: GroupAction::Create { initial_members },
         };
 
-        let (y, operation) = Group::prepare(y, &action)?;
-        let y = Group::process(y, &operation)?;
+        let (y, operation) = GroupCrdt::prepare(y, &action)?;
+        let y = GroupCrdt::process(y, &operation)?;
 
         Ok((y, operation))
     }
@@ -178,14 +178,14 @@ where
     ) -> Result<Self::State, Self::Error> {
         let group_id = remote_operation.payload().group_id();
 
-        let y = GroupState::new(
+        let y = GroupCrdtState::new(
             self.my_id,
             group_id,
             self.store.clone(),
             self.orderer.clone(),
         );
 
-        let y = Group::process(y, &remote_operation)?;
+        let y = GroupCrdt::process(y, &remote_operation)?;
 
         Ok(y)
     }
@@ -199,7 +199,7 @@ where
         remote_operation: ORD::Message,
     ) -> Result<Self::State, Self::Error> {
         // Validation is performed internally by `process()`.
-        let y = Group::process(y, &remote_operation)?;
+        let y = GroupCrdt::process(y, &remote_operation)?;
 
         Ok(y)
     }
@@ -235,8 +235,8 @@ where
             },
         };
 
-        let (y, operation) = Group::prepare(y, &action)?;
-        let y = Group::process(y, &operation)?;
+        let (y, operation) = GroupCrdt::prepare(y, &action)?;
+        let y = GroupCrdt::process(y, &operation)?;
 
         Ok((y, operation))
     }
@@ -274,8 +274,8 @@ where
             },
         };
 
-        let (y, operation) = Group::prepare(y, &action)?;
-        let y = Group::process(y, &operation)?;
+        let (y, operation) = GroupCrdt::prepare(y, &action)?;
+        let y = GroupCrdt::process(y, &operation)?;
 
         Ok((y, operation))
     }
@@ -320,8 +320,8 @@ where
             },
         };
 
-        let (y, operation) = Group::prepare(y, &action)?;
-        let y = Group::process(y, &operation)?;
+        let (y, operation) = GroupCrdt::prepare(y, &action)?;
+        let y = GroupCrdt::process(y, &operation)?;
 
         Ok((y, operation))
     }
@@ -365,8 +365,8 @@ where
             },
         };
 
-        let (y, operation) = Group::prepare(y, &action)?;
-        let y = Group::process(y, &operation)?;
+        let (y, operation) = GroupCrdt::prepare(y, &action)?;
+        let y = GroupCrdt::process(y, &operation)?;
 
         Ok((y, operation))
     }
@@ -411,7 +411,7 @@ mod tests {
     }
 
     // The following tests are all focused on ensuring correct validation and returned error
-    // variants. `Group::prepare()` and `Group::process()` are tested elsewhere and are therefore
+    // variants. `GroupCrdt::prepare()` and `GroupCrdt::process()` are tested elsewhere and are therefore
     // excluded from explicit testing here.
     #[test]
     fn add_validation_errors() {

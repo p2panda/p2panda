@@ -8,7 +8,9 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
-use crate::group::{Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState};
+use crate::group::{
+    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupCrdtError, GroupMember,
+};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
@@ -20,15 +22,15 @@ const ADD_MEMBER_EDGE: &str = "#0091187F";
 const PREVIOUS_EDGE: &str = "#000000";
 const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
-impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<
             ORD::Message,
-            State = GroupState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+            State = GroupCrdtState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupCrdtError<ID, OP, C, RS, ORD, GS>,
         > + Clone
         + Debug,
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
@@ -154,7 +156,7 @@ where
         let color = if control_message.is_create() {
             OP_ROOT_NODE
         } else {
-            match Group::apply_action(
+            match GroupCrdt::apply_action(
                 self.clone(),
                 operation.id(),
                 operation.author(),

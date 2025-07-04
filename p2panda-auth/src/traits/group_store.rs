@@ -5,7 +5,7 @@
 use std::error::Error;
 use std::fmt::Display;
 
-use crate::group::{GroupControlMessage, GroupState};
+use crate::group::{GroupControlMessage, GroupCrdtState};
 use crate::traits::{IdentityHandle, OperationId, Ordering};
 
 /// API for global group store.
@@ -22,10 +22,11 @@ where
     fn insert(
         &self,
         id: &ID,
-        group: &GroupState<ID, OP, C, RS, ORD, Self>,
+        group: &GroupCrdtState<ID, OP, C, RS, ORD, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Get a group's state from the store.
     #[allow(clippy::type_complexity)]
-    fn get(&self, id: &ID) -> Result<Option<GroupState<ID, OP, C, RS, ORD, Self>>, Self::Error>;
+    fn get(&self, id: &ID)
+    -> Result<Option<GroupCrdtState<ID, OP, C, RS, ORD, Self>>, Self::Error>;
 }
