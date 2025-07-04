@@ -7,11 +7,12 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use petgraph::algo::toposort;
 
-use crate::group::graph::{concurrent_bubbles, has_path};
-use crate::group::{Access, Group, GroupControlMessage, GroupError, GroupState, StateChangeResult};
+use crate::Access;
+use crate::graph::{concurrent_bubbles, has_path};
+use crate::group::{
+    Group, GroupAction, GroupControlMessage, GroupError, GroupState, StateChangeResult,
+};
 use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
-
-use super::GroupAction;
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
 ///
@@ -278,11 +279,12 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    use crate::group::test_utils::Network;
-    use crate::group::tests::{
+    use crate::Access;
+    use crate::group::GroupMember;
+    use crate::group::crdt::tests::{
         add_member, assert_members, create_group, from_create, remove_member, sync,
     };
-    use crate::group::{Access, GroupMember};
+    use crate::test_utils::Network;
     use crate::traits::OperationId;
 
     impl OperationId for &str {}

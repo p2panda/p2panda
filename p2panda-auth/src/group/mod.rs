@@ -7,990 +7,36 @@
 // src/group/member.rs
 // src/group/action.rs
 // src/group/control_message.rs
-// src/group/auth_group.rs
+// src/group/group.rs (previously dgm)
+// src/group/crdt.rs (containing GroupState and GroupOperationHandler)
 
-use std::collections::{HashMap, HashSet};
+mod action;
+pub(crate) mod crdt;
+#[cfg(any(test, feature = "test_utils"))]
+mod display;
+mod member;
+mod message;
+pub mod resolver;
+
+pub use action::GroupAction;
+pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
+pub use crdt::{Group, GroupError, GroupState, StateChangeResult};
+pub use member::GroupMember;
+pub use message::GroupControlMessage;
+
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
 
-pub use crate::group::access::Access;
-pub use crate::group::dgm::{GroupManager, GroupManagerError};
-pub use crate::group::resolver::StrongRemove;
-pub use crate::group::state::{GroupMembersState, GroupMembershipError, MemberState};
-
+use crate::Access;
 use crate::traits::{
-    AuthGroup, GroupMembershipQuery, GroupStore, IdentityHandle, Operation, OperationId, Ordering,
-    Resolver,
+    AuthGroup, GroupMembership, GroupMembershipQuery, GroupStore, IdentityHandle, Operation,
+    OperationId, Ordering, Resolver,
 };
 
-mod access;
-mod dgm;
-#[cfg(any(test, feature = "test_utils"))]
-mod display;
-mod graph;
-mod resolver;
-mod state;
-#[cfg(any(test, feature = "test_utils"))]
-pub mod test_utils;
-#[cfg(test)]
-mod tests;
-
-/// A group member which can be a single stateless individual, or a stateful group. In both cases
-/// the member identifier is the same generic ID.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub enum GroupMember<ID> {
-    Individual(ID),
-    Group(ID),
-}
-
-impl<ID> GroupMember<ID>
-where
-    ID: Copy,
-{
-    /// Return the ID of a group member.
-    pub fn id(&self) -> ID {
-        match self {
-            GroupMember::Individual(id) => *id,
-            GroupMember::Group(id) => *id,
-        }
-    }
-}
-
-impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
-
-/// Actions which can be applied to a group.
-#[derive(Clone, Debug, PartialEq)]
-pub enum GroupAction<ID, C> {
-    Create {
-        initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-    },
-    Add {
-        member: GroupMember<ID>,
-        access: Access<C>,
-    },
-    Remove {
-        member: GroupMember<ID>,
-    },
-    Promote {
-        member: GroupMember<ID>,
-        access: Access<C>,
-    },
-    Demote {
-        member: GroupMember<ID>,
-        access: Access<C>,
-    },
-}
-
-impl<ID, C> GroupAction<ID, C>
-where
-    ID: Copy,
-{
-    /// Returns true if this is a create action.
-    pub fn is_create(&self) -> bool {
-        matches!(self, GroupAction::Create { .. })
-    }
-}
-
-/// Control messages which are processed by a group.
-///
-/// There are two variants, one containing a group action and the id of the group where the action
-/// should be applied. The other is a special message which can be used to "undo" a message which
-/// has been applied to the group in the past.
-#[derive(Clone, Debug)]
-pub enum GroupControlMessage<ID, OP, C> {
-    /// An action to apply to the group state.
-    GroupAction {
-        group_id: ID,
-        action: GroupAction<ID, C>,
-    },
-
-    /// A revoke message can be published in order to explicitly invalidate other messages already
-    /// included in a group graph. This action is agnostic to any, probably more nuanced,
-    /// resolving logic which reacts to group actions.
-    ///
-    /// TODO: revoking messages is not implemented yet. I'm still considering if it is required in
-    /// or initial group implementation or something that can come later. There are distinct
-    /// benefits to revoking messages, over "just" making sure to resolve concurrent group action
-    /// conflicts (for example with "strong removal") strategy. By issuing a revoke message
-    /// revoking the message which first added a member into the group, it's possible to
-    /// completely erase that member from the group history. There can be an implicit "seniority"
-    /// rule in play, where it's only possible for an admin to revoke messages that they
-    /// published, or from when they were in the group.
-    Revoke { group_id: ID, id: OP },
-}
-
-impl<ID, OP, C> GroupControlMessage<ID, OP, C>
-where
-    ID: Copy,
-{
-    /// Returns true if this is a create control message.
-    pub fn is_create(&self) -> bool {
-        matches!(
-            self,
-            GroupControlMessage::GroupAction {
-                action: GroupAction::Create { .. },
-                ..
-            }
-        )
-    }
-
-    /// Id of the group this message should be applied to.
-    pub fn group_id(&self) -> ID {
-        match self {
-            GroupControlMessage::Revoke { group_id, .. } => *group_id,
-            GroupControlMessage::GroupAction { group_id, .. } => *group_id,
-        }
-    }
-}
-
-/// The state of a group, the local actor id, as well as state objects for the global
-/// group store and orderer.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct GroupState<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle,
-    OP: OperationId,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
-    GS: GroupStore<ID, OP, C, RS, ORD>,
-{
-    /// ID of the local actor.
-    pub my_id: ID,
-
-    /// ID of the group.
-    pub group_id: ID,
-
-    /// Group state at every position in the operation graph.
-    pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
-
-    /// All operations processed by this group.
-    ///
-    /// Operations _must_ be kept in their partial-order (the order in which they were processed).
-    pub operations: Vec<ORD::Message>,
-
-    /// All operations who's actions should be ignored.
-    pub ignore: HashSet<OP>,
-
-    /// Operation graph for this group.
-    pub graph: DiGraphMap<OP, ()>,
-
-    /// State for the orderer.
-    pub orderer_y: ORD::State,
-
-    /// All groups known to this instance.
-    pub group_store: GS,
-
-    _phantom: PhantomData<RS>,
-}
-
-impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
-{
-    /// Instantiate a new group state.
-    pub fn new(my_id: ID, group_id: ID, group_store: GS, orderer_y: ORD::State) -> Self {
-        Self {
-            my_id,
-            group_id,
-            states: Default::default(),
-            operations: Default::default(),
-            ignore: Default::default(),
-            graph: Default::default(),
-            group_store,
-            orderer_y,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// The id of this group.
-    pub fn id(&self) -> ID {
-        self.group_id
-    }
-
-    /// The current graph tips for this group.
-    pub fn heads(&self) -> HashSet<OP> {
-        self.graph
-            // TODO: clone required here when converting the GraphMap into a Graph. We do this
-            // because the GraphMap api does not include the "externals" method, where as the
-            // Graph api does. We use GraphMap as we can then access nodes by the id we assign
-            // them rather than the internally assigned id generated when using Graph. We can use
-            // Graph and track the indexes ourselves in order to avoid this conversion, or maybe
-            // there is a way to get "externals" on GraphMap (which I didn't find yet). More
-            // investigation required.
-            .clone()
-            .into_graph::<usize>()
-            .externals(petgraph::Direction::Outgoing)
-            .map(|idx| self.graph.from_index(idx.index()))
-            .collect::<HashSet<_>>()
-    }
-
-    /// The current graph tips for this group and any sub-groups who are currently members.
-    #[allow(clippy::type_complexity)]
-    fn transitive_heads(&self) -> Result<HashSet<OP>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut transitive_heads = self.heads();
-        for (member, ..) in self.members() {
-            if let GroupMember::Group(id) = member {
-                let sub_group = self.get_sub_group(id)?;
-                transitive_heads.extend(sub_group.transitive_heads()?);
-            }
-        }
-
-        Ok(transitive_heads)
-    }
-
-    /// The current state of this group.
-    ///
-    /// This method gets the state at all graph tips and then merges them together into one new
-    /// state which represents the current state of the group.
-    pub fn current_state(&self) -> GroupMembersState<GroupMember<ID>, C> {
-        let mut current_state = GroupMembersState::default();
-        for state in self.heads() {
-            // Unwrap as all "head" states should exist.
-            let state = self.states.get(&state).unwrap();
-            current_state = state::merge(state.clone(), current_state);
-        }
-        current_state
-    }
-
-    fn state_at_inner(&self, dependencies: &HashSet<OP>) -> GroupMembersState<GroupMember<ID>, C> {
-        let mut y = GroupMembersState::default();
-        for id in dependencies.iter() {
-            let Some(previous_y) = self.states.get(id) else {
-                // We might be in a sub-group here processing dependencies which don't exist in
-                // this graph, in that case we just ignore missing states.
-                continue;
-            };
-            // Merge all dependency states from this group together.
-            y = state::merge(previous_y.clone(), y);
-        }
-
-        y
-    }
-
-    /// Get the state of a group at a certain point in it's history.
-    pub fn state_at(&self, dependencies: &HashSet<OP>) -> GroupMembersState<GroupMember<ID>, C> {
-        self.state_at_inner(dependencies)
-    }
-
-    fn members_at_inner(&self, dependencies: &HashSet<OP>) -> Vec<(GroupMember<ID>, Access<C>)> {
-        let y = self.state_at_inner(dependencies);
-        y.members
-            .into_iter()
-            .filter_map(|(id, state)| {
-                if state.is_member() {
-                    Some((id, state.access))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-    }
-
-    /// Get the group members at a certain point in groups history.
-    pub fn members_at(&self, dependencies: &HashSet<OP>) -> Vec<(GroupMember<ID>, Access<C>)> {
-        self.members_at_inner(dependencies)
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn transitive_members_at_inner(
-        &self,
-        dependencies: &HashSet<OP>,
-    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut members: HashMap<ID, Access<C>> = HashMap::new();
-
-        // Get members of a group at a certain point in the groups history.
-        for (member, root_access) in self.members_at_inner(dependencies) {
-            match member {
-                GroupMember::Individual(id) => {
-                    // If this is an individual member, then add them straight to the members map.
-                    members.insert(id, root_access.clone());
-                }
-                GroupMember::Group(id) => {
-                    // If this is a sub-group member, then get the sub-group state from the store
-                    // and recurse into the group passing the dependencies set which identify the
-                    // particular states we're interested in.
-                    let sub_group = self.get_sub_group(id)?;
-
-                    // The access level for all transitive members must not be greater than the
-                    // access level assigned to the current sub-group.
-                    let transitive_members = sub_group.transitive_members_at_inner(dependencies)?;
-
-                    // For each transitive member, add them to the members map if they were not
-                    // already a member, assigning them the correct access level. If they were
-                    // already a member, then modify their existing access level _if_ it elevates
-                    // their access to a higher level, but not higher than the current sub.
-                    for (transitive_member, transitive_access) in transitive_members {
-                        let root_access_copy = root_access.clone();
-                        members
-                            .entry(transitive_member)
-                            .and_modify(|access| {
-                                // If the transitive access level this member holds (the access
-                                // level the member has in it's sub-group) is greater than it's
-                                // current access level, but not greater than the root access
-                                // level (the access level initially assigned from the parent
-                                // group) then update the access level.
-                                if transitive_access > *access
-                                    && transitive_access <= root_access_copy
-                                {
-                                    *access = transitive_access.clone()
-                                }
-                            })
-                            .or_insert_with(|| {
-                                if transitive_access <= root_access_copy {
-                                    transitive_access
-                                } else {
-                                    root_access_copy
-                                }
-                            });
-                    }
-                }
-            }
-        }
-
-        Ok(members.into_iter().collect())
-    }
-
-    /// Get all transitive members of the group at a certain point in it's history.
-    ///
-    /// This method recurses into all sub-groups collecting all "tip" members, which are the
-    /// stateless "individual" members of a group, likely identified by a public key.
-    #[allow(clippy::type_complexity)]
-    pub fn transitive_members_at(
-        &self,
-        dependencies: &HashSet<OP>,
-    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let members = self.transitive_members_at_inner(dependencies)?;
-        Ok(members)
-    }
-
-    /// Get all current members of the group.
-    pub fn members(&self) -> Vec<(GroupMember<ID>, Access<C>)> {
-        self.current_state()
-            .members
-            .into_iter()
-            .filter_map(|(id, state)| {
-                if state.is_member() {
-                    Some((id, state.access))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-    }
-
-    /// Get all current transitive members of the group.
-    ///
-    /// This method recurses into all sub-groups collecting all "tip" members, which are the
-    /// stateless "individual" members of a group, likely identified by a public key.
-    #[allow(clippy::type_complexity)]
-    pub fn transitive_members(
-        &self,
-    ) -> Result<Vec<(ID, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let heads = self.transitive_heads()?;
-        let members = self.transitive_members_at(&heads)?;
-
-        Ok(members)
-    }
-
-    /// Get a sub group from the group store.
-    #[allow(clippy::type_complexity)]
-    fn get_sub_group(
-        &self,
-        id: ID,
-    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let y = self
-            .group_store
-            .get(&id)
-            .map_err(|error| GroupError::GroupStoreError(error))?;
-
-        // We expect that groups are created and correctly present in the store before we process
-        // any messages requiring us to query them, so this error can only occur if there is an
-        // error in any higher orchestration system.
-        let Some(y) = y else {
-            return Err(GroupError::MissingSubGroup(id));
-        };
-
-        Ok(y)
-    }
-
-    /// Get the maximum given access level for an actor at a certain point in the auth graph.
-    ///
-    /// An actor can be a direct individual member of a group, or a transitive member via a
-    /// sub-group. This is a helper method which finds the hightest access level a member has and
-    /// returns the group member which gives this actor the found access level.
-    ///
-    /// The passed dependencies array tells us which position in the graph to look at.
-    #[allow(clippy::type_complexity)]
-    pub fn max_access_identity(
-        &self,
-        actor: ID,
-        dependencies: &HashSet<OP>,
-    ) -> Result<Option<(GroupMember<ID>, Access<C>)>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut access_levels = Vec::new();
-
-        // Get members of a group at a certain point in the groups history.
-        for (member, root_access) in self.members_at(dependencies) {
-            match member {
-                // If this is an individual matching the actor then push it to the access levels
-                // vector.
-                GroupMember::Individual(id) => {
-                    if id == actor {
-                        access_levels.push((member, root_access));
-                    }
-                }
-                // If this is a group, then look into all transitive members to find any matches
-                // to the passed actor id.
-                GroupMember::Group(id) => {
-                    let sub_group = self.get_sub_group(id)?;
-                    if let Some((_, transitive_access)) = sub_group
-                        // @TODO: we would prefer to call transitive_members() here so as to
-                        //        account for the most recent sub-group state we know about. To do
-                        //        this we first need to adjust how sub-group states are attached
-                        //        to the root group graph.
-                        .transitive_members_at(dependencies)
-                        .unwrap()
-                        .iter()
-                        .find(|(member, _)| *member == actor)
-                    {
-                        // The actual access can't be greater than the access which was originally
-                        // given to the sub-group.
-                        let actual_access = if transitive_access < &root_access {
-                            transitive_access.clone()
-                        } else {
-                            root_access.clone()
-                        };
-                        access_levels.push((member, actual_access));
-                    }
-                }
-            }
-        }
-
-        let mut max_access: Option<(GroupMember<ID>, Access<C>)> = None;
-        for (id, access) in access_levels {
-            match max_access.clone() {
-                Some((_, prev_access)) => {
-                    if prev_access < access {
-                        max_access = Some((id, access))
-                    }
-                }
-                None => max_access = Some((id, access)),
-            }
-        }
-        Ok(max_access)
-    }
-}
-
-impl<ID, OP, C, RS, ORD, GS> GroupMembershipQuery<ID, OP, C> for GroupState<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
-{
-    type State = GroupState<ID, OP, C, RS, ORD, GS>;
-
-    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
-
-    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error> {
-        let member_state = y
-            .transitive_members()?
-            .into_iter()
-            .find(|(member_id, _state)| member_id == member);
-
-        if let Some(state) = member_state {
-            let access = state.1.to_owned();
-
-            Ok(access)
-        } else {
-            Err(GroupError::MemberNotFound(y.group_id, *member))
-        }
-    }
-
-    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error> {
-        let member_ids = y
-            .transitive_members()?
-            .into_iter()
-            .map(|(member_id, _state)| member_id)
-            .collect();
-
-        Ok(member_ids)
-    }
-
-    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        let member_state = y
-            .transitive_members()?
-            .into_iter()
-            .find(|(member_id, _state)| member_id == member);
-
-        let is_member = member_state.is_some();
-
-        Ok(is_member)
-    }
-
-    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        Ok(GroupState::access(y, member)?.is_pull())
-    }
-
-    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        Ok(GroupState::access(y, member)?.is_read())
-    }
-
-    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        Ok(GroupState::access(y, member)?.is_write())
-    }
-
-    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error> {
-        Ok(GroupState::access(y, member)?.is_manage())
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Group<ID, OP, C, RS, ORD, GS> {
-    _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
-}
-
-/// Core auth protocol for maintaining group membership state in a distributed system. Group
-/// members can be assigned different access levels, where only a sub-set of members can mutate
-/// the state of the group itself.
-///
-/// The core data type is a Directed Acyclic Graph of `GroupControlMessage`s. Messages contain
-/// group control messages which mutate the previous group state. Messages refer to the "previous"
-/// state (set of graph tips) which the action they contain should be applied to; these references
-/// make up the edges in the graph. Additionally, messages have a set of "dependencies" which
-/// could be part of any auth sub-group.
-///
-/// A requirement of the protocol is that all messages are processed in partial-order. When using
-/// a dependency graph structure (as is the case in this implementation) it is possible to achieve
-/// partial-ordering by only processing a message once all it's dependencies have themselves been
-/// processed.
-///
-/// Group state is maintained using a state-based CRDT `GroupMembersState`. Every time a message
-/// is processed, a new state is generated and added to the map of all states. When a new message
-/// is received, it's "previous" state is calculated and then the message applied, resulting in a
-/// new state. This approach allows one to use the state-based CRDT `merge` method to combine
-/// states from any points in the group history into a new state. This property is what allows us
-/// to process messages in partial- rather than total-order.
-///
-/// Group membership rules are checked when an action is applied to the previous state, read more
-/// in the `group_crdt` module.
-///
-/// This is an implementation of the `AuthGroup` trait which requires a `prepare` and `process`
-/// method. This implementation allows for providing several generic parameters which allows for
-/// integration into different systems and customization of how group change conflicts are
-/// handled.
-///
-/// - Resolver (RS): contains logic for deciding when group state rebuilds are required, and how
-///   concurrent actions are handled.
-/// - Orderer (ORD): the orderer implements an approach to ordering messages, the protocol
-///   requires that all messages are processed in partial-order, but exactly how this is achieved
-///   is not specified.
-/// - Group Store (GS): global store containing states for all known groups.
-impl<ID, OP, C, RS, ORD, GS> AuthGroup<ID, OP, RS, ORD> for Group<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    // @TODO: This is a very verbose trait bound. It would be nice to make this a trait alias but
-    // this feature is not supported in stable Rust yet. Creating a sub-trait is an option but
-    // this introduces it's own down sides. It also might be a sign that there should be better
-    // type separation between the Group and Resolver, this could be a good refactor later.
-    RS: Resolver<
-            ORD::Message,
-            State = GroupState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupError<ID, OP, C, RS, ORD, GS>,
-        > + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
-{
-    type State = GroupState<ID, OP, C, RS, ORD, GS>;
-    type Action = GroupControlMessage<ID, OP, C>;
-    type Error = GroupError<ID, OP, C, RS, ORD, GS>;
-
-    /// Prepare a next message/operation which should include all meta-data required for ordering
-    /// auth group operations. An ORD implementation needs to guarantee that operations are
-    /// processed after any dependencies they have on the group graph they are part of, as well as
-    /// any sub-groups.
-    ///
-    /// The method `GroupState::heads` and `GroupState::transitive_heads` can be used to retrieve the
-    /// operation ids of these operation dependencies.
-    fn prepare(
-        mut y: Self::State,
-        action: &Self::Action,
-    ) -> Result<(Self::State, ORD::Message), Self::Error> {
-        // Get the next operation from our global orderer. The operation wraps the action we want
-        // to perform, adding ordering and author meta-data.
-        let ordering_y = y.orderer_y;
-        let (ordering_y, operation) = match ORD::next_message(ordering_y, action) {
-            Ok(operation) => operation,
-            Err(_) => panic!(),
-        };
-
-        y.orderer_y = ordering_y;
-        Ok((y, operation))
-    }
-
-    /// Process an operation created locally or received from a remote peer.
-    fn process(mut y: Self::State, operation: &ORD::Message) -> Result<Self::State, Self::Error> {
-        let operation_id = operation.id();
-        let actor = operation.author();
-        let control_message = operation.payload();
-        let previous_operations = operation.previous();
-        let dependencies = HashSet::from_iter(operation.dependencies().clone());
-        let group_id = control_message.group_id();
-
-        // TODO: this is a bit of a sanity check, if we want to check for duplicate operation
-        // processing here in the groups api then there should probably be a hashset of operations
-        // ids maintained on the struct for efficient lookup.
-        if y.operations.iter().any(|op| op.id() == operation_id) {
-            // The operation has already been processed.
-            return Err(GroupError::DuplicateOperation(operation_id, group_id));
-        }
-
-        if y.group_id != group_id {
-            // The operation is not intended for this group.
-            return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
-        }
-
-        // The resolver implementation contains the logic which determines when rebuilds are
-        // required.
-        let rebuild_required = RS::rebuild_required(&y, operation)?;
-
-        // Add the new operation to the group state graph and operations vec. We validate it in
-        // the following steps.
-        y.graph.add_node(operation_id);
-        for previous in &previous_operations {
-            y.graph.add_edge(*previous, operation_id, ());
-        }
-        y.operations.push(operation.clone());
-
-        let y_i = if rebuild_required {
-            // Validate a concurrent operation against it's previous states.
-            //
-            // To do this we need to prune the graph to only include predecessor operations,
-            // re-calculate the filter, and re-build all states.
-            y = Group::validate_concurrent_action(y, operation)?;
-
-            // Process the group state with the provided resolver. This will populate the set of
-            // messages which should be ignored when applying group management actions and also
-            // rebuilds the group state (including the new operation).
-            RS::process(y)?
-        } else {
-            // Compute the member's state by applying the new operation to the current group
-            // state.
-            //
-            // This method validates that the actor has permission to perform the action.
-            match control_message {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    match Self::apply_action(y, operation_id, actor, &dependencies, &action)? {
-                        StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { error, .. } => {
-                            return Err(GroupError::StateChangeError(operation_id, error));
-                        }
-                        StateChangeResult::Filtered { .. } => {
-                            // Operations can't be filtered out before they were processed.
-                            unreachable!()
-                        }
-                    }
-                }
-
-                // TODO: Remove if we don't want to support revoke yet.
-                GroupControlMessage::Revoke { .. } => unimplemented!(),
-            }
-        };
-
-        // Update the group in the store.
-        y_i.group_store
-            .insert(&group_id, &y_i)
-            .map_err(|error| GroupError::GroupStoreError(error))?;
-
-        Ok(y_i)
-    }
-}
-
-/// Return types expected from applying an action to group state.
-enum StateChangeResult<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message, State = GroupState<ID, OP, C, RS, ORD, GS>> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
-{
-    /// Action was applied an no error occurred.
-    Ok {
-        state: GroupState<ID, OP, C, RS, ORD, GS>,
-    },
-    /// Action was not applied because it failed internal validation.
-    Noop {
-        state: GroupState<ID, OP, C, RS, ORD, GS>,
-        // @TODO: errors occurring here will be logged or reported to higher layers, but we will
-        // not react to them inside of the groups module in any other way. Until this
-        // logging/reporting is implemented the error is not used.
-        #[allow(unused)]
-        error: GroupMembershipError<GroupMember<ID>>,
-    },
-    /// Action was not applied because it has been filtered out.
-    Filtered {
-        state: GroupState<ID, OP, C, RS, ORD, GS>,
-    },
-}
-
-impl<ID, OP, C, RS, ORD, GS> Group<ID, OP, C, RS, ORD, GS>
-where
-    ID: IdentityHandle + Display,
-    OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<
-            ORD::Message,
-            State = GroupState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupError<ID, OP, C, RS, ORD, GS>,
-        > + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
-    ORD::Message: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
-{
-    /// Apply an action to a single group state.
-    #[allow(clippy::type_complexity)]
-    fn apply_action(
-        mut y: GroupState<ID, OP, C, RS, ORD, GS>,
-        id: OP,
-        actor: ID,
-        dependencies: &HashSet<OP>,
-        action: &GroupAction<ID, C>,
-    ) -> Result<StateChangeResult<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        // Compute the member's state by applying the new operation to it's claimed "dependencies"
-        // state.
-        let members_y = if dependencies.is_empty() {
-            GroupMembersState::default()
-        } else {
-            y.state_at(dependencies)
-        };
-
-        // Get the maximum access level for this actor.
-        let max_access = y.max_access_identity(actor, dependencies)?;
-        let member_id = match max_access {
-            Some((id, _)) => id,
-            None => GroupMember::Individual(actor),
-        };
-
-        // Only add the resulting member's state to the states map if the operation isn't
-        // flagged to be ignored.
-        if !y.ignore.contains(&id) {
-            let result = match action.clone() {
-                GroupAction::Add { member, access, .. } => {
-                    state::add(members_y.clone(), member_id, member, access)
-                }
-                GroupAction::Remove { member, .. } => {
-                    state::remove(members_y.clone(), member_id, member)
-                }
-                GroupAction::Promote { member, access } => {
-                    state::promote(members_y.clone(), member_id, member, access)
-                }
-                GroupAction::Demote { member, access } => {
-                    state::demote(members_y.clone(), member_id, member, access)
-                }
-                GroupAction::Create { initial_members } => Ok(state::create(&initial_members)),
-            };
-
-            match result {
-                Ok(members_y_i) => y.states.insert(id, members_y_i),
-                Err(err) => {
-                    // Errors occur here because the member attempting to perform an action
-                    // doesn't have a suitable access level, or that the action itself is invalid
-                    // (eg. promoting a non-existent member).
-                    //
-                    // 1) We expect some errors to occur when when intentionally filtered out
-                    //    actions cause later operations to become invalid.
-                    //
-                    // 2) Operations which other peers accepted into their graph _before_
-                    //    receiving some concurrent operation which caused them to be invalid.
-                    //
-                    // In both cases it's critical that the action does not cause any state
-                    // change, however we do want to accept them into our graph so as to ensure
-                    // consistency consistency across peers.
-                    y.states.insert(id, members_y);
-                    return Ok(StateChangeResult::Noop {
-                        state: y,
-                        error: err,
-                    });
-                }
-            };
-        } else {
-            y.states.insert(id, members_y);
-            return Ok(StateChangeResult::Filtered { state: y });
-        }
-        Ok(StateChangeResult::Ok { state: y })
-    }
-
-    /// Validate an action by applying it to the group state build to it's previous pointers.
-    ///
-    /// When processing an new operation we need to validate that the contained action is valid
-    /// before including it in the graph. By valid we mean that the author who composed the action
-    /// had authority to perform the claimed action, and that the action fulfils all group change
-    /// requirements. To check this we need to re-build the group state to the operations claimed
-    /// "previous" state. This process involves pruning any operations which are not predecessors
-    /// of the new operation resolving the group state again.
-    ///
-    /// This is a relatively expensive computation and should only be used when a re-build is
-    /// actually required.
-    #[allow(clippy::type_complexity)]
-    fn validate_concurrent_action(
-        mut y: GroupState<ID, OP, C, RS, ORD, GS>,
-        operation: &ORD::Message,
-    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        // Keep hold of original operations and graph.
-        let last_graph = y.graph.clone();
-        let last_ignore = y.ignore.clone();
-        let last_states = y.states.clone();
-        let last_operations = y.operations.clone();
-
-        // Collect predecessors of the new operation.
-        let mut predecessors = HashSet::new();
-        for previous in operation.previous() {
-            let reversed = Reversed(&y.graph);
-            let mut dfs_rev = DfsPostOrder::new(&reversed, previous);
-            while let Some(id) = dfs_rev.next(&reversed) {
-                predecessors.insert(id);
-            }
-        }
-
-        // Remove all other nodes from the graph.
-        let to_remove: Vec<_> = y
-            .graph
-            .node_identifiers()
-            .filter(|n| !predecessors.contains(n))
-            .collect();
-
-        for node in &to_remove {
-            y.graph.remove_node(*node);
-        }
-
-        y.operations
-            .retain(|operation| to_remove.iter().all(|remove| remove != &operation.id()));
-
-        y = RS::process(y)?;
-
-        let dependencies = HashSet::from_iter(operation.dependencies().clone());
-
-        let mut y_i = match operation.payload() {
-            GroupControlMessage::GroupAction { action, .. } => {
-                // println!("apply action during validate");
-                match Group::apply_action(
-                    y,
-                    operation.id(),
-                    operation.author(),
-                    &dependencies,
-                    &action,
-                )? {
-                    StateChangeResult::Ok { state, .. } => state,
-                    StateChangeResult::Noop { error, .. } => {
-                        // If a no-op occurs here then we should reject this operation, as the
-                        // author is trying to perform an invalid action, even from their
-                        // "point-of-view".
-                        return Err(GroupError::StateChangeError(operation.id(), error));
-                    }
-                    StateChangeResult::Filtered { state, .. } => {
-                        // TODO: introduce debug logging.
-                        state
-                    }
-                }
-            }
-            // TODO: revoke messages are not supported yet, either implement support or remove
-            // this message variant.
-            GroupControlMessage::Revoke { .. } => unimplemented!(),
-        };
-
-        y_i.graph = last_graph;
-        y_i.ignore = last_ignore;
-        y_i.states = last_states;
-        y_i.operations = last_operations;
-
-        Ok(y_i)
-    }
-
-    /// Rebuild the group state.
-    ///
-    /// This method assumes that a new filter has already calculated and added to the group state.
-    /// No graph traversal occurs, all operations are simply iterated over and applied to the
-    /// group state if they are not explicitly filtered. Errors resulting from "no-op" operations
-    /// (operations which became invalid because they are transitively dependent on filtered
-    /// operations) are expected and therefore not propagated further.
-    #[allow(clippy::type_complexity)]
-    fn rebuild(
-        y: GroupState<ID, OP, C, RS, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, C, RS, ORD, GS>, GroupError<ID, OP, C, RS, ORD, GS>> {
-        let mut y_i = GroupState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
-        y_i.ignore = y.ignore;
-
-        // Apply every operation.
-        let mut create_found = false;
-        for operation in y.operations {
-            let actor = operation.author();
-            let operation_id = operation.id();
-            let control_message = operation.payload();
-            let group_id = control_message.group_id();
-            let dependencies = HashSet::from_iter(operation.dependencies().clone());
-
-            // Sanity check: we should only apply operations for this group.
-            assert_eq!(y_i.group_id, group_id);
-
-            // Sanity check: the first operation must be a create and all other operations must not be.
-            if create_found {
-                assert!(!control_message.is_create())
-            } else {
-                assert!(control_message.is_create())
-            }
-
-            create_found = true;
-
-            y_i = match control_message {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    match Self::apply_action(y_i, operation_id, actor, &dependencies, &action)? {
-                        StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { state, .. } => {
-                            // We don't error here as during re-build we expect some operations to
-                            // fail if they've been transitively invalidated by a change in
-                            // filter.
-                            state
-                        }
-                        StateChangeResult::Filtered { state } => state,
-                    }
-                }
-                // TODO: revoke messages are not supported yet, either implement support or remove
-                // this message variant.
-                GroupControlMessage::Revoke { .. } => unimplemented!(),
-            };
-
-            // Add the new operation to the group state graph and operations vec.
-            y_i.graph.add_node(operation_id);
-            for previous in &operation.previous() {
-                y_i.graph.add_edge(*previous, operation_id, ());
-            }
-
-            // Push the operation to the group state.
-            y_i.operations.push(operation);
-        }
-
-        Ok(y_i)
-    }
-}
-
 #[derive(Debug, Error)]
-pub enum GroupError<ID, OP, C, RS, ORD, GS>
+pub enum GroupManagerError<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -998,34 +44,482 @@ where
     ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
-    #[error("duplicate operation {0} processed in group {1}")]
-    DuplicateOperation(OP, ID),
+    #[error(transparent)]
+    Group(#[from] GroupError<ID, OP, C, RS, ORD, GS>),
 
-    #[error("state change error processing operation {0}: {1:?}")]
-    StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
+    #[error("group must be created with at least one initial member")]
+    EmptyGroup,
 
-    #[error("expected sub-group {0} to exist in the store")]
-    MissingSubGroup(ID),
+    #[error("actor {0} is already a member of group {1}")]
+    GroupMember(ID, ID),
 
-    #[error("ordering error: {0}")]
-    OrderingError(ORD::Error),
+    #[error("actor {0} is not a member of group {1}")]
+    NotGroupMember(ID, ID),
 
-    #[error("group store error: {0}")]
-    GroupStoreError(GS::Error),
+    #[error("action requires manager access but actor {0} is {1} in group {2}")]
+    InsufficientAccess(ID, Access<C>, ID),
 
-    #[error("states {0:?} not found in group {1}")]
-    StatesNotFound(Vec<OP>, ID),
+    #[error("actor {0} already has access level {1} in group {2}")]
+    SameAccessLevel(ID, Access<C>, ID),
+}
 
-    #[error("expected dependencies {0:?} not found in group {1}")]
-    DependenciesNotFound(Vec<OP>, ID),
+/// Decentralised Group Management (DGM).
+///
+/// The `GroupManager` provides a high-level interface for creating and updating groups. These
+/// groups provide a means for restricting access to application data and resources. Groups are
+/// comprised of members, which may be individuals or groups, and are assigned a user-chosen
+/// identity. Each member is assigned a unique user-chosen identifier and access level. Access
+/// levels are used to enforce restrictions over access to data and the mutation of that data.
+/// They are also used to grant permissions which allow for mutating the group state by adding,
+/// removing and modifying the access level of other members.
+///
+/// Each `GroupManager` method performs internal validation to ensure that the desired group
+/// action is valid in light of the current group state. Attempting to perform an invalid action
+/// results in a `GroupManagerError`. For example, attempting to remove a member who is not
+/// currently part of the group.
+pub struct GroupManager<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, OP, C, RS, ORD>,
+{
+    /// ID of the local actor.
+    my_id: ID,
 
-    #[error("operation for group {0} processed in group {1}")]
-    IncorrectGroupId(ID, ID),
+    /// Store for all locally-known groups.
+    store: GS,
 
-    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
-    MissingOperation(OP),
+    /// Message orderer state.
+    orderer: ORD::State,
 
-    // TODO(glyph): I don't think this variant should live here. Maybe another error type?
-    #[error("state not found for group member {0} in group {1}")]
-    MemberNotFound(ID, ID),
+    _phantom: PhantomData<(ID, OP, C, RS, ORD, GS)>,
+}
+
+impl<ID, OP, C, RS, ORD, GS> GroupManager<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    RS: Resolver<ORD::Message>,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    GS: GroupStore<ID, OP, C, RS, ORD>,
+{
+    pub fn init(my_id: ID, store: GS, orderer: ORD::State) -> Self {
+        Self {
+            _phantom: PhantomData,
+            my_id,
+            store,
+            orderer,
+        }
+    }
+}
+
+impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C, ORD>
+    for GroupManager<ID, OP, C, RS, ORD, GS>
+where
+    ID: IdentityHandle + Display,
+    OP: OperationId + Ord + Display,
+    C: Clone + Debug + PartialEq + PartialOrd,
+    RS: Resolver<
+            ORD::Message,
+            State = GroupState<ID, OP, C, RS, ORD, GS>,
+            Error = GroupError<ID, OP, C, RS, ORD, GS>,
+        > + Debug,
+    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD::Message: Clone,
+    ORD::State: Clone,
+    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
+{
+    type State = GroupState<ID, OP, C, RS, ORD, GS>;
+    type Action = GroupControlMessage<ID, OP, C>;
+    type Error = GroupManagerError<ID, OP, C, RS, ORD, GS>;
+
+    /// Create a group.
+    ///
+    /// The creator of the group is automatically added as a manager.
+    ///
+    /// The caller of this method must ensure that the given `group_id` is globally unique. For
+    /// example, using a collision-resistant hash.
+    fn create(
+        &self,
+        group_id: ID,
+        members: Vec<(GroupMember<ID>, Access<C>)>,
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        // The creator of the group is automatically added as a manager.
+        let creator = (GroupMember::Individual(self.my_id), Access::manage());
+
+        let mut initial_members = Vec::new();
+        initial_members.push(creator);
+        initial_members.extend(members);
+
+        let y = GroupState::new(
+            self.my_id,
+            group_id,
+            self.store.clone(),
+            self.orderer.clone(),
+        );
+
+        let action = GroupControlMessage::GroupAction {
+            group_id: y.group_id,
+            action: GroupAction::Create { initial_members },
+        };
+
+        let (y, operation) = Group::prepare(y, &action)?;
+        let y = Group::process(y, &operation)?;
+
+        Ok((y, operation))
+    }
+
+    /// Create a group by processing a remote operation.
+    fn create_from_remote(
+        &self,
+        remote_operation: ORD::Message,
+    ) -> Result<Self::State, Self::Error> {
+        let group_id = remote_operation.payload().group_id();
+
+        let y = GroupState::new(
+            self.my_id,
+            group_id,
+            self.store.clone(),
+            self.orderer.clone(),
+        );
+
+        let y = Group::process(y, &remote_operation)?;
+
+        Ok(y)
+    }
+
+    /// Update the group by processing a remotely-authored action.
+    ///
+    /// The `group_id` of the given operation must be the same as that of the given `y`; failure to
+    /// meet this condition will result in an error.
+    fn receive_from_remote(
+        y: Self::State,
+        remote_operation: ORD::Message,
+    ) -> Result<Self::State, Self::Error> {
+        // Validation is performed internally by `process()`.
+        let y = Group::process(y, &remote_operation)?;
+
+        Ok(y)
+    }
+
+    /// Add a group member.
+    ///
+    /// The `adder` must be a manager and the `added` identity must not already be a member of
+    /// the group; failure to meet these conditions will result in an error.
+    fn add(
+        y: Self::State,
+        adder: ID,
+        added: ID,
+        access: Access<C>,
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        if !Self::State::is_manager(&y, &adder)? {
+            let adder_access = Self::State::access(&y, &adder)?;
+            return Err(GroupManagerError::InsufficientAccess(
+                adder,
+                adder_access,
+                y.group_id,
+            ));
+        }
+
+        if Self::State::is_member(&y, &added)? {
+            return Err(GroupManagerError::GroupMember(added, y.group_id));
+        }
+
+        let action = GroupControlMessage::GroupAction {
+            group_id: y.group_id,
+            action: GroupAction::Add {
+                member: GroupMember::Individual(added),
+                access,
+            },
+        };
+
+        let (y, operation) = Group::prepare(y, &action)?;
+        let y = Group::process(y, &operation)?;
+
+        Ok((y, operation))
+    }
+
+    /// Remove a group member.
+    ///
+    /// The `remover` must be a manager and the `removed` identity must already be a member
+    /// of the group; failure to meet these conditions will result in an error. A member can only
+    /// remove themself from the group if they are a manager.
+    // TODO: Consider introducing self-removal for non-manager members:
+    //
+    // https://github.com/p2panda/p2panda/issues/759
+    fn remove(
+        y: Self::State,
+        remover: ID,
+        removed: ID,
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        if !Self::State::is_manager(&y, &remover)? {
+            let remover_access = Self::State::access(&y, &remover)?;
+            return Err(GroupManagerError::InsufficientAccess(
+                remover,
+                remover_access,
+                y.group_id,
+            ));
+        }
+
+        if !Self::State::is_member(&y, &removed)? {
+            return Err(GroupManagerError::NotGroupMember(removed, y.group_id));
+        }
+
+        let action = GroupControlMessage::GroupAction {
+            group_id: y.group_id,
+            action: GroupAction::Remove {
+                member: GroupMember::Individual(removed),
+            },
+        };
+
+        let (y, operation) = Group::prepare(y, &action)?;
+        let y = Group::process(y, &operation)?;
+
+        Ok((y, operation))
+    }
+
+    /// Promote a group member to the given access level.
+    ///
+    /// The `promoter` must be a manager and the `promoted` identity must already be a member of
+    /// the group; failure to meet these conditions will result in an error. A redundant access
+    /// level assignment will also result in an error; for example, if the `promoted` member
+    /// currently has `Read` access and the given access is also `Read`.
+    fn promote(
+        y: Self::State,
+        promoter: ID,
+        promoted: ID,
+        access: Access<C>,
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        if !Self::State::is_manager(&y, &promoter)? {
+            let promoter_access = Self::State::access(&y, &promoter)?;
+            return Err(GroupManagerError::InsufficientAccess(
+                promoter,
+                promoter_access,
+                y.group_id,
+            ));
+        }
+
+        if !Self::State::is_member(&y, &promoted)? {
+            return Err(GroupManagerError::NotGroupMember(promoted, y.group_id));
+        }
+
+        // Prevent redundant access level assignment.
+        if Self::State::access(&y, &promoted)? == access {
+            return Err(GroupManagerError::SameAccessLevel(
+                promoted, access, y.group_id,
+            ));
+        }
+
+        let action = GroupControlMessage::GroupAction {
+            group_id: y.group_id,
+            action: GroupAction::Promote {
+                member: GroupMember::Individual(promoted),
+                access,
+            },
+        };
+
+        let (y, operation) = Group::prepare(y, &action)?;
+        let y = Group::process(y, &operation)?;
+
+        Ok((y, operation))
+    }
+
+    /// Demote a group member to the given access level.
+    ///
+    /// The `demoter` must be a manager and the `demoted` identity must already be a member of
+    /// the group; failure to meet these conditions will result in an error. A redundant access
+    /// level assignment will also result in an error; for example, if the `demoted` member
+    /// currently has `Manage` access and the given access is also `Manage`.
+    fn demote(
+        y: Self::State,
+        demoter: ID,
+        demoted: ID,
+        access: Access<C>,
+    ) -> Result<(Self::State, ORD::Message), Self::Error> {
+        if !Self::State::is_manager(&y, &demoter)? {
+            let demoter_access = Self::State::access(&y, &demoter)?;
+            return Err(GroupManagerError::InsufficientAccess(
+                demoter,
+                demoter_access,
+                y.group_id,
+            ));
+        }
+
+        if !Self::State::is_member(&y, &demoted)? {
+            return Err(GroupManagerError::NotGroupMember(demoted, y.group_id));
+        }
+
+        if Self::State::access(&y, &demoted)? == access {
+            return Err(GroupManagerError::SameAccessLevel(
+                demoted, access, y.group_id,
+            ));
+        }
+
+        let action = GroupControlMessage::GroupAction {
+            group_id: y.group_id,
+            action: GroupAction::Demote {
+                member: GroupMember::Individual(demoted),
+                access,
+            },
+        };
+
+        let (y, operation) = Group::prepare(y, &action)?;
+        let y = Group::process(y, &operation)?;
+
+        Ok((y, operation))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    use crate::test_utils::{TestGroupState, TestGroupStore, TestOrdererState};
+
+    use super::*;
+
+    const ALICE: char = 'A';
+    const BOB: char = 'B';
+    const CLAIRE: char = 'C';
+    const DAVE: char = 'D';
+
+    const MY_ID: char = 'T';
+    const GROUP_ID: char = 'G';
+
+    // Initialise the group manager and create a group with three initial members.
+    fn setup() -> TestGroupState {
+        let rng = StdRng::from_os_rng();
+
+        let store = TestGroupStore::default();
+        let orderer = TestOrdererState::new(MY_ID, store.clone(), rng);
+
+        let initial_members = [
+            (GroupMember::Individual(ALICE), Access::manage()),
+            (GroupMember::Individual(BOB), Access::read()),
+            (GroupMember::Individual(CLAIRE), Access::write()),
+        ]
+        .to_vec();
+
+        let group = GroupManager::init(MY_ID, store, orderer);
+
+        let (group_y, _operation) = group.create(GROUP_ID, initial_members).unwrap();
+
+        group_y
+    }
+
+    // The following tests are all focused on ensuring correct validation and returned error
+    // variants. `Group::prepare()` and `Group::process()` are tested elsewhere and are therefore
+    // excluded from explicit testing here.
+    #[test]
+    fn add_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::add(y.clone(), BOB, DAVE, Access::pull()),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+
+        // Claire is already a group member.
+        assert!(matches!(
+            GroupManager::add(y, ALICE, CLAIRE, Access::pull()),
+            Err(GroupManagerError::GroupMember(CLAIRE, GROUP_ID))
+        ));
+    }
+
+    #[test]
+    fn remove_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::remove(y.clone(), BOB, CLAIRE),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::remove(y, ALICE, DAVE),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+    }
+
+    #[test]
+    fn promote_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::promote(y.clone(), BOB, CLAIRE, Access::manage()),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::promote(y.clone(), ALICE, DAVE, Access::read()),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+
+        // Bob already has `Read` access.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::promote(y, ALICE, BOB, Access::read()),
+            Err(GroupManagerError::SameAccessLevel(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+    }
+
+    #[test]
+    fn demote_validation_errors() {
+        let y = setup();
+
+        // Bob is not a manager.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::demote(y.clone(), BOB, CLAIRE, Access::pull()),
+            Err(GroupManagerError::InsufficientAccess(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+
+        // Dave is not a group member.
+        assert!(matches!(
+            GroupManager::demote(y.clone(), ALICE, DAVE, Access::read()),
+            Err(GroupManagerError::NotGroupMember(DAVE, GROUP_ID))
+        ));
+
+        // Bob already has `Read` access.
+        let _expected_access = <Access>::read();
+        assert!(matches!(
+            GroupManager::demote(y, ALICE, BOB, Access::read()),
+            Err(GroupManagerError::SameAccessLevel(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
+        ));
+    }
 }

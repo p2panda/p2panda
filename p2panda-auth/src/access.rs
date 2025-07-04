@@ -93,7 +93,7 @@ impl<C> Access<C> {
 mod tests {
     use std::cmp::Ordering;
 
-    use crate::group::Access;
+    use crate::Access;
 
     /// Conditions which models access based on paths. Having access to "/public" gives you access
     /// to "/public/stuff" and "/public/other/stuff" but not "/private" or "/private/stuff".
