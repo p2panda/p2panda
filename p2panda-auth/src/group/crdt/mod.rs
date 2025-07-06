@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
+use petgraph::algo::toposort;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 use thiserror::Error;
@@ -82,9 +83,7 @@ where
     pub states: HashMap<OP, GroupMembersState<GroupMember<ID>, C>>,
 
     /// All operations processed by this group.
-    ///
-    /// Operations _must_ be kept in their partial-order (the order in which they were processed).
-    pub operations: Vec<ORD::Operation>,
+    pub operations: HashMap<OP, ORD::Operation>,
 
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
@@ -591,14 +590,14 @@ where
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
 
-        if y.operations.iter().any(|op| op.id() == operation_id) {
-            // The operation has already been processed.
-            return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
-        }
-
         if y.group_id != group_id {
             // The operation is not intended for this group.
             return Err(GroupCrdtError::IncorrectGroupId(group_id, y.group_id));
+        }
+
+        if y.operations.get(&operation_id).is_some() {
+            // The operation has already been processed.
+            return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
         }
 
         // The resolver implementation contains the logic which determines when rebuilds are
@@ -611,7 +610,8 @@ where
         for previous in &previous_operations {
             y.graph.add_edge(*previous, operation_id, ());
         }
-        y.operations.push(operation.clone());
+
+        y.operations.insert(operation_id, operation.clone());
 
         let y_i = if rebuild_required {
             // Validate a concurrent operation against it's previous states.
@@ -751,7 +751,6 @@ where
         let last_graph = y.graph.clone();
         let last_ignore = y.ignore.clone();
         let last_states = y.states.clone();
-        let last_operations = y.operations.clone();
 
         // Collect predecessors of the new operation.
         let mut predecessors = HashSet::new();
@@ -773,9 +772,6 @@ where
         for node in &to_remove {
             y.graph.remove_node(*node);
         }
-
-        y.operations
-            .retain(|operation| to_remove.iter().all(|remove| remove != &operation.id()));
 
         y = RS::process(y)?;
 
@@ -812,7 +808,6 @@ where
         y_i.graph = last_graph;
         y_i.ignore = last_ignore;
         y_i.states = last_states;
-        y_i.operations = last_operations;
 
         Ok(y_i)
     }
@@ -829,12 +824,19 @@ where
         y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
     ) -> Result<GroupCrdtState<ID, OP, C, RS, ORD, GS>, GroupCrdtError<ID, OP, C, RS, ORD, GS>>
     {
-        let mut y_i = GroupCrdtState::new(y.my_id, y.group_id, y.group_store.clone(), y.orderer_y);
+        let mut y_i = GroupCrdtState::new(y.my_id, y.group_id, y.group_store, y.orderer_y);
         y_i.ignore = y.ignore;
+        let operations = y.operations;
+
+        let topo_sort =
+            toposort(&y.graph, None).expect("group operation sets can be ordered topologically");
 
         // Apply every operation.
         let mut create_found = false;
-        for operation in y.operations {
+        for operation_id in topo_sort {
+            let operation = operations
+                .get(&operation_id)
+                .expect("all processed operations exist");
             let actor = operation.author();
             let operation_id = operation.id();
             let control_message = operation.payload();
@@ -876,11 +878,9 @@ where
             for previous in &operation.previous() {
                 y_i.graph.add_edge(*previous, operation_id, ());
             }
-
-            // Push the operation to the group state.
-            y_i.operations.push(operation);
         }
 
+        y_i.operations = operations;
         Ok(y_i)
     }
 }
