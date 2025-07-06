@@ -64,7 +64,7 @@ where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
@@ -189,32 +189,26 @@ where
                     }
                 }
                 None => {
-                    y = match target_operation.payload() {
-                        GroupControlMessage::GroupAction { action, .. } => {
-                            let dependencies =
-                                HashSet::from_iter(target_operation.dependencies().clone());
+                    let dependencies = HashSet::from_iter(target_operation.dependencies().clone());
 
-                            // As we weren't in a bubble we can directly apply this action.
-                            let result = GroupCrdt::apply_action(
-                                y,
+                    // As we weren't in a bubble we can directly apply this action.
+                    let result = GroupCrdt::apply_action(
+                        y,
+                        target_operation.id(),
+                        target_operation.author(),
+                        &dependencies,
+                        &target_operation.payload().action,
+                    )?;
+
+                    y = match result {
+                        StateChangeResult::Ok { state } => state,
+                        StateChangeResult::Noop { error, .. } => {
+                            return Err(GroupCrdtError::StateChangeError(
                                 target_operation.id(),
-                                target_operation.author(),
-                                &dependencies,
-                                &action,
-                            )?;
-
-                            match result {
-                                StateChangeResult::Ok { state } => state,
-                                StateChangeResult::Noop { error, .. } => {
-                                    return Err(GroupCrdtError::StateChangeError(
-                                        target_operation.id(),
-                                        error,
-                                    ));
-                                }
-                                StateChangeResult::Filtered { state } => state,
-                            }
+                                error,
+                            ));
                         }
-                        GroupControlMessage::Revoke { .. } => unimplemented!(),
+                        StateChangeResult::Filtered { state } => state,
                     };
                     visited.drain();
                 }
@@ -233,16 +227,13 @@ where
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
     /// If the given operation is an action which removes or demotes a manager member, return the
     /// ID of the target member.
     fn removed_manager(&self, operation: &ORD::Operation) -> Option<ID> {
-        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
-            // Revoke operations not yet supported.
-            unimplemented!()
-        };
+        let action = operation.payload().action;
 
         let removed_or_demoted_member = match action {
             GroupAction::Remove { member } => member,

@@ -26,7 +26,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ID, OP, C, ORD, GS>,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error("duplicate operation {0} processed in group {1}")]
@@ -70,7 +70,7 @@ pub struct GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// ID of the local actor.
@@ -106,7 +106,7 @@ where
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     /// Instantiate a new group state.
@@ -409,7 +409,7 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
 {
     type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
@@ -546,7 +546,7 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
@@ -559,7 +559,7 @@ where
     #[allow(clippy::type_complexity)]
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
-        action: &GroupControlMessage<ID, OP, C>,
+        action: &GroupControlMessage<ID, C>,
     ) -> Result<
         (GroupCrdtState<ID, OP, C, RS, ORD, GS>, ORD::Operation),
         GroupCrdtError<ID, OP, C, RS, ORD, GS>,
@@ -629,22 +629,21 @@ where
             // state.
             //
             // This method validates that the actor has permission to perform the action.
-            match control_message {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    match Self::apply_action(y, operation_id, actor, &dependencies, &action)? {
-                        StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { error, .. } => {
-                            return Err(GroupCrdtError::StateChangeError(operation_id, error));
-                        }
-                        StateChangeResult::Filtered { .. } => {
-                            // Operations can't be filtered out before they were processed.
-                            unreachable!()
-                        }
-                    }
+            match Self::apply_action(
+                y,
+                operation_id,
+                actor,
+                &dependencies,
+                &control_message.action,
+            )? {
+                StateChangeResult::Ok { state } => state,
+                StateChangeResult::Noop { error, .. } => {
+                    return Err(GroupCrdtError::StateChangeError(operation_id, error));
                 }
-
-                // TODO: Remove if we don't want to support revoke yet.
-                GroupControlMessage::Revoke { .. } => unimplemented!(),
+                StateChangeResult::Filtered { .. } => {
+                    // Operations can't be filtered out before they were processed.
+                    unreachable!()
+                }
             }
         };
 
@@ -777,32 +776,21 @@ where
 
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        let mut y_i = match operation.payload() {
-            GroupControlMessage::GroupAction { action, .. } => {
-                // println!("apply action during validate");
-                match GroupCrdt::apply_action(
-                    y,
-                    operation.id(),
-                    operation.author(),
-                    &dependencies,
-                    &action,
-                )? {
-                    StateChangeResult::Ok { state, .. } => state,
-                    StateChangeResult::Noop { error, .. } => {
-                        // If a no-op occurs here then we should reject this operation, as the
-                        // author is trying to perform an invalid action, even from their
-                        // "point-of-view".
-                        return Err(GroupCrdtError::StateChangeError(operation.id(), error));
-                    }
-                    StateChangeResult::Filtered { state, .. } => {
-                        // TODO: introduce debug logging.
-                        state
-                    }
-                }
+        let mut y_i = match Self::apply_action(
+            y,
+            operation.id(),
+            operation.author(),
+            &dependencies,
+            &operation.payload().action,
+        )? {
+            StateChangeResult::Ok { state } => state,
+            StateChangeResult::Noop { error, .. } => {
+                return Err(GroupCrdtError::StateChangeError(operation.id(), error));
             }
-            // TODO: revoke messages are not supported yet, either implement support or remove
-            // this message variant.
-            GroupControlMessage::Revoke { .. } => unimplemented!(),
+            StateChangeResult::Filtered { .. } => {
+                // Operations can't be filtered out before they were processed.
+                unreachable!()
+            }
         };
 
         y_i.graph = last_graph;
@@ -855,22 +843,21 @@ where
 
             create_found = true;
 
-            y_i = match control_message {
-                GroupControlMessage::GroupAction { action, .. } => {
-                    match Self::apply_action(y_i, operation_id, actor, &dependencies, &action)? {
-                        StateChangeResult::Ok { state } => state,
-                        StateChangeResult::Noop { state, .. } => {
-                            // We don't error here as during re-build we expect some operations to
-                            // fail if they've been transitively invalidated by a change in
-                            // filter.
-                            state
-                        }
-                        StateChangeResult::Filtered { state } => state,
-                    }
+            y_i = match Self::apply_action(
+                y_i,
+                operation_id,
+                actor,
+                &dependencies,
+                &control_message.action,
+            )? {
+                StateChangeResult::Ok { state } => state,
+                StateChangeResult::Noop { state, .. } => {
+                    // We don't error here as during re-build we expect some operations to
+                    // fail if they've been transitively invalidated by a change in
+                    // filter.
+                    state
                 }
-                // TODO: revoke messages are not supported yet, either implement support or remove
-                // this message variant.
-                GroupControlMessage::Revoke { .. } => unimplemented!(),
+                StateChangeResult::Filtered { state } => state,
             };
 
             // Add the new operation to the group state graph and operations vec.
@@ -892,7 +879,7 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
@@ -951,7 +938,7 @@ pub(crate) mod tests {
         let store = TestGroupStore::default();
         let orderer = TestOrdererState::new(actor_id, store.clone(), StdRng::from_rng(rng));
         let group = TestGroupState::new(actor_id, group_id, store, orderer);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Create {
                 initial_members: members
@@ -971,7 +958,7 @@ pub(crate) mod tests {
         member: char,
         access: Access<()>,
     ) -> (TestGroupState, TestOperation) {
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(member),
@@ -988,7 +975,7 @@ pub(crate) mod tests {
         group_id: char,
         member: char,
     ) -> (TestGroupState, TestOperation) {
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Remove {
                 member: GroupMember::Individual(member),
@@ -1025,7 +1012,7 @@ pub(crate) mod tests {
         let group_y = TestGroupState::new(alice, group_id, store, orderer_y);
 
         // Create group with alice as initial admin member.
-        let control_message_001 = GroupControlMessage::GroupAction {
+        let control_message_001 = GroupControlMessage {
             group_id,
             action: GroupAction::Create {
                 initial_members: vec![(GroupMember::Individual(alice), Access::manage())],
@@ -1043,7 +1030,7 @@ pub(crate) mod tests {
 
         // Add bob with read access.
         let bob = 'B';
-        let control_message_002 = GroupControlMessage::GroupAction {
+        let control_message_002 = GroupControlMessage {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(bob),
@@ -1065,7 +1052,7 @@ pub(crate) mod tests {
 
         // Add claire with write access.
         let claire = 'C';
-        let control_message_003 = GroupControlMessage::GroupAction {
+        let control_message_003 = GroupControlMessage {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(claire),
@@ -1087,7 +1074,7 @@ pub(crate) mod tests {
         );
 
         // Promote claire to admin.
-        let control_message_004 = GroupControlMessage::GroupAction {
+        let control_message_004 = GroupControlMessage {
             group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(claire),
@@ -1109,7 +1096,7 @@ pub(crate) mod tests {
         );
 
         // Demote bob to poll access.
-        let control_message_005 = GroupControlMessage::GroupAction {
+        let control_message_005 = GroupControlMessage {
             group_id,
             action: GroupAction::Demote {
                 member: GroupMember::Individual(bob),
@@ -1131,7 +1118,7 @@ pub(crate) mod tests {
         );
 
         // Remove bob.
-        let control_message_006 = GroupControlMessage::GroupAction {
+        let control_message_006 = GroupControlMessage {
             group_id,
             action: GroupAction::Remove {
                 member: GroupMember::Individual(bob),
@@ -1178,7 +1165,7 @@ pub(crate) mod tests {
             GroupCrdtState::new(alice, alice_team_group, store.clone(), alice_orderer_y);
 
         // Control message creating the devices group, with alice, alice_laptop and alice mobile as members.
-        let control_message_001 = GroupControlMessage::GroupAction {
+        let control_message_001 = GroupControlMessage {
             group_id: devices_group_y.id(),
             action: GroupAction::Create {
                 initial_members: vec![
@@ -1209,7 +1196,7 @@ pub(crate) mod tests {
         );
 
         // Create alice's team group, with alice as the only member.
-        let control_message_002 = GroupControlMessage::GroupAction {
+        let control_message_002 = GroupControlMessage {
             group_id: team_group_y.id(),
             action: GroupAction::Create {
                 initial_members: vec![(GroupMember::Individual(alice), Access::manage())],
@@ -1224,7 +1211,7 @@ pub(crate) mod tests {
         let team_group_y = TestGroup::process(team_group_y, &operation_002).unwrap();
 
         // Add alice's devices group as a member of her teams group with read access.
-        let control_message_003 = GroupControlMessage::GroupAction {
+        let control_message_003 = GroupControlMessage {
             group_id: team_group_y.id(),
             action: GroupAction::Add {
                 member: GroupMember::Group(devices_group_y.id()),
@@ -1800,7 +1787,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(bob),
@@ -1824,7 +1811,7 @@ pub(crate) mod tests {
                 author: alice,
                 dependencies: previous.clone(),
                 previous: previous.clone(),
-                payload: GroupControlMessage::GroupAction {
+                payload: GroupControlMessage {
                     group_id,
                     action: GroupAction::Remove {
                         member: GroupMember::Individual(claire),
@@ -1842,7 +1829,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
                     member: GroupMember::Individual(claire),
@@ -1863,7 +1850,7 @@ pub(crate) mod tests {
             author: bob,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -1887,7 +1874,7 @@ pub(crate) mod tests {
                 author: alice,
                 dependencies: previous.clone(),
                 previous: previous.clone(),
-                payload: GroupControlMessage::GroupAction {
+                payload: GroupControlMessage {
                     group_id,
                     action: GroupAction::Remove {
                         member: GroupMember::Individual(bob),
@@ -1905,7 +1892,7 @@ pub(crate) mod tests {
             author: bob,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -1927,7 +1914,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
                     member: GroupMember::Individual(claire),
@@ -1949,7 +1936,7 @@ pub(crate) mod tests {
             author: eve,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -1971,7 +1958,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
                     member: GroupMember::Individual(eve),
@@ -2038,7 +2025,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(bob),
@@ -2060,7 +2047,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
                     member: GroupMember::Individual(claire),
@@ -2078,7 +2065,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
                     member: GroupMember::Individual(claire),
@@ -2099,7 +2086,7 @@ pub(crate) mod tests {
             author: bob,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -2121,7 +2108,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
                     member: GroupMember::Individual(bob),
@@ -2139,7 +2126,7 @@ pub(crate) mod tests {
             author: bob,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -2161,7 +2148,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
                     member: GroupMember::Individual(claire),
@@ -2183,7 +2170,7 @@ pub(crate) mod tests {
             author: eve,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
                     member: GroupMember::Individual(dave),
@@ -2205,7 +2192,7 @@ pub(crate) mod tests {
             author: alice,
             dependencies: previous.clone(),
             previous: previous.clone(),
-            payload: GroupControlMessage::GroupAction {
+            payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
                     member: GroupMember::Individual(eve),
