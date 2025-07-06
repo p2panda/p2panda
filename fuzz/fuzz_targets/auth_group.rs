@@ -259,7 +259,7 @@ impl Member {
             self.y_orderer.clone(),
         );
 
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Create {
                 initial_members: initial_members.clone(),
@@ -342,7 +342,7 @@ impl Member {
         let result = match operation {
             TestGroupAction::Noop => Ok((y_group, None)),
             TestGroupAction::Action(action) => {
-                let group_operation = GroupControlMessage::GroupAction {
+                let group_operation = GroupControlMessage {
                     group_id: y_group.group_id,
                     action: action.clone(),
                 };
