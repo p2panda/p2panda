@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 
+use petgraph::algo::toposort;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
@@ -66,7 +67,7 @@ where
         root: Self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
-        for operation in &self.operations {
+        for operation in self.operations.values() {
             graph.add_node((Some(operation.id()), self.format_operation(operation)));
 
             let (operation_idx, _) = graph
@@ -331,14 +332,16 @@ where
             }
             GroupMember::Group(id) => {
                 let sub_group = self.get_sub_group(id).unwrap();
-                let create_operation = sub_group
-                    .operations
+
+                let topo_sort = toposort(&sub_group.graph, None)
+                    .expect("group operation sets can be ordered topologically");
+                let create_op_id = topo_sort
                     .first()
-                    .expect("create operation exists");
+                    .expect("at least one operation exists in graph");
 
                 let create_node = graph.node_references().find(|(_, (op, _))| {
                     if let Some(op) = op {
-                        *op == create_operation.id()
+                        op == create_op_id
                     } else {
                         false
                     }
@@ -352,7 +355,7 @@ where
                             .node_references()
                             .find(|(_, (op, _))| {
                                 if let Some(op) = op {
-                                    *op == create_operation.id()
+                                    op == create_op_id
                                 } else {
                                     false
                                 }

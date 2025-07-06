@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Strong remove group resolver implementation.
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -100,15 +100,8 @@ where
         let mut y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
         let mut filter: HashSet<OP> = Default::default();
 
-        // Construct an operation map for easy look-up.
-        //
-        // @TODO: make operations a map on group state struct.
-        let operations: HashMap<OP, ORD::Operation> = y
-            .operations
-            .clone()
-            .into_iter()
-            .map(|op| (op.id(), op))
-            .collect();
+        // @TODO: avoid cloning operations here.
+        let operations = y.operations.clone();
 
         // Keep track of mutual removes (which occur in one bubble) so that we can exclude these
         // from the filter later.
@@ -230,7 +223,6 @@ where
 
         // Sanity check: all bubbles should be visited completely.
         assert!(bubbles.is_empty(), "{:?}", bubbles);
-
         Ok(y)
     }
 }
