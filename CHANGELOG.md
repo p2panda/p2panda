@@ -9,14 +9,13 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-## [0.4.0] - 14/04/2025
+## [0.4.0] - 07/07/2025
 
 ### Added
 
 - `p2panda-auth`: decentralised group management and authorization [#757](https://github.com/p2panda/p2panda/issues/757) 🥞
 - `p2panda-encryption`: decentralized data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
-- Introduce core group CRDT for auth [#748](https://github.com/p2panda/p2panda/pull/748)
 
 ## [0.3.1] - 14/04/2025
 
