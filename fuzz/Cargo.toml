@@ -9,8 +9,10 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+p2panda-auth = { path = "../p2panda-auth", features = ["test_utils"] }
 p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
 p2panda-encryption = { path = "../p2panda-encryption", features = ["test_utils"] }
+rand = { version = "0.9.1", features = ["alloc"] }
 
 [[bin]]
 name = "header_e2e"
@@ -20,6 +22,7 @@ doc = false
 bench = false
 
 [[bin]]
+<<<<<<< HEAD
 name = "groups_2sm"
 path = "fuzz_targets/groups_2sm.rs"
 test = false
@@ -29,6 +32,10 @@ bench = false
 [[bin]]
 name = "groups_message"
 path = "fuzz_targets/groups_message.rs"
+=======
+name = "auth_group"
+path = "fuzz_targets/auth_group.rs"
+>>>>>>> 5de5096d (`p2panda-auth` fuzz tests (#756))
 test = false
 doc = false
 bench = false
