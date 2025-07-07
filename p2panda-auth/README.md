@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Data-type-agnostic p2p networking</strong>
+  <strong>Decentralised group management with fine-grained, per-member permissions</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -85,21 +85,21 @@ turn.
 
 The provided "strong removal" resolver defines the following rules:
 
-1) Removal or demotion of a manager causes any concurrent actions by that member to be
+1. Removal or demotion of a manager causes any concurrent actions by that member to be
    invalidated
-2) Mutual removals, where two managers remove or demote one another concurrently, are not
+2. Mutual removals, where two managers remove or demote one another concurrently, are not
    invalidated; both removals are applied to the group state but any other concurrent actions
    by those members are invalidated
-3) Re-adds are allowed; if Alice removes Charlie then re-adds them, they are still a member of
+3. Re-adds are allowed; if Alice removes Charlie then re-adds them, they are still a member of
    the group but all of their concurrent actions are invalidated
-4) Invalidation of transitive operations; invalidation of an operation due to the application
+4. Invalidation of transitive operations; invalidation of an operation due to the application
    of the aforementioned rules results in all dependent operations being invalidated
 
 ## Related work
 
 The TypeScript library [localfirst/auth](https://github.com/local-first-web/auth) uses groups to
 define access-control and encryption boundaries. We were quite influenced by their flexible CRDT
-abstraction which allows for users to plug in their own "resolvers". 
+abstraction which allows for users to plug in their own "resolvers".
 
 The [Ink & Switch](https://www.inkandswitch.com) project
 [keyhive](https://www.inkandswitch.com/keyhive/notebook/) also uses a groups abstraction for their
@@ -120,7 +120,7 @@ additional terms or conditions.
 
 ---
 
-*This project has received funding from the European Union’s Horizon 2020
+_This project has received funding from the European Union’s Horizon 2020
 research and innovation programme within the framework of the NGI-POINTER
 Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594*.
+NGI0-ENTRUST No 101069594_.

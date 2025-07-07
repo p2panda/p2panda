@@ -1,5 +1,6 @@
 [package]
 name = "p2panda-auth"
+description = "Decentralised group management with fine-grained, per-member permissions"
 version = "0.1.0"
 edition = "2024"
 authors = [
