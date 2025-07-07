@@ -373,10 +373,6 @@ impl Member {
             return Ok(());
         }
 
-        if self.processed.iter().any(|id| *id == operation.id()) {
-            return Ok(());
-        }
-
         let group_id = operation.payload().group_id();
         let y_group = if group_id == ROOT_GROUP_ID {
             self.root_group()
