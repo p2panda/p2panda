@@ -108,7 +108,7 @@ While a future of post-quantum computers may seem far away, `p2panda-encryption`
 
 ## Credits
 
-We have been particularly inspired by the ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf) (DCGKA) paper by Matthew Weidner, Martin Kleppmann, Daniel Hugenroth and Alastair R. Beresford (published in 2021) which is the first paper we are aware of which introduces a PCS and FS encryption scheme with a local-first mindset. On top there's already an almost-complete [Java implementation](https://github.com/trvedata/key-agreement) of the paper, which helped with realising our Rust version.
+We have been particularly inspired by the ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf) (DCGKA) paper by Matthew Weidner, Martin Kleppmann, Daniel Hugenroth and Alastair R. Beresford (published in 2020) which is the first paper we are aware of which introduces a PCS and FS encryption scheme with a local-first mindset. On top there's already an almost-complete [Java implementation](https://github.com/trvedata/key-agreement) of the paper, which helped with realising our Rust version.
 
 The paper formed the initial starting point of our work. In particular, we followed the Double-Ratchet "Message Encryption" scheme with some improvements around managing group membership. We also carried over some of the ideas in the paper to accommodate for the simpler "Data Encryption" approach.
 
