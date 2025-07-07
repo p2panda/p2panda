@@ -1,5 +1,9 @@
 # Releasing p2panda
 
+> p2panda crates are organised in a single Rust workspace (mono-repository).
+> Until our first stable, major release we maintain _one version_ per release
+> _for all crates_. These versions will indicate the progress towards `v1.0.0`.
+
 _This example assumes we are publishing version `1.2.0`._
 
 ## Checks and preparations
