@@ -228,6 +228,7 @@ impl Member {
                 member.y_orderer.clone(),
             );
 
+            // We need to insert the group state to the store as Group::process was never called.
             member
                 .store
                 .insert(&y_group.id(), &y_group)
@@ -267,11 +268,8 @@ impl Member {
         };
 
         let (y_group_i, operation) = TestGroup::prepare(y_group, &control_message).unwrap();
-        let y_group_ii = TestGroup::process(y_group_i, &operation).unwrap();
 
-        self.store
-            .insert(&y_group_ii.id(), &y_group_ii)
-            .expect("can write to group store");
+        let _ = TestGroup::process(y_group_i, &operation).unwrap();
 
         let suggestion = Suggestion::Valid(TestGroupAction::Action(GroupAction::Create {
             initial_members,
@@ -354,19 +352,7 @@ impl Member {
         };
 
         match result {
-            Ok((y_group_i, operation)) => {
-                self.store
-                    .insert(&y_group_i.id(), &y_group_i)
-                    .expect("error inserting to group store");
-
-                if y_group_i.id() != ROOT_GROUP_ID {
-                    let y_root_group_i = self.root_group();
-                    let y_root_group_ii = TestResolver::process(y_root_group_i).unwrap();
-                    self.store
-                        .insert(&y_root_group_ii.id(), &y_root_group_ii)
-                        .expect("error inserting to group store");
-                }
-
+            Ok((_, operation)) => {
                 if let Some(operation) = operation.as_ref() {
                     self.processed.push(operation.id());
                 }
@@ -414,14 +400,6 @@ impl Member {
                     )
                 };
 
-                if y_group.id() != ROOT_GROUP_ID {
-                    let y_root_group_i = self.root_group();
-                    let y_root_group_ii = TestResolver::process(y_root_group_i).unwrap();
-                    self.store
-                        .insert(&y_root_group_ii.id(), &y_root_group_ii)
-                        .expect("error inserting to group store");
-                }
-
                 y
             }
             Err(err) => {
@@ -429,18 +407,7 @@ impl Member {
                     y_group
                 } else {
                     if let Suggestion::Valid(_) = suggestion {
-                        self.store
-                            .insert(&y_group.id(), &y_group)
-                            .expect("error inserting to group store");
                         self.report(y_group.id(), true);
-
-                        if y_group.id() != ROOT_GROUP_ID {
-                            let y_root_group_i = self.root_group();
-                            let y_root_group_ii = TestResolver::process(y_root_group_i).unwrap();
-                            self.store
-                                .insert(&y_root_group_ii.id(), &y_root_group_ii)
-                                .expect("error inserting to group store");
-                        }
 
                         panic!(
                             "unexpected error when processing remote operation from valid operation member={} '{:?}':\n{}",
@@ -453,10 +420,6 @@ impl Member {
                 }
             }
         };
-
-        self.store
-            .insert(&y_group.id(), &y_group)
-            .expect("error inserting to group store");
 
         self.processed.push(operation.id());
 
