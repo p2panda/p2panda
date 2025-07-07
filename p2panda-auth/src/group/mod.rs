@@ -28,7 +28,6 @@ use crate::traits::{
 };
 
 #[derive(Debug, Error)]
-// TODO: Rename to `GroupError`.
 /// All possible errors that can occur when creating or updating a group.
 pub enum GroupError<ID, OP, C, RS, ORD, GS>
 where

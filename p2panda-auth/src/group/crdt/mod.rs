@@ -896,7 +896,7 @@ where
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    /// Action was applied an no error occurred.
+    /// Action was applied and no error occurred.
     Ok {
         state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
     },
