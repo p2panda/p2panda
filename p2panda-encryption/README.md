@@ -88,7 +88,7 @@ The second option comes with more flexibility if you're interested in integratin
 
 ## Security
 
-End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties to read your application data but they can never guarantee full security, especially in decentralised, experimental networks.
+End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties from reading your application data but they can never guarantee full security, especially in decentralised, experimental networks.
 
 We currently _cannot_ recommend using this technology for high-risk use-cases when you cannot fully guarantee control over all devices and transport channels.
 
