@@ -900,12 +900,14 @@ where
     Ok {
         state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
     },
+
     /// Action was not applied because it failed internal validation.
     Noop {
         state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
         #[allow(unused)]
         error: GroupMembershipError<GroupMember<ID>>,
     },
+
     /// Action was not applied because it has been filtered out.
     Filtered {
         state: GroupCrdtState<ID, OP, C, RS, ORD, GS>,
