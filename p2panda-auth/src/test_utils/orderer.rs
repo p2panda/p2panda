@@ -55,9 +55,7 @@ impl TestOrdererState {
 #[derive(Clone, Debug, Default)]
 pub struct TestOrderer {}
 
-impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
-    for TestOrderer
-{
+impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for TestOrderer {
     type State = TestOrdererState;
 
     type Error = OrdererError;
@@ -72,7 +70,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Condi
     /// group graph, and also the tips of any sub-group graphs.
     fn next_message(
         y: Self::State,
-        control_message: &GroupControlMessage<MemberId, MessageId, Conditions>,
+        control_message: &GroupControlMessage<MemberId, Conditions>,
     ) -> Result<(Self::State, Self::Operation), Self::Error> {
         let group_id = control_message.group_id();
         let group_y = {
@@ -106,7 +104,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Condi
 
         // If this operation adds a new member to the group, and that member itself is a
         // sub-group, include their current transitive heads in our dependencies.
-        if let GroupControlMessage::GroupAction {
+        if let GroupControlMessage {
             action:
                 GroupAction::Add {
                     member: GroupMember::Group(id),
@@ -125,7 +123,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Condi
 
         // If this is a create action, check if any of the initial members are sub-groups and if
         // so include their current transitive heads in our dependencies.
-        if let GroupControlMessage::GroupAction {
+        if let GroupControlMessage {
             action: GroupAction::Create { initial_members },
             ..
         } = control_message
@@ -224,10 +222,10 @@ pub struct TestOperation {
     pub author: char,
     pub dependencies: Vec<u32>,
     pub previous: Vec<u32>,
-    pub payload: GroupControlMessage<char, u32, ()>,
+    pub payload: GroupControlMessage<char, ()>,
 }
 
-impl Operation<char, u32, GroupControlMessage<char, u32, ()>> for TestOperation {
+impl Operation<char, u32, GroupControlMessage<char, ()>> for TestOperation {
     fn id(&self) -> u32 {
         self.id
     }
@@ -244,7 +242,7 @@ impl Operation<char, u32, GroupControlMessage<char, u32, ()>> for TestOperation 
         self.previous.clone()
     }
 
-    fn payload(&self) -> GroupControlMessage<char, u32, ()> {
+    fn payload(&self) -> GroupControlMessage<char, ()> {
         self.payload.clone()
     }
 }

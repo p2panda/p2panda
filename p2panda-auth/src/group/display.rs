@@ -27,7 +27,7 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Clone + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
@@ -81,7 +81,7 @@ where
                 })
                 .unwrap();
 
-            if let GroupControlMessage::GroupAction {
+            if let GroupControlMessage {
                 action: GroupAction::Add { member, .. },
                 ..
             } = operation.payload()
@@ -89,7 +89,7 @@ where
                 graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
             }
 
-            if let GroupControlMessage::GroupAction {
+            if let GroupControlMessage {
                 action:
                     GroupAction::Create {
                         initial_members, ..
@@ -140,10 +140,6 @@ where
 
     fn format_operation(&self, operation: &ORD::Operation) -> String {
         let control_message = operation.payload();
-        let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
-            // Revoke operations not yet supported.
-            unimplemented!()
-        };
 
         let mut s = String::new();
 
@@ -155,7 +151,7 @@ where
                 operation.id(),
                 operation.author(),
                 &HashSet::from_iter(operation.dependencies()),
-                &action,
+                &control_message.action,
             )
             .expect("critical error when applying state change")
             {
@@ -210,29 +206,15 @@ where
         s
     }
 
-    fn format_control_message(&self, message: &GroupControlMessage<ID, OP, C>) -> String {
+    fn format_control_message(&self, message: &GroupControlMessage<ID, C>) -> String {
         let mut s = String::new();
         s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
 
-        match message {
-            GroupControlMessage::Revoke { .. } => todo!(),
-            GroupControlMessage::GroupAction { action, .. } => match action {
-                GroupAction::Create { initial_members } => {
-                    s += "<TR><TD>CREATE</TD></TR>";
-                    s += "<TR><TD>initial members</TD></TR>";
-                    for (member, access) in initial_members {
-                        match member {
-                            GroupMember::Individual(id) => {
-                                s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
-                            }
-                            GroupMember::Group(id) => {
-                                s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
-                            }
-                        }
-                    }
-                }
-                GroupAction::Add { member, access } => {
-                    s += "<TR><TD>ADD</TD></TR>";
+        match &message.action {
+            GroupAction::Create { initial_members } => {
+                s += "<TR><TD>CREATE</TD></TR>";
+                s += "<TR><TD>initial members</TD></TR>";
+                for (member, access) in initial_members {
                     match member {
                         GroupMember::Individual(id) => {
                             s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
@@ -242,40 +224,50 @@ where
                         }
                     }
                 }
-                GroupAction::Remove { member } => {
-                    s += "<TR><TD>REMOVE</TD></TR>";
-                    match member {
-                        GroupMember::Individual(id) => {
-                            s += &format!("<TR><TD>individual : {}</TD></TR>", id)
-                        }
-                        GroupMember::Group(id) => s += &format!("<TR><TD>group : {}</TD></TR>", id),
+            }
+            GroupAction::Add { member, access } => {
+                s += "<TR><TD>ADD</TD></TR>";
+                match member {
+                    GroupMember::Individual(id) => {
+                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                    }
+                    GroupMember::Group(id) => {
+                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                     }
                 }
-                GroupAction::Promote { member, access } => {
-                    s += "<TR><TD>PROMOTE</TD></TR>";
-                    match member {
-                        GroupMember::Individual(id) => {
-                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
-                        }
-                        GroupMember::Group(id) => {
-                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
-                        }
+            }
+            GroupAction::Remove { member } => {
+                s += "<TR><TD>REMOVE</TD></TR>";
+                match member {
+                    GroupMember::Individual(id) => {
+                        s += &format!("<TR><TD>individual : {}</TD></TR>", id)
+                    }
+                    GroupMember::Group(id) => s += &format!("<TR><TD>group : {}</TD></TR>", id),
+                }
+            }
+            GroupAction::Promote { member, access } => {
+                s += "<TR><TD>PROMOTE</TD></TR>";
+                match member {
+                    GroupMember::Individual(id) => {
+                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                    }
+                    GroupMember::Group(id) => {
+                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                     }
                 }
-                GroupAction::Demote { member, access } => {
-                    s += "<TR><TD>DEMOTE</TD></TR>";
-                    match member {
-                        GroupMember::Individual(id) => {
-                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
-                        }
-                        GroupMember::Group(id) => {
-                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
-                        }
+            }
+            GroupAction::Demote { member, access } => {
+                s += "<TR><TD>DEMOTE</TD></TR>";
+                match member {
+                    GroupMember::Individual(id) => {
+                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                    }
+                    GroupMember::Group(id) => {
+                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
                     }
                 }
-            },
+            }
         }
-
         s += "</TABLE>";
         s
     }

@@ -34,7 +34,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ID, OP, C, ORD, GS>,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     #[error(transparent)]
@@ -75,7 +75,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// ID of the local actor.
@@ -95,7 +95,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, RS, ORD>,
 {
     /// Initialise the `Group` state so that groups can be created and updated.
@@ -117,13 +117,13 @@ where
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     type State = GroupCrdtState<ID, OP, C, RS, ORD, GS>;
-    type Action = GroupControlMessage<ID, OP, C>;
+    type Action = GroupControlMessage<ID, C>;
     type Error = GroupError<ID, OP, C, RS, ORD, GS>;
 
     /// Create a group.
@@ -151,7 +151,7 @@ where
             self.orderer.clone(),
         );
 
-        let action = GroupControlMessage::GroupAction {
+        let action = GroupControlMessage {
             group_id: y.group_id,
             action: GroupAction::Create { initial_members },
         };
@@ -218,7 +218,7 @@ where
             return Err(GroupError::GroupMember(added, y.group_id));
         }
 
-        let action = GroupControlMessage::GroupAction {
+        let action = GroupControlMessage {
             group_id: y.group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(added),
@@ -258,7 +258,7 @@ where
             return Err(GroupError::NotGroupMember(removed, y.group_id));
         }
 
-        let action = GroupControlMessage::GroupAction {
+        let action = GroupControlMessage {
             group_id: y.group_id,
             action: GroupAction::Remove {
                 member: GroupMember::Individual(removed),
@@ -301,7 +301,7 @@ where
             return Err(GroupError::SameAccessLevel(promoted, access, y.group_id));
         }
 
-        let action = GroupControlMessage::GroupAction {
+        let action = GroupControlMessage {
             group_id: y.group_id,
             action: GroupAction::Promote {
                 member: GroupMember::Individual(promoted),
@@ -344,7 +344,7 @@ where
             return Err(GroupError::SameAccessLevel(demoted, access, y.group_id));
         }
 
-        let action = GroupControlMessage::GroupAction {
+        let action = GroupControlMessage {
             group_id: y.group_id,
             action: GroupAction::Demote {
                 member: GroupMember::Individual(demoted),
