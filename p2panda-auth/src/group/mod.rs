@@ -70,7 +70,6 @@ where
 /// valid in light of the current group state. Attempting to perform an invalid action results in a
 /// `GroupError`. For example, attempting to remove a member who is not currently part of the
 /// group.
-// TODO: Rename to `Group`.
 pub struct Group<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
