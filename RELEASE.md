@@ -35,6 +35,8 @@ intra-workspace dependencies:
 - `p2panda-stream`
 - `p2panda-net`
 - `p2panda-blobs`
+- `p2panda-encryption`
+- `p2panda-auth`
 
 9. Move into the directory of the crate you wish to publish, taking into
     account the order listed above.
