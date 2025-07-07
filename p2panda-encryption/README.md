@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Decentralized data- and message encryption for groups</strong>
+  <strong>Decentralised data- and message encryption for groups</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -22,7 +22,7 @@
   </h3>
 </div>
 
-`p2panda-encryption` provides decentralized, secure data- and message encryption for groups with post-compromise security and optional forward secrecy.
+`p2panda-encryption` provides decentralised, secure data- and message encryption for groups with post-compromise security and optional forward secrecy.
 
 The crate implements two different group key-agreement and encryption schemes for a whole range of use cases for applications which can't rely on a stable network connection or centralised coordination.
 
@@ -46,9 +46,9 @@ Similar to our other p2panda crates, we aim to make our implementation "framewor
 
 We're currently working on a high-level, easy to use, integration layer which combines `p2panda-auth` and `p2panda-encryption` into a feature-complete and tested solution with authenticated roles and group management, nested groups, multi-device support, atomic transactions, message ordering and validation.
 
-### Robustness in decentralized systems
+### Robustness in decentralised systems
 
-`p2panda-encryption` has been specifically designed to be robust when used in decentralized systems. It accounts for use in scenarios without guaranteed connectivity between members of the group and corner cases where group changes (adding, removing members etc.) take place concurrently. No centralised server is required for coordination of the group.
+`p2panda-encryption` has been specifically designed to be robust when used in decentralised systems. It accounts for use in scenarios without guaranteed connectivity between members of the group and corner cases where group changes (adding, removing members etc.) take place concurrently. No centralised server is required for coordination of the group.
 
 The code in this crate is expressed as [pure functions](https://en.wikipedia.org/wiki/Pure_function) where state is passed around until it gets finally "committed" into a persistance layer inside an atomic transaction. This allows fault-resiliant writes to any database and makes applications robust to not corrupt their state on crashes.
 
@@ -82,13 +82,13 @@ Each subsequent 2SM round (via HPKE) uses exactly one secret key, which is then 
 
 ## Usage & integration
 
-There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives a tested end-to-end solution for building secure, decentralized applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
+There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives a tested end-to-end solution for building secure, decentralised applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
 
 The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering, group management, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you still struggle, please [reach out](https://p2panda.org/#contact).
 
 ## Security
 
-End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties to read your application data but they can never guarantee full security, especially in decentralized, experimental networks.
+End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties to read your application data but they can never guarantee full security, especially in decentralised, experimental networks.
 
 We can currently _not_ recommend using this technology for high-risk use-cases when you can not fully guarantee control over all devices and transport channels.
 

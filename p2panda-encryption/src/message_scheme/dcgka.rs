@@ -1193,7 +1193,7 @@ where
 
     /// Computes the set of group members at the time of the most recent control message sent by
     /// user ID. It works by filtering the set of group membership operations to contain only those
-    /// seen by ID, and then invoking the Decentralized Group Membership function DGM to compute
+    /// seen by ID, and then invoking the Decentralised Group Membership function DGM to compute
     /// the group membership.
     pub fn member_view(
         y: &DcgkaState<ID, OP, PKI, DGM, KMG>,
