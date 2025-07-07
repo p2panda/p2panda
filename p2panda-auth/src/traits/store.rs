@@ -5,15 +5,15 @@
 use std::error::Error;
 use std::fmt::Display;
 
-use crate::group::{GroupControlMessage, GroupState};
-use crate::traits::{IdentityHandle, OperationId, Ordering};
+use crate::group::{GroupControlMessage, GroupCrdtState};
+use crate::traits::{IdentityHandle, OperationId, Orderer};
 
-/// API for global group store.
+/// Interface for interacting with a global group store.
 pub trait GroupStore<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
     Self: Sized,
 {
     type Error: Error + Display;
@@ -22,10 +22,11 @@ where
     fn insert(
         &self,
         id: &ID,
-        group: &GroupState<ID, OP, C, RS, ORD, Self>,
+        group: &GroupCrdtState<ID, OP, C, RS, ORD, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Get a group's state from the store.
     #[allow(clippy::type_complexity)]
-    fn get(&self, id: &ID) -> Result<Option<GroupState<ID, OP, C, RS, ORD, Self>>, Self::Error>;
+    fn get(&self, id: &ID)
+    -> Result<Option<GroupCrdtState<ID, OP, C, RS, ORD, Self>>, Self::Error>;
 }

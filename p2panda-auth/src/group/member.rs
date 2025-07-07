@@ -2,8 +2,10 @@
 
 use crate::traits::IdentityHandle;
 
-/// A group member which can be a single stateless individual, or a stateful group. In both cases
-/// the member identifier is the same generic ID.
+/// A group member which can be a single individual or another group.
+///
+/// The `Group` variant can be used to express nested group relations. In both cases, the member
+/// identifier is the same generic ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum GroupMember<ID> {
     Individual(ID),
