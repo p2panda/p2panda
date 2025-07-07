@@ -12,9 +12,9 @@ use libfuzzer_sys::fuzz_target;
 use p2panda_auth::group::{GroupAction, GroupControlMessage, GroupCrdtError, GroupMember};
 use p2panda_auth::test_utils::{
     MemberId, MessageId, TestGroup, TestGroupError, TestGroupState, TestGroupStore, TestOperation,
-    TestOrdererState, TestResolver,
+    TestOrdererState,
 };
-use p2panda_auth::traits::{GroupStore, Operation as OperationTrait, Resolver};
+use p2panda_auth::traits::{GroupStore, Operation as OperationTrait};
 use p2panda_auth::{Access, AccessLevel};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng, random_bool};
@@ -391,7 +391,7 @@ impl Member {
             )
         };
 
-        let y_group = match TestGroup::process(y_group.clone(), operation) {
+        let _ = match TestGroup::process(y_group.clone(), operation) {
             Ok(y) => {
                 if let Suggestion::Invalid(_) = suggestion {
                     panic!(
