@@ -7,7 +7,7 @@ use crate::crypto::x25519::{PUBLIC_KEY_SIZE, PublicKey, SecretKey};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_sign};
 use crate::key_bundle::{Lifetime, LifetimeError};
 
-/// Pre-key with key material for X3DH key agreement to be used until it's lifetime expired.
+/// Pre-key with key material for X3DH key agreement to be used until it's lifetime has expired.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreKey(PublicKey, Lifetime);
 

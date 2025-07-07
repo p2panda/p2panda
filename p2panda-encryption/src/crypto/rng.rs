@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use rand_chacha::rand_core::{SeedableRng, TryRngCore};
 use thiserror::Error;
 
-/// Cryptographically secure random number generator that uses the ChaCha algorithm.
+/// Cryptographically-secure random number generator that uses the ChaCha algorithm.
 #[derive(Debug)]
 pub struct Rng {
     rng: Mutex<rand_chacha::ChaCha20Rng>,

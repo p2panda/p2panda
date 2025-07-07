@@ -16,8 +16,7 @@
 //!
 //! Every group operation ([create](EncryptionGroup::create) or [update](EncryptionGroup::update)
 //! group, [add](EncryptionGroup::add) or [remove](EncryptionGroup::remove) member) results in a
-//! [`ControlMessage`] which is broadcast to the network for each group member and a set of direct
-//! messages.
+//! [`ControlMessage`] which is broadcast to the network for each group member, along with a set of direct messages.
 //!
 //! A [`DirectMessage`] is sent to a specific group member and contains the group secrets encrypted
 //! towards them for key agreement.
@@ -28,8 +27,8 @@
 //!
 //! The "Data Encryption" group API is mostly a wrapper around the [2SM (Two-Party Secure
 //! Messaging) key agreement protocol](crate::two_party). On creating or updating a group and
-//! removing a member a new, random [`GroupSecret`] is [generated](SecretBundle::generate). Every
-//! secret is identified with an unique [`GroupSecretId`] and has a UNIX timestamp indicating when
+//! removing a member, a new, random [`GroupSecret`] is [generated](SecretBundle::generate). Every
+//! secret is identified with a unique [`GroupSecretId`] and has a UNIX timestamp indicating when
 //! it was created.
 //!
 //! Peers maintain a [`SecretBundle`] with all group secrets inside. Secrets are added to the
@@ -49,7 +48,7 @@
 //! ## Optional forward secrecy
 //!
 //! Applications can remove group secrets for forward secrecy based on their own logic. For
-//! removing group secrets implementors can use the [`EncryptionGroup::update_secrets`] method.
+//! removing group secrets implementers can use the [`EncryptionGroup::update_secrets`] method.
 //!
 //! For stronger forward secrecy guarantees have a look at the ["Message
 //! Encryption"](crate::message_scheme) scheme.
@@ -67,14 +66,14 @@
 //! Check out the [`EncryptionGroup`] API for establishing and maintaining groups using the "Data
 //! Encryption" scheme.
 //!
-//! [`GroupSecret`] and [`SecretBundle`] are always passed in explicitly into every group operation
+//! [`GroupSecret`] and [`SecretBundle`] are always explicitly passed into every group operation
 //! ("add member", "remove member", etc.) to allow full control over the managed keys for
 //! applications.
 //!
 //! Developers need to bring their own data types with [group message
 //! interfaces](crate::traits::GroupMessage), [decentralised group
 //! membership](crate::traits::GroupMembership) (DGM) and [ordering](crate::traits::Ordering)
-//! implementations when using this crate directly, for easier use without this overhead it's
+//! implementations when using this crate directly. For easier use without this overhead it's
 //! recommended to look into higher-level integrations using the p2panda stack.
 mod data;
 pub mod dcgka;

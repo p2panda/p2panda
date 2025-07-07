@@ -14,7 +14,7 @@ use thiserror::Error;
 /// dependencies are met and yields a linearized sequence of "dependency checked" items.
 ///
 /// Note that this is only used for fuzzing and testing purposes. A more robust implementation
-/// would need to take file-system persistance and atomic transactions into account.
+/// would need to take file-system persistence and atomic transactions into account.
 #[derive(Debug)]
 pub struct Orderer<T> {
     _marker: PhantomData<T>,

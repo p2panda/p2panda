@@ -3,7 +3,7 @@
 //! A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "data encryption"
 //! scheme with forward secrecy and post-compromise security.
 //!
-//! This uses internally the 2SM (Two-Party Secure Messaging) key agreement scheme with strong
+//! This uses the 2SM (Two-Party Secure Messaging) key agreement scheme internally with strong
 //! forward secrecy guarantees.
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
@@ -407,7 +407,7 @@ where
     }
 
     /// Uses 2SM to encrypt a direct message for another group member. The first time a message is
-    /// encrypted to a particular recipient ID, the 2SM protocol state is initialized and stored in
+    /// encrypted to a particular recipient ID, the 2SM protocol state is initialised and stored in
     /// γ.2sm[ID]. We then use 2SM-Send to encrypt the message, and store the updated protocol
     /// state in γ.
     fn encrypt_to(
@@ -432,7 +432,7 @@ where
         Ok((y, ciphertext))
     }
 
-    /// Is the reverse of encrypt_to. It similarly initializes the protocol state on first use, and
+    /// Is the reverse of encrypt_to. It similarly initialises the protocol state on first use, and
     /// then uses 2SM-Receive to decrypt the ciphertext, with the protocol state stored in
     /// γ.2sm[ID].
     fn decrypt_from(

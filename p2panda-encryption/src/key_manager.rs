@@ -2,7 +2,7 @@
 
 //! Manager for our own secret key material.
 //!
-//! Peers should automatically rotate their key bundles if the lifetime is close to expire. It is
+//! Peers should automatically rotate their key bundles if the lifetime is close to expiring. It is
 //! recommended to do this in good time before the actual expiration date to allow others to
 //! receive it even when the network is unstable or peers are longer offline.
 use std::collections::HashMap;

@@ -34,7 +34,7 @@ More detail about the particular implementation and design choices of `p2panda-e
 
 Key agreement in `p2panda-encryption` provides strong forward secrecy, while the security of the data itself depends on the encryption scheme used. The crate offers two different encryption schemes:
 
-**Data Encryption** re-uses the same symmetric key known to the peer until a new key got introduced to the group, for example on member removal. Keys will stay in the network to allow decrypting older data, unless they are manually removed by the application for optional forward secrecy.
+**Data Encryption** re-uses the same symmetric key known to the peer until a new key is introduced to the group, for example on member removal. Keys will stay in the network to allow decrypting older data, unless they are manually removed by the application for optional forward secrecy.
 
 For **Message Encryption** peers agree on a secret to establish a [message ratchet](https://en.wikipedia.org/wiki/Double_Ratchet_Algorithm) per member, deriving a new key for each message sent. After decrypting the ciphertext of the message the key gets dropped for forward secrecy.
 
@@ -44,13 +44,13 @@ This implementation is compatible with any data type, encoding format or transpo
 
 Similar to our other p2panda crates, we aim to make our implementation "framework independent" while providing optional "glue code" to integrate it in into the larger [p2panda ecosystem](https://p2panda.org).
 
-We're currently working on a high-level, easy to use, integration layer which combines `p2panda-auth` and `p2panda-encryption` into a feature-complete and tested solution with authenticated roles and group management, nested groups, multi-device support, atomic transactions, message ordering and validation.
+We're currently working on a high-level, easy-to-use integration layer which combines `p2panda-auth` and `p2panda-encryption` into a feature-complete and tested solution with authenticated roles and group management, nested groups, multi-device support, atomic transactions, message ordering and validation.
 
 ### Robustness in Decentralised Systems
 
 `p2panda-encryption` has been specifically designed to be robust when used in decentralised systems. It accounts for use in scenarios without guaranteed connectivity between members of the group and corner cases where group changes (adding, removing members etc.) take place concurrently. No centralised server is required for coordination of the group.
 
-The code in this crate is expressed as [pure functions](https://en.wikipedia.org/wiki/Pure_function) where state is passed around until it gets finally "committed" into a persistance layer inside an atomic transaction. This allows fault-resiliant writes to any database and makes applications robust to not corrupt their state on crashes.
+The code in this crate is expressed as [pure functions](https://en.wikipedia.org/wiki/Pure_function) where state is passed around until it is finally "committed" into a persistence layer inside an atomic transaction. This allows fault-resilient writes to any database and makes applications robust against corruption of their state when crashes occur.
 
 ## Design
 
@@ -64,9 +64,9 @@ The second scheme is **"Message Encryption"**, offering a forward secure (FS) me
 
 ### Key Bundles and Pre-Keys
 
-Key bundles are published into the network by peers including identity- and pre-keys which can be used by other peers to invite them into an encrypted group.
+Key bundles are published into the network by peers. These bundles include identity- and pre-keys which can be used by other peers to invite them into an encrypted group.
 
-Pre-keys are used during the initial [X3DG](https://signal.org/docs/specifications/x3dh/) key agreement between two peers and can be limited to be used only once or for a specified lifetime for forward secrecy.
+Pre-keys are used during the initial [X3DG](https://signal.org/docs/specifications/x3dh/) key agreement between two peers and can be limited to a single use or for a specified lifetime for forward secrecy.
 
 ### Secure Key-Agreement
 
@@ -78,37 +78,37 @@ During the initial 2SM "round" (via X3DH) the forward secrecy is defined by the 
 
 Each subsequent 2SM round (via HPKE) uses exactly one secret key, which is then dropped and replaced by a newly-generated key-pair. This gives the key-agreement protocol strong forward secrecy guarantees for each round, independent of the initially used pre-keys.
 
-2SM is optimized to fastly allow a group to learn about a new group secret (for example after a member removal or group compromise) in `O(n)` steps where `n` is the number of members.
+2SM is optimised to allow a group to learn about a new group secret (for example, after a member removal or group compromise) in `O(n)` steps where `n` is the number of members.
 
 ## Usage & Integration
 
 There are various ways to use `p2panda-encryption`. We're currently working on a p2panda crate which gives a tested end-to-end solution for building secure, decentralised applications with p2panda data types. If you're interested in group encryption, roles and members management for your application but not building the "p2p backend", this is for you.
 
-The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering, group management, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you still struggle, please [reach out](https://p2panda.org/#contact).
+The second option comes with more flexibility if you're interested in integrating group encryption into your custom p2p data-types and algorithms but also requires more care around message ordering, group management, validation and authentication. We've tried to reduce the API surface for integrations into custom applications as much as possible. If you still struggle, please [reach out](https://p2panda.org/#contact) to us.
 
 ## Security
 
 End-to-end encryption (E2EE) solutions like `p2panda-encryption` prevent third parties to read your application data but they can never guarantee full security, especially in decentralised, experimental networks.
 
-We can currently _not_ recommend using this technology for high-risk use-cases when you can not fully guarantee control over all devices and transport channels.
+We currently _cannot_ recommend using this technology for high-risk use-cases when you cannot fully guarantee control over all devices and transport channels.
 
 ### Audit
 
-Until this point this crate has not received a security audit yet.
+This crate has not yet received a security audit.
 
 ### Meta-Data
 
-In the current implementation all group control messages are _not_ encrypted. While application data is fully protected, an adversary who got access to the network, will be able to observe control messages and reason about which members are inside the group. The cryptographic identities in the group are not necessarily connected to any concrete persons but can potentially reveal enough meta-data.
+In the current implementation all group control messages are _unencrypted_. While application data is fully protected, an adversary who gains access to the network will be able to observe control messages and reason about which members are inside the group. The cryptographic identities in the group are not necessarily connected to any concrete persons but can potentially reveal enough meta-data to prove harmful.
 
 We're working on a variant of `p2panda-encryption` where even control messages, sender and recipient info are encrypted. This unfortunately comes with worse performance and special UX requirements but we still believe there is a use-case for smaller groups.
 
 ### Post-Quantum
 
-While a future of post-quantum computers seems far, `p2panda-encryption` is not secure against so called harvest-now-decrypt-later (HNDL) quantum adversaries as we're not using any post-quantum-ready cryptography.
+While a future of post-quantum computers may seem far away, `p2panda-encryption` is not secure against so called harvest-now-decrypt-later (HNDL) quantum adversaries as we're not using any post-quantum-ready cryptography.
 
 ## Credits
 
-We have been particularly inspired by the ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf) (DCGKA) paper by Matthew Weidner, Martin Kleppmann, Daniel Hugenroth and Alastair R. Beresford (published in 2021) which is the first paper we are aware of which introduces a PCS and FS encryption scheme with a local-first mindset. On top there's already an almost complete [Java implementation](https://github.com/trvedata/key-agreement) of the paper, which helped with realising our Rust version.
+We have been particularly inspired by the ["Key Agreement for Decentralized Secure Group Messaging with Strong Security Guarantees"](https://eprint.iacr.org/2020/1281.pdf) (DCGKA) paper by Matthew Weidner, Martin Kleppmann, Daniel Hugenroth and Alastair R. Beresford (published in 2021) which is the first paper we are aware of which introduces a PCS and FS encryption scheme with a local-first mindset. On top there's already an almost-complete [Java implementation](https://github.com/trvedata/key-agreement) of the paper, which helped with realising our Rust version.
 
 The paper formed the initial starting point of our work. In particular, we followed the Double-Ratchet "Message Encryption" scheme with some improvements around managing group membership. We also carried over some of the ideas in the paper to accommodate for the simpler "Data Encryption" approach.
 
