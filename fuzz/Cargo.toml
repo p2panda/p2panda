@@ -22,7 +22,6 @@ doc = false
 bench = false
 
 [[bin]]
-<<<<<<< HEAD
 name = "groups_2sm"
 path = "fuzz_targets/groups_2sm.rs"
 test = false
@@ -32,10 +31,13 @@ bench = false
 [[bin]]
 name = "groups_message"
 path = "fuzz_targets/groups_message.rs"
-=======
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "auth_group"
 path = "fuzz_targets/auth_group.rs"
->>>>>>> 5de5096d (`p2panda-auth` fuzz tests (#756))
 test = false
 doc = false
 bench = false
