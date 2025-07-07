@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Group membership CRDT.
+//! Core group membership state represented as a Causal Length CRDT (CL-CRDT).
+//!
+//! The approach used here was first described by Weihai Yu and Sigbjørn Rostad and in their paper
+//! titled 'A low-cost set CRDT based on causal lengths'.
+//!
+//! Yu, W. and Rostad, S. A Low-Cost Set CRDT Based on Causal Lengths. In Proceedings of the 7th
+//! Workshop on Principles and Practice of Consistency for Distributed Data (2020), Article no. 5,
+//! pp. 1-6.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -10,6 +17,8 @@ use thiserror::Error;
 
 use crate::Access;
 
+/// Invalid group state modification attempts due to group membership state and member access
+/// levels.
 #[derive(Debug, Error, PartialEq)]
 pub enum GroupMembershipError<ID> {
     #[error("attempted to add a member who is already active in the group: {0}")]
@@ -34,6 +43,9 @@ pub enum GroupMembershipError<ID> {
     UnrecognisedMember(ID),
 }
 
+/// The access state of an individual group member.
+///
+/// Counters are used to allow conflict-free merging of states.
 #[derive(Clone, Debug)]
 pub struct MemberState<C> {
     pub(crate) member_counter: usize,
@@ -45,34 +57,52 @@ impl<C> MemberState<C>
 where
     C: Clone + Debug + PartialEq,
 {
+    /// Return the access level of the member.
     pub fn access(&self) -> Access<C> {
         self.access.clone()
     }
 
+    /// Return `true` if the member is an active member of the group.
     pub fn is_member(&self) -> bool {
         self.member_counter % 2 != 0
     }
 
+    /// Return `true` if the member has `Pull` access.
     pub fn is_puller(&self) -> bool {
         self.access.is_pull()
     }
 
+    /// Return `true` if the member has `Read` access.
     pub fn is_reader(&self) -> bool {
         self.access.is_read()
     }
 
+    /// Return `true` if the member has `Write` access.
     pub fn is_writer(&self) -> bool {
         self.access.is_write()
     }
 
+    /// Return `true` if the member has `Manage` access.
     pub fn is_manager(&self) -> bool {
         self.access.is_manage()
     }
 }
 
+/// The membership state of all known groups.
 #[derive(Clone, Debug)]
 pub struct GroupMembersState<ID, C> {
     pub(crate) members: HashMap<ID, MemberState<C>>,
+}
+
+impl<ID, C> Default for GroupMembersState<ID, C>
+where
+    C: PartialEq,
+{
+    fn default() -> Self {
+        Self {
+            members: Default::default(),
+        }
+    }
 }
 
 impl<ID, C> GroupMembersState<ID, C>
@@ -94,7 +124,7 @@ where
             .collect::<HashSet<ID>>()
     }
 
-    /// Return all active group members with manager access.
+    /// Return all active group members with `Manage` access.
     pub fn managers(&self) -> HashSet<ID> {
         self.members
             .iter()
@@ -106,17 +136,6 @@ where
                 }
             })
             .collect::<HashSet<_>>()
-    }
-}
-
-impl<ID, C> Default for GroupMembersState<ID, C>
-where
-    C: PartialEq,
-{
-    fn default() -> Self {
-        Self {
-            members: Default::default(),
-        }
     }
 }
 
@@ -139,7 +158,10 @@ pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
 
 /// Add a member to the group with the given access level.
 ///
-/// The actor performing the action must be an active member of the group with manager access.
+/// The `adder` must be an active member of the group with `Manage` access and the `added` identity
+/// must not be a current member of the group; failure to meet these conditions will result in an
+/// error.
+///
 /// Re-adding a previously removed member is supported.
 pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
@@ -190,7 +212,9 @@ pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
 
 /// Remove a member from the group.
 ///
-/// The actor performing the action must be an active member of the group with manager access.
+/// The `remover` must be an active member of the group with `Manage` access and the `removed`
+/// identity must also be an active member of the group; failure to meet these conditions will
+/// result in an error.
 pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
     state: GroupMembersState<ID, C>,
     remover: ID,
@@ -234,8 +258,11 @@ pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
 
 /// Modify the access level of a group member.
 ///
-/// The actor performing the action must be an active member of the group with manager access.
-pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+/// Both the `modifier` and `modified` identity must be active group members; failure to meet these
+/// conditions will result in an error.
+///
+/// This is a helper method to reduce code duplication in `promote()` and `demote()`.
+fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     modifier: ID,
     modified: ID,
@@ -280,10 +307,9 @@ pub fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// No modification will occur if the promoted member already has `Manage` access. In that case, the
 /// given state is returned unchanged.
 ///
-/// Conditions may be optionally provided. These are only applied in the case of a promotion from
-/// `Read` to `Write`.
-///
-/// The actor performing the action must be an active member of the group with manager access.
+/// The `promoter` must be an active member of the group with `Manage` access and the `promoted`
+/// identity must also be an active member of the group; failure to meet these conditions will
+/// result in an error.
 pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     promoter: ID,
@@ -309,10 +335,9 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// No modification will occur if the demoted member already has `Pull` access. In that case, the
 /// given state is returned unchanged.
 ///
-/// Conditions may be optionally provided. These are only applied in the case of a demotion from
-/// `Manage` to `Write`.
-///
-/// The actor performing the action must be an active member of the group with manager access.
+/// The `demoter` must be an active member of the group with `Manage` access and the `demoted`
+/// identity must also be an active member of the group; failure to meet these conditions will
+/// result in an error.
 pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state: GroupMembersState<ID, C>,
     demoter: ID,
@@ -336,12 +361,12 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// Merge two group states into one using a deterministic, conflict-free approach.
 ///
 /// Grow-only counters are used internally to track state changes; one counter for add / remove
-/// actions and one for access modification action. These values are used to determine which
+/// actions and one for access modification actions. These values are used to determine which
 /// membership and access states should be included in the merged group state. A state with a higher
 /// counter indicates that it has undergone more actions; this state will be included in the merge.
 ///
-/// If a member exists with different access levels in each state and has undergone the same number
-/// of access modifications, the lower of the two access levels will be chosen.
+/// If a member exists with different access levels in each state but the same number of access
+/// modifications, the lower of the two access levels will be chosen.
 pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,

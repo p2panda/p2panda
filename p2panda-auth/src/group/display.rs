@@ -8,8 +8,8 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
-use crate::group::{Group, GroupAction, GroupControlMessage, GroupError, GroupMember, GroupState};
-use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_OK_NODE: &str = "#BFC6C77F";
@@ -20,23 +20,18 @@ const ADD_MEMBER_EDGE: &str = "#0091187F";
 const PREVIOUS_EDGE: &str = "#000000";
 const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
-impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<
-            ORD::Message,
-            State = GroupState<ID, OP, C, RS, ORD, GS>,
-            Error = GroupError<ID, OP, C, RS, ORD, GS>,
-        > + Clone
-        + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Clone + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
     ORD::State: Clone,
-    ORD::Message: Clone,
+    ORD::Operation: Clone,
     GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
-    /// Print an auth group graph in DOT format for visualizing the group control message DAG.
+    /// Print an auth group graph in DOT format for visualizing the group operation DAG.
     pub fn display(&self) -> String {
         let mut graph = DiGraph::new();
         graph = self.add_nodes_and_previous_edges(self.clone(), graph);
@@ -142,7 +137,7 @@ where
         graph
     }
 
-    fn format_operation(&self, operation: &ORD::Message) -> String {
+    fn format_operation(&self, operation: &ORD::Operation) -> String {
         let control_message = operation.payload();
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
@@ -154,7 +149,7 @@ where
         let color = if control_message.is_create() {
             OP_ROOT_NODE
         } else {
-            match Group::apply_action(
+            match GroupCrdt::apply_action(
                 self.clone(),
                 operation.id(),
                 operation.author(),
@@ -284,7 +279,7 @@ where
         s
     }
 
-    fn format_members(&self, operation: &ORD::Message) -> String {
+    fn format_members(&self, operation: &ORD::Operation) -> String {
         let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
         dependencies.insert(operation.id());
         let mut members = self

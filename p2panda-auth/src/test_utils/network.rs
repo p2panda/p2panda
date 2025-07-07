@@ -8,11 +8,11 @@ use rand::seq::SliceRandom;
 
 use crate::Access;
 use crate::group::{GroupAction, GroupControlMessage, GroupMember};
-use crate::traits::{AuthGroup, GroupStore, Operation, Ordering};
+use crate::traits::{GroupStore, Operation, Orderer};
 
 use super::{
-    GroupId, MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation,
-    TestOrderer, TestOrdererState,
+    MemberId, MessageId, TestGroup, TestGroupState, TestGroupStore, TestOperation, TestOrderer,
+    TestOrdererState,
 };
 
 pub struct Network {
@@ -53,7 +53,7 @@ impl Network {
 
     pub fn create(
         &mut self,
-        group_id: GroupId,
+        group_id: MemberId,
         creator: MemberId,
         initial_members: Vec<(GroupMember<MemberId>, Access<()>)>,
     ) -> MessageId {
@@ -74,7 +74,7 @@ impl Network {
         &mut self,
         adder: MemberId,
         added: GroupMember<MemberId>,
-        group_id: GroupId,
+        group_id: MemberId,
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&adder, &group_id);
@@ -97,7 +97,7 @@ impl Network {
         &mut self,
         remover: MemberId,
         removed: GroupMember<MemberId>,
-        group_id: GroupId,
+        group_id: MemberId,
     ) -> MessageId {
         let y = self.get_y(&remover, &group_id);
         let control_message = GroupControlMessage::GroupAction {
@@ -116,7 +116,7 @@ impl Network {
         &mut self,
         demoter: MemberId,
         demoted: GroupMember<MemberId>,
-        group_id: GroupId,
+        group_id: MemberId,
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&demoter, &group_id);
@@ -139,7 +139,7 @@ impl Network {
         &mut self,
         promoter: MemberId,
         promoted: GroupMember<MemberId>,
-        group_id: GroupId,
+        group_id: MemberId,
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&promoter, &group_id);
@@ -223,7 +223,7 @@ impl Network {
     pub fn members(
         &self,
         member: &MemberId,
-        group_id: &GroupId,
+        group_id: &MemberId,
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y.members();
@@ -234,7 +234,7 @@ impl Network {
     pub fn members_at(
         &self,
         member: &MemberId,
-        group_id: &GroupId,
+        group_id: &MemberId,
         dependencies: &[MessageId],
     ) -> Vec<(GroupMember<MemberId>, Access<()>)> {
         let group_y = self.get_y(member, group_id);
@@ -246,7 +246,7 @@ impl Network {
     pub fn transitive_members(
         &self,
         member: &MemberId,
-        group_id: &GroupId,
+        group_id: &MemberId,
     ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
         let mut members = group_y
@@ -259,7 +259,7 @@ impl Network {
     pub fn transitive_members_at(
         &self,
         member: &MemberId,
-        group_id: &GroupId,
+        group_id: &MemberId,
         dependencies: &[MessageId],
     ) -> Vec<(MemberId, Access<()>)> {
         let group_y = self.get_y(member, group_id);
@@ -276,7 +276,7 @@ impl Network {
         self.queue = VecDeque::from(queue);
     }
 
-    pub fn get_y(&self, member: &MemberId, group_id: &GroupId) -> TestGroupState {
+    pub fn get_y(&self, member: &MemberId, group_id: &MemberId) -> TestGroupState {
         let member = self.members.get(member).expect("member exists");
         let group_y = TestGroupStore::get(&member.group_store, group_id).unwrap();
 

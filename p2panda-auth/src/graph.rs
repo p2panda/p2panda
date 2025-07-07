@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Graph functions for identifying related sets of concurrent operations.
+
 use std::collections::HashSet;
 
 use petgraph::graphmap::DiGraphMap;
@@ -7,6 +9,7 @@ use petgraph::visit::{Dfs, Reversed};
 
 use crate::traits::OperationId;
 
+/// Recursively identify all operations concurrent with the given target operation.
 fn concurrent_bubble<OP>(
     graph: &DiGraphMap<OP, ()>,
     target: OP,
@@ -50,6 +53,9 @@ where
 }
 
 /// Return any operations concurrent with the given target operation.
+///
+/// Operations are considered concurrent if they are neither predecessors nor successors of the
+/// target operation.
 fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId + Ord,
@@ -75,7 +81,9 @@ where
     graph.nodes().filter(|n| !relatives.contains(n)).collect()
 }
 
-/// Is `to` reachable from `from`
+/// Return `true` if a linear path exists in the graph between `from` and `to`.
+///
+/// This indicates whether or not the given operations occurred concurrently.
 pub fn has_path<OP>(graph: &DiGraphMap<OP, ()>, from: OP, to: OP) -> bool
 where
     OP: OperationId + Ord,

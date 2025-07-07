@@ -10,9 +10,9 @@ use petgraph::algo::toposort;
 use crate::Access;
 use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::{
-    Group, GroupAction, GroupControlMessage, GroupError, GroupState, StateChangeResult,
+    GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult,
 };
-use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering, Resolver};
+use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
 ///
@@ -25,13 +25,15 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 /// operations are processed. It can be assumed that the behavior is equivalent for an admin
 /// member being removed, or demoted from admin to a lower access level.
 ///
-/// 1) Removals
+/// ## Strong Remove Concurrency Rules
+///
+/// ### Removals
 ///
 /// If a removal has occurred, filter any concurrent operations by the removed member, as long
 /// as it's 1) not a predecessor of the remove operation, and 2) not a mutual removal (removal
 /// of the remover by the removed member).
 ///
-/// 2) Mutual removals
+/// ### Mutual removals
 ///
 /// Mutual removals result in both members being removed from the group, and any dependent
 /// concurrent branches are not applied to group state. We imagine further implementations
@@ -42,13 +44,13 @@ use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Ordering
 /// concurrent operations performed by the removed members (keeping predecessors of the
 /// remove).
 ///
-/// 3) Re-adding member concurrently
+/// ### Re-adding member concurrently
 ///
 /// If Alice removes Charlie and Bob removes then adds Charlie concurrently, Charlie is still
 /// in the group. However, if Charlie performed any concurrent actions, these will be filtered
 /// along with any dependent operations.
 ///
-/// 4) Filtering of dependent operations
+/// ### Filtering of transitively dependent operations
 ///
 /// When an operation is "explicitly" filtered it may cause dependent operations to become
 /// invalid, these operations will not be applied to the group state.
@@ -57,31 +59,28 @@ pub struct StrongRemove<ID, OP, C, ORD, GS> {
     _phantom: PhantomData<(ID, OP, C, ORD, GS)>,
 }
 
-impl<ID, OP, C, ORD, GS> Resolver<ORD::Message> for StrongRemove<ID, OP, C, ORD, GS>
+impl<ID, OP, C, ORD, GS> Resolver<ID, OP, C, ORD, GS> for StrongRemove<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
-    ORD::Message: Clone,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Clone + Debug,
+    ORD::Operation: Clone,
     ORD::State: Clone,
     GS: GroupStore<ID, OP, C, Self, ORD> + Debug + Clone,
 {
-    type State = GroupState<ID, OP, C, Self, ORD, GS>;
-    type Error = GroupError<ID, OP, C, Self, ORD, GS>;
-
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(
-        y: &GroupState<ID, OP, C, Self, ORD, GS>,
-        operation: &ORD::Message,
-    ) -> Result<bool, Self::Error> {
+        y: &GroupCrdtState<ID, OP, C, Self, ORD, GS>,
+        operation: &ORD::Operation,
+    ) -> Result<bool, GroupCrdtError<ID, OP, C, Self, ORD, GS>> {
         let control_message = operation.payload();
         let group_id = control_message.group_id();
 
         // Sanity check.
         if y.group_id != group_id {
             // The operation is not intended for this group.
-            return Err(GroupError::IncorrectGroupId(group_id, y.group_id));
+            return Err(GroupCrdtError::IncorrectGroupId(group_id, y.group_id));
         }
 
         let transitive_heads = y.transitive_heads().unwrap();
@@ -93,17 +92,18 @@ where
     /// Process the group operation graph, producing a new filter and re-building all state
     /// accordingly.
     fn process(
-        mut y: GroupState<ID, OP, C, Self, ORD, GS>,
-    ) -> Result<GroupState<ID, OP, C, Self, ORD, GS>, Self::Error> {
+        mut y: GroupCrdtState<ID, OP, C, Self, ORD, GS>,
+    ) -> Result<GroupCrdtState<ID, OP, C, Self, ORD, GS>, GroupCrdtError<ID, OP, C, Self, ORD, GS>>
+    {
         // Start by draining the existing filter and re-building all states.
         y.ignore.drain();
-        let mut y = Group::rebuild(y).expect("no errors when re-building a group");
+        let mut y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
         let mut filter: HashSet<OP> = Default::default();
 
         // Construct an operation map for easy look-up.
         //
         // @TODO: make operations a map on group state struct.
-        let operations: HashMap<OP, ORD::Message> = y
+        let operations: HashMap<OP, ORD::Operation> = y
             .operations
             .clone()
             .into_iter()
@@ -127,7 +127,7 @@ where
         // Traverse the graph visiting the operations in topological order.
         for target_operation_id in topo_sort.iter() {
             let Some(target_operation) = operations.get(target_operation_id) else {
-                return Err(GroupError::MissingOperation(*target_operation_id));
+                return Err(GroupCrdtError::MissingOperation(*target_operation_id));
             };
 
             let bubble = bubbles
@@ -151,7 +151,7 @@ where
                     }
 
                     let Some(bubble_operation) = operations.get(bubble_operation_id) else {
-                        return Err(GroupError::MissingOperation(*bubble_operation_id));
+                        return Err(GroupCrdtError::MissingOperation(*bubble_operation_id));
                     };
 
                     // If this concurrent operation is _not_ authored by the "target author" then we
@@ -187,7 +187,7 @@ where
                         let mut filter_tmp = filter.clone();
                         filter_tmp.retain(|op: &OP| !mutual_removes.contains(op));
                         y.ignore = filter_tmp;
-                        y = Group::rebuild(y).expect("no errors when re-building a group");
+                        y = GroupCrdt::rebuild(y).expect("no errors when re-building a group");
                         // Remove the visited bubble from the bubbles set.
                         bubbles.retain(|b| *b != bubble);
 
@@ -202,7 +202,7 @@ where
                                 HashSet::from_iter(target_operation.dependencies().clone());
 
                             // As we weren't in a bubble we can directly apply this action.
-                            let result = Group::apply_action(
+                            let result = GroupCrdt::apply_action(
                                 y,
                                 target_operation.id(),
                                 target_operation.author(),
@@ -213,7 +213,7 @@ where
                             match result {
                                 StateChangeResult::Ok { state } => state,
                                 StateChangeResult::Noop { error, .. } => {
-                                    return Err(GroupError::StateChangeError(
+                                    return Err(GroupCrdtError::StateChangeError(
                                         target_operation.id(),
                                         error,
                                     ));
@@ -235,18 +235,18 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD, GS> GroupState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Clone + Debug + PartialEq + PartialOrd,
-    RS: Resolver<ORD::Message> + Debug,
-    ORD: Ordering<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
+    RS: Resolver<ID, OP, C, ORD, GS> + Debug,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
 {
     /// If the given operation is an action which removes or demotes a manager member, return the
     /// ID of the target member.
-    fn removed_manager(&self, operation: &ORD::Message) -> Option<ID> {
+    fn removed_manager(&self, operation: &ORD::Operation) -> Option<ID> {
         let GroupControlMessage::GroupAction { action, .. } = operation.payload() else {
             // Revoke operations not yet supported.
             unimplemented!()
