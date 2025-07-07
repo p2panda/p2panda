@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 p2panda-core = { path = "../p2panda-core", features = ["arbitrary"] }
-p2panda-group = { path = "../p2panda-group", features = ["test_utils"] }
+p2panda-encryption = { path = "../p2panda-encryption", features = ["test_utils"] }
 
 [[bin]]
 name = "header_e2e"

@@ -6,15 +6,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_group::message_scheme::{GroupEvent, MessageGroup};
-use p2panda_group::test_utils::message_scheme::dgm::AckedTestDgm;
-use p2panda_group::test_utils::message_scheme::network::{
+use p2panda_encryption::message_scheme::{GroupEvent, MessageGroup};
+use p2panda_encryption::test_utils::message_scheme::dgm::AckedTestDgm;
+use p2panda_encryption::test_utils::message_scheme::network::{
     TestGroupError, TestGroupState, init_group_state,
 };
-use p2panda_group::test_utils::message_scheme::ordering::{ForwardSecureOrderer, TestMessage};
-use p2panda_group::test_utils::{MemberId, MessageId};
-use p2panda_group::traits::ForwardSecureGroupMessage;
-use p2panda_group::{Rng, message_scheme};
+use p2panda_encryption::test_utils::message_scheme::ordering::{ForwardSecureOrderer, TestMessage};
+use p2panda_encryption::test_utils::{MemberId, MessageId};
+use p2panda_encryption::traits::ForwardSecureGroupMessage;
+use p2panda_encryption::{Rng, message_scheme};
 
 /// Number of max. group epochs per fuzzing round. Members can create one group operation each per
 /// epoch.

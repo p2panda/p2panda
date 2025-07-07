@@ -77,7 +77,7 @@
 //!
 //! ## "Live Mode"
 //!
-//! To send newly created messages fastly to other peers, `p2panda-net` uses broadcast gossip
+//! To send newly-created messages fastly to other peers, `p2panda-net` uses broadcast gossip
 //! overlays for each topic. With this "live mode" messages arrive almost instantly.
 //!
 //! ## Sync
