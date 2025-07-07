@@ -95,6 +95,18 @@ The provided "strong removal" resolver defines the following rules:
 4) Invalidation of transitive operations; invalidation of an operation due to the application
    of the aforementioned rules results in all dependent operations being invalidated
 
+## Related work
+
+The TypeScript library [localfirst/auth](https://github.com/local-first-web/auth) uses groups to
+define access-control and encryption boundaries. We were quite influenced by their flexible CRDT
+abstraction which allows for users to plug in their own "resolvers". 
+
+The [Ink & Switch](https://www.inkandswitch.com) project
+[keyhive](https://www.inkandswitch.com/keyhive/notebook/) also uses a groups abstraction for their
+integration of access-control and encryption systems into the automerge CRDT library. The
+underlying mechanisms for managing group state however is based on chains of capability
+delegations, which is different from our operation-based CRDT approach.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0] or [MIT license] at your option.
