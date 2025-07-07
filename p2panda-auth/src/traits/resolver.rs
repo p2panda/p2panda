@@ -9,7 +9,7 @@ pub trait Resolver<ID, OP, C, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     GS: GroupStore<ID, OP, C, Self, ORD>,
     Self: Sized,
 {
