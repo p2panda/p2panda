@@ -530,10 +530,10 @@ where
 /// - OP : identifier for an operation.
 /// - C  : conditions which restrict an access level.
 /// - RS : generic resolver which contains logic for deciding when group state rebuilds are
-///        required, and how concurrent actions are handled. See the `resolver` module for
-///        different implementations.
+///   required, and how concurrent actions are handled. See the `resolver` module for different
+///   implementations.
 /// - ORD: orderer which exposes an API for creating and processing operations with meta-data
-///        which allow them to be processed in partial order.
+///   which allow them to be processed in partial order.
 /// - GS : global store containing states for all known groups.
 #[derive(Clone, Debug, Default)]
 pub struct GroupCrdt<ID, OP, C, RS, ORD, GS> {
@@ -595,7 +595,7 @@ where
             return Err(GroupCrdtError::IncorrectGroupId(group_id, y.group_id));
         }
 
-        if y.operations.get(&operation_id).is_some() {
+        if y.operations.contains_key(&operation_id) {
             // The operation has already been processed.
             return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
         }
