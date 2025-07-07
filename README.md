@@ -48,9 +48,9 @@ p2panda is "broadcast-only" at it’s heart, making any data not only offline-fi
 
 📦 [`p2panda-encryption`](https://crates.io/crates/p2panda-encryption) - Decentralised data- and message encryption for groups with post-compromise security and optional forward secrecy.
 
-🚧 `p2panda-node` - All-in-one p2panda node which can be used in federated or fully decentralised networks or both at the same time. Supports "lightweight" clients running in the browser.
+📦 [`p2panda-auth`](https://crates.io/crates/p2panda-auth) - Decentralised group management with fine-grained, per-member permissions.
 
-🚧 `p2panda-auth` - Manage access to data with capabilities.
+🚧  `p2panda-node` - All-in-one p2panda node which can be used in federated or fully decentralised networks or both at the same time. Supports "lightweight" clients running in the browser.
 
 ## License
 
