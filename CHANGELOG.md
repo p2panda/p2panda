@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.4.0] - 14/04/2025
+
 ### Added
 
 - `p2panda-auth`: decentralised group management and authorization [#757](https://github.com/p2panda/p2panda/issues/757) 🥞
@@ -79,7 +81,8 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.1...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/p2panda/p2panda/releases/tag/v0.4.0
 [0.3.1]: https://github.com/p2panda/p2panda/releases/tag/v0.3.1
 [0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0

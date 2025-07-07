@@ -1,7 +1,7 @@
 [package]
 name = "p2panda-auth"
 description = "Decentralised group management with fine-grained, per-member permissions"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2024"
 authors = [
     "adz <x12@adz.garden>",
