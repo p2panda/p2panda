@@ -7,9 +7,9 @@
 //! still have access to previously-created content, for example private knowledge or wiki
 //! applications or a booking tool for rehearsal rooms.
 //!
-//! A member will not learn about any newly created data after removing them from the group since
-//! the key gets rotated on member removal or manual key update. This should accommodate for many
-//! use-cases in p2p applications which rely on basic group encryption with post-compromise
+//! A member will not learn about any newly-created data after they are removed from the group,
+//! since the key gets rotated on member removal or manual key update. This should accommodate for
+//! many use-cases in p2p applications which rely on basic group encryption with post-compromise
 //! security (PCS) and forward secrecy (FS) during key agreement.
 //!
 //! ## Messages
