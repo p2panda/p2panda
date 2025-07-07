@@ -22,7 +22,7 @@
   </h3>
 </div>
 
-This crate provides provides decentralised group management with fine-grained, per-member
+This crate provides decentralised group management with fine-grained, per-member
 permissions.
 
 Once a group has been created, members can be added, removed, promoted and demoted. Each
