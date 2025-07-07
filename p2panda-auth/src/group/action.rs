@@ -3,7 +3,7 @@
 use crate::Access;
 use crate::group::GroupMember;
 
-/// Actions which can be applied to a group.
+/// Actions for creating groups and modifying group membership.
 #[derive(Clone, Debug, PartialEq)]
 pub enum GroupAction<ID, C> {
     Create {
@@ -30,7 +30,7 @@ impl<ID, C> GroupAction<ID, C>
 where
     ID: Copy,
 {
-    /// Returns true if this is a create action.
+    /// Return `true` if this is a create action.
     pub fn is_create(&self) -> bool {
         matches!(self, GroupAction::Create { .. })
     }

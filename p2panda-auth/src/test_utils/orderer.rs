@@ -14,7 +14,7 @@ use crate::test_utils::{
     Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
     TestGroupStore,
 };
-use crate::traits::{GroupStore, Operation, Ordering};
+use crate::traits::{GroupStore, Operation, Orderer};
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
@@ -55,14 +55,14 @@ impl TestOrdererState {
 #[derive(Clone, Debug, Default)]
 pub struct TestOrderer {}
 
-impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
+impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Conditions>>
     for TestOrderer
 {
     type State = TestOrdererState;
 
     type Error = OrdererError;
 
-    type Message = TestOperation;
+    type Operation = TestOperation;
 
     /// Construct the next operation which should include meta-data required for establishing order
     /// between different operations.
@@ -73,7 +73,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
     fn next_message(
         y: Self::State,
         control_message: &GroupControlMessage<MemberId, MessageId, Conditions>,
-    ) -> Result<(Self::State, Self::Message), Self::Error> {
+    ) -> Result<(Self::State, Self::Operation), Self::Error> {
         let group_id = control_message.group_id();
         let group_y = {
             let y_inner = y.inner.borrow();
@@ -172,7 +172,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
         Ok((y_i, operation))
     }
 
-    fn queue(y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
+    fn queue(y: Self::State, message: &Self::Operation) -> Result<Self::State, Self::Error> {
         let id = message.id();
 
         {
@@ -199,7 +199,7 @@ impl Ordering<MemberId, MessageId, GroupControlMessage<MemberId, MessageId, Cond
 
     fn next_ready_message(
         y: Self::State,
-    ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
+    ) -> Result<(Self::State, Option<Self::Operation>), Self::Error> {
         let next_msg = {
             let mut inner = y.inner.borrow_mut();
             let (orderer_y_i, msg) =

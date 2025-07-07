@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
 use std::error::Error;
 
 use crate::Access;
 use crate::group::GroupMember;
-use crate::traits::{IdentityHandle, OperationId, Ordering};
+use crate::traits::{IdentityHandle, OperationId, Orderer};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait GroupMembership<ID, OP, C, ORD>
+pub trait Group<ID, OP, C, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
     // TODO: Do we strictly need the orderer here? Could it rather be a generic message?
     // We might not actually need to know anything about the message type, only in the `Orderer`.
-    // In the _implementation_ we'd say it's an `ORD::Message` but not here (move that knowledge
+    // In the _implementation_ we'd say it's an `ORD::Operation` but not here (move that knowledge
     // into the implementation.
-    ORD: Ordering<ID, OP, Self::Action>,
+    ORD: Orderer<ID, OP, Self::Action>,
 {
     type State;
     type Action;
@@ -29,7 +30,7 @@ where
         &self,
         group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Initialise the group by processing a remotely-authored `create` message.
     ///
@@ -37,13 +38,13 @@ where
     /// called. The `group_id` is extracted from the operation itself.
     fn create_from_remote(
         &self,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error>;
 
     /// Process a remotely-authored group action message.
     fn receive_from_remote(
         y: Self::State,
-        remote_operation: ORD::Message,
+        remote_operation: ORD::Operation,
     ) -> Result<Self::State, Self::Error>;
 
     /// Add a member to the group.
@@ -55,14 +56,14 @@ where
         adder: ID,
         added: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Removes a member from the group.
     fn remove(
         y: Self::State,
         remover: ID,
         removed: ID,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Promote a member to the given access level.
     fn promote(
@@ -70,7 +71,7 @@ where
         promoter: ID,
         promoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
 
     /// Demote a member to the given access level.
     fn demote(
@@ -78,5 +79,34 @@ where
         demoter: ID,
         demoted: ID,
         access: Access<C>,
-    ) -> Result<(Self::State, ORD::Message), Self::Error>;
+    ) -> Result<(Self::State, ORD::Operation), Self::Error>;
+}
+
+/// Interface for querying group membership and access levels.
+pub trait GroupMembership<ID, OP, C> {
+    type State;
+    type Error: Error;
+
+    /// Query the current access level of the given member.
+    ///
+    /// The member is expected to be a "stateless" individual, not a "stateful" group.
+    fn access(y: &Self::State, member: &ID) -> Result<Access<C>, Self::Error>;
+
+    /// Query group membership.
+    fn member_ids(y: &Self::State) -> Result<HashSet<ID>, Self::Error>;
+
+    /// Return `true` if the given ID is an active member of the group.
+    fn is_member(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Pull` access level.
+    fn is_puller(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Read` access level.
+    fn is_reader(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Write` access level.
+    fn is_writer(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
+
+    /// Return `true` if the given member is currently assigned the `Manage` access level.
+    fn is_manager(y: &Self::State, member: &ID) -> Result<bool, Self::Error>;
 }
