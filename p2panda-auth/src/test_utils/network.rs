@@ -58,7 +58,7 @@ impl Network {
         initial_members: Vec<(GroupMember<MemberId>, Access<()>)>,
     ) -> MessageId {
         let y = self.get_y(&creator, &group_id);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Create { initial_members },
         };
@@ -78,7 +78,7 @@ impl Network {
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&adder, &group_id);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Add {
                 member: added,
@@ -100,7 +100,7 @@ impl Network {
         group_id: MemberId,
     ) -> MessageId {
         let y = self.get_y(&remover, &group_id);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Remove { member: removed },
         };
@@ -120,7 +120,7 @@ impl Network {
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&demoter, &group_id);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Demote {
                 member: demoted,
@@ -143,7 +143,7 @@ impl Network {
         access: Access<()>,
     ) -> MessageId {
         let y = self.get_y(&promoter, &group_id);
-        let control_message = GroupControlMessage::GroupAction {
+        let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Promote {
                 member: promoted,

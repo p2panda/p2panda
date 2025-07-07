@@ -13,7 +13,7 @@ pub trait GroupStore<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, OP, C>>,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>>,
     Self: Sized,
 {
     type Error: Error + Display;
