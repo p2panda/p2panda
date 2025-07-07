@@ -4,7 +4,7 @@
 //!
 //! This "Data Encryption" scheme allows peers to encrypt any data with a secret, symmetric key for
 //! a group. This will be useful for building applications where users who enter a group late will
-//! still have access to previously created content, for example private knowledge or wiki
+//! still have access to previously-created content, for example private knowledge or wiki
 //! applications or a booking tool for rehearsal rooms.
 //!
 //! A member will not learn about any newly created data after removing them from the group since
@@ -43,7 +43,7 @@
 //!
 //! Members who have been added to the group will learn about the whole secret bundle included in a
 //! direct "welcome" message encrypted towards them using the 2SM protocol. Through this the added
-//! member will be able to decrypt all previously created content as they will learn about all
+//! member will be able to decrypt all previously-created content as they will learn about all
 //! used secrets.
 //!
 //! ## Optional forward secrecy

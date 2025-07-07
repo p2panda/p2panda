@@ -205,7 +205,7 @@ where
                 //
                 // This is a naive implementation where we assume that every member processed every
                 // control message after one round and where every message points at _every_
-                // previously created message.
+                // previously-created message.
                 if let ForwardSecureMessageContent::Control { .. } = message.content() {
                     if welcome.previous.contains(&message.id()) {
                         continue;
