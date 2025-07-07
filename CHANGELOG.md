@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- `p2panda-auth`: decentralised group management and authorization [#757](https://github.com/p2panda/p2panda/issues/757) 🥞
 - `p2panda-encryption`: decentralized data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
 - Introduce core group CRDT for auth [#748](https://github.com/p2panda/p2panda/pull/748)
@@ -42,8 +43,8 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Refactor sync manager to reduce complexity [#714](https://github.com/p2panda/p2panda/pull/714)
-- Expose bootstrap mode setting for network chat example via CLI arg [#709](https://github.com/p2panda/p2panda/pull/709) 
-- Expand chat example with relay, mdns and bootstrap options [#690](https://github.com/p2panda/p2panda/pull/690) 
+- Expose bootstrap mode setting for network chat example via CLI arg [#709](https://github.com/p2panda/p2panda/pull/709)
+- Expand chat example with relay, mdns and bootstrap options [#690](https://github.com/p2panda/p2panda/pull/690)
 - Remove logging from network tests [#693](https://github.com/p2panda/p2panda/pull/693)
 - Give access to header in `Extension::extract` method [#670](https://github.com/p2panda/p2panda/pull/670)
 - Update to iroh `v0.31.0` [#672](https://github.com/p2panda/p2panda/pull/672)
