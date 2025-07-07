@@ -15,7 +15,7 @@
 //! datasets. Custom sync protocols can be defined which rely on group membership and access
 //! levels to determine who to sync with and over which subsets of data. Access conditions can be
 //! used to define application-layer specific access rules, for example when modelling moderation
-//! rules or additional write checks. 
+//! rules or additional write checks.
 //!
 //! ## Features
 //!
