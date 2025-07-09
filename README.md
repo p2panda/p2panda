@@ -24,7 +24,7 @@ We have adopted a modular approach—allowing projects the freedom to pick what 
 
 Many of our Rust crates operate over raw bytes and are fully compatible with your own data types and any CRDT. In case you don't plan on building your own peer-to-peer protocol, we have you covered with all features required to build a mobile or desktop application.
 
-We're using existing libraries like [iroh](https://github.com/n0-computer/iroh) and well-established standards such as BLAKE3, Ed25519, STUN, CBOR, TLS, QUIC, [UCAN](https://github.com/ucan-wg/spec), [Double Ratchet](https://en.m.wikipedia.org/wiki/Double_Ratchet_Algorithm) and more - as long as they give us the radical offline-first guarantee we need.
+We're using existing libraries like [iroh](https://github.com/n0-computer/iroh) and well-established standards such as BLAKE3, Ed25519, STUN, CBOR, TLS, QUIC, [Double Ratchet](https://en.m.wikipedia.org/wiki/Double_Ratchet_Algorithm) and more - as long as they give us the radical offline-first guarantee we need.
 
 We want collaboration, encryption and access-control to work even when operating over unstable or ephemeral connections. Towards this end, we're actively working alongside researchers to design and implement resilient solutions.
 
