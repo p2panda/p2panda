@@ -274,12 +274,15 @@ where
             .endpoint
             .connect(from_public_key(peer), SYNC_CONNECTION_ALPN)
             .await
-            .map_err(|_| SyncAttemptError::Connection)?;
+            .map_err(|err| {
+                error!("connection error: {}", err);
+                SyncAttemptError::Connection
+            })?;
 
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|_| SyncAttemptError::Connection)?;
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|err| {
+            error!("connection error: {}", err);
+            SyncAttemptError::Connection
+        })?;
 
         let sync_protocol = self.config.protocol();
         let engine_actor_tx = self.engine_actor_tx.clone();
