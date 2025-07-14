@@ -1066,7 +1066,7 @@ mod tests {
     }
 
     // @TODO: This test uses an externally hosted relay which causes delays or might sometimes not
-    // pass, we can look into using a "mock" infrastructure instead 
+    // pass, we can look into using a "mock" infrastructure instead
     // See: https://github.com/p2panda/p2panda/issues/687
     // #[tokio::test]
     // async fn join_gossip_overlay_with_relay() {
