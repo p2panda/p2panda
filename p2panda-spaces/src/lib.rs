@@ -4,4 +4,5 @@ mod event;
 mod group;
 mod manager;
 mod space;
+mod store;
 pub mod traits;
