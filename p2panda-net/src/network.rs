@@ -1065,61 +1065,64 @@ mod tests {
         node_2.shutdown().await.unwrap();
     }
 
-    #[tokio::test]
-    async fn join_gossip_overlay_with_relay() {
-        let network_id = [1; 32];
-        let topic = TestTopic::new("chat");
-
-        // @NOTE(glyph): I tried using the iroh test relay (`iroh::test_utils::run_relay_server()`)
-        // but it fails (the peers never find one another via the network-wide gossip overlay).
-        // For now we use the p2panda relay instead.
-        let relay_url: RelayUrl = "https://wasser.liebechaos.org/".parse().unwrap();
-
-        // Build the bootstrap node.
-        let node_1 = NetworkBuilder::new(network_id)
-            .bootstrap()
-            .relay(relay_url.clone(), false, 0)
-            .build()
-            .await
-            .unwrap();
-        // Ensure the connection to the relay has been initialized.
-        node_1.endpoint().home_relay().initialized().await.unwrap();
-
-        // Build the second node.
-        let node_2 = NetworkBuilder::new(network_id)
-            .relay(relay_url, false, 0)
-            .direct_address(node_1.node_id(), vec![], None)
-            .build()
-            .await
-            .unwrap();
-
-        // Subscribe to the same topic from both nodes
-        let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
-        let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
-
-        // Ensure the gossip-overlay has been joined by both nodes for the given topic
-        assert!(ready_1.await.is_ok());
-        assert!(ready_2.await.is_ok());
-
-        // Broadcast a message and make sure it's received by the other node
-        tx_1.send(ToNetwork::Message {
-            bytes: "Hello, Node".to_bytes(),
-        })
-        .await
-        .unwrap();
-
-        let rx_2_msg = rx_2.recv().await.unwrap();
-        assert_eq!(
-            rx_2_msg,
-            FromNetwork::GossipMessage {
-                bytes: "Hello, Node".to_bytes(),
-                delivered_from: node_1.node_id(),
-            }
-        );
-
-        node_1.shutdown().await.unwrap();
-        node_2.shutdown().await.unwrap();
-    }
+    // @TODO: This test uses an externally hosted relay which causes delays or might sometimes not
+    // pass, we can look into using a "mock" infrastructure instead 
+    // See: https://github.com/p2panda/p2panda/issues/687
+    // #[tokio::test]
+    // async fn join_gossip_overlay_with_relay() {
+    //     let network_id = [1; 32];
+    //     let topic = TestTopic::new("chat");
+    //
+    //     // @NOTE(glyph): I tried using the iroh test relay (`iroh::test_utils::run_relay_server()`)
+    //     // but it fails (the peers never find one another via the network-wide gossip overlay).
+    //     // For now we use the p2panda relay instead.
+    //     let relay_url: RelayUrl = "https://wiese.liebechaos.org/".parse().unwrap();
+    //
+    //     // Build the bootstrap node.
+    //     let node_1 = NetworkBuilder::new(network_id)
+    //         .bootstrap()
+    //         .relay(relay_url.clone(), false, 0)
+    //         .build()
+    //         .await
+    //         .unwrap();
+    //     // Ensure the connection to the relay has been initialized.
+    //     node_1.endpoint().home_relay().initialized().await.unwrap();
+    //
+    //     // Build the second node.
+    //     let node_2 = NetworkBuilder::new(network_id)
+    //         .relay(relay_url, false, 0)
+    //         .direct_address(node_1.node_id(), vec![], None)
+    //         .build()
+    //         .await
+    //         .unwrap();
+    //
+    //     // Subscribe to the same topic from both nodes
+    //     let (tx_1, _rx_1, ready_1) = node_1.subscribe(topic.clone()).await.unwrap();
+    //     let (_tx_2, mut rx_2, ready_2) = node_2.subscribe(topic).await.unwrap();
+    //
+    //     // Ensure the gossip-overlay has been joined by both nodes for the given topic
+    //     assert!(ready_1.await.is_ok());
+    //     assert!(ready_2.await.is_ok());
+    //
+    //     // Broadcast a message and make sure it's received by the other node
+    //     tx_1.send(ToNetwork::Message {
+    //         bytes: "Hello, Node".to_bytes(),
+    //     })
+    //     .await
+    //     .unwrap();
+    //
+    //     let rx_2_msg = rx_2.recv().await.unwrap();
+    //     assert_eq!(
+    //         rx_2_msg,
+    //         FromNetwork::GossipMessage {
+    //             bytes: "Hello, Node".to_bytes(),
+    //             delivered_from: node_1.node_id(),
+    //         }
+    //     );
+    //
+    //     node_1.shutdown().await.unwrap();
+    //     node_2.shutdown().await.unwrap();
+    // }
 
     #[tokio::test]
     async fn ping_pong() {
