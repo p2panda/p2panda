@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use crate::event::Event;
 use crate::group::Group;
 use crate::space::Space;
+use crate::store::SpacesStore;
 use crate::traits::Forge;
 
 /// Create and manage spaces and groups.
@@ -25,15 +26,25 @@ use crate::traits::Forge;
 /// removed from a space.
 ///
 /// Is agnostic to current p2panda-streams, networking layer, data type?
-pub struct Manager<F, M> {
+pub struct Manager<S, F, M> {
     forge: F,
-    _phantom: PhantomData<M>,
+    store: S,
+    _marker: PhantomData<M>,
 }
 
-impl<F, M> Manager<F, M>
+impl<S, F, M> Manager<S, F, M>
 where
+    S: SpacesStore,
     F: Forge<M>,
 {
+    pub fn new(store: S, forge: F) -> Self {
+        Self {
+            forge,
+            store,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn space(&self) -> Space<F, M> {
         todo!()
     }
