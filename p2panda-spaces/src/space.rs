@@ -3,14 +3,19 @@
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
-use p2panda_auth::group::GroupMember;
+use p2panda_auth::group::{GroupAction as AuthGroupAction, GroupCrdt as AuthGroup, GroupMember};
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
+use p2panda_encryption::data_scheme::EncryptionGroup;
+use thiserror::Error;
 
 use crate::manager::Manager;
 use crate::orderer::AuthOrderer;
 use crate::traits::Forge;
-use crate::{ActorId, AuthDummyStore, AuthGroupState, Conditions, OperationId};
+use crate::{
+    ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
+    OperationId,
+};
 
 /// Encrypted data context with authorization boundary.
 ///
@@ -28,7 +33,7 @@ where
     pub(crate) async fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Self {
+    ) -> Result<Self, SpaceError<C, RS>> {
         let manager = manager_ref.inner.read().await;
 
         let my_id: ActorId = manager.forge.public_key().into();
@@ -43,9 +48,9 @@ where
         let ephemeral_private_key = PrivateKey::new();
         let space_id: ActorId = ephemeral_private_key.public_key().into();
 
-        // 2. Establish auth group state with create control message.
+        // 2. Prepare auth group state with "create" control message.
 
-        // Automatically add ourselves with "Manage" level without any conditions as default.
+        // Automatically add ourselves with "manage" level without any conditions as default.
         if !initial_members
             .iter()
             .any(|(member, _)| member.id() == my_id)
@@ -53,23 +58,26 @@ where
             initial_members.push((GroupMember::Individual(my_id), Access::manage()));
         }
 
-        // @TODO: Get this from manager & establish initial orderer state.
-        //
-        // This initial orderer state is not necessarily "empty", can include pointers at other
-        // groups in case we've passed in "groups" as our initial members.
-        let orderer_y = ();
+        let (auth_y, auth_args) = {
+            // @TODO: Get this from manager & establish initial orderer state.
+            //
+            // This initial orderer state is not necessarily "empty", can include pointers at other
+            // groups in case we've passed in "groups" as our initial members.
+            let orderer_y = ();
 
-        let auth_y = AuthGroupState::<C, RS>::new(my_id, space_id, AuthDummyStore, orderer_y);
+            let y = AuthGroupState::<C, RS>::new(my_id, space_id, AuthDummyStore, orderer_y);
 
-        // let action = GroupControlMessage {
-        //     group_id: y.group_id,
-        //     action: GroupAction::Create { initial_members },
-        // };
-        //
-        // let (y, operation) = GroupCrdt::prepare(y, &action)?;
-        // let y = GroupCrdt::process(y, &operation)?;
-        //
-        // Ok((y, operation))
+            let action = AuthControlMessage {
+                group_id: space_id,
+                action: AuthGroupAction::Create { initial_members },
+            };
+
+            AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
+        };
+
+        // let encryption_y = EncryptionGroup::init(my_id, my_keys, pki, dgm, orderer);
+
+        // 3. Prepare encryption group state.
 
         // 3. establish encryption group state with create control message
         // 4. merge and sign control messages in forge (F)
@@ -77,9 +85,9 @@ where
 
         drop(manager);
 
-        Self {
+        Ok(Self {
             manager: manager_ref,
-        }
+        })
     }
 
     pub fn publish(_bytes: &[u8]) {
@@ -89,4 +97,13 @@ where
     pub fn process(&mut self, _message: &M) {
         todo!()
     }
+}
+
+#[derive(Debug, Error)]
+pub enum SpaceError<C, RS>
+where
+    RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+{
+    #[error("{0}")]
+    AuthGroup(AuthGroupError<C, RS>),
 }

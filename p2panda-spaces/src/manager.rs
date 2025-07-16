@@ -60,6 +60,7 @@ where
             auth_orderer,
             _marker: PhantomData,
         };
+
         Self {
             inner: Arc::new(RwLock::new(inner)),
         }
@@ -70,7 +71,7 @@ where
     }
 
     pub async fn create_space(&self) -> Space<S, F, M, C, RS> {
-        Space::create(self.clone(), Vec::new()).await
+        Space::create(self.clone(), Vec::new()).await.unwrap() // @TODO: Handle error!
     }
 
     pub fn group(&self) -> Group {
