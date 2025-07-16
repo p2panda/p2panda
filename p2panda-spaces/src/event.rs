@@ -3,8 +3,8 @@
 use crate::group::Group;
 use crate::space::Space;
 
-pub enum Event<S, F, M> {
-    JoinedSpace(Space<S, F, M>),
+pub enum Event<S, F, M, C, RS> {
+    JoinedSpace(Space<S, F, M, C, RS>),
     JoinedGroup(Group),
     Message(M),
 }
