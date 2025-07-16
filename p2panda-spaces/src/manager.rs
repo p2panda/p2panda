@@ -45,11 +45,11 @@ where
         }
     }
 
-    pub fn space(&self) -> Space<F, M> {
+    pub fn space(&self) -> Space<S, F, M> {
         todo!()
     }
 
-    pub fn create_space(&mut self) -> Space<F, M> {
+    pub fn create_space(&mut self) -> Space<S, F, M> {
         todo!()
     }
 
@@ -61,7 +61,7 @@ where
         todo!()
     }
 
-    pub fn receive(&mut self, _message: &M) -> Vec<Event<F, M>> {
+    pub fn process(&mut self, _message: &M) -> Vec<Event<S, F, M>> {
         todo!()
     }
 }
