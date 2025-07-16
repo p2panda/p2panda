@@ -49,6 +49,10 @@ where
         //
         // This is very memory in-efficient and the reason why this implementations should only be
         // used for development & testing purposes.
+        //
+        // @TODO: if we want to protect against two transactions being open at the same time and
+        // operating on independent states (then over-writing each other on commit), we could
+        // introduce a semaphore here which only unlocks once commit has been called.
         let current_state = self.state.read().await;
         let next_state = current_state.clone();
 
