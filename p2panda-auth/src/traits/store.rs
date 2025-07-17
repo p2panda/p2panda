@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO: Rename this module from `group_store.rs` to `store.rs`.
-
 use std::error::Error;
 use std::fmt::Display;
 
