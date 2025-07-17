@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// @TODO: Remove this later.
+#![allow(unused)]
+
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
 
 use p2panda_auth::traits::IdentityHandle as AuthIdentityHandle;
 use p2panda_auth::traits::OperationId as AuthOperationId;
 use p2panda_core::{Hash, PublicKey};
-use p2panda_encryption::key_manager::KeyManager;
-use p2panda_encryption::key_registry::KeyRegistry;
 use p2panda_encryption::traits::IdentityHandle as EncryptionIdentityHandle;
 use p2panda_encryption::traits::OperationId as EncryptionOperationId;
 use serde::{Deserialize, Serialize};
 
 use crate::dgm::EncryptionGroupMembership;
+use crate::key_manager::KeyManager;
+use crate::key_registry::KeyRegistry;
 use crate::orderer::{AuthOrderer, EncryptionOrderer};
 
 mod dgm;
@@ -90,7 +93,7 @@ pub trait Conditions: Clone + Debug + PartialEq + PartialOrd {}
 type EncryptionGroup = p2panda_encryption::data_scheme::EncryptionGroup<
     ActorId,
     OperationId,
-    KeyRegistry<ActorId>,
+    KeyRegistry,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,

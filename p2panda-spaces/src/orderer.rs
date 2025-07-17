@@ -83,6 +83,12 @@ impl<C> AuthOperation<ActorId, OperationId, AuthControlMessage<C>> for AuthArgs 
 
 pub struct EncryptionOrderer {}
 
+impl EncryptionOrderer {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 impl p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
     for EncryptionOrderer
 {

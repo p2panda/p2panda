@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::dgm::EncryptionMembershipState;
 use crate::manager::Manager;
-use crate::orderer::AuthOrderer;
+use crate::orderer::{AuthOrderer, EncryptionOrderer};
 use crate::traits::Forge;
 use crate::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
@@ -30,11 +30,11 @@ where
     F: Forge<M>,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
-    pub(crate) async fn create(
+    pub(crate) fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
     ) -> Result<Self, SpaceError<C, RS>> {
-        let manager = manager_ref.inner.write().await;
+        let manager = manager_ref.inner.borrow_mut();
 
         let my_id: ActorId = manager.forge.public_key().into();
 
@@ -77,21 +77,27 @@ where
 
         // 3. establish encryption group state with create control message
 
-        // @TODO: KeyManagerState and KeyRegistryState should be shared across groups and so we
-        // need a key manager which follows interior mutability patterns.
-        let dgm = EncryptionMembershipState {
-            space_id,
-            group_store: (),
+        let encryption_y = {
+            let dgm = EncryptionMembershipState {
+                space_id,
+                group_store: (),
+            };
+
+            let orderer_y = ();
+
+            // @TODO: KeyManagerState and KeyRegistryState should be shared across groups and so we
+            // need a wrapper around them which follows interior mutability patterns.
+            EncryptionGroup::init(
+                my_id,
+                manager.key_manager_y.clone(),
+                manager.key_registry_y.clone(),
+                dgm,
+                orderer_y,
+            );
         };
-        let encryption_y = EncryptionGroup::init(
-            my_id,
-            manager.key_manager_y.clone(),
-            manager.key_registry_y.clone(),
-            dgm,
-            orderer,
-        );
 
         // 4. merge and sign control messages in forge (F)
+
         // 5. persist new state
 
         drop(manager);
@@ -101,11 +107,19 @@ where
         })
     }
 
-    pub fn publish(_bytes: &[u8]) {
+    pub(crate) fn process(&mut self, _message: &M) {
         todo!()
     }
 
-    pub fn process(&mut self, _message: &M) {
+    pub fn add(&self) {
+        todo!()
+    }
+
+    pub fn remove(&self) {
+        todo!()
+    }
+
+    pub fn publish(_bytes: &[u8]) {
         todo!()
     }
 }
