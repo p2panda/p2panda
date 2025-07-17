@@ -11,7 +11,10 @@ pub struct EncryptionGroupMembership {}
 
 // @TODO: Maybe put `serde` features behind a feature-flag in `p2panda-encryption`?
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptionMembershipState {}
+pub struct EncryptionMembershipState {
+    pub(crate) space_id: ActorId,
+    pub(crate) group_store: () // TODO: this should be a generic S group store
+}
 
 impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
     for EncryptionGroupMembership
@@ -47,6 +50,7 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
     }
 
     fn members(y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
+        // TODO: get the spaces' group state and then query it.
         todo!()
     }
 }
