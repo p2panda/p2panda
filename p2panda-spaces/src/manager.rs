@@ -5,6 +5,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use p2panda_auth::traits::Resolver;
+use p2panda_encryption::Rng;
+use p2panda_encryption::crypto::x25519::SecretKey;
+use p2panda_encryption::key_bundle::Lifetime;
+use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
+use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
+use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::event::Event;
@@ -41,6 +47,9 @@ pub struct InnerManager<S, F, M, C, RS> {
     pub(crate) forge: F,
     pub(crate) store: S,
     pub(crate) auth_orderer: AuthOrderer,
+    pub(crate) key_manager_y: KeyManagerState,
+    pub(crate) key_registry_y: KeyRegistryState<ActorId>,
+    pub(crate) rng: Rng,
     _marker: PhantomData<(M, C, RS)>,
 }
 
@@ -51,19 +60,29 @@ where
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
-    pub fn new(store: S, forge: F) -> Self {
+    pub fn new(
+        store: S,
+        forge: F,
+        identity_secret: &SecretKey,
+        rng: Rng,
+    ) -> Result<Self, ManagerError> {
         let auth_orderer = AuthOrderer::new();
+        let key_manager_y = KeyManager::init(identity_secret, Lifetime::default(), &rng)?;
+        let key_registry_y = KeyRegistry::init();
 
         let inner = InnerManager {
             forge,
             store,
             auth_orderer,
+            key_manager_y,
+            key_registry_y,
+            rng,
             _marker: PhantomData,
         };
 
-        Self {
+        Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
-        }
+        })
     }
 
     pub fn space(&self) -> Space<S, F, M, C, RS> {
@@ -96,4 +115,10 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
             inner: self.inner.clone(),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ManagerError {
+    #[error(transparent)]
+    KeyManager(#[from] KeyManagerError),
 }

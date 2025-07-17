@@ -6,15 +6,15 @@ use p2panda_auth::Access;
 use p2panda_auth::group::{GroupAction as AuthGroupAction, GroupCrdt as AuthGroup, GroupMember};
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
-use p2panda_encryption::data_scheme::EncryptionGroup;
 use thiserror::Error;
 
+use crate::dgm::EncryptionMembershipState;
 use crate::manager::Manager;
 use crate::orderer::AuthOrderer;
 use crate::traits::Forge;
 use crate::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
-    OperationId,
+    EncryptionGroup, OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -34,7 +34,7 @@ where
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
     ) -> Result<Self, SpaceError<C, RS>> {
-        let manager = manager_ref.inner.read().await;
+        let manager = manager_ref.inner.write().await;
 
         let my_id: ActorId = manager.forge.public_key().into();
 
@@ -75,11 +75,22 @@ where
             AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
         };
 
-        // let encryption_y = EncryptionGroup::init(my_id, my_keys, pki, dgm, orderer);
-
-        // 3. Prepare encryption group state.
-
         // 3. establish encryption group state with create control message
+
+        // @TODO: KeyManagerState and KeyRegistryState should be shared across groups and so we
+        // need a key manager which follows interior mutability patterns.
+        let dgm = EncryptionMembershipState {
+            space_id,
+            group_store: (),
+        };
+        let encryption_y = EncryptionGroup::init(
+            my_id,
+            manager.key_manager_y.clone(),
+            manager.key_registry_y.clone(),
+            dgm,
+            orderer,
+        );
+
         // 4. merge and sign control messages in forge (F)
         // 5. persist new state
 

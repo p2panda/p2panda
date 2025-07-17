@@ -8,6 +8,9 @@ use p2panda_auth::traits::OperationId as AuthOperationId;
 use p2panda_core::{Hash, PublicKey};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
+use p2panda_encryption::traits::IdentityHandle as EncryptionIdentityHandle;
+use p2panda_encryption::traits::OperationId as EncryptionOperationId;
+use serde::{Deserialize, Serialize};
 
 use crate::dgm::EncryptionGroupMembership;
 use crate::orderer::{AuthOrderer, EncryptionOrderer};
@@ -23,10 +26,11 @@ mod space;
 mod store;
 pub mod traits;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ActorId(pub(crate) PublicKey);
 
 impl AuthIdentityHandle for ActorId {}
+impl EncryptionIdentityHandle for ActorId {}
 
 impl Display for ActorId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -40,7 +44,7 @@ impl From<PublicKey> for ActorId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub(crate) Hash);
 
 impl Display for OperationId {
@@ -50,6 +54,7 @@ impl Display for OperationId {
 }
 
 impl AuthOperationId for OperationId {}
+impl EncryptionOperationId for OperationId {}
 
 type AuthGroupError<C, RS> =
     p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
