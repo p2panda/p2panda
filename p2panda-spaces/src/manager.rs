@@ -1,22 +1,23 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use p2panda_auth::traits::Resolver;
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
-use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
+use p2panda_encryption::key_manager::KeyManagerError;
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 use crate::event::Event;
 use crate::group::Group;
+use crate::key_manager::{KeyManager, KeyManagerState};
+use crate::key_registry::{KeyRegistry, KeyRegistryState};
 use crate::orderer::AuthOrderer;
-use crate::space::Space;
+use crate::space::{Space, SpaceError};
 use crate::store::SpacesStore;
 use crate::traits::Forge;
 use crate::{ActorId, AuthDummyStore, Conditions, OperationId};
@@ -40,15 +41,15 @@ use crate::{ActorId, AuthDummyStore, Conditions, OperationId};
 ///
 /// Is agnostic to current p2panda-streams, networking layer, data type?
 pub struct Manager<S, F, M, C, RS> {
-    pub(crate) inner: Arc<RwLock<InnerManager<S, F, M, C, RS>>>,
+    pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
 }
 
-pub struct InnerManager<S, F, M, C, RS> {
+pub(crate) struct ManagerInner<S, F, M, C, RS> {
     pub(crate) forge: F,
     pub(crate) store: S,
-    pub(crate) auth_orderer: AuthOrderer,
+    pub(crate) auth_orderer: AuthOrderer, // @TODO: This should probably be the state instead.
     pub(crate) key_manager_y: KeyManagerState,
-    pub(crate) key_registry_y: KeyRegistryState<ActorId>,
+    pub(crate) key_registry_y: KeyRegistryState,
     pub(crate) rng: Rng,
     _marker: PhantomData<(M, C, RS)>,
 }
@@ -65,12 +66,14 @@ where
         forge: F,
         identity_secret: &SecretKey,
         rng: Rng,
-    ) -> Result<Self, ManagerError> {
+    ) -> Result<Self, ManagerError<C, RS>> {
         let auth_orderer = AuthOrderer::new();
+
         let key_manager_y = KeyManager::init(identity_secret, Lifetime::default(), &rng)?;
+
         let key_registry_y = KeyRegistry::init();
 
-        let inner = InnerManager {
+        let inner = ManagerInner {
             forge,
             store,
             auth_orderer,
@@ -81,7 +84,7 @@ where
         };
 
         Ok(Self {
-            inner: Arc::new(RwLock::new(inner)),
+            inner: Rc::new(RefCell::new(inner)),
         })
     }
 
@@ -89,8 +92,9 @@ where
         todo!()
     }
 
-    pub async fn create_space(&self) -> Space<S, F, M, C, RS> {
-        Space::create(self.clone(), Vec::new()).await.unwrap() // @TODO: Handle error!
+    pub fn create_space(&self) -> Result<Space<S, F, M, C, RS>, ManagerError<C, RS>> {
+        let space = Space::create(self.clone(), Vec::new())?;
+        Ok(space)
     }
 
     pub fn group(&self) -> Group {
@@ -118,7 +122,13 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 }
 
 #[derive(Debug, Error)]
-pub enum ManagerError {
+pub enum ManagerError<C, RS>
+where
+    RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+{
+    #[error(transparent)]
+    Space(#[from] SpaceError<C, RS>),
+
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
 }
