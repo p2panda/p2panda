@@ -25,6 +25,7 @@ mod key_manager;
 mod key_registry;
 mod manager;
 mod orderer;
+mod playground;
 mod space;
 mod store;
 pub mod traits;

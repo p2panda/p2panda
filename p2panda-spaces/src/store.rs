@@ -24,7 +24,7 @@ use tokio::sync::RwLock;
 /// development and testing purposes.
 #[derive(Clone)]
 pub struct MemoryStore<T> {
-    state: Arc<RwLock<T>>,
+    pub state: Arc<RwLock<T>>,
 }
 
 impl<T> MemoryStore<T> {
