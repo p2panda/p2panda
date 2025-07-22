@@ -86,8 +86,8 @@ where
             // need a wrapper around them which follows interior mutability patterns.
             let y = EncryptionGroup::init(
                 my_id,
-                manager.key_manager_y.clone(),
-                manager.key_registry_y.clone(),
+                manager.key_manager_y.clone(), // @TODO: Get state from S instead
+                manager.key_registry_y.clone(), // @TODO: Get state from S instead
                 dgm,
                 orderer_y,
             );
@@ -126,7 +126,7 @@ where
 
         // 6. Persist new state.
 
-        // @TODO
+        // @TODO: Write new state to S (Store).
 
         drop(manager);
 
@@ -136,14 +136,6 @@ where
     }
 
     pub(crate) fn process(&mut self, _message: &M) {
-        todo!()
-    }
-
-    pub fn add(&self) {
-        todo!()
-    }
-
-    pub fn remove(&self) {
         todo!()
     }
 
