@@ -9,9 +9,9 @@ use p2panda_core::PrivateKey;
 use thiserror::Error;
 
 use crate::dgm::EncryptionMembershipState;
+use crate::forge::{Forge, ForgeArgs, SpacesMessage};
 use crate::manager::Manager;
-use crate::orderer::{AuthOrderer, EncryptionOrderer};
-use crate::traits::Forge;
+use crate::orderer::{AuthMessage, AuthOrderer, EncryptionMessage, EncryptionOrderer};
 use crate::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
     EncryptionGroup, EncryptionGroupError, OperationId,
@@ -27,25 +27,21 @@ pub struct Space<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
+    F: Forge<M, C>,
+    M: SpacesMessage<C>,
     C: Conditions,
-    F: Forge<M>,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     pub(crate) fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<Self, SpaceError<M, C, RS>> {
+    ) -> Result<Self, SpaceError<F, M, C, RS>> {
         let manager = manager_ref.inner.borrow_mut();
 
         let my_id: ActorId = manager.forge.public_key().into();
 
         // 1. Derive a space id.
 
-        // @TODO
-        //    - generate new key pair
-        //    - use public key for space id
-        //    - use the private key to sign the control message
-        //    - throw away the private key
         let ephemeral_private_key = PrivateKey::new();
         let space_id: ActorId = ephemeral_private_key.public_key().into();
 
@@ -76,7 +72,7 @@ where
             AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
         };
 
-        // 3. establish encryption group state with create control message
+        // 3. Establish encryption group state with create control message.
 
         let (encryption_y, encryption_args) = {
             let dgm = EncryptionMembershipState {
@@ -102,11 +98,35 @@ where
                 .map_err(SpaceError::EncryptionGroup)?
         };
 
-        // 4. merge and sign control messages in forge (F)
+        // 4. Merge and sign control messages in forge (F).
 
-        // 5. process auth message
+        let args = {
+            let AuthMessage::Args(auth_args) = auth_args else {
+                panic!("here we're only dealing with local operations");
+            };
 
-        // 6. persist new state
+            let EncryptionMessage::Args(encryption_args) = encryption_args else {
+                panic!("here we're only dealing with local operations");
+            };
+
+            ForgeArgs::from_args(space_id, Some(auth_args), Some(encryption_args))
+        };
+
+        let message = manager
+            .forge
+            .forge_with(ephemeral_private_key, args)
+            .map_err(SpaceError::Forge)?;
+
+        // 5. Process auth message.
+
+        let auth_y = {
+            let auth_message = AuthMessage::from_forged(message);
+            AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
+        };
+
+        // 6. Persist new state.
+
+        // @TODO
 
         drop(manager);
 
@@ -140,8 +160,10 @@ fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 }
 
 #[derive(Debug, Error)]
-pub enum SpaceError<M, C, RS>
+pub enum SpaceError<F, M, C, RS>
 where
+    F: Forge<M, C>,
+    M: SpacesMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
@@ -150,4 +172,7 @@ where
 
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError<M>),
+
+    #[error("{0}")]
+    Forge(F::Error),
 }
