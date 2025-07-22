@@ -7,13 +7,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ActorId, OperationId};
 
+#[derive(Clone, Debug)]
 pub struct EncryptionGroupMembership {}
 
 // @TODO: Maybe put `serde` features behind a feature-flag in `p2panda-encryption`?
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
     pub(crate) space_id: ActorId,
-    pub(crate) group_store: () // TODO: this should be a generic S group store
+    pub(crate) group_store: (), // TODO: this should be a generic S group store
 }
 
 impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
@@ -24,7 +25,12 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
     type Error = Infallible; // @TODO
 
     fn create(my_id: ActorId, initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
-        todo!()
+        // @TODO: as all DGM methods are handled outside of encryption this is a no-op.
+        let y = EncryptionMembershipState {
+            space_id: ActorId::placeholder(),
+            group_store: (),
+        };
+        Ok(y)
     }
 
     fn from_welcome(my_id: ActorId, y: Self::State) -> Result<Self::State, Self::Error> {

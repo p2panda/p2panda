@@ -40,10 +40,12 @@ use crate::{ActorId, AuthDummyStore, Conditions, OperationId};
 /// removed from a space.
 ///
 /// Is agnostic to current p2panda-streams, networking layer, data type?
+#[derive(Debug)]
 pub struct Manager<S, F, M, C, RS> {
     pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
 }
 
+#[derive(Debug)]
 pub(crate) struct ManagerInner<S, F, M, C, RS> {
     pub(crate) forge: F,
     pub(crate) store: S,
@@ -66,7 +68,7 @@ where
         forge: F,
         identity_secret: &SecretKey,
         rng: Rng,
-    ) -> Result<Self, ManagerError<C, RS>> {
+    ) -> Result<Self, ManagerError<M, C, RS>> {
         let auth_orderer = AuthOrderer::new();
 
         let key_manager_y = KeyManager::init(identity_secret, Lifetime::default(), &rng)?;
@@ -92,7 +94,7 @@ where
         todo!()
     }
 
-    pub fn create_space(&self) -> Result<Space<S, F, M, C, RS>, ManagerError<C, RS>> {
+    pub fn create_space(&self) -> Result<Space<S, F, M, C, RS>, ManagerError<M, C, RS>> {
         let space = Space::create(self.clone(), Vec::new())?;
         Ok(space)
     }
@@ -122,13 +124,75 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 }
 
 #[derive(Debug, Error)]
-pub enum ManagerError<C, RS>
+pub enum ManagerError<M, C, RS>
 where
+    C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     #[error(transparent)]
-    Space(#[from] SpaceError<C, RS>),
+    Space(#[from] SpaceError<M, C, RS>),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::Infallible;
+
+    use p2panda_core::PrivateKey;
+    use p2panda_encryption::Rng;
+    use p2panda_encryption::crypto::x25519::SecretKey;
+
+    use crate::store::{AllState, MemoryStore};
+    use crate::traits::Forge;
+    use crate::{Conditions, StrongRemoveResolver};
+
+    use super::Manager;
+
+    #[derive(Debug)]
+    struct Message {}
+
+    #[derive(Debug)]
+    struct TestForge {
+        private_key: PrivateKey,
+    }
+
+    #[derive(Clone, Debug, PartialEq, PartialOrd)]
+    struct TestConditions {}
+    impl Conditions for TestConditions {}
+
+    impl Forge<Message> for TestForge {
+        type Error = Infallible;
+
+        fn public_key(&self) -> p2panda_core::PublicKey {
+            self.private_key.public_key()
+        }
+
+        fn forge(&self, args: crate::traits::ForgeArgs) -> Result<Message, Self::Error> {
+            todo!()
+        }
+
+        fn forge_with(
+            &self,
+            private_key: p2panda_core::PrivateKey,
+            args: crate::traits::ForgeArgs,
+        ) -> Result<Message, Self::Error> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn create_space() {
+        let rng = Rng::from_seed([0; 32]);
+        let private_key = PrivateKey::new();
+        // @TODO: this should soon be a SQLite store.
+        let mut store = MemoryStore::new(AllState::default());
+        let forge = TestForge { private_key };
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let manager: Manager<_, _, _, TestConditions, StrongRemoveResolver<TestConditions>> =
+            Manager::new(store, forge, &identity_secret, rng).unwrap();
+        let space = manager.create_space().unwrap();
+        // println!("{0:#?}", space);
+    }
 }

@@ -22,7 +22,7 @@ use tokio::sync::RwLock;
 /// transaction object, where it is mutated until it finally overrides the current state on
 /// "commit". Since this approach is not memory-efficient this store should only be used for
 /// development and testing purposes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MemoryStore<T> {
     state: Arc<RwLock<T>>,
 }
@@ -87,7 +87,7 @@ impl<T> Transaction for MemoryTransaction<T> {
 }
 
 /// In-memory state representing _all_ p2panda systems (operations, encryption, auth, orderer, etc.).
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AllState {
     spaces: SpacesState,
     orderer: OrdererState,
@@ -127,7 +127,7 @@ impl SpacesStore for MemoryStore<AllState> {
 
 // Store implementations for `p2panda-spaces` for in-memory backends.
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SpacesState {
     // @TODO: This is just an example. Remove this.
     example: usize,
@@ -145,7 +145,7 @@ impl WriteToStore<MemoryStore<AllState>> for SpacesState {
 
 // .. more examples
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct OrdererState {}
 
 impl WriteToStore<MemoryStore<AllState>> for OrdererState {
