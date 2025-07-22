@@ -41,7 +41,7 @@ use crate::{ActorId, AuthDummyStore, Conditions, OperationId};
 /// changes, application data being decrypted, pre-key bundles being published, we were added or
 /// removed from a space.
 ///
-/// Is agnostic to current p2panda-streams, networking layer, data type?
+/// Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
 pub struct Manager<S, F, M, C, RS> {
     pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
@@ -51,11 +51,13 @@ pub struct Manager<S, F, M, C, RS> {
 pub(crate) struct ManagerInner<S, F, M, C, RS> {
     pub(crate) forge: F,
     pub(crate) store: S,
-    pub(crate) auth_orderer: AuthOrderer, // @TODO: This should probably be the state instead.
-    pub(crate) key_manager_y: KeyManagerState,
-    pub(crate) key_registry_y: KeyRegistryState,
     pub(crate) rng: Rng,
     _marker: PhantomData<(M, C, RS)>,
+
+    // @TODO: Remove all state and move it into S.
+    pub(crate) auth_orderer: AuthOrderer,
+    pub(crate) key_manager_y: KeyManagerState,
+    pub(crate) key_registry_y: KeyRegistryState,
 }
 
 impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
@@ -64,6 +66,7 @@ where
     F: Forge<M, C>,
     M: SpacesMessage<C>,
     C: Conditions,
+    // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     pub fn new(
@@ -93,7 +96,7 @@ where
         })
     }
 
-    pub fn space(&self) -> Space<S, F, M, C, RS> {
+    pub fn space(&self, space_id: ActorId) -> Space<S, F, M, C, RS> {
         todo!()
     }
 
@@ -112,15 +115,21 @@ where
         Ok(space)
     }
 
-    pub fn group(&self) -> Group {
-        todo!()
-    }
-
-    pub fn create_group(&mut self) -> Group {
-        todo!()
+    pub fn register_member(&mut self) {
+        // @TODO: Find a better name
+        // @TODO: Implement manually adding an "individual" key bundle to the registry.
     }
 
     pub fn process(&mut self, _message: &M) -> Vec<Event<S, F, M, C, RS>> {
+        // @TODO: Look up if we know about the space id in the message M, route it to the right
+        // instance and continue processing there.
+        //
+        // This can be a system message (control messages) or application message (to-be decrypted
+        // in space)
+
+        // @TODO: Error when we process an message on an unknown space. This should not happen at
+        // this stage because we rely on an orderer before.
+
         todo!()
     }
 }
