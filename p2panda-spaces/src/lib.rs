@@ -54,7 +54,7 @@ impl ActorId {
 
 impl Display for ActorId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -85,7 +85,7 @@ impl From<Hash> for OperationId {
 
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.0)
     }
 }
 
