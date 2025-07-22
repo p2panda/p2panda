@@ -8,6 +8,7 @@ use p2panda_auth::traits::Operation as AuthOperation;
 use p2panda_encryption::traits::GroupMessage as EncryptionOperation;
 
 use crate::dgm::EncryptionGroupMembership;
+use crate::forge::SpacesMessage;
 use crate::{
     ActorId, AuthControlMessage, Conditions, EncryptionControlMessage, EncryptionDirectMessage,
     OperationId,
@@ -31,7 +32,7 @@ where
 {
     type State = (); // @TODO
 
-    type Operation = AuthArgs<C>;
+    type Operation = AuthMessage<C>;
 
     type Error = Infallible; // @TODO
 
@@ -43,9 +44,9 @@ where
         // introduce ordering then auth dependencies should be calculated and returned here.
         Ok((
             y,
-            AuthArgs {
+            AuthMessage::Args(AuthArgs {
                 control_message: control_message.clone(),
-            },
+            }),
         ))
     }
 
@@ -69,27 +70,79 @@ pub struct AuthArgs<C> {
     pub(crate) control_message: AuthControlMessage<C>,
 }
 
-// Nothing of this will ever be called at this stage where we're just preparing the arguments for a
-// future message to be forged.
-impl<C> AuthOperation<ActorId, OperationId, AuthControlMessage<C>> for AuthArgs<C> {
+#[derive(Clone, Debug)]
+pub enum AuthMessage<C> {
+    Args(AuthArgs<C>),
+    Forged {
+        author: ActorId,
+        operation_id: OperationId,
+        control_message: AuthControlMessage<C>,
+    },
+}
+
+impl<C> AuthMessage<C>
+where
+    C: Conditions,
+{
+    pub(crate) fn from_forged<M: SpacesMessage<C>>(message: M) -> Self {
+        AuthMessage::Forged {
+            author: message.author(),
+            operation_id: message.id(),
+            control_message: AuthControlMessage {
+                group_id: message.group_id(),
+                action: message.control_message().to_auth_action(),
+            },
+        }
+    }
+}
+
+impl<C> AuthOperation<ActorId, OperationId, AuthControlMessage<C>> for AuthMessage<C>
+where
+    C: Conditions,
+{
     fn id(&self) -> OperationId {
-        unreachable!()
+        match self {
+            AuthMessage::Args(auth_args) => {
+                // Nothing of this will ever be called at this stage where we're just preparing the
+                // arguments for a future message to be forged.
+                unimplemented!()
+            }
+            AuthMessage::Forged { operation_id, .. } => *operation_id,
+        }
     }
 
     fn author(&self) -> ActorId {
-        unreachable!()
+        match self {
+            AuthMessage::Args(auth_args) => {
+                // Nothing of this will ever be called at this stage where we're just preparing the
+                // arguments for a future message to be forged.
+                unimplemented!()
+            }
+            AuthMessage::Forged { author, .. } => *author,
+        }
     }
 
     fn dependencies(&self) -> Vec<OperationId> {
-        unreachable!()
+        // @TODO: We do not implement ordering yet.
+        Vec::new()
     }
 
     fn previous(&self) -> Vec<OperationId> {
-        unreachable!()
+        // @TODO: We do not implement ordering yet.
+        Vec::new()
     }
 
     fn payload(&self) -> AuthControlMessage<C> {
-        unreachable!()
+        match self {
+            AuthMessage::Args(auth_args) => {
+                // Nothing of this will ever be called at this stage where we're just preparing the
+                // arguments for a future message to be forged.
+                unimplemented!()
+            }
+            AuthMessage::Forged {
+                control_message, ..
+            } => control_message.clone(),
+        }
     }
 }
 
@@ -126,7 +179,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         // introduce ordering then encryption dependencies should be calculated and returned here.
         Ok((
             y,
-            EncryptionMessage::Local(EncryptionArgs {
+            EncryptionMessage::Args(EncryptionArgs {
                 control_message: control_message.clone(),
                 direct_messages: direct_messages.to_vec(),
             }),
@@ -163,15 +216,15 @@ impl<M> EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership>
 {
     fn id(&self) -> OperationId {
         match self {
-            EncryptionMessage::Local(_) => OperationId::placeholder(),
-            EncryptionMessage::Remote(_) => todo!(),
+            EncryptionMessage::Args(_) => OperationId::placeholder(),
+            EncryptionMessage::Forged(_) => todo!(),
         }
     }
 
     fn sender(&self) -> ActorId {
         match self {
-            EncryptionMessage::Local(_) => ActorId::placeholder(),
-            EncryptionMessage::Remote(_) => todo!(),
+            EncryptionMessage::Args(_) => ActorId::placeholder(),
+            EncryptionMessage::Forged(_) => todo!(),
         }
     }
 
@@ -194,6 +247,6 @@ pub struct EncryptionArgs {
 
 #[derive(Clone, Debug)]
 pub enum EncryptionMessage<M> {
-    Local(EncryptionArgs),
-    Remote(M),
+    Args(EncryptionArgs),
+    Forged(M),
 }

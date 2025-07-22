@@ -77,6 +77,12 @@ impl OperationId {
     }
 }
 
+impl From<Hash> for OperationId {
+    fn from(value: Hash) -> Self {
+        Self(value)
+    }
+}
+
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
@@ -90,6 +96,8 @@ type AuthGroupError<C, RS> =
     p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
 
 type AuthControlMessage<C> = p2panda_auth::group::GroupControlMessage<ActorId, C>;
+
+type AuthAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 
 type AuthGroupState<C, RS> =
     p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
