@@ -11,6 +11,7 @@ use p2panda_encryption::key_manager::KeyManagerError;
 use p2panda_encryption::traits::{IdentityManager, PreKeyManager};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug)]
 pub struct KeyManager;
 
 impl KeyManager {

@@ -14,12 +14,13 @@ use crate::orderer::{AuthOrderer, EncryptionOrderer};
 use crate::traits::Forge;
 use crate::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
-    EncryptionGroup, OperationId,
+    EncryptionGroup, EncryptionGroupError, OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
 ///
 /// Only members with suitable access to the space can read and write to it.
+#[derive(Debug)]
 pub struct Space<S, F, M, C, RS> {
     manager: Manager<S, F, M, C, RS>,
 }
@@ -33,7 +34,7 @@ where
     pub(crate) fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<Self, SpaceError<C, RS>> {
+    ) -> Result<Self, SpaceError<M, C, RS>> {
         let manager = manager_ref.inner.borrow_mut();
 
         let my_id: ActorId = manager.forge.public_key().into();
@@ -77,7 +78,7 @@ where
 
         // 3. establish encryption group state with create control message
 
-        let encryption_y = {
+        let (encryption_y, encryption_args) = {
             let dgm = EncryptionMembershipState {
                 space_id,
                 group_store: (),
@@ -87,18 +88,25 @@ where
 
             // @TODO: KeyManagerState and KeyRegistryState should be shared across groups and so we
             // need a wrapper around them which follows interior mutability patterns.
-            EncryptionGroup::init(
+            let y = EncryptionGroup::init(
                 my_id,
                 manager.key_manager_y.clone(),
                 manager.key_registry_y.clone(),
                 dgm,
                 orderer_y,
             );
+
+            let members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
+            let secret_members = secret_members(members);
+            EncryptionGroup::create(y, secret_members, &manager.rng)
+                .map_err(SpaceError::EncryptionGroup)?
         };
 
         // 4. merge and sign control messages in forge (F)
 
-        // 5. persist new state
+        // 5. process auth message
+
+        // 6. persist new state
 
         drop(manager);
 
@@ -124,11 +132,22 @@ where
     }
 }
 
+fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
+    members
+        .into_iter()
+        .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })
+        .collect()
+}
+
 #[derive(Debug, Error)]
-pub enum SpaceError<C, RS>
+pub enum SpaceError<M, C, RS>
 where
+    C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     #[error("{0}")]
     AuthGroup(AuthGroupError<C, RS>),
+
+    #[error("{0}")]
+    EncryptionGroup(EncryptionGroupError<M>),
 }

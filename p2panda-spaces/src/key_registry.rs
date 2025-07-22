@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ActorId;
 
+#[derive(Debug)]
 pub struct KeyRegistry;
 
 impl KeyRegistry {

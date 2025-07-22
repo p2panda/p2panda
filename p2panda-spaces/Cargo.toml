@@ -14,6 +14,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 
 [dev-dependencies]
 tokio = { version = "1.46.1", features = ["rt", "macros"] }
+p2panda-encryption = { path = "../p2panda-encryption", version = "0.4.0", features = ["data_scheme", "test_utils"], default-features = false }
 
 [lints]
 workspace = true
