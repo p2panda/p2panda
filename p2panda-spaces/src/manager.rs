@@ -42,6 +42,7 @@ use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
 // Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
 pub struct Manager<S, F, M, C, RS> {
+    #[allow(clippy::type_complexity)]
     pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
 }
 
@@ -67,6 +68,7 @@ where
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
+    #[allow(clippy::result_large_err)]
     pub fn new(
         store: S,
         forge: F,
@@ -98,6 +100,7 @@ where
         todo!()
     }
 
+    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub fn create_space(
         &self,
         initial_members: &[(ActorId, Access<C>)],
@@ -143,6 +146,7 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 }
 
 #[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)]
 pub enum ManagerError<F, M, C, RS>
 where
     F: Forge<M, C>,

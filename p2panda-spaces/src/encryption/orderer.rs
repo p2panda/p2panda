@@ -106,6 +106,7 @@ pub struct EncryptionArgs {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum EncryptionMessage<M> {
     Args(EncryptionArgs),
     Forged(M),

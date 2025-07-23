@@ -33,6 +33,7 @@ where
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
+    #[allow(clippy::result_large_err)]
     pub(crate) fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,

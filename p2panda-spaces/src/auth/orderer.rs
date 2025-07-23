@@ -62,6 +62,7 @@ pub struct AuthArgs<C> {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum AuthMessage<C> {
     Args(AuthArgs<C>),
     Forged {
