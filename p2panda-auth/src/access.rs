@@ -185,8 +185,8 @@ mod tests {
         assert!(root_access >= public_access);
 
         // Unrelated paths are not comparable.
-        assert!((private_access < public_access));
-        assert!((private_access > public_access));
+        assert!(!(private_access >= public_access));
+        assert!(!(private_access <= public_access));
 
         let read_access_to_root =
             Access::read().with_conditions(PathCondition("/root".to_string()));
