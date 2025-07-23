@@ -743,17 +743,13 @@ where
 
     /// Returns the direct addresses of this node.
     pub async fn direct_addresses(&self) -> Option<Vec<SocketAddr>> {
-        match self
-            .inner
+        self.inner
             .endpoint
             .direct_addresses()
             .initialized()
             .await
             .map(|addrs| addrs.into_iter().map(|direct| direct.addr).collect())
-        {
-            Ok(result) => Some(result),
-            Err(_) => None,
-        }
+            .ok()
     }
 
     /// Returns a handle to the network endpoint.

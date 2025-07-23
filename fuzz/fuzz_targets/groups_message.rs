@@ -385,7 +385,7 @@ impl Display for Operation {
                     )
                 }
                 Operation::Remove { removed } => {
-                    format!("remove {}", removed)
+                    format!("remove {removed}")
                 }
                 Operation::Update => "update".to_string(),
                 Operation::SendMessage { plaintext } => {
@@ -694,7 +694,7 @@ fuzz_target!(|seed: [u8; 32]| {
     // machine.
 
     println!("\n==============================");
-    println!("group created [group_creator={}]", group_creator);
+    println!("group created [group_creator={group_creator}]");
     println!("==============================");
 
     for _ in 0..MAX_GROUP_EPOCHS {
@@ -732,7 +732,7 @@ fuzz_target!(|seed: [u8; 32]| {
                 Suggestion::Valid(operation) => {
                     if let Some(message) = member
                         .process_local(operation, &rng)
-                        .unwrap_or_else(|_| panic!("valid operations to not fail: {}", operation))
+                        .unwrap_or_else(|_| panic!("valid operations to not fail: {operation}"))
                     {
                         operations.push((operation.clone(), message.clone()));
                         queue.push_back((suggestion, message));
@@ -777,8 +777,7 @@ fuzz_target!(|seed: [u8; 32]| {
                     Ok(output) => {
                         if let Suggestion::Invalid(operation) = suggestion {
                             panic!(
-                                "expected error when processing remote message from invalid operation '{}'",
-                                operation
+                                "expected error when processing remote message from invalid operation '{operation}'"
                             )
                         }
 

@@ -121,7 +121,7 @@ impl<ID, OP> Display for ForwardSecureMessageContent<ID, OP> {
             "{}",
             match self {
                 Self::Control(control_message) => control_message.to_string(),
-                Self::Application { generation, .. } => format!("application @{}", generation),
+                Self::Application { generation, .. } => format!("application @{generation}"),
             }
         )
     }

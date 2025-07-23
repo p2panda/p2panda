@@ -116,7 +116,7 @@ mod tests {
             timestamp: 0,
             ..Default::default()
         };
-        header_0.sign(&private_key);
+        header_0.sign(private_key);
         let operation_0 = Operation {
             hash: header_0.hash(),
             header: header_0.clone(),
@@ -129,7 +129,7 @@ mod tests {
             timestamp: 1,
             ..Default::default()
         };
-        header_1.sign(&private_key);
+        header_1.sign(private_key);
         let operation_1 = Operation {
             hash: header_1.hash(),
             header: header_1.clone(),
@@ -142,7 +142,7 @@ mod tests {
             timestamp: 2,
             ..Default::default()
         };
-        header_2.sign(&private_key);
+        header_2.sign(private_key);
         let operation_2 = Operation {
             hash: header_2.hash(),
             header: header_2.clone(),
@@ -155,7 +155,7 @@ mod tests {
             timestamp: 3,
             ..Default::default()
         };
-        header_3.sign(&private_key);
+        header_3.sign(private_key);
         let operation_3 = Operation {
             hash: header_3.hash(),
             header: header_3.clone(),
@@ -168,7 +168,7 @@ mod tests {
             timestamp: 4,
             ..Default::default()
         };
-        header_4.sign(&private_key);
+        header_4.sign(private_key);
         let operation_4 = Operation {
             hash: header_4.hash(),
             header: header_4.clone(),

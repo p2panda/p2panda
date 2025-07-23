@@ -92,7 +92,7 @@ fn random_member_type(id: MemberId) -> GroupMember<MemberId> {
 fn print_members(members: &[(GroupMember<MemberId>, Access<()>)]) -> String {
     members
         .iter()
-        .map(|(id, access)| format!("{:?} {}", id, access))
+        .map(|(id, access)| format!("{id:?} {access}"))
         .collect::<Vec<String>>()
         .join(", ")
 }
@@ -135,13 +135,13 @@ impl Display for TestGroupAction {
                             print_members(initial_members)
                         ),
                         GroupAction::Add { member, .. } => {
-                            format!("add {:?}", member,)
+                            format!("add {member:?}",)
                         }
                         GroupAction::Remove { member } => {
-                            format!("remove {:?}", member)
+                            format!("remove {member:?}")
                         }
-                        GroupAction::Promote { member, .. } => format!("promote {:?}", member),
-                        GroupAction::Demote { member, .. } => format!("demote {:?}", member),
+                        GroupAction::Promote { member, .. } => format!("promote {member:?}"),
+                        GroupAction::Demote { member, .. } => format!("demote {member:?}"),
                     }
                 }
             }
@@ -391,8 +391,7 @@ impl Member {
             Ok(y) => {
                 if let Suggestion::Invalid(_) = suggestion {
                     panic!(
-                        "expected error when processing remote operation from invalid operation '{:?}'",
-                        operation
+                        "expected error when processing remote operation from invalid operation '{operation:?}'"
                     )
                 };
 
@@ -604,7 +603,7 @@ impl Member {
         println!("=== filter ===");
         let mut filter = y_group.ignore.iter().collect::<Vec<_>>();
         filter.sort();
-        println!("{:?}", filter);
+        println!("{filter:?}");
         println!();
 
         if save_graph {
@@ -764,9 +763,9 @@ fuzz_target!(|seed: [u8; 32]| {
                             if let Some(operation) = member
                                 .process_local(group_id, action)
                                 .unwrap_or_else(|error| {
-                                    println!("group={}, action={:?}", group_id, action);
+                                    println!("group={group_id}, action={action:?}");
                                     member.report(group_id, true);
-                                    panic!("valid actions to not fail: {}", error)
+                                    panic!("valid actions to not fail: {error}")
                                 })
                             {
                                 // All other partition members process it.
@@ -834,8 +833,8 @@ fuzz_target!(|seed: [u8; 32]| {
         let y_group = control_member.root_group();
         println!("=== test setup ===");
         println!("group: {:?}", y_group.id());
-        println!("actors: {:?}", members_count);
-        println!("branches: {:?}", MAX_BRANCHES);
+        println!("actors: {members_count:?}");
+        println!("branches: {MAX_BRANCHES:?}");
         println!(
             "operations: {:?}",
             control_member.processed.len() + control_member.processed.len()

@@ -49,7 +49,7 @@ pub fn make_response(service_name: &ServiceName, node_addr: &NodeAddr) -> Messag
     }
 
     for (port, addrs) in srv_map {
-        let target = Name::from_str(&format!("{}-{}.local.", node_id_str, port))
+        let target = Name::from_str(&format!("{node_id_str}-{port}.local."))
             .expect("node was checked already");
         msg.add_answer(Record::from_rdata(
             my_srv_name.clone(),

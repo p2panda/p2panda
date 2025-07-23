@@ -119,9 +119,9 @@ async fn main() -> Result<()> {
 
     // Print network info to the terminal.
     println!("node id:");
-    println!("\t{}", public_key);
+    println!("\t{public_key}");
     println!("network id:");
-    println!("\t{}", network_id);
+    println!("\t{network_id}");
     println!("node listening addresses:");
     for local_endpoint in network
         .endpoint()

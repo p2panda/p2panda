@@ -54,10 +54,10 @@ where
 
                 format!("constraint = false, color=\"{DEPENDENCIES_EDGE}\", penwidth = 2.0")
             },
-            &|_, (_, (_, s))| format!("label = {}", s),
+            &|_, (_, (_, s))| format!("label = {s}"),
         );
 
-        let mut s = format!("{:?}", dag_graphviz);
+        let mut s = format!("{dag_graphviz:?}");
         s = s.replace("digraph {", "digraph {\n    splines=polyline\n");
         s
     }
@@ -200,7 +200,7 @@ where
         let members = self.transitive_members().unwrap();
         s += "<TR><TD>GROUP MEMBERS</TD></TR>";
         for (id, access) in members {
-            s += &format!("<TR><TD> {} : {} </TD></TR>", id, access);
+            s += &format!("<TR><TD> {id} : {access} </TD></TR>");
         }
         s += "</TABLE>>";
         s
@@ -217,10 +217,10 @@ where
                 for (member, access) in initial_members {
                     match member {
                         GroupMember::Individual(id) => {
-                            s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                            s += &format!("<TR><TD>individual : {id} : {access}</TD></TR>")
                         }
                         GroupMember::Group(id) => {
-                            s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                            s += &format!("<TR><TD>group : {id} : {access}</TD></TR>")
                         }
                     }
                 }
@@ -229,10 +229,10 @@ where
                 s += "<TR><TD>ADD</TD></TR>";
                 match member {
                     GroupMember::Individual(id) => {
-                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>individual : {id} : {access}</TD></TR>")
                     }
                     GroupMember::Group(id) => {
-                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>group : {id} : {access}</TD></TR>")
                     }
                 }
             }
@@ -240,19 +240,19 @@ where
                 s += "<TR><TD>REMOVE</TD></TR>";
                 match member {
                     GroupMember::Individual(id) => {
-                        s += &format!("<TR><TD>individual : {}</TD></TR>", id)
+                        s += &format!("<TR><TD>individual : {id}</TD></TR>")
                     }
-                    GroupMember::Group(id) => s += &format!("<TR><TD>group : {}</TD></TR>", id),
+                    GroupMember::Group(id) => s += &format!("<TR><TD>group : {id}</TD></TR>"),
                 }
             }
             GroupAction::Promote { member, access } => {
                 s += "<TR><TD>PROMOTE</TD></TR>";
                 match member {
                     GroupMember::Individual(id) => {
-                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>individual : {id} : {access}</TD></TR>")
                     }
                     GroupMember::Group(id) => {
-                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>group : {id} : {access}</TD></TR>")
                     }
                 }
             }
@@ -260,10 +260,10 @@ where
                 s += "<TR><TD>DEMOTE</TD></TR>";
                 match member {
                     GroupMember::Individual(id) => {
-                        s += &format!("<TR><TD>individual : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>individual : {id} : {access}</TD></TR>")
                     }
                     GroupMember::Group(id) => {
-                        s += &format!("<TR><TD>group : {} : {}</TD></TR>", id, access)
+                        s += &format!("<TR><TD>group : {id} : {access}</TD></TR>")
                     }
                 }
             }

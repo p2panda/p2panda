@@ -185,7 +185,7 @@ mod tests {
         let j = graph.add_node("J"); // 9
 
         // Add edges.
-        graph.extend_with_edges(&[
+        graph.extend_with_edges([
             (a, b),
             (a, c),
             (b, d),

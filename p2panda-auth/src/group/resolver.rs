@@ -216,7 +216,7 @@ where
         }
 
         // Sanity check: all bubbles should be visited completely.
-        assert!(bubbles.is_empty(), "{:?}", bubbles);
+        assert!(bubbles.is_empty(), "{bubbles:?}");
         Ok(y)
     }
 }

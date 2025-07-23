@@ -1682,15 +1682,14 @@ pub(crate) mod tests {
         let add_team_to_org_op_id = operations[5];
 
         // Initial state of the org group.
-        let members =
-            network.transitive_members_at(&ALICE, &ALICE_ORG_GROUP, &vec![create_org_op_id]);
+        let members = network.transitive_members_at(&ALICE, &ALICE_ORG_GROUP, &[create_org_op_id]);
         assert_eq!(members, vec![(ALICE, Access::manage())]);
 
         // CHARLIE_TEAM was added but before BOB_DEVICES was added to the team.
         let members = network.transitive_members_at(
             &ALICE,
             &ALICE_ORG_GROUP,
-            &vec![add_team_to_org_op_id, create_team_op_id],
+            &[add_team_to_org_op_id, create_team_op_id],
         );
         assert_eq!(
             members,
@@ -1705,7 +1704,7 @@ pub(crate) mod tests {
         let members = network.transitive_members_at(
             &ALICE,
             &ALICE_ORG_GROUP,
-            &vec![
+            &[
                 add_team_to_org_op_id,
                 create_devices_op_id,
                 add_devices_to_team_op_id,
@@ -1726,7 +1725,7 @@ pub(crate) mod tests {
         let members_at_most_recent_heads = network.transitive_members_at(
             &ALICE,
             &ALICE_ORG_GROUP,
-            &vec![
+            &[
                 add_team_to_org_op_id,
                 add_mobile_to_devices_op_id,
                 add_devices_to_team_op_id,

@@ -88,7 +88,7 @@ pub fn assert_direct_message(
         .iter()
         .find(|message| message.recipient == recipient)
         .cloned()
-        .unwrap_or_else(|| panic!("could not find direct message for {:?}", recipient))
+        .unwrap_or_else(|| panic!("could not find direct message for {recipient:?}"))
         .clone()
 }
 
