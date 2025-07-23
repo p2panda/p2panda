@@ -11,4 +11,6 @@ mod manager;
 mod message;
 mod space;
 mod store;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
 mod types;

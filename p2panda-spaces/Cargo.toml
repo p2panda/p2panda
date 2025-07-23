@@ -2,6 +2,23 @@
 name = "p2panda-spaces"
 version = "0.1.0"
 edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
+]
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
+
+[features]
+test_utils = []
 
 [dependencies]
 p2panda-auth = { path = "../p2panda-auth", version = "0.4.0", default-features = false }
@@ -15,6 +32,3 @@ tokio = { version = "1.46.1", features = ["sync"] }
 [dev-dependencies]
 p2panda-encryption = { path = "../p2panda-encryption", version = "0.4.0", features = ["test_utils"], default-features = false }
 tokio = { version = "1.46.1", features = ["rt", "macros"] }
-
-[lints]
-workspace = true

@@ -145,7 +145,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
     use std::convert::Infallible;
 
     use p2panda_core::{Hash, PrivateKey, PublicKey};
@@ -153,6 +152,7 @@ mod tests {
 
     use crate::forge::{Forge, ForgeArgs, ForgedMessage};
     use crate::message::ControlMessage;
+    use crate::test_utils::MemoryStore;
     use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
 
     use super::Manager;
@@ -240,19 +240,26 @@ mod tests {
         }
     }
 
-    #[test]
-    fn create_space() {
-        // let rng = Rng::from_seed([0; 32]);
-        // let private_key = PrivateKey::new();
+    type TestStore = MemoryStore<TestMessage, TestConditions, StrongRemoveResolver<TestConditions>>;
 
-        // @TODO: this should soon be a SQLite store.
-        // let store = MemoryStore::new(AllState::default());
+    type TestManager = Manager<
+        TestStore,
+        TestForge,
+        TestMessage,
+        TestConditions,
+        StrongRemoveResolver<TestConditions>,
+    >;
 
-        // let forge = TestForge::new(private_key);
+    #[tokio::test]
+    async fn create_space() {
+        let rng = Rng::from_seed([0; 32]);
+        let private_key = PrivateKey::new();
 
-        // let manager: Manager<_, _, _, TestConditions, StrongRemoveResolver<TestConditions>> =
-        //     Manager::new(store, forge, rng).unwrap();
-        //
-        // let _space = manager.create_space(&[]).unwrap();
+        let store = TestStore::new();
+        let forge = TestForge::new(private_key);
+
+        let manager = TestManager::new(store, forge, rng).unwrap();
+
+        let (_space, _message) = manager.create_space(&[]).await.unwrap();
     }
 }

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::Cell;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -191,13 +190,14 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct SpaceState<M, C, RS>
 where
     C: Conditions,
 {
     pub space_id: ActorId,
-    pub auth_y: Cell<AuthGroupState<C, RS>>,
-    pub encryption_y: Cell<EncryptionGroupState<M>>,
+    pub auth_y: AuthGroupState<C, RS>,
+    pub encryption_y: EncryptionGroupState<M>,
 }
 
 impl<M, C, RS> SpaceState<M, C, RS>
@@ -211,8 +211,8 @@ where
     ) -> Self {
         Self {
             space_id,
-            auth_y: Cell::new(auth_y),
-            encryption_y: Cell::new(encryption_y),
+            auth_y,
+            encryption_y,
         }
     }
 }
