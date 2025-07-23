@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ActorId, OperationId};
+use crate::types::{ActorId, OperationId};
 
 #[derive(Clone, Debug)]
 pub struct EncryptionGroupMembership {}
@@ -24,7 +24,7 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
 
     type Error = Infallible; // @TODO
 
-    fn create(my_id: ActorId, initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
+    fn create(_my_id: ActorId, _initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
         // @TODO: as all DGM methods are handled outside of encryption this is a no-op.
         let y = EncryptionMembershipState {
             space_id: ActorId::placeholder(),
@@ -33,29 +33,29 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
         Ok(y)
     }
 
-    fn from_welcome(my_id: ActorId, y: Self::State) -> Result<Self::State, Self::Error> {
+    fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
         todo!()
     }
 
     fn add(
-        y: Self::State,
-        adder: ActorId,
-        added: ActorId,
-        operation_id: OperationId,
+        _y: Self::State,
+        _adder: ActorId,
+        _added: ActorId,
+        _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
         todo!()
     }
 
     fn remove(
-        y: Self::State,
-        remover: ActorId,
-        removed: &ActorId,
-        operation_id: OperationId,
+        _y: Self::State,
+        _remover: ActorId,
+        _removed: &ActorId,
+        _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
         todo!()
     }
 
-    fn members(y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
+    fn members(_y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
         // TODO: get the spaces' group state and then query it.
         todo!()
     }

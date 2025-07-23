@@ -1,20 +1,19 @@
-use std::convert::Infallible;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::fmt::Debug;
 
-use p2panda_auth::Access;
-use p2panda_auth::group::GroupMember;
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_encryption::data_scheme::DirectMessage;
 
-use crate::dgm::EncryptionGroupMembership;
-use crate::orderer::{AuthArgs, EncryptionArgs};
-use crate::{
-    ActorId, AuthAction, AuthControlMessage, Conditions, EncryptionControlMessage, OperationId,
+use crate::auth::orderer::AuthArgs;
+use crate::encryption::orderer::EncryptionArgs;
+use crate::message::ControlMessage;
+use crate::types::{
+    ActorId, AuthAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
 
 pub trait Forge<M, C>
 where
-    M: SpacesMessage<C>,
+    M: ForgedMessage<C>,
 {
     type Error: Debug;
 
@@ -22,10 +21,14 @@ where
 
     fn forge(&self, args: ForgeArgs<C>) -> Result<M, Self::Error>;
 
-    fn forge_with(&self, private_key: PrivateKey, args: ForgeArgs<C>) -> Result<M, Self::Error>;
+    fn forge_ephemeral(
+        &self,
+        private_key: PrivateKey,
+        args: ForgeArgs<C>,
+    ) -> Result<M, Self::Error>;
 }
 
-pub trait SpacesMessage<C> {
+pub trait ForgedMessage<C> {
     fn id(&self) -> OperationId;
 
     fn author(&self) -> ActorId;
@@ -36,37 +39,10 @@ pub trait SpacesMessage<C> {
 }
 
 #[derive(Debug)]
-pub enum ControlMessage<C> {
-    Create {
-        // GroupMember is required for understanding if a public key / actor id is an individual or
-        // a group in case we're adding something with only pull-access. In that case that actor
-        // doesn't need to publish a key bundle and every receiver will not strictly be able to
-        // verify if it's _really_ a group or individual.
-        //
-        // In any other case we always want to verify if the group member type is correct.
-        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    },
-    // @TODO: introduce all other variants.
-}
-
-impl<C> ControlMessage<C>
-where
-    C: Conditions,
-{
-    pub(crate) fn to_auth_action(&self) -> AuthAction<C> {
-        match self {
-            ControlMessage::Create { initial_members } => AuthAction::Create {
-                initial_members: initial_members.to_owned(),
-            },
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct ForgeArgs<C> {
     pub group_id: ActorId,
     pub control_message: ControlMessage<C>,
-    pub direct_messages: Vec<DirectMessage<ActorId, OperationId, EncryptionGroupMembership>>,
+    pub direct_messages: Vec<EncryptionDirectMessage>,
 }
 
 impl<C> ForgeArgs<C>

@@ -7,7 +7,7 @@ use p2panda_encryption::key_bundle::LongTermKeyBundle;
 use p2panda_encryption::traits::{IdentityRegistry, PreKeyRegistry};
 use serde::{Deserialize, Serialize};
 
-use crate::ActorId;
+use crate::types::ActorId;
 
 #[derive(Debug)]
 pub struct KeyRegistry;
@@ -25,7 +25,10 @@ pub struct KeyRegistryState {}
 impl IdentityRegistry<ActorId, KeyRegistryState> for KeyRegistry {
     type Error = Infallible; // @TODO
 
-    fn identity_key(y: &KeyRegistryState, id: &ActorId) -> Result<Option<PublicKey>, Self::Error> {
+    fn identity_key(
+        _y: &KeyRegistryState,
+        _id: &ActorId,
+    ) -> Result<Option<PublicKey>, Self::Error> {
         todo!()
     }
 }
@@ -36,8 +39,8 @@ impl PreKeyRegistry<ActorId, LongTermKeyBundle> for KeyRegistry {
     type Error = Infallible; // @TODO
 
     fn key_bundle(
-        y: Self::State,
-        id: &ActorId,
+        _y: Self::State,
+        _id: &ActorId,
     ) -> Result<(Self::State, Option<LongTermKeyBundle>), Self::Error> {
         todo!()
     }

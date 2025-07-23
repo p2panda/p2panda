@@ -16,9 +16,9 @@ pub struct KeyManager;
 
 impl KeyManager {
     pub fn init(
-        identity_key: &SecretKey,
-        lifetime: Lifetime,
-        rng: &Rng,
+        _identity_key: &SecretKey,
+        _lifetime: Lifetime,
+        _rng: &Rng,
     ) -> Result<KeyManagerState, KeyManagerError> {
         Ok(KeyManagerState {})
     }
@@ -29,7 +29,7 @@ impl KeyManager {
 pub struct KeyManagerState {}
 
 impl IdentityManager<KeyManagerState> for KeyManager {
-    fn identity_secret(y: &KeyManagerState) -> &SecretKey {
+    fn identity_secret(_y: &KeyManagerState) -> &SecretKey {
         todo!()
     }
 }
@@ -39,32 +39,32 @@ impl PreKeyManager for KeyManager {
 
     type Error = Infallible; // @TODO
 
-    fn prekey_secret(y: &Self::State) -> &SecretKey {
+    fn prekey_secret(_y: &Self::State) -> &SecretKey {
         todo!()
     }
 
     fn rotate_prekey(
-        y: Self::State,
-        lifetime: Lifetime,
-        rng: &Rng,
+        _y: Self::State,
+        _lifetime: Lifetime,
+        _rng: &Rng,
     ) -> Result<Self::State, Self::Error> {
         todo!()
     }
 
-    fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
+    fn prekey_bundle(_y: &Self::State) -> LongTermKeyBundle {
         todo!()
     }
 
     fn generate_onetime_bundle(
-        y: Self::State,
-        rng: &Rng,
+        _y: Self::State,
+        _rng: &Rng,
     ) -> Result<(Self::State, OneTimeKeyBundle), Self::Error> {
         todo!()
     }
 
     fn use_onetime_secret(
-        y: Self::State,
-        id: OneTimePreKeyId,
+        _y: Self::State,
+        _id: OneTimePreKeyId,
     ) -> Result<(Self::State, Option<SecretKey>), Self::Error> {
         todo!()
     }

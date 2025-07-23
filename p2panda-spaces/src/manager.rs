@@ -14,34 +14,32 @@ use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManagerError;
 use thiserror::Error;
 
-use crate::event::Event;
-use crate::forge::{Forge, SpacesMessage};
-use crate::group::Group;
-use crate::key_manager::{KeyManager, KeyManagerState};
-use crate::key_registry::{KeyRegistry, KeyRegistryState};
-use crate::orderer::AuthOrderer;
+use crate::auth::orderer::AuthOrderer;
+use crate::encryption::key_manager::{KeyManager, KeyManagerState};
+use crate::encryption::key_registry::{KeyRegistry, KeyRegistryState};
+use crate::forge::{Forge, ForgedMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::SpacesStore;
-use crate::{ActorId, AuthDummyStore, Conditions, OperationId};
+use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
 
-/// Create and manage spaces and groups.
-///
-/// Takes care of ingesting operations, updating spaces, groups and member key-material. Has access
-/// to the operation and group stores, orderer, key-registry and key-manager.
-///
-/// Routes operations to the correct space(s), group(s) or member.
-///
-/// Only one instance of `Spaces` per app user.
-///
-/// Operations are created and published within the spaces service, reacting to arriving
-/// operations, due to api calls (create group, create space), or triggered by key-bundles
-/// expiring.
-///
-/// Users of spaces can subscribe to events which inform about member, group or space state
-/// changes, application data being decrypted, pre-key bundles being published, we were added or
-/// removed from a space.
-///
-/// Is agnostic to current p2panda-streams, networking layer, data type.
+// Create and manage spaces and groups.
+//
+// Takes care of ingesting operations, updating spaces, groups and member key-material. Has access
+// to the operation and group stores, orderer, key-registry and key-manager.
+//
+// Routes operations to the correct space(s), group(s) or member.
+//
+// Only one instance of `Spaces` per app user.
+//
+// Operations are created and published within the spaces service, reacting to arriving
+// operations, due to api calls (create group, create space), or triggered by key-bundles
+// expiring.
+//
+// Users of spaces can subscribe to events which inform about member, group or space state
+// changes, application data being decrypted, pre-key bundles being published, we were added or
+// removed from a space.
+//
+// Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
 pub struct Manager<S, F, M, C, RS> {
     pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
@@ -64,7 +62,7 @@ impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
 where
     S: SpacesStore,
     F: Forge<M, C>,
-    M: SpacesMessage<C>,
+    M: ForgedMessage<C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
@@ -96,7 +94,7 @@ where
         })
     }
 
-    pub fn space(&self, space_id: ActorId) -> Space<S, F, M, C, RS> {
+    pub fn space(&self, _space_id: ActorId) -> Space<S, F, M, C, RS> {
         todo!()
     }
 
@@ -120,7 +118,7 @@ where
         // @TODO: Implement manually adding an "individual" key bundle to the registry.
     }
 
-    pub fn process(&mut self, _message: &M) -> Vec<Event<S, F, M, C, RS>> {
+    pub fn process(&mut self, _message: &M) {
         // @TODO: Look up if we know about the space id in the message M, route it to the right
         // instance and continue processing there.
         //
@@ -134,9 +132,8 @@ where
     }
 }
 
-/// Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping
-/// them in an Arc. See related discussion:
-/// https://stackoverflow.com/questions/72150623/deriveclone-seems-to-wrongfully-enforce-generic-to-be-clone
+// Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping
+// them in an Arc. Related: https://stackoverflow.com/questions/72150623
 impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
     fn clone(&self) -> Self {
         Self {
@@ -149,7 +146,7 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 pub enum ManagerError<F, M, C, RS>
 where
     F: Forge<M, C>,
-    M: SpacesMessage<C>,
+    M: ForgedMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
@@ -169,9 +166,10 @@ mod tests {
     use p2panda_encryption::Rng;
     use p2panda_encryption::crypto::x25519::SecretKey;
 
-    use crate::forge::{ControlMessage, Forge, ForgeArgs, SpacesMessage};
+    use crate::forge::{Forge, ForgeArgs, ForgedMessage};
+    use crate::message::ControlMessage;
     use crate::store::{AllState, MemoryStore};
-    use crate::{ActorId, Conditions, OperationId, StrongRemoveResolver};
+    use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
 
     use super::Manager;
 
@@ -184,7 +182,7 @@ mod tests {
         spaces_args: ForgeArgs<TestConditions>,
     }
 
-    impl SpacesMessage<TestConditions> for TestMessage {
+    impl ForgedMessage<TestConditions> for TestMessage {
         fn id(&self) -> OperationId {
             let mut buffer: Vec<u8> = self.public_key.as_bytes().to_vec();
             buffer.extend_from_slice(&self.seq_num.to_be_bytes());
@@ -239,7 +237,7 @@ mod tests {
             })
         }
 
-        fn forge_with(
+        fn forge_ephemeral(
             &self,
             private_key: PrivateKey,
             args: ForgeArgs<TestConditions>,
@@ -259,7 +257,7 @@ mod tests {
         let private_key = PrivateKey::new();
 
         // @TODO: this should soon be a SQLite store.
-        let mut store = MemoryStore::new(AllState::default());
+        let store = MemoryStore::new(AllState::default());
 
         let forge = TestForge::new(private_key);
 
@@ -268,7 +266,6 @@ mod tests {
         let manager: Manager<_, _, _, TestConditions, StrongRemoveResolver<TestConditions>> =
             Manager::new(store, forge, &identity_secret, rng).unwrap();
 
-        let space = manager.create_space(&[]).unwrap();
-        // println!("{0:#?}", space);
+        let _space = manager.create_space(&[]).unwrap();
     }
 }

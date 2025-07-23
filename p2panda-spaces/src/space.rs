@@ -8,11 +8,12 @@ use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use thiserror::Error;
 
-use crate::dgm::EncryptionMembershipState;
-use crate::forge::{Forge, ForgeArgs, SpacesMessage};
+use crate::auth::orderer::{AuthMessage, AuthOrderer};
+use crate::encryption::dgm::EncryptionMembershipState;
+use crate::encryption::orderer::EncryptionMessage;
+use crate::forge::{Forge, ForgeArgs, ForgedMessage};
 use crate::manager::Manager;
-use crate::orderer::{AuthMessage, AuthOrderer, EncryptionMessage, EncryptionOrderer};
-use crate::{
+use crate::types::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
     EncryptionGroup, EncryptionGroupError, OperationId,
 };
@@ -28,7 +29,7 @@ pub struct Space<S, F, M, C, RS> {
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
     F: Forge<M, C>,
-    M: SpacesMessage<C>,
+    M: ForgedMessage<C>,
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
@@ -74,7 +75,7 @@ where
 
         // 3. Establish encryption group state with create control message.
 
-        let (encryption_y, encryption_args) = {
+        let (_encryption_y, encryption_args) = {
             let dgm = EncryptionMembershipState {
                 space_id,
                 group_store: (),
@@ -114,12 +115,12 @@ where
 
         let message = manager
             .forge
-            .forge_with(ephemeral_private_key, args)
+            .forge_ephemeral(ephemeral_private_key, args)
             .map_err(SpaceError::Forge)?;
 
         // 5. Process auth message.
 
-        let auth_y = {
+        let _auth_y = {
             let auth_message = AuthMessage::from_forged(message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
@@ -155,7 +156,7 @@ fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 pub enum SpaceError<F, M, C, RS>
 where
     F: Forge<M, C>,
-    M: SpacesMessage<C>,
+    M: ForgedMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
