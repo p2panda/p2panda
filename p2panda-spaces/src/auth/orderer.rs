@@ -76,7 +76,7 @@ impl<C> AuthMessage<C>
 where
     C: Conditions,
 {
-    pub(crate) fn from_forged<M: ForgedMessage<C>>(message: M) -> Self {
+    pub(crate) fn from_forged<M: ForgedMessage<C>>(message: &M) -> Self {
         AuthMessage::Forged {
             author: message.author(),
             operation_id: message.id(),

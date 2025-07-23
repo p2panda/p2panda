@@ -8,7 +8,8 @@ use crate::auth::orderer::AuthArgs;
 use crate::encryption::orderer::EncryptionArgs;
 use crate::message::ControlMessage;
 use crate::types::{
-    ActorId, AuthAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
+    ActorId, AuthGroupAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage,
+    OperationId,
 };
 
 pub trait Forge<M, C>
@@ -64,71 +65,73 @@ where
 
         let control_message = {
             let (auth_action, encryption_action) = match (auth_action, encryption_action) {
-                (None, None) => panic!(),
                 (None, Some(_)) => todo!(),
                 (Some(_), None) => todo!(),
                 (Some(auth_action), Some(encryption_action)) => (auth_action, encryption_action),
+                _ => {
+                    panic!("invalid arguments")
+                }
             };
 
             match (auth_action, encryption_action) {
                 (
-                    AuthAction::Create { initial_members },
+                    AuthGroupAction::Create { initial_members },
                     EncryptionControlMessage::Create { .. },
                 ) => ControlMessage::Create { initial_members },
                 _ => unimplemented!(),
             }
 
             // @TODO
-            // (AuthAction::Create { initial_members }, EncryptionControlMessage::Update) => todo!(),
+            // (AuthGroupAction::Create { initial_members }, EncryptionControlMessage::Update) => todo!(),
             // (
-            //     AuthAction::Create { initial_members },
+            //     AuthGroupAction::Create { initial_members },
             //     EncryptionControlMessage::Remove { removed },
             // ) => todo!(),
-            // (AuthAction::Create { initial_members }, EncryptionControlMessage::Add { added }) => {
+            // (AuthGroupAction::Create { initial_members }, EncryptionControlMessage::Add { added }) => {
             //     todo!()
             // }
             // (
-            //     AuthAction::Add { member, access },
+            //     AuthGroupAction::Add { member, access },
             //     EncryptionControlMessage::Create { initial_members },
             // ) => todo!(),
-            // (AuthAction::Add { member, access }, EncryptionControlMessage::Update) => todo!(),
-            // (AuthAction::Add { member, access }, EncryptionControlMessage::Remove { removed }) => {
+            // (AuthGroupAction::Add { member, access }, EncryptionControlMessage::Update) => todo!(),
+            // (AuthGroupAction::Add { member, access }, EncryptionControlMessage::Remove { removed }) => {
             //     todo!()
             // }
-            // (AuthAction::Add { member, access }, EncryptionControlMessage::Add { added }) => {
+            // (AuthGroupAction::Add { member, access }, EncryptionControlMessage::Add { added }) => {
             //     todo!()
             // }
             // (
-            //     AuthAction::Remove { member },
+            //     AuthGroupAction::Remove { member },
             //     EncryptionControlMessage::Create { initial_members },
             // ) => todo!(),
-            // (AuthAction::Remove { member }, EncryptionControlMessage::Update) => todo!(),
-            // (AuthAction::Remove { member }, EncryptionControlMessage::Remove { removed }) => {
+            // (AuthGroupAction::Remove { member }, EncryptionControlMessage::Update) => todo!(),
+            // (AuthGroupAction::Remove { member }, EncryptionControlMessage::Remove { removed }) => {
             //     todo!()
             // }
-            // (AuthAction::Remove { member }, EncryptionControlMessage::Add { added }) => todo!(),
+            // (AuthGroupAction::Remove { member }, EncryptionControlMessage::Add { added }) => todo!(),
             // (
-            //     AuthAction::Promote { member, access },
+            //     AuthGroupAction::Promote { member, access },
             //     EncryptionControlMessage::Create { initial_members },
             // ) => todo!(),
-            // (AuthAction::Promote { member, access }, EncryptionControlMessage::Update) => todo!(),
+            // (AuthGroupAction::Promote { member, access }, EncryptionControlMessage::Update) => todo!(),
             // (
-            //     AuthAction::Promote { member, access },
+            //     AuthGroupAction::Promote { member, access },
             //     EncryptionControlMessage::Remove { removed },
             // ) => todo!(),
-            // (AuthAction::Promote { member, access }, EncryptionControlMessage::Add { added }) => {
+            // (AuthGroupAction::Promote { member, access }, EncryptionControlMessage::Add { added }) => {
             //     todo!()
             // }
             // (
-            //     AuthAction::Demote { member, access },
+            //     AuthGroupAction::Demote { member, access },
             //     EncryptionControlMessage::Create { initial_members },
             // ) => todo!(),
-            // (AuthAction::Demote { member, access }, EncryptionControlMessage::Update) => todo!(),
+            // (AuthGroupAction::Demote { member, access }, EncryptionControlMessage::Update) => todo!(),
             // (
-            //     AuthAction::Demote { member, access },
+            //     AuthGroupAction::Demote { member, access },
             //     EncryptionControlMessage::Remove { removed },
             // ) => todo!(),
-            // (AuthAction::Demote { member, access }, EncryptionControlMessage::Add { added }) => {
+            // (AuthGroupAction::Demote { member, access }, EncryptionControlMessage::Add { added }) => {
             //     todo!()
             // }
         };

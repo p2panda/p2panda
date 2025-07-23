@@ -81,15 +81,18 @@ impl EncryptionOperationId for OperationId {}
 
 // ~~~ Auth ~~~
 
+pub type AuthGroup<C, RS> =
+    p2panda_auth::group::GroupCrdt<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+
+pub type AuthGroupState<C, RS> =
+    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+
 pub type AuthGroupError<C, RS> =
     p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
 
 pub type AuthControlMessage<C> = p2panda_auth::group::GroupControlMessage<ActorId, C>;
 
-pub type AuthAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
-
-pub type AuthGroupState<C, RS> =
-    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 
 pub type StrongRemoveResolver<C> = p2panda_auth::group::resolver::StrongRemove<
     ActorId,
@@ -102,6 +105,15 @@ pub type StrongRemoveResolver<C> = p2panda_auth::group::resolver::StrongRemove<
 // ~~~ Encryption ~~~
 
 pub type EncryptionGroup<M> = p2panda_encryption::data_scheme::EncryptionGroup<
+    ActorId,
+    OperationId,
+    KeyRegistry,
+    EncryptionGroupMembership,
+    KeyManager,
+    EncryptionOrderer<M>,
+>;
+
+pub type EncryptionGroupState<M> = p2panda_encryption::data_scheme::GroupState<
     ActorId,
     OperationId,
     KeyRegistry,

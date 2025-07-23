@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use crate::types::{ActorId, AuthAction, Conditions};
+use crate::types::{ActorId, AuthGroupAction, Conditions};
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
@@ -25,9 +25,9 @@ impl<C> ControlMessage<C>
 where
     C: Conditions,
 {
-    pub(crate) fn to_auth_action(&self) -> AuthAction<C> {
+    pub(crate) fn to_auth_action(&self) -> AuthGroupAction<C> {
         match self {
-            ControlMessage::Create { initial_members } => AuthAction::Create {
+            ControlMessage::Create { initial_members } => AuthGroupAction::Create {
                 initial_members: initial_members.to_owned(),
             },
         }

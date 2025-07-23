@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::auth::orderer::AuthOrderer;
 use crate::forge::{Forge, ForgedMessage};
 use crate::space::{Space, SpaceError};
-use crate::store::SpacesStore;
+use crate::store::{KeyStore, SpaceStore};
 use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
 
 // Create and manage spaces and groups.
@@ -52,7 +52,7 @@ pub(crate) struct ManagerInner<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
 where
-    S: SpacesStore,
+    S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
@@ -81,7 +81,7 @@ where
     pub async fn create_space(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<Space<S, F, M, C, RS>, ManagerError<S, F, M, C, RS>> {
+    ) -> Result<(Space<S, F, M, C, RS>, M), ManagerError<S, F, M, C, RS>> {
         // @TODO: Assign GroupMember type to every actor based on looking up our own state,
         // checking if actor is a group or individual.
         // @TODO: Throw error when user tries to add a space to a space.
@@ -90,11 +90,11 @@ where
             .map(|(actor, access)| (GroupMember::Individual(actor.to_owned()), access.to_owned()))
             .collect();
 
-        let space = Space::create(self.clone(), initial_members)
+        let (space, message) = Space::create(self.clone(), initial_members)
             .await
             .map_err(ManagerError::Space)?;
 
-        Ok(space)
+        Ok((space, message))
     }
 
     pub fn register_member(&mut self) {
@@ -130,7 +130,7 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 #[allow(clippy::large_enum_variant)]
 pub enum ManagerError<S, F, M, C, RS>
 where
-    S: SpacesStore,
+    S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,

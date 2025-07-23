@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::Cell;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
-use p2panda_auth::group::{GroupAction as AuthGroupAction, GroupCrdt as AuthGroup, GroupMember};
+use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use thiserror::Error;
@@ -13,10 +14,11 @@ use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::orderer::EncryptionMessage;
 use crate::forge::{Forge, ForgeArgs, ForgedMessage};
 use crate::manager::Manager;
-use crate::store::SpacesStore;
+use crate::store::{KeyStore, SpaceStore};
 use crate::types::{
-    ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
-    EncryptionGroup, EncryptionGroupError, OperationId,
+    ActorId, AuthControlMessage, AuthDummyStore, AuthGroup, AuthGroupAction, AuthGroupError,
+    AuthGroupState, Conditions, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
+    OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -38,7 +40,7 @@ pub struct Space<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
-    S: SpacesStore,
+    S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
@@ -48,7 +50,7 @@ where
     pub(crate) async fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<Self, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<(Self, M), SpaceError<S, F, M, C, RS>> {
         let manager = manager_ref.inner.borrow_mut();
 
         let my_id: ActorId = manager.forge.public_key().into();
@@ -87,7 +89,7 @@ where
 
         // 3. Establish encryption group state (prepare & process) with "create" control message.
 
-        let (_encryption_y, encryption_args) = {
+        let (encryption_y, encryption_args) = {
             // @TODO: Establish DGM state.
             //
             // This will mostly be a wrapper around the auth state, as this is where we will learn
@@ -106,18 +108,18 @@ where
                 .store
                 .key_manager()
                 .await
-                .map_err(SpaceError::Store)?;
+                .map_err(SpaceError::KeyStore)?;
 
             let key_registry_y = manager
                 .store
                 .key_registry()
                 .await
-                .map_err(SpaceError::Store)?;
+                .map_err(SpaceError::KeyStore)?;
 
             let y = EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y);
 
-            let members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
-            let secret_members = secret_members(members);
+            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
+            let secret_members = secret_members(group_members);
 
             // We can use the high-level API (prepare & process internally) as none of the internal
             // methods require a signed message type ("forged") with a final "operation id".
@@ -146,29 +148,67 @@ where
 
         // 5. Process auth message.
 
-        let _auth_y = {
-            let auth_message = AuthMessage::from_forged(message);
+        let auth_y = {
+            let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
         // 6. Persist new state.
 
-        // @TODO: Write new state to S (Store).
+        let y = SpaceState::new(space_id, auth_y, encryption_y);
+        manager
+            .store
+            .set_space(space_id, y)
+            .await
+            .map_err(SpaceError::SpaceStore)?;
 
         drop(manager);
 
-        Ok(Self {
-            id: space_id,
-            manager: manager_ref,
-        })
+        Ok((
+            Self {
+                id: space_id,
+                manager: manager_ref,
+            },
+            message,
+        ))
     }
 
     pub(crate) fn process(&mut self, _message: &M) {
         todo!()
     }
 
+    pub fn id(&self) -> ActorId {
+        self.id
+    }
+
     pub fn publish(_bytes: &[u8]) {
         todo!()
+    }
+}
+
+pub struct SpaceState<M, C, RS>
+where
+    C: Conditions,
+{
+    pub space_id: ActorId,
+    pub auth_y: Cell<AuthGroupState<C, RS>>,
+    pub encryption_y: Cell<EncryptionGroupState<M>>,
+}
+
+impl<M, C, RS> SpaceState<M, C, RS>
+where
+    C: Conditions,
+{
+    pub fn new(
+        space_id: ActorId,
+        auth_y: AuthGroupState<C, RS>,
+        encryption_y: EncryptionGroupState<M>,
+    ) -> Self {
+        Self {
+            space_id,
+            auth_y: Cell::new(auth_y),
+            encryption_y: Cell::new(encryption_y),
+        }
     }
 }
 
@@ -182,7 +222,7 @@ fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 #[derive(Debug, Error)]
 pub enum SpaceError<S, F, M, C, RS>
 where
-    S: SpacesStore,
+    S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
@@ -198,5 +238,8 @@ where
     Forge(F::Error),
 
     #[error("{0}")]
-    Store(S::Error),
+    KeyStore(<S as KeyStore>::Error),
+
+    #[error("{0}")]
+    SpaceStore(<S as SpaceStore<M, C, RS>>::Error),
 }
