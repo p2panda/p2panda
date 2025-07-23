@@ -185,8 +185,27 @@ where
         self.id
     }
 
+    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<S, F, M, C, RS>> {
+        let space_y = self.state().await?;
+        let group_members = space_y
+            .auth_y
+            .transitive_members()
+            .map_err(SpaceError::AuthGroup)?;
+        Ok(group_members)
+    }
+
     pub fn publish(_bytes: &[u8]) {
         todo!()
+    }
+
+    async fn state(&self) -> Result<SpaceState<M, C, RS>, SpaceError<S, F, M, C, RS>> {
+        let manager = self.manager.inner.read().await;
+        let space_y = manager
+            .store
+            .space(&self.id)
+            .await
+            .map_err(SpaceError::SpaceStore)?;
+        Ok(space_y)
     }
 }
 

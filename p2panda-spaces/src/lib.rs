@@ -8,6 +8,7 @@ mod encryption;
 mod forge;
 mod group;
 mod manager;
+mod member;
 mod message;
 mod space;
 mod store;

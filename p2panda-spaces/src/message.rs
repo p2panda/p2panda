@@ -7,7 +7,7 @@ use crate::types::{ActorId, AuthGroupAction, Conditions};
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum ControlMessage<C> {
     Create {

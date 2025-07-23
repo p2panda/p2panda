@@ -8,7 +8,6 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_encryption::Rng;
-use p2panda_encryption::key_bundle::LongTermKeyBundle;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
 use p2panda_encryption::key_registry::KeyRegistry;
 use p2panda_encryption::traits::PreKeyManager;
@@ -17,6 +16,7 @@ use tokio::sync::RwLock;
 
 use crate::auth::orderer::AuthOrderer;
 use crate::forge::{Forge, ForgedMessage};
+use crate::member::Member;
 use crate::space::{Space, SpaceError};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
@@ -110,10 +110,7 @@ where
         inner.forge.public_key().into()
     }
 
-    /// Returns our own key bundle.
-    // @TODO: What is the struct containing the key bundle _and_ the actor id? Is this a "Device"?
-    // "Author", ...?
-    pub async fn key_bundle(&self) -> Result<LongTermKeyBundle, ManagerError<S, F, M, C, RS>> {
+    pub async fn me(&self) -> Result<Member, ManagerError<S, F, M, C, RS>> {
         let inner = self.inner.read().await;
 
         let y = inner
@@ -122,15 +119,18 @@ where
             .await
             .map_err(ManagerError::KeyStore)?;
 
-        Ok(KeyManager::prekey_bundle(&y))
+        // @TODO: What happens if the forge changes their private key?
+        let my_id = inner.forge.public_key().into();
+
+        Ok(Member::new(my_id, KeyManager::prekey_bundle(&y)))
     }
 
-    // @TODO: Find a better name?
-    pub async fn add_key_bundle(
+    pub async fn register_member(
         &mut self,
-        id: ActorId,
-        key_bundle: LongTermKeyBundle,
+        member: &Member,
     ) -> Result<(), ManagerError<S, F, M, C, RS>> {
+        // @TODO: Reject invalid / expired key bundles.
+
         let mut inner = self.inner.write().await;
 
         let y = inner
@@ -139,7 +139,8 @@ where
             .await
             .map_err(ManagerError::KeyStore)?;
 
-        let y_ii = KeyRegistry::add_longterm_bundle(y, id, key_bundle);
+        // @TODO: Setting longterm bundle should overwrite previous one if this is newer.
+        let y_ii = KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone());
 
         inner
             .store
@@ -198,6 +199,8 @@ where
 mod tests {
     use std::convert::Infallible;
 
+    use p2panda_auth::Access;
+    use p2panda_auth::group::GroupMember;
     use p2panda_core::{Hash, PrivateKey, PublicKey};
     use p2panda_encryption::Rng;
     use p2panda_encryption::crypto::x25519::SecretKey;
@@ -322,6 +325,29 @@ mod tests {
 
         let manager = TestManager::new(store, forge, rng).unwrap();
 
-        let (_space, _message) = manager.create_space(&[]).await.unwrap();
+        // Methods return the correct identity handle.
+        assert_eq!(manager.id().await, my_id);
+
+        assert_eq!(manager.me().await.unwrap().id(), my_id);
+        assert!(manager.me().await.unwrap().verify().is_ok());
+
+        let (space, message) = manager.create_space(&[]).await.unwrap();
+
+        // We've added ourselves automatically with manage access.
+        assert_eq!(
+            space.members().await.unwrap(),
+            vec![(my_id, Access::manage())]
+        );
+
+        // Control message contains "create".
+        assert_eq!(
+            message.spaces_args.control_message,
+            ControlMessage::Create {
+                initial_members: vec![(GroupMember::Individual(my_id), Access::manage())]
+            }
+        );
+
+        // No direct messages as we are the only member.
+        assert!(message.spaces_args.direct_messages.is_empty());
     }
 }
