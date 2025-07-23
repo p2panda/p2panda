@@ -3,6 +3,8 @@
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
+use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::GroupMessage as EncryptionOperation;
 
 use crate::encryption::dgm::EncryptionGroupMembership;
@@ -39,7 +41,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         // introduce ordering then encryption dependencies should be calculated and returned here.
         Ok((
             y,
-            EncryptionMessage::Args(EncryptionArgs {
+            EncryptionMessage::Args(EncryptionArgs::System {
                 control_message: control_message.clone(),
                 direct_messages: direct_messages.to_vec(),
             }),
@@ -47,12 +49,21 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
     }
 
     fn next_application_message(
-        _y: Self::State,
-        _group_secret_id: p2panda_encryption::data_scheme::GroupSecretId,
-        _nonce: p2panda_encryption::crypto::xchacha20::XAeadNonce,
-        _ciphertext: Vec<u8>,
+        y: Self::State,
+        group_secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+        ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        todo!()
+        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
+        // introduce ordering then encryption dependencies should be calculated and returned here.
+        Ok((
+            y,
+            EncryptionMessage::Args(EncryptionArgs::Application {
+                group_secret_id,
+                nonce,
+                ciphertext,
+            }),
+        ))
     }
 
     fn queue(_y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
@@ -98,11 +109,17 @@ impl<M> EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership>
 }
 
 #[derive(Clone, Debug)]
-pub struct EncryptionArgs {
-    // @TODO: Here we will fill in the "dependencies", control message etc. which will be later
-    // used by ForgeArgs.
-    pub(crate) control_message: EncryptionControlMessage,
-    pub(crate) direct_messages: Vec<EncryptionDirectMessage>,
+pub enum EncryptionArgs {
+    // @TODO: Here we will fill in the "dependencies", which will be later used by ForgeArgs.
+    System {
+        control_message: EncryptionControlMessage,
+        direct_messages: Vec<EncryptionDirectMessage>,
+    },
+    Application {
+        group_secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+        ciphertext: Vec<u8>,
+    },
 }
 
 #[derive(Clone, Debug)]

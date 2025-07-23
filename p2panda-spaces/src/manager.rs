@@ -207,7 +207,7 @@ mod tests {
     use p2panda_encryption::key_bundle::Lifetime;
     use p2panda_encryption::key_manager::KeyManager;
 
-    use crate::forge::{Forge, ForgeArgs, ForgedMessage};
+    use crate::forge::{Forge, ForgeArgs, ForgeArgsContent, ForgedMessage};
     use crate::message::ControlMessage;
     use crate::test_utils::MemoryStore;
     use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
@@ -238,8 +238,13 @@ mod tests {
             self.spaces_args.group_id
         }
 
-        fn control_message(&self) -> &ControlMessage<TestConditions> {
-            &self.spaces_args.control_message
+        fn control_message(&self) -> Option<&ControlMessage<TestConditions>> {
+            match &self.spaces_args.content {
+                ForgeArgsContent::System {
+                    control_message, ..
+                } => Some(control_message),
+                ForgeArgsContent::Application { .. } => None,
+            }
         }
     }
 
@@ -331,7 +336,10 @@ mod tests {
         assert_eq!(manager.me().await.unwrap().id(), my_id);
         assert!(manager.me().await.unwrap().verify().is_ok());
 
-        let (space, message) = manager.create_space(&[]).await.unwrap();
+        // Create Space
+        // ~~~~~~~~~~~~
+
+        let (mut space, message) = manager.create_space(&[]).await.unwrap();
 
         // We've added ourselves automatically with manage access.
         assert_eq!(
@@ -339,15 +347,32 @@ mod tests {
             vec![(my_id, Access::manage())]
         );
 
+        assert_eq!(message.spaces_args.group_id, space.id());
+
+        let ForgeArgsContent::System {
+            control_message,
+            direct_messages,
+        } = message.spaces_args.content
+        else {
+            panic!("expected system message");
+        };
+
         // Control message contains "create".
         assert_eq!(
-            message.spaces_args.control_message,
+            control_message,
             ControlMessage::Create {
                 initial_members: vec![(GroupMember::Individual(my_id), Access::manage())]
-            }
+            },
         );
 
         // No direct messages as we are the only member.
-        assert!(message.spaces_args.direct_messages.is_empty());
+        assert!(direct_messages.is_empty());
+
+        // Publish data
+        // ~~~~~~~~~~~~
+
+        let message = space.publish(b"Hello, Spaces!").await.unwrap();
+
+        println!("{message:?}");
     }
 }

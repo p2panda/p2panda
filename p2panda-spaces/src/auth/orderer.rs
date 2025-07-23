@@ -82,7 +82,13 @@ where
             operation_id: message.id(),
             control_message: AuthControlMessage {
                 group_id: message.group_id(),
-                action: message.control_message().to_auth_action(),
+                action: message
+                    .control_message()
+                    // This is a non-public method and we expect this to be only called inside
+                    // local operations, so we can be sure this must be a system message containing
+                    // the control message.
+                    .expect("system message")
+                    .to_auth_action(),
             },
         }
     }

@@ -194,8 +194,33 @@ where
         Ok(group_members)
     }
 
-    pub fn publish(_bytes: &[u8]) {
-        todo!()
+    pub async fn publish(&mut self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
+        let mut space_y = self.state().await?;
+        let mut manager = self.manager.inner.write().await;
+
+        let (encryption_y, encryption_args) =
+            EncryptionGroup::send(space_y.encryption_y, plaintext, &manager.rng)
+                .map_err(SpaceError::EncryptionGroup)?;
+
+        let args = {
+            let EncryptionMessage::Args(encryption_args) = encryption_args else {
+                panic!("here we're only dealing with local operations");
+            };
+
+            ForgeArgs::from_args(self.id, None, Some(encryption_args))
+        };
+
+        space_y.encryption_y = encryption_y;
+
+        manager
+            .store
+            .set_space(&self.id, space_y)
+            .await
+            .map_err(SpaceError::SpaceStore)?;
+
+        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+
+        Ok(message)
     }
 
     async fn state(&self) -> Result<SpaceState<M, C, RS>, SpaceError<S, F, M, C, RS>> {
