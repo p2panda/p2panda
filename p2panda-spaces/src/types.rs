@@ -7,6 +7,8 @@ use std::sync::LazyLock;
 use p2panda_auth::traits::{IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId};
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
+use p2panda_encryption::key_manager::KeyManager;
+use p2panda_encryption::key_registry::KeyRegistry;
 use p2panda_encryption::traits::{
     IdentityHandle as EncryptionIdentityHandle, OperationId as EncryptionOperationId,
 };
@@ -14,8 +16,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionGroupMembership;
-use crate::encryption::key_manager::KeyManager;
-use crate::encryption::key_registry::KeyRegistry;
 use crate::encryption::orderer::EncryptionOrderer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -107,7 +107,7 @@ pub type StrongRemoveResolver<C> = p2panda_auth::group::resolver::StrongRemove<
 pub type EncryptionGroup<M> = p2panda_encryption::data_scheme::EncryptionGroup<
     ActorId,
     OperationId,
-    KeyRegistry,
+    KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer<M>,
@@ -116,7 +116,7 @@ pub type EncryptionGroup<M> = p2panda_encryption::data_scheme::EncryptionGroup<
 pub type EncryptionGroupState<M> = p2panda_encryption::data_scheme::GroupState<
     ActorId,
     OperationId,
-    KeyRegistry,
+    KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer<M>,
@@ -130,7 +130,7 @@ pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMess
 pub type EncryptionGroupError<M> = p2panda_encryption::data_scheme::GroupError<
     ActorId,
     OperationId,
-    KeyRegistry,
+    KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer<M>,

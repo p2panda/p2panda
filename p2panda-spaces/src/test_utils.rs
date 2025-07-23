@@ -2,9 +2,10 @@
 
 use std::collections::HashMap;
 
+use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use thiserror::Error;
 
-use crate::encryption::{KeyManagerState, KeyRegistryState};
 use crate::space::SpaceState;
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{ActorId, Conditions};
@@ -15,7 +16,7 @@ where
     C: Conditions,
 {
     key_manager: KeyManagerState,
-    key_registry: KeyRegistryState,
+    key_registry: KeyRegistryState<ActorId>,
     spaces: HashMap<ActorId, SpaceState<M, C, RS>>,
 }
 
@@ -23,10 +24,10 @@ impl<M, C, RS> MemoryStore<M, C, RS>
 where
     C: Conditions,
 {
-    pub fn new() -> Self {
+    pub fn new(key_manager: KeyManagerState) -> Self {
         Self {
-            key_manager: todo!(),
-            key_registry: todo!(),
+            key_manager,
+            key_registry: KeyRegistry::init(),
             spaces: HashMap::new(),
         }
     }
@@ -34,20 +35,26 @@ where
 
 impl<M, C, RS> SpaceStore<M, C, RS> for MemoryStore<M, C, RS>
 where
+    M: Clone,
+    RS: Clone,
     C: Conditions,
 {
     type Error = MemoryStoreError;
 
-    async fn space(&self, id: ActorId) -> Result<SpaceState<M, C, RS>, Self::Error> {
-        todo!()
+    async fn space(&self, id: &ActorId) -> Result<SpaceState<M, C, RS>, Self::Error> {
+        self.spaces
+            .get(&id)
+            .ok_or(MemoryStoreError::UnknownSpace(*id))
+            .cloned()
     }
 
     async fn set_space(
         &mut self,
-        id: ActorId,
+        id: &ActorId,
         y: SpaceState<M, C, RS>,
-    ) -> Result<SpaceState<M, C, RS>, Self::Error> {
-        todo!()
+    ) -> Result<(), Self::Error> {
+        self.spaces.insert(*id, y);
+        Ok(())
     }
 }
 
@@ -58,19 +65,21 @@ where
     type Error = MemoryStoreError;
 
     async fn key_manager(&self) -> Result<KeyManagerState, Self::Error> {
-        todo!()
+        Ok(self.key_manager.clone())
     }
 
-    async fn key_registry(&self) -> Result<KeyRegistryState, Self::Error> {
-        todo!()
+    async fn key_registry(&self) -> Result<KeyRegistryState<ActorId>, Self::Error> {
+        Ok(self.key_registry.clone())
     }
 
     async fn set_key_manager(&mut self, y: &KeyManagerState) -> Result<(), Self::Error> {
-        todo!()
+        self.key_manager = y.clone();
+        Ok(())
     }
 
-    async fn set_key_registry(&mut self, y: &KeyRegistryState) -> Result<(), Self::Error> {
-        todo!()
+    async fn set_key_registry(&mut self, y: &KeyRegistryState<ActorId>) -> Result<(), Self::Error> {
+        self.key_registry = y.clone();
+        Ok(())
     }
 }
 

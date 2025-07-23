@@ -149,6 +149,9 @@ mod tests {
 
     use p2panda_core::{Hash, PrivateKey, PublicKey};
     use p2panda_encryption::Rng;
+    use p2panda_encryption::crypto::x25519::SecretKey;
+    use p2panda_encryption::key_bundle::Lifetime;
+    use p2panda_encryption::key_manager::KeyManager;
 
     use crate::forge::{Forge, ForgeArgs, ForgedMessage};
     use crate::message::ControlMessage;
@@ -159,7 +162,7 @@ mod tests {
 
     type SeqNum = u64;
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct TestMessage {
         seq_num: SeqNum,
         public_key: PublicKey,
@@ -255,7 +258,12 @@ mod tests {
         let rng = Rng::from_seed([0; 32]);
         let private_key = PrivateKey::new();
 
-        let store = TestStore::new();
+        let key_manager_y = {
+            let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
+        };
+
+        let store = TestStore::new(key_manager_y);
         let forge = TestForge::new(private_key);
 
         let manager = TestManager::new(store, forge, rng).unwrap();

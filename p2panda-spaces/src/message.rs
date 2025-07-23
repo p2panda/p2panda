@@ -8,6 +8,7 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum ControlMessage<C> {
     Create {
         // GroupMember is required for understanding if a public key / actor id is an individual or

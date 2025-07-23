@@ -8,7 +8,7 @@ use p2panda_encryption::traits::GroupMessage as EncryptionOperation;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EncryptionOrderer<M> {
     _marker: PhantomData<M>,
 }

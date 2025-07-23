@@ -40,6 +40,7 @@ pub trait ForgedMessage<C> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct ForgeArgs<C> {
     pub group_id: ActorId,
     pub control_message: ControlMessage<C>,

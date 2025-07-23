@@ -1,7 +1,4 @@
-pub mod dgm;
-pub mod key_manager;
-pub mod key_registry;
-pub mod orderer;
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub use key_manager::{KeyManager, KeyManagerState};
-pub use key_registry::{KeyRegistry, KeyRegistryState};
+pub mod dgm;
+pub mod orderer;

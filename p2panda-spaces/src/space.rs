@@ -162,7 +162,7 @@ where
 
         manager
             .store
-            .set_space(space_id, SpaceState::new(space_id, auth_y, encryption_y))
+            .set_space(&space_id, SpaceState::new(space_id, auth_y, encryption_y))
             .await
             .map_err(SpaceError::SpaceStore)?;
 
@@ -191,12 +191,16 @@ where
 }
 
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct SpaceState<M, C, RS>
 where
     C: Conditions,
 {
     pub space_id: ActorId,
     pub auth_y: AuthGroupState<C, RS>,
+    // @TODO: This contains the PKI and KMG states and other unnecessary data we don't need to
+    // persist. We can make the fields public in `p2panda-encryption` and extract only the
+    // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
 }
 

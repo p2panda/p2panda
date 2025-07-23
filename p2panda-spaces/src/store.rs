@@ -2,8 +2,9 @@
 
 use std::fmt::Debug;
 
-use crate::encryption::key_manager::KeyManagerState;
-use crate::encryption::key_registry::KeyRegistryState;
+use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_registry::KeyRegistryState;
+
 use crate::space::SpaceState;
 use crate::types::{ActorId, Conditions};
 
@@ -13,14 +14,16 @@ where
 {
     type Error: Debug;
 
-    fn space(&self, id: ActorId)
-    -> impl Future<Output = Result<SpaceState<M, C, RS>, Self::Error>>;
+    fn space(
+        &self,
+        id: &ActorId,
+    ) -> impl Future<Output = Result<SpaceState<M, C, RS>, Self::Error>>;
 
     fn set_space(
         &mut self,
-        id: ActorId,
+        id: &ActorId,
         y: SpaceState<M, C, RS>,
-    ) -> impl Future<Output = Result<SpaceState<M, C, RS>, Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
 pub trait KeyStore {
@@ -28,7 +31,7 @@ pub trait KeyStore {
 
     fn key_manager(&self) -> impl Future<Output = Result<KeyManagerState, Self::Error>>;
 
-    fn key_registry(&self) -> impl Future<Output = Result<KeyRegistryState, Self::Error>>;
+    fn key_registry(&self) -> impl Future<Output = Result<KeyRegistryState<ActorId>, Self::Error>>;
 
     fn set_key_manager(
         &mut self,
@@ -37,6 +40,6 @@ pub trait KeyStore {
 
     fn set_key_registry(
         &mut self,
-        y: &KeyRegistryState,
+        y: &KeyRegistryState<ActorId>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
