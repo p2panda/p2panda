@@ -368,10 +368,19 @@ mod tests {
         // No direct messages as we are the only member.
         assert!(direct_messages.is_empty());
 
+        // Author of this message is _not_ us but an ephemeral key.
+        assert_ne!(ActorId::from(message.public_key), manager.id().await);
+
+        // Public key of this message is the space id.
+        assert_eq!(ActorId::from(message.public_key), space.id());
+
         // Publish data
         // ~~~~~~~~~~~~
 
         let message = space.publish(b"Hello, Spaces!").await.unwrap();
+
+        // Author of this message is us.
+        assert_eq!(ActorId::from(message.public_key), manager.id().await);
 
         println!("{message:?}");
     }
