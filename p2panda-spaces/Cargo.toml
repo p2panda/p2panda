@@ -8,8 +8,6 @@ p2panda-core = { path = "../p2panda-core", version = "0.4.0", default-features =
 p2panda-auth = { path = "../p2panda-auth", version = "0.4.0", default-features = false }
 p2panda-encryption = { path = "../p2panda-encryption", version = "0.4.0", features = ["data_scheme"], default-features = false }
 p2panda-store = { path = "../p2panda-store", version = "0.4.0", default-features = false }
-# @TODO: Remove tokio dependency
-tokio = { version = "1.46.1", features = ["sync"] }
 thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
 

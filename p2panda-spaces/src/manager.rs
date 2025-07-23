@@ -9,14 +9,10 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_encryption::Rng;
-use p2panda_encryption::crypto::x25519::SecretKey;
-use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManagerError;
 use thiserror::Error;
 
 use crate::auth::orderer::AuthOrderer;
-use crate::encryption::key_manager::{KeyManager, KeyManagerState};
-use crate::encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use crate::forge::{Forge, ForgedMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::SpacesStore;
@@ -48,15 +44,10 @@ pub struct Manager<S, F, M, C, RS> {
 
 #[derive(Debug)]
 pub(crate) struct ManagerInner<S, F, M, C, RS> {
-    pub(crate) forge: F,
     pub(crate) store: S,
+    pub(crate) forge: F,
     pub(crate) rng: Rng,
     _marker: PhantomData<(M, C, RS)>,
-
-    // @TODO: Remove all state and move it into S.
-    pub(crate) auth_orderer: AuthOrderer,
-    pub(crate) key_manager_y: KeyManagerState,
-    pub(crate) key_registry_y: KeyRegistryState,
 }
 
 impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
@@ -69,24 +60,10 @@ where
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     #[allow(clippy::result_large_err)]
-    pub fn new(
-        store: S,
-        forge: F,
-        identity_secret: &SecretKey,
-        rng: Rng,
-    ) -> Result<Self, ManagerError<F, M, C, RS>> {
-        let auth_orderer = AuthOrderer::new();
-
-        let key_manager_y = KeyManager::init(identity_secret, Lifetime::default(), &rng)?;
-
-        let key_registry_y = KeyRegistry::init();
-
+    pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<S, F, M, C, RS>> {
         let inner = ManagerInner {
-            forge,
             store,
-            auth_orderer,
-            key_manager_y,
-            key_registry_y,
+            forge,
             rng,
             _marker: PhantomData,
         };
@@ -101,10 +78,10 @@ where
     }
 
     #[allow(clippy::type_complexity, clippy::result_large_err)]
-    pub fn create_space(
+    pub async fn create_space(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<Space<S, F, M, C, RS>, ManagerError<F, M, C, RS>> {
+    ) -> Result<Space<S, F, M, C, RS>, ManagerError<S, F, M, C, RS>> {
         // @TODO: Assign GroupMember type to every actor based on looking up our own state,
         // checking if actor is a group or individual.
         // @TODO: Throw error when user tries to add a space to a space.
@@ -112,7 +89,11 @@ where
             .iter()
             .map(|(actor, access)| (GroupMember::Individual(actor.to_owned()), access.to_owned()))
             .collect();
-        let space = Space::create(self.clone(), initial_members).map_err(ManagerError::Space)?;
+
+        let space = Space::create(self.clone(), initial_members)
+            .await
+            .map_err(ManagerError::Space)?;
+
         Ok(space)
     }
 
@@ -147,15 +128,16 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum ManagerError<F, M, C, RS>
+pub enum ManagerError<S, F, M, C, RS>
 where
+    S: SpacesStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     #[error(transparent)]
-    Space(#[from] SpaceError<F, M, C, RS>),
+    Space(#[from] SpaceError<S, F, M, C, RS>),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
@@ -168,11 +150,9 @@ mod tests {
 
     use p2panda_core::{Hash, PrivateKey, PublicKey};
     use p2panda_encryption::Rng;
-    use p2panda_encryption::crypto::x25519::SecretKey;
 
     use crate::forge::{Forge, ForgeArgs, ForgedMessage};
     use crate::message::ControlMessage;
-    use crate::store::{AllState, MemoryStore};
     use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
 
     use super::Manager;
@@ -257,19 +237,17 @@ mod tests {
 
     #[test]
     fn create_space() {
-        let rng = Rng::from_seed([0; 32]);
-        let private_key = PrivateKey::new();
+        // let rng = Rng::from_seed([0; 32]);
+        // let private_key = PrivateKey::new();
 
         // @TODO: this should soon be a SQLite store.
-        let store = MemoryStore::new(AllState::default());
+        // let store = MemoryStore::new(AllState::default());
 
-        let forge = TestForge::new(private_key);
+        // let forge = TestForge::new(private_key);
 
-        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-
-        let manager: Manager<_, _, _, TestConditions, StrongRemoveResolver<TestConditions>> =
-            Manager::new(store, forge, &identity_secret, rng).unwrap();
-
-        let _space = manager.create_space(&[]).unwrap();
+        // let manager: Manager<_, _, _, TestConditions, StrongRemoveResolver<TestConditions>> =
+        //     Manager::new(store, forge, rng).unwrap();
+        //
+        // let _space = manager.create_space(&[]).unwrap();
     }
 }

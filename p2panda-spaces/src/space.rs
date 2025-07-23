@@ -13,6 +13,7 @@ use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::orderer::EncryptionMessage;
 use crate::forge::{Forge, ForgeArgs, ForgedMessage};
 use crate::manager::Manager;
+use crate::store::SpacesStore;
 use crate::types::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroupError, AuthGroupState, Conditions,
     EncryptionGroup, EncryptionGroupError, OperationId,
@@ -23,21 +24,31 @@ use crate::types::{
 /// Only members with suitable access to the space can read and write to it.
 #[derive(Debug)]
 pub struct Space<S, F, M, C, RS> {
+    /// Reference to the manager.
+    ///
+    /// This allows us build an API where users can treat "space" instances independently from the
+    /// manager API, even though internally it has a reference to it.
     manager: Manager<S, F, M, C, RS>,
+
+    /// Id of the space.
+    ///
+    /// This is the "pointer" at the related space state which lives inside the manager.
+    id: ActorId,
 }
 
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
+    S: SpacesStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
     #[allow(clippy::result_large_err)]
-    pub(crate) fn create(
+    pub(crate) async fn create(
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<Self, SpaceError<F, M, C, RS>> {
+    ) -> Result<Self, SpaceError<S, F, M, C, RS>> {
         let manager = manager_ref.inner.borrow_mut();
 
         let my_id: ActorId = manager.forge.public_key().into();
@@ -58,7 +69,7 @@ where
         }
 
         let (auth_y, auth_args) = {
-            // @TODO: Get this from manager & establish initial orderer state.
+            // @TODO: Get this from store & establish initial orderer state.
             //
             // This initial orderer state is not necessarily "empty", can include pointers at other
             // groups in case we've passed in "groups" as our initial members.
@@ -74,28 +85,42 @@ where
             AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
         };
 
-        // 3. Establish encryption group state with create control message.
+        // 3. Establish encryption group state (prepare & process) with "create" control message.
 
         let (_encryption_y, encryption_args) = {
+            // @TODO: Establish DGM state.
+            //
+            // This will mostly be a wrapper around the auth state, as this is where we will learn
+            // about the current group members.
+            //
+            // We keep the "space_id" around so the object knows which group state to look up.
             let dgm = EncryptionMembershipState {
                 space_id,
                 group_store: (),
             };
 
+            // @TODO: Establish orderer state.
             let orderer_y = ();
 
-            // @TODO: KeyManagerState and KeyRegistryState should be shared across groups and so we
-            // need a wrapper around them which follows interior mutability patterns.
-            let y = EncryptionGroup::init(
-                my_id,
-                manager.key_manager_y.clone(), // @TODO: Get state from S instead
-                manager.key_registry_y.clone(), // @TODO: Get state from S instead
-                dgm,
-                orderer_y,
-            );
+            let key_manager_y = manager
+                .store
+                .key_manager()
+                .await
+                .map_err(SpaceError::Store)?;
+
+            let key_registry_y = manager
+                .store
+                .key_registry()
+                .await
+                .map_err(SpaceError::Store)?;
+
+            let y = EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y);
 
             let members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
             let secret_members = secret_members(members);
+
+            // We can use the high-level API (prepare & process internally) as none of the internal
+            // methods require a signed message type ("forged") with a final "operation id".
             EncryptionGroup::create(y, secret_members, &manager.rng)
                 .map_err(SpaceError::EncryptionGroup)?
         };
@@ -133,6 +158,7 @@ where
         drop(manager);
 
         Ok(Self {
+            id: space_id,
             manager: manager_ref,
         })
     }
@@ -154,8 +180,9 @@ fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 }
 
 #[derive(Debug, Error)]
-pub enum SpaceError<F, M, C, RS>
+pub enum SpaceError<S, F, M, C, RS>
 where
+    S: SpacesStore,
     F: Forge<M, C>,
     M: ForgedMessage<C>,
     C: Conditions,
@@ -169,4 +196,7 @@ where
 
     #[error("{0}")]
     Forge(F::Error),
+
+    #[error("{0}")]
+    Store(S::Error),
 }
