@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
@@ -11,6 +10,7 @@ use p2panda_auth::traits::Resolver;
 use p2panda_encryption::Rng;
 use p2panda_encryption::key_manager::KeyManagerError;
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 use crate::auth::orderer::AuthOrderer;
 use crate::forge::{Forge, ForgedMessage};
@@ -39,7 +39,7 @@ use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
 #[derive(Debug)]
 pub struct Manager<S, F, M, C, RS> {
     #[allow(clippy::type_complexity)]
-    pub(crate) inner: Rc<RefCell<ManagerInner<S, F, M, C, RS>>>,
+    pub(crate) inner: Arc<RwLock<ManagerInner<S, F, M, C, RS>>>,
 }
 
 #[derive(Debug)]
@@ -69,7 +69,7 @@ where
         };
 
         Ok(Self {
-            inner: Rc::new(RefCell::new(inner)),
+            inner: Arc::new(RwLock::new(inner)),
         })
     }
 
@@ -188,14 +188,14 @@ mod tests {
 
     #[derive(Debug)]
     struct TestForge {
-        next_seq_num: Cell<SeqNum>,
+        next_seq_num: SeqNum,
         private_key: PrivateKey,
     }
 
     impl TestForge {
         pub fn new(private_key: PrivateKey) -> Self {
             Self {
-                next_seq_num: Cell::new(0),
+                next_seq_num: 0,
                 private_key,
             }
         }
@@ -213,16 +213,21 @@ mod tests {
             self.private_key.public_key()
         }
 
-        fn forge(&self, args: ForgeArgs<TestConditions>) -> Result<TestMessage, Self::Error> {
+        async fn forge(
+            &mut self,
+            args: ForgeArgs<TestConditions>,
+        ) -> Result<TestMessage, Self::Error> {
+            let seq_num = self.next_seq_num;
+            self.next_seq_num += 1;
             Ok(TestMessage {
-                seq_num: self.next_seq_num.replace(self.next_seq_num.get() + 1),
+                seq_num,
                 public_key: self.public_key(),
                 spaces_args: args,
             })
         }
 
-        fn forge_ephemeral(
-            &self,
+        async fn forge_ephemeral(
+            &mut self,
             private_key: PrivateKey,
             args: ForgeArgs<TestConditions>,
         ) -> Result<TestMessage, Self::Error> {

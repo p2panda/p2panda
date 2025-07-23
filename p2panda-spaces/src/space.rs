@@ -51,9 +51,10 @@ where
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
     ) -> Result<(Self, M), SpaceError<S, F, M, C, RS>> {
-        let manager = manager_ref.inner.borrow_mut();
-
-        let my_id: ActorId = manager.forge.public_key().into();
+        let my_id: ActorId = {
+            let manager = manager_ref.inner.read().await;
+            manager.forge.public_key().into()
+        };
 
         // 1. Derive a space id.
 
@@ -90,6 +91,8 @@ where
         // 3. Establish encryption group state (prepare & process) with "create" control message.
 
         let (encryption_y, encryption_args) = {
+            let manager = manager_ref.inner.read().await;
+
             // @TODO: Establish DGM state.
             //
             // This will mostly be a wrapper around the auth state, as this is where we will learn
@@ -141,9 +144,12 @@ where
             ForgeArgs::from_args(space_id, Some(auth_args), Some(encryption_args))
         };
 
+        let mut manager = manager_ref.inner.write().await;
+
         let message = manager
             .forge
             .forge_ephemeral(ephemeral_private_key, args)
+            .await
             .map_err(SpaceError::Forge)?;
 
         // 5. Process auth message.
@@ -155,10 +161,9 @@ where
 
         // 6. Persist new state.
 
-        let y = SpaceState::new(space_id, auth_y, encryption_y);
         manager
             .store
-            .set_space(space_id, y)
+            .set_space(space_id, SpaceState::new(space_id, auth_y, encryption_y))
             .await
             .map_err(SpaceError::SpaceStore)?;
 

@@ -20,13 +20,13 @@ where
 
     fn public_key(&self) -> PublicKey;
 
-    fn forge(&self, args: ForgeArgs<C>) -> Result<M, Self::Error>;
+    fn forge(&mut self, args: ForgeArgs<C>) -> impl Future<Output = Result<M, Self::Error>>;
 
     fn forge_ephemeral(
-        &self,
+        &mut self,
         private_key: PrivateKey,
         args: ForgeArgs<C>,
-    ) -> Result<M, Self::Error>;
+    ) -> impl Future<Output = Result<M, Self::Error>>;
 }
 
 pub trait ForgedMessage<C> {
