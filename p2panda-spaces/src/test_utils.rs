@@ -2,8 +2,9 @@
 
 use std::collections::HashMap;
 
-use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
+use p2panda_encryption::traits::PreKeyManager;
 use thiserror::Error;
 
 use crate::space::SpaceState;
@@ -24,10 +25,17 @@ impl<M, C, RS> MemoryStore<M, C, RS>
 where
     C: Conditions,
 {
-    pub fn new(key_manager: KeyManagerState) -> Self {
+    pub fn new(my_id: ActorId, key_manager: KeyManagerState) -> Self {
+        // Register our own pre-keys.
+        let key_registry = {
+            let key_bundle = KeyManager::prekey_bundle(&key_manager);
+            let y = KeyRegistry::init();
+            KeyRegistry::add_longterm_bundle(y, my_id, key_bundle)
+        };
+
         Self {
             key_manager,
-            key_registry: KeyRegistry::init(),
+            key_registry,
             spaces: HashMap::new(),
         }
     }

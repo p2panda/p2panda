@@ -8,7 +8,10 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_encryption::Rng;
-use p2panda_encryption::key_manager::KeyManagerError;
+use p2panda_encryption::key_bundle::LongTermKeyBundle;
+use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
+use p2panda_encryption::key_registry::KeyRegistry;
+use p2panda_encryption::traits::PreKeyManager;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -82,9 +85,14 @@ where
         &self,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Space<S, F, M, C, RS>, M), ManagerError<S, F, M, C, RS>> {
+        // @TODO: Check if initial members are known and have a key bundle present, throw error
+        // otherwise.
+
         // @TODO: Assign GroupMember type to every actor based on looking up our own state,
         // checking if actor is a group or individual.
+
         // @TODO: Throw error when user tries to add a space to a space.
+
         let initial_members = initial_members
             .iter()
             .map(|(actor, access)| (GroupMember::Individual(actor.to_owned()), access.to_owned()))
@@ -97,12 +105,52 @@ where
         Ok((space, message))
     }
 
-    pub fn register_member(&mut self) {
-        // @TODO: Find a better name
-        // @TODO: Implement manually adding an "individual" key bundle to the registry.
+    pub async fn id(&self) -> ActorId {
+        let inner = self.inner.read().await;
+        inner.forge.public_key().into()
     }
 
-    pub fn process(&mut self, _message: &M) {
+    /// Returns our own key bundle.
+    // @TODO: What is the struct containing the key bundle _and_ the actor id? Is this a "Device"?
+    // "Author", ...?
+    pub async fn key_bundle(&self) -> Result<LongTermKeyBundle, ManagerError<S, F, M, C, RS>> {
+        let inner = self.inner.read().await;
+
+        let y = inner
+            .store
+            .key_manager()
+            .await
+            .map_err(ManagerError::KeyStore)?;
+
+        Ok(KeyManager::prekey_bundle(&y))
+    }
+
+    // @TODO: Find a better name?
+    pub async fn add_key_bundle(
+        &mut self,
+        id: ActorId,
+        key_bundle: LongTermKeyBundle,
+    ) -> Result<(), ManagerError<S, F, M, C, RS>> {
+        let mut inner = self.inner.write().await;
+
+        let y = inner
+            .store
+            .key_registry()
+            .await
+            .map_err(ManagerError::KeyStore)?;
+
+        let y_ii = KeyRegistry::add_longterm_bundle(y, id, key_bundle);
+
+        inner
+            .store
+            .set_key_registry(&y_ii)
+            .await
+            .map_err(ManagerError::KeyStore)?;
+
+        Ok(())
+    }
+
+    pub async fn process(&mut self, _message: &M) {
         // @TODO: Look up if we know about the space id in the message M, route it to the right
         // instance and continue processing there.
         //
@@ -141,6 +189,9 @@ where
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
+
+    #[error("{0}")]
+    KeyStore(<S as KeyStore>::Error),
 }
 
 #[cfg(test)]
@@ -256,14 +307,17 @@ mod tests {
     #[tokio::test]
     async fn create_space() {
         let rng = Rng::from_seed([0; 32]);
-        let private_key = PrivateKey::new();
 
+        let private_key = PrivateKey::new();
+        let my_id: ActorId = private_key.public_key().into();
+
+        // @TODO: We need a way to initialise our identity key when it is not set yet.
         let key_manager_y = {
             let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
         };
 
-        let store = TestStore::new(key_manager_y);
+        let store = TestStore::new(my_id, key_manager_y);
         let forge = TestForge::new(private_key);
 
         let manager = TestManager::new(store, forge, rng).unwrap();
