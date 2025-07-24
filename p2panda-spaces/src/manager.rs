@@ -367,7 +367,7 @@ mod tests {
     async fn create_space() {
         let rng = Rng::from_seed([0; 32]);
 
-        let private_key = PrivateKey::new();
+        let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
         let my_id: ActorId = private_key.public_key().into();
 
         // @TODO: We need a way to initialise our identity key when it is not set yet.

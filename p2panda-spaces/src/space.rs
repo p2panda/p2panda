@@ -6,6 +6,7 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
+use p2panda_encryption::RngError;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
@@ -66,7 +67,10 @@ where
 
         // 1. Derive a space id.
 
-        let ephemeral_private_key = PrivateKey::new();
+        let ephemeral_private_key = {
+            let manager = manager_ref.inner.write().await;
+            PrivateKey::from_bytes(&manager.rng.random_array()?)
+        };
         let space_id: ActorId = ephemeral_private_key.public_key().into();
 
         // 2. Prepare auth group state with "create" control message.
@@ -290,6 +294,9 @@ where
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
+    #[error(transparent)]
+    Rng(#[from] RngError),
+
     #[error("{0}")]
     AuthGroup(AuthGroupError<C, RS>),
 
