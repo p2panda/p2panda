@@ -8,11 +8,13 @@ use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use thiserror::Error;
 
-use crate::auth::orderer::{AuthMessage, AuthOrderer};
+use crate::auth::message::AuthMessage;
+use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionMembershipState;
-use crate::encryption::orderer::EncryptionMessage;
-use crate::forge::{Forge, ForgeArgs, ForgedMessage};
+use crate::encryption::message::EncryptionMessage;
+use crate::forge::Forge;
 use crate::manager::Manager;
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroup, AuthGroupAction, AuthGroupError,
@@ -41,7 +43,7 @@ impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
     S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
-    M: ForgedMessage<C>,
+    M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
@@ -140,7 +142,7 @@ where
                 panic!("here we're only dealing with local operations");
             };
 
-            ForgeArgs::from_args(space_id, Some(auth_args), Some(encryption_args))
+            SpacesArgs::from_args(space_id, Some(auth_args), Some(encryption_args))
         };
 
         let mut manager = manager_ref.inner.write().await;
@@ -207,7 +209,7 @@ where
                 panic!("here we're only dealing with local operations");
             };
 
-            ForgeArgs::from_args(self.id, None, Some(encryption_args))
+            SpacesArgs::from_args(self.id, None, Some(encryption_args))
         };
 
         space_y.encryption_y = encryption_y;
@@ -277,7 +279,6 @@ pub enum SpaceError<S, F, M, C, RS>
 where
     S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
-    M: ForgedMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {

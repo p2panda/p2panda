@@ -15,8 +15,9 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::auth::orderer::AuthOrderer;
-use crate::forge::{Forge, ForgedMessage};
+use crate::forge::Forge;
 use crate::member::Member;
+use crate::message::{AuthoredMessage, SpacesMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
@@ -57,7 +58,7 @@ impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
 where
     S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
-    M: ForgedMessage<C>,
+    M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
@@ -151,7 +152,8 @@ where
         Ok(())
     }
 
-    pub async fn process(&mut self, _message: &M) {
+    // We expect messages to be signature-checked, dependency-checked & partially ordered here.
+    pub async fn process(&mut self, message: &M) -> Result<(), ManagerError<S, F, M, C, RS>> {
         // @TODO: Look up if we know about the space id in the message M, route it to the right
         // instance and continue processing there.
         //
@@ -161,7 +163,7 @@ where
         // @TODO: Error when we process an message on an unknown space. This should not happen at
         // this stage because we rely on an orderer before.
 
-        todo!()
+        Ok(())
     }
 }
 
@@ -181,7 +183,6 @@ pub enum ManagerError<S, F, M, C, RS>
 where
     S: SpaceStore<M, C, RS> + KeyStore,
     F: Forge<M, C>,
-    M: ForgedMessage<C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
@@ -207,8 +208,8 @@ mod tests {
     use p2panda_encryption::key_bundle::Lifetime;
     use p2panda_encryption::key_manager::KeyManager;
 
-    use crate::forge::{Forge, ForgeArgs, ForgeArgsContent, ForgedMessage};
-    use crate::message::ControlMessage;
+    use crate::forge::Forge;
+    use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
     use crate::test_utils::MemoryStore;
     use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
 
@@ -220,10 +221,10 @@ mod tests {
     struct TestMessage {
         seq_num: SeqNum,
         public_key: PublicKey,
-        spaces_args: ForgeArgs<TestConditions>,
+        spaces_args: SpacesArgs<TestConditions>,
     }
 
-    impl ForgedMessage<TestConditions> for TestMessage {
+    impl AuthoredMessage for TestMessage {
         fn id(&self) -> OperationId {
             let mut buffer: Vec<u8> = self.public_key.as_bytes().to_vec();
             buffer.extend_from_slice(&self.seq_num.to_be_bytes());
@@ -233,18 +234,11 @@ mod tests {
         fn author(&self) -> ActorId {
             self.public_key.into()
         }
+    }
 
-        fn group_id(&self) -> ActorId {
-            self.spaces_args.group_id
-        }
-
-        fn control_message(&self) -> Option<&ControlMessage<TestConditions>> {
-            match &self.spaces_args.content {
-                ForgeArgsContent::System {
-                    control_message, ..
-                } => Some(control_message),
-                ForgeArgsContent::Application { .. } => None,
-            }
+    impl SpacesMessage<TestConditions> for TestMessage {
+        fn args(&self) -> &SpacesArgs<TestConditions> {
+            todo!()
         }
     }
 
@@ -277,7 +271,7 @@ mod tests {
 
         async fn forge(
             &mut self,
-            args: ForgeArgs<TestConditions>,
+            args: SpacesArgs<TestConditions>,
         ) -> Result<TestMessage, Self::Error> {
             let seq_num = self.next_seq_num;
             self.next_seq_num += 1;
@@ -291,7 +285,7 @@ mod tests {
         async fn forge_ephemeral(
             &mut self,
             private_key: PrivateKey,
-            args: ForgeArgs<TestConditions>,
+            args: SpacesArgs<TestConditions>,
         ) -> Result<TestMessage, Self::Error> {
             Ok(TestMessage {
                 // Will always be first entry in the "log" as we're dropping the private key.
@@ -347,20 +341,21 @@ mod tests {
             vec![(my_id, Access::manage())]
         );
 
-        assert_eq!(message.spaces_args.group_id, space.id());
-
-        let ForgeArgsContent::System {
+        let SpacesArgs::ControlMessage {
+            id: group_id,
             control_message,
             direct_messages,
-        } = message.spaces_args.content
+        } = message.args()
         else {
             panic!("expected system message");
         };
 
+        assert_eq!(*group_id, space.id());
+
         // Control message contains "create".
         assert_eq!(
             control_message,
-            ControlMessage::Create {
+            &ControlMessage::Create {
                 initial_members: vec![(GroupMember::Individual(my_id), Access::manage())]
             },
         );

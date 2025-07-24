@@ -2,9 +2,7 @@
 
 use std::convert::Infallible;
 
-use p2panda_auth::traits::Operation as AuthOperation;
-
-use crate::forge::ForgedMessage;
+use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, Conditions, OperationId};
 
 // Manages "dependencies" required for `p2panda-auth`.
@@ -51,95 +49,5 @@ where
     ) -> Result<(Self::State, Option<Self::Operation>), Self::Error> {
         // We shift "dependency checked" message ordering to outside of `p2panda-spaces`.
         unreachable!()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AuthArgs<C> {
-    // @TODO: Here we will fill in the "dependencies", control message etc. which will be later
-    // used by ForgeArgs.
-    pub(crate) control_message: AuthControlMessage<C>,
-}
-
-#[derive(Clone, Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum AuthMessage<C> {
-    Args(AuthArgs<C>),
-    Forged {
-        author: ActorId,
-        operation_id: OperationId,
-        control_message: AuthControlMessage<C>,
-    },
-}
-
-impl<C> AuthMessage<C>
-where
-    C: Conditions,
-{
-    pub(crate) fn from_forged<M: ForgedMessage<C>>(message: &M) -> Self {
-        AuthMessage::Forged {
-            author: message.author(),
-            operation_id: message.id(),
-            control_message: AuthControlMessage {
-                group_id: message.group_id(),
-                action: message
-                    .control_message()
-                    // This is a non-public method and we expect this to be only called inside
-                    // local operations, so we can be sure this must be a system message containing
-                    // the control message.
-                    .expect("system message")
-                    .to_auth_action(),
-            },
-        }
-    }
-}
-
-impl<C> AuthOperation<ActorId, OperationId, AuthControlMessage<C>> for AuthMessage<C>
-where
-    C: Conditions,
-{
-    fn id(&self) -> OperationId {
-        match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
-            AuthMessage::Forged { operation_id, .. } => *operation_id,
-        }
-    }
-
-    fn author(&self) -> ActorId {
-        match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
-            AuthMessage::Forged { author, .. } => *author,
-        }
-    }
-
-    fn dependencies(&self) -> Vec<OperationId> {
-        // @TODO: We do not implement ordering yet.
-        Vec::new()
-    }
-
-    fn previous(&self) -> Vec<OperationId> {
-        // @TODO: We do not implement ordering yet.
-        Vec::new()
-    }
-
-    fn payload(&self) -> AuthControlMessage<C> {
-        match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
-            AuthMessage::Forged {
-                control_message, ..
-            } => control_message.clone(),
-        }
     }
 }

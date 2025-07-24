@@ -2,10 +2,160 @@
 
 use std::fmt::Debug;
 
-use crate::types::{ActorId, AuthGroupAction, Conditions};
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
+use p2panda_encryption::data_scheme::GroupSecretId;
+
+use crate::auth::message::AuthArgs;
+use crate::encryption::message::EncryptionArgs;
+use crate::types::{
+    ActorId, AuthGroupAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage,
+    OperationId,
+};
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+
+// @TODO: This could be an interesting trait for `p2panda-core`, next to another one where we
+// declare dependencies.
+pub trait AuthoredMessage {
+    fn id(&self) -> OperationId;
+
+    fn author(&self) -> ActorId;
+
+    // @TODO: Do we need a method here to check the signature?
+}
+
+pub trait SpacesMessage<C> {
+    fn args(&self) -> &SpacesArgs<C>;
+}
+
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+pub enum SpacesArgs<C> {
+    /// System message, contains key bundle of the given author.
+    ///
+    /// Note: Applications should check if the key bundle was authored by the sender.
+    KeyBundle {
+        // @TODO: Key bundle material.
+    },
+
+    /// System message containing a space- or group control message.
+    ControlMessage {
+        /// Space- or group id.
+        id: ActorId,
+
+        /// "Control message" describing group operation ("add member", "remove member", etc.).
+        control_message: ControlMessage<C>,
+
+        /// Encrypted, direct messages to members in the group, used for key agreement.
+        direct_messages: Vec<EncryptionDirectMessage>,
+    },
+
+    /// Encrypted application message used inside a space.
+    Application {
+        /// Space this message was encrypted for. Members in that space should be able to decrypt
+        /// it.
+        space_id: ActorId,
+
+        /// Used key id for AEAD.
+        group_secret_id: GroupSecretId,
+
+        /// Used nonce for AEAD.
+        nonce: XAeadNonce,
+
+        /// Encrypted application data.
+        ciphertext: Vec<u8>,
+    },
+}
+
+impl<C> SpacesArgs<C>
+where
+    C: Conditions,
+{
+    pub(crate) fn from_args(
+        group_id: ActorId,
+        auth_args: Option<AuthArgs<C>>,
+        encryption_args: Option<EncryptionArgs>,
+    ) -> Self {
+        let (encryption_action, direct_messages) = match encryption_args {
+            Some(EncryptionArgs::System {
+                control_message,
+                direct_messages,
+            }) => (Some(control_message), direct_messages),
+            None => (None, Vec::new()),
+            Some(EncryptionArgs::Application {
+                group_secret_id,
+                nonce,
+                ciphertext,
+            }) => return Self::from_application_args(group_id, group_secret_id, nonce, ciphertext),
+        };
+
+        let auth_action = auth_args.map(|args| args.control_message.action);
+
+        match (auth_action, encryption_action) {
+            (None, Some(encryption_control_message)) => {
+                Self::from_encryption_args(group_id, encryption_control_message, direct_messages)
+            }
+            (Some(auth_action), None) => Self::from_auth_args(group_id, auth_action),
+            (Some(auth_action), Some(encryption_control_message)) => Self::from_both_args(
+                group_id,
+                auth_action,
+                encryption_control_message,
+                direct_messages,
+            ),
+            _ => panic!("invalid arguments"),
+        }
+    }
+
+    fn from_application_args(
+        space_id: ActorId,
+        group_secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+        ciphertext: Vec<u8>,
+    ) -> Self {
+        Self::Application {
+            space_id,
+            group_secret_id,
+            nonce,
+            ciphertext,
+        }
+    }
+
+    // @TODO: Handle auth-only cases ("promote", "demote")
+    fn from_auth_args(group_id: ActorId, auth_action: AuthGroupAction<C>) -> Self {
+        todo!();
+    }
+
+    // @TODO: Handle encryption-only cases ("update")
+    fn from_encryption_args(
+        group_id: ActorId,
+        control_message: EncryptionControlMessage,
+        direct_messages: Vec<EncryptionDirectMessage>,
+    ) -> Self {
+        todo!();
+    }
+
+    fn from_both_args(
+        group_id: ActorId,
+        auth_action: AuthGroupAction<C>,
+        encryption_control_message: EncryptionControlMessage,
+        direct_messages: Vec<EncryptionDirectMessage>,
+    ) -> Self {
+        let control_message = match (auth_action, encryption_control_message) {
+            (
+                AuthGroupAction::Create { initial_members },
+                EncryptionControlMessage::Create { .. },
+            ) => ControlMessage::Create { initial_members },
+            _ => unimplemented!(), // @TODO: More cases will go here. Panic on invalid ones.
+        };
+
+        Self::ControlMessage {
+            id: group_id,
+            control_message,
+            direct_messages,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
