@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
-use p2panda_encryption::traits::GroupMessage as EncryptionOperation;
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
@@ -31,7 +30,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
 
     type Error = Infallible; // @TODO
 
-    type Message = EncryptionMessage<M>;
+    type Message = EncryptionMessage;
 
     fn next_control_message(
         y: Self::State,
@@ -83,32 +82,6 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
     fn next_ready_message(
         _y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-        todo!()
-    }
-}
-
-impl<M> EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership>
-    for EncryptionMessage<M>
-{
-    fn id(&self) -> OperationId {
-        match self {
-            EncryptionMessage::Args(_) => OperationId::placeholder(),
-            EncryptionMessage::Forged(_) => todo!(),
-        }
-    }
-
-    fn sender(&self) -> ActorId {
-        match self {
-            EncryptionMessage::Args(_) => ActorId::placeholder(),
-            EncryptionMessage::Forged(_) => todo!(),
-        }
-    }
-
-    fn content(&self) -> p2panda_encryption::traits::GroupMessageContent<ActorId> {
-        todo!()
-    }
-
-    fn direct_messages(&self) -> Vec<EncryptionDirectMessage> {
         todo!()
     }
 }

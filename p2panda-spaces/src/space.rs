@@ -7,6 +7,8 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
+use p2panda_encryption::data_scheme::GroupSecretId;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
@@ -190,9 +192,79 @@ where
         ))
     }
 
-    pub(crate) async fn process(&mut self, _message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        // @TODO
+    pub(crate) async fn process(&mut self, message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
+        match message.args() {
+            SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
+            SpacesArgs::ControlMessage { id, .. } => {
+                assert_eq!(id, &self.id); // Sanity check.
+                self.process_control_message(message).await?;
+            }
+            SpacesArgs::Application {
+                space_id,
+                group_secret_id,
+                nonce,
+                ciphertext,
+            } => {
+                assert_eq!(space_id, &self.id); // Sanity check.
+                self.process_application_message(group_secret_id, nonce, ciphertext)
+                    .await?;
+            }
+        }
+
         Ok(())
+    }
+
+    async fn process_control_message(&self, message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
+        let y = self.state().await?;
+
+        // Process auth message.
+
+        let auth_y = {
+            let auth_message = AuthMessage::from_forged(message);
+            AuthGroup::process(y.auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
+        };
+
+        // Process encryption message.
+
+        let (encryption_y, encryption_output) = {
+            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
+            let secret_members = secret_members(group_members);
+
+            // @TODO
+            let encryption_message = EncryptionMessage::Forged {
+                author: todo!(),
+                operation_id: todo!(),
+                args: todo!(),
+            };
+
+            EncryptionGroup::receive(y.encryption_y, &encryption_message)
+                .map_err(SpaceError::EncryptionGroup)?
+        };
+
+        // Persist new state.
+
+        let manager = self.manager.inner.write().await;
+        manager
+            .store
+            .set_space(
+                &y.space_id,
+                SpaceState::new(y.space_id, auth_y, encryption_y),
+            )
+            .await
+            .map_err(SpaceError::SpaceStore)?;
+
+        todo!()
+    }
+
+    async fn process_application_message(
+        &self,
+        group_secret_id: &GroupSecretId,
+        nonce: &XAeadNonce,
+        ciphertext: &[u8],
+    ) -> Result<(), SpaceError<S, F, M, C, RS>> {
+        let space_y = self.state().await?;
+
+        todo!()
     }
 
     pub fn id(&self) -> ActorId {
@@ -280,7 +352,7 @@ where
     }
 }
 
-fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
+pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
     members
         .into_iter()
         .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })

@@ -7,6 +7,7 @@ use p2panda_encryption::data_scheme::GroupSecretId;
 
 use crate::auth::message::AuthArgs;
 use crate::encryption::message::EncryptionArgs;
+use crate::space::secret_members;
 use crate::types::{
     ActorId, AuthGroupAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage,
     OperationId,
@@ -184,6 +185,21 @@ where
         match self {
             ControlMessage::Create { initial_members } => AuthGroupAction::Create {
                 initial_members: initial_members.to_owned(),
+            },
+        }
+    }
+
+    pub(crate) fn to_encryption_control_message(&self) -> EncryptionControlMessage {
+        match self {
+            ControlMessage::Create { initial_members } => EncryptionControlMessage::Create {
+                // @TODO: Compute set of members looking at auth state to take transitive
+                // membership into account.
+                initial_members: secret_members(
+                    initial_members
+                        .iter()
+                        .map(|(member, access)| (member.id(), access.clone()))
+                        .collect(),
+                ),
             },
         }
     }

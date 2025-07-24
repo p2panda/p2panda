@@ -43,12 +43,7 @@ where
                     group_id: *id,
                     action: control_message.to_auth_action(),
                 },
-                _ => {
-                    // This is a non-public method and we expect this to be only called inside
-                    // local operations, so we can be sure this must be a system message containing
-                    // the control message.
-                    panic!("unexpected message type");
-                }
+                _ => unreachable!("unexpected message type"),
             },
         }
     }

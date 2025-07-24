@@ -189,6 +189,8 @@ where
                 // - Detect if id is related to a space or group.
                 // - Also process group messages.
 
+                // @TODO: Make sure claimed "group member" types in control messages are correct.
+
                 let mut space = match self.space(id).await? {
                     Some(space) => space,
                     None => {
