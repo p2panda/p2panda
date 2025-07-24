@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 use crate::auth::orderer::AuthOrderer;
 use crate::forge::Forge;
 use crate::member::Member;
-use crate::message::{AuthoredMessage, SpacesMessage};
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
@@ -154,14 +154,43 @@ where
 
     // We expect messages to be signature-checked, dependency-checked & partially ordered here.
     pub async fn process(&mut self, message: &M) -> Result<(), ManagerError<S, F, M, C, RS>> {
-        // @TODO: Look up if we know about the space id in the message M, route it to the right
-        // instance and continue processing there.
-        //
-        // This can be a system message (control messages) or application message (to-be decrypted
-        // in space)
+        // Route message to the regarding member-, group- or space processor.
+        match message.args() {
+            // Received key bundle from a member.
+            SpacesArgs::KeyBundle {} => {
+                // @TODO:
+                // - Check if it is valid
+                // - Store it in key manager if it is newer than our previously stored one (if given)
+                todo!()
+            }
+            // Received control message related to a group or space.
+            SpacesArgs::ControlMessage {
+                id,
+                control_message,
+                direct_messages,
+            } => {
+                // @TODO:
+                // - Detect if id is related to a space or group.
+                // - Process space messages.
+                // - Also process group messages.
+                // - Throw error when id is unknown.
+                todo!()
+            }
+            // Received encrypted application data for a space.
+            SpacesArgs::Application {
+                space_id,
+                group_secret_id,
+                nonce,
+                ciphertext,
+            } => {
+                // @TODO:
+                // - Route & process space message.
+                // - Throw error when id is unknown.
+                todo!()
+            }
+        }
 
-        // @TODO: Error when we process an message on an unknown space. This should not happen at
-        // this stage because we rely on an orderer before.
+        // @TODO: Return events.
 
         Ok(())
     }
@@ -238,7 +267,7 @@ mod tests {
 
     impl SpacesMessage<TestConditions> for TestMessage {
         fn args(&self) -> &SpacesArgs<TestConditions> {
-            todo!()
+            &self.spaces_args
         }
     }
 
