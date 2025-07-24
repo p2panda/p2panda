@@ -191,7 +191,8 @@ where
     }
 
     pub(crate) async fn process(&mut self, _message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        todo!()
+        // @TODO
+        Ok(())
     }
 
     pub fn id(&self) -> ActorId {
