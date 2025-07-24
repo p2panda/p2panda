@@ -201,6 +201,9 @@ where
                             return Err(ManagerError::UnexpectedMessage(message.id()));
                         }
 
+                        // @TODO: This is a bit strange. What are the API guarantees here over
+                        // "inexistant" spaces. We should tell from the outside that a new one is
+                        // initialised instead of pointing at an existing one.
                         Space::new(self.clone(), *id)
                     }
                 };

@@ -15,6 +15,7 @@ use crate::auth::message::AuthMessage;
 use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::EncryptionMessage;
+use crate::encryption::orderer::EncryptionOrdererState;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
@@ -119,7 +120,7 @@ where
             };
 
             // @TODO: Establish orderer state.
-            let orderer_y = ();
+            let orderer_y = EncryptionOrdererState::new();
 
             let key_manager_y = manager
                 .store
@@ -177,7 +178,10 @@ where
 
         manager
             .store
-            .set_space(&space_id, SpaceState::new(space_id, auth_y, encryption_y))
+            .set_space(
+                &space_id,
+                SpaceState::from_state(space_id, auth_y, encryption_y),
+            )
             .await
             .map_err(SpaceError::SpaceStore)?;
 
@@ -215,7 +219,66 @@ where
     }
 
     async fn process_control_message(&self, message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        let y = self.state().await?;
+        let y = {
+            let manager = self.manager.inner.read().await;
+
+            let my_id: ActorId = manager.forge.public_key().into();
+
+            match manager
+                .store
+                .space(&self.id)
+                .await
+                .map_err(SpaceError::SpaceStore)?
+            {
+                Some(y) => y,
+                None => {
+                    // @TODO: This repeats quite a lot, would be good to factor state
+                    // initialisation out.
+
+                    let auth_y = {
+                        // @TODO: Get this from store & establish initial orderer state.
+                        //
+                        // This initial orderer state is not necessarily "empty", can include pointers at other
+                        // groups in case we've passed in "groups" as our initial members.
+                        let orderer_y = ();
+
+                        AuthGroupState::<C, RS>::new(my_id, self.id, AuthDummyStore, orderer_y)
+                    };
+
+                    let encryption_y = {
+                        // @TODO: Establish DGM state.
+                        //
+                        // This will mostly be a wrapper around the auth state, as this is where we will learn
+                        // about the current group members.
+                        //
+                        // We keep the "space_id" around so the object knows which group state to look up.
+                        let dgm = EncryptionMembershipState {
+                            space_id: self.id,
+                            group_store: (),
+                        };
+
+                        // @TODO: Establish orderer state.
+                        let orderer_y = EncryptionOrdererState::new();
+
+                        let key_manager_y = manager
+                            .store
+                            .key_manager()
+                            .await
+                            .map_err(SpaceError::KeyStore)?;
+
+                        let key_registry_y = manager
+                            .store
+                            .key_registry()
+                            .await
+                            .map_err(SpaceError::KeyStore)?;
+
+                        EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y)
+                    };
+
+                    SpaceState::from_state(self.id, auth_y, encryption_y)
+                }
+            }
+        };
 
         // Process auth message.
 
@@ -226,43 +289,36 @@ where
 
         // Process encryption message.
 
-        let (encryption_y, encryption_output) = {
-            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
-            let secret_members = secret_members(group_members);
+        let (encryption_y, _encryption_output) = {
+            let encryption_message = EncryptionMessage::from_forged(message);
 
-            // @TODO
-            let encryption_message = EncryptionMessage::Forged {
-                author: todo!(),
-                operation_id: todo!(),
-                args: todo!(),
-            };
-
+            // @TODO: This calls members in the DGM
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?
         };
 
         // Persist new state.
 
-        let manager = self.manager.inner.write().await;
+        let mut manager = self.manager.inner.write().await;
         manager
             .store
             .set_space(
                 &y.space_id,
-                SpaceState::new(y.space_id, auth_y, encryption_y),
+                SpaceState::from_state(y.space_id, auth_y, encryption_y),
             )
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        todo!()
+        Ok(())
     }
 
     async fn process_application_message(
         &self,
-        group_secret_id: &GroupSecretId,
-        nonce: &XAeadNonce,
-        ciphertext: &[u8],
+        _group_secret_id: &GroupSecretId,
+        _nonce: &XAeadNonce,
+        _ciphertext: &[u8],
     ) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        let space_y = self.state().await?;
+        // let space_y = self.state().await?;
 
         todo!()
     }
@@ -339,7 +395,7 @@ impl<M, C, RS> SpaceState<M, C, RS>
 where
     C: Conditions,
 {
-    pub fn new(
+    pub fn from_state(
         space_id: ActorId,
         auth_y: AuthGroupState<C, RS>,
         encryption_y: EncryptionGroupState<M>,

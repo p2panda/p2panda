@@ -375,8 +375,6 @@ where
                     direct_message,
                 )?;
 
-                // y.secrets = SecretBundle::insert(y.secrets, new_group_secret);
-
                 // Check if processing this message added us to the group.
                 let we_are_members = Self::members(&y_i)?.contains(&y_i.my_id);
                 if !y_i.is_welcomed && we_are_members {

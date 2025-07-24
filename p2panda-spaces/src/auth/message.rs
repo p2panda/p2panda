@@ -43,7 +43,7 @@ where
                     group_id: *id,
                     action: control_message.to_auth_action(),
                 },
-                _ => unreachable!("unexpected message type"),
+                _ => panic!("unexpected message type"),
             },
         }
     }

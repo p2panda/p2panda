@@ -57,6 +57,6 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
 
     fn members(_y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
         // TODO: get the spaces' group state and then query it.
-        todo!()
+        Ok(HashSet::new())
     }
 }

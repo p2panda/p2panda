@@ -23,10 +23,21 @@ impl<M> EncryptionOrderer<M> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct EncryptionOrdererState {
+    next_message: Option<EncryptionMessage>,
+}
+
+impl EncryptionOrdererState {
+    pub fn new() -> Self {
+        Self { next_message: None }
+    }
+}
+
 impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
     for EncryptionOrderer<M>
 {
-    type State = (); // @TODO
+    type State = EncryptionOrdererState;
 
     type Error = Infallible; // @TODO
 
@@ -66,8 +77,9 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         ))
     }
 
-    fn queue(_y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
-        todo!()
+    fn queue(mut y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
+        y.next_message = Some(message.clone());
+        Ok(y)
     }
 
     fn set_welcome(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
@@ -80,8 +92,9 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
     }
 
     fn next_ready_message(
-        _y: Self::State,
+        mut y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-        todo!()
+        let message = y.next_message.take();
+        Ok((y, message))
     }
 }
