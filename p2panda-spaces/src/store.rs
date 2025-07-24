@@ -17,7 +17,7 @@ where
     fn space(
         &self,
         id: &ActorId,
-    ) -> impl Future<Output = Result<SpaceState<M, C, RS>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<SpaceState<M, C, RS>>, Self::Error>>;
 
     fn set_space(
         &mut self,

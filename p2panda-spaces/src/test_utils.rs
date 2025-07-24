@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_encryption::traits::PreKeyManager;
-use thiserror::Error;
 
 use crate::space::SpaceState;
 use crate::store::{KeyStore, SpaceStore};
@@ -47,13 +47,10 @@ where
     RS: Clone,
     C: Conditions,
 {
-    type Error = MemoryStoreError;
+    type Error = Infallible;
 
-    async fn space(&self, id: &ActorId) -> Result<SpaceState<M, C, RS>, Self::Error> {
-        self.spaces
-            .get(&id)
-            .ok_or(MemoryStoreError::UnknownSpace(*id))
-            .cloned()
+    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C, RS>>, Self::Error> {
+        Ok(self.spaces.get(&id).cloned())
     }
 
     async fn set_space(
@@ -70,7 +67,7 @@ impl<M, C, RS> KeyStore for MemoryStore<M, C, RS>
 where
     C: Conditions,
 {
-    type Error = MemoryStoreError;
+    type Error = Infallible;
 
     async fn key_manager(&self) -> Result<KeyManagerState, Self::Error> {
         Ok(self.key_manager.clone())
@@ -89,10 +86,4 @@ where
         self.key_registry = y.clone();
         Ok(())
     }
-}
-
-#[derive(Debug, Error)]
-pub enum MemoryStoreError {
-    #[error("tried to access unknown space with id {0}")]
-    UnknownSpace(ActorId),
 }

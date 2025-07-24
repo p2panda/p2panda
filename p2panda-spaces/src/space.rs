@@ -231,7 +231,8 @@ where
             .store
             .space(&self.id)
             .await
-            .map_err(SpaceError::SpaceStore)?;
+            .map_err(SpaceError::SpaceStore)?
+            .ok_or(SpaceError::UnknownSpace(self.id))?;
         Ok(space_y)
     }
 }
@@ -296,4 +297,7 @@ where
 
     #[error("{0}")]
     SpaceStore(<S as SpaceStore<M, C, RS>>::Error),
+
+    #[error("tried to access unknown space id {0}")]
+    UnknownSpace(ActorId),
 }
