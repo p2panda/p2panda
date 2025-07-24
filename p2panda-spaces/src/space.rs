@@ -47,6 +47,13 @@ where
     C: Conditions,
     RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
 {
+    pub(crate) fn new(manager_ref: Manager<S, F, M, C, RS>, id: ActorId) -> Self {
+        Self {
+            manager: manager_ref,
+            id,
+        }
+    }
+
     #[allow(clippy::result_large_err)]
     pub(crate) async fn create(
         manager_ref: Manager<S, F, M, C, RS>,
@@ -179,7 +186,7 @@ where
         ))
     }
 
-    pub(crate) fn process(&mut self, _message: &M) {
+    pub(crate) async fn process(&mut self, _message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
         todo!()
     }
 

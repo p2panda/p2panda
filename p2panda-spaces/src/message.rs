@@ -176,6 +176,10 @@ impl<C> ControlMessage<C>
 where
     C: Conditions,
 {
+    pub fn is_create(&self) -> bool {
+        matches!(self, ControlMessage::Create { .. })
+    }
+
     pub(crate) fn to_auth_action(&self) -> AuthGroupAction<C> {
         match self {
             ControlMessage::Create { initial_members } => AuthGroupAction::Create {

@@ -53,6 +53,10 @@ where
         Ok(self.spaces.get(&id).cloned())
     }
 
+    async fn has_space(&self, id: &ActorId) -> Result<bool, Self::Error> {
+        Ok(self.spaces.contains_key(&id))
+    }
+
     async fn set_space(
         &mut self,
         id: &ActorId,

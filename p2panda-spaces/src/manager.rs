@@ -167,26 +167,48 @@ where
             SpacesArgs::ControlMessage {
                 id,
                 control_message,
-                direct_messages,
+                ..
             } => {
                 // @TODO:
                 // - Detect if id is related to a space or group.
-                // - Process space messages.
                 // - Also process group messages.
-                // - Throw error when id is unknown.
-                todo!()
+
+                let has_space = {
+                    let inner = self.inner.read().await;
+                    inner
+                        .store
+                        .has_space(id)
+                        .await
+                        .map_err(ManagerError::SpaceStore)?
+                };
+
+                if !has_space && !control_message.is_create() {
+                    // If this is not a "create" message we should have learned about the space
+                    // before. This can be either a faulty message or a problem with the message
+                    // orderer.
+                    return Err(ManagerError::UnexpectedMessage(message.id()));
+                }
+
+                let mut space = Space::new(self.clone(), *id);
+                space.process(message).await.map_err(ManagerError::Space)?;
             }
             // Received encrypted application data for a space.
-            SpacesArgs::Application {
-                space_id,
-                group_secret_id,
-                nonce,
-                ciphertext,
-            } => {
-                // @TODO:
-                // - Route & process space message.
-                // - Throw error when id is unknown.
-                todo!()
+            SpacesArgs::Application { space_id, .. } => {
+                let has_space = {
+                    let inner = self.inner.read().await;
+                    inner
+                        .store
+                        .has_space(space_id)
+                        .await
+                        .map_err(ManagerError::SpaceStore)?
+                };
+
+                if !has_space {
+                    return Err(ManagerError::UnexpectedMessage(message.id()));
+                }
+
+                let mut space = Space::new(self.clone(), *space_id);
+                space.process(message).await.map_err(ManagerError::Space)?;
             }
         }
 
@@ -223,6 +245,12 @@ where
 
     #[error("{0}")]
     KeyStore(<S as KeyStore>::Error),
+
+    #[error("{0}")]
+    SpaceStore(<S as SpaceStore<M, C, RS>>::Error),
+
+    #[error("received unexpected message with id {0}, maybe it arrived out-of-order")]
+    UnexpectedMessage(OperationId),
 }
 
 #[cfg(test)]

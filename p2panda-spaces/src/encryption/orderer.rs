@@ -72,7 +72,11 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
     }
 
     fn set_welcome(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
-        // No-op
+        // @TODO: We need to make the orderer aware of the welcome state and only "ready" messages
+        // when we are welcomed, otherwise key agreement and decryption might fail.
+        //
+        // @TODO: We probably also need an error then when someone tries to publish a message in a
+        // not-yet-welcomed space.
         Ok(y)
     }
 
