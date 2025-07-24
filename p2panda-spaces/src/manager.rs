@@ -77,8 +77,24 @@ where
         })
     }
 
-    pub fn space(&self, _space_id: ActorId) -> Space<S, F, M, C, RS> {
-        todo!()
+    pub async fn space(
+        &self,
+        id: &ActorId,
+    ) -> Result<Option<Space<S, F, M, C, RS>>, ManagerError<S, F, M, C, RS>> {
+        let has_space = {
+            let inner = self.inner.read().await;
+            inner
+                .store
+                .has_space(id)
+                .await
+                .map_err(ManagerError::SpaceStore)?
+        };
+
+        if has_space {
+            Ok(Some(Space::new(self.clone(), *id)))
+        } else {
+            Ok(None)
+        }
     }
 
     #[allow(clippy::type_complexity, clippy::result_large_err)]
@@ -173,41 +189,28 @@ where
                 // - Detect if id is related to a space or group.
                 // - Also process group messages.
 
-                let has_space = {
-                    let inner = self.inner.read().await;
-                    inner
-                        .store
-                        .has_space(id)
-                        .await
-                        .map_err(ManagerError::SpaceStore)?
+                let mut space = match self.space(id).await? {
+                    Some(space) => space,
+                    None => {
+                        if !control_message.is_create() {
+                            // If this is not a "create" message we should have learned about the space
+                            // before. This can be either a faulty message or a problem with the message
+                            // orderer.
+                            return Err(ManagerError::UnexpectedMessage(message.id()));
+                        }
+
+                        Space::new(self.clone(), *id)
+                    }
                 };
 
-                if !has_space && !control_message.is_create() {
-                    // If this is not a "create" message we should have learned about the space
-                    // before. This can be either a faulty message or a problem with the message
-                    // orderer.
-                    return Err(ManagerError::UnexpectedMessage(message.id()));
-                }
-
-                let mut space = Space::new(self.clone(), *id);
                 space.process(message).await.map_err(ManagerError::Space)?;
             }
             // Received encrypted application data for a space.
             SpacesArgs::Application { space_id, .. } => {
-                let has_space = {
-                    let inner = self.inner.read().await;
-                    inner
-                        .store
-                        .has_space(space_id)
-                        .await
-                        .map_err(ManagerError::SpaceStore)?
+                let Some(mut space) = self.space(space_id).await? else {
+                    return Err(ManagerError::UnexpectedMessage(message.id()));
                 };
 
-                if !has_space {
-                    return Err(ManagerError::UnexpectedMessage(message.id()));
-                }
-
-                let mut space = Space::new(self.clone(), *space_id);
                 space.process(message).await.map_err(ManagerError::Space)?;
             }
         }
