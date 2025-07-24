@@ -230,7 +230,7 @@ async fn send_and_receive() {
 
     // Alice creates a space with Bob.
 
-    let (_alice_space, alice_create_message) = alice
+    let (alice_space, alice_create_message) = alice
         .manager
         .create_space(&[(bob.manager.id().await, Access::write())])
         .await
@@ -239,4 +239,14 @@ async fn send_and_receive() {
     // Bob processes Alice's "create" message.
 
     bob.manager.process(&alice_create_message).await.unwrap();
+
+    // Bob sends a message to Alice.
+
+    let mut bob_space = bob.manager.space(&alice_space.id()).await.unwrap().unwrap();
+
+    let message = bob_space.publish(b"Hello, Alice!").await.unwrap();
+
+    // Alice processes Bob's encrypted message.
+
+    alice.manager.process(&message).await.unwrap();
 }
