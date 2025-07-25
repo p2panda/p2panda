@@ -122,6 +122,7 @@ where
         Ok((space, message))
     }
 
+    // @TODO: Make it work without async
     pub async fn id(&self) -> ActorId {
         let inner = self.inner.read().await;
         inner.forge.public_key().into()

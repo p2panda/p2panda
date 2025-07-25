@@ -5,6 +5,7 @@ use p2panda_encryption::traits::KeyBundle;
 
 use crate::types::ActorId;
 
+#[derive(Debug)]
 pub struct Member {
     id: ActorId,
     key_bundle: LongTermKeyBundle,

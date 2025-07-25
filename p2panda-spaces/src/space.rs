@@ -96,7 +96,9 @@ where
 
             let action = AuthControlMessage {
                 group_id: space_id,
-                action: AuthGroupAction::Create { initial_members },
+                action: AuthGroupAction::Create {
+                    initial_members: initial_members.clone(),
+                },
             };
 
             AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
@@ -108,11 +110,16 @@ where
             let manager = manager_ref.inner.read().await;
 
             // Establish DGM state.
-            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
-            let members = secret_members(group_members);
 
+            // @TODO: Later we want to call `transitive_members` here, but this currently needs
+            // processing the auth state.
+            let members = secret_members(
+                initial_members
+                    .iter()
+                    .map(|(member, access)| (member.id(), access.clone()))
+                    .collect(),
+            );
             let dgm = EncryptionMembershipState {
-                space_id,
                 members: HashSet::from_iter(members.iter().cloned()),
             };
 
@@ -155,11 +162,10 @@ where
 
         let mut manager = manager_ref.inner.write().await;
 
-        let message = manager
-            .forge
-            .forge_ephemeral(ephemeral_private_key, args)
-            .await
-            .map_err(SpaceError::Forge)?;
+        // @TODO: Can't use ephemeral private key for signing "create" message as this will make
+        // the author / sender different from the person we want to do a key agreement with when
+        // processing it in `p2panda-encryption`.
+        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
 
         // 5. Process auth message.
 
@@ -236,7 +242,6 @@ where
                     let encryption_y = {
                         // Establish DGM state.
                         let dgm = EncryptionMembershipState {
-                            space_id: self.id,
                             members: HashSet::new(),
                         };
 
@@ -272,9 +277,11 @@ where
 
         // Process encryption message.
 
-        let (encryption_y, _encryption_output) = {
+        let (encryption_y, encryption_output) = {
+            let manager = self.manager.inner.read().await;
+
             // Make encryption DGM aware of current auth members state.
-            // @TODO: This should be factored out as it repeats multiple time.
+
             let group_members = y
                 .auth_y
                 .transitive_members()
@@ -282,13 +289,28 @@ where
             let secret_members = secret_members(group_members);
 
             y.encryption_y.dcgka.dgm = EncryptionMembershipState {
-                space_id: self.id(),
                 members: HashSet::from_iter(secret_members.into_iter()),
             };
 
+            // Share "global" key-manager and -registry across all spaces.
+
+            let key_manager_y = manager
+                .store
+                .key_manager()
+                .await
+                .map_err(SpaceError::KeyStore)?;
+
+            let key_registry_y = manager
+                .store
+                .key_registry()
+                .await
+                .map_err(SpaceError::KeyStore)?;
+
+            y.encryption_y.dcgka.my_keys = key_manager_y;
+            y.encryption_y.dcgka.pki = key_registry_y;
+
             let encryption_message = EncryptionMessage::from_forged(message);
 
-            // @TODO: This calls members in the DGM
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?
         };

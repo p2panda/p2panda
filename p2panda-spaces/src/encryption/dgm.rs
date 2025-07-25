@@ -13,7 +13,6 @@ pub struct EncryptionGroupMembership {}
 // @TODO: Maybe put `serde` features behind a feature-flag in `p2panda-encryption`?
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
-    pub(crate) space_id: ActorId,
     pub(crate) members: HashSet<ActorId>,
 }
 
@@ -26,7 +25,6 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
 
     fn create(_my_id: ActorId, initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
         Ok(EncryptionMembershipState {
-            space_id: ActorId::placeholder(),
             members: HashSet::from_iter(initial_members.iter().cloned()),
         })
     }

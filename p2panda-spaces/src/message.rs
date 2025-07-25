@@ -18,7 +18,7 @@ use p2panda_auth::group::GroupMember;
 
 // @TODO: This could be an interesting trait for `p2panda-core`, next to another one where we
 // declare dependencies.
-pub trait AuthoredMessage {
+pub trait AuthoredMessage: Debug {
     fn id(&self) -> OperationId;
 
     fn author(&self) -> ActorId;
