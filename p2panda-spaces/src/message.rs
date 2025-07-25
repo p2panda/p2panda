@@ -123,15 +123,15 @@ where
     }
 
     // @TODO: Handle auth-only cases ("promote", "demote")
-    fn from_auth_args(group_id: ActorId, auth_action: AuthGroupAction<C>) -> Self {
+    fn from_auth_args(_group_id: ActorId, _auth_action: AuthGroupAction<C>) -> Self {
         todo!();
     }
 
     // @TODO: Handle encryption-only cases ("update")
     fn from_encryption_args(
-        group_id: ActorId,
-        control_message: EncryptionControlMessage,
-        direct_messages: Vec<EncryptionDirectMessage>,
+        _group_id: ActorId,
+        _control_message: EncryptionControlMessage,
+        _direct_messages: Vec<EncryptionDirectMessage>,
     ) -> Self {
         todo!();
     }

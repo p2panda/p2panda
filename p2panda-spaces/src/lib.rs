@@ -15,6 +15,6 @@ mod space;
 mod store;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
-#[cfg(any(test))]
+#[cfg(test)]
 mod tests;
 mod types;

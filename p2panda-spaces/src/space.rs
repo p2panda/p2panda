@@ -8,7 +8,6 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
-use p2panda_encryption::data_scheme::GroupOutput;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
