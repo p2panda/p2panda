@@ -15,6 +15,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::auth::orderer::AuthOrderer;
+use crate::event::Event;
 use crate::forge::Forge;
 use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
@@ -170,9 +171,12 @@ where
     }
 
     // We expect messages to be signature-checked, dependency-checked & partially ordered here.
-    pub async fn process(&mut self, message: &M) -> Result<(), ManagerError<S, F, M, C, RS>> {
+    pub async fn process(
+        &mut self,
+        message: &M,
+    ) -> Result<Vec<Event>, ManagerError<S, F, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
-        match message.args() {
+        let events = match message.args() {
             // Received key bundle from a member.
             SpacesArgs::KeyBundle {} => {
                 // @TODO:
@@ -209,7 +213,7 @@ where
                     }
                 };
 
-                space.process(message).await.map_err(ManagerError::Space)?;
+                space.process(message).await.map_err(ManagerError::Space)?
             }
             // Received encrypted application data for a space.
             SpacesArgs::Application { space_id, .. } => {
@@ -217,13 +221,11 @@ where
                     return Err(ManagerError::UnexpectedMessage(message.id()));
                 };
 
-                space.process(message).await.map_err(ManagerError::Space)?;
+                space.process(message).await.map_err(ManagerError::Space)?
             }
-        }
+        };
 
-        // @TODO: Return events.
-
-        Ok(())
+        Ok(events)
     }
 }
 

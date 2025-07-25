@@ -136,6 +136,13 @@ pub type EncryptionGroupError<M> = p2panda_encryption::data_scheme::GroupError<
     EncryptionOrderer<M>,
 >;
 
+pub type EncryptionGroupOutput<M> = p2panda_encryption::data_scheme::GroupOutput<
+    ActorId,
+    OperationId,
+    EncryptionGroupMembership,
+    EncryptionOrderer<M>,
+>;
+
 // ~~~ Hacks ~~~
 
 // @TODO: Will change in `p2panda-auth`.

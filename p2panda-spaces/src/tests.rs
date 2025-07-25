@@ -10,6 +10,7 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManager;
 
+use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
@@ -245,5 +246,14 @@ async fn send_and_receive() {
 
     // Alice processes Bob's encrypted message.
 
-    alice.manager.process(&message).await.unwrap();
+    let events = alice.manager.process(&message).await.unwrap();
+    assert_eq!(events.len(), 1);
+
+    #[allow(irrefutable_let_patterns)]
+    let Event::Application { space_id, data } = events.first().unwrap() else {
+        panic!("unexpected event returned");
+    };
+
+    assert_eq!(space_id, &alice_space.id());
+    assert_eq!(data, b"Hello, Alice!");
 }

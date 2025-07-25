@@ -8,6 +8,7 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Resolver;
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
+use p2panda_encryption::data_scheme::GroupOutput;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
@@ -15,14 +16,15 @@ use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::EncryptionMessage;
 use crate::encryption::orderer::EncryptionOrdererState;
+use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroup, AuthGroupAction, AuthGroupError,
-    AuthGroupState, Conditions, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
-    OperationId,
+    AuthGroupState, Conditions, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
+    EncryptionGroupState, OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -196,23 +198,29 @@ where
         ))
     }
 
-    pub(crate) async fn process(&mut self, message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        match message.args() {
+    pub(crate) async fn process(
+        &mut self,
+        message: &M,
+    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
+        let events = match message.args() {
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::ControlMessage { id, .. } => {
                 assert_eq!(id, &self.id); // Sanity check.
-                self.process_control_message(message).await?;
+                self.process_control_message(message).await?
             }
             SpacesArgs::Application { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
-                self.process_application_message(message).await?;
+                self.process_application_message(message).await?
             }
-        }
+        };
 
-        Ok(())
+        Ok(events)
     }
 
-    async fn process_control_message(&self, message: &M) -> Result<(), SpaceError<S, F, M, C, RS>> {
+    async fn process_control_message(
+        &self,
+        message: &M,
+    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
         let mut y = {
             let manager = self.manager.inner.read().await;
 
@@ -277,7 +285,7 @@ where
 
         // Process encryption message.
 
-        let (encryption_y, encryption_output) = {
+        let (encryption_y, _encryption_output) = {
             let manager = self.manager.inner.read().await;
 
             // Make encryption DGM aware of current auth members state.
@@ -325,18 +333,18 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        Ok(())
+        Ok(vec![])
     }
 
     async fn process_application_message(
         &self,
         message: &M,
-    ) -> Result<(), SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
         // Process encryption message.
 
-        let (encryption_y, _encryption_output) = {
+        let (encryption_y, encryption_output) = {
             let encryption_message = EncryptionMessage::from_forged(message);
 
             // @TODO: This calls members in the DGM
@@ -354,7 +362,23 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        Ok(())
+        let events = encryption_output
+            .into_iter()
+            .map(|event| {
+                match event {
+                    EncryptionGroupOutput::Application { plaintext } => Event::Application {
+                        space_id: self.id,
+                        data: plaintext,
+                    },
+                    _ => {
+                        // We only expect "application" events inside this function.
+                        unreachable!();
+                    }
+                }
+            })
+            .collect();
+
+        Ok(events)
     }
 
     pub fn id(&self) -> ActorId {

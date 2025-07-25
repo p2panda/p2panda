@@ -5,6 +5,7 @@
 
 mod auth;
 mod encryption;
+mod event;
 mod forge;
 mod group;
 mod manager;
