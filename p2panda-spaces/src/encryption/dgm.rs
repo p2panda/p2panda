@@ -14,7 +14,7 @@ pub struct EncryptionGroupMembership {}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
     pub(crate) space_id: ActorId,
-    pub(crate) group_store: (), // TODO: this should be a generic S group store
+    pub(crate) members: HashSet<ActorId>,
 }
 
 impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
@@ -24,13 +24,11 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
 
     type Error = Infallible; // @TODO
 
-    fn create(_my_id: ActorId, _initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
-        // @TODO: as all DGM methods are handled outside of encryption this is a no-op.
-        let y = EncryptionMembershipState {
+    fn create(_my_id: ActorId, initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
+        Ok(EncryptionMembershipState {
             space_id: ActorId::placeholder(),
-            group_store: (),
-        };
-        Ok(y)
+            members: HashSet::from_iter(initial_members.iter().cloned()),
+        })
     }
 
     fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
@@ -55,8 +53,7 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
         todo!()
     }
 
-    fn members(_y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
-        // TODO: get the spaces' group state and then query it.
-        Ok(HashSet::new())
+    fn members(y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {
+        Ok(y.members.clone())
     }
 }

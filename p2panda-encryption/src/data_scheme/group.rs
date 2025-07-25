@@ -44,11 +44,11 @@ where
     KMG::State: Clone,
     ORD: Ordering<ID, OP, DGM>,
 {
-    pub(crate) my_id: ID,
-    pub(crate) dcgka: DcgkaState<ID, OP, PKI, DGM, KMG>,
-    pub(crate) orderer: ORD::State,
-    pub(crate) secrets: SecretBundleState,
-    pub(crate) is_welcomed: bool,
+    pub my_id: ID,
+    pub dcgka: DcgkaState<ID, OP, PKI, DGM, KMG>,
+    pub orderer: ORD::State,
+    pub secrets: SecretBundleState,
+    pub is_welcomed: bool,
 }
 
 impl<ID, OP, PKI, DGM, KMG, ORD> EncryptionGroup<ID, OP, PKI, DGM, KMG, ORD>

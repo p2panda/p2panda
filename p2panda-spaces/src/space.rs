@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -106,15 +107,13 @@ where
         let (encryption_y, encryption_args) = {
             let manager = manager_ref.inner.read().await;
 
-            // @TODO: Establish DGM state.
-            //
-            // This will mostly be a wrapper around the auth state, as this is where we will learn
-            // about the current group members.
-            //
-            // We keep the "space_id" around so the object knows which group state to look up.
+            // Establish DGM state.
+            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
+            let members = secret_members(group_members);
+
             let dgm = EncryptionMembershipState {
                 space_id,
-                group_store: (),
+                members: HashSet::from_iter(members.iter().cloned()),
             };
 
             // @TODO: Establish orderer state.
@@ -134,12 +133,9 @@ where
 
             let y = EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y);
 
-            let group_members = auth_y.transitive_members().map_err(SpaceError::AuthGroup)?;
-            let secret_members = secret_members(group_members);
-
             // We can use the high-level API (prepare & process internally) as none of the internal
             // methods require a signed message type ("forged") with a final "operation id".
-            EncryptionGroup::create(y, secret_members, &manager.rng)
+            EncryptionGroup::create(y, members, &manager.rng)
                 .map_err(SpaceError::EncryptionGroup)?
         };
 
@@ -238,15 +234,10 @@ where
                     };
 
                     let encryption_y = {
-                        // @TODO: Establish DGM state.
-                        //
-                        // This will mostly be a wrapper around the auth state, as this is where we will learn
-                        // about the current group members.
-                        //
-                        // We keep the "space_id" around so the object knows which group state to look up.
+                        // Establish DGM state.
                         let dgm = EncryptionMembershipState {
                             space_id: self.id,
-                            group_store: (),
+                            members: HashSet::new(),
                         };
 
                         // @TODO: Establish orderer state.
@@ -281,7 +272,20 @@ where
 
         // Process encryption message.
 
-        let (encryption_y, encryption_output) = {
+        let (encryption_y, _encryption_output) = {
+            // Make encryption DGM aware of current auth members state.
+            // @TODO: This should be factored out as it repeats multiple time.
+            let group_members = y
+                .auth_y
+                .transitive_members()
+                .map_err(SpaceError::AuthGroup)?;
+            let secret_members = secret_members(group_members);
+
+            y.encryption_y.dcgka.dgm = EncryptionMembershipState {
+                space_id: self.id(),
+                members: HashSet::from_iter(secret_members.into_iter()),
+            };
+
             let encryption_message = EncryptionMessage::from_forged(message);
 
             // @TODO: This calls members in the DGM
