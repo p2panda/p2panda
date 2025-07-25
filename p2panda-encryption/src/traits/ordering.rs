@@ -55,7 +55,7 @@ pub trait Ordering<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
 {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State;
 
     type Error: Error;
 
