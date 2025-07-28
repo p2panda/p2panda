@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{ActorId, OperationId};
 
-#[derive(Clone, Debug)]
+// @TODO: It's strange that Serialize & Deserialize (along with other traits)
+// are required here. It's only a requirement because EncryptionGroupMembership
+// is a generic parameter on EncryptionDirectMessage.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionGroupMembership {}
 
 // @TODO: Maybe put `serde` features behind a feature-flag in `p2panda-encryption`?

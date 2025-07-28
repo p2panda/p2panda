@@ -4,6 +4,7 @@ use std::fmt::Debug;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
+use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthArgs;
 use crate::encryption::message::EncryptionArgs;
@@ -30,8 +31,12 @@ pub trait SpacesMessage<C> {
     fn args(&self) -> &SpacesArgs<C>;
 }
 
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+// @TODO: Clone is a requirement in reflection where SpacesArgs are implemented
+// as p2panda Extensions where Clone is a trait bound. Because of this Clone
+// needed to be moved out from behind the test_utils feature flag. 
+//  
+// #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum SpacesArgs<C> {
     /// System message, contains key bundle of the given author.
     ///
@@ -158,8 +163,12 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+// @TODO: Clone is a requirement in reflection where SpacesArgs are implemented
+// as p2panda Extensions where Clone is a trait bound. Because of this Clone
+// needed to be moved out from behind the test_utils feature flag. 
+//  
+// #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum ControlMessage<C> {
     Create {
         // GroupMember is required for understanding if a public key / actor id is an individual or
