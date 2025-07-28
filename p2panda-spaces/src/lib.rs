@@ -3,18 +3,18 @@
 // @TODO: Remove this later.
 #![allow(dead_code)]
 
-mod auth;
-mod encryption;
-mod event;
-mod forge;
-mod group;
-mod manager;
-mod member;
-mod message;
-mod space;
-mod store;
+pub mod auth;
+pub mod encryption;
+pub mod event;
+pub mod forge;
+pub mod group;
+pub mod manager;
+pub mod member;
+pub mod message;
+pub mod space;
+pub mod store;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
 mod tests;
-mod types;
+pub mod types;
