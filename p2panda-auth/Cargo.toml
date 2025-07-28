@@ -16,6 +16,7 @@ keywords = ["auth", "access-control", "groups"]
 [features]
 default = []
 test_utils = ["dep:rand"]
+serde = ["dep:serde"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -23,7 +24,7 @@ all-features = true
 [dependencies]
 petgraph = { version = "0.8.1", features = ["serde-1"] }
 rand = { version = "0.9.1", features = ["alloc"], optional = true }
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"], optional = true }
 thiserror = "2.0.12"
 
 [dev-dependencies]
