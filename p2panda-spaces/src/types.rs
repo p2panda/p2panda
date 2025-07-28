@@ -50,6 +50,12 @@ impl From<PublicKey> for ActorId {
     }
 }
 
+impl Into<PublicKey> for ActorId {
+    fn into(self) -> PublicKey {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub(crate) Hash);
 
