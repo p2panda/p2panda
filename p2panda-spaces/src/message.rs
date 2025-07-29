@@ -32,11 +32,6 @@ pub trait SpacesMessage<C> {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-// @TODO: Clone is a requirement in reflection where SpacesArgs are implemented
-// as p2panda Extensions where Clone is a trait bound. Because of this Clone
-// needed to be moved out from behind the test_utils feature flag. 
-//  
-// #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum SpacesArgs<C> {
     /// System message, contains key bundle of the given author.
     ///
@@ -166,8 +161,8 @@ where
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 // @TODO: Clone is a requirement in reflection where SpacesArgs are implemented
 // as p2panda Extensions where Clone is a trait bound. Because of this Clone
-// needed to be moved out from behind the test_utils feature flag. 
-//  
+// needed to be moved out from behind the test_utils feature flag.
+//
 // #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub enum ControlMessage<C> {
     Create {
