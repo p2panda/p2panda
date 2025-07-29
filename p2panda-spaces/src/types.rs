@@ -75,6 +75,14 @@ impl TryFrom<[u8; ACTOR_ID_SIZE]> for ActorId {
     }
 }
 
+impl TryFrom<&[u8]> for ActorId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(PublicKey::try_from(bytes)?))
+    }
+}
+
 impl TryFrom<ActorId> for PublicKey {
     type Error = ActorIdError;
 
