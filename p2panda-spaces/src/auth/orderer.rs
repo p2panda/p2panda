@@ -9,6 +9,12 @@ use crate::types::{ActorId, AuthControlMessage, Conditions, OperationId};
 #[derive(Clone, Debug)]
 pub struct AuthOrderer {}
 
+impl Default for AuthOrderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AuthOrderer {
     pub fn new() -> Self {
         Self {}

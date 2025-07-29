@@ -50,11 +50,11 @@ where
     type Error = Infallible;
 
     async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C, RS>>, Self::Error> {
-        Ok(self.spaces.get(&id).cloned())
+        Ok(self.spaces.get(id).cloned())
     }
 
     async fn has_space(&self, id: &ActorId) -> Result<bool, Self::Error> {
-        Ok(self.spaces.contains_key(&id))
+        Ok(self.spaces.contains_key(id))
     }
 
     async fn set_space(

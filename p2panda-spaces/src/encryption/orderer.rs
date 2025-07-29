@@ -15,6 +15,12 @@ pub struct EncryptionOrderer<M> {
     _marker: PhantomData<M>,
 }
 
+impl<M> Default for EncryptionOrderer<M> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<M> EncryptionOrderer<M> {
     pub fn new() -> Self {
         Self {
@@ -26,6 +32,12 @@ impl<M> EncryptionOrderer<M> {
 #[derive(Clone, Debug)]
 pub struct EncryptionOrdererState {
     next_message: Option<EncryptionMessage>,
+}
+
+impl Default for EncryptionOrdererState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EncryptionOrdererState {
