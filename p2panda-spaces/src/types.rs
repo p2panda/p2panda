@@ -14,6 +14,7 @@ use p2panda_encryption::traits::{
     IdentityHandle as EncryptionIdentityHandle, OperationId as EncryptionOperationId,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionGroupMembership;
@@ -29,6 +30,10 @@ impl AuthIdentityHandle for ActorId {}
 impl EncryptionIdentityHandle for ActorId {}
 
 impl ActorId {
+    pub fn from_bytes(bytes: &[u8; ACTOR_ID_SIZE]) -> Result<Self, ActorIdError> {
+        Ok(Self(PublicKey::from_bytes(bytes)?))
+    }
+
     pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
         self.0.as_bytes()
     }
@@ -57,12 +62,26 @@ impl From<PublicKey> for ActorId {
     }
 }
 
+impl TryFrom<[u8; ACTOR_ID_SIZE]> for ActorId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: [u8; ACTOR_ID_SIZE]) -> Result<Self, Self::Error> {
+        Ok(Self(PublicKey::from_bytes(&bytes)?))
+    }
+}
+
 impl TryFrom<ActorId> for PublicKey {
-    type Error = IdentityError;
+    type Error = ActorIdError;
 
     fn try_from(actor_id: ActorId) -> Result<Self, Self::Error> {
-        PublicKey::from_bytes(actor_id.as_bytes())
+        Ok(PublicKey::from_bytes(actor_id.as_bytes())?)
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ActorIdError {
+    #[error(transparent)]
+    Identity(#[from] IdentityError),
 }
 
 pub const OPERATION_ID_SIZE: usize = HASH_LEN;
