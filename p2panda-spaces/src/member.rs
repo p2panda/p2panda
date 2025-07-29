@@ -12,7 +12,7 @@ pub struct Member {
 }
 
 impl Member {
-    pub(crate) fn new(id: ActorId, key_bundle: LongTermKeyBundle) -> Self {
+    pub fn new(id: ActorId, key_bundle: LongTermKeyBundle) -> Self {
         Self { id, key_bundle }
     }
 
