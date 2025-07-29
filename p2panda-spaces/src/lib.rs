@@ -18,3 +18,5 @@ pub mod test_utils;
 #[cfg(test)]
 mod tests;
 pub mod types;
+
+pub use types::{ActorId, OperationId};
