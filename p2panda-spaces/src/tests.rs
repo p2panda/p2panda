@@ -206,8 +206,8 @@ async fn create_space() {
 
 #[tokio::test]
 async fn send_and_receive() {
-    let mut alice = TestPeer::new(0);
-    let mut bob = TestPeer::new(1);
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
 
     // Manually register key bundles of all members.
 
@@ -240,7 +240,7 @@ async fn send_and_receive() {
 
     // Bob sends a message to Alice.
 
-    let mut bob_space = bob.manager.space(&alice_space.id()).await.unwrap().unwrap();
+    let bob_space = bob.manager.space(&alice_space.id()).await.unwrap().unwrap();
 
     let message = bob_space.publish(b"Hello, Alice!").await.unwrap();
 

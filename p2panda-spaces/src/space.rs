@@ -198,7 +198,7 @@ where
     }
 
     pub(crate) async fn process(
-        &mut self,
+        &self,
         message: &M,
     ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
         let events = match message.args() {
@@ -393,7 +393,7 @@ where
         Ok(group_members)
     }
 
-    pub async fn publish(&mut self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
+    pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
         let mut space_y = self.state().await?;
         let mut manager = self.manager.inner.write().await;
 

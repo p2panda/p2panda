@@ -145,7 +145,7 @@ where
     }
 
     pub async fn register_member(
-        &mut self,
+        &self,
         member: &Member,
     ) -> Result<(), ManagerError<S, F, M, C, RS>> {
         // @TODO: Reject invalid / expired key bundles.
@@ -171,10 +171,7 @@ where
     }
 
     // We expect messages to be signature-checked, dependency-checked & partially ordered here.
-    pub async fn process(
-        &mut self,
-        message: &M,
-    ) -> Result<Vec<Event>, ManagerError<S, F, M, C, RS>> {
+    pub async fn process(&self, message: &M) -> Result<Vec<Event>, ManagerError<S, F, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
@@ -196,7 +193,7 @@ where
 
                 // @TODO: Make sure claimed "group member" types in control messages are correct.
 
-                let mut space = match self.space(id).await? {
+                let space = match self.space(id).await? {
                     Some(space) => space,
                     None => {
                         if !control_message.is_create() {
@@ -217,7 +214,7 @@ where
             }
             // Received encrypted application data for a space.
             SpacesArgs::Application { space_id, .. } => {
-                let Some(mut space) = self.space(space_id).await? else {
+                let Some(space) = self.space(space_id).await? else {
                     return Err(ManagerError::UnexpectedMessage(message.id()));
                 };
 
