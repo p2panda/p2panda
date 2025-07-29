@@ -2,12 +2,13 @@
 
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 use p2panda_auth::traits::{IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId};
-use p2panda_core::IdentityError;
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
+use p2panda_core::{HashError, IdentityError};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
 use p2panda_encryption::traits::{
@@ -36,6 +37,10 @@ impl ActorId {
 
     pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
         self.0.as_bytes()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex().to_string()
     }
 
     // When processing locally created operations we handle unsigned messages where the actor id is
@@ -78,6 +83,14 @@ impl TryFrom<ActorId> for PublicKey {
     }
 }
 
+impl FromStr for ActorId {
+    type Err = ActorIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(PublicKey::from_str(value)?))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ActorIdError {
     #[error(transparent)]
@@ -89,7 +102,19 @@ pub const OPERATION_ID_SIZE: usize = HASH_LEN;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub(crate) Hash);
 
+impl AuthOperationId for OperationId {}
+
+impl EncryptionOperationId for OperationId {}
+
 impl OperationId {
+    pub fn as_bytes(&self) -> &[u8; OPERATION_ID_SIZE] {
+        self.0.as_bytes()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex().to_string()
+    }
+
     // When processing locally created operations we handle unsigned messages where the operation
     // id is not known and not required. In these cases we need to satisfy the trait interfaces
     // using a placeholder value.
@@ -99,21 +124,37 @@ impl OperationId {
     }
 }
 
-impl From<Hash> for OperationId {
-    fn from(value: Hash) -> Self {
-        Self(value)
-    }
-}
-
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl AuthOperationId for OperationId {}
+impl From<Hash> for OperationId {
+    fn from(value: Hash) -> Self {
+        Self(value)
+    }
+}
 
-impl EncryptionOperationId for OperationId {}
+impl From<[u8; OPERATION_ID_SIZE]> for OperationId {
+    fn from(bytes: [u8; OPERATION_ID_SIZE]) -> Self {
+        Self(Hash::from_bytes(bytes))
+    }
+}
+
+impl FromStr for OperationId {
+    type Err = OperationIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Hash::from_str(value)?))
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum OperationIdError {
+    #[error(transparent)]
+    Hash(#[from] HashError),
+}
 
 // ~~~ Auth ~~~
 
