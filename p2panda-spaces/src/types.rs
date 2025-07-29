@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::LazyLock;
 
 use p2panda_auth::traits::{IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId};
+use p2panda_core::IdentityError;
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
 use p2panda_encryption::key_manager::KeyManager;
@@ -18,6 +19,8 @@ use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
 
+pub const ACTOR_ID_SIZE: usize = PUBLIC_KEY_LEN;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ActorId(pub(crate) PublicKey);
 
@@ -26,10 +29,14 @@ impl AuthIdentityHandle for ActorId {}
 impl EncryptionIdentityHandle for ActorId {}
 
 impl ActorId {
-    /// When processing locally created operations we handle unsigned messages where the actor id
-    /// is not known and not required. In these cases we need to satisfy the trait interfaces
-    /// using a placeholder value.
-    pub fn placeholder() -> Self {
+    pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
+        self.0.as_bytes()
+    }
+
+    // When processing locally created operations we handle unsigned messages where the actor id is
+    // not known and not required. In these cases we need to satisfy the trait interfaces using a
+    // placeholder value.
+    pub(crate) fn placeholder() -> Self {
         static PLACEHOLDER_PUBLIC_KEY: LazyLock<PublicKey> = LazyLock::new(|| {
             PublicKey::from_bytes(&[0; PUBLIC_KEY_LEN])
                 .expect("can create public key from constant bytes")
@@ -50,20 +57,24 @@ impl From<PublicKey> for ActorId {
     }
 }
 
-impl Into<PublicKey> for ActorId {
-    fn into(self) -> PublicKey {
-        self.0
+impl TryFrom<ActorId> for PublicKey {
+    type Error = IdentityError;
+
+    fn try_from(actor_id: ActorId) -> Result<Self, Self::Error> {
+        PublicKey::from_bytes(actor_id.as_bytes())
     }
 }
+
+pub const OPERATION_ID_SIZE: usize = HASH_LEN;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub(crate) Hash);
 
 impl OperationId {
-    /// When processing locally created operations we handle unsigned messages where the operation
-    /// id is not known and not required. In these cases we need to satisfy the trait interfaces
-    /// using a placeholder value.
-    pub fn placeholder() -> Self {
+    // When processing locally created operations we handle unsigned messages where the operation
+    // id is not known and not required. In these cases we need to satisfy the trait interfaces
+    // using a placeholder value.
+    pub(crate) fn placeholder() -> Self {
         static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
         Self(PLACEHOLDER_ID)
     }
