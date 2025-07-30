@@ -254,3 +254,33 @@ where
 
 // @TODO: this supertrait should be defined in p2panda-auth
 pub trait Conditions: Clone + Debug + PartialEq + PartialOrd {}
+
+#[cfg(test)]
+mod tests {
+    use p2panda_core::{PrivateKey, PublicKey};
+    use p2panda_encryption::Rng;
+
+    use crate::ActorId;
+
+    #[test]
+    fn from_actor_id() {
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+
+        let actor_id: ActorId = public_key.to_hex().parse().unwrap();
+
+        assert_eq!(PublicKey::try_from(actor_id).unwrap(), public_key);
+    }
+
+    #[test]
+    fn actor_id_from_rng() {
+        let rng = Rng::from_seed(*PrivateKey::new().as_bytes());
+
+        let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
+        let public_key = private_key.public_key();
+
+        let actor_id: ActorId = public_key.to_hex().parse().unwrap();
+
+        assert_eq!(PublicKey::try_from(actor_id).unwrap(), public_key);
+    }
+}
