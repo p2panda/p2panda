@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
-use p2panda_auth::traits::Resolver;
+use p2panda_auth::traits::{Conditions, Resolver};
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
 use thiserror::Error;
@@ -22,7 +22,7 @@ use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{
     ActorId, AuthControlMessage, AuthDummyStore, AuthGroup, AuthGroupAction, AuthGroupError,
-    AuthGroupState, Conditions, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
+    AuthGroupState, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
     EncryptionGroupState, OperationId,
 };
 

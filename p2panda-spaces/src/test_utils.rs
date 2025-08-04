@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_encryption::traits::PreKeyManager;
 
 use crate::space::SpaceState;
 use crate::store::{KeyStore, SpaceStore};
-use crate::types::{ActorId, Conditions};
+use crate::types::ActorId;
 
 #[derive(Debug)]
 pub struct MemoryStore<M, C, RS>

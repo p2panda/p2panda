@@ -2,6 +2,7 @@
 
 use std::convert::Infallible;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
@@ -15,7 +16,7 @@ use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
 use crate::test_utils::MemoryStore;
-use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
+use crate::types::{ActorId, OperationId, StrongRemoveResolver};
 
 type SeqNum = u64;
 
