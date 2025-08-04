@@ -16,6 +16,7 @@ use std::hash::Hash;
 use thiserror::Error;
 
 use crate::Access;
+use crate::traits::Conditions;
 
 /// Invalid group state modification attempts due to group membership state and member access
 /// levels.
@@ -96,7 +97,7 @@ pub struct GroupMembersState<ID, C> {
 
 impl<ID, C> Default for GroupMembersState<ID, C>
 where
-    C: PartialEq,
+    C: Conditions,
 {
     fn default() -> Self {
         Self {
@@ -108,7 +109,7 @@ where
 impl<ID, C> GroupMembersState<ID, C>
 where
     ID: Clone + Hash + Eq,
-    C: Clone + Debug + PartialEq,
+    C: Conditions,
 {
     /// Return all active group members.
     pub fn members(&self) -> HashSet<ID> {
@@ -140,7 +141,7 @@ where
 }
 
 /// Create a new group and add the given set of initial members.
-pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
+pub fn create<ID: Clone + Eq + Hash, C: Conditions>(
     initial_members: &[(ID, Access<C>)],
 ) -> GroupMembersState<ID, C> {
     let mut members = HashMap::new();
@@ -163,7 +164,7 @@ pub fn create<ID: Clone + Eq + Hash, C: Clone + PartialEq>(
 /// error.
 ///
 /// Re-adding a previously removed member is supported.
-pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
+pub fn add<ID: Clone + Eq + Hash, C: Conditions>(
     state: GroupMembersState<ID, C>,
     adder: ID,
     added: ID,
@@ -215,7 +216,7 @@ pub fn add<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq>(
 /// The `remover` must be an active member of the group with `Manage` access and the `removed`
 /// identity must also be an active member of the group; failure to meet these conditions will
 /// result in an error.
-pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
+pub fn remove<ID: Eq + Hash, C: Conditions>(
     state: GroupMembersState<ID, C>,
     remover: ID,
     removed: ID,
@@ -262,7 +263,7 @@ pub fn remove<ID: Eq + Hash, C: Clone + Debug + PartialEq>(
 /// conditions will result in an error.
 ///
 /// This is a helper method to reduce code duplication in `promote()` and `demote()`.
-fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+fn modify<ID: Eq + Hash, C: Conditions>(
     state: GroupMembersState<ID, C>,
     modifier: ID,
     modified: ID,
@@ -310,7 +311,7 @@ fn modify<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// The `promoter` must be an active member of the group with `Manage` access and the `promoted`
 /// identity must also be an active member of the group; failure to meet these conditions will
 /// result in an error.
-pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+pub fn promote<ID: Eq + Hash, C: Conditions>(
     state: GroupMembersState<ID, C>,
     promoter: ID,
     promoted: ID,
@@ -338,7 +339,7 @@ pub fn promote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 /// The `demoter` must be an active member of the group with `Manage` access and the `demoted`
 /// identity must also be an active member of the group; failure to meet these conditions will
 /// result in an error.
-pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+pub fn demote<ID: Eq + Hash, C: Conditions>(
     state: GroupMembersState<ID, C>,
     demoter: ID,
     demoted: ID,
@@ -367,7 +368,7 @@ pub fn demote<ID: Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
 ///
 /// If a member exists with different access levels in each state but the same number of access
 /// modifications, the lower of the two access levels will be chosen.
-pub fn merge<ID: Clone + Eq + Hash, C: Clone + Debug + PartialEq + PartialOrd>(
+pub fn merge<ID: Clone + Eq + Hash, C: Conditions>(
     state_1: GroupMembersState<ID, C>,
     state_2: GroupMembersState<ID, C>,
 ) -> GroupMembersState<ID, C> {
@@ -420,7 +421,7 @@ mod tests {
         let bob = 1;
         let charlie = 2;
 
-        let initial_members = [(alice, Access::manage()), (bob, Access::read())];
+        let initial_members = [(alice, <Access>::manage()), (bob, Access::read())];
 
         // Alice creates a group with Alice and Bob as members.
         let group_y = create(&initial_members);
@@ -432,13 +433,7 @@ mod tests {
         assert!(!group_y.managers().contains(&bob));
 
         // Alice adds Charlie.
-        let group_y = add(
-            group_y,
-            alice,
-            charlie,
-            Access::write().with_conditions("requirement".to_string()),
-        )
-        .unwrap();
+        let group_y = add(group_y, alice, charlie, Access::write()).unwrap();
 
         assert!(group_y.members().contains(&charlie));
 
@@ -453,19 +448,13 @@ mod tests {
         let alice = 0;
         let bob = 1;
 
-        let initial_members = [(alice, Access::manage()), (bob, Access::read())];
+        let initial_members = [(alice, <Access>::manage()), (bob, Access::read())];
 
         // Alice creates a group with Alice and Bob as members.
         let group_y = create(&initial_members);
 
         // Alice promotes Bob to Write access.
-        let group_y = promote(
-            group_y,
-            alice,
-            bob,
-            Access::write().with_conditions("requirement".to_string()),
-        )
-        .unwrap();
+        let group_y = promote(group_y, alice, bob, Access::write()).unwrap();
 
         let group_y_clone = group_y.clone();
 
@@ -615,7 +604,7 @@ mod tests {
         let daphne = 3;
 
         let initial_members = [
-            (alice, Access::manage()),
+            (alice, <Access>::manage()),
             (bob, Access::read()),
             (charlie, Access::read()),
         ];
@@ -633,12 +622,7 @@ mod tests {
         ));
 
         // Bob promotes Charlie...
-        let result = promote(
-            group_y.clone(),
-            bob,
-            charlie,
-            Access::write().with_conditions("paw".to_string()),
-        );
+        let result = promote(group_y.clone(), bob, charlie, Access::write());
 
         // ...but Bob isn't a manager.
         assert!(matches!(
