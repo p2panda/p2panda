@@ -584,10 +584,10 @@ where
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
-        let previous_operations = operation.previous();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
 
+        // @TODO: group id should be the root group, or a current sub-group member.
         if y.group_id != group_id {
             // The operation is not intended for this group.
             return Err(GroupCrdtError::IncorrectGroupId(group_id, y.group_id));
@@ -602,11 +602,14 @@ where
         // required.
         let rebuild_required = RS::rebuild_required(&y, operation)?;
 
-        // Add the new operation to the group state graph and operations vec. We validate it in
-        // the following steps.
+        // Add the new operation to the group state graph and operations vec. We
+        // validate it in the following steps.
         y.graph.add_node(operation_id);
-        for previous in &previous_operations {
-            y.graph.add_edge(*previous, operation_id, ());
+        for dependency in &dependencies {
+            if !y.graph.contains_node(*dependency) {
+                continue;
+            }
+            y.graph.add_edge(*dependency, operation_id, ());
         }
 
         y.operations.insert(operation_id, operation.clone());
@@ -751,9 +754,9 @@ where
 
         // Collect predecessors of the new operation.
         let mut predecessors = HashSet::new();
-        for previous in operation.previous() {
+        for dependency in operation.dependencies() {
             let reversed = Reversed(&y.graph);
-            let mut dfs_rev = DfsPostOrder::new(&reversed, previous);
+            let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
             while let Some(id) = dfs_rev.next(&reversed) {
                 predecessors.insert(id);
             }
@@ -860,8 +863,11 @@ where
 
             // Add the new operation to the group state graph and operations vec.
             y_i.graph.add_node(operation_id);
-            for previous in &operation.previous() {
-                y_i.graph.add_edge(*previous, operation_id, ());
+            for dependency in &operation.dependencies() {
+                if !y_i.graph.contains_node(*dependency) {
+                    continue;
+                }
+                y_i.graph.add_edge(*dependency, operation_id, ());
             }
         }
 
@@ -1776,14 +1782,13 @@ pub(crate) mod tests {
             &mut rng,
         );
 
-        let previous: Vec<u32> = y_i.heads().into_iter().collect();
+        let dependencies: Vec<u32> = y_i.heads().into_iter().collect();
 
         // AlreadyAdded
         let op = TestOperation {
             id: 1,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -1806,8 +1811,7 @@ pub(crate) mod tests {
             &TestOperation {
                 id: 2,
                 author: alice,
-                dependencies: previous.clone(),
-                previous: previous.clone(),
+                dependencies: dependencies.clone(),
                 payload: GroupControlMessage {
                     group_id,
                     action: GroupAction::Remove {
@@ -1818,14 +1822,13 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-        let previous: Vec<u32> = y_ii.heads().into_iter().collect();
+        let dependencies: Vec<u32> = y_ii.heads().into_iter().collect();
 
         // AlreadyRemoved
         let op = TestOperation {
             id: 3,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
@@ -1845,8 +1848,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 4,
             author: bob,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -1869,8 +1871,7 @@ pub(crate) mod tests {
             &TestOperation {
                 id: 5,
                 author: alice,
-                dependencies: previous.clone(),
-                previous: previous.clone(),
+                dependencies: dependencies.clone(),
                 payload: GroupControlMessage {
                     group_id,
                     action: GroupAction::Remove {
@@ -1881,14 +1882,13 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-        let previous: Vec<u32> = y_iii.heads().into_iter().collect();
+        let dependencies: Vec<u32> = y_iii.heads().into_iter().collect();
 
         // InactiveActor
         let op = TestOperation {
             id: 6,
             author: bob,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -1909,8 +1909,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 7,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
@@ -1931,8 +1930,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 8,
             author: eve,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -1953,8 +1951,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 9,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies,
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
@@ -1993,7 +1990,7 @@ pub(crate) mod tests {
             &mut rng,
         );
 
-        let previous: Vec<u32> = y_i.heads().into_iter().collect();
+        let dependencies: Vec<u32> = y_i.heads().into_iter().collect();
 
         // Remove all current members and all all non-members as managers in a concurrent branch.
         let (mut y_ii, _) = remove_member(y_i, group_id, bob);
@@ -2020,8 +2017,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 1,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -2042,8 +2038,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 2,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
@@ -2053,15 +2048,14 @@ pub(crate) mod tests {
         };
         let y_iii = GroupCrdt::process(y_ii.clone(), &op).unwrap();
 
-        // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
-        let previous = vec![op.id];
+        // Refer to only the newly published operation in dependencies so as to remain in the concurrent branch.
+        let dependencies = vec![op.id];
 
         // AlreadyRemoved (claire)
         let op = TestOperation {
             id: 3,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
@@ -2081,8 +2075,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 4,
             author: bob,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -2103,8 +2096,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 5,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Remove {
@@ -2114,15 +2106,14 @@ pub(crate) mod tests {
         };
         let y_iv = GroupCrdt::process(y_iii.clone(), &op).unwrap();
 
-        // Refer to only the newly published operation in previous so as to remain in the concurrent branch.
-        let previous = vec![op.id];
+        // Refer to only the newly published operation in dependencies so as to remain in the concurrent branch.
+        let dependencies = vec![op.id];
 
         // InactiveActor (bob tries to add dave)
         let op = TestOperation {
             id: 6,
             author: bob,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -2143,8 +2134,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 7,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {
@@ -2165,8 +2155,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 8,
             author: eve,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies: dependencies.clone(),
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Add {
@@ -2187,8 +2176,7 @@ pub(crate) mod tests {
         let op = TestOperation {
             id: 9,
             author: alice,
-            dependencies: previous.clone(),
-            previous: previous.clone(),
+            dependencies,
             payload: GroupControlMessage {
                 group_id,
                 action: GroupAction::Promote {

@@ -20,7 +20,6 @@ const OP_NOOP_NODE: &str = "#FFA142";
 const OP_ROOT_NODE: &str = "#EDD7B17F";
 const INDIVIDUAL_NODE: &str = "#EDD7B17F";
 const ADD_MEMBER_EDGE: &str = "#0091187F";
-const PREVIOUS_EDGE: &str = "#000000";
 const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
 impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
@@ -46,10 +45,6 @@ where
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, edge| {
                 let weight = edge.weight();
-                if weight == "previous" {
-                    return format!("color=\"{PREVIOUS_EDGE}\", penwidth = 2.0");
-                }
-
                 if weight == "member" || weight == "sub group" {
                     return format!("color=\"{ADD_MEMBER_EDGE}\", penwidth = 2.0");
                 }
@@ -104,11 +99,7 @@ where
                 }
             }
 
-            let mut dependencies = operation.dependencies().clone();
-            let previous = operation.previous();
-            dependencies.retain(|id| !previous.contains(id));
-
-            for dependency in dependencies {
+            for dependency in operation.dependencies() {
                 let (idx, _) = graph
                     .node_references()
                     .find(|(_, (op, _))| {
@@ -119,21 +110,9 @@ where
                         }
                     })
                     .unwrap();
-                graph.add_edge(operation_idx, idx, "dependency".to_string());
-            }
 
-            for previous in previous {
-                let (idx, _) = graph
-                    .node_references()
-                    .find(|(_, (op, _))| {
-                        if let Some(op) = op {
-                            *op == previous
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
-                graph.add_edge(operation_idx, idx, "previous".to_string());
+                // @TODO: only add edges for nodes which exist in the graph.
+                graph.add_edge(operation_idx, idx, "dependency".to_string());
             }
         }
 
@@ -169,13 +148,6 @@ where
         s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
         s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
-        let previous = operation.previous();
-        if !previous.is_empty() {
-            s += &format!(
-                "<TR><TD>previous</TD><TD>{}</TD></TR>",
-                self.format_dependencies(&previous)
-            );
-        }
         let dependencies = operation.dependencies().clone();
         if !dependencies.is_empty() {
             s += &format!(

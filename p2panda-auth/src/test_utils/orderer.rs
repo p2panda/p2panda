@@ -140,9 +140,6 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
             }
         };
 
-        // The previous field includes only the tip operations for the target group graph.
-        let previous = group_y.heads();
-
         // Generate a new random operation id.
         let next_id = {
             let mut y_mut = y.inner.borrow_mut();
@@ -154,7 +151,6 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
             id: next_id,
             author: y.my_id(),
             dependencies: dependencies.into_iter().collect::<Vec<_>>(),
-            previous: previous.into_iter().collect::<Vec<_>>(),
             payload: control_message.clone(),
         };
 
@@ -221,7 +217,6 @@ pub struct TestOperation {
     pub id: u32,
     pub author: char,
     pub dependencies: Vec<u32>,
-    pub previous: Vec<u32>,
     pub payload: GroupControlMessage<char, ()>,
 }
 
@@ -236,10 +231,6 @@ impl Operation<char, u32, GroupControlMessage<char, ()>> for TestOperation {
 
     fn dependencies(&self) -> Vec<u32> {
         self.dependencies.clone()
-    }
-
-    fn previous(&self) -> Vec<u32> {
-        self.previous.clone()
     }
 
     fn payload(&self) -> GroupControlMessage<char, ()> {

@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Queue which checks if dependencies are met for an item and returning it as "ready".
@@ -17,7 +16,7 @@ pub struct PartialOrderer<T> {
     _marker: PhantomData<T>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PartialOrdererState<T>
 where
     T: PartialEq + Eq + StdHash,
