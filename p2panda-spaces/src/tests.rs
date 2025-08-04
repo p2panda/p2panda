@@ -2,9 +2,9 @@
 
 use std::convert::Infallible;
 
-use p2panda_auth::traits::Conditions;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+use p2panda_auth::traits::Conditions;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;

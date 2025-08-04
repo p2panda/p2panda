@@ -11,8 +11,7 @@ use crate::auth::message::AuthArgs;
 use crate::encryption::message::EncryptionArgs;
 use crate::space::secret_members;
 use crate::types::{
-    ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage,
-    OperationId,
+    ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
 
 use p2panda_auth::Access;
