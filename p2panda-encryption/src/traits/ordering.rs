@@ -18,8 +18,10 @@
 //! An "ordering" interface allows us to implement these requirements for our custom application
 //! data types.
 use std::error::Error;
+#[cfg(any(test, feature = "message_scheme"))]
 use std::fmt::Debug;
 
+#[cfg(any(test, feature = "message_scheme"))]
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::xchacha20::XAeadNonce;
@@ -55,7 +57,7 @@ pub trait Ordering<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
 {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State;
 
     type Error: Error;
 

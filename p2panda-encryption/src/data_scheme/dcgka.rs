@@ -40,21 +40,21 @@ where
 {
     /// Public Key Infrastructure (PKI). From here we retrieve the identity keys and long-term
     /// pre-key bundles for each member to do 2SM.
-    pub(crate) pki: PKI::State,
+    pub pki: PKI::State,
 
     /// Our own key manager state holding the secret parts for our own identity keys and published
     /// long-term pre-key bundles so we can do 2SM.
-    pub(crate) my_keys: KMG::State,
+    pub my_keys: KMG::State,
 
     /// Our id which is used as a unique handle inside this group.
-    pub(crate) my_id: ID,
+    pub my_id: ID,
 
     /// Handlers for each member to manage the "Two-Party Secure Messaging" (2SM) key-agreement
     /// protocol as specified in the paper.
-    pub(crate) two_party: HashMap<ID, TwoPartyState<LongTermKeyBundle>>,
+    pub two_party: HashMap<ID, TwoPartyState<LongTermKeyBundle>>,
 
     /// Decentralised group membership (DGM) state.
-    pub(crate) dgm: DGM::State,
+    pub dgm: DGM::State,
 }
 
 impl<ID, OP, PKI, DGM, KMG> Dcgka<ID, OP, PKI, DGM, KMG>

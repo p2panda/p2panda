@@ -22,8 +22,7 @@ pub struct KeyRegistry<ID> {
 }
 
 /// Serializable state of key registry (for persistence).
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyRegistryState<ID>
 where
     ID: IdentityHandle,
