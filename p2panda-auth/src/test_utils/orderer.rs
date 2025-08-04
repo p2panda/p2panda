@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::rc::Rc;
 
@@ -9,12 +9,11 @@ use rand::RngCore;
 use rand::rngs::StdRng;
 use thiserror::Error;
 
-use crate::group::{GroupAction, GroupControlMessage, GroupMember};
+use crate::group::GroupControlMessage;
 use crate::test_utils::{
-    Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupState,
-    TestGroupStore,
+    Conditions, MemberId, MessageId, PartialOrderer, PartialOrdererState, TestGroupStore,
 };
-use crate::traits::{GroupStore, Operation, Orderer};
+use crate::traits::{Operation, Orderer};
 
 #[derive(Debug, Error)]
 pub enum OrdererError {}
@@ -72,71 +71,14 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
         y: Self::State,
         control_message: &GroupControlMessage<MemberId, Conditions>,
     ) -> Result<(Self::State, Self::Operation), Self::Error> {
-        let group_id = control_message.group_id();
-        let group_y = {
+        // Get auth dependencies. These are the current heads of all groups.
+        let mut auth_dependencies = HashSet::new();
+        {
             let y_inner = y.inner.borrow();
-
-            // Instantiate a new group.
-            let mut group_y = TestGroupState::new(
-                y_inner.my_id,
-                group_id,
-                y_inner.group_store.clone(),
-                y.clone(),
-            );
-
-            // If this isn't a create message, retrieve the current group state from the store.
-            if !control_message.is_create() {
-                let y = TestGroupStore::get(&y_inner.group_store, &group_id)
-                    .expect("get group state from store")
-                    .expect("group exists");
-                group_y = y;
-            }
-
-            group_y
-        };
-
-        // Get the "dependencies" of this operation. Dependencies are any other operations from any
-        // group which should be processed before this one. The transitive_heads method traverses
-        // the current group graph to all tips, and recurses into any sub-groups.
-        let mut dependencies = group_y
-            .transitive_heads()
-            .expect("retrieve transitive heads");
-
-        // If this operation adds a new member to the group, and that member itself is a
-        // sub-group, include their current transitive heads in our dependencies.
-        if let GroupControlMessage {
-            action:
-                GroupAction::Add {
-                    member: GroupMember::Group(id),
-                    ..
-                },
-            ..
-        } = control_message
-        {
-            let added_sub_group = group_y.get_sub_group(*id).expect("sub-group exists");
-            dependencies.extend(
-                &added_sub_group
-                    .transitive_heads()
-                    .expect("retrieve transitive heads"),
-            );
-        };
-
-        // If this is a create action, check if any of the initial members are sub-groups and if
-        // so include their current transitive heads in our dependencies.
-        if let GroupControlMessage {
-            action: GroupAction::Create { initial_members },
-            ..
-        } = control_message
-        {
-            for (member, _) in initial_members {
-                if let GroupMember::Group(id) = member {
-                    let sub_group = group_y.get_sub_group(*id).expect("sub-group exists");
-                    dependencies.extend(
-                        &sub_group
-                            .transitive_heads()
-                            .expect("retrieve transitive heads"),
-                    );
-                }
+            let store = y_inner.group_store.0.borrow();
+            for (_, group_state) in store.iter() {
+                let heads = group_state.heads();
+                auth_dependencies.extend(heads);
             }
         };
 
@@ -150,7 +92,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
         let operation = TestOperation {
             id: next_id,
             author: y.my_id(),
-            dependencies: dependencies.into_iter().collect::<Vec<_>>(),
+            dependencies: auth_dependencies.into_iter().collect::<Vec<_>>(),
             payload: control_message.clone(),
         };
 

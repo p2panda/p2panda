@@ -16,7 +16,7 @@ use crate::traits::GroupStore;
 pub enum GroupStoreError {}
 
 #[derive(Clone, Debug)]
-pub struct TestGroupStore(Rc<RefCell<HashMap<MemberId, TestGroupState>>>);
+pub struct TestGroupStore(pub(crate) Rc<RefCell<HashMap<MemberId, TestGroupState>>>);
 
 impl Default for TestGroupStore {
     fn default() -> Self {
@@ -24,6 +24,9 @@ impl Default for TestGroupStore {
     }
 }
 
+// @TODO: We may not need this implementation of GroupStore as the trait will
+// not be used inside of GroupCrdt and in TestOrderer we can access the concrete
+// fields on known types
 impl GroupStore<MemberId, MessageId, Conditions, TestResolver, TestOrderer> for TestGroupStore {
     type Error = GroupStoreError;
 
