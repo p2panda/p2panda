@@ -567,11 +567,8 @@ where
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
-        let (ordering_y, operation) = match ORD::next_message(ordering_y, action) {
-            Ok(operation) => operation,
-            Err(_) => panic!(),
-        };
-
+        let (ordering_y, operation) =
+            ORD::next_message(ordering_y, action).map_err(GroupCrdtError::OrderingError)?;
         y.orderer_y = ordering_y;
         Ok((y, operation))
     }
