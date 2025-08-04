@@ -6,6 +6,8 @@ use std::fmt::Display;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::traits::Conditions;
+
 /// The four basic access levels which can be assigned to an actor. Greater access levels are
 /// assumed to also contain all lower ones.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -145,6 +147,8 @@ impl<C: PartialOrd + Eq> Ord for Access<C> {
         self.partial_cmp(other).unwrap_or(Ordering::Less)
     }
 }
+
+impl Conditions for () {}
 
 #[cfg(test)]
 mod tests {

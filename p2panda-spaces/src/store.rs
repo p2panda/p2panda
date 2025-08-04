@@ -2,11 +2,12 @@
 
 use std::fmt::Debug;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
 use crate::space::SpaceState;
-use crate::types::{ActorId, Conditions};
+use crate::types::ActorId;
 
 pub trait SpaceStore<M, C, RS>
 where

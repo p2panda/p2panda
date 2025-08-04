@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_auth::traits::Operation as AuthOperation;
+use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::types::{ActorId, AuthControlMessage, Conditions, OperationId};
+use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 #[derive(Clone, Debug)]
 pub struct AuthArgs<C> {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
-use p2panda_auth::traits::Resolver;
+use p2panda_auth::traits::{Conditions, Resolver};
 use p2panda_encryption::Rng;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
 use p2panda_encryption::key_registry::KeyRegistry;
@@ -21,7 +21,7 @@ use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::{KeyStore, SpaceStore};
-use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
+use crate::types::{ActorId, AuthDummyStore, OperationId};
 
 // Create and manage spaces and groups.
 //
