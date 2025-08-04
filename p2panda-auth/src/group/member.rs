@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::traits::IdentityHandle;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// A group member which can be a single individual or another group.
 ///
 /// The `Group` variant can be used to express nested group relations. In both cases, the member
