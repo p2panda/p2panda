@@ -125,6 +125,20 @@ where
             .collect::<HashSet<ID>>()
     }
 
+    /// Return all active group members.
+    pub fn access_levels(&self) -> Vec<(ID, Access<C>)> {
+        self.members
+            .iter()
+            .filter_map(|(id, state)| {
+                if state.is_member() {
+                    Some((id.to_owned(), state.access()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<(ID, Access<C>)>>()
+    }
+
     /// Return all active group members with `Manage` access.
     pub fn managers(&self) -> HashSet<ID> {
         self.members

@@ -8,6 +8,7 @@ mod dgm;
 mod operation;
 mod orderer;
 mod resolver;
+pub(crate) mod resolver_v2;
 mod store;
 
 pub use dgm::{Group, GroupMembership};

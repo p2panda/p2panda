@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub(crate) mod state;
+pub(crate) mod v2;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
