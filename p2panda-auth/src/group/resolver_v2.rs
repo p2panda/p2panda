@@ -599,7 +599,7 @@ mod tests {
             vec![op1.id(), op2.id()],
         );
 
-        // 4: Dave adds Eve (depends on 3, Dave's branch)
+        // 4: Dave adds Eve
         let op4 = add_member(
             DAVE,
             4,
@@ -609,7 +609,7 @@ mod tests {
             vec![op3.id()],
         );
 
-        // 5: Alice adds Frank (concurrent with 8, Alice's branch)
+        // 5: Alice adds Frank
         let op5 = add_member(
             ALICE,
             5,
@@ -619,7 +619,7 @@ mod tests {
             vec![op4.id()],
         );
 
-        // 6: Frank adds Grace (concurrent with 8, Frank's branch)
+        // 6: Frank adds Grace
         let op6 = add_member(
             FRANK,
             6,
@@ -629,9 +629,11 @@ mod tests {
             vec![op5.id()],
         );
 
+        // 6: Dave removes alice concurrently
+        let op7 = remove_member(DAVE, 7, G0, GroupMember::Individual(ALICE), vec![op4.id()]);
+
         let expected_members = vec![(DAVE, Access::manage()), (EVE, Access::read())];
-        let y_i: GroupCrdtState<char, u32, (), TestOrderer> =
-            sync(y, &[op0, op1, op2, op3, op4, op5, op6]);
-        assert_members(&y_i, G1, &expected_members);
+        let y_i = sync(y, &[op0, op1, op2, op3, op4, op5, op6, op7]);
+        assert_members(&y_i, G0, &expected_members);
     }
 }
