@@ -9,6 +9,7 @@ mod display;
 mod member;
 mod message;
 pub mod resolver;
+mod resolver_v2;
 
 pub use action::GroupAction;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
