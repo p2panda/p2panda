@@ -59,15 +59,13 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct GroupCrdtState<ID, OP, C, ORD>
+pub struct AuthState<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
 {
     /// All operations processed by this group.
-    pub operations: HashMap<OP, ORD::Operation>,
+    pub operations: HashMap<OP, M>,
 
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
@@ -77,30 +75,29 @@ where
 
     /// Operation graph for all auth groups.
     pub graph: DiGraphMap<OP, ()>,
-
-    /// State for the orderer.
-    pub orderer_y: ORD::State,
 }
 
-impl<ID, OP, C, ORD> GroupCrdtState<ID, OP, C, ORD>
+impl<ID, OP, C, M> Default for AuthState<ID, OP, C, M>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+{
+    fn default() -> Self {
+        Self {
+            operations: Default::default(),
+            ignore: Default::default(),
+            states: Default::default(),
+            graph: Default::default(),
+        }
+    }
+}
+
+impl<ID, OP, C, M> AuthState<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
 {
-    /// Instantiate a new group state.
-    pub fn new(orderer_y: ORD::State) -> Self {
-        Self {
-            operations: Default::default(),
-            graph: Default::default(),
-            ignore: Default::default(),
-            states: Default::default(),
-            orderer_y,
-        }
-    }
-
     /// Current tips for the group operation graph.
     pub fn heads(&self) -> HashSet<OP> {
         self.graph
@@ -230,6 +227,43 @@ where
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+pub struct GroupCrdtState<ID, OP, C, ORD>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
+    ORD::Operation: Clone,
+{
+    pub auth_y: AuthState<ID, OP, C, ORD::Operation>,
+
+    /// State for the orderer.
+    pub orderer_y: ORD::State,
+}
+
+impl<ID, OP, C, ORD> GroupCrdtState<ID, OP, C, ORD>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    C: Conditions,
+    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
+    ORD::Operation: Clone,
+{
+    /// Instantiate a new group state.
+    pub fn new(orderer_y: ORD::State) -> Self {
+        Self {
+            auth_y: AuthState::default(),
+            orderer_y,
+        }
+    }
+
+    /// Get all current members of the group.
+    pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
+        self.auth_y.members(group_id)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct GroupCrdt<ID, OP, C, ORD> {
     _phantom: PhantomData<(ID, OP, C, ORD)>,
@@ -249,7 +283,6 @@ where
     ///
     /// The method `GroupCrdtState::heads` and `GroupCrdtState::transitive_heads` can be used to retrieve the
     /// operation ids of these operation dependencies.
-    #[allow(clippy::type_complexity)]
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         action: &GroupControlMessage<ID, C>,
@@ -265,7 +298,6 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
-    #[allow(clippy::type_complexity)]
     pub fn process(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
@@ -275,8 +307,8 @@ where
         let control_message = operation.payload();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
-        let rebuild_required =
-            StrongRemove::rebuild_required(&y, &operation).map_err(GroupCrdtError::Resolver)?;
+        let rebuild_required = StrongRemove::rebuild_required(&y.auth_y, &operation)
+            .map_err(GroupCrdtError::Resolver)?;
 
         // @TODO: Validate that this operation does not add a group with, or
         // promote a group to have, Manage level access.
@@ -293,26 +325,27 @@ where
         }
 
         // Add operation to the global auth graph.
-        y.graph.add_node(operation_id);
+        y.auth_y.graph.add_node(operation_id);
         for dependency in &dependencies {
-            y.graph.add_edge(*dependency, operation_id, ());
+            y.auth_y.graph.add_edge(*dependency, operation_id, ());
         }
 
         // Insert operation into all operations map.
-        y.operations.insert(operation_id, operation.clone());
+        y.auth_y.operations.insert(operation_id, operation.clone());
 
         if rebuild_required {
-            return StrongRemove::process(y).map_err(GroupCrdtError::Resolver);
+            y.auth_y = StrongRemove::process(y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            return Ok(y);
         }
 
-        let mut groups_y = y.state_at(&dependencies);
+        let mut groups_y = y.auth_y.state_at(&dependencies);
         let result = apply_action(
             groups_y,
             group_id,
             operation_id,
             actor,
             &control_message.action,
-            &y.ignore,
+            &y.auth_y.ignore,
         );
 
         groups_y = match result {
@@ -328,7 +361,7 @@ where
             }
         };
 
-        y.states.insert(operation_id, groups_y);
+        y.auth_y.states.insert(operation_id, groups_y);
 
         Ok(y)
     }
@@ -344,22 +377,21 @@ where
     ///
     /// This is a relatively expensive computation and should only be used when a re-build is
     /// actually required.
-    #[allow(clippy::type_complexity)]
     pub(crate) fn authorize(
         y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
     ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, ORD>> {
         // Keep hold of original operations and graph.
-        let last_graph = y.graph.clone();
-        let last_ignore = y.ignore.clone();
-        let last_states = y.states.clone();
+        let last_graph = y.auth_y.graph.clone();
+        let last_ignore = y.auth_y.ignore.clone();
+        let last_states = y.auth_y.states.clone();
 
         let mut temp_y = y;
 
         // Collect predecessors of the new operation.
         let mut predecessors = HashSet::new();
         for dependency in operation.dependencies() {
-            let reversed = Reversed(&temp_y.graph);
+            let reversed = Reversed(&temp_y.auth_y.graph);
             let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
             while let Some(id) = dfs_rev.next(&reversed) {
                 predecessors.insert(id);
@@ -368,27 +400,31 @@ where
 
         // Remove all other nodes from the graph.
         let to_remove: Vec<_> = temp_y
+            .auth_y
             .graph
             .node_identifiers()
             .filter(|n| !predecessors.contains(n))
             .collect();
 
         for node in &to_remove {
-            temp_y.graph.remove_node(*node);
+            temp_y.auth_y.graph.remove_node(*node);
         }
 
-        let temp_y_i = StrongRemove::process(temp_y).map_err(GroupCrdtError::Resolver)?;
+        let temp_y_i = {
+            temp_y.auth_y = StrongRemove::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            temp_y
+        };
 
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        let groups_y = temp_y_i.state_at(&dependencies);
+        let groups_y = temp_y_i.auth_y.state_at(&dependencies);
         let result = apply_action(
             groups_y,
             operation.payload().group_id(),
             operation.id(),
             operation.author(),
             &operation.payload().action,
-            &temp_y_i.ignore,
+            &temp_y_i.auth_y.ignore,
         );
 
         match result {
@@ -405,9 +441,9 @@ where
         };
 
         let mut y = temp_y_i;
-        y.graph = last_graph;
-        y.ignore = last_ignore;
-        y.states = last_states;
+        y.auth_y.graph = last_graph;
+        y.auth_y.ignore = last_ignore;
+        y.auth_y.states = last_states;
 
         Ok(y)
     }
