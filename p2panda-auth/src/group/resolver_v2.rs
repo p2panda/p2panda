@@ -8,10 +8,10 @@ use petgraph::algo::toposort;
 use thiserror::Error;
 
 use crate::graph::{concurrent_bubbles, has_path};
-use crate::group::crdt::v2::{GroupCrdtState, apply_action};
+use crate::group::crdt::v2::{AuthState, apply_action};
 use crate::group::{GroupAction, GroupControlMessage};
 use crate::traits::resolver_v2::Resolver;
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer};
+use crate::traits::{Conditions, IdentityHandle, Operation, OperationId};
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
@@ -24,23 +24,22 @@ where
 }
 
 #[derive(Clone, Default)]
-pub struct StrongRemove<ID, OP, C, ORD> {
-    _phantom: PhantomData<(ID, OP, C, ORD)>,
+pub struct StrongRemove<ID, OP, C, M> {
+    _phantom: PhantomData<(ID, OP, C, M)>,
 }
 
-impl<ID, OP, C, ORD> Resolver<ID, OP, C, ORD> for StrongRemove<ID, OP, C, ORD>
+impl<ID, OP, C, M> Resolver<ID, OP, C, M> for StrongRemove<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
+    M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    type State = GroupCrdtState<ID, OP, C, ORD>;
+    type State = AuthState<ID, OP, C, M>;
     type Error = StrongRemoveError<OP>;
 
     /// Identify if an operation should trigger a group state rebuild.
-    fn rebuild_required(y: &Self::State, operation: &ORD::Operation) -> Result<bool, Self::Error> {
+    fn rebuild_required(y: &Self::State, operation: &M) -> Result<bool, Self::Error> {
         let dependencies = operation.dependencies().into_iter().collect();
         Ok(y.heads() != dependencies)
     }
@@ -52,7 +51,7 @@ where
         y.ignore.drain();
         let mut filter: HashSet<OP> = Default::default();
 
-        let operations: HashMap<OP, ORD::Operation> = y.operations.drain().collect();
+        let operations: HashMap<OP, M> = y.operations.drain().collect();
 
         // Keep track of mutual removes (which occur in one bubble) so that we can exclude these
         // from the filter later.
@@ -213,7 +212,7 @@ mod tests {
         TestGroupState, add_member, assert_members, create_group, demote_member, remove_member,
         sync,
     };
-    use crate::test_utils::{TestGroupStore, TestOrderer, TestOrdererState};
+    use crate::test_utils::{TestGroupStore, TestOrdererState};
 
     use super::*;
 
@@ -270,7 +269,7 @@ mod tests {
         assert_members(&y_i, G1, &expected);
 
         // Ignore set should be empty
-        assert!(y_i.ignore.is_empty());
+        assert!(y_i.auth_y.ignore.is_empty());
     }
 
     #[test]
@@ -323,7 +322,7 @@ mod tests {
             (CLAIRE, Access::manage()),
         ];
 
-        let y_final: GroupCrdtState<char, u32, (), TestOrderer> = sync(y, &[op0, op1, op2]);
+        let y_final = sync(y, &[op0, op1, op2]);
         assert_members(&y_final, G1, &expected);
     }
 
@@ -447,8 +446,8 @@ mod tests {
 
         // Only assert final state
         let expected_members = vec![(ALICE, Access::manage())];
-        let y_final: GroupCrdtState<char, u32, (), TestOrderer> = sync(y, &[op0, op1, op2, op3]);
-        assert_members(&y_final, G1, &expected_members);
+        let y_i = sync(y, &[op0, op1, op2, op3]);
+        assert_members(&y_i, G1, &expected_members);
     }
     #[test]
     fn remove_readd_dependencies_filter() {
@@ -528,8 +527,7 @@ mod tests {
             (EVE, Access::read()),
         ];
 
-        let y_final: GroupCrdtState<char, u32, (), TestOrderer> =
-            sync(y, &[op0, op1, op2, op3, op4]);
+        let y_final = sync(y, &[op0, op1, op2, op3, op4]);
         assert_members(&y_final, G1, &expected);
     }
 
