@@ -4,6 +4,7 @@ mod group_store;
 mod network;
 mod orderer;
 mod partial_ord;
+pub(crate) mod v2;
 
 pub use crate::test_utils::group_store::TestGroupStore;
 pub use network::Network;

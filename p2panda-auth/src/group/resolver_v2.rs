@@ -203,16 +203,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
-
     use crate::Access;
     use crate::group::GroupMember;
     use crate::group::crdt::v2::tests::{
-        TestGroupState, add_member, assert_members, create_group, demote_member, remove_member,
-        sync,
+        add_member, assert_members, create_group, demote_member, remove_member, sync,
     };
-    use crate::test_utils::{TestGroupStore, TestOrdererState};
+    use crate::test_utils::v2::TestGroupState;
 
     use super::*;
 
@@ -239,11 +235,7 @@ mod tests {
         //
         // Both removals should be processed, Claire remains
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -284,11 +276,7 @@ mod tests {
         //
         // Final members: [Alice (manage), Bob (write), Claire (manage)]
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -338,11 +326,7 @@ mod tests {
         //
         // Final members: [Alice (manage), Bob (write), Claire (manage)]
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -403,11 +387,7 @@ mod tests {
         //
         // After merging, only Alice remains (removals win).
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Create initial group with Alice and Bob
         let op0 = create_group(
@@ -468,11 +448,7 @@ mod tests {
         // Filtered: [3]
         // Final members: [Alice, Bob, Claire, Eve]
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Alice creates group with Alice, Bob, Claire
         let op0 = create_group(
@@ -556,11 +532,7 @@ mod tests {
         // 6: Frank adds Grace
         // 7: Dave removes Alice
 
-        let mut rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer_alice = TestOrdererState::new(ALICE, store.clone(), StdRng::from_rng(&mut rng));
-        let y = TestGroupState::new(orderer_alice);
+        let y = TestGroupState::new(());
 
         // 0: Create initial group with Alice and Bob
         let op0 = create_group(
