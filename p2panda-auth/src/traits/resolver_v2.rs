@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
 use crate::traits::{IdentityHandle, OperationId};
 
 /// Interface for implementing a custom group crdt resolver.
@@ -9,7 +11,7 @@ where
     OP: OperationId + Ord,
 {
     type State;
-    type Error;
+    type Error: Debug;
 
     /// Check if this message requires that a full state re-build takes place. This would usually
     /// be due to concurrent operations arriving which require special handling.

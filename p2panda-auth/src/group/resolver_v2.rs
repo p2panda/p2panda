@@ -23,7 +23,7 @@ where
     MissingOperation(OP),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct StrongRemove<ID, OP, C, M> {
     _phantom: PhantomData<(ID, OP, C, M)>,
 }
