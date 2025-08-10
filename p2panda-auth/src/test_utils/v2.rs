@@ -40,7 +40,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
 }
 
 pub type TestOrdererState = ();
-pub type TestResolver = StrongRemove<MemberId, MessageId, Conditions, TestOrderer>;
+pub type TestResolver = StrongRemove<MemberId, MessageId, Conditions, TestOperation>;
 pub type TestGroupState = GroupCrdtState<MemberId, MessageId, Conditions, TestOrderer>;
-pub type TestGroup = GroupCrdt<MemberId, MessageId, Conditions, TestOrderer>;
-pub type TestGroupError = GroupCrdtError<MemberId, MessageId, Conditions, TestOrderer>;
+pub type TestGroup = GroupCrdt<MemberId, MessageId, Conditions, TestResolver, TestOrderer>;
+pub type TestGroupError = GroupCrdtError<MemberId, MessageId, Conditions, TestResolver, TestOrderer>;

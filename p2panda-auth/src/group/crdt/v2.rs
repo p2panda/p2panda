@@ -10,7 +10,6 @@ use thiserror::Error;
 
 use crate::access::Access;
 use crate::group::crdt::state;
-use crate::group::resolver_v2::{StrongRemove, StrongRemoveError};
 use crate::group::{
     GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
 };
@@ -19,10 +18,11 @@ use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer}
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
-pub enum GroupCrdtError<ID, OP, C, ORD>
+pub enum GroupCrdtError<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
+    RS: Resolver<ID, OP, C, ORD::Operation>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
 {
     #[error("duplicate operation {0} processed in group {1}")]
@@ -38,7 +38,7 @@ where
     Orderer(ORD::Error),
 
     #[error("ordering error: {0}")]
-    Resolver(StrongRemoveError<OP>),
+    Resolver(RS::Error),
 
     #[error("states {0:?} not found in group {1}")]
     StatesNotFound(Vec<OP>, ID),
@@ -265,15 +265,16 @@ where
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct GroupCrdt<ID, OP, C, ORD> {
-    _phantom: PhantomData<(ID, OP, C, ORD)>,
+pub struct GroupCrdt<ID, OP, C, RS, ORD> {
+    _phantom: PhantomData<(ID, OP, C, RS, ORD)>,
 }
 
-impl<ID, OP, C, ORD> GroupCrdt<ID, OP, C, ORD>
+impl<ID, OP, C, RS, ORD> GroupCrdt<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
@@ -286,7 +287,7 @@ where
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         action: &GroupControlMessage<ID, C>,
-    ) -> Result<(GroupCrdtState<ID, OP, C, ORD>, ORD::Operation), GroupCrdtError<ID, OP, C, ORD>>
+    ) -> Result<(GroupCrdtState<ID, OP, C, ORD>, ORD::Operation), GroupCrdtError<ID, OP, C, RS, ORD>>
     {
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
@@ -301,14 +302,14 @@ where
     pub fn process(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
-    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, ORD>> {
+    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
         let operation_id = operation.id();
         let actor = operation.author();
         let control_message = operation.payload();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
-        let rebuild_required = StrongRemove::rebuild_required(&y.auth_y, &operation)
-            .map_err(GroupCrdtError::Resolver)?;
+        let rebuild_required =
+            RS::rebuild_required(&y.auth_y, &operation).map_err(GroupCrdtError::Resolver)?;
 
         // @TODO: Validate that this operation does not add a group with, or
         // promote a group to have, Manage level access.
@@ -334,7 +335,7 @@ where
         y.auth_y.operations.insert(operation_id, operation.clone());
 
         if rebuild_required {
-            y.auth_y = StrongRemove::process(y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            y.auth_y = RS::process(y.auth_y).map_err(GroupCrdtError::Resolver)?;
             return Ok(y);
         }
 
@@ -380,7 +381,7 @@ where
     pub(crate) fn authorize(
         y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
-    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, ORD>> {
+    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
         // Keep hold of original operations and graph.
         let last_graph = y.auth_y.graph.clone();
         let last_ignore = y.auth_y.ignore.clone();
@@ -411,8 +412,7 @@ where
         }
 
         let temp_y_i = {
-            temp_y.auth_y =
-                StrongRemove::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            temp_y.auth_y = RS::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
             temp_y
         };
 
@@ -578,8 +578,6 @@ pub(crate) mod tests {
     use crate::test_utils::v2::{TestGroup, TestGroupState};
     use crate::test_utils::{MemberId, MessageId, TestOperation};
     use crate::traits::Operation;
-
-    use super::{GroupCrdt, GroupCrdtState};
 
     fn make_group_op(
         actor_id: MemberId,
