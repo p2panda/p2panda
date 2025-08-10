@@ -411,7 +411,8 @@ where
         }
 
         let temp_y_i = {
-            temp_y.auth_y = StrongRemove::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            temp_y.auth_y =
+                StrongRemove::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
             temp_y
         };
 
@@ -571,22 +572,14 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
-
     use crate::Access;
     use crate::group::crdt::v2::GroupCrdtError;
     use crate::group::{GroupAction, GroupControlMessage, GroupMember, GroupMembershipError};
-    use crate::test_utils::{
-        Conditions, MemberId, MessageId, TestGroupStore, TestOperation, TestOrderer,
-        TestOrdererState,
-    };
+    use crate::test_utils::v2::{TestGroup, TestGroupState};
+    use crate::test_utils::{MemberId, MessageId, TestOperation};
     use crate::traits::Operation;
 
     use super::{GroupCrdt, GroupCrdtState};
-
-    pub(crate) type TestGroupState = GroupCrdtState<MemberId, MessageId, Conditions, TestOrderer>;
-    pub(crate) type TestGroup = GroupCrdt<MemberId, MessageId, Conditions, TestOrderer>;
 
     fn make_group_op(
         actor_id: MemberId,
@@ -717,11 +710,7 @@ pub(crate) mod tests {
 
     #[test]
     fn group_operations() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -787,11 +776,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_removal() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -854,11 +839,7 @@ pub(crate) mod tests {
 
     #[test]
     fn mutual_concurrent_removal() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -931,11 +912,7 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_groups() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -983,11 +960,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_unauthorized_add() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1024,11 +997,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_remove_non_member() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1047,11 +1016,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_promote_non_member() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1077,11 +1042,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_demote_non_member() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1107,11 +1068,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_add_existing_member() {
-        let rng = StdRng::from_os_rng();
-
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1137,10 +1094,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_remove_nonexistent_subgroup() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         let op1 = create_group(
             ALICE,
@@ -1159,10 +1113,7 @@ pub(crate) mod tests {
 
     #[test]
     fn deeply_nested_groups_with_removals() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         // Create G1
         let op1 = create_group(
@@ -1263,10 +1214,7 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_groups_with_concurrent_removal_and_promotion() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         // Create G1
         let op1 = create_group(
@@ -1391,10 +1339,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_removal_ooo_processing() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         // Alice creates group
         let op1 = create_group(
@@ -1447,10 +1392,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_add_with_insufficient_access() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y0 = TestGroupState::new(orderer);
+        let y0 = TestGroupState::new(());
 
         // Alice creates the group
         let op1 = create_group(
@@ -1514,10 +1456,7 @@ pub(crate) mod tests {
 
     #[test]
     fn add_group_with_concurrent_change() {
-        let rng = StdRng::from_os_rng();
-        let store = TestGroupStore::default();
-        let orderer = TestOrdererState::new(ALICE, store.clone(), rng);
-        let y = TestGroupState::new(orderer);
+        let y = TestGroupState::new(());
 
         // Create Group 1 with Alice as manager
         let op1 = create_group(
