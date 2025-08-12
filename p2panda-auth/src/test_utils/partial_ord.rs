@@ -53,14 +53,13 @@ impl TestOrderer {
         auth_heads: Rc<RefCell<Vec<MessageId>>>,
         rng: StdRng,
     ) -> TestOrdererState {
-        let y = TestOrdererState {
+        TestOrdererState {
             my_id,
             auth_heads,
             messages: Default::default(),
             orderer_y: PartialOrdererState::default(),
             rng,
-        };
-        y
+        }
     }
 }
 
@@ -91,7 +90,7 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
         let operation = TestOperation {
             id: next_id,
             author: y.my_id(),
-            dependencies: auth_dependencies.iter().cloned().collect::<Vec<_>>(),
+            dependencies: auth_dependencies.to_vec(),
             payload: control_message.clone(),
         };
 
