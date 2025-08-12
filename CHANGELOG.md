@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Introduce `Conditions` super-trait in `p2panda-auth` [#780](https://github.com/p2panda/p2panda/pull/780)
 
+### Changed
+
+- One global state object and operation graph for all groups [#781](https://github.com/p2panda/p2panda/pull/781)
+
 ## [0.4.0] - 07/07/2025
 
 ### Added
