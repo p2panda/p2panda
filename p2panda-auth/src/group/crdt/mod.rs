@@ -603,7 +603,7 @@ where
                 error: err,
             }
         }
-    };
+    }
 }
 
 /// Return types expected from applying an action to group state.
