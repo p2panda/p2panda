@@ -14,7 +14,9 @@ use rand::RngCore;
 use rand::rngs::StdRng;
 use thiserror::Error;
 
-use crate::group::{GroupCrdtInnerState, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState};
+use crate::group::{
+    GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtInnerState, GroupCrdtState,
+};
 use crate::test_utils::{Conditions, MemberId, MessageId, TestOperation, TestResolver};
 use crate::traits::{Operation, Orderer};
 

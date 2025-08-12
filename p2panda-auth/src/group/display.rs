@@ -130,7 +130,8 @@ where
         } else {
             let groups_y = self
                 .inner
-                .state_at(&HashSet::from_iter(operation.dependencies())).unwrap();
+                .state_at(&HashSet::from_iter(operation.dependencies()))
+                .unwrap();
             match apply_action(
                 groups_y,
                 control_message.group_id(),
@@ -257,7 +258,8 @@ where
         dependencies.insert(operation.id());
         let mut members = self
             .inner
-            .state_at(&dependencies).unwrap()
+            .state_at(&dependencies)
+            .unwrap()
             .get(&operation.payload().group_id())
             .unwrap()
             .access_levels();

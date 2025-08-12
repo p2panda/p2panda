@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::crdt::GroupCrdtInnerError;
-use crate::group::{GroupCrdtInnerState, GroupAction, GroupControlMessage, apply_action};
+use crate::group::{GroupAction, GroupControlMessage, GroupCrdtInnerState, apply_action};
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
 /// Error types for GroupCrdt.
@@ -108,7 +108,9 @@ where
 
         // Traverse the graph visiting the operations in topological order.
         for target_operation_id in topo_sort.iter() {
-            let target_operation = operations.get(target_operation_id).expect("all processed operations exist");
+            let target_operation = operations
+                .get(target_operation_id)
+                .expect("all processed operations exist");
             let bubble = bubbles
                 .iter()
                 .find(|bubble| bubble.contains(target_operation_id))
@@ -137,7 +139,9 @@ where
                         continue;
                     }
 
-                    let bubble_operation = operations.get(bubble_operation_id).expect("all processed operations exist");
+                    let bubble_operation = operations
+                        .get(bubble_operation_id)
+                        .expect("all processed operations exist");
 
                     // The bubble operation is for a different group so it should not be filtered.
                     if bubble_operation.payload().group_id()
