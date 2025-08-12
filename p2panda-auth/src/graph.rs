@@ -104,6 +104,9 @@ mod tests {
     use petgraph::{graph::DiGraph, prelude::DiGraphMap};
 
     use crate::graph::concurrent_bubbles;
+    use crate::traits::OperationId;
+
+    impl OperationId for &str {}
 
     #[test]
     fn test_linear_chain_no_concurrency() {

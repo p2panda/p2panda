@@ -2,19 +2,23 @@
 
 #![no_main]
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_auth::group::{GroupAction, GroupControlMessage, GroupCrdtError, GroupMember};
-use p2panda_auth::test_utils::{
-    MemberId, MessageId, TestGroup, TestGroupError, TestGroupState, TestGroupStore, TestOperation,
-    TestOrdererState,
+use p2panda_auth::group::{
+    GroupAction, GroupControlMessage, GroupCrdtError, GroupCrdtState, GroupMember,
 };
-use p2panda_auth::traits::{GroupStore, Operation as OperationTrait};
+use p2panda_auth::test_utils::partial_ord::{
+    TestGroup, TestGroupError, TestGroupState, TestOrderer,
+};
+use p2panda_auth::test_utils::{MemberId, MessageId, TestOperation};
+use p2panda_auth::traits::Operation as OperationTrait;
 use p2panda_auth::{Access, AccessLevel};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng, random_bool};
@@ -22,7 +26,7 @@ use rand::{Rng, SeedableRng, random_bool};
 /// Flag for saving dot graph representations of all groups to the filesystem.
 ///
 /// Graphs are saved when an error occurs in any case.
-const SAVE_GRAPH_VIZ: bool = false;
+const SAVE_GRAPH_VIZ: bool = true;
 
 /// Pool of all possible group member ids.
 const MEMBERS: [char; 26] = [
@@ -162,10 +166,9 @@ struct Member {
     members: Vec<GroupMember<MemberId>>,
 
     /// Group store.
-    store: TestGroupStore,
+    auth_y: TestGroupState,
 
-    /// Orderer state.
-    y_orderer: TestOrdererState,
+    auth_heads_ref: Rc<RefCell<Vec<MessageId>>>,
 
     /// IDs of all operations processed by this member.
     processed: Vec<MessageId>,
@@ -180,14 +183,15 @@ impl Member {
         operations: &mut HashMap<MessageId, (Suggestion, TestOperation)>,
         rng: &mut StdRng,
     ) -> Self {
-        let store = TestGroupStore::default();
-        let y_orderer = TestOrdererState::new(my_id, store.clone(), StdRng::from_rng(rng));
+        let auth_heads_ref = Rc::new(RefCell::new(vec![]));
+        let orderer_y = TestOrderer::init(my_id, auth_heads_ref.clone(), StdRng::from_rng(rng));
+        let auth_y = GroupCrdtState::new(orderer_y);
 
         let mut member = Member {
             my_id,
             members: members.clone(),
-            store,
-            y_orderer,
+            auth_y,
+            auth_heads_ref,
             processed: Vec::new(),
         };
 
@@ -218,30 +222,17 @@ impl Member {
             initial_members.push((GroupMember::Individual(member.my_id), Access::manage()));
 
             member.create_group(ROOT_GROUP_ID, initial_members, operations);
-        } else {
-            // Insert a dummy root group state into the store, we will update this later when we
-            // process the actual create message.
-            let y_group = TestGroupState::new(
-                member.my_id,
-                ROOT_GROUP_ID,
-                member.store.clone(),
-                member.y_orderer.clone(),
+        }
+
+        if member.is_group() {
+            // Group create a sub-group for themselves incase they should be added as a
+            // sub-group.
+            member.create_group(
+                member.id(),
+                vec![(GroupMember::Individual(member.my_id), Access::manage())],
+                operations,
             );
-
-            // We need to insert the group state to the store as Group::process was never called.
-            member
-                .store
-                .insert(&y_group.id(), &y_group)
-                .expect("can write to group store");
-        };
-
-        // All members create a sub-group for themselves incase they should be added as a
-        // sub-group.
-        member.create_group(
-            member.id(),
-            vec![(GroupMember::Individual(member.my_id), Access::manage())],
-            operations,
-        );
+        }
 
         member
     }
@@ -253,13 +244,6 @@ impl Member {
         initial_members: Vec<(GroupMember<MemberId>, Access<()>)>,
         operations: &mut HashMap<MessageId, (Suggestion, TestOperation)>,
     ) {
-        let y_group = TestGroupState::new(
-            self.my_id,
-            group_id,
-            self.store.clone(),
-            self.y_orderer.clone(),
-        );
-
         let control_message = GroupControlMessage {
             group_id,
             action: GroupAction::Create {
@@ -267,9 +251,13 @@ impl Member {
             },
         };
 
-        let (y_group_i, operation) = TestGroup::prepare(y_group, &control_message).unwrap();
+        let (auth_y_i, operation) =
+            TestGroup::prepare(self.auth_y.clone(), &control_message).unwrap();
+        let auth_y_ii = TestGroup::process(auth_y_i, &operation).unwrap();
 
-        let _ = TestGroup::process(y_group_i, &operation).unwrap();
+        self.auth_y = auth_y_ii;
+        self.auth_heads_ref
+            .replace(self.auth_y.auth_y.heads().into_iter().collect());
 
         let suggestion = Suggestion::Valid(TestGroupAction::Action(GroupAction::Create {
             initial_members,
@@ -284,36 +272,34 @@ impl Member {
         self.my_id
     }
 
-    /// Get the root group.
-    pub fn root_group(&self) -> TestGroupState {
-        self.store
-            .get(&ROOT_GROUP_ID)
-            .unwrap()
-            .expect("root group missing")
+    pub fn is_group(&self) -> bool {
+        let member = self.members.iter().find(|m| m.id() == self.id()).unwrap();
+
+        match member {
+            GroupMember::Individual(_) => false,
+            GroupMember::Group(_) => true,
+        }
     }
 
-    /// Get a sub-group.
-    pub fn sub_group(&self, id: &MemberId) -> Option<TestGroupState> {
-        self.store.get(id).expect("store error")
+    /// Get the members of a group.
+    pub fn members(&self, group_id: MemberId) -> Vec<(MemberId, Access<()>)> {
+        self.auth_y.members(group_id)
+    }
+
+    pub fn root_members(&self, group_id: MemberId) -> Vec<(GroupMember<MemberId>, Access<()>)> {
+        self.auth_y.root_members(group_id)
     }
 
     /// Is this member in a group.
     pub fn is_member(&self, group_id: MemberId) -> bool {
-        self.sub_group(&group_id)
-            .unwrap()
-            .transitive_members()
-            .unwrap()
+        self.members(group_id)
             .iter()
             .any(|(id, _)| id == &self.id())
     }
 
     /// Is this member a manager in a group.
     pub fn is_manager(&self, group_id: MemberId) -> bool {
-        let y_group = self.sub_group(&group_id).unwrap();
-
-        y_group
-            .transitive_members()
-            .unwrap()
+        self.members(group_id)
             .iter()
             .any(|(id, access)| id == &self.id() && access == &Access::manage())
     }
@@ -324,35 +310,34 @@ impl Member {
         group_id: MemberId,
         operation: &TestGroupAction,
     ) -> Result<Option<TestOperation>, TestGroupError> {
-        let y_group = if group_id == ROOT_GROUP_ID {
-            self.root_group()
-        } else if let Some(y_sub_group) = self.sub_group(&group_id) {
-            y_sub_group
-        } else {
-            TestGroupState::new(
-                self.my_id,
-                group_id,
-                self.store.clone(),
-                self.y_orderer.clone(),
-            )
-        };
-
         let result = match operation {
-            TestGroupAction::Noop => Ok((y_group, None)),
+            TestGroupAction::Noop => Ok(None),
             TestGroupAction::Action(action) => {
-                let group_operation = GroupControlMessage {
-                    group_id: y_group.group_id,
+                let control_message = GroupControlMessage {
+                    group_id,
                     action: action.clone(),
                 };
-                let (y_group, operation) = TestGroup::prepare(y_group, &group_operation)?;
-                let y_group = TestGroup::process(y_group, &operation)?;
 
-                Ok((y_group, Some(operation)))
+                let (auth_y_i, operation) =
+                    TestGroup::prepare(self.auth_y.clone(), &control_message).unwrap();
+                let auth_y_ii = match TestGroup::process(auth_y_i, &operation) {
+                    Ok(y) => y,
+                    Err(err) => {
+                        self.report(group_id, true);
+                        println!("{:#?}", operation);
+                        panic!("{err}");
+                    }
+                };
+                self.auth_y = auth_y_ii;
+                self.auth_heads_ref
+                    .replace(self.auth_y.auth_y.heads().into_iter().collect());
+
+                Ok(Some(operation))
             }
         };
 
         match result {
-            Ok((_, operation)) => {
+            Ok(operation) => {
                 if let Some(operation) = operation.as_ref() {
                     self.processed.push(operation.id());
                 }
@@ -373,21 +358,7 @@ impl Member {
             return Ok(());
         }
 
-        let group_id = operation.payload().group_id();
-        let y_group = if group_id == ROOT_GROUP_ID {
-            self.root_group()
-        } else if let Some(y_sub_group) = self.sub_group(&group_id) {
-            y_sub_group
-        } else {
-            TestGroupState::new(
-                self.my_id,
-                group_id,
-                self.store.clone(),
-                self.y_orderer.clone(),
-            )
-        };
-
-        let _ = match TestGroup::process(y_group.clone(), operation) {
+        self.auth_y = match TestGroup::process(self.auth_y.clone(), operation) {
             Ok(y) => {
                 if let Suggestion::Invalid(_) = suggestion {
                     panic!(
@@ -399,10 +370,10 @@ impl Member {
             }
             Err(err) => {
                 if let GroupCrdtError::DuplicateOperation(_, _) = err {
-                    y_group
+                    self.auth_y.clone()
                 } else {
                     if let Suggestion::Valid(_) = suggestion {
-                        self.report(y_group.id(), true);
+                        self.report(ROOT_GROUP_ID, true);
 
                         panic!(
                             "unexpected error when processing remote operation from valid operation member={} '{:?}':\n{}",
@@ -411,10 +382,12 @@ impl Member {
                             err
                         );
                     }
-                    y_group
+                    self.auth_y.clone()
                 }
             }
         };
+        self.auth_heads_ref
+            .replace(self.auth_y.auth_y.heads().into_iter().collect());
 
         self.processed.push(operation.id());
 
@@ -423,19 +396,17 @@ impl Member {
 
     /// Assert our root group state is the same as another member.
     pub fn assert_state(&self, other: &Member) {
-        let other_y_group = other.root_group();
-        let mut other_members = other_y_group.members();
+        let mut other_members = other.members(ROOT_GROUP_ID);
         other_members.sort();
 
-        let self_y_group = self.root_group();
-        let mut members = self_y_group.members();
+        let mut members = self.members(ROOT_GROUP_ID);
         members.sort();
 
         if members != other_members {
             println!("member set of {} compared to {} ", self.id(), other.id());
             println!();
-            self.report(self_y_group.id(), true);
-            other.report(self_y_group.id(), true);
+            self.report(ROOT_GROUP_ID, true);
+            other.report(ROOT_GROUP_ID, true);
         }
 
         assert_eq!(members, other_members,);
@@ -447,8 +418,7 @@ impl Member {
         group_id: MemberId,
         rng: &mut StdRng,
     ) -> Option<(GroupMember<MemberId>, Access<()>)> {
-        let y_group = self.sub_group(&group_id).unwrap();
-        random_item(y_group.members(), rng)
+        random_item(self.root_members(group_id), rng)
     }
 
     /// Get a random non-member of the passed group.
@@ -457,8 +427,7 @@ impl Member {
         group_id: MemberId,
         rng: &mut StdRng,
     ) -> Option<GroupMember<MemberId>> {
-        let y_group = self.sub_group(&group_id).unwrap();
-        let active_members = y_group.members();
+        let active_members = self.root_members(group_id);
         let inactive_members = self
             .members
             .clone()
@@ -503,12 +472,10 @@ impl Member {
     ) -> TestGroupAction {
         let mut options = Vec::new();
 
-        let y_group = self.sub_group(&group_id).unwrap();
-
-        let Some((_, access)) = y_group
-            .members()
+        let Some((_, access)) = self
+            .members(group_id)
             .into_iter()
-            .find(|(member, _)| member.id() == self.my_id)
+            .find(|(member, _)| *member == self.my_id)
         else {
             return TestGroupAction::Noop;
         };
@@ -519,11 +486,18 @@ impl Member {
 
         if try_options.contains(&Options::Add) {
             if let Some(member) = self.random_non_member(group_id, rng) {
+                let access = match member {
+                    GroupMember::Individual(_) => {
+                        random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
+                    }
+                    GroupMember::Group(_) => {
+                        random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
+                            .unwrap()
+                    }
+                };
+
                 if member.id() != self.my_id {
-                    options.push(TestGroupAction::Action(GroupAction::Add {
-                        member,
-                        access: random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
-                    }))
+                    options.push(TestGroupAction::Action(GroupAction::Add { member, access }))
                 }
             }
         }
@@ -535,7 +509,15 @@ impl Member {
                         break;
                     }
 
-                    let next_access = random_item(ACCESS_LEVELS.to_vec(), rng).unwrap();
+                    let next_access = match member {
+                        GroupMember::Individual(_) => {
+                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
+                        }
+                        GroupMember::Group(_) => {
+                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
+                                .unwrap()
+                        }
+                    };
 
                     if access > next_access {
                         continue;
@@ -557,7 +539,15 @@ impl Member {
                         break;
                     }
 
-                    let next_access = random_item(ACCESS_LEVELS.to_vec(), rng).unwrap();
+                    let next_access = match member {
+                        GroupMember::Individual(_) => {
+                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
+                        }
+                        GroupMember::Group(_) => {
+                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
+                                .unwrap()
+                        }
+                    };
 
                     if access < next_access {
                         continue;
@@ -592,16 +582,11 @@ impl Member {
 
     /// Print a report for this member.
     fn report(&self, group_id: MemberId, save_graph: bool) {
-        let y_group = self.sub_group(&group_id).unwrap();
-        println!(
-            "=== {} final members for group {} ===",
-            self.id(),
-            y_group.id()
-        );
-        println!("{:?}", y_group.members());
+        println!("=== {} final members for group {} ===", self.id(), group_id);
+        println!("{:?}", self.members(group_id));
         println!();
         println!("=== filter ===");
-        let mut filter = y_group.ignore.iter().collect::<Vec<_>>();
+        let mut filter = self.auth_y.auth_y.ignore.iter().collect::<Vec<_>>();
         filter.sort();
         println!("{filter:?}");
         println!();
@@ -613,11 +598,12 @@ impl Member {
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_millis(),
-                y_group.id(),
+                group_id,
                 self.id()
             ))
             .unwrap();
-            file.write_all(y_group.display().as_bytes()).unwrap();
+            file.write_all(self.auth_y.display(group_id).as_bytes())
+                .unwrap();
         }
     }
 }
@@ -733,7 +719,7 @@ fuzz_target!(|seed: [u8; 32]| {
                         // Check if we are an admin member of a sub-group so that we can
                         // optionally publish an operation to the sub-group (rather than the root
                         // group).
-                        let members = member.root_group().members();
+                        let members = member.root_members(ROOT_GROUP_ID);
                         let is_sub_group_admin = members.iter().find_map(|(group_member, _)| {
                             if let GroupMember::Group(id) = group_member {
                                 if member.is_manager(*id) {
@@ -745,7 +731,7 @@ fuzz_target!(|seed: [u8; 32]| {
 
                         let mut group_id = ROOT_GROUP_ID;
 
-                        // If we're a sub-group admin so poblish an operation there instead.
+                        // Either publish an operation to our own group, a sub-group we're an admin member of, or the root group.
                         if let Some(sub_group) = is_sub_group_admin {
                             group_id =
                                 random_item(vec![ROOT_GROUP_ID, *sub_group], &mut rng).unwrap();
@@ -830,9 +816,8 @@ fuzz_target!(|seed: [u8; 32]| {
             control_member.assert_state(member);
         }
 
-        let y_group = control_member.root_group();
         println!("=== test setup ===");
-        println!("group: {:?}", y_group.id());
+        println!("group: {:?}", ROOT_GROUP_ID);
         println!("actors: {members_count:?}");
         println!("branches: {MAX_BRANCHES:?}");
         println!(
@@ -840,7 +825,7 @@ fuzz_target!(|seed: [u8; 32]| {
             control_member.processed.len() + control_member.processed.len()
         );
         println!();
-        control_member.report(y_group.id(), SAVE_GRAPH_VIZ);
+        control_member.report(ROOT_GROUP_ID, SAVE_GRAPH_VIZ);
     }
 
     drop(active_members);
