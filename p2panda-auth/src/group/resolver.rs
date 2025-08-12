@@ -255,7 +255,7 @@ mod tests {
         assert_members(&y_i, G1, &expected);
 
         // Ignore set should be empty
-        assert!(y_i.auth_y.ignore.is_empty());
+        assert!(y_i.inner.ignore.is_empty());
     }
 
     #[test]

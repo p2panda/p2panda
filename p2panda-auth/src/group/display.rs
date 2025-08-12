@@ -59,10 +59,10 @@ where
         &self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
-        let sorted = toposort(&self.auth_y.graph, None).expect("topo sort graph");
+        let sorted = toposort(&self.inner.graph, None).expect("topo sort graph");
         for id in sorted {
             let operation = self
-                .auth_y
+                .inner
                 .operations
                 .get(&id)
                 .expect("operation is present");
@@ -129,7 +129,7 @@ where
             OP_ROOT_NODE
         } else {
             let groups_y = self
-                .auth_y
+                .inner
                 .state_at(&HashSet::from_iter(operation.dependencies())).unwrap();
             match apply_action(
                 groups_y,
@@ -137,7 +137,7 @@ where
                 operation.id(),
                 operation.author(),
                 &control_message.action,
-                &self.auth_y.ignore,
+                &self.inner.ignore,
             ) {
                 StateChangeResult::Ok { .. } => OP_OK_NODE,
                 StateChangeResult::Noop { .. } => OP_NOOP_NODE,
@@ -256,7 +256,7 @@ where
         let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
         dependencies.insert(operation.id());
         let mut members = self
-            .auth_y
+            .inner
             .state_at(&dependencies).unwrap()
             .get(&operation.payload().group_id())
             .unwrap()
@@ -306,7 +306,7 @@ where
             }
             GroupMember::Group(group_id) => {
                 let (create_group_id, _) = self
-                    .auth_y
+                    .inner
                     .operations
                     .iter()
                     .find(|(_, op)| op.payload().is_create() && op.payload().group_id() == group_id)
