@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Test utilities for when no ordering strategy is required (most likely
+//! because operations are known to prepared be processed in partial order
+//! already).
+
 use std::convert::Infallible;
 use std::fmt::Debug;
 

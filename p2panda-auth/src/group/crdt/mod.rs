@@ -16,7 +16,7 @@ use crate::group::{
 };
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
-/// Error types for GroupCrdt.
+/// Inner error types for GroupCrdt.
 #[derive(Debug, Error)]
 pub enum GroupCrdtInnerError<OP> {
     #[error("states {0:?} not found")]
@@ -51,6 +51,8 @@ where
     Resolver(RS::Error),
 }
 
+/// Inner state object for `GroupCrdt` which contains the actual groups state,
+/// including operation graph and membership snapshots.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupCrdtInnerState<ID, OP, C, M>
@@ -92,7 +94,7 @@ where
     OP: OperationId + Ord,
     C: Conditions,
 {
-    /// Current tips for the group operation graph.
+    /// Current tips for the groups operation graph.
     pub fn heads(&self) -> HashSet<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
@@ -109,22 +111,24 @@ where
             .collect::<HashSet<_>>()
     }
 
-    /// Current state of this group.
+    /// Current groups state.
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
-    /// state which represents the current state of the group.
+    /// state which represents the current state of the groups.
     pub fn current_state(&self) -> HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
         self.merge_states(&self.heads())
             .expect("states exist for processed operations")
     }
 
-    pub(crate) fn state_at(
+    /// Get the state at a certain point in history.
+    pub fn state_at(
         &self,
         dependencies: &HashSet<OP>,
     ) -> Result<HashMap<ID, GroupMembersState<GroupMember<ID>, C>>, GroupCrdtInnerError<OP>> {
         self.merge_states(dependencies)
     }
 
+    /// Merge multiple states together.
     fn merge_states(
         &self,
         ids: &HashSet<OP>,
@@ -207,7 +211,7 @@ where
         }
     }
 
-    /// Get all current members of the group.
+    /// Get all current members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         let mut members = HashMap::new();
         self.members_inner(group_id, &mut members, None);
@@ -215,6 +219,8 @@ where
     }
 }
 
+/// State object for `GroupCrdt` containing an orderer state and the inner
+/// state.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct GroupCrdtState<ID, OP, C, ORD>
@@ -224,6 +230,7 @@ where
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
+    /// Inner groups state.
     pub auth_y: GroupCrdtInnerState<ID, OP, C, ORD::Operation>,
 
     /// State for the orderer.
@@ -238,7 +245,7 @@ where
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
-    /// Instantiate a new group state.
+    /// Instantiate a new state.
     pub fn new(orderer_y: ORD::State) -> Self {
         Self {
             auth_y: GroupCrdtInnerState::default(),
@@ -246,7 +253,10 @@ where
         }
     }
 
-    /// Get all current members of the group.
+    /// Get all direct members of a group.
+    ///
+    /// This method does not recurse into sub-groups, but rather returns only
+    /// the direct group members and their access levels.
     pub fn root_members(&self, group_id: ID) -> Vec<(GroupMember<ID>, Access<C>)> {
         match self.auth_y.current_state().get(&group_id) {
             Some(group_y) => group_y.access_levels(),
@@ -254,12 +264,54 @@ where
         }
     }
 
-    /// Get all current members of the group.
+    /// Get all transitive members of a group.
+    ///
+    /// This method recurses into all sub-groups and returns a resolved list of
+    /// individual group members and their access levels.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.auth_y.members(group_id)
     }
 }
 
+/// Core group CRDT for maintaining group membership state in a decentralized
+/// system.
+///
+/// Group members can be assigned different access levels, where only a sub-set
+/// of members can mutate the state of the group itself. Group members can be
+/// (immutable) individuals or (mutable) sub-groups.
+///
+/// The core data type is a Directed Acyclic Graph of all operations containing
+/// group management actions. Operations refer to the previous global state (set
+/// of graph tips) in their "dependencies" field, this is the local state when
+/// an actor creates a new auth action; these references make up the edges in
+/// the graph.
+///
+/// A requirement of the protocol is that all messages are processed in
+/// partial-order. When using a dependency graph structure (as is the case in
+/// this implementation) it is possible to achieve partial-ordering by only
+/// processing a message once all it's dependencies have themselves been
+/// processed.
+///
+/// Group state is maintained using the state object `GroupMembersState`. Every
+/// time an action is processed, a new state is generated and added to the map
+/// of all states. When a new operation is received, it's previous state is
+/// calculated and then the message applied, resulting in a new state.
+///
+/// Group membership rules are checked when an action is applied to the previous
+/// state, read more in the `crdt::state` module.
+///
+/// The struct has several generic parameters which allow users to specify their
+/// own core types and to customise behavior when handling concurrent changes
+/// when resolving a graph to it's final state.
+///
+/// - ID : identifier for both an individual actor and group.
+/// - OP : identifier for an operation.
+/// - C  : conditions which restrict an access level.
+/// - RS : generic resolver which contains logic for deciding when group state
+///   rebuilds are required, and how concurrent actions are handled. See the
+///   `resolver` module for different implementations.
+/// - ORD: orderer which exposes an API for creating and processing operations
+///   with meta-data which allow them to be processed in partial order.
 #[derive(Clone, Debug, Default)]
 pub struct GroupCrdt<ID, OP, C, RS, ORD> {
     _phantom: PhantomData<(ID, OP, C, RS, ORD)>,
@@ -281,19 +333,16 @@ where
         }
     }
 
-    /// Prepare a next operation to be processed locally and sent to remote peers. An ORD
-    /// implementation needs to ensure "previous" and "dependencies" are populated correctly so
-    /// that a partial-order of all operations in the system can be established.
-    ///
-    /// The method `GroupCrdtState::heads` and `GroupCrdtState::transitive_heads` can be used to retrieve the
-    /// operation ids of these operation dependencies.
+    /// Prepare a next operation to be processed locally and sent to remote
+    /// peers. An ORD implementation needs to ensure "dependencies" are
+    /// populated correctly so that a partial-order of all operations in the
+    /// system can be established.
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         action: &GroupControlMessage<ID, C>,
     ) -> Result<(GroupCrdtState<ID, OP, C, ORD>, ORD::Operation), GroupCrdtError<ID, OP, C, RS, ORD>>
     {
-        // Get the next operation from our global orderer. The operation wraps the action we want
-        // to perform, adding ordering and author meta-data.
+        // Get the next operation from our global orderer.
         let ordering_y = y.orderer_y;
         let (ordering_y, operation) =
             ORD::next_message(ordering_y, action).map_err(GroupCrdtError::Orderer)?;
@@ -387,17 +436,19 @@ where
         Ok(y)
     }
 
-    /// Validate an action by applying it to the group state build to it's previous pointers.
+    /// Validate an action by applying it to the group state build to it's
+    /// previous pointers.
     ///
-    /// When processing an new operation we need to validate that the contained action is valid
-    /// before including it in the graph. By valid we mean that the author who composed the action
-    /// had authority to perform the claimed action, and that the action fulfils all group change
-    /// requirements. To check this we need to re-build the group state to the operations claimed
-    /// "previous" state. This process involves pruning any operations which are not predecessors
-    /// of the new operation resolving the group state again.
+    /// When processing an new operation we need to validate that the contained
+    /// action is valid before including it in the graph. By valid we mean that
+    /// the author who composed the action had authority to perform the claimed
+    /// action, and that the action fulfils all group change requirements. To
+    /// check this we need to re-build the group state to the operations claimed
+    /// previous state. This process involves pruning any operations which are
+    /// not predecessors of the new operation resolving the group state again.
     ///
-    /// This is a relatively expensive computation and should only be used when a re-build is
-    /// actually required.
+    /// This is a relatively expensive computation and should only be used when
+    /// a re-build is actually required.
     pub(crate) fn authorize(
         y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
