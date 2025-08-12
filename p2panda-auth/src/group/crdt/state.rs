@@ -125,7 +125,7 @@ where
             .collect::<HashSet<ID>>()
     }
 
-    /// Return all active group members.
+    /// Return all active group members and their access levels.
     pub fn access_levels(&self) -> Vec<(ID, Access<C>)> {
         self.members
             .iter()
