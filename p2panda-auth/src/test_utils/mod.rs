@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Test utilities.
+
 pub mod no_ord;
 pub mod partial_ord;
 
