@@ -34,6 +34,9 @@ where
     #[error("expected sub-group {0} to exist in the store")]
     MissingSubGroup(ID),
 
+    #[error("attempted to add group {0} with manage access")]
+    ManagerGroupsNotAllowed(ID),
+
     #[error("ordering error: {0}")]
     Orderer(ORD::Error),
 
@@ -272,9 +275,11 @@ where
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
-
     pub fn init(orderer_y: ORD::State) -> GroupCrdtState<ID, OP, C, ORD> {
-        GroupCrdtState { auth_y: AuthState::default(), orderer_y }
+        GroupCrdtState {
+            auth_y: AuthState::default(),
+            orderer_y,
+        }
     }
 
     /// Prepare a next operation to be processed locally and sent to remote peers. An ORD
@@ -310,8 +315,20 @@ where
         let rebuild_required =
             RS::rebuild_required(&y.auth_y, &operation).map_err(GroupCrdtError::Resolver)?;
 
-        // @TODO: Validate that this operation does not add a group with, or
-        // promote a group to have, Manage level access.
+        // Adding a group as a manager of another group is currently not
+        // supported.
+        //
+        // @TODO: To support this behavior updates in the StrongRemove resolver
+        // so that cross-group concurrent remove cycles are detected. Related to
+        // issue: https://github.com/p2panda/p2panda/issues/779 
+        match &control_message.action {
+            GroupAction::Add { member, access } | GroupAction::Promote { member, access } => {
+                if member.is_group() && access.is_manage() {
+                    return Err(GroupCrdtError::ManagerGroupsNotAllowed(member.id()));
+                }
+            }
+            _ => (),
+        };
 
         // Validate that the author of this operation had the required access
         // rights at the point in the auth graph which they claim as their last
@@ -915,6 +932,32 @@ pub(crate) mod tests {
             1,
             G1,
             GroupMember::Individual(BOB),
+            Access::manage(),
+            vec![op1.id()],
+        );
+
+        assert!(TestGroup::process(y_i, &op2).is_err());
+    }
+
+    #[test]
+    fn error_on_add_manager_group() {
+        let y = TestGroupState::new(());
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+
+        let op2 = add_member(
+            ALICE,
+            1,
+            G1,
+            GroupMember::Group(BOB),
             Access::manage(),
             vec![op1.id()],
         );
