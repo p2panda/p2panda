@@ -51,6 +51,8 @@ where
     Resolver(RS::Error),
 }
 
+type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<ID>, C>>;
+
 /// Inner state object for `GroupCrdt` which contains the actual groups state,
 /// including operation graph and membership snapshots.
 #[derive(Debug)]
@@ -66,8 +68,8 @@ where
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
 
-    /// States for this auth group.
-    pub states: HashMap<OP, HashMap<ID, GroupMembersState<GroupMember<ID>, C>>>,
+    /// All resolved states.
+    pub states: HashMap<OP, GroupStates<ID, C>>,
 
     /// Operation graph for all auth groups.
     pub graph: DiGraphMap<OP, ()>,
@@ -111,11 +113,11 @@ where
             .collect::<HashSet<_>>()
     }
 
-    /// Current groups state.
+    /// Current group states.
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
     /// state which represents the current state of the groups.
-    pub fn current_state(&self) -> HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
+    pub fn current_state(&self) -> GroupStates<ID, C> {
         self.merge_states(&self.heads())
             .expect("states exist for processed operations")
     }
@@ -124,7 +126,7 @@ where
     pub fn state_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> Result<HashMap<ID, GroupMembersState<GroupMember<ID>, C>>, GroupCrdtInnerError<OP>> {
+    ) -> Result<GroupStates<ID, C>, GroupCrdtInnerError<OP>> {
         self.merge_states(dependencies)
     }
 
@@ -132,7 +134,7 @@ where
     fn merge_states(
         &self,
         ids: &HashSet<OP>,
-    ) -> Result<HashMap<ID, GroupMembersState<GroupMember<ID>, C>>, GroupCrdtInnerError<OP>> {
+    ) -> Result<GroupStates<ID, C>, GroupCrdtInnerError<OP>> {
         let mut current_state = HashMap::new();
         for id in ids {
             // Unwrap as this method is only used internally where all requested states should exist.
@@ -140,7 +142,7 @@ where
                 Some(group_states) => group_states.clone(),
                 None => {
                     return Err(GroupCrdtInnerError::StatesNotFound(
-                        ids.into_iter().cloned().collect(),
+                        ids.iter().cloned().collect(),
                     ));
                 }
             };
@@ -337,6 +339,7 @@ where
     /// peers. An ORD implementation needs to ensure "dependencies" are
     /// populated correctly so that a partial-order of all operations in the
     /// system can be established.
+    #[allow(clippy::type_complexity)]
     pub fn prepare(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         action: &GroupControlMessage<ID, C>,
@@ -351,6 +354,7 @@ where
     }
 
     /// Process an operation created locally or received from a remote peer.
+    #[allow(clippy::type_complexity)]
     pub fn process(
         mut y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
@@ -361,7 +365,7 @@ where
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
         let rebuild_required =
-            RS::rebuild_required(&y.inner, &operation).map_err(GroupCrdtError::Resolver)?;
+            RS::rebuild_required(&y.inner, operation).map_err(GroupCrdtError::Resolver)?;
 
         if y.inner.operations.contains_key(&operation_id) {
             // The operation has already been processed.
@@ -449,6 +453,7 @@ where
     ///
     /// This is a relatively expensive computation and should only be used when
     /// a re-build is actually required.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn authorize(
         y: GroupCrdtState<ID, OP, C, ORD>,
         operation: &ORD::Operation,
@@ -522,9 +527,8 @@ where
 }
 
 /// Apply an action to a single group state.
-#[allow(clippy::type_complexity)]
 pub(crate) fn apply_action<ID, OP, C>(
-    mut groups_y: HashMap<ID, GroupMembersState<GroupMember<ID>, C>>,
+    mut groups_y: GroupStates<ID, C>,
     group_id: ID,
     id: OP,
     actor: ID,
@@ -577,7 +581,7 @@ where
     match result {
         Ok(members_y_i) => {
             groups_y.insert(group_id, members_y_i);
-            return StateChangeResult::Ok { state: groups_y };
+            StateChangeResult::Ok { state: groups_y }
         }
         Err(err) => {
             // Errors occur here because the member attempting to perform an action
@@ -594,10 +598,10 @@ where
             // change, however we do want to accept them into our graph so as to ensure
             // consistency consistency across peers.
             groups_y.insert(group_id, members_y);
-            return StateChangeResult::Noop {
+            StateChangeResult::Noop {
                 state: groups_y,
                 error: err,
-            };
+            }
         }
     };
 }
@@ -609,21 +613,17 @@ where
     C: Conditions,
 {
     /// Action was applied and no error occurred.
-    Ok {
-        state: HashMap<ID, GroupMembersState<GroupMember<ID>, C>>,
-    },
+    Ok { state: GroupStates<ID, C> },
 
     /// Action was not applied because it failed internal validation.
     Noop {
-        state: HashMap<ID, GroupMembersState<GroupMember<ID>, C>>,
+        state: GroupStates<ID, C>,
         #[allow(unused)]
         error: GroupMembershipError<GroupMember<ID>>,
     },
 
     /// Action was not applied because it has been filtered out.
-    Filtered {
-        state: HashMap<ID, GroupMembersState<GroupMember<ID>, C>>,
-    },
+    Filtered { state: GroupStates<ID, C> },
 }
 
 impl<ID, C> StateChangeResult<ID, C>
@@ -631,7 +631,7 @@ where
     ID: IdentityHandle,
     C: Conditions,
 {
-    pub fn state(&self) -> &HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
+    pub fn state(&self) -> &GroupStates<ID, C> {
         match self {
             StateChangeResult::Ok { state }
             | StateChangeResult::Noop { state, .. }
