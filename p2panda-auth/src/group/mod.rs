@@ -25,7 +25,7 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    Conditions, Group as GroupTrait, GroupMembership, IdentityHandle, OperationId, Orderer,
+    Conditions, Groups as GroupsTrait, GroupMembership, IdentityHandle, OperationId, Orderer,
     Resolver,
 };
 
@@ -62,7 +62,7 @@ where
 
 /// Decentralised Group Management (DGM).
 ///
-/// The `Group` provides a high-level interface for creating and updating groups. These groups
+/// The `Groups` provides a high-level interface for creating and updating groups. These groups
 /// provide a means for restricting access to application data and resources. Groups are
 /// comprised of members, which may be individuals or groups, and are assigned a user-chosen
 /// identity. Each member is assigned a unique user-chosen identifier and access level. Access
@@ -70,7 +70,7 @@ where
 /// They are also used to grant permissions which allow for mutating the group state by adding,
 /// removing and modifying the access level of other members.
 ///
-/// Each `Group` method performs internal validation to ensure that the desired group action is
+/// Each `Groups` method performs internal validation to ensure that the desired group action is
 /// valid in light of the current group state. Attempting to perform an invalid action results in a
 /// `GroupsError`. For example, attempting to remove a member who is not currently part of the
 /// group.
@@ -110,12 +110,13 @@ where
         }
     }
 
+    /// Take the current state from the groups struct consuming self in the process.
     pub fn take_state(mut self) -> GroupCrdtState<ID, OP, C, ORD> {
         self.y.take().expect("state object present")
     }
 }
 
-impl<ID, OP, C, RS, ORD> GroupTrait<ID, OP, C, ORD> for Groups<ID, OP, C, RS, ORD>
+impl<ID, OP, C, RS, ORD> GroupsTrait<ID, OP, C, ORD> for Groups<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -159,7 +160,7 @@ where
         Ok(operation)
     }
 
-    /// Update the group by processing a remotely-authored action.
+    /// Update a group by processing a remotely-authored action.
     ///
     /// The `group_id` of the given operation must be the same as that of the given `y`; failure to
     /// meet this condition will result in an error.

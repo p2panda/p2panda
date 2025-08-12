@@ -8,7 +8,7 @@ use crate::group::GroupMember;
 use crate::traits::{IdentityHandle, OperationId, Orderer};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait Group<ID, OP, C, ORD>
+pub trait Groups<ID, OP, C, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId,
