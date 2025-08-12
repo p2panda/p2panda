@@ -26,10 +26,7 @@ where
     ) -> Result<MSG, Self::Error>;
 
     /// Process a remotely-authored group action message.
-    fn receive_from_remote(
-        &mut self,
-        remote_operation: MSG,
-    ) -> Result<(), Self::Error>;
+    fn receive_from_remote(&mut self, remote_operation: MSG) -> Result<(), Self::Error>;
 
     /// Add a member to the group.
     ///
@@ -44,12 +41,7 @@ where
     ) -> Result<MSG, Self::Error>;
 
     /// Removes a member from the group.
-    fn remove(
-        &mut self,
-        group_id: ID,
-        remover: ID,
-        removed: ID,
-    ) -> Result<MSG, Self::Error>;
+    fn remove(&mut self, group_id: ID, remover: ID, removed: ID) -> Result<MSG, Self::Error>;
 
     /// Promote a member to the given access level.
     fn promote(

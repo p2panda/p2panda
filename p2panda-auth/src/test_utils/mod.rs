@@ -7,8 +7,8 @@ pub mod partial_ord;
 
 use std::fmt::Debug;
 
-use crate::group::resolver::StrongRemove;
 use crate::Access;
+use crate::group::resolver::StrongRemove;
 use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
 use crate::traits::{IdentityHandle, Operation, OperationId, Orderer};
 
