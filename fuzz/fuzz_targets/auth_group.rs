@@ -325,7 +325,7 @@ impl Member {
                     Ok(y) => y,
                     Err(err) => {
                         self.report(group_id, true);
-                        println!("{:#?}", operation);
+                        println!("{operation:#?}");
                         panic!("{err}");
                     }
                 };
@@ -816,7 +816,7 @@ fuzz_target!(|seed: [u8; 32]| {
         }
 
         println!("=== test setup ===");
-        println!("group: {:?}", ROOT_GROUP_ID);
+        println!("group: {ROOT_GROUP_ID:?}");
         println!("actors: {members_count:?}");
         println!("branches: {MAX_BRANCHES:?}");
         println!(
