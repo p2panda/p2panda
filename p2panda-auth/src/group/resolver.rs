@@ -22,6 +22,46 @@ where
     Groups(#[from] GroupCrdtInnerError<OP>),
 }
 
+/// An implementation of `Resolver` trait which follows strong remove ruleset.  
+///
+/// Concurrent operations are identified and processed, any which should be invalidated are
+/// added to the operation filter and not applied to the group state. Once an operation has
+/// been filtered, any operations which depended on any resulting state will not be applied to
+/// group state either. Ruleset for Concurrent Operations
+///
+/// The following ruleset is applied when choosing which operations to "filter" when concurrent
+/// operations are processed. It can be assumed that the behavior is equivalent for an admin
+/// member being removed, or demoted from admin to a lower access level.
+///
+/// ## Strong Remove Concurrency Rules
+///
+/// ### Removals
+///
+/// If a removal has occurred, filter any concurrent operations by the removed member, as long
+/// as it's 1) not a predecessor of the remove operation, and 2) not a mutual removal (removal
+/// of the remover by the removed member).
+///
+/// ### Mutual removals
+///
+/// Mutual removals result in both members being removed from the group, and any dependent
+/// concurrent branches are not applied to group state. We imagine further implementations
+/// taking different approaches, like resolving by seniority, hash id, quorum or some other
+/// parameter.
+///
+/// If a mutual removal has occurred, we want to retain the removal operations but filter all
+/// concurrent operations performed by the removed members (keeping predecessors of the
+/// remove).
+///
+/// ### Re-adding member concurrently
+///
+/// If Alice removes Charlie and Bob removes then adds Charlie concurrently, Charlie is still
+/// in the group. However, if Charlie performed any concurrent actions, these will be filtered
+/// along with any dependent operations.
+///
+/// ### Filtering of transitively dependent operations
+///
+/// When an operation is "explicitly" filtered it may cause dependent operations to become
+/// invalid, these operations will not be applied to the group state.
 #[derive(Clone, Debug, Default)]
 pub struct StrongRemove<ID, OP, C, M> {
     _phantom: PhantomData<(ID, OP, C, M)>,
