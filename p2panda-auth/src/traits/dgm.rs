@@ -5,20 +5,14 @@ use std::fmt::Debug;
 
 use crate::Access;
 use crate::group::GroupMember;
-use crate::traits::{IdentityHandle, OperationId, Orderer};
+use crate::traits::{IdentityHandle, OperationId};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait Groups<ID, OP, C, ORD>
+pub trait Groups<ID, OP, C, MSG>
 where
     ID: IdentityHandle,
     OP: OperationId,
-    // TODO: Do we strictly need the orderer here? Could it rather be a generic message?
-    // We might not actually need to know anything about the message type, only in the `Orderer`.
-    // In the _implementation_ we'd say it's an `ORD::Operation` but not here (move that knowledge
-    // into the implementation.
-    ORD: Orderer<ID, OP, Self::Action>,
 {
-    type Action;
     type Error: Debug;
 
     /// Creates a new group, returning the updated state and the creation operation message.
@@ -29,12 +23,12 @@ where
         &mut self,
         group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-    ) -> Result<ORD::Operation, Self::Error>;
+    ) -> Result<MSG, Self::Error>;
 
     /// Process a remotely-authored group action message.
     fn receive_from_remote(
         &mut self,
-        remote_operation: ORD::Operation,
+        remote_operation: MSG,
     ) -> Result<(), Self::Error>;
 
     /// Add a member to the group.
@@ -47,7 +41,7 @@ where
         adder: ID,
         added: ID,
         access: Access<C>,
-    ) -> Result<ORD::Operation, Self::Error>;
+    ) -> Result<MSG, Self::Error>;
 
     /// Removes a member from the group.
     fn remove(
@@ -55,7 +49,7 @@ where
         group_id: ID,
         remover: ID,
         removed: ID,
-    ) -> Result<ORD::Operation, Self::Error>;
+    ) -> Result<MSG, Self::Error>;
 
     /// Promote a member to the given access level.
     fn promote(
@@ -64,7 +58,7 @@ where
         promoter: ID,
         promoted: ID,
         access: Access<C>,
-    ) -> Result<ORD::Operation, Self::Error>;
+    ) -> Result<MSG, Self::Error>;
 
     /// Demote a member to the given access level.
     fn demote(
@@ -73,7 +67,7 @@ where
         demoter: ID,
         demoted: ID,
         access: Access<C>,
-    ) -> Result<ORD::Operation, Self::Error>;
+    ) -> Result<MSG, Self::Error>;
 }
 
 /// Interface for querying group membership and access levels.

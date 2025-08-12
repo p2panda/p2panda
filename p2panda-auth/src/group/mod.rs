@@ -25,7 +25,7 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    Conditions, Groups as GroupsTrait, GroupMembership, IdentityHandle, OperationId, Orderer,
+    Conditions, GroupMembership, Groups as GroupsTrait, IdentityHandle, OperationId, Orderer,
     Resolver,
 };
 
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<ID, OP, C, RS, ORD> GroupsTrait<ID, OP, C, ORD> for Groups<ID, OP, C, RS, ORD>
+impl<ID, OP, C, RS, ORD> GroupsTrait<ID, OP, C, ORD::Operation> for Groups<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -126,7 +126,6 @@ where
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
-    type Action = GroupControlMessage<ID, C>;
     type Error = GroupsError<ID, OP, C, RS, ORD>;
 
     /// Create a group.
