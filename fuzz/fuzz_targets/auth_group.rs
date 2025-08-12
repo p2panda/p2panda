@@ -26,7 +26,7 @@ use rand::{Rng, SeedableRng, random_bool};
 /// Flag for saving dot graph representations of all groups to the filesystem.
 ///
 /// Graphs are saved when an error occurs in any case.
-const SAVE_GRAPH_VIZ: bool = true;
+const SAVE_GRAPH_VIZ: bool = false;
 
 /// Pool of all possible group member ids.
 const MEMBERS: [char; 26] = [
