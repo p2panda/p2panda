@@ -8,7 +8,8 @@ use petgraph::algo::toposort;
 use thiserror::Error;
 
 use crate::graph::{concurrent_bubbles, has_path};
-use crate::group::{AuthState, GroupAction, GroupControlMessage, apply_action};
+use crate::group::crdt::GroupCrdtInnerError;
+use crate::group::{GroupCrdtInnerState, GroupAction, GroupControlMessage, apply_action};
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
 /// Error types for GroupCrdt.
@@ -17,8 +18,8 @@ pub enum StrongRemoveError<OP>
 where
     OP: OperationId,
 {
-    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
-    MissingOperation(OP),
+    #[error(transparent)]
+    Groups(#[from] GroupCrdtInnerError<OP>),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -33,7 +34,7 @@ where
     C: Conditions,
     M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    type State = AuthState<ID, OP, C, M>;
+    type State = GroupCrdtInnerState<ID, OP, C, M>;
     type Error = StrongRemoveError<OP>;
 
     /// Identify if an operation should trigger a group state rebuild.
@@ -67,10 +68,7 @@ where
 
         // Traverse the graph visiting the operations in topological order.
         for target_operation_id in topo_sort.iter() {
-            let Some(target_operation) = operations.get(target_operation_id) else {
-                return Err(StrongRemoveError::MissingOperation(*target_operation_id));
-            };
-
+            let target_operation = operations.get(target_operation_id).expect("all processed operations exist");
             let bubble = bubbles
                 .iter()
                 .find(|bubble| bubble.contains(target_operation_id))
@@ -99,9 +97,7 @@ where
                         continue;
                     }
 
-                    let Some(bubble_operation) = operations.get(bubble_operation_id) else {
-                        return Err(StrongRemoveError::MissingOperation(*bubble_operation_id));
-                    };
+                    let bubble_operation = operations.get(bubble_operation_id).expect("all processed operations exist");
 
                     // The bubble operation is for a different group so it should not be filtered.
                     if bubble_operation.payload().group_id()
@@ -150,7 +146,7 @@ where
                             let operation = operations.get(&op).expect("all operations exist");
                             let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-                            let mut groups_y = y.state_at(&dependencies);
+                            let mut groups_y = y.state_at(&dependencies)?;
 
                             let result = apply_action(
                                 groups_y,
@@ -172,7 +168,7 @@ where
                     let dependencies = HashSet::from_iter(target_operation.dependencies().clone());
 
                     // As we weren't in a bubble we can directly apply this action.
-                    let mut groups_y = y.state_at(&dependencies);
+                    let mut groups_y = y.state_at(&dependencies)?;
                     let result = apply_action(
                         groups_y,
                         target_operation.payload().group_id(),

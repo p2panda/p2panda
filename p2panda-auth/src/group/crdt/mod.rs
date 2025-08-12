@@ -18,6 +18,13 @@ use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer,
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
+pub enum GroupCrdtInnerError<OP> {
+    #[error("states {0:?} not found")]
+    StatesNotFound(Vec<OP>),
+}
+
+/// Error types for GroupCrdt.
+#[derive(Debug, Error)]
 pub enum GroupCrdtError<ID, OP, C, RS, ORD>
 where
     ID: IdentityHandle,
@@ -25,44 +32,28 @@ where
     RS: Resolver<ID, OP, C, ORD::Operation>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
 {
+    #[error(transparent)]
+    Inner(#[from] GroupCrdtInnerError<OP>),
+
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
 
     #[error("state change error processing operation {0}: {1:?}")]
     StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 
-    #[error("expected sub-group {0} to exist in the store")]
-    MissingSubGroup(ID),
-
     #[error("attempted to add group {0} with manage access")]
     ManagerGroupsNotAllowed(ID),
 
-    #[error("ordering error: {0}")]
+    #[error("orderer error: {0}")]
     Orderer(ORD::Error),
 
-    #[error("ordering error: {0}")]
+    #[error("resolver error: {0}")]
     Resolver(RS::Error),
-
-    #[error("states {0:?} not found in group {1}")]
-    StatesNotFound(Vec<OP>, ID),
-
-    #[error("expected dependencies {0:?} not found in group {1}")]
-    DependenciesNotFound(Vec<OP>, ID),
-
-    #[error("operation for group {0} processed in group {1}")]
-    IncorrectGroupId(ID, ID),
-
-    #[error("operation id {0} exists in the graph but the corresponding operation was not found")]
-    MissingOperation(OP),
-
-    // TODO(glyph): I don't think this variant should live here. Maybe another error type?
-    #[error("state not found for group member {0} in group {1}")]
-    MemberNotFound(ID, ID),
 }
 
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct AuthState<ID, OP, C, M>
+pub struct GroupCrdtInnerState<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -80,7 +71,7 @@ where
     pub graph: DiGraphMap<OP, ()>,
 }
 
-impl<ID, OP, C, M> Default for AuthState<ID, OP, C, M>
+impl<ID, OP, C, M> Default for GroupCrdtInnerState<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -95,7 +86,7 @@ where
     }
 }
 
-impl<ID, OP, C, M> AuthState<ID, OP, C, M>
+impl<ID, OP, C, M> GroupCrdtInnerState<ID, OP, C, M>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -124,23 +115,31 @@ where
     /// state which represents the current state of the group.
     pub fn current_state(&self) -> HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
         self.merge_states(&self.heads())
+            .expect("states exist for processed operations")
     }
 
     pub(crate) fn state_at(
         &self,
         dependencies: &HashSet<OP>,
-    ) -> HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
+    ) -> Result<HashMap<ID, GroupMembersState<GroupMember<ID>, C>>, GroupCrdtInnerError<OP>> {
         self.merge_states(dependencies)
     }
 
     fn merge_states(
         &self,
         ids: &HashSet<OP>,
-    ) -> HashMap<ID, GroupMembersState<GroupMember<ID>, C>> {
+    ) -> Result<HashMap<ID, GroupMembersState<GroupMember<ID>, C>>, GroupCrdtInnerError<OP>> {
         let mut current_state = HashMap::new();
         for id in ids {
             // Unwrap as this method is only used internally where all requested states should exist.
-            let group_states = self.states.get(id).unwrap().clone();
+            let group_states = match self.states.get(id) {
+                Some(group_states) => group_states.clone(),
+                None => {
+                    return Err(GroupCrdtInnerError::StatesNotFound(
+                        ids.into_iter().cloned().collect(),
+                    ));
+                }
+            };
             for (id, state) in group_states.into_iter() {
                 current_state
                     .entry(id)
@@ -152,7 +151,7 @@ where
                     .or_insert(state);
             }
         }
-        current_state
+        Ok(current_state)
     }
 
     fn members_inner(
@@ -225,7 +224,7 @@ where
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
-    pub auth_y: AuthState<ID, OP, C, ORD::Operation>,
+    pub auth_y: GroupCrdtInnerState<ID, OP, C, ORD::Operation>,
 
     /// State for the orderer.
     pub orderer_y: ORD::State,
@@ -242,7 +241,7 @@ where
     /// Instantiate a new group state.
     pub fn new(orderer_y: ORD::State) -> Self {
         Self {
-            auth_y: AuthState::default(),
+            auth_y: GroupCrdtInnerState::default(),
             orderer_y,
         }
     }
@@ -271,13 +270,13 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>>,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
     pub fn init(orderer_y: ORD::State) -> GroupCrdtState<ID, OP, C, ORD> {
         GroupCrdtState {
-            auth_y: AuthState::default(),
+            auth_y: GroupCrdtInnerState::default(),
             orderer_y,
         }
     }
@@ -315,12 +314,17 @@ where
         let rebuild_required =
             RS::rebuild_required(&y.auth_y, &operation).map_err(GroupCrdtError::Resolver)?;
 
+        if y.auth_y.operations.contains_key(&operation_id) {
+            // The operation has already been processed.
+            return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
+        }
+
         // Adding a group as a manager of another group is currently not
         // supported.
         //
         // @TODO: To support this behavior updates in the StrongRemove resolver
         // so that cross-group concurrent remove cycles are detected. Related to
-        // issue: https://github.com/p2panda/p2panda/issues/779 
+        // issue: https://github.com/p2panda/p2panda/issues/779
         match &control_message.action {
             GroupAction::Add { member, access } | GroupAction::Promote { member, access } => {
                 if member.is_group() && access.is_manage() {
@@ -355,7 +359,7 @@ where
             return Ok(y);
         }
 
-        let mut groups_y = y.auth_y.state_at(&dependencies);
+        let mut groups_y = y.auth_y.state_at(&dependencies)?;
         let result = apply_action(
             groups_y,
             group_id,
@@ -434,7 +438,7 @@ where
 
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        let groups_y = temp_y_i.auth_y.state_at(&dependencies);
+        let groups_y = temp_y_i.auth_y.state_at(&dependencies)?;
         let result = apply_action(
             groups_y,
             operation.payload().group_id(),

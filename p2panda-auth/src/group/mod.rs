@@ -13,7 +13,7 @@ pub mod resolver;
 pub use action::GroupAction;
 pub(crate) use crdt::apply_action;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
-pub use crdt::{AuthState, GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult};
+pub use crdt::{GroupCrdt, GroupCrdtError, GroupCrdtInnerState, GroupCrdtState, StateChangeResult};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
 
@@ -25,8 +25,8 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    Conditions, Group as GroupTrait, GroupMembership, IdentityHandle, OperationId,
-    Orderer, Resolver,
+    Conditions, Group as GroupTrait, GroupMembership, IdentityHandle, OperationId, Orderer,
+    Resolver,
 };
 
 #[derive(Debug, Error)]
@@ -55,6 +55,9 @@ where
 
     #[error("actor {0} already has access level {1} in group {2}")]
     SameAccessLevel(ID, Access<C>, ID),
+
+    #[error("state not found for group member {0} in group {1}")]
+    MemberNotFound(ID, ID),
 }
 
 /// Decentralised Group Management (DGM).
@@ -76,7 +79,8 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>> + Debug,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>
+        + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
@@ -90,7 +94,8 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>> + Debug,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>
+        + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
@@ -115,7 +120,8 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>> + Debug,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>
+        + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
@@ -348,7 +354,8 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = AuthState<ID, OP, C, ORD::Operation>> + Debug,
+    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>
+        + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
 {
@@ -370,9 +377,7 @@ where
 
             Ok(access)
         } else {
-            Err(GroupsError::Group(GroupCrdtError::MemberNotFound(
-                group_id, member,
-            )))
+            Err(GroupsError::MemberNotFound(group_id, member))
         }
     }
 
@@ -538,7 +543,11 @@ mod tests {
         let _expected_access = <Access>::read();
         assert!(matches!(
             groups.promote(GROUP_ID, ALICE, BOB, Access::read()),
-            Err(GroupsError::SameAccessLevel(BOB, _expected_access, GROUP_ID))
+            Err(GroupsError::SameAccessLevel(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
         ));
     }
 
@@ -567,7 +576,11 @@ mod tests {
         let _expected_access = <Access>::read();
         assert!(matches!(
             groups.demote(GROUP_ID, ALICE, BOB, Access::read()),
-            Err(GroupsError::SameAccessLevel(BOB, _expected_access, GROUP_ID))
+            Err(GroupsError::SameAccessLevel(
+                BOB,
+                _expected_access,
+                GROUP_ID
+            ))
         ));
     }
 }

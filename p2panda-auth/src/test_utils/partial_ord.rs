@@ -9,11 +9,11 @@ use rand::RngCore;
 use rand::rngs::StdRng;
 use thiserror::Error;
 
-use crate::group::{AuthState, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState};
+use crate::group::{GroupCrdtInnerState, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState};
 use crate::test_utils::{Conditions, MemberId, MessageId, TestOperation, TestResolver};
 use crate::traits::{Operation, Orderer};
 
-pub type TestAuthState = AuthState<MemberId, MessageId, Conditions, TestOperation>;
+pub type TestAuthState = GroupCrdtInnerState<MemberId, MessageId, Conditions, TestOperation>;
 pub type TestGroupState = GroupCrdtState<MemberId, MessageId, Conditions, TestOrderer>;
 pub type TestGroup = GroupCrdt<MemberId, MessageId, Conditions, TestResolver, TestOrderer>;
 pub type TestGroupError =
