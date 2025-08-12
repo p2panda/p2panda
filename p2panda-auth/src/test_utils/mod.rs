@@ -62,7 +62,7 @@ fn make_group_op(
     }
 }
 
-pub(crate) fn create_group(
+pub fn create_group(
     actor_id: MemberId,
     operation_id: MessageId,
     group_id: MemberId,
@@ -78,7 +78,7 @@ pub(crate) fn create_group(
     )
 }
 
-pub(crate) fn add_member(
+pub fn add_member(
     actor_id: MemberId,
     operation_id: MessageId,
     group_id: MemberId,
@@ -95,7 +95,7 @@ pub(crate) fn add_member(
     )
 }
 
-pub(crate) fn remove_member(
+pub fn remove_member(
     actor_id: MemberId,
     operation_id: MessageId,
     group_id: MemberId,
@@ -111,7 +111,7 @@ pub(crate) fn remove_member(
     )
 }
 
-pub(crate) fn promote_member(
+pub fn promote_member(
     actor_id: MemberId,
     operation_id: MessageId,
     group_id: MemberId,
@@ -128,7 +128,7 @@ pub(crate) fn promote_member(
     )
 }
 
-pub(crate) fn demote_member(
+pub fn demote_member(
     actor_id: MemberId,
     operation_id: MessageId,
     group_id: MemberId,
@@ -145,7 +145,7 @@ pub(crate) fn demote_member(
     )
 }
 
-pub(crate) fn sync<ORD>(
+pub fn sync<ORD>(
     y: GroupCrdtState<MemberId, MessageId, Conditions, ORD>,
     ops: &[TestOperation],
 ) -> GroupCrdtState<MemberId, MessageId, Conditions, ORD>
@@ -163,7 +163,7 @@ where
     })
 }
 
-pub(crate) fn assert_members<ORD>(
+pub fn assert_members<ORD>(
     y: &GroupCrdtState<MemberId, MessageId, Conditions, ORD>,
     group_id: MemberId,
     expected: &[(char, Access<()>)],
