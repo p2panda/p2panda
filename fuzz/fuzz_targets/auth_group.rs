@@ -488,9 +488,7 @@ impl Member {
         if try_options.contains(&Options::Add) {
             if let Some(member) = self.random_non_member(group_id, rng) {
                 let access = match member {
-                    GroupMember::Individual(_) => {
-                        random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
-                    }
+                    GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
                     GroupMember::Group(_) => {
                         random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
                             .unwrap()
