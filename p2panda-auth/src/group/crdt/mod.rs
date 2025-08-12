@@ -231,7 +231,7 @@ where
     ORD::Operation: Clone,
 {
     /// Inner groups state.
-    pub auth_y: GroupCrdtInnerState<ID, OP, C, ORD::Operation>,
+    pub inner: GroupCrdtInnerState<ID, OP, C, ORD::Operation>,
 
     /// State for the orderer.
     pub orderer_y: ORD::State,
@@ -248,7 +248,7 @@ where
     /// Instantiate a new state.
     pub fn new(orderer_y: ORD::State) -> Self {
         Self {
-            auth_y: GroupCrdtInnerState::default(),
+            inner: GroupCrdtInnerState::default(),
             orderer_y,
         }
     }
@@ -258,7 +258,7 @@ where
     /// This method does not recurse into sub-groups, but rather returns only
     /// the direct group members and their access levels.
     pub fn root_members(&self, group_id: ID) -> Vec<(GroupMember<ID>, Access<C>)> {
-        match self.auth_y.current_state().get(&group_id) {
+        match self.inner.current_state().get(&group_id) {
             Some(group_y) => group_y.access_levels(),
             None => vec![],
         }
@@ -269,7 +269,7 @@ where
     /// This method recurses into all sub-groups and returns a resolved list of
     /// individual group members and their access levels.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
-        self.auth_y.members(group_id)
+        self.inner.members(group_id)
     }
 }
 
@@ -328,7 +328,7 @@ where
 {
     pub fn init(orderer_y: ORD::State) -> GroupCrdtState<ID, OP, C, ORD> {
         GroupCrdtState {
-            auth_y: GroupCrdtInnerState::default(),
+            inner: GroupCrdtInnerState::default(),
             orderer_y,
         }
     }
@@ -361,9 +361,9 @@ where
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = control_message.group_id();
         let rebuild_required =
-            RS::rebuild_required(&y.auth_y, &operation).map_err(GroupCrdtError::Resolver)?;
+            RS::rebuild_required(&y.inner, &operation).map_err(GroupCrdtError::Resolver)?;
 
-        if y.auth_y.operations.contains_key(&operation_id) {
+        if y.inner.operations.contains_key(&operation_id) {
             // The operation has already been processed.
             return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
         }
@@ -395,27 +395,27 @@ where
         }
 
         // Add operation to the global auth graph.
-        y.auth_y.graph.add_node(operation_id);
+        y.inner.graph.add_node(operation_id);
         for dependency in &dependencies {
-            y.auth_y.graph.add_edge(*dependency, operation_id, ());
+            y.inner.graph.add_edge(*dependency, operation_id, ());
         }
 
         // Insert operation into all operations map.
-        y.auth_y.operations.insert(operation_id, operation.clone());
+        y.inner.operations.insert(operation_id, operation.clone());
 
         if rebuild_required {
-            y.auth_y = RS::process(y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            y.inner = RS::process(y.inner).map_err(GroupCrdtError::Resolver)?;
             return Ok(y);
         }
 
-        let mut groups_y = y.auth_y.state_at(&dependencies)?;
+        let mut groups_y = y.inner.state_at(&dependencies)?;
         let result = apply_action(
             groups_y,
             group_id,
             operation_id,
             actor,
             &control_message.action,
-            &y.auth_y.ignore,
+            &y.inner.ignore,
         );
 
         groups_y = match result {
@@ -431,7 +431,7 @@ where
             }
         };
 
-        y.auth_y.states.insert(operation_id, groups_y);
+        y.inner.states.insert(operation_id, groups_y);
 
         Ok(y)
     }
@@ -454,16 +454,16 @@ where
         operation: &ORD::Operation,
     ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
         // Keep hold of original operations and graph.
-        let last_graph = y.auth_y.graph.clone();
-        let last_ignore = y.auth_y.ignore.clone();
-        let last_states = y.auth_y.states.clone();
+        let last_graph = y.inner.graph.clone();
+        let last_ignore = y.inner.ignore.clone();
+        let last_states = y.inner.states.clone();
 
         let mut temp_y = y;
 
         // Collect predecessors of the new operation.
         let mut predecessors = HashSet::new();
         for dependency in operation.dependencies() {
-            let reversed = Reversed(&temp_y.auth_y.graph);
+            let reversed = Reversed(&temp_y.inner.graph);
             let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
             while let Some(id) = dfs_rev.next(&reversed) {
                 predecessors.insert(id);
@@ -472,31 +472,31 @@ where
 
         // Remove all other nodes from the graph.
         let to_remove: Vec<_> = temp_y
-            .auth_y
+            .inner
             .graph
             .node_identifiers()
             .filter(|n| !predecessors.contains(n))
             .collect();
 
         for node in &to_remove {
-            temp_y.auth_y.graph.remove_node(*node);
+            temp_y.inner.graph.remove_node(*node);
         }
 
         let temp_y_i = {
-            temp_y.auth_y = RS::process(temp_y.auth_y).map_err(GroupCrdtError::Resolver)?;
+            temp_y.inner = RS::process(temp_y.inner).map_err(GroupCrdtError::Resolver)?;
             temp_y
         };
 
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        let groups_y = temp_y_i.auth_y.state_at(&dependencies)?;
+        let groups_y = temp_y_i.inner.state_at(&dependencies)?;
         let result = apply_action(
             groups_y,
             operation.payload().group_id(),
             operation.id(),
             operation.author(),
             &operation.payload().action,
-            &temp_y_i.auth_y.ignore,
+            &temp_y_i.inner.ignore,
         );
 
         match result {
@@ -513,9 +513,9 @@ where
         };
 
         let mut y = temp_y_i;
-        y.auth_y.graph = last_graph;
-        y.auth_y.ignore = last_ignore;
-        y.auth_y.states = last_states;
+        y.inner.graph = last_graph;
+        y.inner.ignore = last_ignore;
+        y.inner.states = last_states;
 
         Ok(y)
     }

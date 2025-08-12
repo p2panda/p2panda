@@ -165,9 +165,10 @@ struct Member {
     /// All possible group members.
     members: Vec<GroupMember<MemberId>>,
 
-    /// Group store.
-    auth_y: TestGroupState,
+    /// Groups state.
+    groups_y: TestGroupState,
 
+    /// Current heads of global auth state graph.
     auth_heads_ref: Rc<RefCell<Vec<MessageId>>>,
 
     /// IDs of all operations processed by this member.
@@ -185,12 +186,12 @@ impl Member {
     ) -> Self {
         let auth_heads_ref = Rc::new(RefCell::new(vec![]));
         let orderer_y = TestOrderer::init(my_id, auth_heads_ref.clone(), StdRng::from_rng(rng));
-        let auth_y = GroupCrdtState::new(orderer_y);
+        let groups_y = GroupCrdtState::new(orderer_y);
 
         let mut member = Member {
             my_id,
             members: members.clone(),
-            auth_y,
+            groups_y,
             auth_heads_ref,
             processed: Vec::new(),
         };
@@ -251,13 +252,13 @@ impl Member {
             },
         };
 
-        let (auth_y_i, operation) =
-            TestGroup::prepare(self.auth_y.clone(), &control_message).unwrap();
-        let auth_y_ii = TestGroup::process(auth_y_i, &operation).unwrap();
+        let (groups_y_i, operation) =
+            TestGroup::prepare(self.groups_y.clone(), &control_message).unwrap();
+        let groups_y_ii = TestGroup::process(groups_y_i, &operation).unwrap();
 
-        self.auth_y = auth_y_ii;
+        self.groups_y = groups_y_ii;
         self.auth_heads_ref
-            .replace(self.auth_y.auth_y.heads().into_iter().collect());
+            .replace(self.groups_y.inner.heads().into_iter().collect());
 
         let suggestion = Suggestion::Valid(TestGroupAction::Action(GroupAction::Create {
             initial_members,
@@ -283,11 +284,11 @@ impl Member {
 
     /// Get the members of a group.
     pub fn members(&self, group_id: MemberId) -> Vec<(MemberId, Access<()>)> {
-        self.auth_y.members(group_id)
+        self.groups_y.members(group_id)
     }
 
     pub fn root_members(&self, group_id: MemberId) -> Vec<(GroupMember<MemberId>, Access<()>)> {
-        self.auth_y.root_members(group_id)
+        self.groups_y.root_members(group_id)
     }
 
     /// Is this member in a group.
@@ -318,9 +319,9 @@ impl Member {
                     action: action.clone(),
                 };
 
-                let (auth_y_i, operation) =
-                    TestGroup::prepare(self.auth_y.clone(), &control_message).unwrap();
-                let auth_y_ii = match TestGroup::process(auth_y_i, &operation) {
+                let (groups_y_i, operation) =
+                    TestGroup::prepare(self.groups_y.clone(), &control_message).unwrap();
+                let groups_y_ii = match TestGroup::process(groups_y_i, &operation) {
                     Ok(y) => y,
                     Err(err) => {
                         self.report(group_id, true);
@@ -328,9 +329,9 @@ impl Member {
                         panic!("{err}");
                     }
                 };
-                self.auth_y = auth_y_ii;
+                self.groups_y = groups_y_ii;
                 self.auth_heads_ref
-                    .replace(self.auth_y.auth_y.heads().into_iter().collect());
+                    .replace(self.groups_y.inner.heads().into_iter().collect());
 
                 Ok(Some(operation))
             }
@@ -358,7 +359,7 @@ impl Member {
             return Ok(());
         }
 
-        self.auth_y = match TestGroup::process(self.auth_y.clone(), operation) {
+        self.groups_y = match TestGroup::process(self.groups_y.clone(), operation) {
             Ok(y) => {
                 if let Suggestion::Invalid(_) = suggestion {
                     panic!(
@@ -370,7 +371,7 @@ impl Member {
             }
             Err(err) => {
                 if let GroupCrdtError::DuplicateOperation(_, _) = err {
-                    self.auth_y.clone()
+                    self.groups_y.clone()
                 } else {
                     if let Suggestion::Valid(_) = suggestion {
                         self.report(ROOT_GROUP_ID, true);
@@ -382,12 +383,12 @@ impl Member {
                             err
                         );
                     }
-                    self.auth_y.clone()
+                    self.groups_y.clone()
                 }
             }
         };
         self.auth_heads_ref
-            .replace(self.auth_y.auth_y.heads().into_iter().collect());
+            .replace(self.groups_y.inner.heads().into_iter().collect());
 
         self.processed.push(operation.id());
 
@@ -586,7 +587,7 @@ impl Member {
         println!("{:?}", self.members(group_id));
         println!();
         println!("=== filter ===");
-        let mut filter = self.auth_y.auth_y.ignore.iter().collect::<Vec<_>>();
+        let mut filter = self.groups_y.inner.ignore.iter().collect::<Vec<_>>();
         filter.sort();
         println!("{filter:?}");
         println!();
@@ -602,7 +603,7 @@ impl Member {
                 self.id()
             ))
             .unwrap();
-            file.write_all(self.auth_y.display(group_id).as_bytes())
+            file.write_all(self.groups_y.display(group_id).as_bytes())
                 .unwrap();
         }
     }
