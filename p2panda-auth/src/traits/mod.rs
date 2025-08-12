@@ -9,7 +9,7 @@ mod operation;
 mod orderer;
 mod resolver;
 
-pub use dgm::{Group, GroupMembership};
+pub use dgm::{Groups, GroupMembership};
 pub use operation::Operation;
 pub use orderer::Orderer;
 pub use resolver::Resolver;
