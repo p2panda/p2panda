@@ -16,7 +16,8 @@ use crate::group::{
     GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
 };
 use crate::traits::{
-    GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
+    Conditions, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId, Orderer,
+    Resolver,
 };
 
 /// Error types for GroupCrdt.
@@ -104,7 +105,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
@@ -407,7 +408,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupMembership<ID, OP, C> for GroupCrdtState<ID, O
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug,
@@ -544,7 +545,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupCrdt<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,
@@ -567,11 +568,8 @@ where
         // Get the next operation from our global orderer. The operation wraps the action we want
         // to perform, adding ordering and author meta-data.
         let ordering_y = y.orderer_y;
-        let (ordering_y, operation) = match ORD::next_message(ordering_y, action) {
-            Ok(operation) => operation,
-            Err(_) => panic!(),
-        };
-
+        let (ordering_y, operation) =
+            ORD::next_message(ordering_y, action).map_err(GroupCrdtError::OrderingError)?;
         y.orderer_y = ordering_y;
         Ok((y, operation))
     }
@@ -877,7 +875,7 @@ pub enum StateChangeResult<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     ORD::Operation: Clone,

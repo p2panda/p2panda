@@ -23,8 +23,8 @@ use thiserror::Error;
 
 use crate::Access;
 use crate::traits::{
-    Group as GroupTrait, GroupMembership, GroupStore, IdentityHandle, Operation, OperationId,
-    Orderer, Resolver,
+    Conditions, Group as GroupTrait, GroupMembership, GroupStore, IdentityHandle, Operation,
+    OperationId, Orderer, Resolver,
 };
 
 #[derive(Debug, Error)]
@@ -115,7 +115,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupTrait<ID, OP, C, ORD> for Group<ID, OP, C, RS,
 where
     ID: IdentityHandle + Display,
     OP: OperationId + Ord + Display,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::Operation: Clone,

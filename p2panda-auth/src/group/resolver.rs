@@ -12,7 +12,9 @@ use crate::graph::{concurrent_bubbles, has_path};
 use crate::group::{
     GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtError, GroupCrdtState, StateChangeResult,
 };
-use crate::traits::{GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver};
+use crate::traits::{
+    Conditions, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
+};
 
 /// An implementation of `GroupResolver` trait which follows strong remove ruleset.  
 ///
@@ -63,7 +65,7 @@ impl<ID, OP, C, ORD, GS> Resolver<ID, OP, C, ORD, GS> for StrongRemove<ID, OP, C
 where
     ID: IdentityHandle + Display + Ord,
     OP: OperationId + Display + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::Operation: Clone,
     ORD::State: Clone,
@@ -225,7 +227,7 @@ impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    C: Clone + Debug + PartialEq + PartialOrd,
+    C: Conditions,
     RS: Resolver<ID, OP, C, ORD, GS> + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
     GS: GroupStore<ID, OP, C, RS, ORD> + Debug + Clone,
