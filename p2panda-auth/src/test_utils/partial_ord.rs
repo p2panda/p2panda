@@ -97,9 +97,6 @@ impl Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> for
         // always called locally and we can assume that our own messages are processed immediately.
         let y_i = TestOrderer::queue(y, &operation)?;
 
-        // Update the auth heads assuming that this message will be processed correctly.
-        y_i.auth_heads.replace(vec![next_id]);
-
         Ok((y_i, operation))
     }
 
