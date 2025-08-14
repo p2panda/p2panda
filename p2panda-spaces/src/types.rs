@@ -4,9 +4,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use p2panda_auth::group::{GroupCrdtInnerState as AuthInnerState};
+use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
 use p2panda_auth::traits::{
-    Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver
+    Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver,
 };
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
