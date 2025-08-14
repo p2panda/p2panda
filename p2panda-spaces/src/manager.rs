@@ -19,7 +19,7 @@ use crate::forge::Forge;
 use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
-use crate::store::{KeyStore, SpaceStore};
+use crate::store::{AuthStore, KeyStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
 
 // Create and manage spaces and groups.
@@ -56,7 +56,7 @@ pub(crate) struct ManagerInner<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore,
+    S: SpaceStore<M> + KeyStore + AuthStore<C>,
     F: Forge<M, C>,
     M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
@@ -239,7 +239,7 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 #[allow(clippy::large_enum_variant)]
 pub enum ManagerError<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore,
+    S: SpaceStore<M> + KeyStore + AuthStore<C>,
     F: Forge<M, C>,
     C: Conditions,
     RS: AuthResolver<C>,
@@ -254,7 +254,7 @@ where
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C>>::Error),
+    SpaceStore(<S as SpaceStore<M>>::Error),
 
     #[error("received unexpected message with id {0}, maybe it arrived out-of-order")]
     UnexpectedMessage(OperationId),

@@ -18,11 +18,11 @@ use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::store::{KeyStore, SpaceStore};
+use crate::store::{AuthStore, KeyStore, SpaceStore};
 use crate::types::{
-    ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
-    AuthResolver, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
-    EncryptionGroupState, OperationId,
+    ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthResolver,
+    EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput, EncryptionGroupState,
+    OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -44,7 +44,7 @@ pub struct Space<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore,
+    S: SpaceStore<M> + KeyStore + AuthStore<C>,
     F: Forge<M, C>,
     M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
@@ -86,17 +86,6 @@ where
         }
 
         let (auth_y, auth_args) = {
-            // @TODO: Get this from store & establish initial orderer state.
-            //
-            // This initial orderer state is not necessarily "empty", can include pointers at other
-            // groups in case we've passed in "groups" as our initial members.
-            let orderer_y = ();
-
-            // @TODO: This state should already be instantiated as there is now
-            // only one state object for all auth groups. Move this into the
-            // manager and only access it here.
-            let y = AuthGroupState::<C>::new(orderer_y);
-
             let action = AuthControlMessage {
                 group_id: space_id,
                 action: AuthGroupAction::Create {
@@ -104,7 +93,9 @@ where
                 },
             };
 
-            AuthGroup::prepare(y, &action).map_err(SpaceError::AuthGroup)?
+            let manager = manager_ref.inner.read().await;
+            let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
+            AuthGroup::prepare(auth_y, &action).map_err(SpaceError::AuthGroup)?
         };
 
         // 3. Establish encryption group state (prepare & process) with "create" control message.
@@ -181,10 +172,12 @@ where
 
         manager
             .store
-            .set_space(
-                &space_id,
-                SpaceState::from_state(space_id, auth_y, encryption_y),
-            )
+            .set_auth(&auth_y)
+            .await
+            .map_err(SpaceError::AuthStore)?;
+        manager
+            .store
+            .set_space(&space_id, SpaceState::from_state(space_id, encryption_y))
             .await
             .map_err(SpaceError::SpaceStore)?;
 
@@ -235,19 +228,6 @@ where
             {
                 Some(y) => y,
                 None => {
-                    // @TODO: This repeats quite a lot, would be good to factor state
-                    // initialisation out.
-
-                    let auth_y = {
-                        // @TODO: Get this from store & establish initial orderer state.
-                        //
-                        // This initial orderer state is not necessarily "empty", can include pointers at other
-                        // groups in case we've passed in "groups" as our initial members.
-                        let orderer_y = ();
-
-                        AuthGroupState::<C>::new(orderer_y)
-                    };
-
                     let encryption_y = {
                         // Establish DGM state.
                         let dgm = EncryptionMembershipState {
@@ -272,16 +252,18 @@ where
                         EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y)
                     };
 
-                    SpaceState::from_state(self.id, auth_y, encryption_y)
+                    SpaceState::from_state(self.id, encryption_y)
                 }
             }
         };
 
         // Process auth message.
 
-        y.auth_y = {
+        let auth_y = {
+            let manager = self.manager.inner.read().await;
             let auth_message = AuthMessage::from_forged(message);
-            AuthGroup::process(y.auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
+            let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
+            AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
         // Process encryption message.
@@ -291,7 +273,7 @@ where
 
             // Make encryption DGM aware of current auth members state.
 
-            let group_members = y.auth_y.members(self.id);
+            let group_members = auth_y.members(self.id);
             let secret_members = secret_members(group_members);
 
             y.encryption_y.dcgka.dgm = EncryptionMembershipState {
@@ -325,6 +307,11 @@ where
         // Persist new state.
 
         let mut manager = self.manager.inner.write().await;
+        manager
+            .store
+            .set_auth(&auth_y)
+            .await
+            .map_err(SpaceError::AuthStore)?;
         manager
             .store
             .set_space(&self.id, y)
@@ -384,8 +371,9 @@ where
     }
 
     pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<S, F, M, C, RS>> {
-        let space_y = self.state().await?;
-        let group_members = space_y.auth_y.members(self.id);
+        let manager = self.manager.inner.read().await;
+        let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
+        let group_members = auth_y.members(self.id);
         Ok(group_members)
     }
 
@@ -418,7 +406,7 @@ where
         Ok(message)
     }
 
-    async fn state(&self) -> Result<SpaceState<M, C>, SpaceError<S, F, M, C, RS>> {
+    async fn state(&self) -> Result<SpaceState<M>, SpaceError<S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let space_y = manager
             .store
@@ -432,30 +420,18 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct SpaceState<M, C>
-where
-    C: Conditions,
-{
+pub struct SpaceState<M> {
     pub space_id: ActorId,
-    pub auth_y: AuthGroupState<C>,
     // @TODO: This contains the PKI and KMG states and other unnecessary data we don't need to
     // persist. We can make the fields public in `p2panda-encryption` and extract only the
     // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
 }
 
-impl<M, C> SpaceState<M, C>
-where
-    C: Conditions,
-{
-    pub fn from_state(
-        space_id: ActorId,
-        auth_y: AuthGroupState<C>,
-        encryption_y: EncryptionGroupState<M>,
-    ) -> Self {
+impl<M> SpaceState<M> {
+    pub fn from_state(space_id: ActorId, encryption_y: EncryptionGroupState<M>) -> Self {
         Self {
             space_id,
-            auth_y,
             encryption_y,
         }
     }
@@ -471,7 +447,7 @@ pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 #[derive(Debug, Error)]
 pub enum SpaceError<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore,
+    S: SpaceStore<M> + KeyStore + AuthStore<C>,
     F: Forge<M, C>,
     C: Conditions,
     RS: Resolver<ActorId, OperationId, C, AuthMessage<C>>,
@@ -489,10 +465,13 @@ where
     Forge(F::Error),
 
     #[error("{0}")]
+    AuthStore(<S as AuthStore<C>>::Error),
+
+    #[error("{0}")]
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C>>::Error),
+    SpaceStore(<S as SpaceStore<M>>::Error),
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ActorId),
