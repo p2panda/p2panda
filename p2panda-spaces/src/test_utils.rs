@@ -3,25 +3,26 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_encryption::traits::PreKeyManager;
 
 use crate::space::SpaceState;
 use crate::store::{KeyStore, SpaceStore};
-use crate::types::{ActorId, Conditions};
+use crate::types::ActorId;
 
 #[derive(Debug)]
-pub struct MemoryStore<M, C, RS>
+pub struct MemoryStore<M, C>
 where
     C: Conditions,
 {
     key_manager: KeyManagerState,
     key_registry: KeyRegistryState<ActorId>,
-    spaces: HashMap<ActorId, SpaceState<M, C, RS>>,
+    spaces: HashMap<ActorId, SpaceState<M, C>>,
 }
 
-impl<M, C, RS> MemoryStore<M, C, RS>
+impl<M, C> MemoryStore<M, C>
 where
     C: Conditions,
 {
@@ -41,15 +42,14 @@ where
     }
 }
 
-impl<M, C, RS> SpaceStore<M, C, RS> for MemoryStore<M, C, RS>
+impl<M, C> SpaceStore<M, C> for MemoryStore<M, C>
 where
     M: Clone,
-    RS: Clone,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C, RS>>, Self::Error> {
+    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C>>, Self::Error> {
         Ok(self.spaces.get(id).cloned())
     }
 
@@ -57,17 +57,13 @@ where
         Ok(self.spaces.contains_key(id))
     }
 
-    async fn set_space(
-        &mut self,
-        id: &ActorId,
-        y: SpaceState<M, C, RS>,
-    ) -> Result<(), Self::Error> {
+    async fn set_space(&mut self, id: &ActorId, y: SpaceState<M, C>) -> Result<(), Self::Error> {
         self.spaces.insert(*id, y);
         Ok(())
     }
 }
 
-impl<M, C, RS> KeyStore for MemoryStore<M, C, RS>
+impl<M, C> KeyStore for MemoryStore<M, C>
 where
     C: Conditions,
 {

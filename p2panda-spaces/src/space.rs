@@ -5,13 +5,12 @@ use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
-use p2panda_auth::traits::Resolver;
+use p2panda_auth::traits::{Conditions, Resolver};
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
-use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::EncryptionMessage;
 use crate::encryption::orderer::EncryptionOrdererState;
@@ -21,8 +20,8 @@ use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{KeyStore, SpaceStore};
 use crate::types::{
-    ActorId, AuthControlMessage, AuthDummyStore, AuthGroup, AuthGroupAction, AuthGroupError,
-    AuthGroupState, Conditions, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
+    ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
+    AuthResolver, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
     EncryptionGroupState, OperationId,
 };
 
@@ -45,11 +44,11 @@ pub struct Space<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Space<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C, RS> + KeyStore,
+    S: SpaceStore<M, C> + KeyStore,
     F: Forge<M, C>,
     M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
-    RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+    RS: Debug + AuthResolver<C>,
 {
     pub(crate) fn new(manager_ref: Manager<S, F, M, C, RS>, id: ActorId) -> Self {
         Self {
@@ -93,7 +92,10 @@ where
             // groups in case we've passed in "groups" as our initial members.
             let orderer_y = ();
 
-            let y = AuthGroupState::<C, RS>::new(my_id, space_id, AuthDummyStore, orderer_y);
+            // @TODO: This state should already be instantiated as there is now
+            // only one state object for all auth groups. Move this into the
+            // manager and only access it here.
+            let y = AuthGroupState::<C>::new(orderer_y);
 
             let action = AuthControlMessage {
                 group_id: space_id,
@@ -243,7 +245,7 @@ where
                         // groups in case we've passed in "groups" as our initial members.
                         let orderer_y = ();
 
-                        AuthGroupState::<C, RS>::new(my_id, self.id, AuthDummyStore, orderer_y)
+                        AuthGroupState::<C>::new(orderer_y)
                     };
 
                     let encryption_y = {
@@ -289,10 +291,7 @@ where
 
             // Make encryption DGM aware of current auth members state.
 
-            let group_members = y
-                .auth_y
-                .transitive_members()
-                .map_err(SpaceError::AuthGroup)?;
+            let group_members = y.auth_y.members(self.id);
             let secret_members = secret_members(group_members);
 
             y.encryption_y.dcgka.dgm = EncryptionMembershipState {
@@ -386,10 +385,7 @@ where
 
     pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<S, F, M, C, RS>> {
         let space_y = self.state().await?;
-        let group_members = space_y
-            .auth_y
-            .transitive_members()
-            .map_err(SpaceError::AuthGroup)?;
+        let group_members = space_y.auth_y.members(self.id);
         Ok(group_members)
     }
 
@@ -422,7 +418,7 @@ where
         Ok(message)
     }
 
-    async fn state(&self) -> Result<SpaceState<M, C, RS>, SpaceError<S, F, M, C, RS>> {
+    async fn state(&self) -> Result<SpaceState<M, C>, SpaceError<S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let space_y = manager
             .store
@@ -436,25 +432,25 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct SpaceState<M, C, RS>
+pub struct SpaceState<M, C>
 where
     C: Conditions,
 {
     pub space_id: ActorId,
-    pub auth_y: AuthGroupState<C, RS>,
+    pub auth_y: AuthGroupState<C>,
     // @TODO: This contains the PKI and KMG states and other unnecessary data we don't need to
     // persist. We can make the fields public in `p2panda-encryption` and extract only the
     // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
 }
 
-impl<M, C, RS> SpaceState<M, C, RS>
+impl<M, C> SpaceState<M, C>
 where
     C: Conditions,
 {
     pub fn from_state(
         space_id: ActorId,
-        auth_y: AuthGroupState<C, RS>,
+        auth_y: AuthGroupState<C>,
         encryption_y: EncryptionGroupState<M>,
     ) -> Self {
         Self {
@@ -475,10 +471,10 @@ pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
 #[derive(Debug, Error)]
 pub enum SpaceError<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C, RS> + KeyStore,
+    S: SpaceStore<M, C> + KeyStore,
     F: Forge<M, C>,
     C: Conditions,
-    RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+    RS: Resolver<ActorId, OperationId, C, AuthMessage<C>>,
 {
     #[error(transparent)]
     Rng(#[from] RngError),
@@ -496,7 +492,7 @@ where
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C, RS>>::Error),
+    SpaceStore(<S as SpaceStore<M, C>>::Error),
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ActorId),
