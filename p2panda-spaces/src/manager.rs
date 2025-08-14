@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
-use p2panda_auth::traits::Resolver;
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::Rng;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
 use p2panda_encryption::key_registry::KeyRegistry;
@@ -14,14 +14,13 @@ use p2panda_encryption::traits::PreKeyManager;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::auth::orderer::AuthOrderer;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::{KeyStore, SpaceStore};
-use crate::types::{ActorId, AuthDummyStore, Conditions, OperationId};
+use crate::types::{ActorId, AuthResolver, OperationId};
 
 // Create and manage spaces and groups.
 //
@@ -57,12 +56,12 @@ pub(crate) struct ManagerInner<S, F, M, C, RS> {
 
 impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C, RS> + KeyStore,
+    S: SpaceStore<M, C> + KeyStore,
     F: Forge<M, C>,
     M: AuthoredMessage + SpacesMessage<C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
-    RS: Debug + Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+    RS: Debug + AuthResolver<C>,
 {
     #[allow(clippy::result_large_err)]
     pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<S, F, M, C, RS>> {
@@ -240,10 +239,10 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 #[allow(clippy::large_enum_variant)]
 pub enum ManagerError<S, F, M, C, RS>
 where
-    S: SpaceStore<M, C, RS> + KeyStore,
+    S: SpaceStore<M, C> + KeyStore,
     F: Forge<M, C>,
     C: Conditions,
-    RS: Resolver<ActorId, OperationId, C, AuthOrderer, AuthDummyStore>,
+    RS: AuthResolver<C>,
 {
     #[error(transparent)]
     Space(#[from] SpaceError<S, F, M, C, RS>),
@@ -255,7 +254,7 @@ where
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C, RS>>::Error),
+    SpaceStore(<S as SpaceStore<M, C>>::Error),
 
     #[error("received unexpected message with id {0}, maybe it arrived out-of-order")]
     UnexpectedMessage(OperationId),

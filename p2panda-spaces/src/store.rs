@@ -2,13 +2,14 @@
 
 use std::fmt::Debug;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
 use crate::space::SpaceState;
-use crate::types::{ActorId, Conditions};
+use crate::types::ActorId;
 
-pub trait SpaceStore<M, C, RS>
+pub trait SpaceStore<M, C>
 where
     C: Conditions,
 {
@@ -17,14 +18,14 @@ where
     fn space(
         &self,
         id: &ActorId,
-    ) -> impl Future<Output = Result<Option<SpaceState<M, C, RS>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<SpaceState<M, C>>, Self::Error>>;
 
     fn has_space(&self, id: &ActorId) -> impl Future<Output = Result<bool, Self::Error>>;
 
     fn set_space(
         &mut self,
         id: &ActorId,
-        y: SpaceState<M, C, RS>,
+        y: SpaceState<M, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
