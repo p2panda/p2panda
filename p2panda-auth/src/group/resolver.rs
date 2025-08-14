@@ -120,9 +120,8 @@ where
 
             let control_message = target_operation.payload();
             let removed_or_demoted_member = match control_message.action {
-                GroupAction::Remove { member } | GroupAction::Demote { member, .. } => {
-                    Some(member.id())
-                }
+                GroupAction::Remove { member } => Some(member.id()),
+                GroupAction::Demote { member, access } if !access.is_manage() => Some(member.id()),
                 _ => None,
             };
 
@@ -161,7 +160,8 @@ where
 
                     // Check if this was a concurrent remove.
                     let mutual_remove = match bubble_operation.payload().action {
-                        GroupAction::Remove { member } | GroupAction::Demote { member, .. } => {
+                        GroupAction::Remove { member } => member.id() == target_operation.author(),
+                        GroupAction::Demote { member, access } if !access.is_manage() => {
                             member.id() == target_operation.author()
                         }
                         _ => false,
