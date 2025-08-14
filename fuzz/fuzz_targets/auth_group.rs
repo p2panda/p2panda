@@ -728,14 +728,16 @@ fuzz_target!(|seed: [u8; 32]| {
                             None
                         });
 
-                        let mut group_id = ROOT_GROUP_ID;
+                        let mut group_options = vec![ROOT_GROUP_ID, member.id()];
 
-                        // Either publish an operation to our own group, a sub-group we're an admin member of, or the root group.
-                        if let Some(sub_group) = is_sub_group_admin {
-                            group_id =
-                                random_item(vec![ROOT_GROUP_ID, *sub_group], &mut rng).unwrap();
+                        // If we are a member of a sub-group which is not our
+                        // own sub-group then also add this to the possible
+                        // groups.
+                        if let Some(sub_group) = is_sub_group_admin && *sub_group != member.id() {
+                            group_options.push(*sub_group);
                         };
 
+                        let group_id = random_item(group_options, &mut rng).unwrap();
                         let suggestion = member.suggest(group_id, &mut rng);
                         (suggestion, group_id)
                     };
