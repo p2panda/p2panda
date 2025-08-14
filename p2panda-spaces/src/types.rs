@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use p2panda_auth::traits::{IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId};
+use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
+use p2panda_auth::traits::{
+    Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver,
+};
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
 use p2panda_core::{HashError, IdentityError};
@@ -17,6 +19,7 @@ use p2panda_encryption::traits::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::auth::message::AuthMessage;
 use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
@@ -167,25 +170,37 @@ pub enum OperationIdError {
 // ~~~ Auth ~~~
 
 pub type AuthGroup<C, RS> =
-    p2panda_auth::group::GroupCrdt<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+    p2panda_auth::group::GroupCrdt<ActorId, OperationId, C, RS, AuthOrderer>;
 
-pub type AuthGroupState<C, RS> =
-    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+pub type AuthGroupState<C> =
+    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, AuthOrderer>;
 
 pub type AuthGroupError<C, RS> =
-    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer, AuthDummyStore>;
+    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer>;
 
 pub type AuthControlMessage<C> = p2panda_auth::group::GroupControlMessage<ActorId, C>;
 
 pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 
-pub type StrongRemoveResolver<C> = p2panda_auth::group::resolver::StrongRemove<
-    ActorId,
-    OperationId,
-    C,
-    AuthOrderer,
-    AuthDummyStore,
->;
+pub type StrongRemoveResolver<C> =
+    p2panda_auth::group::resolver::StrongRemove<ActorId, OperationId, C, AuthMessage<C>>;
+
+// @TODO: We can bound this state requirement in p2panda-auth to reduce
+// complexity in this trait signature.
+pub trait AuthResolver<C>:
+    Resolver<
+        ActorId,
+        OperationId,
+        C,
+        AuthMessage<C>,
+        State = AuthInnerState<ActorId, OperationId, C, AuthMessage<C>>,
+    >
+{
+}
+
+// Required as we define a new super-trait above with non-generic actor id,
+// operation id and message type.
+impl<C> AuthResolver<C> for StrongRemoveResolver<C> where C: Conditions {}
 
 // ~~~ Encryption ~~~
 
@@ -227,33 +242,6 @@ pub type EncryptionGroupOutput<M> = p2panda_encryption::data_scheme::GroupOutput
     EncryptionGroupMembership,
     EncryptionOrderer<M>,
 >;
-
-// ~~~ Hacks ~~~
-
-// @TODO: Will change in `p2panda-auth`.
-#[derive(Debug, Clone)]
-pub struct AuthDummyStore;
-
-impl<C, RS> p2panda_auth::traits::GroupStore<ActorId, OperationId, C, RS, AuthOrderer>
-    for AuthDummyStore
-where
-    C: Conditions,
-    Self: Sized,
-{
-    type Error = Infallible;
-
-    fn insert(&self, _id: &ActorId, _group: &AuthGroupState<C, RS>) -> Result<(), Self::Error> {
-        // Noop: Writing new group state will be handled outside of this layer.
-        Ok(())
-    }
-
-    fn get(&self, _id: &ActorId) -> Result<Option<AuthGroupState<C, RS>>, Self::Error> {
-        todo!()
-    }
-}
-
-// @TODO: this supertrait should be defined in p2panda-auth
-pub trait Conditions: Clone + Debug + PartialEq + PartialOrd {}
 
 #[cfg(test)]
 mod tests {

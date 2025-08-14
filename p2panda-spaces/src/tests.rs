@@ -4,6 +4,7 @@ use std::convert::Infallible;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+use p2panda_auth::traits::Conditions;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
@@ -15,7 +16,7 @@ use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
 use crate::test_utils::MemoryStore;
-use crate::types::{ActorId, Conditions, OperationId, StrongRemoveResolver};
+use crate::types::{ActorId, AuthGroupState, OperationId, StrongRemoveResolver};
 
 type SeqNum = u64;
 
@@ -98,7 +99,7 @@ impl Forge<TestMessage, TestConditions> for TestForge {
     }
 }
 
-type TestStore = MemoryStore<TestMessage, TestConditions, StrongRemoveResolver<TestConditions>>;
+type TestStore = MemoryStore<TestMessage, TestConditions>;
 
 type TestManager = Manager<
     TestStore,
@@ -125,7 +126,9 @@ impl TestPeer {
             KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
         };
 
-        let store = TestStore::new(my_id, key_manager_y);
+        let orderer_y = ();
+        let auth_y = AuthGroupState::new(orderer_y);
+        let store = TestStore::new(my_id, key_manager_y, auth_y);
         let forge = TestForge::new(private_key);
 
         let manager = TestManager::new(store, forge, rng).unwrap();
@@ -150,7 +153,9 @@ async fn create_space() {
         KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
     };
 
-    let store = TestStore::new(my_id, key_manager_y);
+    let orderer_y = ();
+    let auth_y = AuthGroupState::new(orderer_y);
+    let store = TestStore::new(my_id, key_manager_y, auth_y);
     let forge = TestForge::new(private_key);
 
     let manager = TestManager::new(store, forge, rng).unwrap();
