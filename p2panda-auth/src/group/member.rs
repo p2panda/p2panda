@@ -23,6 +23,19 @@ where
             GroupMember::Group(id) => *id,
         }
     }
+
+    /// Return true if this group member is itself a group.
+    pub fn is_group(&self) -> bool {
+        match self {
+            GroupMember::Individual(_) => false,
+            GroupMember::Group(_) => true,
+        }
+    }
+
+    /// Return true if this group member is an individual.
+    pub fn is_individual(&self) -> bool {
+        !self.is_group()
+    }
 }
 
 impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}

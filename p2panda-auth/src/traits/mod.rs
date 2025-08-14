@@ -8,13 +8,11 @@ mod dgm;
 mod operation;
 mod orderer;
 mod resolver;
-mod store;
 
-pub use dgm::{Group, GroupMembership};
+pub use dgm::{GroupMembership, Groups};
 pub use operation::Operation;
 pub use orderer::Orderer;
 pub use resolver::Resolver;
-pub use store::GroupStore;
 
 /// Handle to identify a group member.
 ///
