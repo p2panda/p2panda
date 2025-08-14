@@ -733,7 +733,9 @@ fuzz_target!(|seed: [u8; 32]| {
                         // If we are a member of a sub-group which is not our
                         // own sub-group then also add this to the possible
                         // groups.
-                        if let Some(sub_group) = is_sub_group_admin && *sub_group != member.id() {
+                        if let Some(sub_group) = is_sub_group_admin
+                            && *sub_group != member.id()
+                        {
                             group_options.push(*sub_group);
                         };
 
