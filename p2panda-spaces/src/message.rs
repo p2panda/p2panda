@@ -68,9 +68,8 @@ pub enum SpacesArgs<C> {
         /// Used key id for AEAD.
         group_secret_id: GroupSecretId,
 
-        // @TODO: We probably also want auth dependencies here too. 
+        // @TODO: We probably also want auth dependencies here too.
         // auth_dependencies: Vec<OperationId>,
-
         /// Encryption dependencies. These are the latest heads of the encryption control
         /// and application message graph.
         encryption_dependencies: Vec<OperationId>,
