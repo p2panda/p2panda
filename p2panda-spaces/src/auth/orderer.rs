@@ -7,19 +7,21 @@ use p2panda_auth::traits::Conditions;
 use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+pub struct AuthOrdererState {
+    pub dependencies: Vec<OperationId>,
+}
+
 // Manages "dependencies" required for `p2panda-auth`.
 #[derive(Clone, Debug)]
 pub struct AuthOrderer {}
 
-impl Default for AuthOrderer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AuthOrderer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn init() -> AuthOrdererState {
+        AuthOrdererState {
+            dependencies: Default::default(),
+        }
     }
 }
 
@@ -27,7 +29,7 @@ impl<C> p2panda_auth::traits::Orderer<ActorId, OperationId, AuthControlMessage<C
 where
     C: Conditions,
 {
-    type State = (); // @TODO
+    type State = AuthOrdererState;
 
     type Operation = AuthMessage<C>;
 
@@ -37,11 +39,11 @@ where
         y: Self::State,
         control_message: &AuthControlMessage<C>,
     ) -> Result<(Self::State, Self::Operation), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then auth dependencies should be calculated and returned here.
+        let dependencies = y.dependencies.clone();
         Ok((
             y,
             AuthMessage::Args(AuthArgs {
+                dependencies,
                 control_message: control_message.clone(),
             }),
         ))
