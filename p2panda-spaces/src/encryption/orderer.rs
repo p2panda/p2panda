@@ -32,6 +32,10 @@ impl<M> EncryptionOrderer<M> {
 #[derive(Clone, Debug)]
 pub struct EncryptionOrdererState {
     next_message: Option<EncryptionMessage>,
+
+    // @TODO: logic for keeping these dependencies up-to-date with processed and published
+    // operations is not implemented.
+    pub dependencies: Vec<OperationId>,
 }
 
 impl Default for EncryptionOrdererState {
@@ -42,7 +46,10 @@ impl Default for EncryptionOrdererState {
 
 impl EncryptionOrdererState {
     pub fn new() -> Self {
-        Self { next_message: None }
+        Self {
+            next_message: None,
+            dependencies: Default::default(),
+        }
     }
 }
 
@@ -60,11 +67,11 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         control_message: &EncryptionControlMessage,
         direct_messages: &[EncryptionDirectMessage],
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then encryption dependencies should be calculated and returned here.
+        let dependencies = y.dependencies.clone();
         Ok((
             y,
             EncryptionMessage::Args(EncryptionArgs::System {
+                dependencies,
                 control_message: control_message.clone(),
                 direct_messages: direct_messages.to_vec(),
             }),
@@ -77,11 +84,11 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then encryption dependencies should be calculated and returned here.
+        let dependencies = y.dependencies.clone();
         Ok((
             y,
             EncryptionMessage::Args(EncryptionArgs::Application {
+                dependencies,
                 group_secret_id,
                 nonce,
                 ciphertext,
