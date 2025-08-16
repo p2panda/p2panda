@@ -27,7 +27,6 @@ pub enum ToGossipActor {
         topic_id: [u8; 32],
         peers: Vec<PublicKey>,
     },
-    #[allow(dead_code)]
     Leave {
         topic_id: [u8; 32],
     },
