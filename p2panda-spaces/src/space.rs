@@ -260,7 +260,7 @@ where
 
             match member {
                 GroupMember::Individual(id) => {
-                    EncryptionGroup::add(y.encryption_y, id, &mut manager.rng)
+                    EncryptionGroup::add(y.encryption_y, id, &manager.rng)
                         .map_err(SpaceError::EncryptionGroup)?
                 }
                 GroupMember::Group(_) => {
