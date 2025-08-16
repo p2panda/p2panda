@@ -233,7 +233,7 @@ where
         // 3. Add new secret members to encryption group state.
 
         let (encryption_y, encryption_args) = {
-            let mut manager = self.manager.inner.write().await;
+            let manager = self.manager.inner.write().await;
 
             // Make encryption DGM aware of current auth members state.
 
