@@ -197,10 +197,10 @@ pub fn add<ID: Clone + Eq + Hash, C: Conditions>(
     }
 
     // Ensure that "added" is not already an active member of the group.
-    if let Some(added_state) = state.members.get(&added) {
-        if added_state.is_member() {
-            return Err(GroupMembershipError::AlreadyAdded(added));
-        }
+    if let Some(added_state) = state.members.get(&added)
+        && added_state.is_member()
+    {
+        return Err(GroupMembershipError::AlreadyAdded(added));
     }
 
     // Add "added" to the group or increment their counters if they are already known but were
@@ -253,10 +253,10 @@ pub fn remove<ID: Eq + Hash, C: Conditions>(
     };
 
     // Ensure that "removed" is not already an inactive member of the group.
-    if let Some(removed_state) = state.members.get(&removed) {
-        if !removed_state.is_member() {
-            return Err(GroupMembershipError::AlreadyRemoved(removed));
-        }
+    if let Some(removed_state) = state.members.get(&removed)
+        && !removed_state.is_member()
+    {
+        return Err(GroupMembershipError::AlreadyRemoved(removed));
     }
 
     // Increment "removed" counters unless they are already removed.
