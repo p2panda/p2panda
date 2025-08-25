@@ -201,17 +201,19 @@ impl StateMachine {
         let mut options = Vec::new();
 
         if try_options.contains(&Options::Add)
-            && let Some(added) = self.values.random_member(rng) {
-                options.push(Operation::Add {
-                    added,
-                    members_in_welcome: self.values.active_members.clone(),
-                });
-            }
+            && let Some(added) = self.values.random_member(rng)
+        {
+            options.push(Operation::Add {
+                added,
+                members_in_welcome: self.values.active_members.clone(),
+            });
+        }
 
         if try_options.contains(&Options::Remove)
-            && let Some(removed) = self.values.random_active_member(rng) {
-                options.push(Operation::Remove { removed });
-            }
+            && let Some(removed) = self.values.random_active_member(rng)
+        {
+            options.push(Operation::Remove { removed });
+        }
 
         if try_options.contains(&Options::Update) {
             options.push(Operation::Update);
