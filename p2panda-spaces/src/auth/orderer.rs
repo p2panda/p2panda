@@ -20,6 +20,8 @@ pub struct AuthOrderer {}
 impl AuthOrderer {
     pub fn init() -> AuthOrdererState {
         AuthOrdererState {
+            // @TODO: we should have access to the shared manager store here, get the auth state
+            // and calculate the heads.
             dependencies: Default::default(),
         }
     }

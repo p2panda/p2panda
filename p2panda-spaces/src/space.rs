@@ -302,6 +302,8 @@ where
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
+        // @TODO: This is where we can update orderer state for both auth and encryption.
+
         // 6. Persist new state.
 
         Self::persist_space(self.manager.clone(), y, auth_y).await?;

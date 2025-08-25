@@ -48,6 +48,13 @@ impl EncryptionOrdererState {
     pub fn new() -> Self {
         Self {
             next_message: None,
+
+            // @TODO: We should maintain (update) this state for the encryption control message
+            // DAG inside of p2panda-spaces. For reference see
+            // https://github.com/p2panda/p2panda/blob/main/p2panda-encryption/src/data_scheme/test_utils/ordering.rs#L54-L55
+            //
+            // @TODO: We don't look at application message dependencies quite yet. More research
+            // needed into requirements around bi-directional dependencies between dags.
             dependencies: Default::default(),
         }
     }
