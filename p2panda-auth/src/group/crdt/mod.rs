@@ -16,19 +16,19 @@ use crate::group::{
 };
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
-/// Inner error types for GroupCrdt.
-#[derive(Debug, Error)]
-pub enum GroupCrdtInnerError<OP> {
-    #[error("states {0:?} not found")]
-    StatesNotFound(Vec<OP>),
-}
-
 /// Max depth of group nesting allowed.
 ///
 /// Depth is checked during group state queries and if the depth is exceeded further additions are
 /// ignored. The main reason for this check is to protect against accidental group nesting cycles
 /// which may occur as a result of concurrent operations.
 const MAX_NESTED_DEPTH: u32 = 1000;
+
+/// Inner error types for GroupCrdt.
+#[derive(Debug, Error)]
+pub enum GroupCrdtInnerError<OP> {
+    #[error("states {0:?} not found")]
+    StatesNotFound(Vec<OP>),
+}
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
