@@ -213,10 +213,8 @@ where
             let group_id = operation.payload().group_id();
             let (mut concurrent, ..) = split_bubble(&y.graph, bubble, *operation_id);
             concurrent.retain(|id| {
-                let concurrent_operation = y
-                    .operations
-                    .get(id)
-                    .expect("all operations present in map");
+                let concurrent_operation =
+                    y.operations.get(id).expect("all operations present in map");
 
                 // RULE: Concurrent re-adds not allowed.
                 let is_readd = Self::is_readd(group_id, removed, concurrent_operation);
@@ -320,9 +318,10 @@ where
         member: demoted,
         access,
     } = action
-        && !access.is_manage() {
-            return Some(demoted.id());
-        }
+        && !access.is_manage()
+    {
+        return Some(demoted.id());
+    }
 
     None
 }
@@ -339,17 +338,19 @@ where
         member: added,
         access,
     } = &action
-        && access.is_manage() {
-            return Some(added.id());
-        }
+        && access.is_manage()
+    {
+        return Some(added.id());
+    }
 
     if let GroupAction::Promote {
         member: promoted,
         access,
     } = action
-        && access.is_manage() {
-            return Some(promoted.id());
-        }
+        && access.is_manage()
+    {
+        return Some(promoted.id());
+    }
 
     None
 }
