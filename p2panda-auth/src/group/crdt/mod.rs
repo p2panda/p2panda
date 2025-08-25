@@ -24,7 +24,7 @@ pub enum GroupCrdtInnerError<OP> {
 }
 
 /// Max depth of group nesting allowed.
-/// 
+///
 /// Depth is checked during group state queries and if the depth is exceeded further additions are
 /// ignored. The main reason for this check is to protect against accidental group nesting cycles
 /// which may occur as a result of concurrent operations.
@@ -231,7 +231,7 @@ where
                         .or_insert_with(|| next_access);
                 }
                 GroupMember::Group(id) => {
-                    self.members_inner(id, members, Some(next_access), depth.clone())
+                    self.members_inner(id, members, Some(next_access), depth)
                 }
             }
         }
@@ -254,11 +254,11 @@ where
         } = &operation.payload().action
         {
             let states = self.current_state();
-            let mut stack = vec![child_group_id.clone()];
+            let mut stack = vec![*child_group_id];
             let mut visited = HashSet::new();
 
             while let Some(child_group_id) = stack.pop() {
-                if !visited.insert(child_group_id.clone()) {
+                if !visited.insert(child_group_id) {
                     continue;
                 }
                 if child_group_id == parent_group_id {
@@ -268,7 +268,7 @@ where
                 if let Some(group_state) = states.get(&child_group_id) {
                     for (member, _) in group_state.access_levels() {
                         if let GroupMember::Group(id) = member {
-                            stack.push(id.clone());
+                            stack.push(id);
                         }
                     }
                 }
@@ -539,7 +539,7 @@ where
         };
 
         // Detect if this operation would cause a nested group cycle.
-        if temp_y.inner.would_create_cycle(&operation) {
+        if temp_y.inner.would_create_cycle(operation) {
             let parent_group = operation.payload().group_id();
 
             // Only adds cause a cycle, we just access the member id here.

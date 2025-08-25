@@ -491,9 +491,31 @@ impl Member {
             return TestGroupAction::Noop;
         }
 
-        if try_options.contains(&Options::Add) {
-            if let Some(member) = self.random_non_member(group_id, rng) {
-                let access = match member {
+        if try_options.contains(&Options::Add)
+            && let Some(member) = self.random_non_member(group_id, rng)
+        {
+            let access = match member {
+                GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
+                GroupMember::Group(_) => {
+                    random_item(vec![Access::pull(), Access::read(), Access::write()], rng).unwrap()
+                }
+            };
+
+            if member.id() != self.my_id {
+                options.push(TestGroupAction::Action(GroupAction::Add { member, access }))
+            }
+        }
+
+        if try_options.contains(&Options::Promote)
+            && let Some((member, access)) = self.random_member(group_id, rng)
+        {
+            #[allow(clippy::never_loop)]
+            loop {
+                if access.is_manage() {
+                    break;
+                }
+
+                let next_access = match member {
                     GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
                     GroupMember::Group(_) => {
                         random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
@@ -501,78 +523,53 @@ impl Member {
                     }
                 };
 
-                if member.id() != self.my_id {
-                    options.push(TestGroupAction::Action(GroupAction::Add { member, access }))
-                }
-            }
-        }
-
-        if try_options.contains(&Options::Promote) {
-            if let Some((member, access)) = self.random_member(group_id, rng) {
-                loop {
-                    if access.is_manage() {
-                        break;
-                    }
-
-                    let next_access = match member {
-                        GroupMember::Individual(_) => {
-                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
-                        }
-                        GroupMember::Group(_) => {
-                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
-                                .unwrap()
-                        }
-                    };
-
-                    if access >= next_access {
-                        break;
-                    }
-
-                    options.push(TestGroupAction::Action(GroupAction::Promote {
-                        member,
-                        access: next_access,
-                    }));
+                if access >= next_access {
                     break;
                 }
-            }
-        }
 
-        if try_options.contains(&Options::Demote) {
-            if let Some((member, access)) = self.random_member(group_id, rng) {
-                loop {
-                    if access.is_pull() {
-                        break;
-                    }
-
-                    let next_access = match member {
-                        GroupMember::Individual(_) => {
-                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
-                        }
-                        GroupMember::Group(_) => {
-                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
-                                .unwrap()
-                        }
-                    };
-
-                    if access <= next_access {
-                        break;
-                    }
-
-                    options.push(TestGroupAction::Action(GroupAction::Demote {
-                        member,
-                        access: next_access,
-                    }));
-                    break;
-                }
-            }
-        }
-
-        if try_options.contains(&Options::Remove) {
-            if let Some(removed) = self.random_member(group_id, rng) {
-                options.push(TestGroupAction::Action(GroupAction::Remove {
-                    member: removed.0,
+                options.push(TestGroupAction::Action(GroupAction::Promote {
+                    member,
+                    access: next_access,
                 }));
+                break;
             }
+        }
+
+        if try_options.contains(&Options::Demote)
+            && let Some((member, access)) = self.random_member(group_id, rng)
+        {
+            #[allow(clippy::never_loop)]
+            loop {
+                if access.is_pull() {
+                    break;
+                }
+
+                let next_access = match member {
+                    GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
+                    GroupMember::Group(_) => {
+                        random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
+                            .unwrap()
+                    }
+                };
+
+                if access <= next_access {
+                    break;
+                }
+
+                options.push(TestGroupAction::Action(GroupAction::Demote {
+                    member,
+                    access: next_access,
+                }));
+                break;
+            }
+        }
+
+        if try_options.contains(&Options::Remove)
+            && let Some(removed) = self.random_member(group_id, rng)
+        {
+            options.push(TestGroupAction::Action(GroupAction::Remove {
+                member: removed.0,
+            }));
         }
 
         if try_options.contains(&Options::Noop) {
@@ -725,10 +722,10 @@ fuzz_target!(|seed: [u8; 32]| {
                         // group).
                         let members = member.root_members(ROOT_GROUP_ID);
                         let is_sub_group_admin = members.iter().find_map(|(group_member, _)| {
-                            if let GroupMember::Group(id) = group_member {
-                                if member.is_manager(*id) {
-                                    return Some(id);
-                                }
+                            if let GroupMember::Group(id) = group_member
+                                && member.is_manager(*id)
+                            {
+                                return Some(id);
                             };
                             None
                         });
