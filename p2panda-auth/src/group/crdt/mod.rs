@@ -230,9 +230,7 @@ where
                         })
                         .or_insert_with(|| next_access);
                 }
-                GroupMember::Group(id) => {
-                    self.members_inner(id, members, Some(next_access), depth)
-                }
+                GroupMember::Group(id) => self.members_inner(id, members, Some(next_access), depth),
             }
         }
     }
