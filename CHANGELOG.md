@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - One global state object and operation graph for all groups [#781](https://github.com/p2panda/p2panda/pull/781)
+- Improvements to strong remove resolver [#788](https://github.com/p2panda/p2panda/pull/788)
 
 ## [0.4.0] - 07/07/2025
 
