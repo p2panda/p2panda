@@ -111,6 +111,11 @@ where
     C: Conditions,
     M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
+    /// Process a single operation bubble. 
+    /// 
+    /// 1) construct "authority graphs" for detecting concurrent remove cycles.
+    /// 2) compute operation filter following strong remove rules
+    /// 3) resolver group membership state
     fn process_bubble(
         mut y: GroupCrdtInnerState<ID, OP, C, M>,
         bubble: &HashSet<OP>,
@@ -139,8 +144,7 @@ where
         //
         // NOTE: The petgraph topological sorting algorithm is only deterministic when all graph
         // nodes are added in the same order. This is not the case for us, but that's ok as we
-        // don't rely on a deterministic linearisation of operations for resolving state, only
-        // partial-ordering is required.
+        // don't rely on a deterministic linearisation of operations for resolving state.
         let mut topo = Topo::new(&bubble_graph);
         while let Some(operation_id) = topo.next(&bubble_graph) {
             y = Self::apply_operation(y, operation_id);
@@ -148,6 +152,7 @@ where
         y
     }
 
+    /// Check if an operation is part of a mutual remove cycle.
     fn is_mutual_remove(operation: &M, authority_graphs: &mut AuthorityGraphs<ID, OP>) -> bool {
         let removed = removed_or_demoted_manager(operation);
         let added = added_or_promoted_manager(operation);
@@ -159,6 +164,7 @@ where
         authority_graphs.is_cycle(&group_id, &operation.id())
     }
 
+    /// Check if the passed operation re-adds a previously removed member.
     fn is_readd(group_id: ID, removed: ID, operation: &M) -> bool {
         if group_id != operation.payload().group_id() {
             return false;
@@ -171,6 +177,7 @@ where
         added.id() == removed
     }
 
+    /// Check if an operation is authored by a removed member.
     fn is_removed(group_id: ID, removed: ID, operation: &M) -> bool {
         if group_id != operation.payload().group_id() {
             return false;
@@ -258,6 +265,7 @@ where
         authority_graphs
     }
 
+    /// Apply an operation to the auth state.
     fn apply_operation(
         mut y: GroupCrdtInnerState<ID, OP, C, M>,
         operation_id: OP,
@@ -302,6 +310,8 @@ where
     }
 }
 
+/// Return the member id if this operation removes a member, or demotes a member from having
+/// manager access.
 fn removed_or_demoted_manager<ID, OP, C, M>(operation: &M) -> Option<ID>
 where
     ID: IdentityHandle + Ord,
@@ -326,6 +336,8 @@ where
     None
 }
 
+/// Return the member id if this operation adds a manager member or promotes a member to have
+/// manager access.
 fn added_or_promoted_manager<ID, OP, C, M>(operation: &M) -> Option<ID>
 where
     ID: IdentityHandle + Ord,
