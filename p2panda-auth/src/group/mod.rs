@@ -8,10 +8,12 @@ pub(crate) mod crdt;
 mod display;
 mod member;
 mod message;
+mod authority_graphs;
 pub mod resolver;
 
 pub use action::GroupAction;
 pub(crate) use crdt::apply_action;
+pub(crate) use authority_graphs::AuthorityGraphs;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
 pub use crdt::{
     GroupCrdt, GroupCrdtError, GroupCrdtInnerError, GroupCrdtInnerState, GroupCrdtState,
