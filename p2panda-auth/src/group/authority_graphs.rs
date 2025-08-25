@@ -126,9 +126,9 @@ where
     /// Returns true if the target operation is part of a mutual remove cycle.
     pub fn is_cycle(&mut self, group_id: &ID, target_op: &OP) -> bool {
         // If the graph is none (the cache was busted) then rebuild graph and cycle state.
-        if self.graphs.get(group_id).is_none() {
-            self.build_graph(&group_id);
-            self.compute_cycles(&group_id);
+        if !self.graphs.contains_key(group_id) {
+            self.build_graph(group_id);
+            self.compute_cycles(group_id);
         }
 
         if let Some(set) = self.cycles.get(group_id) {
@@ -230,7 +230,7 @@ where
             }
         }
 
-        self.graphs.insert(group_id.clone(), graph);
+        self.graphs.insert(*group_id, graph);
     }
 
     fn ensure_node(
@@ -238,9 +238,7 @@ where
         nodes: &mut HashMap<Node<ID, OP>, NodeIndex>,
         key: Node<ID, OP>,
     ) -> NodeIndex {
-        *nodes
-            .entry(key.clone())
-            .or_insert_with(|| graph.add_node(key))
+        *nodes.entry(key).or_insert_with(|| graph.add_node(key))
     }
 
     fn add_edge_if_missing(graph: &mut DiGraph<Node<ID, OP>, ()>, from: NodeIndex, to: NodeIndex) {
@@ -254,7 +252,7 @@ where
         let graph = match self.graphs.get(group_id) {
             Some(g) => g,
             None => {
-                self.cycles.insert(group_id.clone(), HashSet::new());
+                self.cycles.insert(*group_id, HashSet::new());
                 return;
             }
         };
@@ -272,7 +270,7 @@ where
             }
         }
 
-        self.cycles.insert(group_id.clone(), ops_in_cycles);
+        self.cycles.insert(*group_id, ops_in_cycles);
     }
 }
 

@@ -207,7 +207,7 @@ where
         for operation_id in bubble {
             let operation = y
                 .operations
-                .get(&operation_id)
+                .get(operation_id)
                 .expect("all operations present in map");
 
             // If this is not a remove or demote operation no action is required.
@@ -226,7 +226,7 @@ where
             concurrent.retain(|id| {
                 let concurrent_operation = y
                     .operations
-                    .get(&id)
+                    .get(id)
                     .expect("all operations present in map");
 
                 // RULE: Concurrent re-adds not allowed.
@@ -331,11 +331,9 @@ where
         member: demoted,
         access,
     } = action
-    {
-        if !access.is_manage() {
+        && !access.is_manage() {
             return Some(demoted.id());
         }
-    }
 
     None
 }
@@ -352,21 +350,17 @@ where
         member: added,
         access,
     } = &action
-    {
-        if access.is_manage() {
+        && access.is_manage() {
             return Some(added.id());
         }
-    }
 
     if let GroupAction::Promote {
         member: promoted,
         access,
     } = action
-    {
-        if access.is_manage() {
+        && access.is_manage() {
             return Some(promoted.id());
         }
-    }
 
     None
 }
