@@ -111,8 +111,8 @@ where
     C: Conditions,
     M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    /// Process a single operation bubble. 
-    /// 
+    /// Process a single operation bubble.
+    ///
     /// 1) construct "authority graphs" for detecting concurrent remove cycles.
     /// 2) compute operation filter following strong remove rules
     /// 3) resolver group membership state
