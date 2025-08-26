@@ -12,11 +12,8 @@ pub trait Operation<ID, OP, P> {
     /// ID of the author of this operation.
     fn author(&self) -> ID;
 
-    /// Other operation dependencies.
+    /// Auth dependencies.
     fn dependencies(&self) -> Vec<OP>;
-
-    /// The last graph tips in the group this operation belongs to.
-    fn previous(&self) -> Vec<OP>;
 
     /// Payload of this operation.
     fn payload(&self) -> P;

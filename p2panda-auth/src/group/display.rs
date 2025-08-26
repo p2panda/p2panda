@@ -9,52 +9,43 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
-use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
-use crate::traits::{
-    Conditions, GroupStore, IdentityHandle, Operation, OperationId, Orderer, Resolver,
-};
+use crate::group::{GroupAction, GroupControlMessage, GroupCrdtState, GroupMember, apply_action};
+use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_OK_NODE: &str = "#BFC6C77F";
-const OP_NOOP_NODE: &str = "#FFA142";
+const OP_ERR_NODE: &str = "#FFA142";
 const OP_ROOT_NODE: &str = "#EDD7B17F";
 const INDIVIDUAL_NODE: &str = "#EDD7B17F";
 const ADD_MEMBER_EDGE: &str = "#0091187F";
-const PREVIOUS_EDGE: &str = "#000000";
 const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
-impl<ID, OP, C, RS, ORD, GS> GroupCrdtState<ID, OP, C, RS, ORD, GS>
+impl<ID, OP, C, ORD> GroupCrdtState<ID, OP, C, ORD>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD, GS> + Clone + Debug,
     ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
     ORD::State: Clone,
     ORD::Operation: Clone,
-    GS: GroupStore<ID, OP, C, RS, ORD> + Clone + Debug,
 {
     /// Print an auth group graph in DOT format for visualizing the group operation DAG.
-    pub fn display(&self) -> String {
+    pub fn display(&self, group_id: ID) -> String {
         let mut graph = DiGraph::new();
-        graph = self.add_nodes_and_previous_edges(self.clone(), graph);
+        graph = self.add_nodes_and_previous_edges(graph);
 
-        graph.add_node((None, self.format_final_members()));
+        graph.add_node((None, self.format_final_members(group_id)));
 
         let dag_graphviz = Dot::with_attr_getters(
             &graph,
             &[Config::NodeNoLabel, Config::EdgeNoLabel],
             &|_, edge| {
                 let weight = edge.weight();
-                if weight == "previous" {
-                    return format!("color=\"{PREVIOUS_EDGE}\", penwidth = 2.0");
-                }
-
                 if weight == "member" || weight == "sub group" {
-                    return format!("color=\"{ADD_MEMBER_EDGE}\", penwidth = 2.0");
+                    return format!("color=\"{ADD_MEMBER_EDGE}\"");
                 }
 
-                format!("constraint = false, color=\"{DEPENDENCIES_EDGE}\", penwidth = 2.0")
+                format!("color=\"{DEPENDENCIES_EDGE}\"")
             },
             &|_, (_, (_, s))| format!("label = {s}"),
         );
@@ -66,10 +57,15 @@ where
 
     fn add_nodes_and_previous_edges(
         &self,
-        root: Self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
-        for operation in self.operations.values() {
+        let sorted = toposort(&self.inner.graph, None).expect("topo sort graph");
+        for id in sorted {
+            let operation = self
+                .inner
+                .operations
+                .get(&id)
+                .expect("operation is present");
             graph.add_node((Some(operation.id()), self.format_operation(operation)));
 
             let (operation_idx, _) = graph
@@ -88,7 +84,7 @@ where
                 ..
             } = operation.payload()
             {
-                graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                graph = self.add_member_to_graph(operation_idx, member, graph);
             }
 
             if let GroupControlMessage {
@@ -100,15 +96,11 @@ where
             } = operation.payload()
             {
                 for (member, _access) in initial_members {
-                    graph = self.add_member_to_graph(operation_idx, member, root.clone(), graph);
+                    graph = self.add_member_to_graph(operation_idx, member, graph);
                 }
             }
 
-            let mut dependencies = operation.dependencies().clone();
-            let previous = operation.previous();
-            dependencies.retain(|id| !previous.contains(id));
-
-            for dependency in dependencies {
+            for dependency in operation.dependencies() {
                 let (idx, _) = graph
                     .node_references()
                     .find(|(_, (op, _))| {
@@ -119,21 +111,9 @@ where
                         }
                     })
                     .unwrap();
-                graph.add_edge(operation_idx, idx, "dependency".to_string());
-            }
 
-            for previous in previous {
-                let (idx, _) = graph
-                    .node_references()
-                    .find(|(_, (op, _))| {
-                        if let Some(op) = op {
-                            *op == previous
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
-                graph.add_edge(operation_idx, idx, "previous".to_string());
+                // @TODO: only add edges for nodes which exist in the graph.
+                graph.add_edge(operation_idx, idx, "dependency".to_string());
             }
         }
 
@@ -148,17 +128,20 @@ where
         let color = if control_message.is_create() {
             OP_ROOT_NODE
         } else {
-            match GroupCrdt::apply_action(
-                self.clone(),
+            let groups_y = self
+                .inner
+                .state_at(&HashSet::from_iter(operation.dependencies()))
+                .unwrap();
+            match apply_action(
+                groups_y,
+                control_message.group_id(),
                 operation.id(),
                 operation.author(),
-                &HashSet::from_iter(operation.dependencies()),
                 &control_message.action,
-            )
-            .expect("critical error when applying state change")
-            {
+                &self.inner.ignore,
+            ) {
                 StateChangeResult::Ok { .. } => OP_OK_NODE,
-                StateChangeResult::Noop { .. } => OP_NOOP_NODE,
+                StateChangeResult::Error { .. } => OP_ERR_NODE,
                 StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
             }
         };
@@ -166,16 +149,12 @@ where
         s += &format!(
             "<<TABLE BGCOLOR=\"{color}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         );
-        s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", self.id());
+        s += &format!(
+            "<TR><TD>group</TD><TD>{}</TD></TR>",
+            control_message.group_id()
+        );
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
         s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
-        let previous = operation.previous();
-        if !previous.is_empty() {
-            s += &format!(
-                "<TR><TD>previous</TD><TD>{}</TD></TR>",
-                self.format_dependencies(&previous)
-            );
-        }
         let dependencies = operation.dependencies().clone();
         if !dependencies.is_empty() {
             s += &format!(
@@ -195,11 +174,11 @@ where
         s
     }
 
-    fn format_final_members(&self) -> String {
+    fn format_final_members(&self, group_id: ID) -> String {
         let mut s = String::new();
         s += "<<TABLE BGCOLOR=\"#00E30F7F\" BORDER=\"1\" CELLBORDER=\"1\" CELLSPACING=\"2\">";
 
-        let members = self.transitive_members().unwrap();
+        let members = self.members(group_id);
         s += "<TR><TD>GROUP MEMBERS</TD></TR>";
         for (id, access) in members {
             s += &format!("<TR><TD> {id} : {access} </TD></TR>");
@@ -278,8 +257,12 @@ where
         let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
         dependencies.insert(operation.id());
         let mut members = self
-            .transitive_members_at(&dependencies)
-            .expect("state exists");
+            .inner
+            .state_at(&dependencies)
+            .unwrap()
+            .get(&operation.payload().group_id())
+            .unwrap()
+            .access_levels();
         members.sort_by(|(id_a, _), (id_b, _)| id_a.cmp(id_b));
 
         let mut s = String::new();
@@ -287,7 +270,7 @@ where
         s += "<TR><TD>MEMBERS</TD></TR>";
 
         for (member, access) in members {
-            s += &format!("<TR><TD>{member} : {access}</TD></TR>")
+            s += &format!("<TR><TD>{member:?} : {access}</TD></TR>")
         }
 
         s += "</TABLE>";
@@ -310,7 +293,6 @@ where
         &self,
         operation_idx: NodeIndex,
         member: GroupMember<ID>,
-        root: Self,
         mut graph: DiGraph<(Option<OP>, String), String>,
     ) -> DiGraph<(Option<OP>, String), String> {
         match member {
@@ -324,42 +306,18 @@ where
                 };
                 graph.add_edge(operation_idx, idx, "member".to_string());
             }
-            GroupMember::Group(id) => {
-                let sub_group = self.get_sub_group(id).unwrap();
-
-                let topo_sort = toposort(&sub_group.graph, None)
-                    .expect("group operation sets can be ordered topologically");
-                let create_op_id = topo_sort
-                    .first()
-                    .expect("at least one operation exists in graph");
-
-                let create_node = graph.node_references().find(|(_, (op, _))| {
-                    if let Some(op) = op {
-                        op == create_op_id
-                    } else {
-                        false
-                    }
-                });
-
-                let create_operation_idx = match create_node {
-                    Some((idx, _)) => idx,
-                    None => {
-                        graph = sub_group.add_nodes_and_previous_edges(root.clone(), graph);
-                        let (idx, _) = graph
-                            .node_references()
-                            .find(|(_, (op, _))| {
-                                if let Some(op) = op {
-                                    op == create_op_id
-                                } else {
-                                    false
-                                }
-                            })
-                            .unwrap();
-                        idx
-                    }
-                };
-
-                graph.add_edge(operation_idx, create_operation_idx, "sub group".to_string());
+            GroupMember::Group(group_id) => {
+                let (create_group_id, _) = self
+                    .inner
+                    .operations
+                    .iter()
+                    .find(|(_, op)| op.payload().is_create() && op.payload().group_id() == group_id)
+                    .unwrap();
+                let (idx, _) = graph
+                    .node_references()
+                    .find(|(_, (op, _))| *op == Some(*create_group_id))
+                    .unwrap();
+                graph.add_edge(operation_idx, idx, "member".to_string());
             }
         }
         graph
