@@ -2,29 +2,27 @@
 
 use std::fmt::Debug;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
 use crate::space::SpaceState;
-use crate::types::{ActorId, Conditions};
+use crate::types::{ActorId, AuthGroupState};
 
-pub trait SpaceStore<M, C, RS>
-where
-    C: Conditions,
-{
+pub trait SpaceStore<M> {
     type Error: Debug;
 
     fn space(
         &self,
         id: &ActorId,
-    ) -> impl Future<Output = Result<Option<SpaceState<M, C, RS>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<SpaceState<M>>, Self::Error>>;
 
     fn has_space(&self, id: &ActorId) -> impl Future<Output = Result<bool, Self::Error>>;
 
     fn set_space(
         &mut self,
         id: &ActorId,
-        y: SpaceState<M, C, RS>,
+        y: SpaceState<M>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
@@ -44,4 +42,15 @@ pub trait KeyStore {
         &mut self,
         y: &KeyRegistryState<ActorId>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
+}
+
+pub trait AuthStore<C>
+where
+    C: Conditions,
+{
+    type Error: Debug;
+
+    fn auth(&self) -> impl Future<Output = Result<AuthGroupState<C>, Self::Error>>;
+
+    fn set_auth(&mut self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
 }
