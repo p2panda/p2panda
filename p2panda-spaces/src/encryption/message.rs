@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessageContent};
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::types::{
-    ActorId, Conditions, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
-};
+use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
 
 #[derive(Clone, Debug)]
 pub enum EncryptionArgs {
