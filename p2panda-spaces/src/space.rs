@@ -117,11 +117,11 @@ where
                 members: HashSet::from_iter(members.iter().cloned()),
             };
 
-                        // @TODO: Get this from store & establish initial orderer state.
-                        //
-                        // This initial orderer state is not necessarily "empty", can include pointers at other
-                        // groups in case we've passed in "groups" as our initial members.
-                        let orderer_y = EncryptionOrdererState::new();
+            // @TODO: Get this from store & establish initial orderer state.
+            //
+            // This initial orderer state is not necessarily "empty", can include pointers at other
+            // groups in case we've passed in "groups" as our initial members.
+            let orderer_y = EncryptionOrdererState::new();
 
             let key_manager_y = manager
                 .store
