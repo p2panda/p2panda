@@ -2,8 +2,10 @@
 
 use std::convert::Infallible;
 
+use p2panda_auth::traits::Conditions;
+
 use crate::auth::message::{AuthArgs, AuthMessage};
-use crate::types::{ActorId, AuthControlMessage, Conditions, OperationId};
+use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 // Manages "dependencies" required for `p2panda-auth`.
 #[derive(Clone, Debug)]
