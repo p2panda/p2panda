@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use serde::{Deserialize, Serialize};
@@ -10,8 +11,7 @@ use crate::auth::message::AuthArgs;
 use crate::encryption::message::EncryptionArgs;
 use crate::space::secret_members;
 use crate::types::{
-    ActorId, AuthGroupAction, Conditions, EncryptionControlMessage, EncryptionDirectMessage,
-    OperationId,
+    ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
 
 use p2panda_auth::Access;
