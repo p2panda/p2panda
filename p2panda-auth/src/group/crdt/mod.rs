@@ -424,7 +424,7 @@ where
 
         groups_y = match result {
             StateChangeResult::Ok { state } => state,
-            StateChangeResult::Noop { error, .. } => {
+            StateChangeResult::Error { error, .. } => {
                 // Noop shouldn't happen when processing new operations as the
                 // rebuild logic should have occurred instead.
                 return Err(GroupCrdtError::StateChangeError(operation_id, error));
@@ -506,7 +506,7 @@ where
 
         match result {
             StateChangeResult::Ok { state } => state,
-            StateChangeResult::Noop { error, .. } => {
+            StateChangeResult::Error { error, .. } => {
                 // Noop shouldn't happen when processing new operations as the
                 // rebuild logic should have occurred instead.
                 return Err(GroupCrdtError::StateChangeError(operation.id(), error));
@@ -598,7 +598,7 @@ where
             // change, however we do want to accept them into our graph so as to ensure
             // consistency consistency across peers.
             groups_y.insert(group_id, members_y);
-            StateChangeResult::Noop {
+            StateChangeResult::Error {
                 state: groups_y,
                 error: err,
             }
@@ -616,7 +616,7 @@ where
     Ok { state: GroupStates<ID, C> },
 
     /// Action was not applied because it failed internal validation.
-    Noop {
+    Error {
         state: GroupStates<ID, C>,
         #[allow(unused)]
         error: GroupMembershipError<GroupMember<ID>>,
@@ -634,7 +634,7 @@ where
     pub fn state(&self) -> &GroupStates<ID, C> {
         match self {
             StateChangeResult::Ok { state }
-            | StateChangeResult::Noop { state, .. }
+            | StateChangeResult::Error { state, .. }
             | StateChangeResult::Filtered { state } => state,
         }
     }

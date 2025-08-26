@@ -14,7 +14,7 @@ use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer}
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_OK_NODE: &str = "#BFC6C77F";
-const OP_NOOP_NODE: &str = "#FFA142";
+const OP_ERR_NODE: &str = "#FFA142";
 const OP_ROOT_NODE: &str = "#EDD7B17F";
 const INDIVIDUAL_NODE: &str = "#EDD7B17F";
 const ADD_MEMBER_EDGE: &str = "#0091187F";
@@ -141,7 +141,7 @@ where
                 &self.inner.ignore,
             ) {
                 StateChangeResult::Ok { .. } => OP_OK_NODE,
-                StateChangeResult::Noop { .. } => OP_NOOP_NODE,
+                StateChangeResult::Error { .. } => OP_ERR_NODE,
                 StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
             }
         };

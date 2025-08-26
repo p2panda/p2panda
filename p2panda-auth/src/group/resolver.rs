@@ -5,22 +5,12 @@ use std::collections::{HashMap, HashSet};
 use std::{fmt::Debug, marker::PhantomData};
 
 use petgraph::algo::toposort;
-use thiserror::Error;
 
 use crate::graph::{concurrent_bubbles, has_path};
-use crate::group::crdt::GroupCrdtInnerError;
-use crate::group::{GroupAction, GroupControlMessage, GroupCrdtInnerState, apply_action};
+use crate::group::{
+    GroupAction, GroupControlMessage, GroupCrdtInnerError, GroupCrdtInnerState, apply_action,
+};
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
-
-/// Error types for GroupCrdt.
-#[derive(Debug, Error)]
-pub enum StrongRemoveError<OP>
-where
-    OP: OperationId,
-{
-    #[error(transparent)]
-    Groups(#[from] GroupCrdtInnerError<OP>),
-}
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.  
 ///
@@ -75,7 +65,7 @@ where
     M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
     type State = GroupCrdtInnerState<ID, OP, C, M>;
-    type Error = StrongRemoveError<OP>;
+    type Error = GroupCrdtInnerError<OP>;
 
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(y: &Self::State, operation: &M) -> Result<bool, Self::Error> {

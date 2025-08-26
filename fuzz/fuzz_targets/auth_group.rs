@@ -226,8 +226,7 @@ impl Member {
         }
 
         if member.is_group() {
-            // Group create a sub-group for themselves incase they should be added as a
-            // sub-group.
+            // Members which are acting as a group create a group for themselves.
             member.create_group(
                 member.id(),
                 vec![(GroupMember::Individual(member.my_id), Access::manage())],

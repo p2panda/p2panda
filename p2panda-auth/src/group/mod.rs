@@ -13,7 +13,10 @@ pub mod resolver;
 pub use action::GroupAction;
 pub(crate) use crdt::apply_action;
 pub use crdt::state::{GroupMembersState, GroupMembershipError, MemberState};
-pub use crdt::{GroupCrdt, GroupCrdtError, GroupCrdtInnerState, GroupCrdtState, StateChangeResult};
+pub use crdt::{
+    GroupCrdt, GroupCrdtError, GroupCrdtInnerError, GroupCrdtInnerState, GroupCrdtState,
+    StateChangeResult,
+};
 pub use member::GroupMember;
 pub use message::GroupControlMessage;
 
@@ -86,7 +89,7 @@ where
 {
     my_id: ID,
     y: Option<GroupCrdtState<ID, OP, C, ORD>>,
-    _phantom: PhantomData<(ID, OP, C, RS, ORD)>,
+    _phantom: PhantomData<RS>,
 }
 
 impl<ID, OP, C, RS, ORD> Groups<ID, OP, C, RS, ORD>
