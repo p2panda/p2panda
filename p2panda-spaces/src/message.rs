@@ -49,7 +49,6 @@ pub enum SpacesArgs<C> {
         control_message: ControlMessage<C>,
 
         // @TODO: We eventually want application dependencies here too.
-
         /// Auth dependencies. These are the latest heads of the global auth control message graph.
         auth_dependencies: Vec<OperationId>,
 
@@ -72,7 +71,6 @@ pub enum SpacesArgs<C> {
 
         // @TODO: We probably also want auth dependencies here too.
         // auth_dependencies: Vec<OperationId>,
-        
         /// Encryption dependencies. These are the latest heads of the encryption control
         /// and application message graph.
         encryption_dependencies: Vec<OperationId>,
