@@ -5,6 +5,8 @@ use std::marker::PhantomData;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
+use petgraph::prelude::DiGraphMap;
+use petgraph::visit::NodeIndexable;
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
@@ -32,6 +34,10 @@ impl<M> EncryptionOrderer<M> {
 #[derive(Clone, Debug)]
 pub struct EncryptionOrdererState {
     next_message: Option<EncryptionMessage>,
+
+    pub heads: Vec<OperationId>,
+
+    pub graph: DiGraphMap<OperationId, ()>,
 }
 
 impl Default for EncryptionOrdererState {
@@ -42,7 +48,37 @@ impl Default for EncryptionOrdererState {
 
 impl EncryptionOrdererState {
     pub fn new() -> Self {
-        Self { next_message: None }
+        Self {
+            next_message: None,
+
+            heads: Default::default(),
+
+            // @TODO: We don't look at application message dependencies quite yet. More research
+            // needed into requirements around bi-directional dependencies between dags.
+            graph: Default::default(),
+        }
+    }
+
+    pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
+        if self.graph.contains_node(id) {
+            return;
+        }
+        self.graph.add_node(id);
+        for dependency in dependencies {
+            self.graph.add_edge(*dependency, id, ());
+        }
+
+        self.heads = self
+            .graph
+            .clone()
+            .into_graph::<usize>()
+            .externals(petgraph::Direction::Outgoing)
+            .map(|idx| self.graph.from_index(idx.index()))
+            .collect::<Vec<_>>();
+    }
+
+    pub fn heads(&self) -> &[OperationId] {
+        &self.heads
     }
 }
 
@@ -60,11 +96,11 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         control_message: &EncryptionControlMessage,
         direct_messages: &[EncryptionDirectMessage],
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then encryption dependencies should be calculated and returned here.
+        let dependencies = y.heads().to_vec();
         Ok((
             y,
             EncryptionMessage::Args(EncryptionArgs::System {
+                dependencies,
                 control_message: control_message.clone(),
                 direct_messages: direct_messages.to_vec(),
             }),
@@ -77,11 +113,11 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then encryption dependencies should be calculated and returned here.
+        let dependencies = y.heads().to_vec();
         Ok((
             y,
             EncryptionMessage::Args(EncryptionArgs::Application {
+                dependencies,
                 group_secret_id,
                 nonce,
                 ciphertext,

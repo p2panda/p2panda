@@ -32,17 +32,19 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
         })
     }
 
-    fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
-        todo!()
+    fn from_welcome(_my_id: ActorId, y: Self::State) -> Result<Self::State, Self::Error> {
+        Ok(y)
     }
 
     fn add(
-        _y: Self::State,
+        y: Self::State,
         _adder: ActorId,
         _added: ActorId,
         _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
-        todo!()
+        // The DGM state is already updated manually before this method is called so no action is
+        // required.
+        Ok(y)
     }
 
     fn remove(

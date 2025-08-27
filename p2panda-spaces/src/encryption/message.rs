@@ -11,12 +11,13 @@ use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, O
 
 #[derive(Clone, Debug)]
 pub enum EncryptionArgs {
-    // @TODO: Here we will fill in the "dependencies", which will be later used by ForgeArgs.
     System {
+        dependencies: Vec<OperationId>,
         control_message: EncryptionControlMessage,
         direct_messages: Vec<EncryptionDirectMessage>,
     },
     Application {
+        dependencies: Vec<OperationId>,
         group_secret_id: GroupSecretId,
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
@@ -42,19 +43,23 @@ impl EncryptionMessage {
     {
         let args = match message.args() {
             SpacesArgs::ControlMessage {
+                encryption_dependencies,
                 control_message,
                 direct_messages,
                 ..
             } => EncryptionArgs::System {
+                dependencies: encryption_dependencies.clone(),
                 control_message: control_message.to_encryption_control_message(),
                 direct_messages: direct_messages.to_vec(),
             },
             SpacesArgs::Application {
+                encryption_dependencies,
                 group_secret_id,
                 nonce,
                 ciphertext,
                 ..
             } => EncryptionArgs::Application {
+                dependencies: encryption_dependencies.clone(),
                 group_secret_id: *group_secret_id,
                 nonce: *nonce,
                 ciphertext: ciphertext.to_vec(),
@@ -110,6 +115,7 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
                 group_secret_id,
                 nonce,
                 ciphertext,
+                ..
             } => GroupMessageContent::Application {
                 group_secret_id: *group_secret_id,
                 nonce: *nonce,

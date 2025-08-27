@@ -3,23 +3,66 @@
 use std::convert::Infallible;
 
 use p2panda_auth::traits::Conditions;
+use petgraph::prelude::DiGraphMap;
+use petgraph::visit::NodeIndexable;
 
 use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
-// Manages "dependencies" required for `p2panda-auth`.
 #[derive(Clone, Debug)]
-pub struct AuthOrderer {}
+pub struct AuthOrdererState {
+    pub heads: Vec<OperationId>,
 
-impl Default for AuthOrderer {
+    pub graph: DiGraphMap<OperationId, ()>,
+}
+
+impl Default for AuthOrdererState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AuthOrderer {
+impl AuthOrdererState {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            heads: Default::default(),
+
+            // @TODO: We don't look at application message dependencies quite yet. More research
+            // needed into requirements around bi-directional dependencies between dags.
+            graph: Default::default(),
+        }
+    }
+
+    pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
+        if self.graph.contains_node(id) {
+            return;
+        }
+        self.graph.add_node(id);
+        for dependency in dependencies {
+            self.graph.add_edge(*dependency, id, ());
+        }
+
+        self.heads = self
+            .graph
+            .clone()
+            .into_graph::<usize>()
+            .externals(petgraph::Direction::Outgoing)
+            .map(|idx| self.graph.from_index(idx.index()))
+            .collect::<Vec<_>>();
+    }
+
+    pub fn heads(&self) -> &[OperationId] {
+        &self.heads
+    }
+}
+
+// Manages "dependencies" required for `p2panda-auth`.
+#[derive(Clone, Debug)]
+pub struct AuthOrderer {}
+
+impl AuthOrderer {
+    pub fn init() -> AuthOrdererState {
+        AuthOrdererState::new()
     }
 }
 
@@ -27,7 +70,7 @@ impl<C> p2panda_auth::traits::Orderer<ActorId, OperationId, AuthControlMessage<C
 where
     C: Conditions,
 {
-    type State = (); // @TODO
+    type State = AuthOrdererState;
 
     type Operation = AuthMessage<C>;
 
@@ -37,11 +80,11 @@ where
         y: Self::State,
         control_message: &AuthControlMessage<C>,
     ) -> Result<(Self::State, Self::Operation), Self::Error> {
-        // @TODO: we aren't focussing on ordering now so no dependencies are required, when we
-        // introduce ordering then auth dependencies should be calculated and returned here.
+        let dependencies = y.heads().to_vec();
         Ok((
             y,
             AuthMessage::Args(AuthArgs {
+                dependencies,
                 control_message: control_message.clone(),
             }),
         ))
