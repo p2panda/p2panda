@@ -32,8 +32,8 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
         })
     }
 
-    fn from_welcome(_my_id: ActorId, _y: Self::State) -> Result<Self::State, Self::Error> {
-        todo!()
+    fn from_welcome(_my_id: ActorId, y: Self::State) -> Result<Self::State, Self::Error> {
+        Ok(y)
     }
 
     fn add(
