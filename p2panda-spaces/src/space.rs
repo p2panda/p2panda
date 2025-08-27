@@ -436,7 +436,7 @@ where
         // Update auth and encryption orderer states.
 
         (y.encryption_y.orderer, auth_y.orderer_y) =
-            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
+            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, message);
 
         // Persist new state.
 
@@ -542,8 +542,8 @@ where
                 encryption_dependencies,
                 ..
             } => {
-                auth_y.add_dependency(message.id(), &auth_dependencies);
-                encryption_y.add_dependency(message.id(), &encryption_dependencies);
+                auth_y.add_dependency(message.id(), auth_dependencies);
+                encryption_y.add_dependency(message.id(), encryption_dependencies);
             }
             // @TODO: also include application messages in auth and encryption dependencies.
             SpacesArgs::Application { .. } => (),
