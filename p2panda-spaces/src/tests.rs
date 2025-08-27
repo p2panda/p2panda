@@ -382,64 +382,64 @@ async fn add_member_to_space() {
     ))
 }
 
-// @TODO: bring back test once replaying encryption messages   
+// @TODO: bring back test once replaying encryption messages
 //
 // #[tokio::test]
 // async fn receive_control_messages() {
 //     let alice = TestPeer::new(0);
 //     let bob = TestPeer::new(1);
-// 
+//
 //     // Manually register bob's key bundle.
-// 
+//
 //     alice
 //         .manager
 //         .register_member(&bob.manager.me().await.unwrap())
 //         .await
 //         .unwrap();
-// 
+//
 //     // Manually register alice's key bundle.
-// 
+//
 //     bob.manager
 //         .register_member(&alice.manager.me().await.unwrap())
 //         .await
 //         .unwrap();
-// 
+//
 //     let alice_id = alice.manager.id().await;
 //     let bob_id = bob.manager.id().await;
-// 
+//
 //     let alice_manager = alice.manager.clone();
 //     let bob_manager = alice.manager.clone();
-// 
+//
 //     // Alice: Create Space
 //     // ~~~~~~~~~~~~
-// 
+//
 //     let (space, message_01) = alice_manager.create_space(&[]).await.unwrap();
 //     let space_id = space.id();
 //     drop(space);
-// 
+//
 //     // Bob: Receive Message 01
 //     // ~~~~~~~~~~~~
-// 
+//
 //     bob.manager.process(&message_01).await.unwrap();
 //     let space = bob_manager.space(&space_id).await.unwrap().unwrap();
-// 
+//
 //     // Alice is the only group member.
 //     let mut members = space.members().await.unwrap();
 //     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
 //     assert_eq!(members, vec![(alice_id, Access::manage())]);
-// 
+//
 //     // Orderer states have been updated.
 //     let manager_ref = bob_manager.inner.read().await;
 //     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
 //     assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
-// 
+//
 //     let auth_y = manager_ref.store.auth().await.unwrap();
 //     assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
 //     drop(manager_ref);
-// 
+//
 //     // Alice: Add new member to Space
 //     // ~~~~~~~~~~~~
-// 
+//
 //     let space = alice_manager.space(&space_id).await.unwrap().unwrap();
 //     let message_02 = space
 //         .add(
@@ -449,13 +449,13 @@ async fn add_member_to_space() {
 //         .await
 //         .unwrap();
 //     drop(space);
-// 
+//
 //     // Bob: Receive Message 02
 //     // ~~~~~~~~~~~~
-// 
+//
 //     bob.manager.process(&message_02).await.unwrap();
 //     let space = bob_manager.space(&space_id).await.unwrap().unwrap();
-// 
+//
 //     // Alice and bob are both members.
 //     let mut members = space.members().await.unwrap();
 //     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
@@ -463,12 +463,12 @@ async fn add_member_to_space() {
 //         members,
 //         vec![(alice_id, Access::manage()), (bob_id, Access::read())]
 //     );
-// 
+//
 //     // Orderer states have been updated.
 //     let manager_ref = bob_manager.inner.read().await;
 //     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
 //     assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads);
-// 
+//
 //     let auth_y = manager_ref.store.auth().await.unwrap();
 //     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
 // }
