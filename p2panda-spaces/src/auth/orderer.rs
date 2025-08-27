@@ -3,14 +3,57 @@
 use std::convert::Infallible;
 
 use p2panda_auth::traits::Conditions;
+use petgraph::prelude::DiGraphMap;
+use petgraph::visit::NodeIndexable;
 
 use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[derive(Clone, Debug)]
 pub struct AuthOrdererState {
-    pub dependencies: Vec<OperationId>,
+    pub heads: Vec<OperationId>,
+
+    pub graph: DiGraphMap<OperationId, ()>,
+}
+
+impl Default for AuthOrdererState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AuthOrdererState {
+    pub fn new() -> Self {
+        Self {
+            heads: Default::default(),
+
+            // @TODO: We don't look at application message dependencies quite yet. More research
+            // needed into requirements around bi-directional dependencies between dags.
+            graph: Default::default(),
+        }
+    }
+
+    pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
+        if self.graph.contains_node(id) {
+            return;
+        }
+        self.graph.add_node(id);
+        for dependency in dependencies {
+            self.graph.add_edge(*dependency, id, ());
+        }
+
+        self.heads = self
+            .graph
+            .clone()
+            .into_graph::<usize>()
+            .externals(petgraph::Direction::Outgoing)
+            .map(|idx| self.graph.from_index(idx.index()))
+            .collect::<Vec<_>>();
+    }
+
+    pub fn heads(&self) -> &[OperationId] {
+        &self.heads
+    }
 }
 
 // Manages "dependencies" required for `p2panda-auth`.
@@ -19,11 +62,7 @@ pub struct AuthOrderer {}
 
 impl AuthOrderer {
     pub fn init() -> AuthOrdererState {
-        AuthOrdererState {
-            // @TODO: we should have access to the shared manager store here, get the auth state
-            // and calculate the heads.
-            dependencies: Default::default(),
-        }
+        AuthOrdererState::new()
     }
 }
 
@@ -41,7 +80,7 @@ where
         y: Self::State,
         control_message: &AuthControlMessage<C>,
     ) -> Result<(Self::State, Self::Operation), Self::Error> {
-        let dependencies = y.dependencies.clone();
+        let dependencies = y.heads().to_vec();
         Ok((
             y,
             AuthMessage::Args(AuthArgs {

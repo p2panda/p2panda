@@ -208,6 +208,14 @@ async fn create_space() {
     // No direct messages as we are the only member.
     assert!(direct_messages.is_empty());
 
+    // Orderer states have been updated.
+    let manager_ref = manager.inner.read().await;
+    let y = manager_ref.store.space(&space.id()).await.unwrap().unwrap();
+    assert_eq!(vec![message.id()], y.encryption_y.orderer.heads);
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message.id()], auth_y.orderer_y.heads)
+
     // @TODO: Currently the "create" message has been signed by the author's permament key. We
     // would like to sign it with the ephemeral key instead.
     //
@@ -297,25 +305,14 @@ async fn add_member_to_space() {
     let space_id = space.id();
     drop(space);
 
-    // Update the dependencies for both auth and encryption orderers.
+    // Orderer states have been updated.
+    let manager_ref = manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
 
-    {
-        let mut manager_inner = manager.inner.write().await;
-        let mut auth_y = manager_inner.store.auth().await.unwrap();
-        auth_y.orderer_y.dependencies = vec![message_01.id()];
-        manager_inner.store.set_auth(&auth_y).await.unwrap();
-    }
-
-    {
-        let mut manager_inner = manager.inner.write().await;
-        let mut space_y = manager_inner.store.space(&space_id).await.unwrap().unwrap();
-        space_y.encryption_y.orderer.dependencies = vec![message_01.id()];
-        manager_inner
-            .store
-            .set_space(&space_id, space_y)
-            .await
-            .unwrap();
-    }
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
+    drop(manager_ref);
 
     // Add new member to Space
     // ~~~~~~~~~~~~
@@ -328,6 +325,8 @@ async fn add_member_to_space() {
         )
         .await
         .unwrap();
+    let mut members = space.members().await.unwrap();
+    drop(space);
 
     let SpacesArgs::ControlMessage {
         id: group_id,
@@ -340,20 +339,19 @@ async fn add_member_to_space() {
         panic!("expected system message");
     };
 
-    // Dependencies are set for both auth and encryption.
-    assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
-    assert_eq!(encryption_dependencies.to_owned(), vec![message_01.id()]);
-
-    // Correct space id.
-    assert_eq!(*group_id, space.id());
-
     // Alice and bob are both members.
-    let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
     assert_eq!(
         members,
         vec![(alice_id, Access::manage()), (bob_id, Access::read())]
     );
+
+    // Dependencies are set for both auth and encryption.
+    assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
+    assert_eq!(encryption_dependencies.to_owned(), vec![message_01.id()]);
+
+    // Correct space id.
+    assert_eq!(*group_id, space_id);
 
     // Control message contains "add".
     assert_eq!(
@@ -363,6 +361,14 @@ async fn add_member_to_space() {
             access: Access::read()
         },
     );
+
+    // Orderer states have been updated.
+    let manager_ref = manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads);
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
 
     // There is one direct message and it's for bob.
     assert_eq!(direct_messages.len(), 1);
@@ -374,4 +380,93 @@ async fn add_member_to_space() {
             ..
         } if recipient == bob_id
     ))
+}
+
+#[tokio::test]
+async fn receive_control_messages() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    // Manually register bob's key bundle.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register alice's key bundle.
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = alice.manager.clone();
+
+    // Alice: Create Space
+    // ~~~~~~~~~~~~
+
+    let (space, message_01) = alice_manager.create_space(&[]).await.unwrap();
+    let space_id = space.id();
+    drop(space);
+
+    // Bob: Receive Message 01
+    // ~~~~~~~~~~~~
+
+    bob.manager.process(&message_01).await.unwrap();
+    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+
+    // Alice is the only group member.
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(members, vec![(alice_id, Access::manage())]);
+
+    // Orderer states have been updated.
+    let manager_ref = bob_manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
+    drop(manager_ref);
+
+    // Alice: Add new member to Space
+    // ~~~~~~~~~~~~
+
+    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
+    let message_02 = space
+        .add(
+            GroupMember::Individual(bob.manager.id().await),
+            Access::read(),
+        )
+        .await
+        .unwrap();
+    drop(space);
+
+    // Bob: Receive Message 02
+    // ~~~~~~~~~~~~
+
+    bob.manager.process(&message_02).await.unwrap();
+    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+
+    // Alice and bob are both members.
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![(alice_id, Access::manage()), (bob_id, Access::read())]
+    );
+
+    // Orderer states have been updated.
+    let manager_ref = bob_manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads);
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
 }

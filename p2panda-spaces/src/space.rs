@@ -11,6 +11,7 @@ use p2panda_encryption::RngError;
 use thiserror::Error;
 
 use crate::auth::message::{AuthArgs, AuthMessage};
+use crate::auth::orderer::AuthOrdererState;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::EncryptionMessage;
 use crate::encryption::orderer::EncryptionOrdererState;
@@ -119,10 +120,8 @@ where
                 members: HashSet::from_iter(secret_members.iter().cloned()),
             };
 
-            // @TODO: Get this from store & establish initial orderer state.
-            //
-            // This initial orderer state is not necessarily "empty", can include pointers at other
-            // groups in case we've passed in "groups" as our initial members.
+            // Encryption orderer state is empty when we're processing the first
+            // message in a new space.
             let orderer_y = EncryptionOrdererState::new();
 
             let key_manager_y = manager
@@ -167,16 +166,21 @@ where
         let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
         drop(manager);
 
-        // 5. Process auth message.
+        // 5. Process auth message and initialise space state.
 
-        let auth_y = {
+        let mut auth_y = {
             let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
+        let mut y = SpaceState::from_state(space_id, encryption_y);
 
-        // 6. Persist new state.
+        // 6. Update auth and encryption orderer states.
 
-        let y = SpaceState::from_state(space_id, encryption_y);
+        (y.encryption_y.orderer, auth_y.orderer_y) =
+            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
+
+        // 7. Persist new state.
+
         Self::persist_space(manager_ref.clone(), y, auth_y).await?;
 
         Ok((
@@ -297,14 +301,17 @@ where
 
         // 5. Process auth message.
 
-        let auth_y = {
+        let mut auth_y = {
             let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // @TODO: This is where we can update orderer state for both auth and encryption.
+        // 6. Update auth and encryption orderer states.
 
-        // 6. Persist new state.
+        (y.encryption_y.orderer, auth_y.orderer_y) =
+            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
+
+        // 7. Persist new state.
 
         Self::persist_space(self.manager.clone(), y, auth_y).await?;
 
@@ -355,10 +362,8 @@ where
                             members: HashSet::new(),
                         };
 
-                        // @TODO: Get this from store & establish initial orderer state.
-                        //
-                        // This initial orderer state is not necessarily "empty", can include pointers at other
-                        // groups in case we've passed in "groups" as our initial members.
+                        // Encryption orderer state is empty when we're processing the first
+                        // message in a new space.
                         let orderer_y = EncryptionOrdererState::new();
 
                         let key_manager_y = manager
@@ -383,7 +388,7 @@ where
 
         // Process auth message.
 
-        let auth_y = {
+        let mut auth_y = {
             let manager = self.manager.inner.read().await;
             let auth_message = AuthMessage::from_forged(message);
             let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
@@ -427,6 +432,11 @@ where
                 .map_err(SpaceError::EncryptionGroup)?
         };
         y.encryption_y = encryption_y;
+
+        // Update auth and encryption orderer states.
+
+        (y.encryption_y.orderer, auth_y.orderer_y) =
+            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
 
         // Persist new state.
 
@@ -518,6 +528,28 @@ where
             .filter(|actor| previous_members.contains(actor))
             .collect::<Vec<_>>();
         Ok((next_members, diff_members))
+    }
+
+    // Update orderer states.
+    pub fn update_orderer_states(
+        mut encryption_y: EncryptionOrdererState,
+        mut auth_y: AuthOrdererState,
+        message: &M,
+    ) -> (EncryptionOrdererState, AuthOrdererState) {
+        match message.args() {
+            SpacesArgs::KeyBundle {} => unimplemented!(),
+            SpacesArgs::ControlMessage {
+                auth_dependencies,
+                encryption_dependencies,
+                ..
+            } => {
+                auth_y.add_dependency(message.id(), &auth_dependencies);
+                encryption_y.add_dependency(message.id(), &encryption_dependencies);
+            }
+            // @TODO: also include application messages in auth and encryption dependencies.
+            SpacesArgs::Application { .. } => (),
+        };
+        (encryption_y, auth_y)
     }
 
     // Persist both auth and space state.
