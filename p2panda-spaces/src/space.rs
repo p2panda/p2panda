@@ -530,8 +530,7 @@ where
         Ok((next_members, diff_members))
     }
 
-    // Update orderer states.
-    pub fn update_orderer_states(
+    fn update_orderer_states(
         mut encryption_y: EncryptionOrdererState,
         mut auth_y: AuthOrdererState,
         message: &M,
