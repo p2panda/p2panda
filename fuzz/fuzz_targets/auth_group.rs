@@ -21,7 +21,7 @@ use p2panda_auth::test_utils::{MemberId, MessageId, TestOperation};
 use p2panda_auth::traits::Operation as OperationTrait;
 use p2panda_auth::{Access, AccessLevel};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng, random_bool};
+use rand::{Rng, SeedableRng};
 
 /// Flag for saving dot graph representations of all groups to the filesystem.
 ///
@@ -29,10 +29,7 @@ use rand::{Rng, SeedableRng, random_bool};
 const SAVE_GRAPH_VIZ: bool = false;
 
 /// Pool of all possible group member ids.
-const MEMBERS: [char; 26] = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
-    'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-];
+const MEMBERS: [char; 12] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
 /// The root group id.
 const ROOT_GROUP_ID: char = '0';
@@ -41,7 +38,7 @@ const ROOT_GROUP_ID: char = '0';
 const MAX_ACTION_ROUNDS: usize = 6;
 
 /// Max operations per actor, per round.
-const MAX_ACTOR_OPERATIONS_PER_ROUND: u8 = 2;
+const MAX_ACTOR_OPERATIONS_PER_ROUND: u8 = 6;
 
 /// Max concurrent branches.
 const MAX_BRANCHES: u8 = 6;
@@ -85,12 +82,12 @@ fn random_item<T: Clone>(vec: Vec<T>, rng: &mut StdRng) -> Option<T> {
     }
 }
 
-fn random_member_type(id: MemberId) -> GroupMember<MemberId> {
-    if random_bool(1.0 / 3.0) {
-        GroupMember::Group(id)
-    } else {
-        GroupMember::Individual(id)
-    }
+fn random_member_type(id: MemberId, rng: &mut StdRng) -> GroupMember<MemberId> {
+    random_item(
+        vec![GroupMember::Individual(id), GroupMember::Group(id)],
+        rng,
+    )
+    .unwrap()
 }
 
 fn print_members(members: &[(GroupMember<MemberId>, Access<()>)]) -> String {
@@ -320,12 +317,19 @@ impl Member {
 
                 let (groups_y_i, operation) =
                     TestGroup::prepare(self.groups_y.clone(), &control_message).unwrap();
-                let groups_y_ii = match TestGroup::process(groups_y_i, &operation) {
+                let groups_y_ii = match TestGroup::process(groups_y_i.clone(), &operation) {
                     Ok(y) => y,
                     Err(err) => {
-                        self.report(group_id, true);
-                        println!("{operation:#?}");
-                        panic!("{err}");
+                        // The fuzz tests may suggest operations which cause a cycle so we ignore
+                        // these errors.
+                        if let GroupCrdtError::GroupCycle(_, _, _) = err {
+                            self.groups_y = groups_y_i;
+                            return Ok(None);
+                        } else {
+                            self.report(group_id, true);
+                            println!("{operation:#?}");
+                            panic!("{err}");
+                        }
                     }
                 };
                 self.groups_y = groups_y_ii;
@@ -370,6 +374,10 @@ impl Member {
             }
             Err(err) => {
                 if let GroupCrdtError::DuplicateOperation(_, _) = err {
+                    self.groups_y.clone()
+                    // The fuzz tests may suggest operations which cause a cycle so we ignore
+                    // these errors.
+                } else if let GroupCrdtError::GroupCycle(_, _, _) = err {
                     self.groups_y.clone()
                 } else {
                     if let Suggestion::Valid(_) = suggestion {
@@ -453,7 +461,6 @@ impl Member {
                     Options::Remove,
                     Options::Promote,
                     Options::Demote,
-                    Options::Noop,
                 ],
                 rng,
             )
@@ -484,9 +491,31 @@ impl Member {
             return TestGroupAction::Noop;
         }
 
-        if try_options.contains(&Options::Add) {
-            if let Some(member) = self.random_non_member(group_id, rng) {
-                let access = match member {
+        if try_options.contains(&Options::Add)
+            && let Some(member) = self.random_non_member(group_id, rng)
+        {
+            let access = match member {
+                GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
+                GroupMember::Group(_) => {
+                    random_item(vec![Access::pull(), Access::read(), Access::write()], rng).unwrap()
+                }
+            };
+
+            if member.id() != self.my_id {
+                options.push(TestGroupAction::Action(GroupAction::Add { member, access }))
+            }
+        }
+
+        if try_options.contains(&Options::Promote)
+            && let Some((member, access)) = self.random_member(group_id, rng)
+        {
+            #[allow(clippy::never_loop)]
+            loop {
+                if access.is_manage() {
+                    break;
+                }
+
+                let next_access = match member {
                     GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
                     GroupMember::Group(_) => {
                         random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
@@ -494,88 +523,60 @@ impl Member {
                     }
                 };
 
-                if member.id() != self.my_id {
-                    options.push(TestGroupAction::Action(GroupAction::Add { member, access }))
-                }
-            }
-        }
-
-        if try_options.contains(&Options::Promote) {
-            if let Some((member, access)) = self.random_member(group_id, rng) {
-                loop {
-                    if access.is_manage() {
-                        break;
-                    }
-
-                    let next_access = match member {
-                        GroupMember::Individual(_) => {
-                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
-                        }
-                        GroupMember::Group(_) => {
-                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
-                                .unwrap()
-                        }
-                    };
-
-                    if access > next_access {
-                        continue;
-                    }
-
-                    options.push(TestGroupAction::Action(GroupAction::Promote {
-                        member,
-                        access: next_access,
-                    }));
+                if access >= next_access {
                     break;
                 }
-            }
-        }
 
-        if try_options.contains(&Options::Demote) {
-            if let Some((member, access)) = self.random_member(group_id, rng) {
-                loop {
-                    if access.is_pull() {
-                        break;
-                    }
-
-                    let next_access = match member {
-                        GroupMember::Individual(_) => {
-                            random_item(ACCESS_LEVELS.to_vec(), rng).unwrap()
-                        }
-                        GroupMember::Group(_) => {
-                            random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
-                                .unwrap()
-                        }
-                    };
-
-                    if access < next_access {
-                        continue;
-                    }
-
-                    options.push(TestGroupAction::Action(GroupAction::Demote {
-                        member,
-                        access: next_access,
-                    }));
-                    break;
-                }
-            }
-        }
-
-        if try_options.contains(&Options::Remove) {
-            if let Some(removed) = self.random_member(group_id, rng) {
-                options.push(TestGroupAction::Action(GroupAction::Remove {
-                    member: removed.0,
+                options.push(TestGroupAction::Action(GroupAction::Promote {
+                    member,
+                    access: next_access,
                 }));
+                break;
             }
+        }
+
+        if try_options.contains(&Options::Demote)
+            && let Some((member, access)) = self.random_member(group_id, rng)
+        {
+            #[allow(clippy::never_loop)]
+            loop {
+                if access.is_pull() {
+                    break;
+                }
+
+                let next_access = match member {
+                    GroupMember::Individual(_) => random_item(ACCESS_LEVELS.to_vec(), rng).unwrap(),
+                    GroupMember::Group(_) => {
+                        random_item(vec![Access::pull(), Access::read(), Access::write()], rng)
+                            .unwrap()
+                    }
+                };
+
+                if access <= next_access {
+                    break;
+                }
+
+                options.push(TestGroupAction::Action(GroupAction::Demote {
+                    member,
+                    access: next_access,
+                }));
+                break;
+            }
+        }
+
+        if try_options.contains(&Options::Remove)
+            && let Some(removed) = self.random_member(group_id, rng)
+        {
+            options.push(TestGroupAction::Action(GroupAction::Remove {
+                member: removed.0,
+            }));
         }
 
         if try_options.contains(&Options::Noop) {
             options.push(TestGroupAction::Noop);
         }
 
-        match random_item(options, rng) {
-            Some(operation) => operation,
-            None => TestGroupAction::Noop,
-        }
+        random_item(options, rng).unwrap_or(TestGroupAction::Noop)
     }
 
     /// Print a report for this member.
@@ -645,7 +646,7 @@ fuzz_target!(|seed: [u8; 32]| {
 
     // Generate a list of all member ids.
     let mut members: HashMap<MemberId, Member> = HashMap::new();
-    let range: u8 = random_range(1, MEMBERS.len() as u8, &mut rng);
+    let range: u8 = random_range(4, MEMBERS.len() as u8, &mut rng);
     let mut member_ids = MEMBERS[0..range as usize].to_vec();
 
     // Pop off the root group creator.
@@ -653,8 +654,10 @@ fuzz_target!(|seed: [u8; 32]| {
 
     // Assign all members as either "individual" or "group". This signifies how they would be
     // added to a group.
-    let mut member_ids: Vec<GroupMember<MemberId>> =
-        member_ids.into_iter().map(random_member_type).collect();
+    let mut member_ids: Vec<GroupMember<MemberId>> = member_ids
+        .into_iter()
+        .map(|id| random_member_type(id, &mut rng))
+        .collect();
 
     // Push back the root group creator as an individual.
     member_ids.push(GroupMember::Individual(group_creator));
@@ -719,10 +722,10 @@ fuzz_target!(|seed: [u8; 32]| {
                         // group).
                         let members = member.root_members(ROOT_GROUP_ID);
                         let is_sub_group_admin = members.iter().find_map(|(group_member, _)| {
-                            if let GroupMember::Group(id) = group_member {
-                                if member.is_manager(*id) {
-                                    return Some(id);
-                                }
+                            if let GroupMember::Group(id) = group_member
+                                && member.is_manager(*id)
+                            {
+                                return Some(id);
                             };
                             None
                         });
@@ -743,7 +746,10 @@ fuzz_target!(|seed: [u8; 32]| {
                         (suggestion, group_id)
                     };
 
-                    // Process group operation locally for this member.
+                    if matches!(suggestion, Suggestion::Valid(TestGroupAction::Noop)) {
+                        continue;
+                    }
+
                     match &suggestion {
                         Suggestion::Valid(action) => {
                             let member = members.get_mut(partition_member).unwrap();

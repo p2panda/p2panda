@@ -13,6 +13,7 @@ use crate::group::{GroupAction, GroupControlMessage, GroupCrdtState, GroupMember
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
+const OP_MUTUAL_REMOVE_NODE: &str = "#9a0aad";
 const OP_OK_NODE: &str = "#BFC6C77F";
 const OP_ERR_NODE: &str = "#FFA142";
 const OP_ROOT_NODE: &str = "#EDD7B17F";
@@ -132,17 +133,22 @@ where
                 .inner
                 .state_at(&HashSet::from_iter(operation.dependencies()))
                 .unwrap();
-            match apply_action(
-                groups_y,
-                control_message.group_id(),
-                operation.id(),
-                operation.author(),
-                &control_message.action,
-                &self.inner.ignore,
-            ) {
-                StateChangeResult::Ok { .. } => OP_OK_NODE,
-                StateChangeResult::Error { .. } => OP_ERR_NODE,
-                StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
+
+            if self.inner.mutual_removes.contains(&operation.id()) {
+                OP_MUTUAL_REMOVE_NODE
+            } else {
+                match apply_action(
+                    groups_y,
+                    control_message.group_id(),
+                    operation.id(),
+                    operation.author(),
+                    &control_message.action,
+                    &self.inner.ignore,
+                ) {
+                    StateChangeResult::Ok { .. } => OP_OK_NODE,
+                    StateChangeResult::Error { .. } => OP_ERR_NODE,
+                    StateChangeResult::Filtered { .. } => OP_FILTER_NODE,
+                }
             }
         };
 
