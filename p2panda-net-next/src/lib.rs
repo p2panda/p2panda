@@ -1,4 +1,7 @@
+mod actors;
 mod addrs;
+
+pub type TopicId = [u8; 32];
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub(crate) fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {
