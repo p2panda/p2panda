@@ -22,6 +22,9 @@
   </h3>
 </div>
 
+⚠️ Relay-mediated connectivity over the internet is currently disabled while
+we work on a refactor. Local networking using mDNS is working as usual. ⚠️
+
 This crate provides a data-type-agnostic p2p networking layer offering robust, direct communication
 to any device, no matter where they are.
 
