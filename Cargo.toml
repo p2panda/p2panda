@@ -8,6 +8,7 @@ members = [
     "p2panda-discovery",
     "p2panda-encryption",
     "p2panda-net",
+    "p2panda-net-next",
     "p2panda-store",
     "p2panda-stream",
     "p2panda-sync",
