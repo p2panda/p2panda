@@ -11,9 +11,11 @@ use iroh::Endpoint as IrohEndpoint;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
 use p2panda_core::PublicKey;
-use ractor::{Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
-use session::ToGossipSession;
+use ractor::{
+    Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
+};
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tracing::{debug, warn};
 
 use crate::actors::gossip::session::GossipSession;
 use crate::network::{FromNetwork, ToNetwork};
@@ -67,7 +69,7 @@ impl Message for ToGossip {}
 
 pub struct GossipState {
     gossip: IrohGossip,
-    sessions: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    sessions: HashMap<ActorId, TopicId>,
     from_gossip_senders: HashMap<TopicId, Vec<Sender<FromNetwork>>>,
     // TODO: Store topic_id -> actor_id mappings for session actors.
 }
@@ -167,7 +169,12 @@ impl Actor for Gossip {
                 )
                 .await?;
 
-                let _ = state.sessions.insert(topic_id, gossip_session_actor);
+                // Associate the session actor with the topic.
+                let _ = state
+                    .sessions
+                    .insert(gossip_session_actor.get_id(), topic_id);
+
+                // Associate the user channel (sender) with the topic.
                 let _ = state
                     .from_gossip_senders
                     .entry(topic_id)
@@ -175,8 +182,8 @@ impl Actor for Gossip {
                     .push(from_network_tx);
 
                 // Return sender / receiver pair to the user.
-                // TODO: Handle case where receiver channel has been dropped.
                 if !reply.is_closed() {
+                    // TODO: Handle case where receiver channel has been dropped.
                     let _ = reply.send((to_network_tx, from_network_rx));
                 }
 
@@ -197,5 +204,56 @@ impl Actor for Gossip {
         }
     }
 
-    // TODO: Child actor supervision.
+    async fn handle_supervisor_evt(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SupervisionEvent::ActorStarted(actor) => {
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sessions.get(&actor_id) {
+                    debug!(
+                        "received ready from gossip session actor #{} for topic id {:?}",
+                        actor_id, topic_id
+                    );
+                }
+            }
+            SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sessions.remove(&actor_id) {
+                    debug!(
+                        "gossip session #{} over topic id {:?} terminated with reason: {:?}",
+                        actor_id, topic_id, reason
+                    );
+
+                    // Drop the channel used to send gossip messages to the user.
+                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
+                        drop(from_gossip_tx)
+                    }
+                }
+            }
+            SupervisionEvent::ActorFailed(actor, panic_msg) => {
+                // NOTE: We do not respawn the session if it fails. Instead, we simply drop the
+                // gossip message sender to the user. The user is expected to handle the error on
+                // the receiver and resubscribe to the topic if they wish.
+
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sessions.remove(&actor_id) {
+                    warn!(
+                        "gossip session #{} over topic id {:?} failed with reason: {}",
+                        actor_id, topic_id, panic_msg
+                    );
+
+                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
+                        drop(from_gossip_tx)
+                    }
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
 }
