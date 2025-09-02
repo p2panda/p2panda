@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use iroh::Endpoint as IrohEndpoint;
 use iroh_gossip::net::Gossip as IrohGossip;
-use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
+use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
 use ractor::{
     Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
@@ -77,19 +77,25 @@ pub struct Gossip;
 impl Actor for Gossip {
     type State = GossipState;
     type Msg = ToGossip;
-    type Arguments = IrohEndpoint;
+    type Arguments = (IrohEndpoint, IrohGossipConfig);
 
-    // Configure the Gossip.
+    // Configure the gossip actor.
     //
     // A cloned IrohEndpoint is passed in when this actor is spawned by the Endpoint actor.
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
-        endpoint: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        // TODO: Pass config in with the endpoint as arguments.
-        // TODO: Configure iroh gossip properly.
-        let gossip = IrohGossip::builder().spawn(endpoint.clone()).await?;
+        let (endpoint, config) = args;
+
+        let gossip = IrohGossip::builder()
+            .max_message_size(config.max_message_size)
+            .membership_config(config.membership)
+            .broadcast_config(config.broadcast)
+            .spawn(endpoint.clone())
+            .await?;
+
         let sessions = HashMap::new();
         let from_gossip_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
@@ -121,7 +127,6 @@ impl Actor for Gossip {
         _myself: ActorRef<Self::Msg>,
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        // TODO: Clean-up on shutdown.
         Ok(())
     }
 
