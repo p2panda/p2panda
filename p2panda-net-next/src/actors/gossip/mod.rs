@@ -21,10 +21,6 @@ use crate::actors::gossip::session::GossipSession;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::{from_public_key, TopicId};
 
-// NOTE: The `GossipSession` actor does not know the topic id for it's session. Instead, the
-// `Gossip` actor holds a mapping of `topic_id` -> `actor_id` for each gossip subscription
-// session.
-
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
     ///
@@ -71,7 +67,7 @@ pub struct GossipState {
     gossip: IrohGossip,
     sessions: HashMap<ActorId, TopicId>,
     from_gossip_senders: HashMap<TopicId, Vec<Sender<FromNetwork>>>,
-    // TODO: Store topic_id -> actor_id mappings for session actors.
+    topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
 
 pub struct Gossip;
@@ -94,6 +90,7 @@ impl Actor for Gossip {
         let gossip = IrohGossip::builder().spawn(endpoint.clone()).await?;
         let sessions = HashMap::new();
         let from_gossip_senders = HashMap::new();
+        let topic_delivery_scopes = HashMap::new();
 
         // TODO: The router needs to be configured to accept gossip protocol.
         // This needs to be done when the router is built.
@@ -103,6 +100,7 @@ impl Actor for Gossip {
             gossip,
             sessions,
             from_gossip_senders,
+            topic_delivery_scopes,
         };
 
         Ok(state)
@@ -195,9 +193,30 @@ impl Actor for Gossip {
                 delivery_scope,
                 session_id,
             } => {
-                // TODO: Write the received bytes into the appropriate user channel.
-                todo!()
+                let msg = FromNetwork::GossipMessage {
+                    bytes,
+                    delivered_from,
+                };
+
+                if let Some(topic_id) = state.sessions.get(&session_id) {
+                    // Store the delivery scope of the received message.
+                    let _ = state
+                        .topic_delivery_scopes
+                        .entry(*topic_id)
+                        .or_insert_with(Vec::new)
+                        .push(delivery_scope);
+
+                    // Write the received bytes to all subscribers for the associated topic.
+                    if let Some(senders) = state.from_gossip_senders.get(topic_id) {
+                        for sender in senders {
+                            sender.send(msg.clone()).await?
+                        }
+                    }
+                }
+
+                Ok(())
             }
+            // TODO: Handle overlay events.
             ToGossip::Joined { peers, session_id } => todo!(),
             ToGossip::NeighborUp { peer, session_id } => todo!(),
             ToGossip::NeighborDown { peer, session_id } => todo!(),
@@ -206,7 +225,7 @@ impl Actor for Gossip {
 
     async fn handle_supervisor_evt(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -215,7 +234,7 @@ impl Actor for Gossip {
                 let actor_id = actor.get_id();
                 if let Some(topic_id) = state.sessions.get(&actor_id) {
                     debug!(
-                        "received ready from gossip session actor #{} for topic id {:?}",
+                        "gossip actor: received ready from gossip session actor #{} for topic id {:?}",
                         actor_id, topic_id
                     );
                 }
@@ -224,7 +243,7 @@ impl Actor for Gossip {
                 let actor_id = actor.get_id();
                 if let Some(topic_id) = state.sessions.remove(&actor_id) {
                     debug!(
-                        "gossip session #{} over topic id {:?} terminated with reason: {:?}",
+                        "gossip actor: gossip session #{} over topic id {:?} terminated with reason: {:?}",
                         actor_id, topic_id, reason
                     );
 
@@ -242,7 +261,7 @@ impl Actor for Gossip {
                 let actor_id = actor.get_id();
                 if let Some(topic_id) = state.sessions.remove(&actor_id) {
                     warn!(
-                        "gossip session #{} over topic id {:?} failed with reason: {}",
+                        "gossip_actor: gossip session #{} over topic id {:?} failed with reason: {}",
                         actor_id, topic_id, panic_msg
                     );
 
