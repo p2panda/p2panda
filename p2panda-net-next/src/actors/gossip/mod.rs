@@ -219,9 +219,18 @@ impl Actor for Gossip {
                 Ok(())
             }
             // TODO: Handle overlay events.
-            ToGossip::Joined { peers, session_id } => todo!(),
-            ToGossip::NeighborUp { peer, session_id } => todo!(),
-            ToGossip::NeighborDown { peer, session_id } => todo!(),
+            ToGossip::Joined {
+                peers: _,
+                session_id: _,
+            } => todo!(),
+            ToGossip::NeighborUp {
+                peer: _,
+                session_id: _,
+            } => todo!(),
+            ToGossip::NeighborDown {
+                peer: _,
+                session_id: _,
+            } => todo!(),
         }
     }
 

@@ -17,7 +17,7 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tracing::{debug, warn};
 
-use crate::actors::gossip::listener::{GossipListener, ToGossipListener};
+use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
 use crate::actors::gossip::ToGossip;
@@ -34,7 +34,6 @@ impl Message for ToGossipSession {}
 pub struct GossipSessionState {
     gossip_sender_actor: ActorRef<ToGossipSender>,
     gossip_receiver_actor: ActorRef<ToGossipReceiver>,
-    gossip_listener_actor: ActorRef<ToGossipListener>,
 }
 
 pub struct GossipSession {
@@ -76,11 +75,9 @@ impl Actor for GossipSession {
         )
         .await?;
 
-        // TODO: Spawn the channel listener.
-        // Must take a reference to the `gossip_sender_actor` for direct message passing.
         // The channel listener receives messages from userland and forwards them to the gossip
         // sender.
-        let (gossip_listener_actor, _) = Actor::spawn_linked(
+        let (_gossip_listener_actor, _) = Actor::spawn_linked(
             None,
             GossipListener::new(gossip_sender_actor.clone()),
             receiver_from_user,
@@ -91,7 +88,6 @@ impl Actor for GossipSession {
         let state = GossipSessionState {
             gossip_sender_actor,
             gossip_receiver_actor,
-            gossip_listener_actor,
         };
 
         Ok(state)
