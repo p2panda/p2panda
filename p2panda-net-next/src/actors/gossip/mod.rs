@@ -175,10 +175,10 @@ impl Actor for Gossip {
                     .insert(gossip_session_actor.get_id(), topic_id);
 
                 // Associate the user channel (sender) with the topic.
-                let _ = state
+                state
                     .from_gossip_senders
                     .entry(topic_id)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(from_network_tx);
 
                 // Return sender / receiver pair to the user.
@@ -202,10 +202,10 @@ impl Actor for Gossip {
 
                 if let Some(topic_id) = state.sessions.get(&session_id) {
                     // Store the delivery scope of the received message.
-                    let _ = state
+                    state
                         .topic_delivery_scopes
                         .entry(*topic_id)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(delivery_scope);
 
                     // Write the received bytes to all subscribers for the associated topic.
