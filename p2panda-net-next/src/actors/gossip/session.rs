@@ -15,10 +15,10 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tracing::{debug, warn};
 
+use crate::actors::gossip::ToGossip;
 use crate::actors::gossip::listener::{GossipListener, ToGossipListener};
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::actors::gossip::ToGossip;
 use crate::network::ToNetwork;
 use crate::to_public_key;
 
