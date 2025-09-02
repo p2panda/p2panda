@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Gossip sender actor which holds the topic sender, receives local messages and broadcasts them
 //! to the overlay.
 

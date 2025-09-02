@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Listen for messages from the user and forward them to the gossip sender.
 
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};

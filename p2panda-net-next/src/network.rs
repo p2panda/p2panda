@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use p2panda_core::PublicKey;
 
 /// An event to be broadcast to the network.

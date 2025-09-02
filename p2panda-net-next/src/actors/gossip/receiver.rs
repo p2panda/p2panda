@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Gossip recevier actor which holds the gossip topic receiver, receives overlay messages and sends
 //! them to the gossip session actor.
 

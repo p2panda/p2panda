@@ -1,4 +1,6 @@
-//! An iroh-specific gossip actor for message broadcast.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! An `iroh`-specific gossip actor for message broadcast.
 
 mod listener;
 mod receiver;
@@ -19,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::session::GossipSession;
 use crate::network::{FromNetwork, ToNetwork};
-use crate::{TopicId, from_public_key};
+use crate::{from_public_key, TopicId};
 
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
