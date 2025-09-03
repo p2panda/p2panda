@@ -124,8 +124,12 @@ impl Actor for Gossip {
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state
+        // and connections.
+        state.gossip.shutdown().await?;
+
         Ok(())
     }
 
