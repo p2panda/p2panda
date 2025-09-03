@@ -3,7 +3,7 @@
 //! Gossip sender actor which holds the topic sender, receives local messages and broadcasts them
 //! to the overlay.
 
-use iroh_gossip::net::GossipSender as IrohGossipSender;
+use iroh_gossip::api::GossipSender as IrohGossipSender;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 
 pub enum ToGossipSender {

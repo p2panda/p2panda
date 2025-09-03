@@ -4,7 +4,7 @@
 //! them to the gossip session actor.
 
 use futures_lite::StreamExt;
-use iroh_gossip::net::GossipReceiver as IrohGossipReceiver;
+use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 use tracing::error;
 
@@ -39,9 +39,16 @@ impl Actor for GossipReceiver {
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        receiver: Self::Arguments,
+        mut receiver: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        // Invoke the handler to wait for the first event on the receiver.
+        // Wait for the first peer connection.
+        receiver.joined().await?;
+
+        // Inform the session actor about our direct neighbors.
+        let peers = receiver.neighbors().collect();
+        let _ = self.session.cast(ToGossipSession::ProcessJoined(peers));
+
+        // Invoke the handler to wait for the next event on the receiver.
         let _ = myself.cast(ToGossipReceiver::WaitForEvent);
 
         let state = GossipReceiverState {

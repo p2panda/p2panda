@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::session::GossipSession;
 use crate::network::{FromNetwork, ToNetwork};
-use crate::{TopicId, from_public_key};
+use crate::{from_public_key, TopicId};
 
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
@@ -93,8 +93,7 @@ impl Actor for Gossip {
             .max_message_size(config.max_message_size)
             .membership_config(config.membership)
             .broadcast_config(config.broadcast)
-            .spawn(endpoint.clone())
-            .await?;
+            .spawn(endpoint.clone());
 
         let sessions = HashMap::new();
         let from_gossip_senders = HashMap::new();
@@ -163,7 +162,7 @@ impl Actor for Gossip {
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
 
-                let subscription = state.gossip.subscribe(topic_id.into(), peers)?;
+                let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = Actor::spawn_linked(

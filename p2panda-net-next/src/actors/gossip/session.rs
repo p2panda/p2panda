@@ -9,24 +9,26 @@
 
 use std::time::Duration;
 
-use iroh_gossip::net::{
-    Event as IrohEvent, GossipEvent as IrohGossipEvent, GossipTopic as IrohGossipTopic,
-};
+use iroh::NodeId;
+use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tracing::{debug, warn};
 
-use crate::actors::gossip::ToGossip;
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
+use crate::actors::gossip::ToGossip;
 use crate::network::ToNetwork;
 use crate::to_public_key;
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
     ProcessEvent(IrohEvent),
+
+    /// Joined the gossip overlay with the given peers as direct neighbors.
+    ProcessJoined(Vec<NodeId>),
 }
 
 impl Message for ToGossipSession {}
@@ -115,53 +117,51 @@ impl Actor for GossipSession {
         message: Self::Msg,
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        // Gossip events are passed up the chain to the main gossip actor.
+        //
+        // We perform type conversion here to reduce the workload of the gossip actor.
         match message {
+            ToGossipSession::ProcessJoined(peers) => {
+                let peers: Vec<PublicKey> = peers.into_iter().map(to_public_key).collect();
+                let session_id = myself.get_id();
+
+                let _ = self
+                    .gossip_actor
+                    .cast(ToGossip::Joined { peers, session_id });
+            }
             ToGossipSession::ProcessEvent(event) => match event {
                 IrohEvent::Lagged => {
                     warn!("gossip session actor: missed messages - dropping gossip event")
                 }
-                // Gossip events are passed up the chain to the main gossip actor.
-                //
-                // We perform type conversion here to reduce the workload of the gossip actor.
-                IrohEvent::Gossip(gossip_event) => match gossip_event {
-                    IrohGossipEvent::Joined(peers) => {
-                        let peers: Vec<PublicKey> = peers.into_iter().map(to_public_key).collect();
-                        let session_id = myself.get_id();
+                IrohEvent::Received(msg) => {
+                    let bytes = msg.content.into();
+                    let delivered_from = to_public_key(msg.delivered_from);
+                    let delivery_scope = msg.scope;
+                    let session_id = myself.get_id();
 
-                        let _ = self
-                            .gossip_actor
-                            .cast(ToGossip::Joined { peers, session_id });
-                    }
-                    IrohGossipEvent::Received(msg) => {
-                        let bytes = msg.content.into();
-                        let delivered_from = to_public_key(msg.delivered_from);
-                        let delivery_scope = msg.scope;
-                        let session_id = myself.get_id();
+                    let _ = self.gossip_actor.cast(ToGossip::ReceivedMessage {
+                        bytes,
+                        delivered_from,
+                        delivery_scope,
+                        session_id,
+                    });
+                }
+                IrohEvent::NeighborUp(peer) => {
+                    let peer = to_public_key(peer);
+                    let session_id = myself.get_id();
 
-                        let _ = self.gossip_actor.cast(ToGossip::ReceivedMessage {
-                            bytes,
-                            delivered_from,
-                            delivery_scope,
-                            session_id,
-                        });
-                    }
-                    IrohGossipEvent::NeighborUp(peer) => {
-                        let peer = to_public_key(peer);
-                        let session_id = myself.get_id();
+                    let _ = self
+                        .gossip_actor
+                        .cast(ToGossip::NeighborUp { peer, session_id });
+                }
+                IrohEvent::NeighborDown(peer) => {
+                    let peer = to_public_key(peer);
+                    let session_id = myself.get_id();
 
-                        let _ = self
-                            .gossip_actor
-                            .cast(ToGossip::NeighborUp { peer, session_id });
-                    }
-                    IrohGossipEvent::NeighborDown(peer) => {
-                        let peer = to_public_key(peer);
-                        let session_id = myself.get_id();
-
-                        let _ = self
-                            .gossip_actor
-                            .cast(ToGossip::NeighborUp { peer, session_id });
-                    }
-                },
+                    let _ = self
+                        .gossip_actor
+                        .cast(ToGossip::NeighborUp { peer, session_id });
+                }
             },
         }
 
