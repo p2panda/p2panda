@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::session::GossipSession;
 use crate::network::{FromNetwork, ToNetwork};
-use crate::{from_public_key, TopicId};
+use crate::{TopicId, from_public_key};
 
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
