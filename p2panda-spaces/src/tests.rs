@@ -382,6 +382,92 @@ async fn add_member_to_space() {
     ))
 }
 
+#[tokio::test]
+async fn add_pull_member_to_space() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    // Manually register bobs key bundle.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+
+    let manager = alice.manager.clone();
+
+    // Create Space
+    // ~~~~~~~~~~~~
+
+    let (space, message_01) = manager.create_space(&[]).await.unwrap();
+    let space_id = space.id();
+    drop(space);
+
+    // Add new pull-only member to Space
+    // ~~~~~~~~~~~~
+
+    let space = manager.space(&space_id).await.unwrap().unwrap();
+    let message_02 = space
+        .add(
+            GroupMember::Individual(bob.manager.id().await),
+            Access::pull(),
+        )
+        .await
+        .unwrap();
+    let mut members = space.members().await.unwrap();
+    drop(space);
+
+    let SpacesArgs::ControlMessage {
+        id: group_id,
+        control_message,
+        auth_dependencies,
+        encryption_dependencies,
+        direct_messages,
+    } = message_02.args()
+    else {
+        panic!("expected system message");
+    };
+
+    // Correct space id.
+    assert_eq!(*group_id, space_id);
+
+    // Alice and bob are both members.
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![(alice_id, Access::manage()), (bob_id, Access::pull())]
+    );
+
+    assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
+    // There is no dependency for encryption.
+    assert_eq!(encryption_dependencies.to_owned(), vec![]);
+
+    // Control message contains "add".
+    assert_eq!(
+        control_message,
+        &ControlMessage::Add {
+            member: GroupMember::Individual(bob_id),
+            access: Access::pull()
+        },
+    );
+
+    let manager_ref = manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    // Encryption order still has message_01 as it's latest state.
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
+
+    // Auth order has been updated.
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
+
+    // There are no direct messages.
+    assert_eq!(direct_messages.len(), 0);
+}
+
 // @TODO: bring back test once replaying encryption messages
 //
 // #[tokio::test]

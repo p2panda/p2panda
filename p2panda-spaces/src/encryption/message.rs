@@ -36,7 +36,7 @@ pub enum EncryptionMessage {
 }
 
 impl EncryptionMessage {
-    pub(crate) fn from_forged<M, C>(message: &M) -> Self
+    pub(crate) fn from_forged<M, C>(message: &M) -> Option<Self>
     where
         M: AuthoredMessage + SpacesMessage<C>,
         C: Conditions,
@@ -47,11 +47,15 @@ impl EncryptionMessage {
                 control_message,
                 direct_messages,
                 ..
-            } => EncryptionArgs::System {
-                dependencies: encryption_dependencies.clone(),
-                control_message: control_message.to_encryption_control_message(),
-                direct_messages: direct_messages.to_vec(),
-            },
+            } => {
+                let control_message = control_message.to_encryption_control_message()?;
+
+                EncryptionArgs::System {
+                    dependencies: encryption_dependencies.clone(),
+                    control_message,
+                    direct_messages: direct_messages.to_vec(),
+                }
+            }
             SpacesArgs::Application {
                 encryption_dependencies,
                 group_secret_id,
@@ -67,11 +71,11 @@ impl EncryptionMessage {
             _ => unreachable!("unexpected message type"),
         };
 
-        EncryptionMessage::Forged {
+        Some(EncryptionMessage::Forged {
             author: message.author(),
             operation_id: message.id(),
             args,
-        }
+        })
     }
 }
 

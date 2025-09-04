@@ -68,111 +68,66 @@ where
             manager.forge.public_key().into()
         };
 
-        // 1. Derive a space id.
+        // 1. Derive a space id and initialize new new state.
 
-        let ephemeral_private_key = {
+        let space_id: ActorId = {
             let manager = manager_ref.inner.write().await;
-            PrivateKey::from_bytes(&manager.rng.random_array()?)
+            let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
+            private_key.public_key().into()
         };
-        let space_id: ActorId = ephemeral_private_key.public_key().into();
-
-        // 2a. Prepare auth group state with "create" control message.
-
-        // Automatically add ourselves with "manage" level without any conditions as default.
-        if !initial_members
-            .iter()
-            .any(|(member, _)| member.id() == my_id)
-        {
-            initial_members.push((GroupMember::Individual(my_id), Access::manage()));
-        }
-
-        let auth_control_message = AuthControlMessage {
-            group_id: space_id,
-            action: AuthGroupAction::Create {
-                initial_members: initial_members.clone(),
-            },
-        };
-
-        let (auth_y, auth_args) = {
+        let mut y = Self::get_or_init_state(space_id, manager_ref.clone()).await?;
+        let auth_y = {
             let manager = manager_ref.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
+            manager.store.auth().await.map_err(SpaceError::AuthStore)?
+        };
+
+        // 2. Prepare auth "create" control message.
+
+        let (mut auth_y, auth_message) = {
+            // Automatically add ourselves with "manage" level without any conditions as default.
+            if !initial_members
+                .iter()
+                .any(|(member, _)| member.id() == my_id)
+            {
+                initial_members.push((GroupMember::Individual(my_id), Access::manage()));
+            }
+
+            let auth_control_message = AuthControlMessage {
+                group_id: space_id,
+                action: AuthGroupAction::Create {
+                    initial_members: initial_members.clone(),
+                },
+            };
             AuthGroup::prepare(auth_y, &auth_control_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // 2b. Compute the new group state to get the secret members.
+        // 3. Prepare and process encryption control message(s), establishing initial state.
 
-        let (secret_members, _) = Self::pre_process_auth(
+        let (encryption_y, encryption_message) = Self::process_group_membership_change(
             manager_ref.clone(),
             space_id,
-            &auth_args.dependencies(),
-            &auth_control_message,
+            y.encryption_y,
+            &auth_message,
         )
         .await?;
-
-        // 3. Establish encryption group state (prepare & process) with "create" control message.
-
-        let (encryption_y, encryption_args) = {
-            let manager = manager_ref.inner.read().await;
-
-            // Establish DGM state.
-
-            let dgm = EncryptionMembershipState {
-                members: HashSet::from_iter(secret_members.iter().cloned()),
-            };
-
-            // Encryption orderer state is empty when we're processing the first
-            // message in a new space.
-            let orderer_y = EncryptionOrdererState::new();
-
-            let key_manager_y = manager
-                .store
-                .key_manager()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            let key_registry_y = manager
-                .store
-                .key_registry()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            let y = EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y);
-
-            // We can use the high-level API (prepare & process internally) as none of the internal
-            // methods require a signed message type ("forged") with a final "operation id".
-            EncryptionGroup::create(y, secret_members, &manager.rng)
-                .map_err(SpaceError::EncryptionGroup)?
-        };
+        y.encryption_y = encryption_y;
 
         // 4. Merge and sign control messages in forge (F).
 
-        let args = {
-            let AuthMessage::Args(auth_args) = auth_args else {
-                panic!("here we're only dealing with local operations");
-            };
+        let message = Self::forge(
+            manager_ref.clone(),
+            space_id,
+            auth_message,
+            encryption_message,
+        )
+        .await?;
 
-            let EncryptionMessage::Args(encryption_args) = encryption_args else {
-                panic!("here we're only dealing with local operations");
-            };
+        // 5. Process auth message.
 
-            SpacesArgs::from_args(space_id, Some(auth_args), Some(encryption_args))
-        };
-
-        let mut manager = manager_ref.inner.write().await;
-
-        // @TODO: Can't use ephemeral private key for signing "create" message as this will make
-        // the author / sender different from the person we want to do a key agreement with when
-        // processing it in `p2panda-encryption`.
-        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
-        drop(manager);
-
-        // 5. Process auth message and initialise space state.
-
-        let mut auth_y = {
+        auth_y = {
             let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
-        let mut y = SpaceState::from_state(space_id, encryption_y);
 
         // 6. Update auth and encryption orderer states.
 
@@ -198,120 +153,56 @@ where
         member: GroupMember<ActorId>,
         access: Access<C>,
     ) -> Result<M, SpaceError<S, F, M, C, RS>> {
-        let mut y = {
+        let mut y = Self::get_or_init_state(self.id(), self.manager.clone()).await?;
+        let auth_y = {
             let manager = self.manager.inner.read().await;
-            manager
-                .store
-                .space(&self.id)
-                .await
-                .map_err(SpaceError::SpaceStore)?
-                .expect("space exists")
+            manager.store.auth().await.map_err(SpaceError::AuthStore)?
         };
 
-        // 1. Prepare auth group state with "add" control message.
+        // 1. Prepare auth group "add" control message.
 
-        let auth_control_message = AuthControlMessage {
-            group_id: self.id(),
-            action: AuthGroupAction::Add { member, access },
-        };
-
-        let (auth_y, auth_args) = {
-            let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
+        let (auth_y, auth_message) = {
+            let auth_control_message = AuthControlMessage {
+                group_id: self.id(),
+                action: AuthGroupAction::Add { member, access },
+            };
             AuthGroup::prepare(auth_y, &auth_control_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // 2. Compute the secret group members _after_ this operation will be processed, and the
-        //    diff between the _current_ and _next_ secret members. This is needed to know which
-        //    members have been added to the encryption scope (they have read access) once the
-        //    "add" has been processed.
+        // 2. Prepare and process encryption control message(s).
 
-        let (secret_members, _secret_members_diff) = Self::pre_process_auth(
+        let (encryption_y, encryption_message) = Self::process_group_membership_change(
             self.manager.clone(),
             self.id(),
-            &auth_args.dependencies(),
-            &auth_control_message,
+            y.encryption_y,
+            &auth_message,
+        )
+        .await?;
+        y.encryption_y = encryption_y;
+
+        // 3. Merge and sign control messages in forge (F).
+
+        let message = Self::forge(
+            self.manager.clone(),
+            self.id(),
+            auth_message,
+            encryption_message,
         )
         .await?;
 
-        // 3. Add new secret members to encryption group state.
-
-        let (encryption_y, encryption_args) = {
-            let manager = self.manager.inner.write().await;
-
-            // Make encryption DGM aware of current auth members state.
-
-            y.encryption_y.dcgka.dgm = EncryptionMembershipState {
-                members: HashSet::from_iter(secret_members.into_iter()),
-            };
-
-            // Share "global" key-manager and -registry across all spaces.
-
-            let key_manager_y = manager
-                .store
-                .key_manager()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            let key_registry_y = manager
-                .store
-                .key_registry()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            y.encryption_y.dcgka.my_keys = key_manager_y;
-            y.encryption_y.dcgka.pki = key_registry_y;
-
-            match member {
-                GroupMember::Individual(id) => {
-                    EncryptionGroup::add(y.encryption_y, id, &manager.rng)
-                        .map_err(SpaceError::EncryptionGroup)?
-                }
-                GroupMember::Group(_) => {
-                    // @TODO: in order to support adding a group to a space we need to add _all_
-                    // new transitive members which have read access. We already compute the new
-                    // to-be-added secret members above and have it in _secret_members_diff.
-                    unimplemented!();
-                }
-            }
-        };
-        y.encryption_y = encryption_y;
-
-        // 4. Merge and sign control messages in forge (F).
-
-        let args = {
-            let AuthMessage::Args(auth_args) = auth_args else {
-                panic!("here we're only dealing with local operations");
-            };
-
-            let EncryptionMessage::Args(encryption_args) = encryption_args else {
-                panic!("here we're only dealing with local operations");
-            };
-
-            SpacesArgs::from_args(self.id, Some(auth_args), Some(encryption_args))
-        };
-
-        let mut manager = self.manager.inner.write().await;
-
-        // @TODO: Can't use ephemeral private key for signing "create" message as this will make
-        // the author / sender different from the person we want to do a key agreement with when
-        // processing it in `p2panda-encryption`.
-        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
-        drop(manager);
-
-        // 5. Process auth message.
+        // 4. Process auth control message.
 
         let mut auth_y = {
             let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // 6. Update auth and encryption orderer states.
+        // 5. Update auth and encryption orderer states.
 
         (y.encryption_y.orderer, auth_y.orderer_y) =
             Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
 
-        // 7. Persist new state.
+        // 6. Persist new state.
 
         Self::persist_space(self.manager.clone(), y, auth_y).await?;
 
@@ -341,52 +232,9 @@ where
         &self,
         message: &M,
     ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
-        let mut y = {
-            let manager = self.manager.inner.read().await;
+        let mut y = Self::get_or_init_state(self.id, self.manager.clone()).await?;
 
-            let my_id: ActorId = manager.forge.public_key().into();
-
-            match manager
-                .store
-                .space(&self.id)
-                .await
-                .map_err(SpaceError::SpaceStore)?
-            {
-                Some(y) => y,
-                None => {
-                    // @TODO: This repeats quite a lot, would be good to factor state
-                    // initialisation out.
-                    let encryption_y = {
-                        // Establish DGM state.
-                        let dgm = EncryptionMembershipState {
-                            members: HashSet::new(),
-                        };
-
-                        // Encryption orderer state is empty when we're processing the first
-                        // message in a new space.
-                        let orderer_y = EncryptionOrdererState::new();
-
-                        let key_manager_y = manager
-                            .store
-                            .key_manager()
-                            .await
-                            .map_err(SpaceError::KeyStore)?;
-
-                        let key_registry_y = manager
-                            .store
-                            .key_registry()
-                            .await
-                            .map_err(SpaceError::KeyStore)?;
-
-                        EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y)
-                    };
-
-                    SpaceState::from_state(self.id, encryption_y)
-                }
-            }
-        };
-
-        // Process auth message.
+        // 1. Process auth control message.
 
         let mut auth_y = {
             let manager = self.manager.inner.read().await;
@@ -395,54 +243,86 @@ where
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // Process encryption message.
+        // 2. Process encryption control message.
 
         let (encryption_y, _encryption_output) = {
-            let manager = self.manager.inner.read().await;
-
-            // Make encryption DGM aware of current auth members state.
-
-            let group_members = auth_y.members(self.id);
-            let secret_members = secret_members(group_members);
-
-            y.encryption_y.dcgka.dgm = EncryptionMembershipState {
-                members: HashSet::from_iter(secret_members.into_iter()),
-            };
-
-            // Share "global" key-manager and -registry across all spaces.
-
-            let key_manager_y = manager
-                .store
-                .key_manager()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            let key_registry_y = manager
-                .store
-                .key_registry()
-                .await
-                .map_err(SpaceError::KeyStore)?;
-
-            y.encryption_y.dcgka.my_keys = key_manager_y;
-            y.encryption_y.dcgka.pki = key_registry_y;
-
             let encryption_message = EncryptionMessage::from_forged(message);
+            if let Some(encryption_message) = encryption_message {
+                // Make encryption DGM aware of current auth members state.
+                let group_members = auth_y.members(self.id);
+                let secret_members = secret_members(group_members);
+                y.encryption_y.dcgka.dgm = EncryptionMembershipState {
+                    members: HashSet::from_iter(secret_members.into_iter()),
+                };
 
-            EncryptionGroup::receive(y.encryption_y, &encryption_message)
-                .map_err(SpaceError::EncryptionGroup)?
+                EncryptionGroup::receive(y.encryption_y, &encryption_message)
+                    .map_err(SpaceError::EncryptionGroup)?
+            } else {
+                (y.encryption_y, vec![])
+            }
         };
         y.encryption_y = encryption_y;
 
-        // Update auth and encryption orderer states.
+        // 3. Update auth and encryption orderer states.
 
         (y.encryption_y.orderer, auth_y.orderer_y) =
             Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, message);
 
-        // Persist new state.
+        // 4. Persist new state.
 
         Self::persist_space(self.manager.clone(), y, auth_y).await?;
 
         Ok(vec![])
+    }
+
+    /// Process a group membership change on the group encryption state.
+    ///
+    /// The difference between the current and next secret group members (those with "read"
+    /// access) is computed and only the diff processed in the encryption group.
+    async fn process_group_membership_change(
+        manager_ref: Manager<S, F, M, C, RS>,
+        space_id: ActorId,
+        mut encryption_y: EncryptionGroupState<M>,
+        auth_message: &AuthMessage<C>,
+    ) -> Result<(EncryptionGroupState<M>, Option<EncryptionMessage>), SpaceError<S, F, M, C, RS>>
+    {
+        // Compute the secret group members after this auth action will be processed, This is
+        // needed to know which members have been added/removed from the encryption scope (those
+        // that have read access) once the action has been processed.
+        let (current_members, next_members) =
+            Self::compute_secret_members(manager_ref.clone(), space_id, auth_message).await?;
+
+        // Make the DGM aware of current members.
+        let dgm = EncryptionMembershipState {
+            members: HashSet::from_iter(current_members.clone().into_iter()),
+        };
+        encryption_y.dcgka.dgm = dgm;
+
+        let (encryption_y, message) = {
+            let manager = manager_ref.inner.read().await;
+            match &auth_message.payload().action {
+                AuthGroupAction::Create { .. } => {
+                    EncryptionGroup::create(encryption_y, next_members.clone(), &manager.rng)
+                        .map_err(SpaceError::EncryptionGroup)
+                }
+                AuthGroupAction::Add { .. } => {
+                    let added = added_members(current_members, next_members);
+
+                    if added.is_empty() {
+                        return Ok((encryption_y, None));
+                    }
+
+                    // @TODO: here we just take the first added member, but actually we want to add
+                    // every new member. For this we need to attach an array of encryption messages to
+                    // the space control message.
+                    EncryptionGroup::add(encryption_y, *added.first().unwrap(), &manager.rng)
+                        .map_err(SpaceError::EncryptionGroup)
+                }
+                _ => unimplemented!(),
+            }?
+        };
+
+        Ok((encryption_y, Some(message)))
     }
 
     async fn process_application_message(
@@ -454,7 +334,8 @@ where
         // Process encryption message.
 
         let (encryption_y, encryption_output) = {
-            let encryption_message = EncryptionMessage::from_forged(message);
+            let encryption_message =
+                EncryptionMessage::from_forged(message).expect("has encryption message");
 
             // @TODO: This calls members in the DGM
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
@@ -492,16 +373,15 @@ where
 
     /// Process an auth control message before the "authored" version has been forged. This is
     /// useful when we want to know what the resulting auth state will be.
-    async fn pre_process_auth(
-        manager: Manager<S, F, M, C, RS>,
+    async fn compute_secret_members(
+        manager_ref: Manager<S, F, M, C, RS>,
         space_id: ActorId,
-        dependencies: &Vec<OperationId>,
-        control_message: &AuthControlMessage<C>,
+        auth_message: &AuthMessage<C>,
     ) -> Result<(Vec<ActorId>, Vec<ActorId>), SpaceError<S, F, M, C, RS>> {
-        let manager = manager.inner.read().await;
-        let my_id: ActorId = manager.forge.public_key().into();
+        let manager = manager_ref.inner.read().await;
+        let my_id = manager.forge.public_key().into();
         let auth_y = manager.store.auth().await.map_err(SpaceError::AuthStore)?;
-        let previous_members = secret_members(auth_y.members(space_id));
+        let current_members = secret_members(auth_y.members(space_id));
 
         // We process a fake operation on the current auth state in order to compute the next
         // membership state.
@@ -509,8 +389,8 @@ where
             author: my_id,
             operation_id: OperationId::placeholder(),
             args: AuthArgs {
-                dependencies: dependencies.to_owned(),
-                control_message: control_message.to_owned(),
+                dependencies: auth_message.dependencies(),
+                control_message: auth_message.payload(),
             },
         };
 
@@ -519,22 +399,19 @@ where
         // state, and so no re-build will occur. This means processing the operation is cheap.
         // Processing the operation through the auth api is preferred over calculating the
         // next state manually, as auth does as some basic validation of control messages for
-        // us.
+        // us and handles nested groups.
         let auth_y_i = AuthGroup::process(auth_y, &fake_op).map_err(SpaceError::AuthGroup)?;
         let next_members = secret_members(auth_y_i.members(space_id));
-        let diff_members = next_members
-            .iter()
-            .cloned()
-            .filter(|actor| previous_members.contains(actor))
-            .collect::<Vec<_>>();
-        Ok((next_members, diff_members))
+        Ok((current_members, next_members))
     }
 
+    /// Update states for both encryption and auth orderers based on newly forged message.
     fn update_orderer_states(
         mut encryption_y: EncryptionOrdererState,
         mut auth_y: AuthOrdererState,
         message: &M,
     ) -> (EncryptionOrdererState, AuthOrdererState) {
+        let encryption_message = EncryptionMessage::from_forged(message);
         match message.args() {
             SpacesArgs::KeyBundle {} => unimplemented!(),
             SpacesArgs::ControlMessage {
@@ -543,7 +420,10 @@ where
                 ..
             } => {
                 auth_y.add_dependency(message.id(), auth_dependencies);
-                encryption_y.add_dependency(message.id(), encryption_dependencies);
+
+                if encryption_message.is_some() {
+                    encryption_y.add_dependency(message.id(), encryption_dependencies);
+                }
             }
             // @TODO: also include application messages in auth and encryption dependencies.
             SpacesArgs::Application { .. } => (),
@@ -551,7 +431,7 @@ where
         (encryption_y, auth_y)
     }
 
-    // Persist both auth and space state.
+    /// Persist both auth and space state.
     async fn persist_space(
         manager_ref: Manager<S, F, M, C, RS>,
         space: SpaceState<M>,
@@ -571,6 +451,93 @@ where
             .map_err(SpaceError::SpaceStore)?;
 
         Ok(())
+    }
+
+    /// Forge a space message from an auth and optional encryption message. This produces a signed
+    /// message which can be hashed to compute the final operation id.
+    async fn forge(
+        manager_ref: Manager<S, F, M, C, RS>,
+        space_id: ActorId,
+        auth_message: AuthMessage<C>,
+        encryption_message: Option<EncryptionMessage>,
+    ) -> Result<M, SpaceError<S, F, M, C, RS>> {
+        let AuthMessage::Args(auth_args) = auth_message else {
+            panic!("here we're only dealing with local operations");
+        };
+
+        let encryption_args =
+            if let Some(EncryptionMessage::Args(encryption_args)) = encryption_message {
+                Some(encryption_args)
+            } else {
+                None
+            };
+
+        let args = SpacesArgs::from_args(space_id, Some(auth_args), encryption_args);
+
+        // @TODO: Can't use ephemeral private key for signing "create" message as this will make
+        // the author / sender different from the person we want to do a key agreement with when
+        // processing it in `p2panda-encryption`.
+        let mut manager = manager_ref.inner.write().await;
+        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+        Ok(message)
+    }
+
+    /// Get the space state.
+    async fn state(&self) -> Result<SpaceState<M>, SpaceError<S, F, M, C, RS>> {
+        let manager = self.manager.inner.read().await;
+        let space_y = manager
+            .store
+            .space(&self.id)
+            .await
+            .map_err(SpaceError::SpaceStore)?
+            .ok_or(SpaceError::UnknownSpace(self.id))?;
+        Ok(space_y)
+    }
+
+    /// Get or if not present initialize a new space state.
+    async fn get_or_init_state(
+        space_id: ActorId,
+        manager_ref: Manager<S, F, M, C, RS>,
+    ) -> Result<SpaceState<M>, SpaceError<S, F, M, C, RS>> {
+        let manager = manager_ref.inner.read().await;
+
+        let result = manager
+            .store
+            .space(&space_id)
+            .await
+            .map_err(SpaceError::SpaceStore)?;
+
+        let space_y = match result {
+            Some(y) => y,
+            None => {
+                let my_id: ActorId = manager.forge.public_key().into();
+
+                let key_manager_y = manager
+                    .store
+                    .key_manager()
+                    .await
+                    .map_err(SpaceError::KeyStore)?;
+
+                let key_registry_y = manager
+                    .store
+                    .key_registry()
+                    .await
+                    .map_err(SpaceError::KeyStore)?;
+
+                let dgm = EncryptionMembershipState {
+                    members: HashSet::new(),
+                };
+
+                // Encryption orderer state is empty when we're initializing a new encryption
+                // state.
+                let orderer_y = EncryptionOrdererState::new();
+
+                let encryption_y =
+                    EncryptionGroup::init(my_id, key_manager_y, key_registry_y, dgm, orderer_y);
+                SpaceState::from_state(space_id, encryption_y)
+            }
+        };
+        Ok(space_y)
     }
 
     pub fn id(&self) -> ActorId {
@@ -612,17 +579,6 @@ where
 
         Ok(message)
     }
-
-    async fn state(&self) -> Result<SpaceState<M>, SpaceError<S, F, M, C, RS>> {
-        let manager = self.manager.inner.read().await;
-        let space_y = manager
-            .store
-            .space(&self.id)
-            .await
-            .map_err(SpaceError::SpaceStore)?
-            .ok_or(SpaceError::UnknownSpace(self.id))?;
-        Ok(space_y)
-    }
 }
 
 #[derive(Debug)]
@@ -649,6 +605,14 @@ pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
         .into_iter()
         .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })
         .collect()
+}
+
+pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
+    next_members
+        .iter()
+        .cloned()
+        .filter(|actor| !current_members.contains(actor))
+        .collect::<Vec<_>>()
 }
 
 #[derive(Debug, Error)]

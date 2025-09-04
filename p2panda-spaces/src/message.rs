@@ -124,7 +124,9 @@ where
             (None, Some(encryption_control_message)) => {
                 Self::from_encryption_args(group_id, encryption_control_message, direct_messages)
             }
-            (Some(auth_action), None) => Self::from_auth_args(group_id, auth_action),
+            (Some(auth_action), None) => {
+                Self::from_auth_args(group_id, auth_action, auth_dependencies)
+            }
             (Some(auth_action), Some(encryption_control_message)) => Self::from_both_args(
                 group_id,
                 auth_action,
@@ -153,9 +155,18 @@ where
         }
     }
 
-    // @TODO: Handle auth-only cases ("promote", "demote")
-    fn from_auth_args(_group_id: ActorId, _auth_action: AuthGroupAction<C>) -> Self {
-        todo!();
+    fn from_auth_args(
+        group_id: ActorId,
+        auth_action: AuthGroupAction<C>,
+        auth_dependencies: Vec<OperationId>,
+    ) -> Self {
+        Self::ControlMessage {
+            id: group_id,
+            control_message: ControlMessage::from_auth_action(&auth_action),
+            auth_dependencies,
+            encryption_dependencies: vec![],
+            direct_messages: vec![],
+        }
     }
 
     // @TODO: Handle encryption-only cases ("update")
@@ -175,15 +186,12 @@ where
         encryption_dependencies: Vec<OperationId>,
         direct_messages: Vec<EncryptionDirectMessage>,
     ) -> Self {
-        let control_message = match (auth_action, encryption_control_message) {
-            (
-                AuthGroupAction::Create { initial_members },
-                EncryptionControlMessage::Create { .. },
-            ) => ControlMessage::Create { initial_members },
-            (AuthGroupAction::Add { member, access }, EncryptionControlMessage::Add { .. })
-                if !access.is_pull() =>
-            {
-                ControlMessage::Add { member, access }
+        let control_message = match (&auth_action, &encryption_control_message) {
+            (AuthGroupAction::Create { .. }, EncryptionControlMessage::Create { .. }) => {
+                ControlMessage::from_auth_action(&auth_action)
+            }
+            (AuthGroupAction::Add { .. }, EncryptionControlMessage::Add { .. }) => {
+                ControlMessage::from_auth_action(&auth_action)
             }
             _ => unimplemented!(), // @TODO: More cases will go here. Panic on invalid ones.
         };
@@ -242,9 +250,9 @@ where
         }
     }
 
-    pub(crate) fn to_encryption_control_message(&self) -> EncryptionControlMessage {
+    pub(crate) fn to_encryption_control_message(&self) -> Option<EncryptionControlMessage> {
         match self {
-            ControlMessage::Create { initial_members } => EncryptionControlMessage::Create {
+            ControlMessage::Create { initial_members } => Some(EncryptionControlMessage::Create {
                 // @TODO: Compute set of members looking at auth state to take transitive
                 // membership into account.
                 initial_members: secret_members(
@@ -253,17 +261,27 @@ where
                         .map(|(member, access)| (member.id(), access.clone()))
                         .collect(),
                 ),
-            },
+            }),
             ControlMessage::Add { member, access } if !access.is_pull() => {
                 // @TODO: Need to look into auth state to compute set of added
                 // secret member when a group was added and we need to compute
                 // transitive members.
 
-                // @TODO: We want to ignore any members which only have "pull"
-                // access.
-                EncryptionControlMessage::Add { added: member.id() }
+                // @TODO: We want to ignore any members which only have "pull" access.
+                Some(EncryptionControlMessage::Add { added: member.id() })
             }
+            ControlMessage::Add { access, .. } if access.is_pull() => None,
             _ => unimplemented!(),
+        }
+    }
+
+    pub(crate) fn from_auth_action(action: &AuthGroupAction<C>) -> Self {
+        match action.clone() {
+            AuthGroupAction::Create { initial_members } => {
+                ControlMessage::Create { initial_members }
+            }
+            AuthGroupAction::Add { member, access } => ControlMessage::Add { member, access },
+            _ => unimplemented!(), // @TODO: More cases will go here. Panic on invalid ones.
         }
     }
 }

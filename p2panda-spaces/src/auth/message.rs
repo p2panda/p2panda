@@ -91,11 +91,7 @@ where
 
     fn payload(&self) -> AuthControlMessage<C> {
         match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
+            AuthMessage::Args(args) => args.control_message.clone(),
             AuthMessage::Forged {
                 args: AuthArgs {
                     control_message, ..
