@@ -136,7 +136,7 @@ where
 
         // 7. Persist new state.
 
-        Self::persist_space(manager_ref.clone(), y, auth_y).await?;
+        Self::set_state(manager_ref.clone(), y, auth_y).await?;
 
         Ok((
             Self {
@@ -204,7 +204,7 @@ where
 
         // 6. Persist new state.
 
-        Self::persist_space(self.manager.clone(), y, auth_y).await?;
+        Self::set_state(self.manager.clone(), y, auth_y).await?;
 
         Ok(message)
     }
@@ -270,7 +270,7 @@ where
 
         // 4. Persist new state.
 
-        Self::persist_space(self.manager.clone(), y, auth_y).await?;
+        Self::set_state(self.manager.clone(), y, auth_y).await?;
 
         Ok(vec![])
     }
@@ -431,28 +431,6 @@ where
         (encryption_y, auth_y)
     }
 
-    /// Persist both auth and space state.
-    async fn persist_space(
-        manager_ref: Manager<S, F, M, C, RS>,
-        space: SpaceState<M>,
-        auth: AuthGroupState<C>,
-    ) -> Result<(), SpaceError<S, F, M, C, RS>> {
-        let mut manager = manager_ref.inner.write().await;
-        manager
-            .store
-            .set_auth(&auth)
-            .await
-            .map_err(SpaceError::AuthStore)?;
-        let space_id = space.space_id;
-        manager
-            .store
-            .set_space(&space_id, space)
-            .await
-            .map_err(SpaceError::SpaceStore)?;
-
-        Ok(())
-    }
-
     /// Forge a space message from an auth and optional encryption message. This produces a signed
     /// message which can be hashed to compute the final operation id.
     async fn forge(
@@ -492,6 +470,28 @@ where
             .map_err(SpaceError::SpaceStore)?
             .ok_or(SpaceError::UnknownSpace(self.id))?;
         Ok(space_y)
+    }
+
+    /// Persist both auth and space state.
+    async fn set_state(
+        manager_ref: Manager<S, F, M, C, RS>,
+        space: SpaceState<M>,
+        auth: AuthGroupState<C>,
+    ) -> Result<(), SpaceError<S, F, M, C, RS>> {
+        let mut manager = manager_ref.inner.write().await;
+        manager
+            .store
+            .set_auth(&auth)
+            .await
+            .map_err(SpaceError::AuthStore)?;
+        let space_id = space.space_id;
+        manager
+            .store
+            .set_space(&space_id, space)
+            .await
+            .map_err(SpaceError::SpaceStore)?;
+
+        Ok(())
     }
 
     /// Get or if not present initialize a new space state.
