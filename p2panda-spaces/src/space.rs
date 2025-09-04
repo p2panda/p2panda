@@ -554,6 +554,11 @@ where
 
     pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
         let mut space_y = self.state().await?;
+
+        if !space_y.encryption_y.orderer.is_welcomed() {
+            return Err(SpaceError::NotWelcomed(self.id()));
+        }
+
         let mut manager = self.manager.inner.write().await;
 
         let (encryption_y, encryption_args) =
@@ -647,4 +652,7 @@ where
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ActorId),
+
+    #[error("tried to publish when not a member of space {0}")]
+    NotWelcomed(ActorId),
 }
