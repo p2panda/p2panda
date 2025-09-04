@@ -570,23 +570,33 @@ async fn receive_control_messages() {
     assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
     drop(manager_ref);
 
-    // Alice: Add new member to Space
+    // Alice: Publishes a message into the space
     // ~~~~~~~~~~~~
 
     let space = alice_manager.space(&space_id).await.unwrap().unwrap();
-    let message_02 = space
+    let message_02 = space.publish(&[0, 1, 2]).await.unwrap();
+
+    // Alice: Add new member to Space
+    // ~~~~~~~~~~~~
+
+    let message_03 = space
         .add(
             GroupMember::Individual(bob.manager.id().await),
             Access::read(),
         )
         .await
         .unwrap();
+
     drop(space);
 
-    // Bob: Receive Message 02
+    // Bob: Receive Message 02 & 03
     // ~~~~~~~~~~~~
 
-    bob.manager.process(&message_02).await.unwrap();
+    let events = bob.manager.process(&message_02).await.unwrap();
+    assert!(events.is_empty());
+    let events = bob.manager.process(&message_03).await.unwrap();
+    // The application message arrives only after bob is welcomed.
+    assert_eq!(events.len(), 1);
     let space = bob_manager.space(&space_id).await.unwrap().unwrap();
 
     // Alice and bob are both members.
@@ -600,8 +610,8 @@ async fn receive_control_messages() {
     // Orderer states have been updated.
     let manager_ref = bob_manager.inner.read().await;
     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_03.id()], y.encryption_y.orderer.heads());
 
     let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
+    assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 }
