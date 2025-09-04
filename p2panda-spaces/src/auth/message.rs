@@ -7,8 +7,7 @@ use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 #[derive(Clone, Debug)]
 pub struct AuthArgs<C> {
-    // @TODO: Here we will fill in the "dependencies", control message etc. which will be later
-    // used by ForgeArgs.
+    pub(crate) dependencies: Vec<OperationId>,
     pub(crate) control_message: AuthControlMessage<C>,
 }
 
@@ -19,7 +18,7 @@ pub enum AuthMessage<C> {
     Forged {
         author: ActorId,
         operation_id: OperationId,
-        control_message: AuthControlMessage<C>,
+        args: AuthArgs<C>,
     },
 }
 
@@ -31,19 +30,24 @@ where
     where
         M: AuthoredMessage + SpacesMessage<C>,
     {
+        let SpacesArgs::ControlMessage {
+            id,
+            control_message,
+            auth_dependencies,
+            ..
+        } = message.args()
+        else {
+            panic!("unexpected message type")
+        };
         AuthMessage::Forged {
             author: message.author(),
             operation_id: message.id(),
-            control_message: match message.args() {
-                SpacesArgs::ControlMessage {
-                    id,
-                    control_message,
-                    ..
-                } => AuthControlMessage {
+            args: AuthArgs {
+                dependencies: auth_dependencies.clone(),
+                control_message: AuthControlMessage {
                     group_id: *id,
                     action: control_message.to_auth_action(),
                 },
-                _ => panic!("unexpected message type"),
             },
         }
     }
@@ -76,19 +80,23 @@ where
     }
 
     fn dependencies(&self) -> Vec<OperationId> {
-        // @TODO: We do not implement ordering yet.
-        Vec::new()
+        match self {
+            AuthMessage::Args(args) => args.dependencies.clone(),
+            AuthMessage::Forged {
+                args: AuthArgs { dependencies, .. },
+                ..
+            } => dependencies.clone(),
+        }
     }
 
     fn payload(&self) -> AuthControlMessage<C> {
         match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
+            AuthMessage::Args(args) => args.control_message.clone(),
             AuthMessage::Forged {
-                control_message, ..
+                args: AuthArgs {
+                    control_message, ..
+                },
+                ..
             } => control_message.clone(),
         }
     }
