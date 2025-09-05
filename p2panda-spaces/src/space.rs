@@ -292,9 +292,10 @@ where
         let (current_members, next_members) =
             Self::compute_secret_members(manager_ref.clone(), space_id, auth_message).await?;
 
-        // Make the DGM aware of current members.
+        // Make the DGM aware of group members after this group membership change has been
+        // processed.
         let dgm = EncryptionMembershipState {
-            members: HashSet::from_iter(current_members.clone().into_iter()),
+            members: HashSet::from_iter(next_members.clone().into_iter()),
         };
         encryption_y.dcgka.dgm = dgm;
 
