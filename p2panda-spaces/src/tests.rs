@@ -383,6 +383,43 @@ async fn add_member_to_space() {
 }
 
 #[tokio::test]
+async fn send_and_receive_after_add() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    let bob_id = bob.manager.id().await;
+
+    // Manually register key bundles of all members.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Alice creates a space, adds Bob in a following step and then sends a message.
+
+    let (alice_space, message_01) = alice.manager.create_space(&[]).await.unwrap();
+    let message_02 = alice_space
+        .add(GroupMember::Individual(bob_id), Access::read())
+        .await
+        .unwrap();
+    let message_03 = alice_space.publish(b"Hello bob").await.unwrap();
+
+    // Bob processes all of Alice's messages.
+
+    bob.manager.process(&message_01).await.unwrap();
+    bob.manager.process(&message_02).await.unwrap();
+    let events = bob.manager.process(&message_03).await.unwrap();
+    assert_eq!(events.len(), 1);
+}
+
+#[tokio::test]
 async fn add_pull_member_to_space() {
     let alice = TestPeer::new(0);
     let bob = TestPeer::new(1);
