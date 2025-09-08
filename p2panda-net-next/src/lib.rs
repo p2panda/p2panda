@@ -4,6 +4,16 @@ mod actors;
 mod addrs;
 mod network;
 
+/// Unique 32 byte identifier for a network.
+///
+/// Peers operating on the same network identifier will eventually discover each other. This is the
+/// most global identifier to group peers into networks. Different applications may choose to share
+/// the same underlying network infrastructure by using the same network identifier.
+///
+/// Please note that the network identifier should _never_ be the same as any other topic
+/// identifier.
+pub type NetworkId = [u8; 32];
+
 pub type TopicId = [u8; 32];
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
