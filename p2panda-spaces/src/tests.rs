@@ -615,3 +615,186 @@ async fn receive_control_messages() {
     let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 }
+
+#[tokio::test]
+async fn remove_member() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    // Manually register key bundles on alice.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register key bundles on bob.
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let bob_id = bob.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Alice: Create Space with themselves and bob
+    // ~~~~~~~~~~~~
+
+    let (space, message_01) = alice_manager
+        .create_space(&[(bob_id, Access::read())])
+        .await
+        .unwrap();
+    let space_id = space.id();
+    drop(space);
+
+    // Bob: Receive Message 01
+    // ~~~~~~~~~~~~
+
+    bob_manager.process(&message_01).await.unwrap();
+
+    // Alice: Removes bob
+    // ~~~~~~~~~~~~
+
+    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
+    let message_02 = space.remove(GroupMember::Individual(bob_id)).await.unwrap();
+
+    let SpacesArgs::ControlMessage {
+        direct_messages, ..
+    } = message_02.args()
+    else {
+        panic!("expected system message");
+    };
+
+    // There are no direct messages (Bob shouldn't receive the new group secret).
+    assert_eq!(direct_messages.len(), 0);
+
+    // Bob: Receive Message 02
+    // ~~~~~~~~~~~~
+
+    let events = bob_manager.process(&message_02).await.unwrap();
+    let event = events.first().unwrap();
+    assert!(matches!(event, Event::Removed { .. }));
+}
+
+#[tokio::test]
+async fn concurrent_removal_conflict() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+    let claire = TestPeer::new(2);
+    let dave = TestPeer::new(3);
+
+    // Manually register all key bundles on alice.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice
+        .manager
+        .register_member(&claire.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice
+        .manager
+        .register_member(&dave.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register all key bundles on bob.
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob.manager
+        .register_member(&claire.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob.manager
+        .register_member(&dave.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+    let dave_id = dave.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Alice: Create Space with themselves and bob
+    // ~~~~~~~~~~~~
+
+    let (space, message_01) = alice_manager
+        .create_space(&[(bob_id, Access::manage())])
+        .await
+        .unwrap();
+    let space_id = space.id();
+    drop(space);
+
+    // Bob: Receive alice's message
+    // ~~~~~~~~~~~~
+
+    bob_manager.process(&message_01).await.unwrap();
+
+    // Alice: Removes bob
+    // ~~~~~~~~~~~~
+
+    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
+    let _ = space.remove(GroupMember::Individual(bob_id)).await.unwrap();
+
+    drop(space);
+
+    // Bob: Adds claire
+    // ~~~~~~~~~~~~
+
+    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+    let message_02_b = space
+        .add(GroupMember::Individual(claire_id), Access::read())
+        .await
+        .unwrap();
+
+    drop(space);
+
+    // Alice: process bobs' message
+    // ~~~~~~~~~~~~
+
+    alice_manager.process(&message_02_b).await.unwrap();
+
+    // Alice: Adds dave
+    // ~~~~~~~~~~~~
+
+    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
+    let message_03 = space
+        .add(GroupMember::Individual(dave_id), Access::read())
+        .await
+        .unwrap();
+
+    let SpacesArgs::ControlMessage {
+        direct_messages, ..
+    } = message_03.args()
+    else {
+        panic!("expected system message");
+    };
+
+    // There is one direct message and it's for dave.
+    assert_eq!(direct_messages.len(), 1);
+    let message = direct_messages.to_owned().pop().unwrap();
+    assert!(matches!(
+        message,
+        DirectMessage {
+            recipient,
+            ..
+        } if recipient == dave_id
+    ))
+}
+

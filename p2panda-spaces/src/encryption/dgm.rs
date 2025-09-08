@@ -48,12 +48,14 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
     }
 
     fn remove(
-        _y: Self::State,
+        y: Self::State,
         _remover: ActorId,
         _removed: &ActorId,
         _operation_id: OperationId,
     ) -> Result<Self::State, Self::Error> {
-        todo!()
+        // The DGM state is already updated manually before this method is called so no action is
+        // required.
+        Ok(y)
     }
 
     fn members(y: &Self::State) -> Result<HashSet<ActorId>, Self::Error> {

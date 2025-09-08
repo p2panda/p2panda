@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -63,80 +64,34 @@ where
         manager_ref: Manager<S, F, M, C, RS>,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
     ) -> Result<(Self, M), SpaceError<S, F, M, C, RS>> {
-        let my_id: ActorId = {
-            let manager = manager_ref.inner.read().await;
-            manager.forge.public_key().into()
-        };
-
-        // 1. Derive a space id and initialize new new state.
-
         let space_id: ActorId = {
             let manager = manager_ref.inner.write().await;
             let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
             private_key.public_key().into()
         };
-        let mut y = Self::get_or_init_state(space_id, manager_ref.clone()).await?;
-        let auth_y = {
+
+        let my_id: ActorId = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(SpaceError::AuthStore)?
+            manager.forge.public_key().into()
         };
 
-        // 2. Prepare auth "create" control message.
+        // Automatically add ourselves with "manage" level without any conditions as default.
+        if !initial_members
+            .iter()
+            .any(|(member, _)| member.id() == my_id)
+        {
+            initial_members.push((GroupMember::Individual(my_id), Access::manage()));
+        }
 
-        let (mut auth_y, auth_message) = {
-            // Automatically add ourselves with "manage" level without any conditions as default.
-            if !initial_members
-                .iter()
-                .any(|(member, _)| member.id() == my_id)
-            {
-                initial_members.push((GroupMember::Individual(my_id), Access::manage()));
-            }
-
-            let auth_control_message = AuthControlMessage {
-                group_id: space_id,
-                action: AuthGroupAction::Create {
-                    initial_members: initial_members.clone(),
-                },
-            };
-            AuthGroup::prepare(auth_y, &auth_control_message).map_err(SpaceError::AuthGroup)?
+        let auth_control_message = AuthControlMessage {
+            group_id: space_id,
+            action: AuthGroupAction::Create {
+                initial_members: initial_members.clone(),
+            },
         };
 
-        // 3. Prepare and process encryption control message(s), establishing initial state.
-
-        let (encryption_y, encryption_message) = Self::process_group_membership_change(
-            manager_ref.clone(),
-            space_id,
-            y.encryption_y,
-            &auth_message,
-        )
-        .await?;
-        y.encryption_y = encryption_y;
-
-        // 4. Merge and sign control messages in forge (F).
-
-        let message = Self::forge(
-            manager_ref.clone(),
-            space_id,
-            auth_message,
-            encryption_message,
-        )
-        .await?;
-
-        // 5. Process auth message.
-
-        auth_y = {
-            let auth_message = AuthMessage::from_forged(&message);
-            AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
-        };
-
-        // 6. Update auth and encryption orderer states.
-
-        (y.encryption_y.orderer, auth_y.orderer_y) =
-            Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
-
-        // 7. Persist new state.
-
-        Self::set_state(manager_ref.clone(), y, auth_y).await?;
+        let message =
+            Self::process_local(manager_ref.clone(), space_id, auth_control_message).await?;
 
         Ok((
             Self {
@@ -153,58 +108,72 @@ where
         member: GroupMember<ActorId>,
         access: Access<C>,
     ) -> Result<M, SpaceError<S, F, M, C, RS>> {
-        let mut y = Self::get_or_init_state(self.id(), self.manager.clone()).await?;
+        let auth_control_message = AuthControlMessage {
+            group_id: self.id(),
+            action: AuthGroupAction::Add { member, access },
+        };
+
+        Self::process_local(self.manager.clone(), self.id(), auth_control_message).await
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub(crate) async fn remove(
+        &self,
+        member: GroupMember<ActorId>,
+    ) -> Result<M, SpaceError<S, F, M, C, RS>> {
+        let auth_control_message = AuthControlMessage {
+            group_id: self.id(),
+            action: AuthGroupAction::Remove { member },
+        };
+
+        Self::process_local(self.manager.clone(), self.id(), auth_control_message).await
+    }
+
+    async fn process_local(
+        manager: Manager<S, F, M, C, RS>,
+        space_id: ActorId,
+        auth_control_message: AuthControlMessage<C>,
+    ) -> Result<M, SpaceError<S, F, M, C, RS>> {
+        let mut y = Self::get_or_init_state(space_id, manager.clone()).await?;
         let auth_y = {
-            let manager = self.manager.inner.read().await;
+            let manager = manager.inner.read().await;
             manager.store.auth().await.map_err(SpaceError::AuthStore)?
         };
 
-        // 1. Prepare auth group "add" control message.
+        let (auth_y, auth_message) =
+            AuthGroup::prepare(auth_y, &auth_control_message).map_err(SpaceError::AuthGroup)?;
 
-        let (auth_y, auth_message) = {
-            let auth_control_message = AuthControlMessage {
-                group_id: self.id(),
-                action: AuthGroupAction::Add { member, access },
-            };
-            AuthGroup::prepare(auth_y, &auth_control_message).map_err(SpaceError::AuthGroup)?
-        };
-
-        // 2. Prepare and process encryption control message(s).
+        // 1. Prepare and process encryption control message(s).
 
         let (encryption_y, encryption_message) = Self::process_group_membership_change(
-            self.manager.clone(),
-            self.id(),
+            manager.clone(),
+            space_id,
             y.encryption_y,
             &auth_message,
         )
         .await?;
         y.encryption_y = encryption_y;
 
-        // 3. Merge and sign control messages in forge (F).
+        // 2. Merge and sign control messages in forge (F).
 
-        let message = Self::forge(
-            self.manager.clone(),
-            self.id(),
-            auth_message,
-            encryption_message,
-        )
-        .await?;
+        let message =
+            Self::forge(manager.clone(), space_id, auth_message, encryption_message).await?;
 
-        // 4. Process auth control message.
+        // 3. Process auth control message.
 
         let mut auth_y = {
             let auth_message = AuthMessage::from_forged(&message);
             AuthGroup::process(auth_y, &auth_message).map_err(SpaceError::AuthGroup)?
         };
 
-        // 5. Update auth and encryption orderer states.
+        // 4. Update auth and encryption orderer states.
 
         (y.encryption_y.orderer, auth_y.orderer_y) =
             Self::update_orderer_states(y.encryption_y.orderer, auth_y.orderer_y, &message);
 
-        // 6. Persist new state.
+        // 5. Persist new state.
 
-        Self::set_state(self.manager.clone(), y, auth_y).await?;
+        Self::set_state(manager.clone(), y, auth_y).await?;
 
         Ok(message)
     }
@@ -317,6 +286,19 @@ where
                     // every new member. For this we need to attach an array of encryption messages to
                     // the space control message.
                     EncryptionGroup::add(encryption_y, *added.first().unwrap(), &manager.rng)
+                        .map_err(SpaceError::EncryptionGroup)
+                }
+                AuthGroupAction::Remove { .. } => {
+                    let removed = removed_members(current_members, next_members);
+
+                    if removed.is_empty() {
+                        return Ok((encryption_y, None));
+                    }
+
+                    // @TODO: here we just take the first removed member, but actually we want to remove
+                    // every new member. For this we need to attach an array of encryption messages to
+                    // the space control message.
+                    EncryptionGroup::remove(encryption_y, *removed.first().unwrap(), &manager.rng)
                         .map_err(SpaceError::EncryptionGroup)
                 }
                 _ => unimplemented!(),
@@ -603,6 +585,14 @@ pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) 
         .collect::<Vec<_>>()
 }
 
+pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
+    current_members
+        .iter()
+        .cloned()
+        .filter(|actor| !next_members.contains(actor))
+        .collect::<Vec<_>>()
+}
+
 fn encryption_output_to_events<M>(
     space_id: ActorId,
     encryption_output: Vec<EncryptionGroupOutput<M>>,
@@ -615,6 +605,7 @@ fn encryption_output_to_events<M>(
                     space_id,
                     data: plaintext,
                 },
+                EncryptionGroupOutput::Removed => Event::Removed { space_id },
                 _ => {
                     // We only expect "application" events inside this function.
                     unreachable!();
@@ -652,6 +643,9 @@ where
 
     #[error("{0}")]
     SpaceStore(<S as SpaceStore<M>>::Error),
+
+    #[error("{0}")]
+    EncryptionOrderer(Infallible),
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ActorId),
