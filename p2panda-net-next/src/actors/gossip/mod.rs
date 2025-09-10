@@ -17,6 +17,7 @@ use ractor::{
     Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
 };
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::GossipSession;
@@ -30,11 +31,11 @@ pub enum ToGossip {
     Handle(RpcReplyPort<IrohGossip>),
 
     /// Join the given topic, using the given peers as gossip bootstrap nodes.
-    Join {
-        topic_id: TopicId,
-        peers: Vec<PublicKey>,
-        reply: RpcReplyPort<(Sender<ToNetwork>, Receiver<FromNetwork>)>,
-    },
+    Join(
+        TopicId,
+        Vec<PublicKey>,
+        RpcReplyPort<(Sender<ToNetwork>, Receiver<FromNetwork>)>,
+    ),
 
     /// Joined a topic by connecting to the given peers.
     Joined {
@@ -69,6 +70,7 @@ pub struct GossipState {
     gossip: IrohGossip,
     sessions: HashMap<ActorId, TopicId>,
     from_gossip_senders: HashMap<TopicId, Vec<Sender<FromNetwork>>>,
+    gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
 
@@ -93,10 +95,11 @@ impl Actor for Gossip {
             .max_message_size(config.max_message_size)
             .membership_config(config.membership)
             .broadcast_config(config.broadcast)
-            .spawn(endpoint.clone());
+            .spawn(endpoint);
 
         let sessions = HashMap::new();
         let from_gossip_senders = HashMap::new();
+        let gossip_joined_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
 
         // TODO: The router needs to be configured to accept gossip protocol.
@@ -107,6 +110,7 @@ impl Actor for Gossip {
             gossip,
             sessions,
             from_gossip_senders,
+            gossip_joined_senders,
             topic_delivery_scopes,
         };
 
@@ -150,15 +154,15 @@ impl Actor for Gossip {
 
                 Ok(())
             }
-            ToGossip::Join {
-                topic_id,
-                peers,
-                reply,
-            } => {
+            ToGossip::Join(topic_id, peers, reply) => {
                 // Channel to receive messages from the user (to the network).
                 let (to_network_tx, to_network_rx) = mpsc::channel(128);
                 // Channel to receive messages from the network (to the user).
                 let (from_network_tx, from_network_rx) = mpsc::channel(128);
+
+                // Oneshot channel to notify the session sender(s) that the overlay has been
+                // joined.
+                let (gossip_joined_tx, gossip_joined_rx) = oneshot::channel();
 
                 // Convert p2panda public keys to iroh node ids.
                 let peers = peers
@@ -166,13 +170,14 @@ impl Actor for Gossip {
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
 
+                // Subscribe to the gossip topic (without waiting for a connection).
                 let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = Actor::spawn_linked(
                     None,
                     GossipSession::new(myself.clone()),
-                    (subscription, to_network_rx),
+                    (subscription, to_network_rx, gossip_joined_rx),
                     myself.clone().into(),
                 )
                 .await?;
@@ -181,6 +186,11 @@ impl Actor for Gossip {
                 let _ = state
                     .sessions
                     .insert(gossip_session_actor.get_id(), topic_id);
+
+                // Associate the session actor with the gossip joined sender.
+                let _ = state
+                    .gossip_joined_senders
+                    .insert(gossip_session_actor.get_id(), gossip_joined_tx);
 
                 // Associate the user channel (sender) with the topic.
                 state
@@ -227,10 +237,40 @@ impl Actor for Gossip {
                 Ok(())
             }
             // TODO: Handle overlay events.
-            ToGossip::Joined {
-                peers: _,
-                session_id: _,
-            } => todo!(),
+            //
+            // We want to track our neighours for each session (topic).
+            //
+            // The `Joined` event describes the peers we initially connect with.
+            // These are used to populate the set of neighours for the session.
+            //
+            // `NeighborUp` adds a new peer to the set of neighours.
+            //
+            // `NeighborDown` removes a peer from the set of neighbours.
+            //
+            // We need some additional logic to "rejoin" the gossip topic if / when the bootstrap
+            // peer(s) (ie. the peers we supplied when calling `Join`) have all transitioned to `NeighborDown`.
+            //
+            // Open question: Do we kill the current session and spawn an entirely new one? Or
+            // would we rather send a `Rejoin` event to the session?
+            //
+            // Another possibility: The iroh gossip `Sender` exposes a `join_peers()` method. Could
+            // we call that each time we discovered a new peer interested in our topic (via ambient
+            // discovery)? This might remove the neew to "rejoin".
+            ToGossip::Joined { peers, session_id } => {
+                // Inform the gossip sender actor that the overlay has been joined.
+                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id) {
+                    if gossip_joined_tx.send(1).is_err() {
+                        warn!("oneshot gossip joined receiver dropped")
+                    }
+                }
+
+                // TODO: Proper handling.
+                if let Some(topic_id) = state.sessions.get(&session_id) {
+                    debug!("joined topic {:?} with peers: {:?}", topic_id, peers);
+                }
+
+                Ok(())
+            }
             ToGossip::NeighborUp {
                 peer: _,
                 session_id: _,
@@ -293,5 +333,153 @@ impl Actor for Gossip {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use iroh::discovery::NodeInfo;
+    use iroh::discovery::static_provider::StaticProvider;
+    use iroh::protocol::Router as IrohRouter;
+    use iroh::{Endpoint as IrohEndpoint, Watcher as _};
+    use iroh_gossip::ALPN as GOSSIP_ALPN;
+    use iroh_gossip::proto::Config as IrohGossipConfig;
+    use p2panda_core::PrivateKey;
+    use ractor::{Actor, call};
+
+    use crate::network::{FromNetwork, ToNetwork};
+    use crate::{from_private_key, from_public_key};
+
+    use super::{Gossip, ToGossip};
+
+    #[tokio::test]
+    async fn two_peer_gossip() {
+        // Ensure gossip messages are broadcast between two peers: ant and bat.
+        //
+        // Ant acts as the bootstrap node; they enter the gossip topic alone. Bat learns about ant
+        // through some other discovery process and then joins the topic.
+        //
+        // Each peer sends and receives a single message.
+
+        // Create topic id.
+        let topic_id = [7; 32];
+
+        // Create keypairs.
+        let ant_private_key = PrivateKey::new();
+        let bat_private_key = PrivateKey::new();
+
+        let ant_public_key = ant_private_key.public_key();
+        let bat_public_key = bat_private_key.public_key();
+
+        // Create endpoints.
+        let ant_discovery = StaticProvider::new();
+        let ant_endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(ant_private_key))
+            .add_discovery(ant_discovery.clone())
+            .bind()
+            .await
+            .unwrap();
+
+        let bat_discovery = StaticProvider::new();
+        let bat_endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(bat_private_key))
+            .add_discovery(bat_discovery.clone())
+            .bind()
+            .await
+            .unwrap();
+
+        // Obtain ant's node information including direct addresses.
+        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
+            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+
+        // Bat discovers ant through some out-of-band process.
+        bat_discovery.add_node_info(ant_node_info);
+
+        // Spawn gossip actors.
+        let gossip_config = IrohGossipConfig::default();
+        let (ant_gossip_actor, ant_gossip_actor_handle) =
+            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+                .await
+                .unwrap();
+        let (bat_gossip_actor, bat_gossip_actor_handle) =
+            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+                .await
+                .unwrap();
+
+        // Get handles to gossip.
+        let ant_gossip = call!(ant_gossip_actor, ToGossip::Handle).unwrap();
+        let bat_gossip = call!(bat_gossip_actor, ToGossip::Handle).unwrap();
+
+        // Build and spawn routers.
+        let ant_router = IrohRouter::builder(ant_endpoint.clone())
+            .accept(GOSSIP_ALPN, ant_gossip)
+            .spawn();
+        let bat_router = IrohRouter::builder(bat_endpoint.clone())
+            .accept(GOSSIP_ALPN, bat_gossip)
+            .spawn();
+
+        // Join the gossip topic.
+        let ant_peers = Vec::new();
+        let bat_peers = vec![ant_public_key];
+
+        let (ant_to_gossip, mut ant_from_gossip) =
+            call!(ant_gossip_actor, ToGossip::Join, topic_id, ant_peers).unwrap();
+        let (bat_to_gossip, mut bat_from_gossip) =
+            call!(bat_gossip_actor, ToGossip::Join, topic_id, bat_peers).unwrap();
+
+        // Send message from ant to bat.
+        let ant_msg_to_bat = b"hi bat!".to_vec();
+        ant_to_gossip
+            .send(ToNetwork::Message {
+                bytes: ant_msg_to_bat.clone(),
+            })
+            .await
+            .unwrap();
+
+        // Ensure bat receives the message from ant.
+        let Some(msg) = bat_from_gossip.recv().await else {
+            panic!("expected msg from ant")
+        };
+
+        assert_eq!(
+            msg,
+            FromNetwork::GossipMessage {
+                bytes: ant_msg_to_bat,
+                delivered_from: ant_public_key
+            }
+        );
+
+        // Send message from bat to ant.
+        let bat_msg_to_ant = b"oh hey ant!".to_vec();
+        bat_to_gossip
+            .send(ToNetwork::Message {
+                bytes: bat_msg_to_ant.clone(),
+            })
+            .await
+            .unwrap();
+
+        // Ensure ant receives the message from bat.
+        let Some(msg) = ant_from_gossip.recv().await else {
+            panic!("expected msg from bat")
+        };
+
+        assert_eq!(
+            msg,
+            FromNetwork::GossipMessage {
+                bytes: bat_msg_to_ant,
+                delivered_from: bat_public_key
+            }
+        );
+
+        // Stop gossip actors.
+        ant_gossip_actor.stop(None);
+        bat_gossip_actor.stop(None);
+        ant_gossip_actor_handle.await.unwrap();
+        bat_gossip_actor_handle.await.unwrap();
+
+        // Shutdown routers.
+        bat_router.shutdown().await.unwrap();
+        ant_router.shutdown().await.unwrap();
     }
 }
