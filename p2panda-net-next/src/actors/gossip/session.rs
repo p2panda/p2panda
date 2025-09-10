@@ -14,6 +14,7 @@ use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
 use crate::actors::gossip::ToGossip;
@@ -51,23 +52,24 @@ impl GossipSession {
 impl Actor for GossipSession {
     type State = GossipSessionState;
     type Msg = ToGossipSession;
-    // TODO: We also need to receive a channel receiver from userland.
-    // That is then passed into the spawned listener.
-    type Arguments = (IrohGossipTopic, Receiver<ToNetwork>);
+    type Arguments = (IrohGossipTopic, Receiver<ToNetwork>, OneshotReceiver<u8>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (mut subscription, receiver_from_user) = args;
-
-        subscription.joined().await?;
+        let (subscription, receiver_from_user, gossip_joined) = args;
 
         let (sender, receiver) = subscription.split();
 
-        let (gossip_sender_actor, _) =
-            Actor::spawn_linked(None, GossipSender, sender, myself.clone().into()).await?;
+        let (gossip_sender_actor, _) = Actor::spawn_linked(
+            None,
+            GossipSender,
+            (sender, gossip_joined),
+            myself.clone().into(),
+        )
+        .await?;
 
         let (gossip_receiver_actor, _) = Actor::spawn_linked(
             None,
