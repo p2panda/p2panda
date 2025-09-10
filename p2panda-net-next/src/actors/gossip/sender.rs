@@ -2,11 +2,20 @@
 
 //! Gossip sender actor which holds the topic sender, receives local messages and broadcasts them
 //! to the overlay.
+//!
+//! The actor first waits for a signal specifying that the gossip topic has been joined. Any
+//! broadcast messages received before the join signal are queued internally (by the actor) and are
+//! then processed after the signal has been received.
 
 use iroh_gossip::api::GossipSender as IrohGossipSender;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use tokio::sync::oneshot::Receiver as OneshotReceiver;
 
 pub enum ToGossipSender {
+    /// Wait for a signal specifying that the gossip topic has been joined.
+    WaitForJoin(OneshotReceiver<u8>),
+
+    /// Broadcast the given bytes into the gossip topic overlay.
     Broadcast(Vec<u8>),
 }
 
@@ -21,13 +30,18 @@ pub struct GossipSender;
 impl Actor for GossipSender {
     type State = GossipSenderState;
     type Msg = ToGossipSender;
-    type Arguments = IrohGossipSender;
+    type Arguments = (IrohGossipSender, OneshotReceiver<u8>);
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
-        sender: Self::Arguments,
+        myself: ActorRef<Self::Msg>,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (sender, joined) = args;
+
+        // Invoke the handler to wait for the gossip overlay to be joined.
+        let _ = myself.cast(ToGossipSender::WaitForJoin(joined));
+
         let state = GossipSenderState {
             sender: Some(sender),
         };
@@ -59,11 +73,25 @@ impl Actor for GossipSender {
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        if let Some(sender) = &mut state.sender {
-            let ToGossipSender::Broadcast(bytes) = message;
-            sender.broadcast(bytes.into()).await?;
-        }
+        match message {
+            ToGossipSender::WaitForJoin(joined) => {
+                // This line of code blocks until the join signal is received. It's important to
+                // only start broadcasting messages once the overlay has been joined, otherwise
+                // those messages will simply vanish into the primordial void.
+                //
+                // Any messages sent to this actor in the meantime are queued and processed once
+                // the join signal is received.
+                let _ = joined.await;
 
-        Ok(())
+                Ok(())
+            }
+            ToGossipSender::Broadcast(bytes) => {
+                if let Some(sender) = &mut state.sender {
+                    sender.broadcast(bytes.into()).await?;
+                }
+
+                Ok(())
+            }
+        }
     }
 }
