@@ -13,6 +13,10 @@ use crate::actors::gossip::session::ToGossipSession;
 pub enum ToGossipReceiver {
     /// Wait for an event on the gossip topic receiver.
     WaitForEvent,
+
+    /// Wait for the first `NeighborUp` event on the receiver, signifying that the gossip overlay
+    /// has been joined.
+    WaitForJoin,
 }
 
 impl Message for ToGossipReceiver {}
@@ -39,17 +43,10 @@ impl Actor for GossipReceiver {
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        mut receiver: Self::Arguments,
+        receiver: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        // Wait for the first peer connection.
-        receiver.joined().await?;
-
-        // Inform the session actor about our direct neighbors.
-        let peers = receiver.neighbors().collect();
-        let _ = self.session.cast(ToGossipSession::ProcessJoined(peers));
-
         // Invoke the handler to wait for the next event on the receiver.
-        let _ = myself.cast(ToGossipReceiver::WaitForEvent);
+        let _ = myself.cast(ToGossipReceiver::WaitForJoin);
 
         let state = GossipReceiverState {
             receiver: Some(receiver),
@@ -79,32 +76,49 @@ impl Actor for GossipReceiver {
     async fn handle(
         &self,
         myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
+        message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        // There's no need to match on `_message` here, since this actor only has a single message
-        // variant (`WaitForEvent`).
+        match message {
+            ToGossipReceiver::WaitForJoin => {
+                if let Some(receiver) = &mut state.receiver {
+                    // Wait for the first peer connection.
+                    //
+                    // NOTE: This will block the actor's message processing queue until the first
+                    // event is received.
+                    receiver.joined().await?;
 
-        if let Some(receiver) = &mut state.receiver {
-            if let Some(received) = receiver.next().await {
-                match received {
-                    Ok(event) => {
-                        // Send the event up the chain for processing.
-                        let _ = self.session.cast(ToGossipSession::ProcessEvent(event));
-                    }
-                    Err(err) => {
-                        error!("gossip receiver actor: {}", err);
-                        drop(state.receiver.take());
-                        myself.stop(Some("channel closed".to_string()));
+                    // Inform the session actor about our direct neighbors.
+                    let peers = receiver.neighbors().collect();
+                    let _ = self.session.cast(ToGossipSession::ProcessJoined(peers));
+                }
 
-                        return Ok(());
+                // Invoke the handler to wait for the next event on the receiver.
+                let _ = myself.cast(ToGossipReceiver::WaitForEvent);
+            }
+            ToGossipReceiver::WaitForEvent => {
+                if let Some(receiver) = &mut state.receiver {
+                    if let Some(received) = receiver.next().await {
+                        match received {
+                            Ok(event) => {
+                                // Send the event up the chain for processing.
+                                let _ = self.session.cast(ToGossipSession::ProcessEvent(event));
+                            }
+                            Err(err) => {
+                                error!("gossip receiver actor: {}", err);
+                                drop(state.receiver.take());
+                                myself.stop(Some("channel closed".to_string()));
+
+                                return Ok(());
+                            }
+                        }
                     }
                 }
+
+                // Invoke the handler to wait for the next event on the receiver.
+                let _ = myself.cast(ToGossipReceiver::WaitForEvent);
             }
         }
-
-        // Invoke the handler to wait for the next event on the receiver.
-        let _ = myself.cast(ToGossipReceiver::WaitForEvent);
 
         Ok(())
     }
