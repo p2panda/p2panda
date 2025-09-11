@@ -245,7 +245,7 @@ where
 
         // 2. Process encryption control message.
 
-        let (encryption_y, _encryption_output) = {
+        let (encryption_y, encryption_output) = {
             let encryption_message = EncryptionMessage::from_forged(message);
             if let Some(encryption_message) = encryption_message {
                 // Make encryption DGM aware of current auth members state.
@@ -272,7 +272,7 @@ where
 
         Self::set_state(self.manager.clone(), y, auth_y).await?;
 
-        Ok(vec![])
+        Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
     /// Process a group membership change on the group encryption state.
@@ -332,19 +332,17 @@ where
     ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
-        // Process encryption message.
+        // 1. Process encryption message.
 
         let (encryption_y, encryption_output) = {
             let encryption_message =
                 EncryptionMessage::from_forged(message).expect("has encryption message");
-
-            // @TODO: This calls members in the DGM
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?
         };
         y.encryption_y = encryption_y;
 
-        // Persist new state.
+        // 2. Persist new state.
 
         let mut manager = self.manager.inner.write().await;
         manager
@@ -353,23 +351,7 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        let events = encryption_output
-            .into_iter()
-            .map(|event| {
-                match event {
-                    EncryptionGroupOutput::Application { plaintext } => Event::Application {
-                        space_id: self.id,
-                        data: plaintext,
-                    },
-                    _ => {
-                        // We only expect "application" events inside this function.
-                        unreachable!();
-                    }
-                }
-            })
-            .collect();
-
-        Ok(events)
+        Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
     /// Process an auth control message before the "authored" version has been forged. This is
@@ -554,6 +536,11 @@ where
 
     pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
         let mut space_y = self.state().await?;
+
+        if !space_y.encryption_y.orderer.is_welcomed() {
+            return Err(SpaceError::NotWelcomed(self.id()));
+        }
+
         let mut manager = self.manager.inner.write().await;
 
         let (encryption_y, encryption_args) =
@@ -616,6 +603,27 @@ pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) 
         .collect::<Vec<_>>()
 }
 
+fn encryption_output_to_events<M>(
+    space_id: ActorId,
+    encryption_output: Vec<EncryptionGroupOutput<M>>,
+) -> Vec<Event> {
+    encryption_output
+        .into_iter()
+        .map(|event| {
+            match event {
+                EncryptionGroupOutput::Application { plaintext } => Event::Application {
+                    space_id,
+                    data: plaintext,
+                },
+                _ => {
+                    // We only expect "application" events inside this function.
+                    unreachable!();
+                }
+            }
+        })
+        .collect()
+}
+
 #[derive(Debug, Error)]
 pub enum SpaceError<S, F, M, C, RS>
 where
@@ -647,4 +655,7 @@ where
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ActorId),
+
+    #[error("tried to publish when not a member of space {0}")]
+    NotWelcomed(ActorId),
 }
