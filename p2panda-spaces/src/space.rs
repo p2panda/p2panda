@@ -272,7 +272,7 @@ where
 
         Self::set_state(self.manager.clone(), y, auth_y).await?;
 
-        Ok(to_events(self.id(), encryption_output))
+        Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
     /// Process a group membership change on the group encryption state.
@@ -351,7 +351,7 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        Ok(to_events(self.id(), encryption_output))
+        Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
     /// Process an auth control message before the "authored" version has been forged. This is
@@ -603,7 +603,10 @@ pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) 
         .collect::<Vec<_>>()
 }
 
-fn to_events<M>(space_id: ActorId, encryption_output: Vec<EncryptionGroupOutput<M>>) -> Vec<Event> {
+fn encryption_output_to_events<M>(
+    space_id: ActorId,
+    encryption_output: Vec<EncryptionGroupOutput<M>>,
+) -> Vec<Event> {
     encryption_output
         .into_iter()
         .map(|event| {
