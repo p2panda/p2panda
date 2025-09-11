@@ -193,6 +193,9 @@ where
             (AuthGroupAction::Add { .. }, EncryptionControlMessage::Add { .. }) => {
                 ControlMessage::from_auth_action(&auth_action)
             }
+            (AuthGroupAction::Remove { .. }, EncryptionControlMessage::Remove { .. }) => {
+                ControlMessage::from_auth_action(&auth_action)
+            }
             _ => unimplemented!(), // @TODO: More cases will go here. Panic on invalid ones.
         };
 
@@ -227,7 +230,9 @@ pub enum ControlMessage<C> {
 
         access: Access<C>,
     },
-    // @TODO: introduce all other variants.
+    Remove {
+        member: GroupMember<ActorId>,
+    }, // @TODO: introduce all other variants.
 }
 
 impl<C> ControlMessage<C>
@@ -247,14 +252,18 @@ where
                 member: member.to_owned(),
                 access: access.to_owned(),
             },
+            ControlMessage::Remove { member } => AuthGroupAction::Remove {
+                member: member.to_owned(),
+            },
         }
     }
 
+    // @TODO: The spaces control message will later contain an array of encryption control
+    // messages and so this method will return an array. It will contain only the changes caused
+    // by the spaces control message which effect the secret group membership.
     pub(crate) fn to_encryption_control_message(&self) -> Option<EncryptionControlMessage> {
         match self {
             ControlMessage::Create { initial_members } => Some(EncryptionControlMessage::Create {
-                // @TODO: Compute set of members looking at auth state to take transitive
-                // membership into account.
                 initial_members: secret_members(
                     initial_members
                         .iter()
@@ -263,14 +272,12 @@ where
                 ),
             }),
             ControlMessage::Add { member, access } if !access.is_pull() => {
-                // @TODO: Need to look into auth state to compute set of added
-                // secret member when a group was added and we need to compute
-                // transitive members.
-
-                // @TODO: We want to ignore any members which only have "pull" access.
                 Some(EncryptionControlMessage::Add { added: member.id() })
             }
             ControlMessage::Add { access, .. } if access.is_pull() => None,
+            ControlMessage::Remove { member } => Some(EncryptionControlMessage::Remove {
+                removed: member.id(),
+            }),
             _ => unimplemented!(),
         }
     }
@@ -281,6 +288,7 @@ where
                 ControlMessage::Create { initial_members }
             }
             AuthGroupAction::Add { member, access } => ControlMessage::Add { member, access },
+            AuthGroupAction::Remove { member } => ControlMessage::Remove { member },
             _ => unimplemented!(), // @TODO: More cases will go here. Panic on invalid ones.
         }
     }
