@@ -4,4 +4,5 @@ use crate::types::ActorId;
 
 pub enum Event {
     Application { space_id: ActorId, data: Vec<u8> },
+    Removed { space_id: ActorId },
 }
