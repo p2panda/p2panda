@@ -17,6 +17,7 @@ use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
+use crate::space::SpaceError;
 use crate::store::{AuthStore, SpaceStore};
 use crate::test_utils::MemoryStore;
 use crate::types::{ActorId, AuthGroupState, OperationId, StrongRemoveResolver};
@@ -105,6 +106,14 @@ impl Forge<TestMessage, TestConditions> for TestForge {
 type TestStore = MemoryStore<TestMessage, TestConditions>;
 
 type TestManager = Manager<
+    TestStore,
+    TestForge,
+    TestMessage,
+    TestConditions,
+    StrongRemoveResolver<TestConditions>,
+>;
+
+type TestSpaceError = SpaceError<
     TestStore,
     TestForge,
     TestMessage,
@@ -211,7 +220,7 @@ async fn create_space() {
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
     let y = manager_ref.store.space(&space.id()).await.unwrap().unwrap();
-    assert_eq!(vec![message.id()], y.encryption_y.orderer.heads);
+    assert_eq!(vec![message.id()], y.encryption_y.orderer.heads());
 
     let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message.id()], auth_y.orderer_y.heads)
@@ -308,7 +317,7 @@ async fn add_member_to_space() {
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
 
     let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
@@ -365,7 +374,7 @@ async fn add_member_to_space() {
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads);
+    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
 
     let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
@@ -495,7 +504,7 @@ async fn add_pull_member_to_space() {
     let manager_ref = manager.inner.read().await;
     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     // Encryption order still has message_01 as it's latest state.
-    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads);
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
 
     // Auth order has been updated.
     let auth_y = manager_ref.store.auth().await.unwrap();
@@ -503,4 +512,106 @@ async fn add_pull_member_to_space() {
 
     // There are no direct messages.
     assert_eq!(direct_messages.len(), 0);
+}
+
+#[tokio::test]
+async fn receive_control_messages() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    // Manually register bob's key bundle.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register alice's key bundle.
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Alice: Create Space
+    // ~~~~~~~~~~~~
+
+    let (space, message_01) = alice_manager.create_space(&[]).await.unwrap();
+    let space_id = space.id();
+    drop(space);
+
+    // Bob: Receive Message 01
+    // ~~~~~~~~~~~~
+
+    bob.manager.process(&message_01).await.unwrap();
+    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+
+    // Alice is the only group member.
+    let members = space.members().await.unwrap();
+    assert_eq!(members, vec![(alice_id, Access::manage())]);
+
+    // Bob cannot publish to space as he is not welcomed yet.
+    let error = space.publish(&[0, 1, 2]).await.unwrap_err();
+    assert!(matches!(error, TestSpaceError::NotWelcomed(_)));
+
+    // Orderer states have been updated.
+    let manager_ref = bob_manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
+    drop(manager_ref);
+
+    // Alice: Publishes a message into the space
+    // ~~~~~~~~~~~~
+
+    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
+    let message_02 = space.publish(&[0, 1, 2]).await.unwrap();
+
+    // Alice: Add new member to Space
+    // ~~~~~~~~~~~~
+
+    let message_03 = space
+        .add(
+            GroupMember::Individual(bob.manager.id().await),
+            Access::read(),
+        )
+        .await
+        .unwrap();
+
+    drop(space);
+
+    // Bob: Receive Message 02 & 03
+    // ~~~~~~~~~~~~
+
+    let events = bob.manager.process(&message_02).await.unwrap();
+    assert!(events.is_empty());
+    let events = bob.manager.process(&message_03).await.unwrap();
+    // The application message arrives only after bob is welcomed.
+    assert_eq!(events.len(), 1);
+    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+
+    // Alice and bob are both members.
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![(alice_id, Access::manage()), (bob_id, Access::read())]
+    );
+
+    // Orderer states have been updated.
+    let manager_ref = bob_manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_03.id()], y.encryption_y.orderer.heads());
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 }
