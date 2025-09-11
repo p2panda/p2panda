@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
 use std::marker::PhantomData;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
+use p2panda_encryption::traits::GroupMessage;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 
@@ -33,11 +35,25 @@ impl<M> EncryptionOrderer<M> {
 
 #[derive(Clone, Debug)]
 pub struct EncryptionOrdererState {
-    next_message: Option<EncryptionMessage>,
+    /// Current graph heads (cache)
+    heads: Vec<OperationId>,
 
-    pub heads: Vec<OperationId>,
+    /// Graph of all operations processed by this group.
+    graph: DiGraphMap<OperationId, ()>,
 
-    pub graph: DiGraphMap<OperationId, ()>,
+    /// Queue of operations we have not yet processed.
+    ///
+    /// This should only grow in the case where we are not yet welcomed into the group by an "Add"
+    /// message.
+    queue: VecDeque<OperationId>,
+
+    // @TODO: We keep all messages in memory currently which is bad. We need a persistence
+    // layer where we can fetch messages from.
+    /// In-memory store of all messages.
+    messages: HashMap<OperationId, EncryptionMessage>,
+
+    /// "Create" or "Add" message which got us into the group.
+    welcome_message: Option<EncryptionMessage>,
 }
 
 impl Default for EncryptionOrdererState {
@@ -49,13 +65,17 @@ impl Default for EncryptionOrdererState {
 impl EncryptionOrdererState {
     pub fn new() -> Self {
         Self {
-            next_message: None,
-
             heads: Default::default(),
 
             // @TODO: We don't look at application message dependencies quite yet. More research
             // needed into requirements around bi-directional dependencies between dags.
             graph: Default::default(),
+
+            queue: Default::default(),
+
+            messages: Default::default(),
+
+            welcome_message: Default::default(),
         }
     }
 
@@ -80,6 +100,10 @@ impl EncryptionOrdererState {
     pub fn heads(&self) -> &[OperationId] {
         &self.heads
     }
+
+    pub fn is_welcomed(&self) -> bool {
+        self.welcome_message.is_some()
+    }
 }
 
 impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
@@ -96,6 +120,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         control_message: &EncryptionControlMessage,
         direct_messages: &[EncryptionDirectMessage],
     ) -> Result<(Self::State, Self::Message), Self::Error> {
+        // NOTE: Updating the orderer state is taken care of outside of the orderer itself.
         let dependencies = y.heads().to_vec();
         Ok((
             y,
@@ -113,6 +138,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
+        // NOTE: Updating the orderer state is taken care of outside of the orderer itself.
         let dependencies = y.heads().to_vec();
         Ok((
             y,
@@ -126,23 +152,35 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
     }
 
     fn queue(mut y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
-        y.next_message = Some(message.clone());
+        let id = message.id();
+        y.messages.insert(id, message.clone());
+        y.queue.push_back(id);
         Ok(y)
     }
 
-    fn set_welcome(y: Self::State, _message: &Self::Message) -> Result<Self::State, Self::Error> {
-        // @TODO: We need to make the orderer aware of the welcome state and only "ready" messages
-        // when we are welcomed, otherwise key agreement and decryption might fail.
-        //
-        // @TODO: We probably also need an error then when someone tries to publish a message in a
-        // not-yet-welcomed space.
+    fn set_welcome(
+        mut y: Self::State,
+        message: &Self::Message,
+    ) -> Result<Self::State, Self::Error> {
+        y.welcome_message = Some(message.clone());
         Ok(y)
     }
 
     fn next_ready_message(
         mut y: Self::State,
     ) -> Result<(Self::State, Option<Self::Message>), Self::Error> {
-        let message = y.next_message.take();
+        // We have not joined the group yet, don't process any messages.
+        if y.welcome_message.is_none() {
+            return Ok((y, None));
+        };
+
+        let message = y.queue.pop_front().map(|id| {
+            y.messages
+                .get(&id)
+                .expect("ids map consistently to messages")
+                .to_owned()
+        });
+
         Ok((y, message))
     }
 }
