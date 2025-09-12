@@ -15,6 +15,7 @@ const MDNS_PORT: u16 = 5353;
 pub fn socket_v4_unbound() -> Result<UdpSocket> {
     let socket =
         Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).context("Socket::new")?;
+    socket.set_nonblocking(true).context("set_nonblocking")?;
     UdpSocket::from_std(std::net::UdpSocket::from(socket)).context("from_std")
 }
 
