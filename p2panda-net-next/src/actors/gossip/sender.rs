@@ -13,7 +13,7 @@ use tokio::sync::oneshot::Receiver as OneshotReceiver;
 
 pub enum ToGossipSender {
     /// Wait for a signal specifying that the gossip topic has been joined.
-    WaitForJoin(OneshotReceiver<u8>),
+    WaitUntilJoined(OneshotReceiver<u8>),
 
     /// Broadcast the given bytes into the gossip topic overlay.
     Broadcast(Vec<u8>),
@@ -40,7 +40,7 @@ impl Actor for GossipSender {
         let (sender, joined) = args;
 
         // Invoke the handler to wait for the gossip overlay to be joined.
-        let _ = myself.cast(ToGossipSender::WaitForJoin(joined));
+        let _ = myself.cast(ToGossipSender::WaitUntilJoined(joined));
 
         let state = GossipSenderState {
             sender: Some(sender),
@@ -74,7 +74,7 @@ impl Actor for GossipSender {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToGossipSender::WaitForJoin(joined) => {
+            ToGossipSender::WaitUntilJoined(joined) => {
                 // This line of code blocks until the join signal is received. It's important to
                 // only start broadcasting messages once the overlay has been joined, otherwise
                 // those messages will simply vanish into the primordial void.

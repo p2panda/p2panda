@@ -84,8 +84,9 @@ impl Actor for GossipReceiver {
                 if let Some(receiver) = &mut state.receiver {
                     // Wait for the first peer connection.
                     //
-                    // NOTE: This will block the actor's message processing queue until the first
-                    // event is received.
+                    // This will block the actor's message processing queue until the first
+                    // `NeighborUp` event is received. The event is consumed by the call to
+                    // `joined()`.
                     receiver.joined().await?;
 
                     // Inform the session actor about our direct neighbors.
