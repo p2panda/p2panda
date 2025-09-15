@@ -2,6 +2,7 @@
 
 mod checkpoint;
 mod client;
+mod controller;
 mod subject;
 
 pub use checkpoint::Checkpoint;
