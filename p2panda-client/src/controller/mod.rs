@@ -4,6 +4,4 @@ mod backend;
 mod consumer;
 mod controller;
 
-pub use backend::{Backend, StreamEvent, Subscription, SubscriptionId};
-pub use consumer::{Consumer, ConsumerError};
 pub use controller::{Controller, ControllerError};
