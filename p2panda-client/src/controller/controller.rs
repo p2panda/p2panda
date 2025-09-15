@@ -7,7 +7,7 @@ use p2panda_core::Hash;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::controller::backend::{Backend, Subscription, SubscriptionId};
+use crate::backend::{Backend, Subscription, SubscriptionId};
 use crate::controller::consumer::Consumer;
 use crate::{Checkpoint, Subject};
 
