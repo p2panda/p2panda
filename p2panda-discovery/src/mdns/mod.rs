@@ -213,3 +213,13 @@ impl Discovery for LocalDiscovery {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::mdns::socket_v4_unbound;
+
+    #[tokio::test]
+    async fn create_unbound_socket() {
+        socket_v4_unbound().unwrap();
+    }
+}

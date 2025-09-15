@@ -17,6 +17,10 @@ Highlights are marked with a pancake 🥞
 
 - One global state object and operation graph for all groups [#781](https://github.com/p2panda/p2panda/pull/781)
 
+### Fixed
+
+- Enable nonblocking for unbound socket used in mdns discovery [#794](https://github.com/p2panda/p2panda/pull/794)
+
 ## [0.4.0] - 07/07/2025
 
 ### Added
