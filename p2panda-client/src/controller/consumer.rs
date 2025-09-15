@@ -8,7 +8,7 @@ use p2panda_core::Hash;
 use thiserror::Error;
 
 use crate::Subject;
-use crate::controller::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
+use crate::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
 use crate::controller::{Controller, ControllerError};
 
 pub struct Consumer<B>

@@ -5,3 +5,5 @@ mod client;
 mod ephemeral_stream;
 mod message;
 mod stream;
+
+pub use client::{Client, ClientBuilder, ClientError};
