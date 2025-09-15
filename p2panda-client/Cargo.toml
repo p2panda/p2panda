@@ -7,7 +7,9 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
+futures-core = { version = "0.3.31", default-features = false }
+futures-util = { version = "0.3.31", features = ["sink"], default-features = false }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", default-features = false }
 p2panda-net = { path = "../p2panda-net", version = "0.4.0", default-features = false }
 p2panda-sync = { path = "../p2panda-sync", version = "0.4.0", default-features = false }
 serde = { version = "1.0.224", features = ["derive"] }
