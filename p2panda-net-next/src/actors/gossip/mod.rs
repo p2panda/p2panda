@@ -167,10 +167,10 @@ impl Actor for Gossip {
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
-                // Channel to receive messages from the user (to the network).
-                let (to_network_tx, to_network_rx) = mpsc::channel(128);
-                // Channel to receive messages from the network (to the user).
-                let (from_network_tx, from_network_rx) = mpsc::channel(128);
+                // Channel to receive messages from the user (to the gossip overlay).
+                let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
+                // Channel to receive messages from the gossip overlay (to the user).
+                let (from_gossip_tx, from_gossip_rx) = mpsc::channel(128);
 
                 // Oneshot channel to notify the session sender(s) that the overlay has been
                 // joined.
@@ -189,7 +189,7 @@ impl Actor for Gossip {
                 let (gossip_session_actor, _) = Actor::spawn_linked(
                     None,
                     GossipSession::new(myself.clone()),
-                    (topic_id, subscription, to_network_rx, gossip_joined_rx),
+                    (topic_id, subscription, to_gossip_rx, gossip_joined_rx),
                     myself.clone().into(),
                 )
                 .await?;
@@ -217,12 +217,12 @@ impl Actor for Gossip {
                     .from_gossip_senders
                     .entry(topic_id)
                     .or_default()
-                    .push(from_network_tx);
+                    .push(from_gossip_tx);
 
                 // Return sender / receiver pair to the user.
                 if !reply.is_closed() {
                     // TODO: Handle case where receiver channel has been dropped.
-                    let _ = reply.send((to_network_tx, from_network_rx));
+                    let _ = reply.send((to_gossip_tx, from_gossip_rx));
                 }
 
                 Ok(())
@@ -347,6 +347,13 @@ impl Actor for Gossip {
                 // NOTE: We do not respawn the session if it fails. Instead, we simply drop the
                 // gossip message sender to the user. The user is expected to handle the error on
                 // the receiver and resubscribe to the topic if they wish.
+                //
+                // TODO: Do we rather want to handle the resubscribe internally? If the root gossip
+                // actor holds a clone of `to_network_rx` and `from_network_tx` then it's possible
+                // to spawn a replacement for the failed session (while maintaining the original
+                // channels established for message passing with the user). After some threshold
+                // number of failures in a given timespan we drop the channels completely and
+                // return an error to the user.
 
                 let actor_id = actor.get_id();
                 if let Some(topic_id) = state.sessions_by_actor_id.remove(&actor_id) {
