@@ -18,11 +18,12 @@ use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
 use crate::actors::gossip::ToGossip;
+use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
 use crate::network::ToNetwork;
-use crate::to_public_key;
+use crate::{TopicId, to_public_key};
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
@@ -30,11 +31,16 @@ pub enum ToGossipSession {
 
     /// Joined the gossip overlay with the given peers as direct neighbors.
     ProcessJoined(Vec<NodeId>),
+
+    /// Join the given set of peers.
+    JoinPeers(Vec<NodeId>),
 }
 
 impl Message for ToGossipSession {}
 
 pub struct GossipSessionState {
+    topic_id: TopicId,
+    gossip_joiner_actor: ActorRef<ToGossipJoiner>,
     gossip_sender_actor: ActorRef<ToGossipSender>,
     gossip_receiver_actor: ActorRef<ToGossipReceiver>,
 }
@@ -52,24 +58,34 @@ impl GossipSession {
 impl Actor for GossipSession {
     type State = GossipSessionState;
     type Msg = ToGossipSession;
-    type Arguments = (IrohGossipTopic, Receiver<ToNetwork>, OneshotReceiver<u8>);
+    type Arguments = (
+        TopicId,
+        IrohGossipTopic,
+        Receiver<ToNetwork>,
+        OneshotReceiver<u8>,
+    );
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (subscription, receiver_from_user, gossip_joined) = args;
+        let (topic_id, subscription, receiver_from_user, gossip_joined) = args;
 
         let (sender, receiver) = subscription.split();
 
         let (gossip_sender_actor, _) = Actor::spawn_linked(
             None,
             GossipSender,
-            (sender, gossip_joined),
+            (sender.clone(), gossip_joined),
             myself.clone().into(),
         )
         .await?;
+
+        // TODO: Consider carefully whether this requires supervision and, if so, what actions to
+        // take on termination and failure.
+        let (gossip_joiner_actor, _) =
+            Actor::spawn_linked(None, GossipJoiner, sender, myself.clone().into()).await?;
 
         let (gossip_receiver_actor, _) = Actor::spawn_linked(
             None,
@@ -90,6 +106,8 @@ impl Actor for GossipSession {
         .await?;
 
         let state = GossipSessionState {
+            topic_id,
+            gossip_joiner_actor,
             gossip_sender_actor,
             gossip_receiver_actor,
         };
@@ -117,19 +135,22 @@ impl Actor for GossipSession {
         &self,
         myself: ActorRef<Self::Msg>,
         message: Self::Msg,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         // Gossip events are passed up the chain to the main gossip actor.
         //
         // We perform type conversion here to reduce the workload of the gossip actor.
         match message {
             ToGossipSession::ProcessJoined(peers) => {
+                let topic_id = state.topic_id;
                 let peers: Vec<PublicKey> = peers.into_iter().map(to_public_key).collect();
                 let session_id = myself.get_id();
 
-                let _ = self
-                    .gossip_actor
-                    .cast(ToGossip::Joined { peers, session_id });
+                let _ = self.gossip_actor.cast(ToGossip::Joined {
+                    topic_id,
+                    peers,
+                    session_id,
+                });
             }
             ToGossipSession::ProcessEvent(event) => match event {
                 IrohEvent::Lagged => {
@@ -139,12 +160,14 @@ impl Actor for GossipSession {
                     let bytes = msg.content.into();
                     let delivered_from = to_public_key(msg.delivered_from);
                     let delivery_scope = msg.scope;
+                    let topic_id = state.topic_id;
                     let session_id = myself.get_id();
 
                     let _ = self.gossip_actor.cast(ToGossip::ReceivedMessage {
                         bytes,
                         delivered_from,
                         delivery_scope,
+                        topic_id,
                         session_id,
                     });
                 }
@@ -162,9 +185,14 @@ impl Actor for GossipSession {
 
                     let _ = self
                         .gossip_actor
-                        .cast(ToGossip::NeighborUp { peer, session_id });
+                        .cast(ToGossip::NeighborDown { peer, session_id });
                 }
             },
+            ToGossipSession::JoinPeers(peers) => {
+                let _ = state
+                    .gossip_joiner_actor
+                    .cast(ToGossipJoiner::JoinPeers(peers));
+            }
         }
 
         Ok(())
