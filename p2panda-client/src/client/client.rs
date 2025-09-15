@@ -24,7 +24,7 @@ impl ClientBuilder {
 
     pub fn build(self) -> Client {
         Client {
-            private_key: self.private_key.unwrap_or(PrivateKey::new()),
+            private_key: self.private_key.unwrap_or_default(),
         }
     }
 }

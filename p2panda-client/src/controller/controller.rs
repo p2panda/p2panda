@@ -73,7 +73,7 @@ where
 
         {
             let mut subscriptions = self.inner.subscriptions.write().await;
-            subscriptions.insert(subscription_id.clone(), subscription);
+            subscriptions.insert(subscription_id, subscription);
         }
 
         Ok(Consumer::new(

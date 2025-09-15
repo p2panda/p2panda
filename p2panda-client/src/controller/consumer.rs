@@ -82,7 +82,7 @@ where
 {
     fn drop(&mut self) {
         let controller = self.controller.clone();
-        let subscription_id = self.subscription_id.clone();
+        let subscription_id = self.subscription_id;
 
         tokio::spawn(async move {
             let _ = controller.unsubscribe(subscription_id).await;
