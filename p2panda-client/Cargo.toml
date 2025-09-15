@@ -1,0 +1,12 @@
+[package]
+name = "p2panda-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+futures-core = { version = "0.3.31", default-features = false }
+futures-util = { version = "0.3.31", default-features = false, features = ["sink"] }
+pin-project = "1.1.10"
+
+[lints]
+workspace = true
