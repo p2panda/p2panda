@@ -1,0 +1,17 @@
+[package]
+name = "p2panda-client"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
+p2panda-net = { path = "../p2panda-net", version = "0.4.0", default-features = false }
+p2panda-sync = { path = "../p2panda-sync", version = "0.4.0", default-features = false }
+serde = { version = "1.0.224", features = ["derive"] }
+thiserror = "2.0.16"
+
+[dev-dependencies]
+tokio = { version = "1.47.1", features = ["macros", "rt"] }
