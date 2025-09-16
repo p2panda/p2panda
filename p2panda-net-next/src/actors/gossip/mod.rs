@@ -8,7 +8,7 @@ mod receiver;
 mod sender;
 mod session;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use iroh::Endpoint as IrohEndpoint;
 use iroh::NodeId;
@@ -69,7 +69,7 @@ pub enum ToGossip {
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
-        session_id: ActorId,
+        _session_id: ActorId,
     },
 }
 
@@ -79,6 +79,7 @@ pub struct GossipState {
     gossip: IrohGossip,
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, Vec<ActorRef<ToGossipSession>>>,
+    neighours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
     from_gossip_senders: HashMap<TopicId, Vec<Sender<FromNetwork>>>,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
@@ -109,6 +110,7 @@ impl Actor for Gossip {
 
         let sessions_by_actor_id = HashMap::new();
         let sessions_by_topic_id = HashMap::new();
+        let neighours_by_topic_id = HashMap::new();
         let from_gossip_senders = HashMap::new();
         let gossip_joined_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
@@ -121,6 +123,7 @@ impl Actor for Gossip {
             gossip,
             sessions_by_actor_id,
             sessions_by_topic_id,
+            neighours_by_topic_id,
             from_gossip_senders,
             gossip_joined_senders,
             topic_delivery_scopes,
@@ -270,16 +273,6 @@ impl Actor for Gossip {
 
                 Ok(())
             }
-            // TODO: Handle overlay events.
-            //
-            // We want to track our neighours for each session (topic).
-            //
-            // The `Joined` event describes the peers we initially connect with.
-            // These are used to populate the set of neighours for the session.
-            //
-            // `NeighborUp` adds a new peer to the set of neighours.
-            //
-            // `NeighborDown` removes a peer from the set of neighbours.
             ToGossip::Joined {
                 topic_id,
                 peers,
@@ -294,20 +287,31 @@ impl Actor for Gossip {
                     }
                 }
 
+                let peer_set = HashSet::from_iter(peers);
+
+                // Store the neighbours with whom we have joined the topic.
+                state.neighours_by_topic_id.insert(topic_id, peer_set);
+
                 Ok(())
             }
-            ToGossip::NeighborUp {
-                peer: _,
-                session_id: _,
-            } => {
-                // TODO: Handle this event.
+            ToGossip::NeighborUp { peer, session_id } => {
+                // Insert the peer into the set of neighbours.
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
+                    if let Some(peer_set) = state.neighours_by_topic_id.get_mut(topic_id) {
+                        peer_set.insert(peer);
+                    }
+                }
+
                 Ok(())
             }
-            ToGossip::NeighborDown {
-                peer: _,
-                session_id: _,
-            } => {
-                // TODO: Handle this event.
+            ToGossip::NeighborDown { peer, session_id } => {
+                // Remove the peer from the set of neighbours.
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
+                    if let Some(peer_set) = state.neighours_by_topic_id.get_mut(topic_id) {
+                        peer_set.remove(&peer);
+                    }
+                }
+
                 Ok(())
             }
         }
