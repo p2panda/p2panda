@@ -12,12 +12,22 @@ use crate::{Checkpoint, Subject};
 pub type SubscriptionId = u64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StreamEvent {
-    pub id: Hash,
-    pub header: Vec<u8>,
-    pub body: Vec<u8>,
+pub enum StreamEvent {
+    Subscribed {
+        subscription_id: SubscriptionId,
+    },
+    Operation {
+        id: Hash,
+        header: Vec<u8>,
+        body: Vec<u8>,
+    },
+    Unsubscribed,
 }
 
+// @TODO: Can we use this as a general API for node-node ("sync") and node-client communication?
+// Then we might want to move this definition into p2panda-sync?
+//
+// @TODO: "Backend" is a weirdly "centralized" term, is there a better one?
 pub trait Backend: Send + Sync + 'static {
     type Error: Error;
 
