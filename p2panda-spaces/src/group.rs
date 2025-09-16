@@ -20,9 +20,6 @@ use crate::types::{
     AuthResolver, EncryptionGroupError,
 };
 
-/// Encrypted data context with authorization boundary.
-///
-/// Only members with suitable access to the group can read and write to it.
 #[derive(Debug)]
 pub struct Group<S, F, M, C, RS> {
     /// Reference to the manager.
