@@ -46,6 +46,14 @@ where
             .map_err(ConsumerError::Controller)?;
         Ok(())
     }
+
+    // @TODO: Wait for "unsubscribed" event to arrive from backend. Something to handle as an
+    // internal state in Stream implementation.
+    pub async fn unsubscribe(self) -> Result<(), ConsumerError<B>> {
+        self.controller.unsubscribe(self.subscription_id).await?;
+        drop(self);
+        Ok(())
+    }
 }
 
 impl<B> Stream for Consumer<B>
@@ -74,18 +82,4 @@ where
 
     #[error("{0}")]
     Subscription(<B::Subscription as Subscription>::Error),
-}
-
-impl<B> Drop for Consumer<B>
-where
-    B: Backend,
-{
-    fn drop(&mut self) {
-        let controller = self.controller.clone();
-        let subscription_id = self.subscription_id;
-
-        tokio::spawn(async move {
-            let _ = controller.unsubscribe(subscription_id).await;
-        });
-    }
 }
