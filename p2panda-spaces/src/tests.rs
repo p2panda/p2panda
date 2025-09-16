@@ -16,11 +16,14 @@ use crate::auth::orderer::AuthOrderer;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
-use crate::message::{AuthoredMessage, ControlMessage, SpacesArgs, SpacesMessage};
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::SpaceError;
 use crate::store::{AuthStore, SpaceStore};
 use crate::test_utils::MemoryStore;
-use crate::types::{ActorId, AuthGroupState, OperationId, StrongRemoveResolver};
+use crate::types::{
+    ActorId, AuthControlMessage, AuthGroupAction, AuthGroupState, EncryptionControlMessage,
+    OperationId, StrongRemoveResolver,
+};
 
 type SeqNum = u64;
 
@@ -181,7 +184,7 @@ async fn create_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, message) = manager.create_space(&[]).await.unwrap();
+    let (space, messages) = manager.create_space(&[]).await.unwrap();
 
     // We've added ourselves automatically with manage access.
     assert_eq!(
@@ -189,41 +192,71 @@ async fn create_space() {
         vec![(my_id, Access::manage())]
     );
 
-    let SpacesArgs::ControlMessage {
-        id: group_id,
-        control_message,
-        direct_messages,
+    // There are two messages (one auth, one space)
+    assert_eq!(messages.len(), 2);
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
         auth_dependencies,
-        encryption_dependencies,
-    } = message.args()
+    } = message_01.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    let SpacesArgs::SpaceMembership {
+        space_id,
+        group_id,
+        space_dependencies,
+        auth_message_id,
+        control_messages: space_control_messages,
+    } = message_02.args()
     else {
         panic!("expected system message");
     };
 
-    assert_eq!(*group_id, space.id());
+    assert_eq!(*space_id, space.id());
+    assert_ne!(*group_id, space.id());
+    assert_eq!(*auth_message_id, message_01.id());
 
     // Dependencies are empty for both auth and encryption.
-    assert_eq!(auth_dependencies.to_owned(), vec![]);
-    assert_eq!(encryption_dependencies.to_owned(), vec![]);
+    assert_eq!(auth_dependencies, &vec![]);
+    assert_eq!(space_dependencies.to_owned(), vec![]);
 
     // Control message contains "create".
     assert_eq!(
-        control_message,
-        &ControlMessage::Create {
-            initial_members: vec![(GroupMember::Individual(my_id), Access::manage())]
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: *group_id,
+            action: AuthGroupAction::Create {
+                initial_members: vec![(GroupMember::Individual(my_id), Access::manage())]
+            }
         },
     );
 
+    // There is one encryption control message.
+    assert_eq!(space_control_messages.len(), 1);
+    let space_control_message = space_control_messages[0].clone();
+
+    // The encryption control message is an "add" for bob.
+    assert_eq!(
+        space_control_message.encryption_control_message(),
+        EncryptionControlMessage::Create {
+            initial_members: vec![my_id]
+        }
+    );
+
     // No direct messages as we are the only member.
-    assert!(direct_messages.is_empty());
+    assert!(space_control_message.direct_messages().is_empty());
 
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
-    let y = manager_ref.store.space(&space.id()).await.unwrap().unwrap();
-    assert_eq!(vec![message.id()], y.encryption_y.orderer.heads());
-
     let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message.id()], auth_y.orderer_y.heads)
+    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
+
+    let y = manager_ref.store.space(&space.id()).await.unwrap().unwrap();
+    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
 
     // @TODO: Currently the "create" message has been signed by the author's permament key. We
     // would like to sign it with the ephemeral key instead.
@@ -255,7 +288,7 @@ async fn send_and_receive() {
 
     // Alice creates a space with Bob.
 
-    let (alice_space, alice_create_message) = alice
+    let (alice_space, alice_messages) = alice
         .manager
         .create_space(&[(bob.manager.id().await, Access::write())])
         .await
@@ -263,15 +296,18 @@ async fn send_and_receive() {
 
     // @TODO: Currently the "create" message has been signed by the author's permament key. We
     // would like to sign it with the ephemeral key instead.
-    assert_eq!(alice_create_message.author(), alice.manager.id().await);
+    // let alice_create_message = alice_create_messages.pop().unwrap();
+    // assert_eq!(alice_create_message.author(), alice.manager.id().await);
 
-    // Bob processes Alice's "create" message.
+    // Bob processes Alice's messages.
 
-    bob.manager.process(&alice_create_message).await.unwrap();
+    for message in alice_messages {
+        bob.manager.process(&message).await.unwrap();
+    }
 
     // Bob sends a message to Alice.
 
-    let bob_space = bob.manager.space(&alice_space.id()).await.unwrap().unwrap();
+    let bob_space = bob.manager.space(alice_space.id()).await.unwrap().unwrap();
 
     let message = bob_space.publish(b"Hello, Alice!").await.unwrap();
 
@@ -310,40 +346,47 @@ async fn add_member_to_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, message_01) = manager.create_space(&[]).await.unwrap();
+    let (space, messages) = manager.create_space(&[]).await.unwrap();
     let space_id = space.id();
+
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+
     drop(space);
-
-    // Orderer states have been updated.
-    let manager_ref = manager.inner.read().await;
-    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
-
-    let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
-    drop(manager_ref);
 
     // Add new member to Space
     // ~~~~~~~~~~~~
 
-    let space = manager.space(&space_id).await.unwrap().unwrap();
-    let message_02 = space
-        .add(
-            GroupMember::Individual(bob.manager.id().await),
-            Access::read(),
-        )
+    let space = manager.space(space_id).await.unwrap().unwrap();
+    let messages = space
+        .add(bob.manager.id().await, Access::read())
         .await
         .unwrap();
     let mut members = space.members().await.unwrap();
     drop(space);
 
-    let SpacesArgs::ControlMessage {
-        id: group_id,
-        control_message,
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_03 = messages[0].clone();
+    let message_04 = messages[1].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
         auth_dependencies,
-        encryption_dependencies,
-        direct_messages,
-    } = message_02.args()
+    } = message_03.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    let SpacesArgs::SpaceMembership {
+        space_id,
+        group_id,
+        space_dependencies,
+        control_messages: space_control_messages,
+        ..
+    } = message_04.args()
     else {
         panic!("expected system message");
     };
@@ -357,29 +400,35 @@ async fn add_member_to_space() {
 
     // Dependencies are set for both auth and encryption.
     assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
-    assert_eq!(encryption_dependencies.to_owned(), vec![message_01.id()]);
+    assert_eq!(space_dependencies.to_owned(), vec![message_02.id()]);
 
-    // Correct space id.
-    assert_eq!(*group_id, space_id);
+    // Space id and group id are not equal.
+    assert_ne!(group_id, space_id);
 
-    // Control message contains "add".
+    // Auth control message contains "add" for bob.
     assert_eq!(
-        control_message,
-        &ControlMessage::Add {
-            member: GroupMember::Individual(bob_id),
-            access: Access::read()
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: *group_id,
+            action: AuthGroupAction::Add {
+                member: GroupMember::Individual(bob_id),
+                access: Access::read()
+            }
         },
     );
 
-    // Orderer states have been updated.
-    let manager_ref = manager.inner.read().await;
-    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
+    // There is one encryption control message.
+    assert_eq!(space_control_messages.len(), 1);
+    let space_control_message = space_control_messages[0].clone();
 
-    let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
+    // The encryption control message is an "add" for bob.
+    assert_eq!(
+        space_control_message.encryption_control_message(),
+        EncryptionControlMessage::Add { added: bob_id }
+    );
 
-    // There is one direct message and it's for bob.
+    // There is one direct message and it's also for bob.
+    let direct_messages = space_control_message.direct_messages();
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
     assert!(matches!(
@@ -388,7 +437,15 @@ async fn add_member_to_space() {
             recipient,
             ..
         } if recipient == bob_id
-    ))
+    ));
+
+    // Orderer states have been updated.
+    let manager_ref = manager.inner.read().await;
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_04.id()], y.encryption_y.orderer.heads());
+
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 }
 
 #[tokio::test]
@@ -413,18 +470,21 @@ async fn send_and_receive_after_add() {
 
     // Alice creates a space, adds Bob in a following step and then sends a message.
 
-    let (alice_space, message_01) = alice.manager.create_space(&[]).await.unwrap();
-    let message_02 = alice_space
-        .add(GroupMember::Individual(bob_id), Access::read())
-        .await
-        .unwrap();
-    let message_03 = alice_space.publish(b"Hello bob").await.unwrap();
+    let (alice_space, messages) = alice.manager.create_space(&[]).await.unwrap();
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+    let messages = alice_space.add(bob_id, Access::read()).await.unwrap();
+    let message_03 = messages[0].clone();
+    let message_04 = messages[1].clone();
+    let message_05 = alice_space.publish(b"Hello bob").await.unwrap();
 
     // Bob processes all of Alice's messages.
 
     bob.manager.process(&message_01).await.unwrap();
     bob.manager.process(&message_02).await.unwrap();
-    let events = bob.manager.process(&message_03).await.unwrap();
+    bob.manager.process(&message_03).await.unwrap();
+    bob.manager.process(&message_04).await.unwrap();
+    let events = bob.manager.process(&message_05).await.unwrap();
     assert_eq!(events.len(), 1);
 }
 
@@ -449,37 +509,50 @@ async fn add_pull_member_to_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, message_01) = manager.create_space(&[]).await.unwrap();
+    let (space, messages) = manager.create_space(&[]).await.unwrap();
+    assert_eq!(messages.len(), 2);
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
     let space_id = space.id();
     drop(space);
 
     // Add new pull-only member to Space
     // ~~~~~~~~~~~~
 
-    let space = manager.space(&space_id).await.unwrap().unwrap();
-    let message_02 = space
-        .add(
-            GroupMember::Individual(bob.manager.id().await),
-            Access::pull(),
-        )
+    let space = manager.space(space_id).await.unwrap().unwrap();
+    let messages = space
+        .add(bob.manager.id().await, Access::pull())
         .await
         .unwrap();
     let mut members = space.members().await.unwrap();
-    drop(space);
 
-    let SpacesArgs::ControlMessage {
-        id: group_id,
-        control_message,
+    // There are two messages (one auth, one space)
+    assert_eq!(messages.len(), 2);
+    let message_03 = messages[0].clone();
+    let message_04 = messages[1].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
         auth_dependencies,
-        encryption_dependencies,
-        direct_messages,
-    } = message_02.args()
+    } = message_03.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    let SpacesArgs::SpaceMembership {
+        space_id,
+        group_id,
+        space_dependencies,
+        auth_message_id,
+        control_messages: encryption_control_messages,
+    } = message_04.args()
     else {
         panic!("expected system message");
     };
 
-    // Correct space id.
-    assert_eq!(*group_id, space_id);
+    assert_eq!(*space_id, space.id());
+    assert_ne!(*group_id, space.id());
+    assert_eq!(*auth_message_id, message_03.id());
 
     // Alice and bob are both members.
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
@@ -489,29 +562,32 @@ async fn add_pull_member_to_space() {
     );
 
     assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
-    // There is no dependency for encryption.
-    assert_eq!(encryption_dependencies.to_owned(), vec![]);
+    // There is no space dependencies.
+    assert_eq!(space_dependencies.to_owned(), vec![message_02.id()]);
 
-    // Control message contains "add".
+    // Auth control message contains "add" for bob.
     assert_eq!(
-        control_message,
-        &ControlMessage::Add {
-            member: GroupMember::Individual(bob_id),
-            access: Access::pull()
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: *group_id,
+            action: AuthGroupAction::Add {
+                member: GroupMember::Individual(bob_id),
+                access: Access::pull()
+            }
         },
     );
 
-    let manager_ref = manager.inner.read().await;
-    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    // Encryption order still has message_01 as it's latest state.
-    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
+    // There are no encryption control messages.
+    assert_eq!(encryption_control_messages.len(), 0);
 
+    let manager_ref = manager.inner.read().await;
     // Auth order has been updated.
     let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads);
+    assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 
-    // There are no direct messages.
-    assert_eq!(direct_messages.len(), 0);
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    // Encryption order has been updated.
+    assert_eq!(vec![message_04.id()], y.encryption_y.orderer.heads());
 }
 
 #[tokio::test]
@@ -543,15 +619,29 @@ async fn receive_control_messages() {
     // Alice: Create Space
     // ~~~~~~~~~~~~
 
-    let (space, message_01) = alice_manager.create_space(&[]).await.unwrap();
+    let (space, messages) = alice_manager.create_space(&[]).await.unwrap();
     let space_id = space.id();
+    let group_id = space.group_id().await.unwrap();
     drop(space);
 
-    // Bob: Receive Message 01
+    // Bob: Receive Message 01 & 02
     // ~~~~~~~~~~~~
 
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
     bob.manager.process(&message_01).await.unwrap();
-    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
+
+    // Global auth state has been updated.
+    {
+        let manager_ref = bob_manager.inner.read().await;
+        let auth_y = manager_ref.store.auth().await.unwrap();
+        let members = auth_y.members(group_id);
+        assert_eq!(members, vec![(alice_id, Access::manage())]);
+        assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
+    }
+
+    bob.manager.process(&message_02).await.unwrap();
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
 
     // Alice is the only group member.
     let members = space.members().await.unwrap();
@@ -561,44 +651,43 @@ async fn receive_control_messages() {
     let error = space.publish(&[0, 1, 2]).await.unwrap_err();
     assert!(matches!(error, TestSpaceError::NotWelcomed(_)));
 
-    // Orderer states have been updated.
+    // Orderer state has been updated.
     let manager_ref = bob_manager.inner.read().await;
     let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_01.id()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
 
-    let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads);
     drop(manager_ref);
 
     // Alice: Publishes a message into the space
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
-    let message_02 = space.publish(&[0, 1, 2]).await.unwrap();
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let message_03 = space.publish(&[0, 1, 2]).await.unwrap();
 
     // Alice: Add new member to Space
     // ~~~~~~~~~~~~
 
-    let message_03 = space
-        .add(
-            GroupMember::Individual(bob.manager.id().await),
-            Access::read(),
-        )
+    let messages = space
+        .add(bob.manager.id().await, Access::read())
         .await
         .unwrap();
+    let message_04 = messages[0].clone();
+    let message_05 = messages[1].clone();
 
     drop(space);
 
-    // Bob: Receive Message 02 & 03
+    // Bob: Receive Message 03, 04 and 05
     // ~~~~~~~~~~~~
 
-    let events = bob.manager.process(&message_02).await.unwrap();
-    assert!(events.is_empty());
     let events = bob.manager.process(&message_03).await.unwrap();
+    assert!(events.is_empty());
+    let _ = bob.manager.process(&message_04).await.unwrap();
+    assert!(events.is_empty());
+    let events = bob.manager.process(&message_05).await.unwrap();
     // The application message arrives only after bob is welcomed.
     assert_eq!(events.len(), 1);
-    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
 
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
     // Alice and bob are both members.
     let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
@@ -609,11 +698,12 @@ async fn receive_control_messages() {
 
     // Orderer states have been updated.
     let manager_ref = bob_manager.inner.read().await;
-    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_03.id()], y.encryption_y.orderer.heads());
 
     let auth_y = manager_ref.store.auth().await.unwrap();
-    assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
+    assert_eq!(vec![message_04.id()], auth_y.orderer_y.heads);
+
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message_05.id()], y.encryption_y.orderer.heads());
 }
 
 #[tokio::test]
@@ -644,38 +734,82 @@ async fn remove_member() {
     // Alice: Create Space with themselves and bob
     // ~~~~~~~~~~~~
 
-    let (space, message_01) = alice_manager
+    let (space, messages) = alice_manager
         .create_space(&[(bob_id, Access::read())])
         .await
         .unwrap();
     let space_id = space.id();
     drop(space);
 
-    // Bob: Receive Message 01
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+
+    // Bob: Receive Message 01 & 02
     // ~~~~~~~~~~~~
 
     bob_manager.process(&message_01).await.unwrap();
+    bob_manager.process(&message_02).await.unwrap();
 
     // Alice: Removes bob
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
-    let message_02 = space.remove(GroupMember::Individual(bob_id)).await.unwrap();
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let messages = space.remove(bob_id).await.unwrap();
 
-    let SpacesArgs::ControlMessage {
-        direct_messages, ..
-    } = message_02.args()
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_03 = messages[0].clone();
+    let message_04 = messages[1].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
+        ..
+    } = message_03.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    let SpacesArgs::SpaceMembership {
+        group_id,
+        control_messages: space_control_messages,
+        ..
+    } = message_04.args()
     else {
         panic!("expected system message");
     };
 
-    // There are no direct messages (Bob shouldn't receive the new group secret).
-    assert_eq!(direct_messages.len(), 0);
+    // Auth control message contains "remove".
+    assert_eq!(
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: *group_id,
+            action: AuthGroupAction::Remove {
+                member: GroupMember::Individual(bob_id)
+            }
+        },
+    );
 
-    // Bob: Receive Message 02
+    // There is one encryption control message.
+    assert_eq!(space_control_messages.len(), 1);
+    let space_control_message = space_control_messages[0].clone();
+
+    // The encryption control message is an "remove" of bob.
+    assert_eq!(
+        space_control_message.encryption_control_message(),
+        EncryptionControlMessage::Remove { removed: bob_id }
+    );
+
+    // There are no direct messages (Bob shouldn't receive the new group secret).
+    assert_eq!(space_control_message.direct_messages().len(), 0);
+
+    // Bob: Receive Message 03 & 04
     // ~~~~~~~~~~~~
 
-    let events = bob_manager.process(&message_02).await.unwrap();
+    let events = bob_manager.process(&message_03).await.unwrap();
+    assert!(events.is_empty());
+    let events = bob_manager.process(&message_04).await.unwrap();
     let event = events.first().unwrap();
     assert!(matches!(event, Event::Removed { .. }));
 }
@@ -734,59 +868,100 @@ async fn concurrent_removal_conflict() {
     // Alice: Create Space with themselves and bob
     // ~~~~~~~~~~~~
 
-    let (space, message_01) = alice_manager
+    let (space, messages) = alice_manager
         .create_space(&[(bob_id, Access::manage())])
         .await
         .unwrap();
     let space_id = space.id();
     drop(space);
 
-    // Bob: Receive alice's message
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+
+    // Bob: Receive alice's messages
     // ~~~~~~~~~~~~
 
     bob_manager.process(&message_01).await.unwrap();
+    bob_manager.process(&message_02).await.unwrap();
 
-    // Alice: Removes bob
+    // Alice: Removes bob (concurrently)
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
-    let _ = space.remove(GroupMember::Individual(bob_id)).await.unwrap();
-
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let _ = space.remove(bob_id).await.unwrap();
     drop(space);
 
-    // Bob: Adds claire
+    // Bob: Adds claire (concurrently)
     // ~~~~~~~~~~~~
 
-    let space = bob_manager.space(&space_id).await.unwrap().unwrap();
-    let message_02_b = space
-        .add(GroupMember::Individual(claire_id), Access::read())
-        .await
-        .unwrap();
-
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let messages = space.add(claire_id, Access::read()).await.unwrap();
     drop(space);
+
+    // There are two messages (one auth, and one space)
+    assert_eq!(messages.len(), 2);
+    let message_03 = messages[0].clone();
+    let message_04 = messages[1].clone();
 
     // Alice: process bobs' message
     // ~~~~~~~~~~~~
 
-    alice_manager.process(&message_02_b).await.unwrap();
+    alice_manager.process(&message_03).await.unwrap();
+    alice_manager.process(&message_04).await.unwrap();
 
     // Alice: Adds dave
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(&space_id).await.unwrap().unwrap();
-    let message_03 = space
-        .add(GroupMember::Individual(dave_id), Access::read())
-        .await
-        .unwrap();
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let messages = space.add(dave_id, Access::read()).await.unwrap();
 
-    let SpacesArgs::ControlMessage {
-        direct_messages, ..
-    } = message_03.args()
+    assert_eq!(messages.len(), 2);
+    let message_05 = messages[0].clone();
+    let message_06 = messages[1].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
+        ..
+    } = message_05.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    let SpacesArgs::SpaceMembership {
+        group_id,
+        control_messages: space_control_messages,
+        ..
+    } = message_06.args()
     else {
         panic!("expected system message");
     };
 
+    // Auth control message contains "remove".
+    assert_eq!(
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: *group_id,
+            action: AuthGroupAction::Add {
+                member: GroupMember::Individual(dave_id),
+                access: Access::read()
+            }
+        },
+    );
+
+    // There is one encryption control message.
+    assert_eq!(space_control_messages.len(), 1);
+    let space_control_message = space_control_messages[0].clone();
+
+    // The encryption control message is an "add" of dave.
+    assert_eq!(
+        space_control_message.encryption_control_message(),
+        EncryptionControlMessage::Add { added: dave_id }
+    );
+
     // There is one direct message and it's for dave.
+    let direct_messages = space_control_message.direct_messages();
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
     assert!(matches!(
@@ -796,4 +971,373 @@ async fn concurrent_removal_conflict() {
             ..
         } if recipient == dave_id
     ))
+}
+
+#[tokio::test]
+async fn space_from_existing_auth_state() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+    let claire = TestPeer::new(2);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Create Group with bob and claire as managers.
+    // ~~~~~~~~~~~~
+
+    let (group, message_01) = alice_manager
+        .create_group(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
+        .await
+        .unwrap();
+    let member_group_id = group.id();
+
+    // Create Space with group as member
+    // ~~~~~~~~~~~~
+
+    let (space, messages) = alice_manager
+        .create_space(&[(member_group_id, Access::read())])
+        .await
+        .unwrap();
+
+    // There are 3 messages:
+    // 1) auth message containing "create" for the space group
+    // 2) space message containing reference to auth "create" message for the member group
+    // 3) space message containing reference to auth "create" message for the space
+    assert_eq!(messages.len(), 3);
+    let message_02 = messages[0].clone();
+    let message_03 = messages[1].clone();
+    let message_04 = messages[2].clone();
+
+    let SpacesArgs::Auth {
+        control_message: auth_control_message,
+        ..
+    } = message_02.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    // Auth control message contains "create" for the space group.
+    assert_eq!(
+        auth_control_message.to_owned(),
+        AuthControlMessage {
+            group_id: space.group_id().await.unwrap(),
+            action: AuthGroupAction::Create {
+                initial_members: vec![
+                    (GroupMember::Group(member_group_id), Access::read()),
+                    (GroupMember::Individual(alice_id), Access::manage()),
+                ],
+            }
+        },
+    );
+
+    let SpacesArgs::SpaceMembership {
+        control_messages: space_control_messages,
+        auth_message_id,
+        ..
+    } = message_03.args()
+    else {
+        panic!("expected system message");
+    };
+
+    // Space message references auth "create" message for the member group.
+    assert_eq!(*auth_message_id, message_01.id());
+
+    // There are no encryption control message.
+    assert_eq!(space_control_messages.len(), 0);
+
+    let SpacesArgs::SpaceMembership {
+        control_messages: space_control_messages,
+        auth_message_id,
+        ..
+    } = message_04.args()
+    else {
+        panic!("expected system message");
+    };
+
+    // Space message references auth "create" message for space group.
+    assert_eq!(*auth_message_id, message_02.id());
+
+    // There is one encryption control message.
+    assert_eq!(space_control_messages.len(), 1);
+    let space_control_message = space_control_messages[0].clone();
+
+    // The encryption control message is a "create" with alice, bob and claire as initial members.
+    assert!(matches!(space_control_message.encryption_control_message(),
+    EncryptionControlMessage::Create {
+        initial_members
+    } if {
+        let mut initial_members = initial_members.clone();
+        initial_members.sort();
+        initial_members == vec![alice_id, bob_id, claire_id]
+    }));
+
+    // There are two direct messages.
+    let direct_messages = space_control_message.direct_messages();
+    assert_eq!(direct_messages.len(), 2);
+
+    // The messages are for bob and claire.
+    let result = direct_messages.iter().all(|message| {
+        matches!(
+            message,
+            DirectMessage {
+                recipient,
+                ..
+            } if recipient == &bob_id || recipient == &claire_id
+        )
+    });
+    assert!(result, "{:?}", direct_messages);
+
+    // Space members are correct.
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![
+            (alice_id, Access::manage()),
+            (bob_id, Access::read()),
+            (claire_id, Access::read()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn create_group() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let manager = alice.manager.clone();
+
+    // Create Group
+    // ~~~~~~~~~~~~
+
+    let (group, message_01) = manager
+        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .await
+        .unwrap();
+
+    let mut members = group.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![(alice_id, Access::manage()), (bob_id, Access::manage())]
+    );
+
+    // There is one auth message.
+    let SpacesArgs::Auth {
+        control_message,
+        auth_dependencies,
+    } = message_01.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    // Dependencies are empty.
+    assert_eq!(auth_dependencies, &vec![]);
+
+    // Control message contains "create".
+    assert_eq!(
+        control_message.to_owned(),
+        AuthControlMessage {
+            group_id: group.id(),
+            action: AuthGroupAction::Create {
+                initial_members: vec![
+                    (GroupMember::Individual(alice_id), Access::manage()),
+                    (GroupMember::Individual(bob_id), Access::manage())
+                ]
+            }
+        },
+    );
+
+    // Orderer state has been updated.
+    let manager_ref = manager.inner.read().await;
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
+}
+
+#[tokio::test]
+async fn add_member_to_group() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+    let claire = TestPeer::new(2);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+    let manager = alice.manager.clone();
+
+    // Create Group
+    // ~~~~~~~~~~~~
+
+    let (group, message_01) = manager
+        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .await
+        .unwrap();
+
+    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+
+    let mut members = group.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![
+            (alice_id, Access::manage()),
+            (bob_id, Access::manage()),
+            (claire_id, Access::read())
+        ]
+    );
+
+    // There is one auth message.
+    let SpacesArgs::Auth {
+        control_message,
+        auth_dependencies,
+    } = message_02.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    // Dependencies contain message_01.
+    assert_eq!(auth_dependencies, &vec![message_01.id()]);
+
+    // Control message contains "add" of claire.
+    assert_eq!(
+        control_message.to_owned(),
+        AuthControlMessage {
+            group_id: group.id(),
+            action: AuthGroupAction::Add {
+                member: GroupMember::Individual(claire_id),
+                access: Access::read()
+            }
+        },
+    );
+
+    // Orderer state has been updated.
+    let manager_ref = manager.inner.read().await;
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
+}
+
+#[tokio::test]
+async fn remove_member_from_group() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let manager = alice.manager.clone();
+
+    // Create Group
+    // ~~~~~~~~~~~~
+
+    let (group, message_01) = manager
+        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .await
+        .unwrap();
+
+    // Remove bob from group
+    // ~~~~~~~~~~~~
+
+    let message_02 = group.remove(bob_id).await.unwrap();
+
+    let members = group.members().await.unwrap();
+    assert_eq!(members, vec![(alice_id, Access::manage()),]);
+
+    // There is one auth message.
+    let SpacesArgs::Auth {
+        control_message,
+        auth_dependencies,
+    } = message_02.args()
+    else {
+        panic!("expected auth message");
+    };
+
+    // Dependencies contain message_01.
+    assert_eq!(auth_dependencies, &vec![message_01.id()]);
+
+    // Control message contains "remove" of bob.
+    assert_eq!(
+        control_message.to_owned(),
+        AuthControlMessage {
+            group_id: group.id(),
+            action: AuthGroupAction::Remove {
+                member: GroupMember::Individual(bob_id),
+            }
+        },
+    );
+
+    // Orderer state has been updated.
+    let manager_ref = manager.inner.read().await;
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
+}
+
+#[tokio::test]
+async fn receive_auth_messages() {
+    let alice = TestPeer::new(0);
+    let bob = TestPeer::new(1);
+    let claire = TestPeer::new(2);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Create Group
+    // ~~~~~~~~~~~~
+
+    let (group, message_01) = alice_manager
+        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .await
+        .unwrap();
+    let group_id = group.id();
+
+    // Add claire
+    // ~~~~~~~~~~~~
+
+    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+    drop(group);
+
+    // Bob receives message 01 & 02
+    // ~~~~~~~~~~~~
+
+    let _events = bob_manager.process(&message_01).await.unwrap();
+    let _events = bob_manager.process(&message_02).await.unwrap();
+
+    let group = bob_manager.group(group_id).await.unwrap().unwrap();
+    let mut members = group.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(
+        members,
+        vec![
+            (alice_id, Access::manage()),
+            (bob_id, Access::manage()),
+            (claire_id, Access::read())
+        ]
+    );
+    drop(group);
+
+    // Orderer state has been updated.
+    let manager_ref = bob_manager.inner.read().await;
+    let auth_y = manager_ref.store.auth().await.unwrap();
+    assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
 }

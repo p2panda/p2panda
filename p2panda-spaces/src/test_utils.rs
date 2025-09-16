@@ -9,8 +9,9 @@ use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_encryption::traits::PreKeyManager;
 
 use crate::space::SpaceState;
-use crate::store::{AuthStore, KeyStore, SpaceStore};
+use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthGroupState};
+use crate::OperationId;
 
 #[derive(Debug)]
 pub struct MemoryStore<M, C>
@@ -20,7 +21,8 @@ where
     key_manager: KeyManagerState,
     key_registry: KeyRegistryState<ActorId>,
     auth: AuthGroupState<C>,
-    spaces: HashMap<ActorId, SpaceState<M>>,
+    spaces: HashMap<ActorId, SpaceState<M, C>>,
+    messages: HashMap<OperationId, M>,
 }
 
 impl<M, C> MemoryStore<M, C>
@@ -40,18 +42,19 @@ where
             key_registry,
             auth,
             spaces: HashMap::new(),
+            messages: HashMap::new(),
         }
     }
 }
 
-impl<M, C> SpaceStore<M> for MemoryStore<M, C>
+impl<M, C> SpaceStore<M, C> for MemoryStore<M, C>
 where
     M: Clone,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M>>, Self::Error> {
+    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C>>, Self::Error> {
         Ok(self.spaces.get(id).cloned())
     }
 
@@ -59,7 +62,7 @@ where
         Ok(self.spaces.contains_key(id))
     }
 
-    async fn set_space(&mut self, id: &ActorId, y: SpaceState<M>) -> Result<(), Self::Error> {
+    async fn set_space(&mut self, id: &ActorId, y: SpaceState<M, C>) -> Result<(), Self::Error> {
         self.spaces.insert(*id, y);
         Ok(())
     }
@@ -102,6 +105,23 @@ where
 
     async fn set_auth(&mut self, y: &AuthGroupState<C>) -> Result<(), Self::Error> {
         self.auth = y.clone();
+        Ok(())
+    }
+}
+
+impl<M, C> MessageStore<M> for MemoryStore<M, C>
+where
+    M: Clone,
+    C: Conditions,
+{
+    type Error = Infallible;
+    
+    async fn message(&self, id: &OperationId) -> Result<Option<M>, Self::Error> {
+        Ok(self.messages.get(id).cloned())
+    }
+    
+    async fn set_message(&mut self, id: &OperationId, message: &M) -> Result<(), Self::Error> {
+        self.messages.insert(*id, message.clone());
         Ok(())
     }
 }

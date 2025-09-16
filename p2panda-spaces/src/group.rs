@@ -1,3 +1,260 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub struct Group {}
+use std::fmt::Debug;
+
+use p2panda_auth::Access;
+use p2panda_auth::group::GroupMember;
+use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::PrivateKey;
+use p2panda_encryption::RngError;
+use thiserror::Error;
+
+use crate::auth::message::AuthMessage;
+use crate::event::Event;
+use crate::forge::Forge;
+use crate::manager::Manager;
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::store::{AuthStore, MessageStore};
+use crate::types::{
+    ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
+    AuthResolver, EncryptionGroupError,
+};
+
+/// Encrypted data context with authorization boundary.
+///
+/// Only members with suitable access to the group can read and write to it.
+#[derive(Debug)]
+pub struct Group<S, F, M, C, RS> {
+    /// Reference to the manager.
+    ///
+    /// This allows us build an API where users can treat "group" instances independently from the
+    /// manager API, even though internally it has a reference to it.
+    manager: Manager<S, F, M, C, RS>,
+
+    /// Id of the group.
+    ///
+    /// This is the "pointer" at the related group state which lives inside the manager.
+    id: ActorId,
+}
+
+impl<S, F, M, C, RS> Group<S, F, M, C, RS>
+where
+    S: AuthStore<C> + MessageStore<M>,
+    F: Forge<M, C>,
+    M: AuthoredMessage + SpacesMessage<C>,
+    C: Conditions,
+    RS: Debug + AuthResolver<C>,
+{
+    pub(crate) fn new(manager_ref: Manager<S, F, M, C, RS>, id: ActorId) -> Self {
+        Self {
+            manager: manager_ref,
+            id,
+        }
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub(crate) async fn create(
+        manager_ref: Manager<S, F, M, C, RS>,
+        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+    ) -> Result<(Self, M), GroupError<S, F, M, C, RS>> {
+        // Generate random group id.
+        let group_id: ActorId = {
+            let manager = manager_ref.inner.read().await;
+            let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
+            private_key.public_key().into()
+        };
+
+        let control_message = AuthControlMessage {
+            group_id,
+            action: AuthGroupAction::Create {
+                initial_members: initial_members.clone(),
+            },
+        };
+
+        let message = Self::process_control_message(manager_ref.clone(), control_message).await?;
+
+        Ok((
+            Self {
+                id: group_id,
+                manager: manager_ref,
+            },
+            message,
+        ))
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub(crate) async fn add(
+        &self,
+        member: ActorId,
+        access: Access<C>,
+    ) -> Result<M, GroupError<S, F, M, C, RS>> {
+        let member = {
+            let manager = self.manager.inner.read().await;
+            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+
+            // @TODO: we need members(..) to return an Option which is None when the group is not
+            // present in the auth state. Or better yet, introduce a new method which produces a
+            // list of all current known actors in the auth context. This check that the group
+            // is empty does not account for present but empty groups.
+            if auth_y.members(member).is_empty() {
+                GroupMember::Individual(member)
+            } else {
+                GroupMember::Group(member)
+            }
+        };
+
+        let control_message = AuthControlMessage {
+            group_id: self.id,
+            action: AuthGroupAction::Add { member, access },
+        };
+
+        let message = Self::process_control_message(self.manager.clone(), control_message).await?;
+
+        Ok(message)
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub(crate) async fn remove(&self, member: ActorId) -> Result<M, GroupError<S, F, M, C, RS>> {
+        let member = {
+            let manager = self.manager.inner.read().await;
+            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+
+            // @TODO: we need members(..) to return an Option which is None when the group is not
+            // present in the auth state. Or better yet, introduce a new method which produces a
+            // list of all current known actors in the auth context. This check that the group
+            // is empty does not account for present but empty groups.
+            if auth_y.members(member).is_empty() {
+                GroupMember::Individual(member)
+            } else {
+                GroupMember::Group(member)
+            }
+        };
+
+        let control_message = AuthControlMessage {
+            group_id: self.id,
+            action: AuthGroupAction::Remove { member },
+        };
+
+        let message = Self::process_control_message(self.manager.clone(), control_message).await?;
+
+        Ok(message)
+    }
+
+    pub(crate) async fn process(
+        manager_ref: Manager<S, F, M, C, RS>,
+        message: &M,
+    ) -> Result<Vec<Event>, GroupError<S, F, M, C, RS>> {
+        let auth_message = AuthMessage::from_forged(message);
+
+        let mut auth_y = {
+            let manager = manager_ref.inner.read().await;
+            manager.store.auth().await.map_err(GroupError::AuthStore)?
+        };
+
+        let mut manager = manager_ref.inner.write().await;
+        auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
+        auth_y
+            .orderer_y
+            .add_dependency(message.id(), &auth_message.dependencies());
+        manager
+            .store
+            .set_auth(&auth_y)
+            .await
+            .map_err(GroupError::AuthStore)?;
+        manager
+            .store
+            .set_message(&message.id(), message)
+            .await
+            .map_err(GroupError::MessageStore)?;
+
+        Ok(vec![])
+    }
+
+    async fn process_control_message(
+        manager_ref: Manager<S, F, M, C, RS>,
+        control_message: AuthControlMessage<C>,
+    ) -> Result<M, GroupError<S, F, M, C, RS>> {
+        let auth_y = {
+            let manager = manager_ref.inner.read().await;
+            manager.store.auth().await.map_err(GroupError::AuthStore)?
+        };
+
+        let (mut auth_y, auth_message) =
+            AuthGroup::prepare(auth_y, &control_message).map_err(GroupError::AuthGroup)?;
+
+        let args = SpacesArgs::Auth {
+            control_message: auth_message.payload(),
+            auth_dependencies: auth_message.dependencies(),
+        };
+
+        let message = {
+            let mut manager = manager_ref.inner.write().await;
+            let message = manager.forge.forge(args).await.map_err(GroupError::Forge)?;
+            manager
+                .store
+                .set_message(&message.id(), &message)
+                .await
+                .map_err(GroupError::MessageStore)?;
+            message
+        };
+
+        {
+            let mut manager = manager_ref.inner.write().await;
+            let auth_message = AuthMessage::from_forged(&message);
+            auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
+            auth_y
+                .orderer_y
+                .add_dependency(message.id(), &auth_message.dependencies());
+            manager
+                .store
+                .set_auth(&auth_y)
+                .await
+                .map_err(GroupError::AuthStore)?;
+        }
+        Ok(message)
+    }
+
+    /// Get the global auth state.
+    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<S, F, M, C, RS>> {
+        let manager = self.manager.inner.read().await;
+        let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+        Ok(auth_y)
+    }
+
+    pub fn id(&self) -> ActorId {
+        self.id
+    }
+
+    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, GroupError<S, F, M, C, RS>> {
+        let y = self.state().await?;
+        let group_members = y.members(self.id);
+        Ok(group_members)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum GroupError<S, F, M, C, RS>
+where
+    S: AuthStore<C> + MessageStore<M>,
+    F: Forge<M, C>,
+    C: Conditions,
+    RS: AuthResolver<C>,
+{
+    #[error(transparent)]
+    Rng(#[from] RngError),
+
+    #[error("{0}")]
+    AuthGroup(AuthGroupError<C, RS>),
+
+    #[error("{0}")]
+    EncryptionGroup(EncryptionGroupError<M>),
+
+    #[error("{0}")]
+    Forge(F::Error),
+
+    #[error("{0}")]
+    AuthStore(<S as AuthStore<C>>::Error),
+
+    #[error("{0}")]
+    MessageStore(<S as MessageStore<M>>::Error),
+}

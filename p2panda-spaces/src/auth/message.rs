@@ -30,11 +30,9 @@ where
     where
         M: AuthoredMessage + SpacesMessage<C>,
     {
-        let SpacesArgs::ControlMessage {
-            id,
+        let SpacesArgs::Auth {
             control_message,
             auth_dependencies,
-            ..
         } = message.args()
         else {
             panic!("unexpected message type")
@@ -44,10 +42,7 @@ where
             operation_id: message.id(),
             args: AuthArgs {
                 dependencies: auth_dependencies.clone(),
-                control_message: AuthControlMessage {
-                    group_id: *id,
-                    action: control_message.to_auth_action(),
-                },
+                control_message: control_message.to_owned(),
             },
         }
     }

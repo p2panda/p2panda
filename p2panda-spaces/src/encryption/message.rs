@@ -36,46 +36,78 @@ pub enum EncryptionMessage {
 }
 
 impl EncryptionMessage {
-    pub(crate) fn from_forged<M, C>(message: &M) -> Option<Self>
+    pub(crate) fn from_membership<M, C>(space_message: &M) -> Vec<Self>
     where
         M: AuthoredMessage + SpacesMessage<C>,
         C: Conditions,
     {
-        let args = match message.args() {
-            SpacesArgs::ControlMessage {
-                encryption_dependencies,
-                control_message,
-                direct_messages,
-                ..
-            } => {
-                let control_message = control_message.to_encryption_control_message()?;
-
-                EncryptionArgs::System {
-                    dependencies: encryption_dependencies.clone(),
-                    control_message,
-                    direct_messages: direct_messages.to_vec(),
-                }
-            }
-            SpacesArgs::Application {
-                encryption_dependencies,
-                group_secret_id,
-                nonce,
-                ciphertext,
-                ..
-            } => EncryptionArgs::Application {
-                dependencies: encryption_dependencies.clone(),
-                group_secret_id: *group_secret_id,
-                nonce: *nonce,
-                ciphertext: ciphertext.to_vec(),
-            },
-            _ => unreachable!("unexpected message type"),
+        let SpacesArgs::SpaceMembership {
+            space_dependencies,
+            control_messages,
+            ..
+        } = space_message.args()
+        else {
+            panic!("unexpected message type")
         };
 
-        Some(EncryptionMessage::Forged {
-            author: message.author(),
-            operation_id: message.id(),
-            args,
-        })
+        control_messages
+            .clone()
+            .into_iter()
+            .map(|message| {
+                let encryption_args = EncryptionArgs::System {
+                    dependencies: space_dependencies.clone(),
+                    control_message: message.encryption_control_message(),
+                    direct_messages: message.direct_messages().to_owned(),
+                };
+                EncryptionMessage::Forged {
+                    author: space_message.author(),
+                    operation_id: space_message.id(),
+                    args: encryption_args,
+                }
+            })
+            .collect()
+    }
+
+    pub(crate) fn from_application<M, C>(space_message: &M) -> Self
+    where
+        M: AuthoredMessage + SpacesMessage<C>,
+        C: Conditions,
+    {
+        let SpacesArgs::Application {
+            space_dependencies,
+            group_secret_id,
+            nonce,
+            ciphertext,
+            ..
+        } = space_message.args()
+        else {
+            panic!("unexpected message type")
+        };
+
+        let encryption_args = EncryptionArgs::Application {
+            dependencies: space_dependencies.clone(),
+            group_secret_id: *group_secret_id,
+            nonce: *nonce,
+            ciphertext: ciphertext.to_vec(),
+        };
+
+        EncryptionMessage::Forged {
+            author: space_message.author(),
+            operation_id: space_message.id(),
+            args: encryption_args,
+        }
+    }
+
+    pub(crate) fn dependencies(&self) -> &Vec<OperationId> {
+        let args = match self {
+            EncryptionMessage::Args(args) => args,
+            EncryptionMessage::Forged { args, .. } => args,
+        };
+
+        match args {
+            EncryptionArgs::System { dependencies, .. } => dependencies,
+            EncryptionArgs::Application { dependencies, .. } => dependencies,
+        }
     }
 }
 

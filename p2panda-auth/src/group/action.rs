@@ -3,8 +3,12 @@
 use crate::Access;
 use crate::group::GroupMember;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Actions for creating groups and modifying group membership.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum GroupAction<ID, C> {
     Create {
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
