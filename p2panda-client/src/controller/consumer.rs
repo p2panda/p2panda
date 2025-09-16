@@ -11,6 +11,12 @@ use crate::Subject;
 use crate::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
 use crate::controller::{Controller, ControllerError};
 
+enum ConsumerState {
+    Active,
+    Unsubscribing,
+    Unsubscribed,
+}
+
 pub struct Consumer<B>
 where
     B: Backend,
@@ -19,6 +25,7 @@ where
     subscription_id: SubscriptionId,
     controller: Controller<B>,
     event_stream: <B::Subscription as Subscription>::EventStream,
+    state: ConsumerState,
 }
 
 impl<B> Consumer<B>
@@ -36,6 +43,7 @@ where
             subscription_id,
             controller,
             event_stream,
+            state: ConsumerState::Active,
         }
     }
 
@@ -47,12 +55,23 @@ where
         Ok(())
     }
 
-    // @TODO: Wait for "unsubscribed" event to arrive from backend. Something to handle as an
-    // internal state in Stream implementation.
-    pub async fn unsubscribe(self) -> Result<(), ConsumerError<B>> {
-        self.controller.unsubscribe(self.subscription_id).await?;
-        drop(self);
-        Ok(())
+    pub async fn unsubscribe(&mut self) -> Result<(), ConsumerError<B>> {
+        match self.state {
+            ConsumerState::Active => {
+                self.state = ConsumerState::Unsubscribing;
+                self.controller.unsubscribe(self.subscription_id).await?;
+                Ok(())
+            }
+            ConsumerState::Unsubscribing | ConsumerState::Unsubscribed => {
+                // Already unsubscribed, this is fine
+                Ok(())
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn subscription_id(&self) -> SubscriptionId {
+        self.subscription_id
     }
 }
 
@@ -63,8 +82,23 @@ where
     type Item = Result<StreamEvent, ConsumerError<B>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if matches!(self.state, ConsumerState::Unsubscribed) {
+            return Poll::Ready(None);
+        }
+
         match Pin::new(&mut self.event_stream).poll_next(cx) {
-            Poll::Ready(Some(Ok(event))) => Poll::Ready(Some(Ok(event))),
+            Poll::Ready(Some(Ok(event))) => {
+                if matches!(event, StreamEvent::Unsubscribed)
+                    && matches!(self.state, ConsumerState::Unsubscribing)
+                {
+                    self.state = ConsumerState::Unsubscribed;
+                    // Return the Unsubscribed event to the user, then end stream on next poll.
+                    Poll::Ready(Some(Ok(event)))
+                } else {
+                    // Forward all other events normally.
+                    Poll::Ready(Some(Ok(event)))
+                }
+            }
             Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(ConsumerError::Subscription(err)))),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
