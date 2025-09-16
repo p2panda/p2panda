@@ -153,3 +153,94 @@ where
     #[error("{0}")]
     Subscription(<B::Subscription as Subscription>::Error),
 }
+
+#[cfg(test)]
+mod tests {
+    use std::convert::Infallible;
+
+    use futures_util::StreamExt;
+    use p2panda_core::Hash;
+
+    use crate::Subject;
+    use crate::backend::StreamEvent;
+    use crate::controller::consumer::ConsumerError;
+    use crate::test_utils::MockBackend;
+
+    use super::Controller;
+
+    #[tokio::test]
+    async fn subscribe() {
+        let (backend, backend_handle) = MockBackend::new();
+        let controller = Controller::new(backend);
+
+        let subject = Subject::from_hash(Hash::new(b"test"));
+
+        let mut consumer = controller.subscribe(subject, false).await.unwrap();
+        let subscription_id = consumer.subscription_id();
+
+        backend_handle
+            .send_to_subscription(
+                subscription_id,
+                StreamEvent::Operation {
+                    id: Hash::new(b"operation-1"),
+                    header: vec![1, 2, 3],
+                    body: Some(vec![4, 5, 6]),
+                },
+            )
+            .await
+            .unwrap();
+
+        backend_handle
+            .send_to_subscription(
+                subscription_id,
+                StreamEvent::Operation {
+                    id: Hash::new(b"operation-2"),
+                    header: vec![4, 5, 6],
+                    body: Some(vec![7, 8, 9]),
+                },
+            )
+            .await
+            .unwrap();
+
+        consumer.unsubscribe().await.unwrap();
+
+        // Send more events after unsubscribe - these should not be received because backend will
+        // only send to active subscriptions.
+        backend_handle
+            .send_to_subscription(
+                subscription_id,
+                StreamEvent::Operation {
+                    id: Hash::new(b"should not receive"),
+                    header: vec![10, 11, 12],
+                    body: None,
+                },
+            )
+            .await
+            .expect_err("should fail because subscription is no longer active");
+
+        let all_events: Vec<StreamEvent> = consumer
+            .collect::<Vec<Result<StreamEvent, ConsumerError<MockBackend>>>>()
+            .await
+            .into_iter()
+            .map(|event| event.expect("no error"))
+            .collect();
+
+        assert_eq!(
+            all_events,
+            vec![
+                StreamEvent::Subscribed { subscription_id },
+                StreamEvent::Operation {
+                    id: Hash::new(b"operation-1"),
+                    header: vec![1, 2, 3],
+                    body: Some(vec![4, 5, 6]),
+                },
+                StreamEvent::Operation {
+                    id: Hash::new(b"operation-2"),
+                    header: vec![4, 5, 6],
+                    body: Some(vec![7, 8, 9]),
+                },
+                StreamEvent::Unsubscribed,
+            ]
+        );
+    }
+}

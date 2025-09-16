@@ -6,6 +6,9 @@ edition = "2024"
 [lints]
 workspace = true
 
+[features]
+test_utils = []
+
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3.31", features = ["sink"], default-features = false }
@@ -17,4 +20,6 @@ thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["sync"] }
 
 [dev-dependencies]
+anyhow = "1.0.99"
 tokio = { version = "1.47.1", features = ["macros", "rt"] }
+tokio-stream = "0.1"

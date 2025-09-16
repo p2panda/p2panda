@@ -11,7 +11,7 @@ use crate::{Checkpoint, Subject};
 
 pub type SubscriptionId = u64;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StreamEvent {
     Subscribed {
         subscription_id: SubscriptionId,
@@ -19,7 +19,7 @@ pub enum StreamEvent {
     Operation {
         id: Hash,
         header: Vec<u8>,
-        body: Vec<u8>,
+        body: Option<Vec<u8>>,
     },
     Unsubscribed,
 }
