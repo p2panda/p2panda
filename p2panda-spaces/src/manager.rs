@@ -286,13 +286,12 @@ where
                         ));
                     };
 
-                    let auth_message = match message.args() {
+                    match message.args() {
                         SpacesArgs::Auth { .. } => AuthMessage::from_forged(&message),
                         _ => {
                             return Err(ManagerError::IncorrectMessageVariant(*auth_message_id));
                         }
-                    };
-                    auth_message
+                    }
                 };
 
                 let space = match self.space(*space_id).await? {

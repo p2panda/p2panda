@@ -328,7 +328,7 @@ where
                 };
 
                 let (encryption_y, encryption_output_inner) =
-                    EncryptionGroup::receive(y.encryption_y, &encryption_message)
+                    EncryptionGroup::receive(y.encryption_y, encryption_message)
                         .map_err(SpaceError::EncryptionGroup)?;
 
                 encryption_output.extend(encryption_output_inner);

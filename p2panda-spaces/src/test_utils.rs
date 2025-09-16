@@ -8,10 +8,10 @@ use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_encryption::traits::PreKeyManager;
 
+use crate::OperationId;
 use crate::space::SpaceState;
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthGroupState};
-use crate::OperationId;
 
 #[derive(Debug)]
 pub struct MemoryStore<M, C>
@@ -115,11 +115,11 @@ where
     C: Conditions,
 {
     type Error = Infallible;
-    
+
     async fn message(&self, id: &OperationId) -> Result<Option<M>, Self::Error> {
         Ok(self.messages.get(id).cloned())
     }
-    
+
     async fn set_message(&mut self, id: &OperationId, message: &M) -> Result<(), Self::Error> {
         self.messages.insert(*id, message.clone());
         Ok(())

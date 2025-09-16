@@ -64,5 +64,9 @@ pub trait MessageStore<M> {
 
     fn message(&self, id: &OperationId) -> impl Future<Output = Result<Option<M>, Self::Error>>;
 
-    fn set_message(&mut self, id: &OperationId, message: &M) -> impl Future<Output = Result<(), Self::Error>>;
+    fn set_message(
+        &mut self,
+        id: &OperationId,
+        message: &M,
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 }
