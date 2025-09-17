@@ -1,0 +1,12 @@
+[package]
+name = "p2panda-stream-next"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+tokio = { version = "1.47.1", features = ["macros", "rt"] }
