@@ -3,7 +3,6 @@
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
-use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
@@ -20,6 +19,7 @@ use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
     AuthResolver, EncryptionGroupError,
 };
+use crate::utils::{typed_member, typed_members};
 
 #[derive(Debug)]
 pub struct Group<ID, S, F, M, C, RS> {
@@ -54,7 +54,7 @@ where
     #[allow(clippy::result_large_err)]
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
-        initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+        initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<(Self, M), GroupError<ID, S, F, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
@@ -62,6 +62,10 @@ where
             let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
             private_key.public_key().into()
         };
+
+        let initial_members = typed_members(manager_ref.clone(), initial_members)
+            .await
+            .map_err(GroupError::AuthStore)?;
 
         let control_message = AuthControlMessage {
             group_id,
@@ -90,16 +94,7 @@ where
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-
-            // @TODO: we need members(..) to return an Option which is None when the group is not
-            // present in the auth state. Or better yet, introduce a new method which produces a
-            // list of all current known actors in the auth context. This check that the group
-            // is empty does not account for present but empty groups.
-            if auth_y.members(member).is_empty() {
-                GroupMember::Individual(member)
-            } else {
-                GroupMember::Group(member)
-            }
+            typed_member(&auth_y, member)
         };
 
         let control_message = AuthControlMessage {
@@ -120,16 +115,7 @@ where
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-
-            // @TODO: we need members(..) to return an Option which is None when the group is not
-            // present in the auth state. Or better yet, introduce a new method which produces a
-            // list of all current known actors in the auth context. This check that the group
-            // is empty does not account for present but empty groups.
-            if auth_y.members(member).is_empty() {
-                GroupMember::Individual(member)
-            } else {
-                GroupMember::Group(member)
-            }
+            typed_member(&auth_y, member)
         };
 
         let control_message = AuthControlMessage {

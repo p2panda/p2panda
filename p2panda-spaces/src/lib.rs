@@ -19,5 +19,6 @@ pub mod test_utils;
 mod tests;
 pub mod traits;
 pub mod types;
+pub mod utils;
 
 pub use types::{ActorId, OperationId};

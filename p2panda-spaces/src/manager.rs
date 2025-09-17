@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use p2panda_auth::Access;
-use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::Rng;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
@@ -111,14 +110,11 @@ where
             manager.store.auth().await.map_err(GroupError::AuthStore)?
         };
 
-        // @TODO: we need members(..) to return an Option which is None when the group is not
-        // present in the auth state. Or better yet, introduce a new method which produces a
-        // list of all current known actors in the auth context. This check that the group
-        // is empty does not account for present but empty groups.
-        if auth_y.members(id).is_empty() {
-            Ok(None)
-        } else {
+        // Check if this group exists in the auth state.
+        if auth_y.has_group(id) {
             Ok(Some(Group::new(self.clone(), id)))
+        } else {
+            Ok(None)
         }
     }
 
@@ -128,35 +124,7 @@ where
         id: ID,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Space<ID, S, F, M, C, RS>, Vec<M>), ManagerError<ID, S, F, M, C, RS>> {
-        // @TODO: Check if initial members are known and have a key bundle present, throw error
-        // otherwise.
-
-        let initial_members = {
-            let manager = self.inner.read().await;
-            let auth_y = manager
-                .store
-                .auth()
-                .await
-                .map_err(ManagerError::AuthStore)?;
-            let mut initial_members_inner = vec![];
-
-            for (actor, access) in initial_members {
-                // @TODO: we need members(..) to return an Option which is None when the group is not
-                // present in the auth state. Or better yet, introduce a new method which produces a
-                // list of all current known actors in the auth context. This check that the group
-                // is empty does not account for present but empty groups.
-                if auth_y.members(*actor).is_empty() {
-                    initial_members_inner
-                        .push((GroupMember::Individual(*actor), access.to_owned()));
-                } else {
-                    initial_members_inner.push((GroupMember::Group(*actor), access.to_owned()));
-                }
-            }
-
-            initial_members_inner
-        };
-
-        let (space, messages) = Space::create(self.clone(), id, initial_members)
+        let (space, messages) = Space::create(self.clone(), id, initial_members.to_owned())
             .await
             .map_err(ManagerError::Space)?;
 
@@ -168,35 +136,7 @@ where
         &self,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Group<ID, S, F, M, C, RS>, M), ManagerError<ID, S, F, M, C, RS>> {
-        // @TODO: Assign GroupMember type to every actor based on looking up our own state,
-        // checking if actor is a group or individual.
-
-        let initial_members = {
-            let manager = self.inner.read().await;
-            let auth_y = manager
-                .store
-                .auth()
-                .await
-                .map_err(ManagerError::AuthStore)?;
-            let mut initial_members_inner = vec![];
-
-            for (actor, access) in initial_members {
-                // @TODO: we need members(..) to return an Option which is None when the group is not
-                // present in the auth state. Or better yet, introduce a new method which produces a
-                // list of all current known actors in the auth context. This check that the group
-                // is empty does not account for present but empty groups.
-                if auth_y.members(*actor).is_empty() {
-                    initial_members_inner
-                        .push((GroupMember::Individual(*actor), access.to_owned()));
-                } else {
-                    initial_members_inner.push((GroupMember::Group(*actor), access.to_owned()));
-                }
-            }
-
-            initial_members_inner
-        };
-
-        let (group, message) = Group::create(self.clone(), initial_members)
+        let (group, message) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
@@ -264,12 +204,9 @@ where
                 // - Store it in key manager if it is newer than our previously stored one (if given)
                 todo!()
             }
-            SpacesArgs::Auth { .. } => {
-                // @TODO: move into own method.
-                Group::process(self.clone(), message)
-                    .await
-                    .map_err(ManagerError::Group)?
-            }
+            SpacesArgs::Auth { .. } => Group::process(self.clone(), message)
+                .await
+                .map_err(ManagerError::Group)?,
             // Received control message related to a group or space.
             SpacesArgs::SpaceMembership {
                 space_id,

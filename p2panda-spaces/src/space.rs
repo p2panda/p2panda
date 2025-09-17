@@ -5,7 +5,6 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
-use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::{Rng, RngError};
 use petgraph::algo::toposort;
@@ -66,7 +65,7 @@ where
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         space_id: ID,
-        mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
+        mut initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<(Self, Vec<M>), SpaceError<ID, S, F, M, C, RS>> {
         let my_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -79,14 +78,9 @@ where
             manager.store.auth().await.map_err(SpaceError::AuthStore)?
         };
 
-        // Prepare and process auth and space messages for creating the new group.
-
         // Automatically add ourselves with "manage" level without any conditions as default.
-        if !initial_members
-            .iter()
-            .any(|(member, _)| member.id() == my_id)
-        {
-            initial_members.push((GroupMember::Individual(my_id), Access::manage()));
+        if !initial_members.iter().any(|(member, _)| *member == my_id) {
+            initial_members.push((my_id, Access::manage()));
         }
 
         let mut messages = vec![];
