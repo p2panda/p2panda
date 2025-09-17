@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use futures_core::future::BoxFuture;
 use thiserror::Error;
 
 use crate::Layer;
@@ -24,21 +25,26 @@ impl<ID> Orderer<ID> {
 
 impl<T, ID> Layer<T> for Orderer<ID>
 where
-    T: Ordering<ID>,
+    T: Ordering<ID> + Send + 'static,
+    ID: Send + Sync + 'static,
 {
     type Output = Option<T>;
 
     type Error = OrdererError;
 
-    async fn process(&self, _input: T) -> Result<Self::Output, Self::Error> {
-        // @TODO
-        Ok(None)
+    fn process(&self, _input: T) -> BoxFuture<'_, Result<(), Self::Error>> {
+        Box::pin(async {
+            // @TODO
+            Ok(())
+        })
     }
 
-    // @TODO: We need this.
-    // async fn next(&mut self) -> Option<Self::Output> {
-    //     None
-    // }
+    fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
+        Box::pin(async {
+            // @TODO
+            Ok(None)
+        })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -46,10 +52,11 @@ pub enum OrdererError {}
 
 #[cfg(test)]
 mod tests {
+    use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::Layer;
+    use crate::{BufferedLayer, LayerExt};
 
     use super::{Orderer, Ordering};
 
@@ -120,12 +127,12 @@ mod tests {
         };
 
         // Prepare processing pipeline for message ordering.
-        let layer = Orderer::<Hash>::new();
+        let orderer = BufferedLayer::new(Orderer::<Hash>::new(), 16);
 
+        // @TODO
         // Process Icebear's operation first. It will arrive "out of order".
-        layer.process(operation_icebear).await.unwrap();
-
         // Process Pandas's operation next. It will "free" Icebear's operation.
-        layer.process(operation_panda).await.unwrap();
+        let mut _stream =
+            orderer.process_stream(stream::iter(vec![operation_icebear, operation_panda]));
     }
 }
