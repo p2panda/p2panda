@@ -7,42 +7,76 @@ use std::task::{Context, Poll};
 use futures_core::Stream;
 use futures_util::Sink;
 use p2panda_core::Hash;
+use p2panda_core::cbor::{EncodeError, encode_cbor};
+use thiserror::Error;
 
 use crate::Subject;
+use crate::backend::{Backend, StreamEvent};
 use crate::client::message::Message;
+use crate::controller::{Consumer, Controller, ControllerError};
 
-pub struct StreamHandle<M> {
+pub struct StreamHandle<M, B>
+where
+    B: Backend,
+{
     subject: Subject,
+    controller: Controller<B>,
     _marker: PhantomData<M>,
 }
 
-impl<M> StreamHandle<M>
+impl<M, B> StreamHandle<M, B>
 where
     M: Message,
+    B: Backend,
 {
-    pub(crate) fn new(subject: Subject) -> Self {
+    pub(crate) fn new(subject: Subject, controller: Controller<B>) -> Self {
         Self {
             subject,
+            controller,
             _marker: PhantomData,
         }
     }
 
-    pub async fn publish(&self, _message: M) -> Result<(), StreamError> {
-        Ok(())
+    pub async fn publish(&self, message: M) -> Result<Hash, StreamError<B>> {
+        // @TODO: Use operation store here to properly forge a header.
+        let header_bytes = vec![];
+
+        // @TODO: Is it okay to be opiniated on the payload encoding at this layer?
+        let body_bytes = encode_cbor(&message)?;
+
+        self.controller
+            .publish(self.subject.clone(), header_bytes, body_bytes)
+            .await
+            .map_err(StreamError::Controller)
     }
 
-    pub async fn subscribe(&self) -> Result<StreamSubscription<M>, StreamError> {
-        todo!()
+    pub async fn subscribe(&self) -> Result<StreamSubscription<M, B>, StreamError<B>> {
+        let live = true;
+
+        let consumer = self
+            .controller
+            .subscribe(self.subject.clone(), live)
+            .await
+            .map_err(StreamError::Controller)?;
+
+        Ok(StreamSubscription::new(consumer))
     }
 
-    pub async fn commit(&self, _operation_id: Hash) -> Result<Hash, StreamError> {
-        todo!()
+    pub async fn commit(&self, operation_id: Hash) -> Result<(), StreamError<B>> {
+        self.controller
+            .commit(operation_id)
+            .await
+            .map_err(StreamError::Controller)
     }
 }
 
 // @TODO
-impl<M> Sink<()> for StreamHandle<M> {
-    type Error = StreamError;
+impl<M, B> Sink<()> for StreamHandle<M, B>
+where
+    M: Message,
+    B: Backend,
+{
+    type Error = StreamError<B>;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         todo!()
@@ -61,20 +95,67 @@ impl<M> Sink<()> for StreamHandle<M> {
     }
 }
 
-pub struct StreamSubscription<M> {
+pub struct StreamSubscription<M, B>
+where
+    B: Backend,
+{
+    consumer: Consumer<B>,
     _marker: PhantomData<M>,
 }
 
-// @TODO
-impl<M> Stream for StreamSubscription<M>
+impl<M, B> StreamSubscription<M, B>
 where
     M: Message,
+    B: Backend,
 {
-    type Item = ();
+    fn new(consumer: Consumer<B>) -> Self {
+        Self {
+            consumer,
+            _marker: PhantomData,
+        }
+    }
 
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        todo!()
+    pub async fn unsubscribe(&mut self) -> Result<(), StreamError<B>> {
+        self.consumer
+            .unsubscribe()
+            .await
+            .map_err(StreamError::Consumer)
+    }
+
+    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), StreamError<B>> {
+        self.consumer
+            .commit(operation_id)
+            .await
+            .map_err(StreamError::Consumer)
     }
 }
 
-pub enum StreamError {}
+impl<M, B> Stream for StreamSubscription<M, B>
+where
+    M: Message + Unpin,
+    B: Backend,
+{
+    type Item = Result<StreamEvent, StreamError<B>>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        Pin::new(&mut this.consumer)
+            .poll_next(cx)
+            .map(|opt| opt.map(|result| result.map_err(StreamError::Consumer)))
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum StreamError<B>
+where
+    B: Backend,
+{
+    #[error(transparent)]
+    Encode(#[from] EncodeError),
+
+    #[error(transparent)]
+    Controller(#[from] ControllerError<B>),
+
+    #[error(transparent)]
+    Consumer(crate::controller::ConsumerError<B>),
+}
