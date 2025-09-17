@@ -90,6 +90,7 @@ where
         header: Vec<u8>,
         body: Vec<u8>,
     ) -> Result<Hash, ControllerError<B>> {
+        // @TODO: Buffering for to-be-published messages?
         self.inner
             .backend
             .publish(subject, header, body)
@@ -97,7 +98,7 @@ where
             .map_err(ControllerError::Backend)
     }
 
-    pub async fn replay_from(
+    pub async fn replay(
         &self,
         subscription_id: SubscriptionId,
         checkpoint: Checkpoint,
