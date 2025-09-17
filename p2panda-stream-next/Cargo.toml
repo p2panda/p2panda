@@ -1,0 +1,20 @@
+[package]
+name = "p2panda-stream-next"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+flume = { version = "0.11.1", features = ["async"] }
+futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
+pin-project = "1.1.10"
+tokio = { version = "1.47.1", features = ["rt", "macros"] }
+
+[dev-dependencies]
+futures-test = { version = "0.3.31" }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
+serde = { version = "1.0.219" }
+tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }
