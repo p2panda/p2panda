@@ -226,57 +226,9 @@ where
                 // @TODO: check that this message was applied to all spaces and apply it ourselves
                 // if not.
             }
-            // Received control message related to a group or space.
-            SpacesArgs::SpaceMembership {
-                space_id,
-                auth_message_id,
-                ..
-            } => {
-                // @TODO: move into own method.
-                // Get auth message.
-                let auth_message = {
-                    let inner = self.inner.read().await;
-                    let Some(message) = inner
-                        .store
-                        .message(auth_message_id)
-                        .await
-                        .map_err(ManagerError::MessageStore)?
-                    else {
-                        return Err(ManagerError::MissingAuthMessage(
-                            message.id(),
-                            *auth_message_id,
-                        ));
-                    };
-
-                    match message.args() {
-                        SpacesArgs::Auth { .. } => AuthMessage::from_forged(&message),
-                        _ => {
-                            return Err(ManagerError::IncorrectMessageVariant(*auth_message_id));
-                        }
-                    }
-                };
-
-                let space = match self.space(*space_id).await? {
-                    Some(space) => space,
-                    None => {
-                        if !auth_message.payload().is_create() {
-                            // If this is not a "create" message we should have learned about the space
-                            // before. This can be either a faulty message or a problem with the message
-                            // orderer.
-                            return Err(ManagerError::UnexpectedMessage(message.id()));
-                        }
-
-                        // @TODO: This is a bit strange. What are the API guarantees here over
-                        // "inexistant" spaces. We should tell from the outside that a new one is
-                        // initialised instead of pointing at an existing one.
-                        Space::new(self.clone(), *space_id)
-                    }
-                };
-
-                space
-                    .process(message, Some(&auth_message))
-                    .await
-                    .map_err(ManagerError::Space)?
+            // Received control message related to a space.
+            SpacesArgs::SpaceMembership { .. } => {
+                self.handle_space_membership_message(message).await?
             }
             SpacesArgs::SpaceUpdate { .. } => unimplemented!(),
             // Received encrypted application data for a space.
@@ -325,6 +277,65 @@ where
         }
 
         Ok(messages)
+    }
+
+    async fn handle_space_membership_message(
+        &self,
+        message: &M,
+    ) -> Result<Vec<Event<ID>>, ManagerError<ID, S, F, M, C, RS>> {
+        let SpacesArgs::SpaceMembership {
+            space_id,
+            auth_message_id,
+            ..
+        } = message.args()
+        else {
+            panic!("unexpected message type");
+        };
+
+        // Get auth message.
+        let auth_message = {
+            let inner = self.inner.read().await;
+            let Some(message) = inner
+                .store
+                .message(auth_message_id)
+                .await
+                .map_err(ManagerError::MessageStore)?
+            else {
+                return Err(ManagerError::MissingAuthMessage(
+                    message.id(),
+                    *auth_message_id,
+                ));
+            };
+
+            match message.args() {
+                SpacesArgs::Auth { .. } => AuthMessage::from_forged(&message),
+                _ => {
+                    return Err(ManagerError::IncorrectMessageVariant(*auth_message_id));
+                }
+            }
+        };
+
+        let space = match self.space(*space_id).await? {
+            Some(space) => space,
+            None => {
+                if !auth_message.payload().is_create() {
+                    // If this is not a "create" message we should have learned about the space
+                    // before. This can be either a faulty message or a problem with the message
+                    // orderer.
+                    return Err(ManagerError::UnexpectedMessage(message.id()));
+                }
+
+                // @TODO: This is a bit strange. What are the API guarantees here over
+                // "inexistant" spaces. We should tell from the outside that a new one is
+                // initialised instead of pointing at an existing one.
+                Space::new(self.clone(), *space_id)
+            }
+        };
+
+        space
+            .process(message, Some(&auth_message))
+            .await
+            .map_err(ManagerError::Space)
     }
 }
 
