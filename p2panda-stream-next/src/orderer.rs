@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::Layer;
 
 pub trait Ordering<ID> {
-    fn dependencies<'a>(&'a self) -> &'a [ID];
+    fn dependencies(&self) -> &[ID];
 }
 
 pub struct Orderer<ID> {
@@ -16,6 +16,7 @@ pub struct Orderer<ID> {
 }
 
 impl<ID> Orderer<ID> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
