@@ -7,9 +7,9 @@ use futures_core::Stream;
 use p2panda_core::Hash;
 use thiserror::Error;
 
-use crate::Subject;
 use crate::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
 use crate::controller::{Controller, ControllerError};
+use crate::{Checkpoint, Subject};
 
 enum ConsumerState {
     Active,
@@ -50,6 +50,14 @@ where
     pub async fn commit(&mut self, operation_id: Hash) -> Result<(), ConsumerError<B>> {
         self.controller
             .commit(operation_id)
+            .await
+            .map_err(ConsumerError::Controller)?;
+        Ok(())
+    }
+
+    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), ConsumerError<B>> {
+        self.controller
+            .replay(self.subscription_id, from)
             .await
             .map_err(ConsumerError::Controller)?;
         Ok(())
