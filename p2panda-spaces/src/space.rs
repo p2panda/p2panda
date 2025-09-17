@@ -61,6 +61,10 @@ where
         }
     }
 
+    /// Create a space containing initial members and access levels.
+    ///
+    /// If not already included, then the local actor (creator of this space) will be added to the
+    /// initial members and given manage access level.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         space_id: ID,
@@ -100,7 +104,8 @@ where
         .await?;
 
         // Apply the "create" auth message to the space state.
-        let space_message = Self::apply_auth_message(manager_ref.clone(), y, &auth_message).await?;
+        let space_message =
+            Self::process_auth_message(manager_ref.clone(), y, &auth_message).await?;
 
         // Push auth message to the front of the messages vec.
         messages.insert(0, auth_message);
@@ -115,7 +120,8 @@ where
         ))
     }
 
-    pub(crate) async fn add(
+    /// Add a member to the space with assigned access level.
+    pub async fn add(
         &self,
         member: ActorId,
         access: Access<C>,
@@ -126,25 +132,26 @@ where
         let group = Group::new(self.manager.clone(), y.group_id);
         let auth_message = group.add(member, access).await.map_err(SpaceError::Group)?;
         let space_message =
-            Self::apply_auth_message(self.manager.clone(), y, &auth_message).await?;
+            Self::process_auth_message(self.manager.clone(), y, &auth_message).await?;
         Ok(vec![auth_message, space_message])
     }
 
-    pub(crate) async fn remove(
-        &self,
-        member: ActorId,
-    ) -> Result<Vec<M>, SpaceError<ID, S, F, M, C, RS>> {
+    /// Remove a member from the space.
+    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
         let group = Group::new(self.manager.clone(), y.group_id);
         let auth_message = group.remove(member).await.map_err(SpaceError::Group)?;
         let space_message =
-            Self::apply_auth_message(self.manager.clone(), y, &auth_message).await?;
+            Self::process_auth_message(self.manager.clone(), y, &auth_message).await?;
         Ok(vec![auth_message, space_message])
     }
 
-    pub(crate) async fn apply_auth_message(
+    /// Wrap an already forged auth message in a space message and apply any required group
+    /// membership changes to the encryption group context. Any resulting encryption control
+    /// messages are published on the space message alongside a reference to the auth message.
+    pub(crate) async fn process_auth_message(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
@@ -159,10 +166,10 @@ where
         // Get next space members.
         let next_members = secret_members(y.auth_y.members(y.group_id));
 
-        // Process the change of membership on encryption context.
+        // Process the change of membership on encryption the context.
         let (encryption_y, encryption_messages) = if current_members != next_members {
             let manager = manager_ref.inner.read().await;
-            Self::handle_secret_member_change(
+            Self::apply_secret_member_change(
                 y.encryption_y,
                 &auth_message,
                 current_members,
@@ -220,6 +227,7 @@ where
         Ok(space_message)
     }
 
+    /// Process a space message along with it's relevant auth message (if required).
     pub(crate) async fn process(
         &self,
         space_message: &M,
@@ -296,6 +304,7 @@ where
         Ok(y)
     }
 
+    /// Handle messages which effect the space membership.
     async fn handle_membership_message(
         &self,
         space_message: &M,
@@ -355,14 +364,14 @@ where
         Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
-    /// Process a group membership change on the group encryption state.
+    /// Apply a group membership change to the group encryption state.
     ///
     /// The difference between the current and next secret group members (those with "read"
-    /// access) is computed and only the diff processed in the encryption group.
+    /// access) is computed and only the diff processed on the encryption group.
     ///
     /// If it is a group being removed/added to the encryption context, then one encryption
     /// control message for each actor (individual) will be generated.
-    async fn handle_secret_member_change(
+    async fn apply_secret_member_change(
         mut encryption_y: EncryptionGroupState<M>,
         auth_message: &AuthMessage<C>,
         current_members: Vec<ActorId>,
@@ -425,6 +434,7 @@ where
         Ok((encryption_y, messages))
     }
 
+    /// Handle space application messages.
     async fn handle_application_message(
         &self,
         message: &M,
@@ -437,6 +447,10 @@ where
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?
         };
+
+        // @TODO: application messages are not included in the encryption orderer state. We need
+        //        to decide what to do with them.
+
         y.encryption_y = encryption_y;
 
         // Persist new state.
@@ -524,22 +538,25 @@ where
         };
 
         // @TODO: This is ugly, improve space initialization code so that we don't have to pass in
-        // the group id like we do here.
+        // the group id like we do now.
         //
         // Sanity check.
         assert_eq!(space_y.group_id, group_id);
         Ok(space_y)
     }
 
+    /// Id of this space.
     pub fn id(&self) -> ID {
         self.id
     }
 
+    /// Id of the group associated with this space.
     pub async fn group_id(&self) -> Result<ActorId, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
         Ok(y.group_id)
     }
 
+    /// The members of this space.
     pub async fn members(
         &self,
     ) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<ID, S, F, M, C, RS>> {
@@ -548,6 +565,7 @@ where
         Ok(group_members)
     }
 
+    /// Publish a message encrypted towards all current group members.
     pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<ID, S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
@@ -583,6 +601,9 @@ where
                 ciphertext,
             }
         };
+
+        // @TODO: application messages are not included in the encryption orderer state. We need
+        //        to decide what to do with them.
 
         y.encryption_y = encryption_y;
 

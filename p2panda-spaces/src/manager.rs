@@ -59,7 +59,6 @@ pub(crate) struct ManagerInner<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Manager<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    // @TODO: make extensions generic.
     S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
     F: Forge<ID, M, C>,
     M: AuthoredMessage + SpacesMessage<ID, C>,
@@ -67,6 +66,7 @@ where
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + AuthResolver<C>,
 {
+    /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
     pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<ID, S, F, M, C, RS>> {
         let inner = ManagerInner {
@@ -81,6 +81,7 @@ where
         })
     }
 
+    /// Get a space by id.
     pub async fn space(
         &self,
         id: ID,
@@ -101,6 +102,7 @@ where
         }
     }
 
+    /// Get a group by id.
     pub async fn group(
         &self,
         id: ActorId,
@@ -118,6 +120,10 @@ where
         }
     }
 
+    /// Create a new space containing initial members and access levels.
+    ///
+    /// If not already included, then the local actor (creator of this space) will be added to the
+    /// initial members and given manage access level.
     pub async fn create_space(
         &self,
         id: ID,
@@ -130,6 +136,11 @@ where
         Ok((space, messages))
     }
 
+    /// Create a new group containing initial members with associated access levels.
+    ///
+    /// It is possible to create a group where the creator is not an initial member or is a member
+    /// without manager rights. If this is done then after creation no further change of the group
+    /// membership would be possible.
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
@@ -142,11 +153,13 @@ where
     }
 
     // @TODO: Make it work without async
+    /// The public key of the local actor.
     pub async fn id(&self) -> ActorId {
         let inner = self.inner.read().await;
         inner.forge.public_key().into()
     }
 
+    /// The local actor id and their long-term key bundle.
     pub async fn me(&self) -> Result<Member, ManagerError<ID, S, F, M, C, RS>> {
         let inner = self.inner.read().await;
 
@@ -162,6 +175,7 @@ where
         Ok(Member::new(my_id, KeyManager::prekey_bundle(&y)))
     }
 
+    /// Register a member with long-term key bundle material.
     pub async fn register_member(
         &self,
         member: &Member,
@@ -188,7 +202,9 @@ where
         Ok(())
     }
 
-    // We expect messages to be signature-checked, dependency-checked & partially ordered here.
+    /// Process a spaces message.
+    ///
+    /// We expect messages to be signature-checked, dependency-checked & partially ordered.
     pub async fn process(
         &self,
         message: &M,
@@ -202,9 +218,16 @@ where
                 // - Store it in key manager if it is newer than our previously stored one (if given)
                 todo!()
             }
-            SpacesArgs::Auth { .. } => Group::process(self.clone(), message)
-                .await
-                .map_err(ManagerError::Group)?,
+            SpacesArgs::Auth { .. } => {
+                let messages = Group::process(self.clone(), message)
+                    .await
+                    .map_err(ManagerError::Group)?;
+
+                // @TODO: check that this message was applied to all spaces and apply it ourselves
+                // if not.
+
+                messages
+            }
             // Received control message related to a group or space.
             SpacesArgs::SpaceMembership {
                 space_id,

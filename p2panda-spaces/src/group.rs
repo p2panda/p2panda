@@ -51,6 +51,11 @@ where
         }
     }
 
+    /// Create a group containing initial members with associated access levels.
+    ///
+    /// It is possible to create a group where the creator is not an initial member or is a member
+    /// without manager rights. If this is done then after creation no further change of the group
+    /// membership would be possible.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
@@ -73,7 +78,7 @@ where
             },
         };
 
-        let message = Self::process_control_message(manager_ref.clone(), control_message).await?;
+        let message = Self::process_local_control(manager_ref.clone(), control_message).await?;
 
         Ok((
             Self {
@@ -84,7 +89,8 @@ where
         ))
     }
 
-    pub(crate) async fn add(
+    /// Add member to an existing group with specified access level.
+    pub async fn add(
         &self,
         member: ActorId,
         access: Access<C>,
@@ -100,15 +106,13 @@ where
             action: AuthGroupAction::Add { member, access },
         };
 
-        let message = Self::process_control_message(self.manager.clone(), control_message).await?;
+        let message = Self::process_local_control(self.manager.clone(), control_message).await?;
 
         Ok(message)
     }
 
-    pub(crate) async fn remove(
-        &self,
-        member: ActorId,
-    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
+    /// Remove member from an existing group.
+    pub async fn remove(&self, member: ActorId) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -120,11 +124,12 @@ where
             action: AuthGroupAction::Remove { member },
         };
 
-        let message = Self::process_control_message(self.manager.clone(), control_message).await?;
+        let message = Self::process_local_control(self.manager.clone(), control_message).await?;
 
         Ok(message)
     }
 
+    /// Process a remote message.
     pub(crate) async fn process(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         message: &M,
@@ -155,7 +160,8 @@ where
         Ok(vec![])
     }
 
-    async fn process_control_message(
+    /// Process a local control message.
+    async fn process_local_control(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         control_message: AuthControlMessage<C>,
     ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
@@ -196,6 +202,9 @@ where
                 .await
                 .map_err(GroupError::AuthStore)?;
         }
+
+        // @TODO: apply message to all local spaces we're a member of.
+
         Ok(message)
     }
 
@@ -206,10 +215,12 @@ where
         Ok(auth_y)
     }
 
+    /// Id of this group.
     pub fn id(&self) -> ActorId {
         self.id
     }
 
+    /// Current group members and access levels.
     pub async fn members(
         &self,
     ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, F, M, C, RS>> {
