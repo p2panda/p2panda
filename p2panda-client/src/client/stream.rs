@@ -9,10 +9,10 @@ use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use thiserror::Error;
 
-use crate::Subject;
 use crate::backend::{Backend, StreamEvent};
 use crate::client::message::Message;
 use crate::controller::{Consumer, Controller, ControllerError};
+use crate::{Checkpoint, Subject};
 
 pub struct StreamHandle<M, B>
 where
@@ -89,16 +89,23 @@ where
         }
     }
 
-    pub async fn unsubscribe(&mut self) -> Result<(), StreamError<B>> {
+    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), StreamError<B>> {
         self.consumer
-            .unsubscribe()
+            .commit(operation_id)
             .await
             .map_err(StreamError::Consumer)
     }
 
-    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), StreamError<B>> {
+    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), StreamError<B>> {
         self.consumer
-            .commit(operation_id)
+            .replay(from)
+            .await
+            .map_err(StreamError::Consumer)
+    }
+
+    pub async fn unsubscribe(&mut self) -> Result<(), StreamError<B>> {
+        self.consumer
+            .unsubscribe()
             .await
             .map_err(StreamError::Consumer)
     }
