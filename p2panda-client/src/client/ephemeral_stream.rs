@@ -10,7 +10,9 @@ use futures_util::Sink;
 use crate::TopicId;
 use crate::client::message::Message;
 
+// @TODO: Implement this.
 pub struct EphemeralStreamHandle<M> {
+    #[allow(dead_code)]
     topic_id: TopicId,
     _marker: PhantomData<M>,
 }

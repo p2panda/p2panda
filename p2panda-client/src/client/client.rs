@@ -14,6 +14,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self { private_key: None }
     }
@@ -40,6 +41,9 @@ pub struct Client<C>
 where
     C: Connector,
 {
+    // @TODO: Not sure yet what the role of the client will be. Will the stream processor be
+    // _inside_ or _outside_ of it? This will determine where the private key lives.
+    #[allow(dead_code)]
     private_key: PrivateKey,
     controller: Controller<C>,
 }

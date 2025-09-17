@@ -76,12 +76,7 @@ where
             subscriptions.insert(subscription_id, subscription);
         }
 
-        Ok(Consumer::new(
-            subject,
-            subscription_id,
-            event_stream,
-            self.clone(),
-        ))
+        Ok(Consumer::new(subscription_id, event_stream, self.clone()))
     }
 
     pub async fn publish(
