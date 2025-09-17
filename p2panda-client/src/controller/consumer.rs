@@ -7,9 +7,9 @@ use futures_core::Stream;
 use p2panda_core::Hash;
 use thiserror::Error;
 
+use crate::Checkpoint;
 use crate::connector::{Connector, StreamEvent, Subscription, SubscriptionId};
 use crate::controller::{Controller, ControllerError};
-use crate::{Checkpoint, Subject};
 
 enum ConsumerState {
     Active,
@@ -21,7 +21,6 @@ pub struct Consumer<C>
 where
     C: Connector,
 {
-    subject: Subject,
     subscription_id: SubscriptionId,
     controller: Controller<C>,
     event_stream: <C::Subscription as Subscription>::EventStream,
@@ -33,13 +32,11 @@ where
     C: Connector,
 {
     pub(crate) fn new(
-        subject: Subject,
         subscription_id: SubscriptionId,
         event_stream: <C::Subscription as Subscription>::EventStream,
         controller: Controller<C>,
     ) -> Self {
         Self {
-            subject,
             subscription_id,
             controller,
             event_stream,
