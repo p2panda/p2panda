@@ -5,7 +5,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures_core::Stream;
-use futures_util::Sink;
 use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use thiserror::Error;
@@ -67,31 +66,6 @@ where
             .commit(operation_id)
             .await
             .map_err(StreamError::Controller)
-    }
-}
-
-// @TODO
-impl<M, B> Sink<()> for StreamHandle<M, B>
-where
-    M: Message,
-    B: Backend,
-{
-    type Error = StreamError<B>;
-
-    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
-    }
-
-    fn start_send(self: Pin<&mut Self>, _item: ()) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
-    }
-
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
     }
 }
 
