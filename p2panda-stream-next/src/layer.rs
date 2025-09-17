@@ -40,18 +40,22 @@ pub trait LayerExt<T>: Layer<T> {
     {
         LayerStream::new(self)
     }
-
-    /// Processes items from the provided stream through this layer.
-    fn process_stream<S>(self, input_stream: S) -> ChainedLayerStream<Self, S, T>
-    where
-        Self: Sized,
-        S: Stream<Item = T>,
-    {
-        ChainedLayerStream::new(self, input_stream)
-    }
 }
 
 impl<L, T> LayerExt<T> for L where L: Layer<T> {}
+
+/// Extension trait for `Stream` that provides convenient methods for processing with layers.
+pub trait StreamExt<T>: Stream<Item = T> + Sized {
+    /// Processes this stream through the provided layer.
+    fn process_with<L>(self, layer: L) -> ChainedLayerStream<L, Self, T>
+    where
+        L: Layer<T>,
+    {
+        ChainedLayerStream::new(layer, self)
+    }
+}
+
+impl<S, T> StreamExt<T> for S where S: Stream<Item = T> {}
 
 /// Stream for the [`into_stream`](LayerExt::into_stream) method.
 #[pin_project]

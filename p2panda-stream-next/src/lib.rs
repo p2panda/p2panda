@@ -4,6 +4,6 @@ mod layer;
 #[cfg(feature = "orderer")]
 mod orderer;
 
-pub use layer::{BufferedLayer, ChainedLayerStream, Layer, LayerExt, LayerStream};
+pub use layer::{BufferedLayer, ChainedLayerStream, Layer, LayerExt, LayerStream, StreamExt};
 #[cfg(feature = "orderer")]
 pub use orderer::{Orderer, OrdererError, Ordering};

@@ -56,7 +56,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{BufferedLayer, LayerExt};
+    use crate::{BufferedLayer, StreamExt};
 
     use super::{Orderer, Ordering};
 
@@ -129,10 +129,10 @@ mod tests {
         // Prepare processing pipeline for message ordering.
         let orderer = BufferedLayer::new(Orderer::<Hash>::new(), 16);
 
-        // @TODO
+        // @TODO: Finish test.
         // Process Icebear's operation first. It will arrive "out of order".
         // Process Pandas's operation next. It will "free" Icebear's operation.
         let mut _stream =
-            orderer.process_stream(stream::iter(vec![operation_icebear, operation_panda]));
+            stream::iter(vec![operation_icebear, operation_panda]).process_with(orderer);
     }
 }
