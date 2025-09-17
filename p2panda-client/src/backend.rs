@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error;
+use std::fmt::Debug;
 use std::future::Future;
 
 use futures_core::Stream;
@@ -31,7 +32,11 @@ pub enum StreamEvent {
 pub trait Backend: Send + Sync + 'static {
     type Error: Error;
 
-    type Subscription: Subscription;
+    // NOTE(adz): The Debug trait bound is strictly speaking not necessary. Because of the use of
+    // more complex error types with generics, the Rust compiler can't detect that Self::Error
+    // should already implement Debug using the Error supertrait and fails to compile the parent
+    // struct, Subscription instead. This is annoying, but adding Debug here doesn't hurt either.
+    type Subscription: Subscription + Debug;
 
     fn subscribe(
         &self,

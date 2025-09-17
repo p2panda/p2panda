@@ -2,9 +2,11 @@
 
 use p2panda_core::PrivateKey;
 
+use crate::backend::Backend;
 use crate::client::ephemeral_stream::EphemeralStreamHandle;
 use crate::client::message::Message;
 use crate::client::stream::StreamHandle;
+use crate::controller::Controller;
 use crate::{Subject, TopicId};
 
 pub struct ClientBuilder {
@@ -22,23 +24,35 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build(self) -> Client {
+    pub fn build<B>(self, backend: B) -> Client<B>
+    where
+        B: Backend,
+    {
+        let controller = Controller::new(backend);
         Client {
             private_key: self.private_key.unwrap_or_default(),
+            controller,
         }
     }
 }
 
-pub struct Client {
+pub struct Client<B>
+where
+    B: Backend,
+{
     private_key: PrivateKey,
+    controller: Controller<B>,
 }
 
-impl Client {
-    pub fn stream<M>(&self, subject: Subject) -> Result<StreamHandle<M>, ClientError>
+impl<B> Client<B>
+where
+    B: Backend,
+{
+    pub fn stream<M>(&self, subject: Subject) -> Result<StreamHandle<M, B>, ClientError>
     where
         M: Message,
     {
-        Ok(StreamHandle::<M>::new(subject))
+        Ok(StreamHandle::new(subject, self.controller.clone()))
     }
 
     pub fn ephemeral_stream<M>(

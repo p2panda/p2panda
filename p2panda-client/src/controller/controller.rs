@@ -136,7 +136,7 @@ where
         Ok(())
     }
 
-    async fn get_or_create_checkpoint(&self, subject: &Subject) -> Checkpoint {
+    async fn get_or_create_checkpoint(&self, _subject: &Subject) -> Checkpoint {
         // @TODO: Properly compute checkpoint from looking into operations store.
         Checkpoint::default()
     }
@@ -156,8 +156,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
-
     use futures_util::StreamExt;
     use p2panda_core::Hash;
 
