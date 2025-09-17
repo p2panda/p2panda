@@ -237,7 +237,7 @@ where
             }
             SpacesArgs::Application { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
-                self.handle_application_message(&space_message).await?
+                self.handle_application_message(space_message).await?
             }
             _ => panic!("unexpected message"),
         };
@@ -348,7 +348,7 @@ where
             let mut manager = self.manager.inner.write().await;
             y.encryption_y
                 .orderer
-                .add_dependency(space_message.id(), &space_dependencies);
+                .add_dependency(space_message.id(), space_dependencies);
             manager
                 .store
                 .set_space(&self.id, y)
