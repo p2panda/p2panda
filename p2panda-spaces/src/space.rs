@@ -235,6 +235,7 @@ where
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
+                let auth_message = auth_message.expect("all space membership messages have auth message");
                 self.handle_membership_message(space_message, auth_message)
                     .await?
             }
@@ -306,26 +307,25 @@ where
     async fn handle_membership_message(
         &self,
         space_message: &M,
-        auth_message: Option<&AuthMessage<C>>,
+        auth_message: &AuthMessage<C>,
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
             group_id,
-            space_dependencies,
+            space_dependencies, 
+            auth_message_id,
             ..
         } = space_message.args()
         else {
             panic!("unexpected message type");
         };
 
+        // Sanity check.
+        assert_eq!(auth_message.id(), *auth_message_id);
+
         // Process auth message on local auth state.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
-        y.auth_y = {
-            if let Some(auth_message) = auth_message {
-                AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?
-            } else {
-                y.auth_y
-            }
-        };
+        y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
+        y.processed_auth.insert(auth_message.id());
 
         // Process encryption messages.
         let encryption_messages = EncryptionMessage::from_membership(space_message);
