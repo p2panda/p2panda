@@ -15,18 +15,19 @@ use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{AuthStore, MessageStore};
+use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
     AuthResolver, EncryptionGroupError,
 };
 
 #[derive(Debug)]
-pub struct Group<S, F, M, C, RS> {
+pub struct Group<ID, S, F, M, C, RS> {
     /// Reference to the manager.
     ///
     /// This allows us build an API where users can treat "group" instances independently from the
     /// manager API, even though internally it has a reference to it.
-    manager: Manager<S, F, M, C, RS>,
+    manager: Manager<ID, S, F, M, C, RS>,
 
     /// Id of the group.
     ///
@@ -34,15 +35,16 @@ pub struct Group<S, F, M, C, RS> {
     id: ActorId,
 }
 
-impl<S, F, M, C, RS> Group<S, F, M, C, RS>
+impl<ID, S, F, M, C, RS> Group<ID, S, F, M, C, RS>
 where
+    ID: SpaceId,
     S: AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
-    M: AuthoredMessage + SpacesMessage<C>,
+    F: Forge<ID, M, C>,
+    M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
-    pub(crate) fn new(manager_ref: Manager<S, F, M, C, RS>, id: ActorId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<ID, S, F, M, C, RS>, id: ActorId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -51,9 +53,9 @@ where
 
     #[allow(clippy::result_large_err)]
     pub(crate) async fn create(
-        manager_ref: Manager<S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, F, M, C, RS>,
         initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<(Self, M), GroupError<S, F, M, C, RS>> {
+    ) -> Result<(Self, M), GroupError<ID, S, F, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -84,7 +86,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<M, GroupError<S, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -111,7 +113,10 @@ where
     }
 
     #[allow(clippy::result_large_err)]
-    pub(crate) async fn remove(&self, member: ActorId) -> Result<M, GroupError<S, F, M, C, RS>> {
+    pub(crate) async fn remove(
+        &self,
+        member: ActorId,
+    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -138,9 +143,9 @@ where
     }
 
     pub(crate) async fn process(
-        manager_ref: Manager<S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, F, M, C, RS>,
         message: &M,
-    ) -> Result<Vec<Event>, GroupError<S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID>>, GroupError<ID, S, F, M, C, RS>> {
         let auth_message = AuthMessage::from_forged(message);
 
         let mut auth_y = {
@@ -168,9 +173,9 @@ where
     }
 
     async fn process_control_message(
-        manager_ref: Manager<S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, F, M, C, RS>,
         control_message: AuthControlMessage<C>,
-    ) -> Result<M, GroupError<S, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
         let auth_y = {
             let manager = manager_ref.inner.read().await;
             manager.store.auth().await.map_err(GroupError::AuthStore)?
@@ -212,7 +217,7 @@ where
     }
 
     /// Get the global auth state.
-    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<S, F, M, C, RS>> {
+    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
         Ok(auth_y)
@@ -222,7 +227,9 @@ where
         self.id
     }
 
-    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, GroupError<S, F, M, C, RS>> {
+    pub async fn members(
+        &self,
+    ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
         let group_members = y.members(self.id);
         Ok(group_members)
@@ -230,10 +237,10 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum GroupError<S, F, M, C, RS>
+pub enum GroupError<ID, S, F, M, C, RS>
 where
     S: AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
+    F: Forge<ID, M, C>,
     C: Conditions,
     RS: AuthResolver<C>,
 {

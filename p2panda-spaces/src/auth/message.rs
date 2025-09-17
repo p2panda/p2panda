@@ -3,6 +3,7 @@
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::traits::SpaceId;
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 #[derive(Clone, Debug)]
@@ -26,9 +27,10 @@ impl<C> AuthMessage<C>
 where
     C: Conditions,
 {
-    pub(crate) fn from_forged<M>(message: &M) -> Self
+    pub(crate) fn from_forged<ID, M>(message: &M) -> Self
     where
-        M: AuthoredMessage + SpacesMessage<C>,
+        ID: SpaceId,
+        M: AuthoredMessage + SpacesMessage<ID, C>,
     {
         let SpacesArgs::Auth {
             control_message,

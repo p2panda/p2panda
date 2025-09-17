@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::PrivateKey;
 use p2panda_encryption::{Rng, RngError};
 use petgraph::algo::toposort;
 use thiserror::Error;
@@ -23,6 +22,7 @@ use crate::group::{Group, GroupError};
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpaceMembershipControlMessage, SpacesArgs, SpacesMessage};
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput, EncryptionGroupState,
@@ -33,28 +33,29 @@ use crate::types::{
 ///
 /// Only members with suitable access to the space can read and write to it.
 #[derive(Debug)]
-pub struct Space<S, F, M, C, RS> {
+pub struct Space<ID, S, F, M, C, RS> {
     /// Reference to the manager.
     ///
     /// This allows us build an API where users can treat "space" instances independently from the
     /// manager API, even though internally it has a reference to it.
-    manager: Manager<S, F, M, C, RS>,
+    manager: Manager<ID, S, F, M, C, RS>,
 
     /// Id of the space.
     ///
     /// This is the "pointer" at the related space state which lives inside the manager.
-    id: ActorId,
+    id: ID,
 }
 
-impl<S, F, M, C, RS> Space<S, F, M, C, RS>
+impl<ID, S, F, M, C, RS> Space<ID, S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
-    M: AuthoredMessage + SpacesMessage<C>,
+    ID: SpaceId,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
+    F: Forge<ID, M, C>,
+    M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
-    pub(crate) fn new(manager_ref: Manager<S, F, M, C, RS>, id: ActorId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<ID, S, F, M, C, RS>, id: ID) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -63,9 +64,10 @@ where
 
     #[allow(clippy::result_large_err)]
     pub(crate) async fn create(
-        manager_ref: Manager<S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, F, M, C, RS>,
+        space_id: ID,
         mut initial_members: Vec<(GroupMember<ActorId>, Access<C>)>,
-    ) -> Result<(Self, Vec<M>), SpaceError<S, F, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>), SpaceError<ID, S, F, M, C, RS>> {
         let my_id: ActorId = {
             let manager = manager_ref.inner.read().await;
             manager.forge.public_key().into()
@@ -75,12 +77,6 @@ where
         let auth_y = {
             let manager = manager_ref.inner.read().await;
             manager.store.auth().await.map_err(SpaceError::AuthStore)?
-        };
-
-        let space_id = {
-            let manager = manager_ref.inner.write().await;
-            let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
-            private_key.public_key().into()
         };
 
         // Prepare and process auth and space messages for creating the new group.
@@ -157,7 +153,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<Vec<M>, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<M>, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
@@ -172,7 +168,7 @@ where
     pub(crate) async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<Vec<M>, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<M>, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
@@ -184,10 +180,10 @@ where
     }
 
     pub(crate) async fn apply_auth_message(
-        manager_ref: Manager<S, F, M, C, RS>,
-        mut y: SpaceState<M, C>,
+        manager_ref: Manager<ID, S, F, M, C, RS>,
+        mut y: SpaceState<ID, M, C>,
         auth_message: &M,
-    ) -> Result<M, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<M, SpaceError<ID, S, F, M, C, RS>> {
         // Get current space members.
         let current_members = secret_members(y.auth_y.members(y.group_id));
 
@@ -264,7 +260,7 @@ where
         &self,
         space_message: &M,
         auth_message: Option<&AuthMessage<C>>,
-    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let events = match space_message.args() {
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership {
@@ -302,7 +298,7 @@ where
         mut dependencies: Vec<OperationId>,
         encryption_messages: &Vec<EncryptionMessage>,
         auth_message: Option<&AuthMessage<C>>,
-    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let mut y = Self::get_or_init_state(self.id, group_id, self.manager.clone()).await?;
 
         // 1. Process auth message.
@@ -366,7 +362,8 @@ where
         current_members: Vec<ActorId>,
         next_members: Vec<ActorId>,
         rng: &Rng,
-    ) -> Result<(EncryptionGroupState<M>, Vec<EncryptionMessage>), SpaceError<S, F, M, C, RS>> {
+    ) -> Result<(EncryptionGroupState<M>, Vec<EncryptionMessage>), SpaceError<ID, S, F, M, C, RS>>
+    {
         // Make the DGM aware of group members after this group membership change has been
         // processed.
         encryption_y.dcgka.dgm = EncryptionMembershipState {
@@ -425,7 +422,7 @@ where
     async fn handle_application_message(
         &self,
         encryption_message: &EncryptionMessage,
-    ) -> Result<Vec<Event>, SpaceError<S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
         // 1. Process encryption message.
@@ -449,7 +446,7 @@ where
     }
 
     /// Get the space state.
-    async fn state(&self) -> Result<SpaceState<M, C>, SpaceError<S, F, M, C, RS>> {
+    async fn state(&self) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let space_y = manager
             .store
@@ -462,10 +459,10 @@ where
 
     /// Get or if not present initialize a new space state.
     async fn get_or_init_state(
-        space_id: ActorId,
+        space_id: ID,
         group_id: ActorId,
-        manager_ref: Manager<S, F, M, C, RS>,
-    ) -> Result<SpaceState<M, C>, SpaceError<S, F, M, C, RS>> {
+        manager_ref: Manager<ID, S, F, M, C, RS>,
+    ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = manager_ref.inner.read().await;
 
         let result = manager
@@ -529,22 +526,24 @@ where
         Ok(space_y)
     }
 
-    pub fn id(&self) -> ActorId {
+    pub fn id(&self) -> ID {
         self.id
     }
 
-    pub async fn group_id(&self) -> Result<ActorId, SpaceError<S, F, M, C, RS>> {
+    pub async fn group_id(&self) -> Result<ActorId, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
         Ok(y.group_id)
     }
 
-    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<S, F, M, C, RS>> {
+    pub async fn members(
+        &self,
+    ) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<ID, S, F, M, C, RS>> {
         let y = self.state().await?;
         let group_members = y.auth_y.members(y.group_id);
         Ok(group_members)
     }
 
-    pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<S, F, M, C, RS>> {
+    pub async fn publish(&self, plaintext: &[u8]) -> Result<M, SpaceError<ID, S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
         if !y.encryption_y.orderer.is_welcomed() {
@@ -596,11 +595,11 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-pub struct SpaceState<M, C>
+pub struct SpaceState<ID, M, C>
 where
     C: Conditions,
 {
-    pub space_id: ActorId,
+    pub space_id: ID,
     pub group_id: ActorId,
     pub auth_y: AuthGroupState<C>,
     // @TODO: This contains the PKI and KMG states and other unnecessary data we don't need to
@@ -609,12 +608,13 @@ where
     pub encryption_y: EncryptionGroupState<M>,
 }
 
-impl<M, C> SpaceState<M, C>
+impl<ID, M, C> SpaceState<ID, M, C>
 where
+    ID: SpaceId,
     C: Conditions,
 {
     pub fn from_state(
-        space_id: ActorId,
+        space_id: ID,
         group_id: ActorId,
         auth_y: AuthGroupState<C>,
         encryption_y: EncryptionGroupState<M>,
@@ -651,10 +651,13 @@ pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>
         .collect::<Vec<_>>()
 }
 
-fn encryption_output_to_events<M>(
-    space_id: ActorId,
+fn encryption_output_to_events<ID, M>(
+    space_id: ID,
     encryption_output: Vec<EncryptionGroupOutput<M>>,
-) -> Vec<Event> {
+) -> Vec<Event<ID>>
+where
+    ID: SpaceId,
+{
     encryption_output
         .into_iter()
         .map(|event| {
@@ -674,10 +677,11 @@ fn encryption_output_to_events<M>(
 }
 
 #[derive(Debug, Error)]
-pub enum SpaceError<S, F, M, C, RS>
+pub enum SpaceError<ID, S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
+    ID: SpaceId,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
+    F: Forge<ID, M, C>,
     C: Conditions,
     RS: AuthResolver<C>,
 {
@@ -688,7 +692,7 @@ where
     AuthGroup(AuthGroupError<C, RS>),
 
     #[error("{0}")]
-    Group(GroupError<S, F, M, C, RS>),
+    Group(GroupError<ID, S, F, M, C, RS>),
 
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError<M>),
@@ -706,14 +710,14 @@ where
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C>>::Error),
+    SpaceStore(<S as SpaceStore<ID, M, C>>::Error),
 
     #[error("{0}")]
     EncryptionOrderer(Infallible),
 
     #[error("tried to access unknown space id {0}")]
-    UnknownSpace(ActorId),
+    UnknownSpace(ID),
 
     #[error("tried to publish when not a member of space {0}")]
-    NotWelcomed(ActorId),
+    NotWelcomed(ID),
 }

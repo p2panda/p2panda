@@ -23,12 +23,12 @@ pub trait AuthoredMessage: Debug {
     // @TODO: Do we need a method here to check the signature?
 }
 
-pub trait SpacesMessage<C> {
-    fn args(&self) -> &SpacesArgs<C>;
+pub trait SpacesMessage<ID, C> {
+    fn args(&self) -> &SpacesArgs<ID, C>;
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum SpacesArgs<C> {
+pub enum SpacesArgs<ID, C> {
     /// System message, contains key bundle of the given author.
     ///
     /// Note: Applications should check if the key bundle was authored by the sender.
@@ -46,7 +46,7 @@ pub enum SpacesArgs<C> {
     },
     SpaceMembership {
         /// Space this message should be applied to.
-        space_id: ActorId,
+        space_id: ID,
 
         /// Group associated with this space from which group membership is derived.
         group_id: ActorId,
@@ -68,7 +68,7 @@ pub enum SpacesArgs<C> {
     },
     SpaceUpdate {
         /// Space this message should be applied to.
-        space_id: ActorId,
+        space_id: ID,
 
         /// Group associated with this space from which group membership is derived.
         group_id: ActorId,
@@ -78,7 +78,7 @@ pub enum SpacesArgs<C> {
     },
     Application {
         /// Space this message should be applied to.
-        space_id: ActorId,
+        space_id: ID,
 
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,

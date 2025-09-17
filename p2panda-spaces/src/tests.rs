@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::convert::Infallible;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
@@ -20,6 +22,7 @@ use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::SpaceError;
 use crate::store::{AuthStore, SpaceStore};
 use crate::test_utils::MemoryStore;
+use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroupAction, AuthGroupState, EncryptionControlMessage,
     OperationId, StrongRemoveResolver,
@@ -27,14 +30,20 @@ use crate::types::{
 
 type SeqNum = u64;
 
+// Implement SpaceId for i32 which is what we use space identifiers in the tests.
+impl SpaceId for i32 {}
+
 #[derive(Clone, Debug)]
-struct TestMessage {
+struct TestMessage<ID> {
     seq_num: SeqNum,
     public_key: PublicKey,
-    spaces_args: SpacesArgs<TestConditions>,
+    spaces_args: SpacesArgs<ID, TestConditions>,
 }
 
-impl AuthoredMessage for TestMessage {
+impl<ID> AuthoredMessage for TestMessage<ID>
+where
+    ID: SpaceId,
+{
     fn id(&self) -> OperationId {
         let mut buffer: Vec<u8> = self.public_key.as_bytes().to_vec();
         buffer.extend_from_slice(&self.seq_num.to_be_bytes());
@@ -46,23 +55,25 @@ impl AuthoredMessage for TestMessage {
     }
 }
 
-impl SpacesMessage<TestConditions> for TestMessage {
-    fn args(&self) -> &SpacesArgs<TestConditions> {
+impl<ID> SpacesMessage<ID, TestConditions> for TestMessage<ID> {
+    fn args(&self) -> &SpacesArgs<ID, TestConditions> {
         &self.spaces_args
     }
 }
 
 #[derive(Debug)]
-struct TestForge {
+struct TestForge<ID> {
     next_seq_num: SeqNum,
     private_key: PrivateKey,
+    _phantom: PhantomData<ID>,
 }
 
-impl TestForge {
+impl<ID> TestForge<ID> {
     pub fn new(private_key: PrivateKey) -> Self {
         Self {
             next_seq_num: 0,
             private_key,
+            _phantom: PhantomData,
         }
     }
 }
@@ -72,7 +83,10 @@ struct TestConditions {}
 
 impl Conditions for TestConditions {}
 
-impl Forge<TestMessage, TestConditions> for TestForge {
+impl<ID> Forge<ID, TestMessage<ID>, TestConditions> for TestForge<ID>
+where
+    ID: SpaceId,
+{
     type Error = Infallible;
 
     fn public_key(&self) -> PublicKey {
@@ -81,8 +95,8 @@ impl Forge<TestMessage, TestConditions> for TestForge {
 
     async fn forge(
         &mut self,
-        args: SpacesArgs<TestConditions>,
-    ) -> Result<TestMessage, Self::Error> {
+        args: SpacesArgs<ID, TestConditions>,
+    ) -> Result<TestMessage<ID>, Self::Error> {
         let seq_num = self.next_seq_num;
         self.next_seq_num += 1;
         Ok(TestMessage {
@@ -95,8 +109,8 @@ impl Forge<TestMessage, TestConditions> for TestForge {
     async fn forge_ephemeral(
         &mut self,
         private_key: PrivateKey,
-        args: SpacesArgs<TestConditions>,
-    ) -> Result<TestMessage, Self::Error> {
+        args: SpacesArgs<ID, TestConditions>,
+    ) -> Result<TestMessage<ID>, Self::Error> {
         Ok(TestMessage {
             // Will always be first entry in the "log" as we're dropping the private key.
             seq_num: 0,
@@ -106,30 +120,35 @@ impl Forge<TestMessage, TestConditions> for TestForge {
     }
 }
 
-type TestStore = MemoryStore<TestMessage, TestConditions>;
+type TestStore<ID> = MemoryStore<ID, TestMessage<ID>, TestConditions>;
 
-type TestManager = Manager<
-    TestStore,
-    TestForge,
-    TestMessage,
+type TestManager<ID> = Manager<
+    ID,
+    TestStore<ID>,
+    TestForge<ID>,
+    TestMessage<ID>,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
-type TestSpaceError = SpaceError<
-    TestStore,
-    TestForge,
-    TestMessage,
+type TestSpaceError<ID> = SpaceError<
+    ID,
+    TestStore<ID>,
+    TestForge<ID>,
+    TestMessage<ID>,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
-struct TestPeer {
+struct TestPeer<ID = i32> {
     id: u8,
-    manager: TestManager,
+    manager: TestManager<ID>,
 }
 
-impl TestPeer {
+impl<ID> TestPeer<ID>
+where
+    ID: SpaceId + StdHash,
+{
     pub fn new(peer_id: u8) -> Self {
         let rng = Rng::from_seed([peer_id; 32]);
 
@@ -184,7 +203,8 @@ async fn create_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, messages) = manager.create_space(&[]).await.unwrap();
+    let space_id = 0;
+    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
 
     // We've added ourselves automatically with manage access.
     assert_eq!(
@@ -217,7 +237,6 @@ async fn create_space() {
     };
 
     assert_eq!(*space_id, space.id());
-    assert_ne!(*group_id, space.id());
     assert_eq!(*auth_message_id, message_01.id());
 
     // Dependencies are empty for both auth and encryption.
@@ -288,9 +307,10 @@ async fn send_and_receive() {
 
     // Alice creates a space with Bob.
 
+    let space_id = 0;
     let (alice_space, alice_messages) = alice
         .manager
-        .create_space(&[(bob.manager.id().await, Access::write())])
+        .create_space(space_id, &[(bob.manager.id().await, Access::write())])
         .await
         .unwrap();
 
@@ -328,7 +348,7 @@ async fn send_and_receive() {
 #[tokio::test]
 async fn add_member_to_space() {
     let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
+    let bob = <TestPeer>::new(1);
 
     // Manually register bobs key bundle.
 
@@ -346,8 +366,8 @@ async fn add_member_to_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, messages) = manager.create_space(&[]).await.unwrap();
-    let space_id = space.id();
+    let space_id = 0;
+    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
 
     // There are two messages (one auth, and one space)
     assert_eq!(messages.len(), 2);
@@ -401,9 +421,6 @@ async fn add_member_to_space() {
     // Dependencies are set for both auth and encryption.
     assert_eq!(auth_dependencies.to_owned(), vec![message_01.id()]);
     assert_eq!(space_dependencies.to_owned(), vec![message_02.id()]);
-
-    // Space id and group id are not equal.
-    assert_ne!(group_id, space_id);
 
     // Auth control message contains "add" for bob.
     assert_eq!(
@@ -470,7 +487,8 @@ async fn send_and_receive_after_add() {
 
     // Alice creates a space, adds Bob in a following step and then sends a message.
 
-    let (alice_space, messages) = alice.manager.create_space(&[]).await.unwrap();
+    let space_id = 0;
+    let (alice_space, messages) = alice.manager.create_space(space_id, &[]).await.unwrap();
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
     let messages = alice_space.add(bob_id, Access::read()).await.unwrap();
@@ -491,7 +509,7 @@ async fn send_and_receive_after_add() {
 #[tokio::test]
 async fn add_pull_member_to_space() {
     let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
+    let bob = <TestPeer>::new(1);
 
     // Manually register bobs key bundle.
 
@@ -509,11 +527,11 @@ async fn add_pull_member_to_space() {
     // Create Space
     // ~~~~~~~~~~~~
 
-    let (space, messages) = manager.create_space(&[]).await.unwrap();
+    let space_id = 0;
+    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
     assert_eq!(messages.len(), 2);
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
-    let space_id = space.id();
     drop(space);
 
     // Add new pull-only member to Space
@@ -551,7 +569,6 @@ async fn add_pull_member_to_space() {
     };
 
     assert_eq!(*space_id, space.id());
-    assert_ne!(*group_id, space.id());
     assert_eq!(*auth_message_id, message_03.id());
 
     // Alice and bob are both members.
@@ -619,8 +636,8 @@ async fn receive_control_messages() {
     // Alice: Create Space
     // ~~~~~~~~~~~~
 
-    let (space, messages) = alice_manager.create_space(&[]).await.unwrap();
-    let space_id = space.id();
+    let space_id = 0;
+    let (space, messages) = alice_manager.create_space(space_id, &[]).await.unwrap();
     let group_id = space.group_id().await.unwrap();
     drop(space);
 
@@ -734,11 +751,11 @@ async fn remove_member() {
     // Alice: Create Space with themselves and bob
     // ~~~~~~~~~~~~
 
+    let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(&[(bob_id, Access::read())])
+        .create_space(space_id, &[(bob_id, Access::read())])
         .await
         .unwrap();
-    let space_id = space.id();
     drop(space);
 
     // There are two messages (one auth, and one space)
@@ -818,8 +835,8 @@ async fn remove_member() {
 async fn concurrent_removal_conflict() {
     let alice = TestPeer::new(0);
     let bob = TestPeer::new(1);
-    let claire = TestPeer::new(2);
-    let dave = TestPeer::new(3);
+    let claire = <TestPeer>::new(2);
+    let dave = <TestPeer>::new(3);
 
     // Manually register all key bundles on alice.
 
@@ -868,11 +885,11 @@ async fn concurrent_removal_conflict() {
     // Alice: Create Space with themselves and bob
     // ~~~~~~~~~~~~
 
+    let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(&[(bob_id, Access::manage())])
+        .create_space(space_id, &[(bob_id, Access::manage())])
         .await
         .unwrap();
-    let space_id = space.id();
     drop(space);
 
     // There are two messages (one auth, and one space)
@@ -976,8 +993,8 @@ async fn concurrent_removal_conflict() {
 #[tokio::test]
 async fn space_from_existing_auth_state() {
     let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
-    let claire = TestPeer::new(2);
+    let bob = <TestPeer>::new(1);
+    let claire = <TestPeer>::new(2);
 
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;
@@ -1011,8 +1028,9 @@ async fn space_from_existing_auth_state() {
     // Create Space with group as member
     // ~~~~~~~~~~~~
 
+    let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(&[(member_group_id, Access::read())])
+        .create_space(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
 
@@ -1119,8 +1137,8 @@ async fn space_from_existing_auth_state() {
 
 #[tokio::test]
 async fn create_group() {
-    let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
+    let alice = <TestPeer>::new(0);
+    let bob = <TestPeer>::new(1);
 
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;
@@ -1175,9 +1193,9 @@ async fn create_group() {
 
 #[tokio::test]
 async fn add_member_to_group() {
-    let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
-    let claire = TestPeer::new(2);
+    let alice = <TestPeer>::new(0);
+    let bob = <TestPeer>::new(1);
+    let claire = <TestPeer>::new(2);
 
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;
@@ -1237,8 +1255,8 @@ async fn add_member_to_group() {
 
 #[tokio::test]
 async fn remove_member_from_group() {
-    let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
+    let alice = <TestPeer>::new(0);
+    let bob = <TestPeer>::new(1);
 
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;
@@ -1291,9 +1309,9 @@ async fn remove_member_from_group() {
 
 #[tokio::test]
 async fn receive_auth_messages() {
-    let alice = TestPeer::new(0);
-    let bob = TestPeer::new(1);
-    let claire = TestPeer::new(2);
+    let alice = <TestPeer>::new(0);
+    let bob = <TestPeer>::new(1);
+    let claire = <TestPeer>::new(2);
 
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;

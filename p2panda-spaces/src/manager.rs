@@ -22,6 +22,7 @@ use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::traits::SpaceId;
 use crate::types::{ActorId, AuthResolver, OperationId};
 
 // Create and manage spaces and groups.
@@ -43,31 +44,32 @@ use crate::types::{ActorId, AuthResolver, OperationId};
 //
 // Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
-pub struct Manager<S, F, M, C, RS> {
+pub struct Manager<ID, S, F, M, C, RS> {
     #[allow(clippy::type_complexity)]
-    pub(crate) inner: Arc<RwLock<ManagerInner<S, F, M, C, RS>>>,
+    pub(crate) inner: Arc<RwLock<ManagerInner<ID, S, F, M, C, RS>>>,
 }
 
 #[derive(Debug)]
-pub(crate) struct ManagerInner<S, F, M, C, RS> {
+pub(crate) struct ManagerInner<ID, S, F, M, C, RS> {
     pub(crate) store: S,
     pub(crate) forge: F,
     pub(crate) rng: Rng,
-    _marker: PhantomData<(M, C, RS)>,
+    _marker: PhantomData<(ID, M, C, RS)>,
 }
 
-impl<S, F, M, C, RS> Manager<S, F, M, C, RS>
+impl<ID, S, F, M, C, RS> Manager<ID, S, F, M, C, RS>
 where
+    ID: SpaceId,
     // @TODO: make extensions generic.
-    S: SpaceStore<M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
-    M: AuthoredMessage + SpacesMessage<C>,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
+    F: Forge<ID, M, C>,
+    M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + AuthResolver<C>,
 {
     #[allow(clippy::result_large_err)]
-    pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<S, F, M, C, RS>> {
+    pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<ID, S, F, M, C, RS>> {
         let inner = ManagerInner {
             store,
             forge,
@@ -82,8 +84,8 @@ where
 
     pub async fn space(
         &self,
-        id: ActorId,
-    ) -> Result<Option<Space<S, F, M, C, RS>>, ManagerError<S, F, M, C, RS>> {
+        id: ID,
+    ) -> Result<Option<Space<ID, S, F, M, C, RS>>, ManagerError<ID, S, F, M, C, RS>> {
         let has_space = {
             let inner = self.inner.read().await;
             inner
@@ -103,7 +105,7 @@ where
     pub async fn group(
         &self,
         id: ActorId,
-    ) -> Result<Option<Group<S, F, M, C, RS>>, ManagerError<S, F, M, C, RS>> {
+    ) -> Result<Option<Group<ID, S, F, M, C, RS>>, ManagerError<ID, S, F, M, C, RS>> {
         let auth_y = {
             let manager = self.inner.read().await;
             manager.store.auth().await.map_err(GroupError::AuthStore)?
@@ -123,8 +125,9 @@ where
     #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub async fn create_space(
         &self,
+        id: ID,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<S, F, M, C, RS>, Vec<M>), ManagerError<S, F, M, C, RS>> {
+    ) -> Result<(Space<ID, S, F, M, C, RS>, Vec<M>), ManagerError<ID, S, F, M, C, RS>> {
         // @TODO: Check if initial members are known and have a key bundle present, throw error
         // otherwise.
 
@@ -153,7 +156,7 @@ where
             initial_members_inner
         };
 
-        let (space, messages) = Space::create(self.clone(), initial_members)
+        let (space, messages) = Space::create(self.clone(), id, initial_members)
             .await
             .map_err(ManagerError::Space)?;
 
@@ -164,7 +167,7 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<S, F, M, C, RS>, M), ManagerError<S, F, M, C, RS>> {
+    ) -> Result<(Group<ID, S, F, M, C, RS>, M), ManagerError<ID, S, F, M, C, RS>> {
         // @TODO: Assign GroupMember type to every actor based on looking up our own state,
         // checking if actor is a group or individual.
 
@@ -206,7 +209,7 @@ where
         inner.forge.public_key().into()
     }
 
-    pub async fn me(&self) -> Result<Member, ManagerError<S, F, M, C, RS>> {
+    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, F, M, C, RS>> {
         let inner = self.inner.read().await;
 
         let y = inner
@@ -224,7 +227,7 @@ where
     pub async fn register_member(
         &self,
         member: &Member,
-    ) -> Result<(), ManagerError<S, F, M, C, RS>> {
+    ) -> Result<(), ManagerError<ID, S, F, M, C, RS>> {
         // @TODO: Reject invalid / expired key bundles.
 
         let mut inner = self.inner.write().await;
@@ -248,7 +251,10 @@ where
     }
 
     // We expect messages to be signature-checked, dependency-checked & partially ordered here.
-    pub async fn process(&self, message: &M) -> Result<Vec<Event>, ManagerError<S, F, M, C, RS>> {
+    pub async fn process(
+        &self,
+        message: &M,
+    ) -> Result<Vec<Event<ID>>, ManagerError<ID, S, F, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
@@ -336,7 +342,7 @@ where
 
 // Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping
 // them in an Arc. Related: https://stackoverflow.com/questions/72150623
-impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
+impl<ID, S, F, M, C, RS> Clone for Manager<ID, S, F, M, C, RS> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -346,18 +352,19 @@ impl<S, F, M, C, RS> Clone for Manager<S, F, M, C, RS> {
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum ManagerError<S, F, M, C, RS>
+pub enum ManagerError<ID, S, F, M, C, RS>
 where
-    S: SpaceStore<M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<M, C>,
+    ID: SpaceId,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
+    F: Forge<ID, M, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
     #[error(transparent)]
-    Space(#[from] SpaceError<S, F, M, C, RS>),
+    Space(#[from] SpaceError<ID, S, F, M, C, RS>),
 
     #[error(transparent)]
-    Group(#[from] GroupError<S, F, M, C, RS>),
+    Group(#[from] GroupError<ID, S, F, M, C, RS>),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
@@ -366,7 +373,7 @@ where
     KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<M, C>>::Error),
+    SpaceStore(<S as SpaceStore<ID, M, C>>::Error),
 
     #[error("{0}")]
     AuthStore(<S as AuthStore<C>>::Error),

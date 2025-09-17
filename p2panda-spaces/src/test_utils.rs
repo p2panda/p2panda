@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::hash::Hash;
 
 use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
@@ -11,22 +12,24 @@ use p2panda_encryption::traits::PreKeyManager;
 use crate::OperationId;
 use crate::space::SpaceState;
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::traits::SpaceId;
 use crate::types::{ActorId, AuthGroupState};
 
 #[derive(Debug)]
-pub struct MemoryStore<M, C>
+pub struct MemoryStore<ID, M, C>
 where
     C: Conditions,
 {
     key_manager: KeyManagerState,
     key_registry: KeyRegistryState<ActorId>,
     auth: AuthGroupState<C>,
-    spaces: HashMap<ActorId, SpaceState<M, C>>,
+    spaces: HashMap<ID, SpaceState<ID, M, C>>,
     messages: HashMap<OperationId, M>,
 }
 
-impl<M, C> MemoryStore<M, C>
+impl<ID, M, C> MemoryStore<ID, M, C>
 where
+    ID: SpaceId,
     C: Conditions,
 {
     pub fn new(my_id: ActorId, key_manager: KeyManagerState, auth: AuthGroupState<C>) -> Self {
@@ -47,29 +50,31 @@ where
     }
 }
 
-impl<M, C> SpaceStore<M, C> for MemoryStore<M, C>
+impl<ID, M, C> SpaceStore<ID, M, C> for MemoryStore<ID, M, C>
 where
+    ID: SpaceId + Hash,
     M: Clone,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn space(&self, id: &ActorId) -> Result<Option<SpaceState<M, C>>, Self::Error> {
+    async fn space(&self, id: &ID) -> Result<Option<SpaceState<ID, M, C>>, Self::Error> {
         Ok(self.spaces.get(id).cloned())
     }
 
-    async fn has_space(&self, id: &ActorId) -> Result<bool, Self::Error> {
+    async fn has_space(&self, id: &ID) -> Result<bool, Self::Error> {
         Ok(self.spaces.contains_key(id))
     }
 
-    async fn set_space(&mut self, id: &ActorId, y: SpaceState<M, C>) -> Result<(), Self::Error> {
+    async fn set_space(&mut self, id: &ID, y: SpaceState<ID, M, C>) -> Result<(), Self::Error> {
         self.spaces.insert(*id, y);
         Ok(())
     }
 }
 
-impl<M, C> KeyStore for MemoryStore<M, C>
+impl<ID, M, C> KeyStore for MemoryStore<ID, M, C>
 where
+    ID: SpaceId,
     C: Conditions,
 {
     type Error = Infallible;
@@ -93,8 +98,9 @@ where
     }
 }
 
-impl<M, C> AuthStore<C> for MemoryStore<M, C>
+impl<ID, M, C> AuthStore<C> for MemoryStore<ID, M, C>
 where
+    ID: SpaceId,
     C: Conditions,
 {
     type Error = Infallible;
@@ -109,8 +115,9 @@ where
     }
 }
 
-impl<M, C> MessageStore<M> for MemoryStore<M, C>
+impl<ID, M, C> MessageStore<M> for MemoryStore<ID, M, C>
 where
+    ID: SpaceId,
     M: Clone,
     C: Conditions,
 {

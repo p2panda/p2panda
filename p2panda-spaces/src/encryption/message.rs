@@ -7,6 +7,7 @@ use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessa
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::traits::SpaceId;
 use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
 
 #[derive(Clone, Debug)]
@@ -36,9 +37,10 @@ pub enum EncryptionMessage {
 }
 
 impl EncryptionMessage {
-    pub(crate) fn from_membership<M, C>(space_message: &M) -> Vec<Self>
+    pub(crate) fn from_membership<ID, M, C>(space_message: &M) -> Vec<Self>
     where
-        M: AuthoredMessage + SpacesMessage<C>,
+        ID: SpaceId,
+        M: AuthoredMessage + SpacesMessage<ID, C>,
         C: Conditions,
     {
         let SpacesArgs::SpaceMembership {
@@ -68,9 +70,10 @@ impl EncryptionMessage {
             .collect()
     }
 
-    pub(crate) fn from_application<M, C>(space_message: &M) -> Self
+    pub(crate) fn from_application<ID, M, C>(space_message: &M) -> Self
     where
-        M: AuthoredMessage + SpacesMessage<C>,
+        ID: SpaceId,
+        M: AuthoredMessage + SpacesMessage<ID, C>,
         C: Conditions,
     {
         let SpacesArgs::Application {
