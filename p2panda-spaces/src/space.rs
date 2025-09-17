@@ -72,7 +72,8 @@ where
             manager.forge.public_key().into()
         };
 
-        // Get the global auth state.
+        // Get the global auth state. We use this state in a following step to initialise the
+        // space state and we don't want it to contain the group for the space itself.
         let auth_y = {
             let manager = manager_ref.inner.read().await;
             manager.store.auth().await.map_err(SpaceError::AuthStore)?
@@ -83,50 +84,23 @@ where
             initial_members.push((my_id, Access::manage()));
         }
 
-        let mut messages = vec![];
-
-        // Create new group.
+        // Create new group for the space.
         let (group, auth_message) = Group::create(manager_ref.clone(), initial_members)
             .await
             .map_err(SpaceError::Group)?;
 
-        // 1. Instantiate space state.
-        let mut y = { Self::get_or_init_state(space_id, group.id(), manager_ref.clone()).await? };
+        // Instantiate new space state from existing global auth state.
+        let mut messages = vec![];
+        let y = Self::state_from_auth(
+            manager_ref.clone(),
+            auth_y,
+            space_id,
+            group.id(),
+            &mut messages,
+        )
+        .await?;
 
-        // 2. Publish space messages for all operations in the global auth graph.
-        {
-            let mut manager = manager_ref.inner.write().await;
-            let mut space_dependencies = vec![];
-            let operations =
-                toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
-            for id in operations {
-                let operation = auth_y
-                    .inner
-                    .operations
-                    .get(&id)
-                    .expect("all auth operations exist");
-
-                let args = SpacesArgs::SpaceMembership {
-                    space_id: y.space_id,
-                    group_id: y.group_id,
-                    auth_message_id: operation.id(),
-                    control_messages: vec![],
-                    space_dependencies,
-                };
-                let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
-
-                manager
-                    .store
-                    .set_message(&message.id(), &message)
-                    .await
-                    .map_err(SpaceError::MessageStore)?;
-
-                space_dependencies = vec![message.id()];
-                messages.push(message);
-            }
-        };
-        y.auth_y = auth_y;
-
+        // Apply the "create" auth message to the space state.
         let space_message = Self::apply_auth_message(manager_ref.clone(), y, &auth_message).await?;
 
         // Push auth message to the front of the messages vec.
@@ -285,6 +259,60 @@ where
         Ok(events)
     }
 
+    /// Instantiate space state from existing global auth state.
+    /// 
+    /// Every space contains a "wrapped" reference to all messages published to the global auth
+    /// state. This method iterates through all existing auth messages and re-publishes them
+    /// towards this space. None of the messages will contain encryption control messages as they
+    /// were published before the space existed. 
+    async fn state_from_auth(
+        manager_ref: Manager<ID, S, F, M, C, RS>,
+        auth_y: AuthGroupState<C>,
+        space_id: ID,
+        group_id: ActorId,
+        messages: &mut Vec<M>,
+    ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
+        // Instantiate empty space state.
+        let mut y = { Self::get_or_init_state(space_id, group_id, manager_ref.clone()).await? };
+
+        // Publish space messages for all operations in the global auth graph. We topologically
+        // sort the operations and publish them in this linear order.
+        //
+        // These won't contain any encryption messages as they were published _before_ the space
+        // was created.
+        let mut manager = manager_ref.inner.write().await;
+        let mut space_dependencies = vec![];
+        let operations =
+            toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
+        for id in operations {
+            let operation = auth_y
+                .inner
+                .operations
+                .get(&id)
+                .expect("all auth operations exist");
+
+            let args = SpacesArgs::SpaceMembership {
+                space_id: y.space_id,
+                group_id: y.group_id,
+                auth_message_id: operation.id(),
+                control_messages: vec![],
+                space_dependencies,
+            };
+            let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+
+            manager
+                .store
+                .set_message(&message.id(), &message)
+                .await
+                .map_err(SpaceError::MessageStore)?;
+
+            space_dependencies = vec![message.id()];
+            messages.push(message);
+        }
+        y.auth_y = auth_y;
+        Ok(y)
+    }
+
     async fn handle_spaces_messages(
         &self,
         id: OperationId,
@@ -350,6 +378,9 @@ where
     ///
     /// The difference between the current and next secret group members (those with "read"
     /// access) is computed and only the diff processed in the encryption group.
+    ///
+    /// If it is a group being removed/added to the encryption context, then one encryption
+    /// control message for each actor (individual) will be generated.
     async fn process_space_membership_change(
         mut encryption_y: EncryptionGroupState<M>,
         auth_message: &AuthMessage<C>,
