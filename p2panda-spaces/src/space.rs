@@ -162,9 +162,10 @@ where
         // Get next space members.
         let next_members = secret_members(y.auth_y.members(y.group_id));
 
+        // Process the change of membership on encryption context.
         let (encryption_y, encryption_messages) = if current_members != next_members {
             let manager = manager_ref.inner.read().await;
-            Self::process_space_membership_change(
+            Self::handle_secret_member_change(
                 y.encryption_y,
                 &auth_message,
                 current_members,
@@ -177,23 +178,22 @@ where
         };
         y.encryption_y = encryption_y;
 
-        // 2. Sign spaces control message in forge (F).
+        // Construct space message and sign it in the forge (F)
+        let dependencies: Vec<OperationId> = y.encryption_y.orderer.heads().to_vec();
+        let space_message = {
+            let control_messages = encryption_messages
+                .iter()
+                .map(SpaceMembershipControlMessage::from_encryption_message)
+                .collect();
 
-        let control_messages = encryption_messages
-            .iter()
-            .map(SpaceMembershipControlMessage::from_encryption_message)
-            .collect();
+            let args = SpacesArgs::SpaceMembership {
+                space_id: y.space_id,
+                group_id: y.group_id,
+                space_dependencies: dependencies.clone(),
+                auth_message_id: auth_message.id(),
+                control_messages,
+            };
 
-        let mut dependencies: Vec<OperationId> = y.encryption_y.orderer.heads().to_vec();
-        let args = SpacesArgs::SpaceMembership {
-            space_id: y.space_id,
-            group_id: y.group_id,
-            space_dependencies: dependencies.clone(),
-            auth_message_id: auth_message.id(),
-            control_messages,
-        };
-
-        let message = {
             let mut manager = manager_ref.inner.write().await;
             let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
             manager
@@ -202,17 +202,16 @@ where
                 .await
                 .map_err(SpaceError::MessageStore)?;
 
-            // Add the auth message as a dependency to inform the encryption orderer of the causal
-            // relationship.
-            dependencies.push(auth_message.id());
-            y.encryption_y
-                .orderer
-                .add_dependency(message.id(), &dependencies);
             message
         };
 
+        // Update space state and persist it.
         {
             let mut manager = manager_ref.inner.write().await;
+            y.encryption_y
+                .orderer
+                .add_dependency(space_message.id(), &dependencies);
+
             let space_id = y.space_id;
             manager
                 .store
@@ -221,7 +220,7 @@ where
                 .map_err(SpaceError::SpaceStore)?;
         }
 
-        Ok(message)
+        Ok(space_message)
     }
 
     pub(crate) async fn process(
@@ -231,27 +230,14 @@ where
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let events = match space_message.args() {
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
-            SpacesArgs::SpaceMembership {
-                space_id,
-                group_id,
-                space_dependencies,
-                ..
-            } => {
+            SpacesArgs::SpaceMembership { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
-                let encryption_messages = EncryptionMessage::from_membership(space_message);
-                self.handle_spaces_messages(
-                    space_message.id(),
-                    *group_id,
-                    space_dependencies.to_owned(),
-                    &encryption_messages,
-                    auth_message,
-                )
-                .await?
+                self.handle_membership_message(space_message, auth_message)
+                    .await?
             }
             SpacesArgs::Application { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
-                let encryption_message = EncryptionMessage::from_application(space_message);
-                self.handle_application_message(&encryption_message).await?
+                self.handle_application_message(&space_message).await?
             }
             _ => panic!("unexpected message"),
         };
@@ -260,11 +246,11 @@ where
     }
 
     /// Instantiate space state from existing global auth state.
-    /// 
+    ///
     /// Every space contains a "wrapped" reference to all messages published to the global auth
     /// state. This method iterates through all existing auth messages and re-publishes them
     /// towards this space. None of the messages will contain encryption control messages as they
-    /// were published before the space existed. 
+    /// were published before the space existed.
     async fn state_from_auth(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         auth_y: AuthGroupState<C>,
@@ -313,18 +299,22 @@ where
         Ok(y)
     }
 
-    async fn handle_spaces_messages(
+    async fn handle_membership_message(
         &self,
-        id: OperationId,
-        group_id: ActorId,
-        mut dependencies: Vec<OperationId>,
-        encryption_messages: &Vec<EncryptionMessage>,
+        space_message: &M,
         auth_message: Option<&AuthMessage<C>>,
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
-        let mut y = Self::get_or_init_state(self.id, group_id, self.manager.clone()).await?;
+        let SpacesArgs::SpaceMembership {
+            group_id,
+            space_dependencies,
+            ..
+        } = space_message.args()
+        else {
+            panic!("unexpected message type");
+        };
 
-        // 1. Process auth message.
-
+        // Process auth message on local auth state.
+        let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
         y.auth_y = {
             if let Some(auth_message) = auth_message {
                 AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?
@@ -333,38 +323,32 @@ where
             }
         };
 
-        // 2. Process encryption message.
-
+        // Process encryption messages.
+        let encryption_messages = EncryptionMessage::from_membership(space_message);
         let mut encryption_output = vec![];
-        {
-            for encryption_message in encryption_messages {
-                // Make encryption DGM aware of current auth members state.
-                let group_members = y.auth_y.members(y.group_id);
-                let secret_members = secret_members(group_members);
-                y.encryption_y.dcgka.dgm = EncryptionMembershipState {
-                    members: HashSet::from_iter(secret_members.into_iter()),
-                };
+        for encryption_message in encryption_messages {
+            // Make encryption DGM aware of current auth members state.
+            let group_members = y.auth_y.members(y.group_id);
+            let secret_members = secret_members(group_members);
+            y.encryption_y.dcgka.dgm = EncryptionMembershipState {
+                members: HashSet::from_iter(secret_members.into_iter()),
+            };
 
-                let (encryption_y, encryption_output_inner) =
-                    EncryptionGroup::receive(y.encryption_y, encryption_message)
-                        .map_err(SpaceError::EncryptionGroup)?;
+            let (encryption_y, encryption_output_inner) =
+                EncryptionGroup::receive(y.encryption_y, &encryption_message)
+                    .map_err(SpaceError::EncryptionGroup)?;
 
-                encryption_output.extend(encryption_output_inner);
+            encryption_output.extend(encryption_output_inner);
 
-                y.encryption_y = encryption_y
-            }
-        };
-
-        if let Some(auth_message) = auth_message {
-            dependencies.push(auth_message.id());
+            y.encryption_y = encryption_y
         }
 
-        y.encryption_y.orderer.add_dependency(id, &dependencies);
-
-        // 4. Persist new space state.
-
+        // Persist new space state.
         {
             let mut manager = self.manager.inner.write().await;
+            y.encryption_y
+                .orderer
+                .add_dependency(space_message.id(), &space_dependencies);
             manager
                 .store
                 .set_space(&self.id, y)
@@ -381,7 +365,7 @@ where
     ///
     /// If it is a group being removed/added to the encryption context, then one encryption
     /// control message for each actor (individual) will be generated.
-    async fn process_space_membership_change(
+    async fn handle_secret_member_change(
         mut encryption_y: EncryptionGroupState<M>,
         auth_message: &AuthMessage<C>,
         current_members: Vec<ActorId>,
@@ -446,20 +430,19 @@ where
 
     async fn handle_application_message(
         &self,
-        encryption_message: &EncryptionMessage,
+        message: &M,
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let mut y = self.state().await?;
 
-        // 1. Process encryption message.
-
+        // Process encryption message.
+        let encryption_message = EncryptionMessage::from_application(message);
         let (encryption_y, encryption_output) = {
-            EncryptionGroup::receive(y.encryption_y, encryption_message)
+            EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?
         };
         y.encryption_y = encryption_y;
 
-        // 2. Persist new state.
-
+        // Persist new state.
         let mut manager = self.manager.inner.write().await;
         manager
             .store
@@ -521,9 +504,9 @@ where
                 // state.
                 let encryption_orderer_y = EncryptionOrdererState::new();
 
-                // Auth orderer inside of a space is never used as "process" is never called, this
-                // state is never changed. We expect messages in a space to arrive based the
-                // encryption ordering.
+                // Auth orderer inside of a space is never used, AuthGroup::prepare is never
+                // called and we expect messages in a space to arrive based on space
+                // dependencies being satisfied.
                 let auth_orderer_y = AuthOrdererState::new();
 
                 let encryption_y = EncryptionGroup::init(
