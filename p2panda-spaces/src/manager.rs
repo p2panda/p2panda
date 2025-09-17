@@ -118,7 +118,6 @@ where
         }
     }
 
-    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub async fn create_space(
         &self,
         id: ID,
@@ -131,7 +130,6 @@ where
         Ok((space, messages))
     }
 
-    #[allow(clippy::type_complexity, clippy::result_large_err)]
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],

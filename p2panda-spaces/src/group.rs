@@ -51,7 +51,6 @@ where
         }
     }
 
-    #[allow(clippy::result_large_err)]
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
@@ -85,7 +84,6 @@ where
         ))
     }
 
-    #[allow(clippy::result_large_err)]
     pub(crate) async fn add(
         &self,
         member: ActorId,
@@ -107,7 +105,6 @@ where
         Ok(message)
     }
 
-    #[allow(clippy::result_large_err)]
     pub(crate) async fn remove(
         &self,
         member: ActorId,
