@@ -1378,3 +1378,99 @@ async fn receive_auth_messages() {
     let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
 }
+
+#[tokio::test]
+async fn shared_auth_state() {
+    let alice = TestPeer::new(0);
+    let bob = <TestPeer>::new(1);
+    let claire = <TestPeer>::new(2);
+
+    // Manually register bobs key bundle.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice
+        .manager
+        .register_member(&claire.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+
+    let manager = alice.manager.clone();
+
+    // Create Space 0
+    // ~~~~~~~~~~~~
+
+    let space_id = 0;
+    let (space_0, messages) = manager
+        .create_space(space_id, &[(alice_id, Access::manage())])
+        .await
+        .unwrap();
+
+    assert_eq!(messages.len(), 2);
+
+    // Create Space 1
+    // ~~~~~~~~~~~~
+
+    let space_id = 1;
+    let (space_1, messages) = manager
+        .create_space(space_id, &[(alice_id, Access::manage())])
+        .await
+        .unwrap();
+    // There are four messages (one auth, and three space)
+    assert_eq!(messages.len(), 4);
+
+    // Create group
+    // ~~~~~~~~~~~~
+
+    let (group, messages) = manager
+        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::read())])
+        .await
+        .unwrap();
+
+    // There are three messages (one auth, and two space)
+    assert_eq!(messages.len(), 3);
+
+    // Add group to space 0
+    // ~~~~~~~~~~~~
+
+    let messages = space_0.add(group.id(), Access::read()).await.unwrap();
+    // There are three messages (one auth, and two space)
+    assert_eq!(messages.len(), 3);
+
+    // Add group to space 1
+    // ~~~~~~~~~~~~
+
+    let messages = space_1.add(group.id(), Access::read()).await.unwrap();
+    // There are three messages (one auth, and two space)
+    assert_eq!(messages.len(), 3);
+
+    // Add claire to the group
+    // ~~~~~~~~~~~~
+
+    let messages = group.add(claire_id, Access::read()).await.unwrap();
+    // There are three messages (one auth, and two space)
+    assert_eq!(messages.len(), 3);
+
+    // Both space 0 and space 1 should now include claire.
+    let expected_members = vec![
+        (alice_id, Access::manage()),
+        (bob_id, Access::read()),
+        (claire_id, Access::read()),
+    ];
+
+    let mut members = space_0.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(expected_members, members);
+
+    let mut members = space_1.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(expected_members, members);
+}
