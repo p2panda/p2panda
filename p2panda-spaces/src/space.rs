@@ -235,7 +235,8 @@ where
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
-                let auth_message = auth_message.expect("all space membership messages have auth message");
+                let auth_message =
+                    auth_message.expect("all space membership messages have auth message");
                 self.handle_membership_message(space_message, auth_message)
                     .await?
             }
@@ -311,7 +312,7 @@ where
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
             group_id,
-            space_dependencies, 
+            space_dependencies,
             auth_message_id,
             ..
         } = space_message.args()
