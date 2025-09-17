@@ -5,7 +5,7 @@ pub trait Layer<Input> {
 
     type Error;
 
-    fn process(self, input: Input) -> impl Future<Output = Result<Self::Output, Self::Error>>;
+    fn process(&self, input: Input) -> impl Future<Output = Result<Self::Output, Self::Error>>;
 }
 
 pub trait LayerExt<Input>: Layer<Input> + Sized {
@@ -39,7 +39,7 @@ where
 
     type Error = L1::Error;
 
-    async fn process(self, input: Input) -> Result<Self::Output, Self::Error> {
+    async fn process(&self, input: Input) -> Result<Self::Output, Self::Error> {
         let intermediate = self.first.process(input).await?;
         self.second.process(intermediate).await
     }
@@ -72,7 +72,7 @@ mod tests {
 
         type Error = Infallible;
 
-        async fn process(self, input: T) -> Result<Self::Output, Self::Error> {
+        async fn process(&self, input: T) -> Result<Self::Output, Self::Error> {
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -87,10 +87,11 @@ mod tests {
 
     // Coloring layer example.
 
-    #[allow(dead_code)]
+    #[derive(Clone)]
     enum Color {
         Red,
         Green,
+        #[allow(dead_code)]
         Blue,
     }
 
@@ -115,10 +116,10 @@ mod tests {
 
         type Error = Infallible;
 
-        async fn process(self, input: T) -> Result<Self::Output, Self::Error> {
+        async fn process(&self, input: T) -> Result<Self::Output, Self::Error> {
             Ok(WithColor {
                 item: input,
-                color: self.color,
+                color: self.color.clone(),
             })
         }
     }
