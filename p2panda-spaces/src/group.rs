@@ -13,7 +13,7 @@ use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::store::{AuthStore, MessageStore};
+use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
@@ -38,7 +38,7 @@ pub struct Group<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Group<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: AuthStore<C> + MessageStore<M>,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
     F: Forge<ID, M, C>,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
@@ -59,7 +59,7 @@ where
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, M), GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>), GroupError<ID, S, F, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -78,14 +78,22 @@ where
             },
         };
 
-        let message = Self::process_local_control(manager_ref.clone(), control_message).await?;
+        let auth_message =
+            Self::process_local_control(manager_ref.clone(), control_message).await?;
+        let Ok(space_messages) = manager_ref.sync_spaces(&auth_message).await else {
+            // @TODO: handle errors here while avoiding infinite error cycles....
+            panic!()
+        };
+
+        let mut messages = vec![auth_message];
+        messages.extend(space_messages);
 
         Ok((
             Self {
                 id: group_id,
                 manager: manager_ref,
             },
-            message,
+            messages,
         ))
     }
 
@@ -94,7 +102,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -106,13 +114,21 @@ where
             action: AuthGroupAction::Add { member, access },
         };
 
-        let message = Self::process_local_control(self.manager.clone(), control_message).await?;
+        let auth_message =
+            Self::process_local_control(self.manager.clone(), control_message).await?;
+        let Ok(space_messages) = self.manager.sync_spaces(&auth_message).await else {
+            // @TODO: handle errors here while avoiding infinite error cycles....
+            panic!()
+        };
 
-        Ok(message)
+        let mut messages = vec![auth_message];
+        messages.extend(space_messages);
+
+        Ok(messages)
     }
 
     /// Remove member from an existing group.
-    pub async fn remove(&self, member: ActorId) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
+    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -124,9 +140,17 @@ where
             action: AuthGroupAction::Remove { member },
         };
 
-        let message = Self::process_local_control(self.manager.clone(), control_message).await?;
+        let auth_message =
+            Self::process_local_control(self.manager.clone(), control_message).await?;
+        let Ok(space_messages) = self.manager.sync_spaces(&auth_message).await else {
+            // @TODO: handle errors here while avoiding infinite error cycles....
+            panic!()
+        };
 
-        Ok(message)
+        let mut messages = vec![auth_message];
+        messages.extend(space_messages);
+
+        Ok(messages)
     }
 
     /// Process a remote message.

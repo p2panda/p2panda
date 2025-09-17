@@ -88,12 +88,11 @@ where
         }
 
         // Create new group for the space.
-        let (group, auth_message) = Group::create(manager_ref.clone(), initial_members)
+        let (group, mut messages) = Group::create(manager_ref.clone(), initial_members)
             .await
             .map_err(SpaceError::Group)?;
 
         // Instantiate new space state from existing global auth state.
-        let mut messages = vec![];
         let y = Self::state_from_auth(
             manager_ref.clone(),
             auth_y,
@@ -104,11 +103,12 @@ where
         .await?;
 
         // Apply the "create" auth message to the space state.
+        //
+        // We know the first message is the auth message.
         let space_message =
-            Self::process_auth_message(manager_ref.clone(), y, &auth_message).await?;
+            Self::process_auth_message(manager_ref.clone(), y, &messages[0]).await?;
 
-        // Push auth message to the front of the messages vec.
-        messages.insert(0, auth_message);
+        // Push the message for the newly created space to the messages vec.
         messages.push(space_message);
 
         Ok((
@@ -130,10 +130,7 @@ where
 
         // If the space exists we can assume the associated group exists.
         let group = Group::new(self.manager.clone(), y.group_id);
-        let auth_message = group.add(member, access).await.map_err(SpaceError::Group)?;
-        let space_message =
-            Self::process_auth_message(self.manager.clone(), y, &auth_message).await?;
-        Ok(vec![auth_message, space_message])
+        group.add(member, access).await.map_err(SpaceError::Group)
     }
 
     /// Remove a member from the space.
@@ -142,10 +139,7 @@ where
 
         // If the space exists we can assume the associated group exists.
         let group = Group::new(self.manager.clone(), y.group_id);
-        let auth_message = group.remove(member).await.map_err(SpaceError::Group)?;
-        let space_message =
-            Self::process_auth_message(self.manager.clone(), y, &auth_message).await?;
-        Ok(vec![auth_message, space_message])
+        group.remove(member).await.map_err(SpaceError::Group)
     }
 
     /// Wrap an already forged auth message in a space message and apply any required group
@@ -156,6 +150,10 @@ where
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
     ) -> Result<M, SpaceError<ID, S, F, M, C, RS>> {
+        if !y.processed_auth.insert(auth_message.id()) {
+            panic!("only un-processed auth messages expected")
+        }
+
         // Get current space members.
         let current_members = secret_members(y.auth_y.members(y.group_id));
 
@@ -464,8 +462,37 @@ where
         Ok(encryption_output_to_events(self.id(), encryption_output))
     }
 
+    /// Sync a shared auth state change with this space.
+    pub(crate) async fn sync_auth(
+        &self,
+        auth_message: &M,
+    ) -> Result<Option<M>, SpaceError<ID, S, F, M, C, RS>> {
+        // If this space already processed this auth message then skip it.
+        let y = self.state().await?;
+        if y.processed_auth.contains(&auth_message.id()) {
+            return Ok(None);
+        }
+
+        let my_id = self.manager.id().await;
+        let is_reader = self
+            .members()
+            .await?
+            .iter()
+            .any(|(member, access)| *member == my_id && access > &Access::pull());
+
+        if is_reader {
+            let space_message =
+                Space::process_auth_message(self.manager.clone(), y, auth_message).await?;
+            return Ok(Some(space_message));
+        }
+
+        Ok(None)
+    }
+
     /// Get the space state.
-    async fn state(&self) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
+    pub(crate) async fn state(
+        &self,
+    ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let space_y = manager
             .store
@@ -632,6 +659,7 @@ where
     // persist. We can make the fields public in `p2panda-encryption` and extract only the
     // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
+    pub processed_auth: HashSet<OperationId>,
 }
 
 impl<ID, M, C> SpaceState<ID, M, C>
@@ -650,6 +678,7 @@ where
             group_id,
             auth_y,
             encryption_y,
+            processed_auth: HashSet::default(),
         }
     }
 }

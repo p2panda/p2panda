@@ -1019,11 +1019,14 @@ async fn space_from_existing_auth_state() {
     // Create Group with bob and claire as managers.
     // ~~~~~~~~~~~~
 
-    let (group, message_01) = alice_manager
+    let (group, messages) = alice_manager
         .create_group(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
         .await
         .unwrap();
     let member_group_id = group.id();
+
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
 
     // Create Space with group as member
     // ~~~~~~~~~~~~
@@ -1147,10 +1150,13 @@ async fn create_group() {
     // Create Group
     // ~~~~~~~~~~~~
 
-    let (group, message_01) = manager
+    let (group, messages) = manager
         .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
+
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
 
     let mut members = group.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
@@ -1205,12 +1211,17 @@ async fn add_member_to_group() {
     // Create Group
     // ~~~~~~~~~~~~
 
-    let (group, message_01) = manager
+    let (group, messages) = manager
         .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
 
-    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
+
+    let messages = group.add(claire_id, Access::read()).await.unwrap();
+    assert_eq!(messages.len(), 1);
+    let message_02 = messages[0].clone();
 
     let mut members = group.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
@@ -1265,15 +1276,19 @@ async fn remove_member_from_group() {
     // Create Group
     // ~~~~~~~~~~~~
 
-    let (group, message_01) = manager
+    let (group, messages) = manager
         .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
 
     // Remove bob from group
     // ~~~~~~~~~~~~
 
-    let message_02 = group.remove(bob_id).await.unwrap();
+    let messages = group.remove(bob_id).await.unwrap();
+    assert_eq!(messages.len(), 1);
+    let message_02 = messages[0].clone();
 
     let members = group.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
@@ -1323,16 +1338,20 @@ async fn receive_auth_messages() {
     // Create Group
     // ~~~~~~~~~~~~
 
-    let (group, message_01) = alice_manager
+    let (group, messages) = alice_manager
         .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
     let group_id = group.id();
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
 
     // Add claire
     // ~~~~~~~~~~~~
 
-    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+    let messages = group.add(claire_id, Access::read()).await.unwrap();
+    assert_eq!(messages.len(), 1);
+    let message_02 = messages[0].clone();
     drop(group);
 
     // Bob receives message 01 & 02

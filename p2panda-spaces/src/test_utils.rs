@@ -66,6 +66,10 @@ where
         Ok(self.spaces.contains_key(id))
     }
 
+    async fn spaces(&self) -> Result<Vec<ID>, Self::Error> {
+        Ok(self.spaces.keys().cloned().collect())
+    }
+
     async fn set_space(&mut self, id: &ID, y: SpaceState<ID, M, C>) -> Result<(), Self::Error> {
         self.spaces.insert(*id, y);
         Ok(())

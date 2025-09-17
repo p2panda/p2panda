@@ -144,12 +144,12 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<ID, S, F, M, C, RS>, M), ManagerError<ID, S, F, M, C, RS>> {
-        let (group, message) = Group::create(self.clone(), initial_members.to_owned())
+    ) -> Result<(Group<ID, S, F, M, C, RS>, Vec<M>), ManagerError<ID, S, F, M, C, RS>> {
+        let (group, messages) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
-        Ok((group, message))
+        Ok((group, messages))
     }
 
     // @TODO: Make it work without async
@@ -219,14 +219,12 @@ where
                 todo!()
             }
             SpacesArgs::Auth { .. } => {
-                let messages = Group::process(self.clone(), message)
+                Group::process(self.clone(), message)
                     .await
-                    .map_err(ManagerError::Group)?;
+                    .map_err(ManagerError::Group)?
 
                 // @TODO: check that this message was applied to all spaces and apply it ourselves
                 // if not.
-
-                messages
             }
             // Received control message related to a group or space.
             SpacesArgs::SpaceMembership {
@@ -295,6 +293,38 @@ where
         };
 
         Ok(events)
+    }
+
+    /// Sync all spaces with a shared auth state change.
+    pub(crate) async fn sync_spaces(
+        &self,
+        auth_message: &M,
+    ) -> Result<Vec<M>, ManagerError<ID, S, F, M, C, RS>> {
+        let spaces = {
+            let manager = self.inner.read().await;
+            manager
+                .store
+                .spaces()
+                .await
+                .map_err(ManagerError::SpaceStore)?
+        };
+
+        let mut messages = vec![];
+        for id in spaces {
+            let Some(space) = self.space(id).await? else {
+                panic!("expect space to exist");
+            };
+            let Some(message) = space
+                .sync_auth(auth_message)
+                .await
+                .map_err(ManagerError::Space)?
+            else {
+                continue;
+            };
+            messages.push(message);
+        }
+
+        Ok(messages)
     }
 }
 

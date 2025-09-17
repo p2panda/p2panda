@@ -25,6 +25,8 @@ where
 
     fn has_space(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
+    fn spaces(&self) -> impl Future<Output = Result<Vec<ID>, Self::Error>>;
+
     fn set_space(
         &mut self,
         id: &ID,
