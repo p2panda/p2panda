@@ -7,7 +7,7 @@ use futures_core::Stream;
 use p2panda_core::Hash;
 use thiserror::Error;
 
-use crate::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
+use crate::connector::{Connector, StreamEvent, Subscription, SubscriptionId};
 use crate::controller::{Controller, ControllerError};
 use crate::{Checkpoint, Subject};
 
@@ -17,26 +17,26 @@ enum ConsumerState {
     Unsubscribed,
 }
 
-pub struct Consumer<B>
+pub struct Consumer<C>
 where
-    B: Backend,
+    C: Connector,
 {
     subject: Subject,
     subscription_id: SubscriptionId,
-    controller: Controller<B>,
-    event_stream: <B::Subscription as Subscription>::EventStream,
+    controller: Controller<C>,
+    event_stream: <C::Subscription as Subscription>::EventStream,
     state: ConsumerState,
 }
 
-impl<B> Consumer<B>
+impl<C> Consumer<C>
 where
-    B: Backend,
+    C: Connector,
 {
     pub(crate) fn new(
         subject: Subject,
         subscription_id: SubscriptionId,
-        event_stream: <B::Subscription as Subscription>::EventStream,
-        controller: Controller<B>,
+        event_stream: <C::Subscription as Subscription>::EventStream,
+        controller: Controller<C>,
     ) -> Self {
         Self {
             subject,
@@ -47,7 +47,7 @@ where
         }
     }
 
-    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), ConsumerError<B>> {
+    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), ConsumerError<C>> {
         self.controller
             .commit(operation_id)
             .await
@@ -55,7 +55,7 @@ where
         Ok(())
     }
 
-    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), ConsumerError<B>> {
+    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), ConsumerError<C>> {
         self.controller
             .replay(self.subscription_id, from)
             .await
@@ -63,7 +63,7 @@ where
         Ok(())
     }
 
-    pub async fn unsubscribe(&mut self) -> Result<(), ConsumerError<B>> {
+    pub async fn unsubscribe(&mut self) -> Result<(), ConsumerError<C>> {
         match self.state {
             ConsumerState::Active => {
                 self.state = ConsumerState::Unsubscribing;
@@ -83,11 +83,11 @@ where
     }
 }
 
-impl<B> Stream for Consumer<B>
+impl<C> Stream for Consumer<C>
 where
-    B: Backend,
+    C: Connector,
 {
-    type Item = Result<StreamEvent, ConsumerError<B>>;
+    type Item = Result<StreamEvent, ConsumerError<C>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if matches!(self.state, ConsumerState::Unsubscribed) {
@@ -115,13 +115,13 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum ConsumerError<B>
+pub enum ConsumerError<C>
 where
-    B: Backend,
+    C: Connector,
 {
     #[error(transparent)]
-    Controller(#[from] ControllerError<B>),
+    Controller(#[from] ControllerError<C>),
 
     #[error("{0}")]
-    Subscription(<B::Subscription as Subscription>::Error),
+    Subscription(<C::Subscription as Subscription>::Error),
 }

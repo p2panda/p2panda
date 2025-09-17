@@ -7,29 +7,29 @@ use p2panda_core::Hash;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::backend::{Backend, Subscription, SubscriptionId};
+use crate::connector::{Connector, Subscription, SubscriptionId};
 use crate::controller::consumer::Consumer;
 use crate::{Checkpoint, Subject};
 
-pub struct Controller<B>
+pub struct Controller<C>
 where
-    B: Backend,
+    C: Connector,
 {
-    inner: Arc<Inner<B>>,
+    inner: Arc<Inner<C>>,
 }
 
-struct Inner<B>
+struct Inner<C>
 where
-    B: Backend,
+    C: Connector,
 {
-    backend: Arc<B>,
+    connector: Arc<C>,
     checkpoints: RwLock<HashSet<Hash>>,
-    subscriptions: RwLock<HashMap<SubscriptionId, B::Subscription>>,
+    subscriptions: RwLock<HashMap<SubscriptionId, C::Subscription>>,
 }
 
-impl<B> Clone for Controller<B>
+impl<C> Clone for Controller<C>
 where
-    B: Backend,
+    C: Connector,
 {
     fn clone(&self) -> Self {
         Self {
@@ -38,13 +38,13 @@ where
     }
 }
 
-impl<B> Controller<B>
+impl<C> Controller<C>
 where
-    B: Backend,
+    C: Connector,
 {
-    pub fn new(backend: B) -> Self {
+    pub fn new(connector: C) -> Self {
         let inner = Inner {
-            backend: Arc::new(backend),
+            connector: Arc::new(connector),
             checkpoints: RwLock::new(HashSet::new()),
             subscriptions: RwLock::new(HashMap::new()),
         };
@@ -58,15 +58,15 @@ where
         &self,
         subject: Subject,
         live: bool,
-    ) -> Result<Consumer<B>, ControllerError<B>> {
+    ) -> Result<Consumer<C>, ControllerError<C>> {
         let checkpoint = self.get_or_create_checkpoint(&subject).await;
 
         let subscription = self
             .inner
-            .backend
+            .connector
             .subscribe(subject.clone(), checkpoint, live)
             .await
-            .map_err(ControllerError::Backend)?;
+            .map_err(ControllerError::Connector)?;
 
         let subscription_id = subscription.id();
         let event_stream = subscription.events();
@@ -89,20 +89,20 @@ where
         subject: Subject,
         header: Vec<u8>,
         body: Vec<u8>,
-    ) -> Result<Hash, ControllerError<B>> {
+    ) -> Result<Hash, ControllerError<C>> {
         // @TODO: Buffering for to-be-published messages?
         self.inner
-            .backend
+            .connector
             .publish(subject, header, body)
             .await
-            .map_err(ControllerError::Backend)
+            .map_err(ControllerError::Connector)
     }
 
     pub async fn replay(
         &self,
         subscription_id: SubscriptionId,
         checkpoint: Checkpoint,
-    ) -> Result<(), ControllerError<B>> {
+    ) -> Result<(), ControllerError<C>> {
         let mut subscriptions = self.inner.subscriptions.write().await;
 
         if let Some(subscription) = subscriptions.get_mut(&subscription_id) {
@@ -118,7 +118,7 @@ where
     pub async fn unsubscribe(
         &self,
         subscription_id: SubscriptionId,
-    ) -> Result<(), ControllerError<B>> {
+    ) -> Result<(), ControllerError<C>> {
         let mut subscriptions = self.inner.subscriptions.write().await;
 
         if let Some(subscription) = subscriptions.remove(&subscription_id) {
@@ -131,7 +131,7 @@ where
         Ok(())
     }
 
-    pub async fn commit(&self, operation_id: Hash) -> Result<(), ControllerError<B>> {
+    pub async fn commit(&self, operation_id: Hash) -> Result<(), ControllerError<C>> {
         let mut checkpoints = self.inner.checkpoints.write().await;
         checkpoints.insert(operation_id);
         Ok(())
@@ -144,15 +144,15 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum ControllerError<B>
+pub enum ControllerError<C>
 where
-    B: Backend,
+    C: Connector,
 {
     #[error("{0}")]
-    Backend(<B as Backend>::Error),
+    Connector(<C as Connector>::Error),
 
     #[error("{0}")]
-    Subscription(<B::Subscription as Subscription>::Error),
+    Subscription(<C::Subscription as Subscription>::Error),
 }
 
 #[cfg(test)]
@@ -161,23 +161,23 @@ mod tests {
     use p2panda_core::Hash;
 
     use crate::Subject;
-    use crate::backend::StreamEvent;
+    use crate::connector::StreamEvent;
     use crate::controller::consumer::ConsumerError;
-    use crate::test_utils::MockBackend;
+    use crate::test_utils::MockConnector;
 
     use super::Controller;
 
     #[tokio::test]
     async fn subscribe() {
-        let (backend, backend_handle) = MockBackend::new();
-        let controller = Controller::new(backend);
+        let (connector, handle) = MockConnector::new();
+        let controller = Controller::new(connector);
 
         let subject = Subject::from_hash(Hash::new(b"test"));
 
         let mut consumer = controller.subscribe(subject, false).await.unwrap();
         let subscription_id = consumer.subscription_id();
 
-        backend_handle
+        handle
             .send_to_subscription(
                 subscription_id,
                 StreamEvent::Operation {
@@ -189,7 +189,7 @@ mod tests {
             .await
             .unwrap();
 
-        backend_handle
+        handle
             .send_to_subscription(
                 subscription_id,
                 StreamEvent::Operation {
@@ -203,9 +203,9 @@ mod tests {
 
         consumer.unsubscribe().await.unwrap();
 
-        // Send more events after unsubscribe - these should not be received because backend will
+        // Send more events after unsubscribe - these should not be received because connector will
         // only send to active subscriptions.
-        backend_handle
+        handle
             .send_to_subscription(
                 subscription_id,
                 StreamEvent::Operation {
@@ -218,7 +218,7 @@ mod tests {
             .expect_err("should fail because subscription is no longer active");
 
         let all_events: Vec<StreamEvent> = consumer
-            .collect::<Vec<Result<StreamEvent, ConsumerError<MockBackend>>>>()
+            .collect::<Vec<Result<StreamEvent, ConsumerError<MockConnector>>>>()
             .await
             .into_iter()
             .map(|event| event.expect("no error"))

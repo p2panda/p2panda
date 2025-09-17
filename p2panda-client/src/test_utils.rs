@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Test utilities for mocking backend implementations.
+//! Test utilities for mocking connector implementations.
 //!
-//! This module provides mock implementations that can be used across tests to simulate backend
+//! This module provides mock implementations that can be used across tests to simulate connector
 //! behavior without requiring a real backend connection.
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -16,7 +16,7 @@ use p2panda_core::Hash;
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::backend::{Backend, StreamEvent, Subscription, SubscriptionId};
+use crate::connector::{Connector, StreamEvent, Subscription, SubscriptionId};
 use crate::{Checkpoint, Subject};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,12 +34,12 @@ struct SubscriptionHandle {
 }
 
 #[derive(Debug)]
-struct MockBackendState {
+struct MockConnectorState {
     next_subscription_id: SubscriptionId,
     subscriptions: HashMap<SubscriptionId, SubscriptionHandle>,
 }
 
-impl MockBackendState {
+impl MockConnectorState {
     fn new() -> Self {
         Self {
             next_subscription_id: 1,
@@ -82,12 +82,15 @@ impl Unpin for MockEventStream {}
 #[derive(Debug)]
 pub struct MockSubscription {
     id: SubscriptionId,
-    backend_state: Arc<Mutex<MockBackendState>>,
+    connector_state: Arc<Mutex<MockConnectorState>>,
 }
 
 impl MockSubscription {
-    fn new(id: SubscriptionId, backend_state: Arc<Mutex<MockBackendState>>) -> Self {
-        Self { id, backend_state }
+    fn new(id: SubscriptionId, connector_state: Arc<Mutex<MockConnectorState>>) -> Self {
+        Self {
+            id,
+            connector_state,
+        }
     }
 }
 
@@ -102,7 +105,7 @@ impl Subscription for MockSubscription {
 
     fn events(&self) -> Self::EventStream {
         // @TODO: Do we need to make the trait signature async?
-        let state = self.backend_state.try_lock().unwrap();
+        let state = self.connector_state.try_lock().unwrap();
 
         if let Some(handle) = state.subscriptions.get(&self.id) {
             let rx = handle.tx.subscribe();
@@ -125,7 +128,7 @@ impl Subscription for MockSubscription {
     }
 
     async fn unsubscribe(self) -> Result<(), Self::Error> {
-        let mut state = self.backend_state.lock().await;
+        let mut state = self.connector_state.lock().await;
 
         if let Some(handle) = state.subscriptions.get_mut(&self.id) {
             match handle.state {
@@ -144,32 +147,32 @@ impl Subscription for MockSubscription {
 }
 
 #[derive(Debug)]
-pub struct MockBackend {
-    state: Arc<Mutex<MockBackendState>>,
+pub struct MockConnector {
+    state: Arc<Mutex<MockConnectorState>>,
 }
 
-impl MockBackend {
-    pub fn new() -> (Self, MockBackendHandle) {
-        let state = Arc::new(Mutex::new(MockBackendState::new()));
+impl MockConnector {
+    pub fn new() -> (Self, MockConnectorHandle) {
+        let state = Arc::new(Mutex::new(MockConnectorState::new()));
 
-        let backend = Self {
+        let connector = Self {
             state: state.clone(),
         };
 
-        let handle = MockBackendHandle {
+        let handle = MockConnectorHandle {
             state: state.clone(),
         };
 
-        (backend, handle)
+        (connector, handle)
     }
 }
 
 #[derive(Debug)]
-pub struct MockBackendHandle {
-    state: Arc<Mutex<MockBackendState>>,
+pub struct MockConnectorHandle {
+    state: Arc<Mutex<MockConnectorState>>,
 }
 
-impl MockBackendHandle {
+impl MockConnectorHandle {
     /// Send an event to a specific subscription.
     pub async fn send_to_subscription(
         &self,
@@ -247,7 +250,7 @@ impl MockBackendHandle {
     }
 }
 
-impl Backend for MockBackend {
+impl Connector for MockConnector {
     type Error = Infallible;
 
     type Subscription = MockSubscription;
