@@ -10,26 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Checkpoint, Subject};
 
-pub type SubscriptionId = u64;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StreamEvent {
-    Subscribed {
-        subscription_id: SubscriptionId,
-    },
-    Operation {
-        id: Hash,
-        header: Vec<u8>,
-        body: Option<Vec<u8>>,
-    },
-    Unsubscribed,
-}
-
 // @TODO: Can we use this as a general API for node-node ("sync") and node-client communication?
 // Then we might want to move this definition into p2panda-sync?
-//
-// @TODO: "Backend" is a weirdly "centralized" term, is there a better one?
-pub trait Backend: Send + Sync + 'static {
+pub trait Connector: Send + Sync + 'static {
     type Error: Error;
 
     // NOTE(adz): The Debug trait bound is strictly speaking not necessary. Because of the use of
@@ -66,4 +49,19 @@ pub trait Subscription: Send + Sync {
     fn replay(&mut self, from: Checkpoint) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     fn unsubscribe(self) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
+pub type SubscriptionId = u64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StreamEvent {
+    Subscribed {
+        subscription_id: SubscriptionId,
+    },
+    Operation {
+        id: Hash,
+        header: Vec<u8>,
+        body: Option<Vec<u8>>,
+    },
+    Unsubscribed,
 }

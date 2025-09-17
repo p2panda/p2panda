@@ -9,26 +9,26 @@ use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use thiserror::Error;
 
-use crate::backend::{Backend, StreamEvent};
 use crate::client::message::Message;
-use crate::controller::{Consumer, Controller, ControllerError};
+use crate::connector::{Connector, StreamEvent};
+use crate::controller::{Consumer, ConsumerError, Controller, ControllerError};
 use crate::{Checkpoint, Subject};
 
-pub struct StreamHandle<M, B>
+pub struct StreamHandle<M, C>
 where
-    B: Backend,
+    C: Connector,
 {
     subject: Subject,
-    controller: Controller<B>,
+    controller: Controller<C>,
     _marker: PhantomData<M>,
 }
 
-impl<M, B> StreamHandle<M, B>
+impl<M, C> StreamHandle<M, C>
 where
     M: Message,
-    B: Backend,
+    C: Connector,
 {
-    pub(crate) fn new(subject: Subject, controller: Controller<B>) -> Self {
+    pub(crate) fn new(subject: Subject, controller: Controller<C>) -> Self {
         Self {
             subject,
             controller,
@@ -36,7 +36,7 @@ where
         }
     }
 
-    pub async fn publish(&self, message: M) -> Result<Hash, StreamError<B>> {
+    pub async fn publish(&self, message: M) -> Result<Hash, StreamError<C>> {
         // @TODO: Use operation store here to properly forge a header.
         let header_bytes = vec![];
 
@@ -49,19 +49,17 @@ where
             .map_err(StreamError::Controller)
     }
 
-    pub async fn subscribe(&self) -> Result<StreamSubscription<M, B>, StreamError<B>> {
+    pub async fn subscribe(&self) -> Result<StreamSubscription<M, C>, StreamError<C>> {
         let live = true;
-
         let consumer = self
             .controller
             .subscribe(self.subject.clone(), live)
             .await
             .map_err(StreamError::Controller)?;
-
         Ok(StreamSubscription::new(consumer))
     }
 
-    pub async fn commit(&self, operation_id: Hash) -> Result<(), StreamError<B>> {
+    pub async fn commit(&self, operation_id: Hash) -> Result<(), StreamError<C>> {
         self.controller
             .commit(operation_id)
             .await
@@ -69,54 +67,48 @@ where
     }
 }
 
-pub struct StreamSubscription<M, B>
+pub struct StreamSubscription<M, C>
 where
-    B: Backend,
+    C: Connector,
 {
-    consumer: Consumer<B>,
+    consumer: Consumer<C>,
     _marker: PhantomData<M>,
 }
 
-impl<M, B> StreamSubscription<M, B>
+impl<M, C> StreamSubscription<M, C>
 where
     M: Message,
-    B: Backend,
+    C: Connector,
 {
-    fn new(consumer: Consumer<B>) -> Self {
+    fn new(consumer: Consumer<C>) -> Self {
         Self {
             consumer,
             _marker: PhantomData,
         }
     }
 
-    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), StreamError<B>> {
-        self.consumer
-            .commit(operation_id)
-            .await
-            .map_err(StreamError::Consumer)
+    pub async fn commit(&mut self, operation_id: Hash) -> Result<(), StreamError<C>> {
+        self.consumer.commit(operation_id).await?;
+        Ok(())
     }
 
-    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), StreamError<B>> {
-        self.consumer
-            .replay(from)
-            .await
-            .map_err(StreamError::Consumer)
+    pub async fn replay(&mut self, from: Checkpoint) -> Result<(), StreamError<C>> {
+        self.consumer.replay(from).await?;
+        Ok(())
     }
 
-    pub async fn unsubscribe(&mut self) -> Result<(), StreamError<B>> {
-        self.consumer
-            .unsubscribe()
-            .await
-            .map_err(StreamError::Consumer)
+    pub async fn unsubscribe(&mut self) -> Result<(), StreamError<C>> {
+        self.consumer.unsubscribe().await?;
+        Ok(())
     }
 }
 
-impl<M, B> Stream for StreamSubscription<M, B>
+impl<M, C> Stream for StreamSubscription<M, C>
 where
     M: Message + Unpin,
-    B: Backend,
+    C: Connector,
 {
-    type Item = Result<StreamEvent, StreamError<B>>;
+    type Item = Result<StreamEvent, StreamError<C>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -127,16 +119,16 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum StreamError<B>
+pub enum StreamError<C>
 where
-    B: Backend,
+    C: Connector,
 {
     #[error(transparent)]
     Encode(#[from] EncodeError),
 
     #[error(transparent)]
-    Controller(#[from] ControllerError<B>),
+    Controller(#[from] ControllerError<C>),
 
     #[error(transparent)]
-    Consumer(crate::controller::ConsumerError<B>),
+    Consumer(#[from] ConsumerError<C>),
 }
