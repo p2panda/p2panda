@@ -45,7 +45,7 @@ pub trait LayerExt<T>: Layer<T> {
 impl<L, T> LayerExt<T> for L where L: Layer<T> {}
 
 /// Extension trait for `Stream` that provides convenient methods for processing with layers.
-pub trait StreamExt<T>: Stream<Item = T> + Sized {
+pub trait StreamChainExt<T>: Stream<Item = T> + Sized {
     /// Processes this stream through the provided layer.
     fn process_with<L>(self, layer: L) -> ChainedLayerStream<L, Self, T>
     where
@@ -55,7 +55,7 @@ pub trait StreamExt<T>: Stream<Item = T> + Sized {
     }
 }
 
-impl<S, T> StreamExt<T> for S where S: Stream<Item = T> {}
+impl<S, T> StreamChainExt<T> for S where S: Stream<Item = T> {}
 
 /// Stream for the [`into_stream`](LayerExt::into_stream) method.
 #[pin_project]
@@ -90,6 +90,24 @@ where
     /// Consume this stream and return the underlying layer.
     pub fn into_inner(self) -> L {
         self.layer
+    }
+}
+
+impl<L, T> Stream for LayerStream<L, T>
+where
+    L: Layer<T>,
+{
+    type Item = Result<L::Output, L::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        let mut next_fut = this.layer.next();
+
+        match ready!(next_fut.as_mut().poll(cx)) {
+            Ok(Some(output)) => Poll::Ready(Some(Ok(output))),
+            Ok(None) => Poll::Ready(None),
+            Err(error) => Poll::Ready(Some(Err(error))),
+        }
     }
 }
 
@@ -289,5 +307,284 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::Infallible;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use futures_test::task::noop_context;
+    use futures_util::{FutureExt, StreamExt, stream};
+    use tokio::{pin, time};
+
+    use super::*;
+
+    /// Layer turning all strings into UPPERCASE.
+    #[derive(Default)]
+    struct UppercaseLayer {
+        outputs: Arc<Mutex<VecDeque<String>>>,
+    }
+
+    impl Layer<String> for UppercaseLayer {
+        type Output = String;
+
+        type Error = Infallible;
+
+        fn process(&self, input: String) -> BoxFuture<'_, Result<(), Self::Error>> {
+            Box::pin(async move {
+                self.outputs.lock().unwrap().push_back(input.to_uppercase());
+                Ok(())
+            })
+        }
+
+        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
+            Box::pin(async { Ok(self.outputs.lock().unwrap().pop_front()) })
+        }
+    }
+
+    /// Layer adding a counter to any item.
+    #[derive(Default)]
+    struct CounterLayer<T> {
+        outputs: Arc<tokio::sync::Mutex<VecDeque<WithCounter<T>>>>,
+        counter: AtomicU64,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct WithCounter<T> {
+        item: T,
+        counter: u64,
+    }
+
+    impl<T> Layer<T> for CounterLayer<T>
+    where
+        T: Send + 'static,
+    {
+        type Output = WithCounter<T>;
+
+        type Error = String;
+
+        fn process(&self, item: T) -> BoxFuture<'_, Result<(), Self::Error>> {
+            Box::pin(async {
+                let counter = self
+                    .counter
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                self.outputs
+                    .lock()
+                    .await
+                    .push_back(WithCounter { item, counter });
+
+                Ok(())
+            })
+        }
+
+        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
+            Box::pin(async { Ok(self.outputs.lock().await.pop_front()) })
+        }
+    }
+
+    /// Test layer simulating "expensive" async operations when calling "next" or "process".
+    #[derive(Clone)]
+    struct SlowLayer {
+        process_delay: Duration,
+        next_delay: Duration,
+        processed_items: Arc<Mutex<Vec<usize>>>,
+        output_queue: Arc<Mutex<VecDeque<String>>>,
+        should_error: bool,
+    }
+
+    impl SlowLayer {
+        fn new() -> Self {
+            Self {
+                process_delay: Duration::from_millis(0),
+                next_delay: Duration::from_millis(0),
+                processed_items: Arc::new(Mutex::new(Vec::new())),
+                output_queue: Arc::new(Mutex::new(VecDeque::new())),
+                should_error: false,
+            }
+        }
+
+        fn with_process_delay(mut self, process_delay: Duration) -> Self {
+            self.process_delay = process_delay;
+            self
+        }
+
+        fn with_next_delay(mut self, next_delay: Duration) -> Self {
+            self.next_delay = next_delay;
+            self
+        }
+
+        fn with_error_mode(mut self) -> Self {
+            self.should_error = true;
+            self
+        }
+    }
+
+    impl Layer<usize> for SlowLayer {
+        type Output = String;
+
+        type Error = String;
+
+        fn process(&self, input: usize) -> BoxFuture<'_, Result<(), Self::Error>> {
+            Box::pin(async move {
+                time::sleep(self.process_delay).await;
+
+                if self.should_error {
+                    return Err(format!("error in process method: {}", input));
+                }
+
+                self.processed_items.lock().unwrap().push(input);
+                self.output_queue
+                    .lock()
+                    .unwrap()
+                    .push_back(format!("processed_{}", input));
+
+                Ok(())
+            })
+        }
+
+        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
+            Box::pin(async move {
+                time::sleep(self.next_delay).await;
+
+                if self.should_error {
+                    return Err("error in next method".to_string());
+                }
+
+                Ok(self.output_queue.lock().unwrap().pop_front())
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn process_and_next_semantics() {
+        // 1. Regular Layer implementations do not follow the Stream semantics and terminate
+        //    operation when there's no input anymore. We can process and call next as soon as
+        //    there is work being done.
+        let uppercase = UppercaseLayer::default();
+        uppercase.process("Hello".to_string()).await.unwrap();
+        assert_eq!(uppercase.next().await, Ok(Some("HELLO".to_string())));
+        assert_eq!(uppercase.next().await, Ok(None)); // No work being done right now
+
+        // Continue doing new work ..
+        uppercase.process("World".to_string()).await.unwrap();
+        assert_eq!(uppercase.next().await, Ok(Some("WORLD".to_string())));
+        assert_eq!(uppercase.next().await, Ok(None)); // No work again
+
+        // Poll will return a value, we haven't terminated anything.
+        let mut cx = noop_context();
+        assert_eq!(uppercase.next().poll_unpin(&mut cx), Poll::Ready(Ok(None)));
+
+        // 2. While when turning it into a Stream we follow it's semantics: When the input stream
+        //    seizes (by returning Poll::Ready(None)), all chained streams will forward that
+        //    termination.
+        let mut uppercase_stream =
+            stream::iter(vec!["Good".to_string(), "Bye!".to_string()]).process_with(uppercase);
+        assert_eq!(uppercase_stream.next().await, Some(Ok("GOOD".to_string())));
+        assert_eq!(uppercase_stream.next().await, Some(Ok("BYE!".to_string())));
+
+        // Input stream seized, the stream layer terminated.
+        assert_eq!(uppercase_stream.next().await, None);
+
+        // Polling will return Poll::Ready(None), which means stream termination.
+        let mut cx = noop_context();
+        assert_eq!(uppercase_stream.poll_next_unpin(&mut cx), Poll::Ready(None));
+    }
+
+    #[tokio::test]
+    async fn chaining_layers() {
+        let uppercase = UppercaseLayer::default();
+        let counter = CounterLayer::<String>::default();
+
+        let input_stream = stream::iter(vec![
+            "im".to_string(),
+            "very".to_string(),
+            "silent".to_string(),
+        ]);
+
+        let stream = input_stream
+            .process_with(uppercase)
+            // @TODO: A nice out-of-the-box error handling solution could be handy here.
+            .filter_map(|result| async {
+                match result {
+                    Ok(item) => Some(item),
+                    Err(_) => panic!("should not fail"),
+                }
+            })
+            .process_with(counter);
+
+        pin!(stream);
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            Ok(WithCounter {
+                item: "IM".to_string(),
+                counter: 0,
+            }),
+        );
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            Ok(WithCounter {
+                item: "VERY".to_string(),
+                counter: 1,
+            }),
+        );
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            Ok(WithCounter {
+                item: "SILENT".to_string(),
+                counter: 2,
+            }),
+        );
+    }
+
+    #[tokio::test]
+    async fn buffered_layer_polling() {
+        // Have a "slow" processing layer which will not return a result instantly (first poll will
+        // not yield Poll::Ready(T).
+        let slow_layer = SlowLayer::new()
+            .with_process_delay(Duration::from_millis(100))
+            .with_next_delay(Duration::from_millis(50));
+
+        let mut cx = noop_context();
+        assert_eq!(slow_layer.process(1).as_mut().poll(&mut cx), Poll::Pending);
+        assert_eq!(
+            slow_layer.clone().into_stream().poll_next_unpin(&mut cx),
+            Poll::Pending
+        );
+
+        // We need to buffer the result, either through implementing it as part of the layer or by
+        // wrapping it with BufferedLayer, otherwise we would hang forever always re-polling a
+        // never-resolving Future when combined with our (simple) Stream implementation.
+        let buffered_layer = BufferedLayer::new(slow_layer, 10);
+
+        let mut cx = noop_context();
+        assert_eq!(
+            buffered_layer.process(1).as_mut().poll(&mut cx),
+            Poll::Ready(Ok(()))
+        );
+        assert_eq!(
+            buffered_layer.into_stream().poll_next_unpin(&mut cx),
+            Poll::Pending
+        );
+    }
+
+    #[tokio::test]
+    async fn error_handling() {
+        let slow_layer = SlowLayer::new().with_error_mode();
+        // @TODO: Layer implementations return the error on "process" while BufferedLayer only on
+        // the "next" call?
+        assert!(slow_layer.process(1).await.is_err());
+        assert!(slow_layer.next().await.is_err());
+
+        let buffered = BufferedLayer::new(slow_layer, 10);
+        assert!(buffered.process(1).await.is_ok());
+        assert!(buffered.next().await.is_err());
     }
 }

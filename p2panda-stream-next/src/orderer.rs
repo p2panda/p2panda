@@ -57,7 +57,7 @@ mod tests {
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use serde::{Deserialize, Serialize};
 
-    use crate::{BufferedLayer, StreamExt};
+    use crate::{BufferedLayer, StreamChainExt};
 
     use super::{Orderer, Ordering};
 
