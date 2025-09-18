@@ -69,7 +69,7 @@ pub enum ToGossip {
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
-        _session_id: ActorId,
+        session_id: ActorId,
     },
 }
 
@@ -170,6 +170,11 @@ impl Actor for Gossip {
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
+                // TODO: How do we handle a subscribe for a topic that already has an active
+                // subscription? Either we multiplex over a subscription or we establish an
+                // additional session. Right now I (glyph) am leaning towards establishing
+                // additional sessions.
+
                 // Channel to receive messages from the user (to the gossip overlay).
                 let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
                 // Channel to receive messages from the gossip overlay (to the user).
@@ -187,6 +192,10 @@ impl Actor for Gossip {
 
                 // Subscribe to the gossip topic (without waiting for a connection).
                 let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
+
+                // TODO: Store a clone of the `to_gossip_rx` channel to allow for recovery if the session
+                // fails. This will likely be handled in a higher-level `SubscriptionActor`. We'll
+                // need to use an MPMC channel (e.g. from the `async_channel` crate).
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = Actor::spawn_linked(
@@ -267,6 +276,7 @@ impl Actor for Gossip {
                 // Write the received bytes to all subscribers for the associated topic.
                 if let Some(senders) = state.from_gossip_senders.get(&topic_id) {
                     for sender in senders {
+                        // TODO: We need to tidy up properly when the receiver is dropped.
                         sender.send(msg.clone()).await?
                     }
                 }
@@ -341,9 +351,19 @@ impl Actor for Gossip {
                         actor_id, topic_id, reason
                     );
 
-                    // Drop the channel used to send gossip messages to the user.
+                    // Drop all state associated with the terminated gossip session.
+                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
+                    {
+                        drop(gossip_session_actor)
+                    }
+                    if let Some(neighbours) = state.neighours_by_topic_id.remove(&topic_id) {
+                        drop(neighbours)
+                    }
                     if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
                         drop(from_gossip_tx)
+                    }
+                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
+                        drop(gossip_joined_tx)
                     }
                 }
             }
@@ -352,7 +372,7 @@ impl Actor for Gossip {
                 // gossip message sender to the user. The user is expected to handle the error on
                 // the receiver and resubscribe to the topic if they wish.
                 //
-                // TODO: Do we rather want to handle the resubscribe internally? If the root gossip
+                // TODO: We rather want to handle the resubscribe internally. If the root gossip
                 // actor holds a clone of `to_network_rx` and `from_network_tx` then it's possible
                 // to spawn a replacement for the failed session (while maintaining the original
                 // channels established for message passing with the user). After some threshold
@@ -366,8 +386,19 @@ impl Actor for Gossip {
                         actor_id, topic_id, panic_msg
                     );
 
+                    // Drop all state associated with the failed gossip session.
+                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
+                    {
+                        drop(gossip_session_actor)
+                    }
+                    if let Some(neighbours) = state.neighours_by_topic_id.remove(&topic_id) {
+                        drop(neighbours)
+                    }
                     if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
                         drop(from_gossip_tx)
+                    }
+                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
+                        drop(gossip_joined_tx)
                     }
                 }
             }
