@@ -4,6 +4,7 @@
 
 use std::collections::HashSet;
 
+use petgraph::algo::has_path_connecting;
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
 
@@ -81,20 +82,54 @@ where
     graph.nodes().filter(|n| !relatives.contains(n)).collect()
 }
 
+/// Split a set of operations into concurrent, predecessors and successors.
+pub fn split_bubble<OP>(
+    graph: &DiGraphMap<OP, ()>,
+    bubble: &HashSet<OP>,
+    target: OP,
+) -> (HashSet<OP>, HashSet<OP>, Vec<OP>)
+where
+    OP: OperationId + Ord,
+{
+    // Get all successors.
+    let mut concurrent = bubble.clone();
+    let mut successors = Vec::new();
+    let mut dfs = Dfs::new(&graph, target);
+    while let Some(id) = dfs.next(&graph) {
+        concurrent.remove(&id);
+        successors.push(id);
+    }
+
+    // Get all predecessors.
+    let mut predecessors = HashSet::new();
+    let reversed = Reversed(graph);
+    let mut dfs_rev = Dfs::new(&reversed, target);
+    while let Some(id) = dfs_rev.next(&reversed) {
+        concurrent.remove(&id);
+        predecessors.insert(id);
+    }
+
+    (concurrent, predecessors, successors)
+}
+
 /// Return `true` if a linear path exists in the graph between `from` and `to`.
 ///
-/// This indicates whether or not the given operations occurred concurrently.
+/// This indicates whether `to` is a successor of `from`.
 pub fn has_path<OP>(graph: &DiGraphMap<OP, ()>, from: OP, to: OP) -> bool
 where
     OP: OperationId + Ord,
 {
-    let mut dfs = Dfs::new(graph, from);
-    while let Some(node) = dfs.next(graph) {
-        if node == to {
-            return true;
-        }
-    }
-    false
+    from != to && has_path_connecting(graph, from, to, None)
+}
+
+/// Return `true` if no linear path exists between `a` and `b` in either direction.
+///
+/// This indicates whether or not the given operations occurred concurrently.
+pub fn is_concurrent<OP>(graph: &DiGraphMap<OP, ()>, a: OP, b: OP) -> bool
+where
+    OP: OperationId + Ord,
+{
+    a != b && !has_path(graph, a, b) && !has_path(graph, b, a)
 }
 
 #[cfg(test)]

@@ -16,6 +16,13 @@ use crate::group::{
 };
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer, Resolver};
 
+/// Max depth of group nesting allowed.
+///
+/// Depth is checked during group state queries and if the depth is exceeded further additions are
+/// ignored. The main reason for this check is to protect against accidental group nesting cycles
+/// which may occur as a result of concurrent operations.
+const MAX_NESTED_DEPTH: u32 = 1000;
+
 /// Inner error types for GroupCrdt.
 #[derive(Debug, Error)]
 pub enum GroupCrdtInnerError<OP> {
@@ -38,6 +45,9 @@ where
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
 
+    #[error("group cycle detected adding {0} to {1} operation={2}")]
+    GroupCycle(ID, ID, OP),
+
     #[error("state change error processing operation {0}: {1:?}")]
     StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 
@@ -51,7 +61,7 @@ where
     Resolver(RS::Error),
 }
 
-type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<ID>, C>>;
+pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<ID>, C>>;
 
 /// Inner state object for `GroupCrdt` which contains the actual groups state,
 /// including operation graph and membership snapshots.
@@ -68,10 +78,13 @@ where
     /// All operations who's actions should be ignored.
     pub ignore: HashSet<OP>,
 
+    /// All operations which are part of a mutual remove cycle.
+    pub mutual_removes: HashSet<OP>,
+
     /// All resolved states.
     pub states: HashMap<OP, GroupStates<ID, C>>,
 
-    /// Operation graph for all auth groups.
+    /// Operation graph of all auth operations.
     pub graph: DiGraphMap<OP, ()>,
 }
 
@@ -84,6 +97,7 @@ where
         Self {
             operations: Default::default(),
             ignore: Default::default(),
+            mutual_removes: Default::default(),
             states: Default::default(),
             graph: Default::default(),
         }
@@ -95,6 +109,7 @@ where
     ID: IdentityHandle,
     OP: OperationId + Ord,
     C: Conditions,
+    M: Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
     /// Current tips for the groups operation graph.
     pub fn heads(&self) -> HashSet<OP> {
@@ -165,7 +180,14 @@ where
         group_id: ID,
         members: &mut HashMap<ID, Access<C>>,
         root_access: Option<Access<C>>,
+        mut depth: u32,
     ) {
+        // If we reached max nesting depth exit from the traversal.
+        if depth == MAX_NESTED_DEPTH {
+            return;
+        }
+        depth += 1;
+
         let current_states = self.current_state();
         let Some(group_state) = current_states.get(&group_id) else {
             return;
@@ -208,7 +230,7 @@ where
                         })
                         .or_insert_with(|| next_access);
                 }
-                GroupMember::Group(id) => self.members_inner(id, members, Some(next_access)),
+                GroupMember::Group(id) => self.members_inner(id, members, Some(next_access), depth),
             }
         }
     }
@@ -216,8 +238,42 @@ where
     /// Get all current members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         let mut members = HashMap::new();
-        self.members_inner(group_id, &mut members, None);
+        self.members_inner(group_id, &mut members, None, 0);
         members.into_iter().collect()
+    }
+
+    pub(crate) fn would_create_cycle(&self, operation: &M) -> bool {
+        let control_message = operation.payload();
+        let parent_group_id = control_message.group_id();
+
+        if let GroupAction::Add {
+            member: GroupMember::Group(child_group_id),
+            ..
+        } = &operation.payload().action
+        {
+            let states = self.current_state();
+            let mut stack = vec![*child_group_id];
+            let mut visited = HashSet::new();
+
+            while let Some(child_group_id) = stack.pop() {
+                if !visited.insert(child_group_id) {
+                    continue;
+                }
+                if child_group_id == parent_group_id {
+                    // Found a path from child group to parent.
+                    return true;
+                }
+                if let Some(group_state) = states.get(&child_group_id) {
+                    for (member, _) in group_state.access_levels() {
+                        if let GroupMember::Group(id) = member {
+                            stack.push(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        false
     }
 }
 
@@ -367,9 +423,62 @@ where
         let rebuild_required =
             RS::rebuild_required(&y.inner, operation).map_err(GroupCrdtError::Resolver)?;
 
-        if y.inner.operations.contains_key(&operation_id) {
+        // Validate that the author of this operation had the required access rights at the point
+        // in the auth graph which they claim as their last state (the state at "dependencies").
+        // It could be that they had access at this point but concurrent changes (which we know
+        // about) mean that they have lost that access level. This case is dealt with later, here
+        // we want to catch malicious or invalid operations which should _never_ be attached to
+        // the graph.
+        y = GroupCrdt::validate(y, operation)?;
+        y = Self::add_operation(y, operation);
+
+        if rebuild_required {
+            y.inner = RS::process(y.inner).map_err(GroupCrdtError::Resolver)?;
+            return Ok(y);
+        }
+
+        // We don't need to check the state change result as validation was already performed
+        // above.
+        let mut groups_y = y.inner.state_at(&dependencies)?;
+        groups_y = apply_action(
+            groups_y,
+            group_id,
+            operation_id,
+            actor,
+            &control_message.action,
+            &y.inner.ignore,
+        )
+        .state()
+        .to_owned();
+
+        y.inner.states.insert(operation_id, groups_y);
+
+        Ok(y)
+    }
+
+    /// Validate an action by applying it to the group state build to it's previous pointers.
+    ///
+    /// When processing a new operation we need to validate that the contained action is valid
+    /// before including it in the graph. By valid we mean that the author who composed the action
+    /// had authority to perform the claimed action, and that the action fulfils all group change
+    /// requirements. To check this we need to re-build the group state to the operations claimed
+    /// previous state. This process involves pruning any operations which are not predecessors of
+    /// the new operation resolving the group state again.
+    ///
+    /// This is a relatively expensive computation and should only be used when a re-build is
+    /// actually required.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn validate(
+        y: GroupCrdtState<ID, OP, C, ORD>,
+        operation: &ORD::Operation,
+    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
+        // Detect already processed operations.
+        if y.inner.operations.contains_key(&operation.id()) {
             // The operation has already been processed.
-            return Err(GroupCrdtError::DuplicateOperation(operation_id, group_id));
+            return Err(GroupCrdtError::DuplicateOperation(
+                operation.id(),
+                operation.payload().group_id(),
+            ));
         }
 
         // Adding a group as a manager of another group is currently not
@@ -378,7 +487,7 @@ where
         // @TODO: To support this behavior updates in the StrongRemove resolver
         // so that cross-group concurrent remove cycles are detected. Related to
         // issue: https://github.com/p2panda/p2panda/issues/779
-        match &control_message.action {
+        match &operation.payload().action {
             GroupAction::Add { member, access } | GroupAction::Promote { member, access } => {
                 if member.is_group() && access.is_manage() {
                     return Err(GroupCrdtError::ManagerGroupsNotAllowed(member.id()));
@@ -387,121 +496,73 @@ where
             _ => (),
         };
 
-        // Validate that the author of this operation had the required access
-        // rights at the point in the auth graph which they claim as their last
-        // state (the state at "dependencies"). It could be that they had access
-        // at this point but concurrent changes (which we know about) mean that
-        // they have lost that access level. This case is dealt with later, here
-        // we want to catch malicious operations which should _never_ be
-        // attached to the graph.
-        if rebuild_required {
-            y = GroupCrdt::authorize(y, operation)?;
-        }
-
-        // Add operation to the global auth graph.
-        y.inner.graph.add_node(operation_id);
-        for dependency in &dependencies {
-            y.inner.graph.add_edge(*dependency, operation_id, ());
-        }
-
-        // Insert operation into all operations map.
-        y.inner.operations.insert(operation_id, operation.clone());
-
-        if rebuild_required {
-            y.inner = RS::process(y.inner).map_err(GroupCrdtError::Resolver)?;
-            return Ok(y);
-        }
-
-        let mut groups_y = y.inner.state_at(&dependencies)?;
-        let result = apply_action(
-            groups_y,
-            group_id,
-            operation_id,
-            actor,
-            &control_message.action,
-            &y.inner.ignore,
-        );
-
-        groups_y = match result {
-            StateChangeResult::Ok { state } => state,
-            StateChangeResult::Error { error, .. } => {
-                // Noop shouldn't happen when processing new operations as the
-                // rebuild logic should have occurred instead.
-                return Err(GroupCrdtError::StateChangeError(operation_id, error));
-            }
-            StateChangeResult::Filtered { .. } => {
-                // Operations can't be filtered out before they were processed.
-                unreachable!();
-            }
-        };
-
-        y.inner.states.insert(operation_id, groups_y);
-
-        Ok(y)
-    }
-
-    /// Validate an action by applying it to the group state build to it's
-    /// previous pointers.
-    ///
-    /// When processing an new operation we need to validate that the contained
-    /// action is valid before including it in the graph. By valid we mean that
-    /// the author who composed the action had authority to perform the claimed
-    /// action, and that the action fulfils all group change requirements. To
-    /// check this we need to re-build the group state to the operations claimed
-    /// previous state. This process involves pruning any operations which are
-    /// not predecessors of the new operation resolving the group state again.
-    ///
-    /// This is a relatively expensive computation and should only be used when
-    /// a re-build is actually required.
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn authorize(
-        y: GroupCrdtState<ID, OP, C, ORD>,
-        operation: &ORD::Operation,
-    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
-        // Keep hold of original operations and graph.
         let last_graph = y.inner.graph.clone();
         let last_ignore = y.inner.ignore.clone();
+        let last_mutual_removes = y.inner.mutual_removes.clone();
         let last_states = y.inner.states.clone();
-
-        let mut temp_y = y;
-
-        // Collect predecessors of the new operation.
-        let mut predecessors = HashSet::new();
-        for dependency in operation.dependencies() {
-            let reversed = Reversed(&temp_y.inner.graph);
-            let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
-            while let Some(id) = dfs_rev.next(&reversed) {
-                predecessors.insert(id);
-            }
-        }
-
-        // Remove all other nodes from the graph.
-        let to_remove: Vec<_> = temp_y
-            .inner
-            .graph
-            .node_identifiers()
-            .filter(|n| !predecessors.contains(n))
-            .collect();
-
-        for node in &to_remove {
-            temp_y.inner.graph.remove_node(*node);
-        }
-
-        let temp_y_i = {
-            temp_y.inner = RS::process(temp_y.inner).map_err(GroupCrdtError::Resolver)?;
-            temp_y
-        };
 
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        let groups_y = temp_y_i.inner.state_at(&dependencies)?;
+        // If this operation is concurrent to our current local state we need to rebuild the graph
+        // to the operations' claimed dependencies in order to validate it correctly.
+        let temp_y = if y.inner.heads() != dependencies {
+            let mut temp_y = y;
+
+            // Collect predecessors of the new operation.
+            let mut predecessors = HashSet::new();
+            for dependency in operation.dependencies() {
+                let reversed = Reversed(&temp_y.inner.graph);
+                let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
+                while let Some(id) = dfs_rev.next(&reversed) {
+                    predecessors.insert(id);
+                }
+            }
+
+            // Remove all other nodes from the graph.
+            let to_remove: Vec<_> = temp_y
+                .inner
+                .graph
+                .node_identifiers()
+                .filter(|n| !predecessors.contains(n))
+                .collect();
+
+            for node in &to_remove {
+                temp_y.inner.graph.remove_node(*node);
+            }
+
+            temp_y.inner = RS::process(temp_y.inner).map_err(GroupCrdtError::Resolver)?;
+            temp_y
+        } else {
+            y
+        };
+
+        // Detect if this operation would cause a nested group cycle.
+        if temp_y.inner.would_create_cycle(operation) {
+            let parent_group = operation.payload().group_id();
+
+            // Only adds cause a cycle, we just access the member id here.
+            let GroupAction::Add {
+                member: sub_group, ..
+            } = operation.payload().action
+            else {
+                unreachable!()
+            };
+
+            return Err(GroupCrdtError::GroupCycle(
+                parent_group,
+                sub_group.id(),
+                operation.id(),
+            ));
+        }
+
+        // Apply the operation onto the temporary state.
         let result = apply_action(
-            groups_y,
+            temp_y.inner.current_state(),
             operation.payload().group_id(),
             operation.id(),
             operation.author(),
             &operation.payload().action,
-            &temp_y_i.inner.ignore,
+            &temp_y.inner.ignore,
         );
 
         match result {
@@ -517,12 +578,35 @@ where
             }
         };
 
-        let mut y = temp_y_i;
+        let mut y = temp_y;
         y.inner.graph = last_graph;
         y.inner.ignore = last_ignore;
+        y.inner.mutual_removes = last_mutual_removes;
         y.inner.states = last_states;
 
         Ok(y)
+    }
+
+    /// Add an operation to the auth graph and operation map.
+    ///
+    /// NOTE: this method _does not_ process the operation so no new state is derived.
+    fn add_operation(
+        mut y: GroupCrdtState<ID, OP, C, ORD>,
+        operation: &ORD::Operation,
+    ) -> GroupCrdtState<ID, OP, C, ORD> {
+        let operation_id = operation.id();
+        let dependencies = operation.dependencies();
+
+        // Add operation to the global auth graph.
+        y.inner.graph.add_node(operation_id);
+        for dependency in &dependencies {
+            y.inner.graph.add_edge(*dependency, operation_id, ());
+        }
+
+        // Insert operation into all operations map.
+        y.inner.operations.insert(operation_id, operation.clone());
+
+        y
     }
 }
 
@@ -606,6 +690,30 @@ where
     }
 }
 
+/// Apply a remove operation without validating it against state change rules. This is required
+/// when retaining mutual-remove operations which may have lost their delegated access rights.
+pub(crate) fn apply_remove_unsafe<ID, C>(
+    mut groups_y: GroupStates<ID, C>,
+    group_id: ID,
+    removed: GroupMember<ID>,
+) -> GroupStates<ID, C>
+where
+    ID: IdentityHandle,
+    C: Conditions,
+{
+    let mut members_y = groups_y
+        .remove(&group_id)
+        .expect("group already present in states map");
+
+    members_y.members.entry(removed).and_modify(|state| {
+        if state.member_counter % 2 != 0 {
+            state.member_counter += 1
+        }
+    });
+    groups_y.insert(group_id, members_y);
+    groups_y
+}
+
 /// Return types expected from applying an action to group state.
 pub enum StateChangeResult<ID, C>
 where
@@ -642,7 +750,6 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
-
     use crate::Access;
     use crate::group::{GroupCrdtError, GroupMember, GroupMembershipError};
     use crate::test_utils::no_ord::{TestGroup, TestGroupState};
@@ -1506,6 +1613,51 @@ pub(crate) mod tests {
                 (BOB, Access::read()),
                 (CLAIRE, Access::read())
             ]
+        );
+    }
+
+    #[test]
+    fn nested_group_cycle_error() {
+        let y = TestGroupState::new(());
+
+        // Create group G1 with ALICE as manager
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+        let y_i = TestGroup::process(y, &op1).unwrap();
+
+        // Create group G2 with BOB as manager, with G1 as a member
+        let op2 = create_group(
+            BOB,
+            1,
+            G2,
+            vec![
+                (GroupMember::Individual(BOB), Access::manage()),
+                (GroupMember::Group(G1), Access::read()),
+            ],
+            vec![op1.id()],
+        );
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+
+        // Attempt to add G2 as a member of G1, which creates a cycle (G1 -> G2 -> G1)
+        let op3 = add_member(
+            ALICE,
+            2,
+            G1,
+            GroupMember::Group(G2),
+            Access::read(),
+            vec![op2.id()],
+        );
+
+        // This should fail due to cycle detection
+        let result = TestGroup::process(y_ii, &op3);
+        assert!(
+            result.is_err(),
+            "Creating a group cycle should cause an error"
         );
     }
 }
