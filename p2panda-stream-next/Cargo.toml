@@ -6,16 +6,11 @@ edition = "2024"
 [lints]
 workspace = true
 
-[features]
-default = ["orderer"]
-orderer = ["dep:thiserror"]
-
 [dependencies]
 flume = { version = "0.11.1", features = ["async"] }
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
 futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 pin-project = "1.1.10"
-thiserror = { version = "2.0.16", optional = true }
 tokio = { version = "1.47.1", features = ["rt", "macros"] }
 
 [dev-dependencies]
