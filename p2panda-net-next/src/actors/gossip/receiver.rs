@@ -107,7 +107,6 @@ impl Actor for GossipReceiver {
                             }
                             Err(err) => {
                                 error!("gossip receiver actor: {}", err);
-                                drop(state.receiver.take());
                                 myself.stop(Some("channel closed".to_string()));
 
                                 return Ok(());

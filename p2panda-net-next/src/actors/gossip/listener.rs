@@ -83,7 +83,6 @@ impl Actor for GossipListener {
                 }
                 None => {
                     warn!("gossip listener actor: user dropped sender - channel closed");
-                    drop(state.receiver.take());
                     myself.stop(Some("receiver channel closed".to_string()));
 
                     return Ok(());
