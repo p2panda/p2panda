@@ -119,7 +119,7 @@ pub fn has_path<OP>(graph: &DiGraphMap<OP, ()>, from: OP, to: OP) -> bool
 where
     OP: OperationId + Ord,
 {
-    has_path_connecting(graph, from, to, None) && from != to
+    from != to && has_path_connecting(graph, from, to, None)
 }
 
 /// Return `true` if no linear path exists between `a` and `b` in either direction.
@@ -129,7 +129,7 @@ pub fn is_concurrent<OP>(graph: &DiGraphMap<OP, ()>, a: OP, b: OP) -> bool
 where
     OP: OperationId + Ord,
 {
-    !has_path(graph, a, b) && !has_path(graph, b, a) && a != b
+    a != b && !has_path(graph, a, b) && !has_path(graph, b, a)
 }
 
 #[cfg(test)]
