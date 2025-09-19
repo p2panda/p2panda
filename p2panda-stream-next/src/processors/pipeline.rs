@@ -2,7 +2,8 @@
 
 use std::marker::PhantomData;
 
-use crate::processors::{Processor, chained::ChainedProcessors};
+use crate::processors::Processor;
+use crate::processors::chained::ChainedProcessors;
 
 #[derive(Default)]
 pub struct PipelineBuilder<T> {

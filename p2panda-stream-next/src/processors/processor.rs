@@ -14,9 +14,9 @@
 /// can't take in more work.
 ///
 /// Processors _never_ terminate. The future returned by `next` will stay in pending state whenever
-/// there's no work to do or the processor can't continue because of it's internal logic.
-///
-/// Users can decide to drop a processor or escalate to a higher-level whenever an error occurs.
+/// there's no work to do or the processor can't continue because of it's internal logic. Users can
+/// decide to drop a processor or escalate to a higher-level whenever an error occurs or the
+/// processor is no longer used.
 pub trait Processor<T> {
     type Output;
 
