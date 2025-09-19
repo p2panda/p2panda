@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::RefCell;
 use std::convert::Infallible;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
+use std::task::Poll;
 use std::time::Duration;
-use std::{cell::RefCell, task::Poll};
 
 use tokio::{task, time};
 
