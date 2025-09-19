@@ -3,14 +3,18 @@ name = "p2panda-stream-next"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [lints]
 workspace = true
 
 [dependencies]
-flume = { version = "0.11.1", features = ["async"] }
+async-channel = "2.5.0"
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
 futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 pin-project = "1.1.10"
+thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["rt", "macros"] }
 
 [dev-dependencies]
