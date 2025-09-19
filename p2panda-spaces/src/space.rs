@@ -739,7 +739,7 @@ where
     S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
     F: Forge<ID, M, C>,
     C: Conditions,
-    RS: AuthResolver<C>,
+    RS: AuthResolver<C> + Debug,
 {
     #[error(transparent)]
     Rng(#[from] RngError),

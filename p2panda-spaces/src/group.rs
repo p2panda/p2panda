@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
-use crate::manager::Manager;
+use crate::manager::{Manager, ManagerError};
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
@@ -80,10 +80,10 @@ where
 
         let auth_message =
             Self::process_local_control(manager_ref.clone(), control_message).await?;
-        let Ok(space_messages) = manager_ref.sync_spaces(&auth_message).await else {
-            // @TODO: handle errors here while avoiding infinite error cycles....
-            panic!()
-        };
+        let space_messages = manager_ref
+            .sync_spaces(&auth_message)
+            .await
+            .map_err(|err| GroupError::Manager(Box::new(err)))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -116,10 +116,11 @@ where
 
         let auth_message =
             Self::process_local_control(self.manager.clone(), control_message).await?;
-        let Ok(space_messages) = self.manager.sync_spaces(&auth_message).await else {
-            // @TODO: handle errors here while avoiding infinite error cycles....
-            panic!()
-        };
+        let space_messages = self
+            .manager
+            .sync_spaces(&auth_message)
+            .await
+            .map_err(|err| GroupError::Manager(Box::new(err)))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -142,10 +143,11 @@ where
 
         let auth_message =
             Self::process_local_control(self.manager.clone(), control_message).await?;
-        let Ok(space_messages) = self.manager.sync_spaces(&auth_message).await else {
-            // @TODO: handle errors here while avoiding infinite error cycles....
-            panic!()
-        };
+        let space_messages = self
+            .manager
+            .sync_spaces(&auth_message)
+            .await
+            .map_err(|err| GroupError::Manager(Box::new(err)))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -257,10 +259,11 @@ where
 #[derive(Debug, Error)]
 pub enum GroupError<ID, S, F, M, C, RS>
 where
-    S: AuthStore<C> + MessageStore<M>,
+    ID: SpaceId,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
     F: Forge<ID, M, C>,
     C: Conditions,
-    RS: AuthResolver<C>,
+    RS: Debug + AuthResolver<C>,
 {
     #[error(transparent)]
     Rng(#[from] RngError),
@@ -279,4 +282,10 @@ where
 
     #[error("{0}")]
     MessageStore(<S as MessageStore<M>>::Error),
+
+    // @TODO: boxing is required here as ManagerError and GroupError reference each other and
+    // therefore cause an unbounded recursion cycle. We need to coerce from ManagerError as we
+    // call manager.sync_spaces inside of the Group api. Need to consider other solutions here.
+    #[error("{0}")]
+    Manager(Box<ManagerError<ID, S, F, M, C, RS>>),
 }
