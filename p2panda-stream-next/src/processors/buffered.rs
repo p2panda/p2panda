@@ -101,7 +101,7 @@ where
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum BufferedProcessorError {
     #[error("processor was terminated")]
     Terminated,

@@ -284,3 +284,23 @@ async fn error_handling() {
         })
         .await;
 }
+
+#[tokio::test]
+async fn buffered_processor() {
+    let local = task::LocalSet::new();
+
+    local
+        .run_until(async move {
+            let slow = SlowProcessor::new().with_next_delay(Duration::from_millis(5));
+            let buffered = BufferedProcessor::new(slow, 8);
+
+            for i in 0..128 {
+                assert!(buffered.process(i).await.is_ok());
+            }
+
+            for i in 0..128 {
+                assert_eq!(buffered.next().await, Ok(Ok(format!("processed_{}", i))));
+            }
+        })
+        .await;
+}
