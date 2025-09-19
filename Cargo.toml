@@ -11,6 +11,7 @@ members = [
     "p2panda-net",
     "p2panda-store",
     "p2panda-stream",
+    "p2panda-stream-next",
     "p2panda-sync",
 ]
 
