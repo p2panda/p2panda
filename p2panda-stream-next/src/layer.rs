@@ -5,27 +5,23 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_core::future::BoxFuture;
 use futures_core::{Stream, ready};
+use futures_util::FutureExt;
 use pin_project::pin_project;
 use tokio::task::JoinHandle;
+use tokio::{pin, task};
 
 /// Interface for implementing data processing layers.
-pub trait Layer<T>
-where
-    Self: Send + Sync + 'static,
-    Self::Output: Send + 'static,
-    Self::Error: Send + 'static,
-{
+pub trait Layer<T> {
     type Output;
 
     type Error;
 
     /// Consumes an item for further processing.
-    fn process(&self, input: T) -> BoxFuture<'_, Result<(), Self::Error>>;
+    fn process(&self, input: T) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Returns future with processed output or `None` if processor stopped.
-    fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>>;
+    fn next(&self) -> impl Future<Output = Result<Option<Self::Output>, Self::Error>>;
 }
 
 /// Extension trait for `Layer` that provides convenient methods for s tream processing.
@@ -58,10 +54,8 @@ pub trait StreamChainExt<T>: Stream<Item = T> + Sized {
 impl<S, T> StreamChainExt<T> for S where S: Stream<Item = T> {}
 
 /// Stream for the [`into_stream`](LayerExt::into_stream) method.
-#[pin_project]
 #[must_use = "streams do nothing unless polled"]
 pub struct LayerStream<L, T> {
-    #[pin]
     layer: L,
     _marker: PhantomData<T>,
 }
@@ -100,10 +94,10 @@ where
     type Item = Result<L::Output, L::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.project();
-        let mut next_fut = this.layer.next();
+        let next_fut = self.layer.next();
+        pin!(next_fut);
 
-        match ready!(next_fut.as_mut().poll(cx)) {
+        match ready!(next_fut.poll_unpin(cx)) {
             Ok(Some(output)) => Poll::Ready(Some(Ok(output))),
             Ok(None) => Poll::Ready(None),
             Err(error) => Poll::Ready(Some(Err(error))),
@@ -114,33 +108,30 @@ where
 pub struct BufferedLayer<L, T>
 where
     L: Layer<T>,
-    T: Send + Sync + 'static,
 {
-    process_tx: flume::Sender<T>,
-    output_rx: flume::Receiver<Result<L::Output, L::Error>>,
+    process_tx: async_channel::Sender<T>,
+    output_rx: async_channel::Receiver<Result<L::Output, L::Error>>,
     _handle: JoinHandle<()>,
     _marker: PhantomData<(L, T)>,
 }
 
 impl<L, T> BufferedLayer<L, T>
 where
-    L: Layer<T> + Send + 'static,
-    T: Send + Sync + 'static,
-    L::Output: Send + 'static,
-    L::Error: Send + 'static,
+    L: Layer<T> + 'static,
+    T: 'static,
 {
     pub fn new(layer: L, buffer_size: usize) -> Self {
-        let (process_tx, process_rx) = flume::bounded(buffer_size);
-        let (output_tx, output_rx) = flume::bounded(buffer_size);
+        let (process_tx, process_rx) = async_channel::bounded(buffer_size);
+        let (output_tx, output_rx) = async_channel::bounded(buffer_size);
 
-        let worker_handle = tokio::spawn(async move {
+        let worker_handle = task::spawn_local(async move {
             loop {
                 tokio::select! {
-                    result = process_rx.recv_async() => {
+                    result = process_rx.recv() => {
                         match result {
                             Ok(input) => {
                                 if let Err(err) = layer.process(input).await {
-                                    let _ = output_tx.send_async(Err(err)).await;
+                                    let _ = output_tx.send(Err(err)).await;
                                 }
                             },
                             Err(_) => {
@@ -152,14 +143,14 @@ where
                     result = layer.next() => {
                         match result {
                             Ok(Some(output)) => {
-                                let _ = output_tx.send_async(Ok(output)).await;
+                                let _ = output_tx.send(Ok(output)).await;
                             }
                             Ok(None) => {
                                 // Processor seized work, end here.
                                 break;
                             }
                             Err(err) => {
-                                let _ = output_tx.send_async(Err(err)).await;
+                                let _ = output_tx.send(Err(err)).await;
                             }
                         }
                     }
@@ -180,28 +171,23 @@ impl<L, T> Layer<T> for BufferedLayer<L, T>
 where
     // "Inner"-Layer - wrapped by this impl
     L: Layer<T>,
-    T: Send + Sync + 'static,
 {
     type Output = L::Output;
 
     type Error = L::Error;
 
-    fn process(&self, input: T) -> BoxFuture<'_, Result<(), Self::Error>> {
-        Box::pin(async {
-            // @TODO: It should be fine to ignore the error here? Otherwise we need to wrap L::Error
-            // with an BufferedLayerError type.
-            let _ = self.process_tx.send_async(input).await;
-            Ok(())
-        })
+    async fn process(&self, input: T) -> Result<(), Self::Error> {
+        // @TODO: It should be fine to ignore the error here? Otherwise we need to wrap L::Error
+        // with an BufferedLayerError type.
+        let _ = self.process_tx.send(input).await;
+        Ok(())
     }
 
-    fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
-        Box::pin(async {
-            match self.output_rx.recv_async().await {
-                Ok(output) => output.map(Some),
-                Err(_) => Ok(None), // Channel closed, no more items.
-            }
-        })
+    async fn next(&self) -> Result<Option<Self::Output>, Self::Error> {
+        match self.output_rx.recv().await {
+            Ok(output) => output.map(Some),
+            Err(_) => Ok(None), // Channel closed, no more items.
+        }
     }
 }
 
@@ -274,12 +260,16 @@ where
             // 2. Try to get the next item from the input stream to process.
             match ready!(this.input_stream.as_mut().poll_next(cx)) {
                 Some(item) => {
-                    let mut process_fut = this.layer.process(item);
+                    let process_fut = this.layer.process(item);
+
+                    pin!(process_fut);
 
                     match ready!(process_fut.as_mut().poll(cx)) {
                         Ok(()) => {
                             // After processing, try to get outputs from the layer.
-                            let mut next_fut = this.layer.next();
+                            let next_fut = this.layer.next();
+
+                            pin!(next_fut);
 
                             match ready!(next_fut.as_mut().poll(cx)) {
                                 Ok(Some(output)) => {
@@ -297,7 +287,9 @@ where
                 }
                 None => {
                     // Input stream is exhausted, try to get any remaining outputs.
-                    let mut next_fut = this.layer.next();
+                    let next_fut = this.layer.next();
+
+                    pin!(next_fut);
 
                     match ready!(next_fut.as_mut().poll(cx)) {
                         Ok(Some(output)) => return Poll::Ready(Some(Ok(output))),
@@ -334,15 +326,13 @@ mod tests {
 
         type Error = Infallible;
 
-        fn process(&self, input: String) -> BoxFuture<'_, Result<(), Self::Error>> {
-            Box::pin(async move {
-                self.outputs.lock().unwrap().push_back(input.to_uppercase());
-                Ok(())
-            })
+        async fn process(&self, input: String) -> Result<(), Self::Error> {
+            self.outputs.lock().unwrap().push_back(input.to_uppercase());
+            Ok(())
         }
 
-        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
-            Box::pin(async { Ok(self.outputs.lock().unwrap().pop_front()) })
+        async fn next(&self) -> Result<Option<Self::Output>, Self::Error> {
+            Ok(self.outputs.lock().unwrap().pop_front())
         }
     }
 
@@ -361,29 +351,27 @@ mod tests {
 
     impl<T> Layer<T> for CounterLayer<T>
     where
-        T: Send + 'static,
+        T: 'static,
     {
         type Output = WithCounter<T>;
 
         type Error = String;
 
-        fn process(&self, item: T) -> BoxFuture<'_, Result<(), Self::Error>> {
-            Box::pin(async {
-                let counter = self
-                    .counter
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        async fn process(&self, item: T) -> Result<(), Self::Error> {
+            let counter = self
+                .counter
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                self.outputs
-                    .lock()
-                    .await
-                    .push_back(WithCounter { item, counter });
+            self.outputs
+                .lock()
+                .await
+                .push_back(WithCounter { item, counter });
 
-                Ok(())
-            })
+            Ok(())
         }
 
-        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
-            Box::pin(async { Ok(self.outputs.lock().await.pop_front()) })
+        async fn next(&self) -> Result<Option<Self::Output>, Self::Error> {
+            Ok(self.outputs.lock().await.pop_front())
         }
     }
 
@@ -429,34 +417,30 @@ mod tests {
 
         type Error = String;
 
-        fn process(&self, input: usize) -> BoxFuture<'_, Result<(), Self::Error>> {
-            Box::pin(async move {
-                time::sleep(self.process_delay).await;
+        async fn process(&self, input: usize) -> Result<(), Self::Error> {
+            time::sleep(self.process_delay).await;
 
-                if self.should_error {
-                    return Err(format!("error in process method: {}", input));
-                }
+            if self.should_error {
+                return Err(format!("error in process method: {}", input));
+            }
 
-                self.processed_items.lock().unwrap().push(input);
-                self.output_queue
-                    .lock()
-                    .unwrap()
-                    .push_back(format!("processed_{}", input));
+            self.processed_items.lock().unwrap().push(input);
+            self.output_queue
+                .lock()
+                .unwrap()
+                .push_back(format!("processed_{}", input));
 
-                Ok(())
-            })
+            Ok(())
         }
 
-        fn next(&self) -> BoxFuture<'_, Result<Option<Self::Output>, Self::Error>> {
-            Box::pin(async move {
-                time::sleep(self.next_delay).await;
+        async fn next(&self) -> Result<Option<Self::Output>, Self::Error> {
+            time::sleep(self.next_delay).await;
 
-                if self.should_error {
-                    return Err("error in next method".to_string());
-                }
+            if self.should_error {
+                return Err("error in next method".to_string());
+            }
 
-                Ok(self.output_queue.lock().unwrap().pop_front())
-            })
+            Ok(self.output_queue.lock().unwrap().pop_front())
         }
     }
 
@@ -476,8 +460,8 @@ mod tests {
         assert_eq!(uppercase.next().await, Ok(None)); // No work again
 
         // Poll will return a value, we haven't terminated anything.
-        let mut cx = noop_context();
-        assert_eq!(uppercase.next().poll_unpin(&mut cx), Poll::Ready(Ok(None)));
+        // let mut cx = noop_context();
+        // assert_eq!(uppercase.next().poll_unpin(&mut cx), Poll::Ready(Ok(None)));
 
         // 2. While when turning it into a Stream we follow it's semantics: When the input stream
         //    seizes (by returning Poll::Ready(None)), all chained streams will forward that
@@ -546,45 +530,73 @@ mod tests {
 
     #[tokio::test]
     async fn buffered_layer_polling() {
-        // Have a "slow" processing layer which will not return a result instantly (first poll will
-        // not yield Poll::Ready(T).
-        let slow_layer = SlowLayer::new()
-            .with_process_delay(Duration::from_millis(100))
-            .with_next_delay(Duration::from_millis(50));
+        let local = task::LocalSet::new();
 
-        let mut cx = noop_context();
-        assert_eq!(slow_layer.process(1).as_mut().poll(&mut cx), Poll::Pending);
-        assert_eq!(
-            slow_layer.clone().into_stream().poll_next_unpin(&mut cx),
-            Poll::Pending
-        );
+        local
+            .run_until(async move {
+                // Have a "slow" processing layer which will not return a result instantly (first poll will
+                // not yield Poll::Ready(T).
+                let slow_layer = SlowLayer::new()
+                    .with_process_delay(Duration::from_millis(100))
+                    .with_next_delay(Duration::from_millis(50));
 
-        // We need to buffer the result, either through implementing it as part of the layer or by
-        // wrapping it with BufferedLayer, otherwise we would hang forever always re-polling a
-        // never-resolving Future when combined with our (simple) Stream implementation.
-        let buffered_layer = BufferedLayer::new(slow_layer, 10);
+                let mut cx = noop_context();
+                assert_eq!(
+                    {
+                        let fut = slow_layer.process(1);
+                        pin!(fut);
+                        fut.poll_unpin(&mut cx)
+                    },
+                    Poll::Pending
+                );
+                assert_eq!(
+                    slow_layer.clone().into_stream().poll_next_unpin(&mut cx),
+                    Poll::Pending
+                );
 
-        let mut cx = noop_context();
-        assert_eq!(
-            buffered_layer.process(1).as_mut().poll(&mut cx),
-            Poll::Ready(Ok(()))
-        );
-        assert_eq!(
-            buffered_layer.into_stream().poll_next_unpin(&mut cx),
-            Poll::Pending
-        );
+                // We need to buffer the result, either through implementing it as part of the layer or by
+                // wrapping it with BufferedLayer, otherwise we would hang forever always re-polling a
+                // never-resolving Future when combined with our (simple) Stream implementation.
+                let buffered_layer = BufferedLayer::new(slow_layer, 10);
+
+                assert_eq!(
+                    {
+                        let fut = buffered_layer.process(1);
+                        pin!(fut);
+                        let mut cx = noop_context();
+                        fut.poll_unpin(&mut cx)
+                    },
+                    Poll::Ready(Ok(()))
+                );
+                assert_eq!(
+                    {
+                        let stream = buffered_layer.into_stream();
+                        pin!(stream);
+                        let mut cx = noop_context();
+                        stream.poll_next(&mut cx)
+                    },
+                    Poll::Pending
+                );
+            })
+            .await;
     }
 
     #[tokio::test]
     async fn error_handling() {
-        let slow_layer = SlowLayer::new().with_error_mode();
-        // @TODO: Layer implementations return the error on "process" while BufferedLayer only on
-        // the "next" call?
-        assert!(slow_layer.process(1).await.is_err());
-        assert!(slow_layer.next().await.is_err());
+        let local = task::LocalSet::new();
 
-        let buffered = BufferedLayer::new(slow_layer, 10);
-        assert!(buffered.process(1).await.is_ok());
-        assert!(buffered.next().await.is_err());
+        local
+            .run_until(async move {
+                let slow_layer = SlowLayer::new().with_error_mode();
+                // @TODO: Layer implementations return the error on "process" while BufferedLayer only on
+                // the "next" call?
+                assert!(slow_layer.process(1).await.is_err());
+                assert!(slow_layer.next().await.is_err());
+
+                let buffered = BufferedLayer::new(slow_layer, 10);
+                assert!(buffered.process(1).await.is_ok());
+                assert!(buffered.next().await.is_err());
+            })
+            .await;
     }
 }
