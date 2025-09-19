@@ -352,12 +352,6 @@ async fn add_member_to_space() {
 
     // Manually register bobs key bundle.
 
-    alice
-        .manager
-        .register_member(&bob.manager.me().await.unwrap())
-        .await
-        .unwrap();
-
     let alice_id = alice.manager.id().await;
     let bob_id = bob.manager.id().await;
 
@@ -368,6 +362,12 @@ async fn add_member_to_space() {
 
     let space_id = 0;
     let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
 
     // There are two messages (one auth, and one space)
     assert_eq!(messages.len(), 2);
