@@ -12,13 +12,13 @@ workspace = true
 [dependencies]
 async-channel = "2.5.0"
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
-futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 pin-project = "1.1.10"
 thiserror = "2.0.16"
-tokio = { version = "1.47.1", features = ["rt", "macros"] }
+tokio = { version = "1.47.1", default-features = false, features = ["rt", "macros"] }
 
 [dev-dependencies]
 futures-test = { version = "0.3.31" }
+futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 serde = { version = "1.0.219" }
 tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }

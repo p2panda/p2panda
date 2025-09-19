@@ -7,7 +7,8 @@ use std::sync::atomic::AtomicU64;
 use std::task::Poll;
 use std::time::Duration;
 
-use tokio::{task, time};
+use futures_util::{StreamExt, stream};
+use tokio::{pin, task, time};
 
 use crate::test_utils::{AsyncBuffer, assert_poll_eq};
 
@@ -35,16 +36,33 @@ impl Processor<String> for UppercaseProcessor {
 }
 
 /// Processor adding a counter to any item.
-#[derive(Default)]
 struct CounterProcessor<T> {
     outputs: RefCell<AsyncBuffer<WithCounter<T>>>,
     counter: AtomicU64,
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+impl<T> CounterProcessor<T> {
+    pub fn new() -> Self {
+        Self {
+            outputs: RefCell::new(AsyncBuffer::new()),
+            counter: AtomicU64::new(0),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct WithCounter<T> {
     item: T,
     counter: u64,
+}
+
+impl<T> ToString for WithCounter<T>
+where
+    T: ToString,
+{
+    fn to_string(&self) -> String {
+        format!("{}_{}", self.item.to_string(), self.counter)
+    }
 }
 
 impl<T> Processor<T> for CounterProcessor<T> {
@@ -158,7 +176,7 @@ async fn awaiting_on_next() {
 #[tokio::test]
 async fn chaining_processors() {
     let uppercase = UppercaseProcessor::default();
-    let counter = CounterProcessor::<String>::default();
+    let counter = CounterProcessor::<String>::new();
 
     let pipeline = PipelineBuilder::new()
         .layer(uppercase)
@@ -203,7 +221,7 @@ async fn expensive_async_processing() {
             // Have a "slow" processing layer which will not return a result instantly (first
             // poll will _not_ yield Poll::Ready(T).
             let slow = SlowProcessor::new()
-                .with_process_delay(Duration::from_millis(100))
+                .with_process_delay(Duration::from_millis(25))
                 .with_next_delay(Duration::from_millis(50));
             assert_poll_eq(slow.process(0), Poll::Pending);
             assert_poll_eq(slow.next(), Poll::Pending);
@@ -301,6 +319,56 @@ async fn buffered_processor() {
             for i in 0..128 {
                 assert_eq!(buffered.next().await, Ok(Ok(format!("processed_{}", i))));
             }
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn into_stream() {
+    let local = task::LocalSet::new();
+
+    local
+        .run_until(async move {
+            let slow = SlowProcessor::new()
+                .with_process_delay(Duration::from_millis(25))
+                .with_next_delay(Duration::from_millis(15));
+            let uppercase = UppercaseProcessor::default();
+            let counter = CounterProcessor::new();
+
+            let pipeline = stream::iter([62, 23, 11, 74])
+                .layer(counter)
+                .filter_map(|item| async {
+                    match item {
+                        Ok(item) => Some(item),
+                        Err(_) => None,
+                    }
+                })
+                .layer(BufferedProcessor::new(slow, 16))
+                .filter_map(|item| async {
+                    match item {
+                        Ok(Ok(item)) => Some(item),
+                        _ => None,
+                    }
+                })
+                .layer(uppercase);
+
+            pin!(pipeline);
+
+            let result = pipeline
+                .take(4)
+                .map(|item| item.expect("no buffered processor error"))
+                .collect::<Vec<String>>()
+                .await;
+
+            assert_eq!(
+                result,
+                vec![
+                    "PROCESSED_62_0".to_string(),
+                    "PROCESSED_23_1".to_string(),
+                    "PROCESSED_11_2".to_string(),
+                    "PROCESSED_74_3".to_string(),
+                ],
+            );
         })
         .await;
 }

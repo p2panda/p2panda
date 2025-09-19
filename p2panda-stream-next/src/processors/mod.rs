@@ -4,6 +4,7 @@ mod buffered;
 mod chained;
 mod pipeline;
 mod processor;
+mod stream;
 #[cfg(test)]
 mod tests;
 
@@ -11,3 +12,4 @@ pub use buffered::{BufferedProcessor, BufferedProcessorError};
 pub use chained::{ChainedProcessors, ChainedProcessorsError};
 pub use pipeline::{LayeredBuilder, Pipeline, PipelineBuilder};
 pub use processor::Processor;
+pub use stream::{ProcessorExt, ProcessorStream, StreamLayerExt};
