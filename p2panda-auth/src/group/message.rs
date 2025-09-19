@@ -2,12 +2,16 @@
 
 use crate::group::GroupAction;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Control messages which are processed in order to update group state.
 ///
 /// There are two variants, one containing a group action and the ID of the group to which the
 /// action should be applied. The other is a special message which can be used to "undo" a message which
 /// has been previously applied to the group.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct GroupControlMessage<ID, C> {
     pub group_id: ID,
     pub action: GroupAction<ID, C>,

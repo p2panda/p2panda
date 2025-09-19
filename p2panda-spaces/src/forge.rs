@@ -6,7 +6,7 @@ use p2panda_core::{PrivateKey, PublicKey};
 
 use crate::message::SpacesArgs;
 
-pub trait Forge<M, C> {
+pub trait Forge<ID, M, C> {
     type Error: Debug;
 
     fn public_key(&self) -> PublicKey;
@@ -21,11 +21,11 @@ pub trait Forge<M, C> {
     //
     // @TODO: Another thing is that we want to maybe detect key rotations as it means that people
     // will loose access to their spaces.
-    fn forge(&mut self, args: SpacesArgs<C>) -> impl Future<Output = Result<M, Self::Error>>;
+    fn forge(&mut self, args: SpacesArgs<ID, C>) -> impl Future<Output = Result<M, Self::Error>>;
 
     fn forge_ephemeral(
         &mut self,
         private_key: PrivateKey,
-        args: SpacesArgs<C>,
+        args: SpacesArgs<ID, C>,
     ) -> impl Future<Output = Result<M, Self::Error>>;
 }

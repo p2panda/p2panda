@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::types::ActorId;
-
-pub enum Event {
-    Application { space_id: ActorId, data: Vec<u8> },
-    Removed { space_id: ActorId },
+pub enum Event<ID> {
+    Application { space_id: ID, data: Vec<u8> },
+    Removed { space_id: ID },
 }

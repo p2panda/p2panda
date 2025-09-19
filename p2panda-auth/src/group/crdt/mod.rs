@@ -329,6 +329,11 @@ where
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.inner.members(group_id)
     }
+
+    /// Returns `true` if the passed group exists in the current state.
+    pub fn has_group(&self, group_id: ID) -> bool {
+        self.inner.current_state().contains_key(&group_id)
+    }
 }
 
 /// Core group CRDT for maintaining group membership state in a decentralized
