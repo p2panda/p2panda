@@ -4,6 +4,7 @@ use std::convert::Infallible;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
+use assert_matches::assert_matches;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
@@ -15,7 +16,7 @@ use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManager;
 
 use crate::auth::orderer::AuthOrderer;
-use crate::event::Event;
+use crate::event::{self, Event, GroupEvent, Member, SpaceEvent};
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
@@ -142,6 +143,10 @@ type TestSpaceError<ID> = SpaceError<
 struct TestPeer<ID = i32> {
     id: u8,
     manager: TestManager<ID>,
+}
+
+fn sort_members(members: &mut Vec<(Member, Access<TestConditions>)>) {
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.id().cmp(&actor_b.id()));
 }
 
 impl<ID> TestPeer<ID>
@@ -723,7 +728,8 @@ async fn receive_control_messages() {
     assert!(events.is_empty());
     let events = bob.manager.process(&message_05).await.unwrap();
     // The application message arrives only after bob is welcomed.
-    assert_eq!(events.len(), 1);
+    assert_eq!(events.len(), 2);
+    assert!(matches!(events[1], Event::Application { .. }));
 
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
     // Alice and bob are both members.
@@ -787,8 +793,10 @@ async fn remove_member() {
     // Bob: Receive Message 01 & 02
     // ~~~~~~~~~~~~
 
-    bob_manager.process(&message_01).await.unwrap();
-    bob_manager.process(&message_02).await.unwrap();
+    let events = bob_manager.process(&message_01).await.unwrap();
+    assert_eq!(events.len(), 1);
+    let events = bob_manager.process(&message_02).await.unwrap();
+    assert_eq!(events.len(), 1);
 
     // Alice: Removes bob
     // ~~~~~~~~~~~~
@@ -836,9 +844,13 @@ async fn remove_member() {
     // ~~~~~~~~~~~~
 
     let events = bob_manager.process(&message_03).await.unwrap();
-    assert!(events.is_empty());
+    assert_eq!(events.len(), 1);
     let events = bob_manager.process(&message_04).await.unwrap();
-    assert!(matches!(events[0], Event::Removed { .. }));
+    assert_eq!(events.len(), 2);
+    assert!(matches!(
+        events[1],
+        Event::Space(SpaceEvent::Ejected { .. })
+    ));
 }
 
 #[tokio::test]
@@ -1457,4 +1469,408 @@ async fn shared_auth_state() {
     let mut members = space_1.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
     assert_eq!(expected_members, members);
+}
+
+#[tokio::test]
+async fn events() {
+    let alice = TestPeer::new(0);
+    let bob = <TestPeer>::new(1);
+    let claire = <TestPeer>::new(2);
+    let dave = <TestPeer>::new(3);
+
+    let alice_id = alice.manager.id().await;
+    let bob_id = bob.manager.id().await;
+    let claire_id = claire.manager.id().await;
+    let dave_id = dave.manager.id().await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+    let dave_manager = dave.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice_manager
+        .register_member(&dave_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register all key bundles on bob.
+
+    bob_manager
+        .register_member(&alice_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&dave_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register all key bundles on claire.
+
+    claire_manager
+        .register_member(&alice_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    claire_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    claire_manager
+        .register_member(&dave_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let mut all_messages = vec![];
+
+    // Create Group with bob and claire as managers.
+    let (group, messages) = alice_manager
+        .create_group(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
+        .await
+        .unwrap();
+    let member_group_id = group.id();
+
+    assert_eq!(messages.len(), 1);
+    all_messages.extend(messages);
+
+    // Create Space with group as member
+    let space_id = 0;
+    let (space, messages) = alice_manager
+        .create_space(space_id, &[(member_group_id, Access::read())])
+        .await
+        .unwrap();
+    let space_group_id = space.group_id().await.unwrap();
+    assert_eq!(messages.len(), 3);
+    all_messages.extend(messages);
+
+    // Add dave to space with read access
+    let messages = space.add(dave_id, Access::read()).await.unwrap();
+    assert_eq!(messages.len(), 2);
+    all_messages.extend(messages);
+
+    // Remove dave from space
+    let messages = space.remove(dave_id).await.unwrap();
+    assert_eq!(messages.len(), 2);
+    all_messages.extend(messages);
+
+    // Add dave back into space with pull access
+    let messages = space.add(dave_id, Access::pull()).await.unwrap();
+    assert_eq!(messages.len(), 2);
+    all_messages.extend(messages);
+
+    // Remove member group from space
+    let messages = space.remove(group.id()).await.unwrap();
+    assert_eq!(messages.len(), 2);
+    all_messages.extend(messages);
+
+    // Test basic expected event types.
+    for (idx, message) in all_messages.iter().enumerate() {
+        let events = bob_manager.process(&message).await.unwrap();
+        match idx {
+            // Member auth group created.
+            0 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Created { group_id, .. }) if group_id == group.id());
+            }
+            // Space auth group created.
+            1 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Created {group_id, .. }) if group_id == space_group_id);
+            }
+            // Both previous auth messages published to newly created space, initial members added
+            // to encryption context.
+            2 => assert_eq!(events.len(), 0),
+            3 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Created { space_id, group_id, .. }) if space_id == space.id() && group_id == space_group_id);
+            }
+            // Dave added to space auth group and encryption context.
+            4 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Added { added, group_id, .. }) if added == Member::individual(dave_id) && group_id == space_group_id);
+            }
+            5 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Added { added, .. }) if added == dave_id);
+            }
+            // Dave removed from space auth group and encryption context.
+            6 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Removed { removed, .. }) if removed == Member::individual(dave_id));
+            }
+            7 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == dave_id);
+            }
+            // Dave added to auth group with pull access and no resulting encryption context change.
+            8 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Added { added, .. }) if added == Member::individual(dave_id));
+            }
+            9 => assert_eq!(events.len(), 0),
+            // Remove member group from space auth group, both bob and claire removed from space
+            // encryption context.
+            10 => {
+                assert_eq!(events.len(), 1);
+                assert_matches!(events[0].clone(), Event::Group(GroupEvent::Removed { removed, .. }) if removed == Member::group(group.id()));
+            }
+            11 => {
+                assert_eq!(events.len(), 4);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == bob_id || removed == claire_id);
+                assert_matches!(events[1].clone(), Event::Space(SpaceEvent::Ejected { .. }));
+                assert_matches!(events[2].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == bob_id || removed == claire_id);
+                // @TODO: unexpected second "ejected" received here, believe it's due to how
+                // "is_removed" flag is computed inside EncryptionGroup::receive(..) and the fact
+                // that multiple members can be removed in one go now.
+                assert_matches!(events[3].clone(), Event::Space(SpaceEvent::Ejected { .. }));
+            }
+            _ => panic!(),
+        }
+    }
+
+    // Test expected members.
+    for (idx, message) in all_messages.iter().enumerate() {
+        let events = claire_manager.process(&message).await.unwrap();
+        match idx {
+            // Member auth group created.
+            0 => {
+                let Event::Group(GroupEvent::Created {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let expected_members = vec![
+                    (event::Member::individual(bob_id), Access::manage()),
+                    (event::Member::individual(claire_id), Access::manage()),
+                ];
+
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_members);
+            }
+            // Space auth group created.
+            1 => {
+                let Event::Group(GroupEvent::Created {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::group(group.id()), Access::read()),
+                ];
+                let expected_transitive_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(bob_id), Access::read()),
+                    (event::Member::individual(claire_id), Access::read()),
+                ];
+
+                sort_members(&mut expected_members);
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_transitive_members);
+            }
+            // Both previous auth messages published to newly created space, initial members added
+            // to encryption context.
+            2 => assert_eq!(events.len(), 0),
+            3 => {
+                let Event::Space(SpaceEvent::Created { mut members, .. }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let expected_members = vec![alice_id, bob_id, claire_id];
+                members.sort();
+                assert_eq!(members, expected_members);
+            }
+            // Dave added to space auth group and encryption context.
+            4 => {
+                let Event::Group(GroupEvent::Added {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(dave_id), Access::read()),
+                    (event::Member::group(group.id()), Access::read()),
+                ];
+                let mut expected_transitive_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(bob_id), Access::read()),
+                    (event::Member::individual(claire_id), Access::read()),
+                    (event::Member::individual(dave_id), Access::read()),
+                ];
+
+                sort_members(&mut expected_members);
+                sort_members(&mut expected_transitive_members);
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_transitive_members);
+            }
+            5 => {
+                let Event::Space(SpaceEvent::Added { mut members, .. }) = events[0].clone() else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![alice_id, bob_id, claire_id, dave_id];
+                expected_members.sort();
+                members.sort();
+                assert_eq!(members, expected_members);
+            }
+            // Dave removed from space auth group and encryption context.
+            6 => {
+                let Event::Group(GroupEvent::Removed {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::group(group.id()), Access::read()),
+                ];
+                let mut expected_transitive_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(bob_id), Access::read()),
+                    (event::Member::individual(claire_id), Access::read()),
+                ];
+
+                sort_members(&mut expected_members);
+                sort_members(&mut expected_transitive_members);
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_transitive_members);
+            }
+            7 => {
+                let Event::Space(SpaceEvent::Removed { mut members, .. }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![alice_id, bob_id, claire_id];
+                expected_members.sort();
+                members.sort();
+                assert_eq!(members, expected_members);
+            }
+            // Dave added to auth group with pull access and no resulting encryption context change.
+            8 => {
+                let Event::Group(GroupEvent::Added {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(dave_id), Access::pull()),
+                    (event::Member::group(group.id()), Access::read()),
+                ];
+                let mut expected_transitive_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(bob_id), Access::read()),
+                    (event::Member::individual(claire_id), Access::read()),
+                    (event::Member::individual(dave_id), Access::pull()),
+                ];
+
+                sort_members(&mut expected_members);
+                sort_members(&mut expected_transitive_members);
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_transitive_members);
+            }
+            9 => assert_eq!(events.len(), 0),
+            // Remove member group from space auth group, both bob and claire removed from space
+            // encryption context.
+            10 => {
+                let Event::Group(GroupEvent::Removed {
+                    mut members,
+                    mut transitive_members,
+                    ..
+                }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(dave_id), Access::pull()),
+                ];
+                let mut expected_transitive_members = vec![
+                    (event::Member::individual(alice_id), Access::manage()),
+                    (event::Member::individual(dave_id), Access::pull()),
+                ];
+
+                sort_members(&mut expected_members);
+                sort_members(&mut expected_transitive_members);
+                sort_members(&mut members);
+                sort_members(&mut transitive_members);
+                assert_eq!(members, expected_members);
+                assert_eq!(transitive_members, expected_transitive_members);
+            }
+            11 => {
+                let Event::Space(SpaceEvent::Removed { mut members, .. }) = events[0].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![alice_id, bob_id];
+                expected_members.sort();
+                members.sort();
+                assert_eq!(members, expected_members);
+
+                let Event::Space(SpaceEvent::Removed { mut members, .. }) = events[2].clone()
+                else {
+                    panic!()
+                };
+
+                let mut expected_members = vec![alice_id];
+                expected_members.sort();
+                members.sort();
+                assert_eq!(members, expected_members);
+            }
+            _ => panic!(),
+        }
+    }
 }

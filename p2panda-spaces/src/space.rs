@@ -16,7 +16,7 @@ use crate::auth::orderer::AuthOrdererState;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
-use crate::event::Event;
+use crate::event::{Event, encryption_message_to_space_event, encryption_output_to_space_events};
 use crate::forge::Forge;
 use crate::group::{Group, GroupError};
 use crate::manager::Manager;
@@ -226,7 +226,7 @@ where
         &self,
         space_message: &M,
         auth_message: Option<&AuthMessage<C>>,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let events = match space_message.args() {
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership { space_id, .. } => {
@@ -305,7 +305,7 @@ where
         &self,
         space_message: &M,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
             group_id,
             space_dependencies,
@@ -340,13 +340,14 @@ where
         );
 
         // Process encryption message.
-        let (encryption_y, encryption_output) =
+        let (encryption_y, _encryption_output) =
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?;
 
         y.encryption_y = encryption_y;
 
         // Persist new space state.
+
         {
             let mut manager = self.manager.inner.write().await;
             y.encryption_y
@@ -358,7 +359,9 @@ where
                 .await
                 .map_err(SpaceError::SpaceStore)?;
         }
-        Ok(encryption_output_to_events(self.id(), encryption_output))
+
+        // @TODO: compute events.
+        Ok(vec![])
     }
 
     /// Apply a group membership change to the group encryption state.
@@ -435,7 +438,7 @@ where
     async fn handle_application_message(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::Application {
             space_dependencies, ..
         } = message.args()
@@ -460,6 +463,7 @@ where
             .add_dependency(encryption_message.id(), space_dependencies);
 
         // Persist new state.
+        let events = encryption_output_to_space_events(&y.space_id, encryption_output);
         let mut manager = self.manager.inner.write().await;
         manager
             .store
@@ -467,7 +471,7 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        Ok(encryption_output_to_events(self.id(), encryption_output))
+        Ok(events)
     }
 
     /// Sync a shared auth state change with this space.
@@ -740,31 +744,6 @@ pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>
         .cloned()
         .filter(|actor| !next_members.contains(actor))
         .collect::<Vec<_>>()
-}
-
-fn encryption_output_to_events<ID, M>(
-    space_id: ID,
-    encryption_output: Vec<EncryptionGroupOutput<M>>,
-) -> Vec<Event<ID>>
-where
-    ID: SpaceId,
-{
-    encryption_output
-        .into_iter()
-        .map(|event| {
-            match event {
-                EncryptionGroupOutput::Application { plaintext } => Event::Application {
-                    space_id,
-                    data: plaintext,
-                },
-                EncryptionGroupOutput::Removed => Event::Removed { space_id },
-                _ => {
-                    // We only expect "application" events inside this function.
-                    unreachable!();
-                }
-            }
-        })
-        .collect()
 }
 
 #[derive(Debug, Error)]
