@@ -55,26 +55,6 @@ where
             _marker: PhantomData,
         }
     }
-
-    /// Returns reference to the underlying processor.
-    pub fn get_ref(&self) -> &P {
-        &self.processor
-    }
-
-    /// Returns mutable reference to the underlying processor.
-    pub fn get_mut(&mut self) -> &mut P {
-        &mut self.processor
-    }
-
-    /// Returns reference to the underlying input stream.
-    pub fn get_input_ref(&self) -> &S {
-        &self.input_stream
-    }
-
-    /// Consume this stream and return the underlying processor and input stream.
-    pub fn into_inner(self) -> (P, S) {
-        (self.processor, self.input_stream)
-    }
 }
 
 #[derive(Default)]
@@ -109,7 +89,7 @@ where
         loop {
             match state {
                 ProcessorStreamState::InputStream => {
-                    // Check input stream.
+                    // 1. Check input stream.
                     //
                     // If there's an item in the previous `Stream`, we take it and push it into our
                     // internal queue. If there's nothing in it (Poll::Pending), we go into the
@@ -123,16 +103,13 @@ where
                         Poll::Ready(Some(input)) => {
                             this.inputs.push_back(input);
                         }
-                        Poll::Ready(None) => {
-                            state = state.next();
-                        }
-                        Poll::Pending => {
+                        Poll::Ready(None) | Poll::Pending => {
                             state = state.next();
                         }
                     }
                 }
                 ProcessorStreamState::Process => {
-                    // Check input queue for items we can forward to processor.
+                    // 2. Check input queue for items we can forward to processor.
                     //
                     // If there's any items we can give to the processor, we call it's "process"
                     // method with it.
@@ -161,7 +138,7 @@ where
                     state = state.next();
                 }
                 ProcessorStreamState::Next => {
-                    // Check "next" method on processor to see if there's any output.
+                    // 3. Check "next" method on processor to see if there's any output.
                     //
                     // If an output item was given, we yield it in this Stream. If an error was
                     // returned we do the same.
@@ -170,8 +147,8 @@ where
                     // are no items given.
                     //
                     // From here on we _dont_ go into the next state but leave the loop and hope
-                    // that this very stream gets polled again in the future. Then we start again
-                    // from the top!
+                    // that this very stream gets waken up again in the future by the runtime. Then
+                    // we start again from the top! Yay.
                     let fut = this.processor.next();
                     pin!(fut);
 
