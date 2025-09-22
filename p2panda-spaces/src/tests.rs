@@ -466,6 +466,37 @@ async fn add_member_to_space() {
 }
 
 #[tokio::test]
+async fn register_key_bundles_after_space_creation() {
+    let alice = TestPeer::new(0);
+    let bob = <TestPeer>::new(1);
+
+    let manager = alice.manager.clone();
+
+    // Create Space
+    // ~~~~~~~~~~~~
+
+    let space_id = 0;
+    let (space, _) = manager.create_space(space_id, &[]).await.unwrap();
+    drop(space);
+
+    // Register key bundles _after_ the space was already created
+    // ~~~~~~~~~~~~
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Add new member to Space
+    // ~~~~~~~~~~~~
+    let space = manager.space(space_id).await.unwrap().unwrap();
+    let result = space.add(bob.manager.id().await, Access::read()).await;
+
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
 async fn send_and_receive_after_add() {
     let alice = TestPeer::new(0);
     let bob = TestPeer::new(1);

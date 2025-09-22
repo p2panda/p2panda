@@ -495,12 +495,29 @@ where
         &self,
     ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
-        let space_y = manager
+        let mut space_y = manager
             .store
             .space(&self.id)
             .await
             .map_err(SpaceError::SpaceStore)?
             .ok_or(SpaceError::UnknownSpace(self.id))?;
+
+        // Inject latest key material to space DCGKA state.
+        let key_manager_y = manager
+            .store
+            .key_manager()
+            .await
+            .map_err(SpaceError::KeyStore)?;
+
+        let key_registry_y = manager
+            .store
+            .key_registry()
+            .await
+            .map_err(SpaceError::KeyStore)?;
+
+        space_y.encryption_y.dcgka.my_keys = key_manager_y;
+        space_y.encryption_y.dcgka.pki = key_registry_y;
+
         Ok(space_y)
     }
 
@@ -512,6 +529,18 @@ where
     ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = manager_ref.inner.read().await;
 
+        let key_manager_y = manager
+            .store
+            .key_manager()
+            .await
+            .map_err(SpaceError::KeyStore)?;
+
+        let key_registry_y = manager
+            .store
+            .key_registry()
+            .await
+            .map_err(SpaceError::KeyStore)?;
+
         let result = manager
             .store
             .space(&space_id)
@@ -519,21 +548,14 @@ where
             .map_err(SpaceError::SpaceStore)?;
 
         let space_y = match result {
-            Some(y) => y,
+            Some(mut y) => {
+                // Inject latest key material to space DCGKA state.
+                y.encryption_y.dcgka.my_keys = key_manager_y;
+                y.encryption_y.dcgka.pki = key_registry_y;
+                y
+            }
             None => {
                 let my_id: ActorId = manager.forge.public_key().into();
-
-                let key_manager_y = manager
-                    .store
-                    .key_manager()
-                    .await
-                    .map_err(SpaceError::KeyStore)?;
-
-                let key_registry_y = manager
-                    .store
-                    .key_registry()
-                    .await
-                    .map_err(SpaceError::KeyStore)?;
 
                 let dgm = EncryptionMembershipState {
                     members: HashSet::new(),
