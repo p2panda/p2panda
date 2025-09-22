@@ -160,7 +160,7 @@ where
         .into_iter()
         .filter_map(|event| match event {
             EncryptionGroupOutput::Application { plaintext } => Some(Event::Application {
-                space_id: space_id.clone(),
+                space_id: *space_id,
                 data: plaintext,
             }),
             GroupOutput::Control(_control_message) => {
@@ -168,7 +168,7 @@ where
                 todo!()
             }
             GroupOutput::Removed => Some(Event::Space(SpaceEvent::Ejected {
-                space_id: space_id.clone(),
+                space_id: *space_id,
             })),
         })
         .collect()
@@ -195,12 +195,12 @@ where
     {
         let event = match control_message {
             ControlMessage::Create { initial_members } => SpaceEvent::Created {
-                space_id: space_id.clone(),
+                space_id: *space_id,
                 group_id,
                 members: initial_members.to_owned(),
             },
             ControlMessage::Remove { removed } => SpaceEvent::Removed {
-                space_id: space_id.clone(),
+                space_id: *space_id,
                 group_id,
                 removed: *removed,
                 members: {
@@ -214,7 +214,7 @@ where
                 },
             },
             ControlMessage::Add { added } => SpaceEvent::Added {
-                space_id: space_id.clone(),
+                space_id: *space_id,
                 group_id,
                 added: *added,
                 members: {
