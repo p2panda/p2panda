@@ -13,7 +13,7 @@
 /// different order or being withheld for a longer time if internal processor requirements are not
 /// met.
 mod buffered;
-mod chained;
+mod composed;
 mod pipeline;
 mod processor;
 mod stream;
@@ -21,7 +21,7 @@ mod stream;
 mod tests;
 
 pub use buffered::{BufferedProcessor, BufferedProcessorError};
-pub use chained::{ChainedProcessors, ChainedProcessorsError};
+pub use composed::{ComposedError, ComposedProcessors};
 pub use pipeline::{LayeredBuilder, Pipeline, PipelineBuilder};
 pub use processor::Processor;
 pub use stream::{ProcessorExt, ProcessorStream, StreamLayerExt};

@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::processors::Processor;
-use crate::processors::chained::ChainedProcessors;
+use crate::processors::composed::ComposedProcessors;
 
 #[derive(Default)]
 pub struct PipelineBuilder<T> {
@@ -31,13 +31,13 @@ pub struct LayeredBuilder<P, T> {
 }
 
 impl<P, T> LayeredBuilder<P, T> {
-    pub fn layer<P2>(self, processor: P2) -> LayeredBuilder<ChainedProcessors<P, P2>, T>
+    pub fn layer<P2>(self, processor: P2) -> LayeredBuilder<ComposedProcessors<P, P2>, T>
     where
         P: Processor<T>,
         P2: Processor<P::Output>,
     {
         LayeredBuilder {
-            processor: ChainedProcessors {
+            processor: ComposedProcessors {
                 first: self.processor,
                 second: processor,
             },
