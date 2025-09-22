@@ -101,6 +101,12 @@ where
     }
 }
 
+// @TODO(adz): This error type is a bit ugly as technically it will never really happen (when the
+// channel is dropped everything else is gone as well). I would keep it in here for now until we
+// can be really confident to put an unreachable in `next` instead of the error type.
+//
+// Another solution is to remove this buffered layer altogether and have it inside of
+// `StreamProcessor` instead where we can hide this inside the polling logic.
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum BufferedProcessorError {
     #[error("processor was terminated")]
