@@ -18,6 +18,11 @@
 /// This stream processor design can be nicely combined with a Pub/Sub system (like `p2panda-net`),
 /// scoped and stateful stream controllers (in `p2panda-client`) and storage backends supporting
 /// atomic transactions (`p2panda-store`).
+///
+/// ## Single-Threaded Design
+///
+/// Processors are meant to only be executed within a single thread and do not allow `Send` or
+/// `Sync` types. Users need to make sure to run this code in a "local" tokio runtime.
 mod processors;
 #[cfg(test)]
 mod test_utils;
