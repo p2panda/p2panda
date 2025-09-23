@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! An `iroh`-specific gossip actor for message broadcast.
-
 mod joiner;
 mod listener;
 mod receiver;
@@ -23,7 +22,7 @@ use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
-use crate::{from_public_key, TopicId};
+use crate::{TopicId, from_public_key};
 
 /// Bytes received from gossip, along with the public key of the peer from whom the message was
 /// received. Note that the delivering peer is not necessarily the author of the bytes.
@@ -413,14 +412,14 @@ impl Actor for Gossip {
 mod tests {
     use std::time::Duration;
 
-    use iroh::discovery::static_provider::StaticProvider;
     use iroh::discovery::NodeInfo;
+    use iroh::discovery::static_provider::StaticProvider;
     use iroh::protocol::Router as IrohRouter;
     use iroh::{Endpoint as IrohEndpoint, Watcher as _};
-    use iroh_gossip::proto::Config as IrohGossipConfig;
     use iroh_gossip::ALPN as GOSSIP_ALPN;
+    use iroh_gossip::proto::Config as IrohGossipConfig;
     use p2panda_core::PrivateKey;
-    use ractor::{call, Actor};
+    use ractor::{Actor, call};
     use tokio::sync::mpsc::error::TryRecvError;
     use tokio::time::sleep;
 

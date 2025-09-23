@@ -6,7 +6,6 @@
 //! instance is spawned for each subscribed topic. The actor waits for the topic to be joined
 //! and then spawns sender and receiver actors. It receives gossip events from the receiver and
 //! forwards them up the chain to the main gossip orchestration actor.
-
 use std::time::Duration;
 
 use iroh::NodeId;
@@ -17,12 +16,12 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
+use crate::actors::gossip::ToGossip;
 use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::actors::gossip::ToGossip;
-use crate::{to_public_key, TopicId};
+use crate::{TopicId, to_public_key};
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.

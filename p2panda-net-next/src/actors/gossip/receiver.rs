@@ -2,7 +2,6 @@
 
 //! Gossip recevier actor which holds the gossip topic receiver, receives overlay messages and sends
 //! them to the gossip session actor.
-
 use futures_lite::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
