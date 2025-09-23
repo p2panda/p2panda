@@ -20,7 +20,6 @@ mod stream;
 #[cfg(test)]
 mod tests;
 
-pub use buffered::{BufferedProcessor, BufferedProcessorError};
 pub use composed::{ComposedError, ComposedProcessors};
 pub use pipeline::{LayeredBuilder, Pipeline, PipelineBuilder};
 pub use processor::Processor;

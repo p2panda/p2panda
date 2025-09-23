@@ -47,7 +47,7 @@ impl<T> AsyncBuffer<T> {
 /// Compare the resulting poll state from a future.
 pub fn assert_poll_eq<Fut: Future>(fut: Fut, poll: Poll<Fut::Output>)
 where
-    <Fut as futures_core::Future>::Output: PartialEq + std::fmt::Debug,
+    <Fut as Future>::Output: PartialEq + std::fmt::Debug,
 {
     assert_eq!(
         {

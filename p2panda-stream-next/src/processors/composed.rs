@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use thiserror::Error;
-
 use crate::processors::Processor;
 
 pub struct ComposedProcessors<P1, P2> {
@@ -54,11 +52,8 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ComposedError<P1, P2> {
-    #[error("{0}")]
     First(P1),
-
-    #[error("{0}")]
     Second(P2),
 }

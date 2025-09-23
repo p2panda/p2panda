@@ -10,11 +10,10 @@ all-features = true
 workspace = true
 
 [dependencies]
-async-channel = "2.5.0"
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
 pin-project = "1.1.10"
-thiserror = "2.0.16"
-tokio = { version = "1.47.1", default-features = false, features = ["rt", "macros"] }
+tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
+tokio-stream = { version = "0.1.17", default-features = false }
 
 [dev-dependencies]
 futures-test = { version = "0.3.31" }

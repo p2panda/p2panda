@@ -8,8 +8,10 @@ use std::task::Poll;
 use std::time::Duration;
 
 use futures_util::{StreamExt, stream};
-use tokio::{pin, task, time};
+use tokio::{task, time};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
+use crate::processors::buffered::Buffer;
 use crate::test_utils::{AsyncBuffer, assert_poll_eq};
 
 use super::*;
@@ -309,16 +311,36 @@ async fn buffered_processor() {
 
     local
         .run_until(async move {
-            let slow = SlowProcessor::new().with_next_delay(Duration::from_millis(5));
-            let buffered = BufferedProcessor::new(slow, 8);
+            let uppercase = UppercaseProcessor::default();
+            let (_buffered, tx, rx) = Buffer::new(uppercase);
 
-            for i in 0..128 {
-                assert!(buffered.process(i).await.is_ok());
-            }
+            tx.send("i scream".to_string()).unwrap();
+            tx.send("you scream".to_string()).unwrap();
+            tx.send("we all scream".to_string()).unwrap();
+            tx.send("for icecream".to_string()).unwrap();
 
-            for i in 0..128 {
-                assert_eq!(buffered.next().await, Ok(Ok(format!("processed_{}", i))));
-            }
+            let rx = UnboundedReceiverStream::new(rx);
+
+            let result = rx
+                .take(4) // Processor does not terminate by itself
+                .filter_map(|item| async {
+                    match item {
+                        Ok(item) => Some(item),
+                        Err(err) => panic!("{}", err),
+                    }
+                })
+                .collect::<Vec<String>>()
+                .await;
+
+            assert_eq!(
+                result,
+                vec![
+                    "I SCREAM".to_string(),
+                    "YOU SCREAM".to_string(),
+                    "WE ALL SCREAM".to_string(),
+                    "FOR ICECREAM".to_string(),
+                ]
+            );
         })
         .await;
 }
@@ -337,31 +359,14 @@ async fn into_stream() {
 
             let pipeline = stream::iter([62, 23, 11, 74])
                 .layer(counter)
-                .filter_map(|item| async {
-                    match item {
-                        Ok(item) => Some(item),
-                        Err(_) => None,
-                    }
-                })
-                .layer(BufferedProcessor::new(slow, 16))
-                .filter_map(|item| async {
-                    match item {
-                        Ok(Ok(item)) => Some(item),
-                        _ => None,
-                    }
-                })
-                .layer(uppercase);
-
-            pin!(pipeline);
-
-            let result = pipeline
-                .take(4)
-                .map(|item| item.expect("no buffered processor error"))
-                .collect::<Vec<String>>()
-                .await;
+                .filter_map(|item| async { item.ok() })
+                .layer(slow)
+                .filter_map(|item| async { item.ok() })
+                .layer(uppercase)
+                .filter_map(|item| async { item.ok() });
 
             assert_eq!(
-                result,
+                pipeline.take(4).collect::<Vec<String>>().await,
                 vec![
                     "PROCESSED_62_0".to_string(),
                     "PROCESSED_23_1".to_string(),

@@ -1,55 +1,46 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use async_channel::{Receiver, Sender};
-use thiserror::Error;
+use tokio::sync::mpsc;
 use tokio::task::{self, JoinHandle};
 
 use crate::processors::Processor;
 
-/// Processor "driving" another processor with a sized buffer, using an input stream to input new
-/// items and yielding processed items as a `Stream` implementation.
-///
-/// ## Errors
-///
-/// The processor silently fails on internal errors (channels closed, etc.), but forwards any
-/// potential failures occuring in the inner processor (both when calling `process` or `next`). Any
-/// higher-level logic can now reason about if that error should be forwarded or if the wrapper
-/// (and thus the inner processor itself) needs to be stopped.
-pub struct BufferedProcessor<P, T>
-where
-    P: Processor<T>,
-{
-    input_tx: Sender<T>,
-    output_rx: Receiver<Result<P::Output, P::Error>>,
+/// Layer "driving" expensive async processors with an unbounded buffer, using a channel receiver
+/// to input new items and forwarding processed items on a channel sender.
+pub struct Buffer {
     handle: JoinHandle<()>,
 }
 
-impl<P, T> BufferedProcessor<P, T>
-where
-    P: Processor<T> + 'static,
-    T: 'static,
-{
-    pub fn new(processor: P, buffer_size: usize) -> Self {
-        let (input_tx, input_rx) = async_channel::bounded::<T>(buffer_size);
-        let (output_tx, output_rx) =
-            async_channel::bounded::<Result<P::Output, P::Error>>(buffer_size);
+pub type BufferSender<T> = mpsc::UnboundedSender<T>;
+
+pub type BufferReceiver<P, T> =
+    mpsc::UnboundedReceiver<Result<<P as Processor<T>>::Output, <P as Processor<T>>::Error>>;
+
+impl Buffer {
+    pub fn new<P, T>(processor: P) -> (Self, BufferSender<T>, BufferReceiver<P, T>)
+    where
+        P: Processor<T> + 'static,
+        T: 'static,
+    {
+        let (input_tx, mut input_rx) = mpsc::unbounded_channel::<T>();
+        let (output_tx, output_rx) = mpsc::unbounded_channel::<Result<P::Output, P::Error>>();
 
         let handle = task::spawn_local(async move {
             loop {
                 tokio::select! {
                     input = input_rx.recv() => {
-                        let Ok(input) = input else {
+                        let Some(input) = input else {
                             break;
                         };
 
                         if let Err(err) = processor.process(input).await
-                            && output_tx.send(Err(err)).await.is_err() {
+                            && output_tx.send(Err(err)).is_err() {
                                 break;
                             }
                     }
 
                     output = processor.next() => {
-                        if output_tx.send(output).await.is_err() {
+                        if output_tx.send(output).is_err() {
                             break;
                         }
                     }
@@ -57,58 +48,12 @@ where
             }
         });
 
-        Self {
-            input_tx,
-            output_rx,
-            handle,
-        }
+        (Self { handle }, input_tx, output_rx)
     }
 }
 
-impl<P, T> Drop for BufferedProcessor<P, T>
-where
-    P: Processor<T>,
-{
+impl Drop for Buffer {
     fn drop(&mut self) {
         self.handle.abort();
     }
-}
-
-impl<P, T> Processor<T> for BufferedProcessor<P, T>
-where
-    P: Processor<T>,
-{
-    type Output = Result<P::Output, P::Error>;
-
-    type Error = BufferedProcessorError;
-
-    async fn process(&self, input: T) -> Result<(), Self::Error> {
-        // Ignore channel errors as this just indicates that the processor was shut down from the
-        // outside.
-        let _ = self.input_tx.send(input).await;
-
-        // Do not forward any errors which might occur from calling "process". Users of this "meta
-        // processor" around the inner processor will eventually receive it via "next". This is due
-        // to the stream design where all errors are "merged" into one output result.
-        Ok(())
-    }
-
-    async fn next(&self) -> Result<Self::Output, Self::Error> {
-        match self.output_rx.recv().await {
-            Ok(output) => Ok(output),
-            Err(_) => Err(BufferedProcessorError::Terminated),
-        }
-    }
-}
-
-// @TODO(adz): This error type is a bit ugly as technically it will never really happen (when the
-// channel is dropped everything else is gone as well). I would keep it in here for now until we
-// can be really confident to put an unreachable in `next` instead of the error type.
-//
-// Another solution is to remove this buffered layer altogether and have it inside of
-// `StreamProcessor` instead where we can hide this inside the polling logic.
-#[derive(Debug, PartialEq, Eq, Error)]
-pub enum BufferedProcessorError {
-    #[error("processor was terminated")]
-    Terminated,
 }
