@@ -6,6 +6,7 @@ use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_encryption::traits::GroupMessage;
 use p2panda_encryption::{Rng, RngError};
 use petgraph::algo::toposort;
 use thiserror::Error;
@@ -19,13 +20,13 @@ use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError};
 use crate::manager::Manager;
-use crate::message::{AuthoredMessage, SpaceMembershipControlMessage, SpacesArgs, SpacesMessage};
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
-    EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput, EncryptionGroupState,
-    OperationId,
+    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
+    EncryptionGroupState, OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -165,7 +166,7 @@ where
         let next_members = secret_members(y.auth_y.members(y.group_id));
 
         // Process the change of membership on encryption the context.
-        let (encryption_y, encryption_messages) = if current_members != next_members {
+        let (encryption_y, direct_messages) = if current_members != next_members {
             let manager = manager_ref.inner.read().await;
             Self::apply_secret_member_change(
                 y.encryption_y,
@@ -183,17 +184,12 @@ where
         // Construct space message and sign it in the forge (F)
         let dependencies: Vec<OperationId> = y.encryption_y.orderer.heads().to_vec();
         let space_message = {
-            let control_messages = encryption_messages
-                .iter()
-                .map(SpaceMembershipControlMessage::from_encryption_message)
-                .collect();
-
             let args = SpacesArgs::SpaceMembership {
                 space_id: y.space_id,
                 group_id: y.group_id,
                 space_dependencies: dependencies.clone(),
                 auth_message_id: auth_message.id(),
-                control_messages,
+                direct_messages,
             };
 
             let mut manager = manager_ref.inner.write().await;
@@ -286,7 +282,7 @@ where
                 space_id: y.space_id,
                 group_id: y.group_id,
                 auth_message_id: operation.id(),
-                control_messages: vec![],
+                direct_messages: vec![],
                 space_dependencies,
             };
             let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
@@ -313,40 +309,42 @@ where
         let SpacesArgs::SpaceMembership {
             group_id,
             space_dependencies,
-            auth_message_id,
             ..
         } = space_message.args()
         else {
             panic!("unexpected message type");
         };
 
-        // Sanity check.
-        assert_eq!(auth_message.id(), *auth_message_id);
-
-        // Process auth message on local auth state.
+        // Get space state and current members.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
+        let current_members = secret_members(y.auth_y.members(y.group_id));
+
+        // Process auth message on space auth state.
         y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
         y.processed_auth.insert(auth_message.id());
 
-        // Process encryption messages.
-        let encryption_messages = EncryptionMessage::from_membership(space_message);
-        let mut encryption_output = vec![];
-        for encryption_message in encryption_messages {
-            // Make encryption DGM aware of current auth members state.
-            let group_members = y.auth_y.members(y.group_id);
-            let secret_members = secret_members(group_members);
-            y.encryption_y.dcgka.dgm = EncryptionMembershipState {
-                members: HashSet::from_iter(secret_members.into_iter()),
-            };
+        // Get next space members.
+        let next_members = secret_members(y.auth_y.members(y.group_id));
 
-            let (encryption_y, encryption_output_inner) =
-                EncryptionGroup::receive(y.encryption_y, &encryption_message)
-                    .map_err(SpaceError::EncryptionGroup)?;
+        // Make the dgm aware of the new space members.
+        y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
 
-            encryption_output.extend(encryption_output_inner);
+        // Construct encryption message.
+        let my_id = self.manager.id().await;
+        let encryption_message = EncryptionMessage::from_membership(
+            space_message,
+            my_id,
+            auth_message,
+            current_members,
+            next_members,
+        );
 
-            y.encryption_y = encryption_y
-        }
+        // Process encryption message.
+        let (encryption_y, encryption_output) =
+            EncryptionGroup::receive(y.encryption_y, &encryption_message)
+                .map_err(SpaceError::EncryptionGroup)?;
+
+        y.encryption_y = encryption_y;
 
         // Persist new space state.
         {
@@ -365,33 +363,33 @@ where
 
     /// Apply a group membership change to the group encryption state.
     ///
-    /// The difference between the current and next secret group members (those with "read"
-    /// access) is computed and only the diff processed on the encryption group.
-    ///
-    /// If it is a group being removed/added to the encryption context, then one encryption
-    /// control message for each actor (individual) will be generated.
+    /// For "add" and "remove" actions, the difference between the current and next secret group
+    /// members (those with "read" access) is computed and only the diff processed on the
+    /// encryption group.
     async fn apply_secret_member_change(
         mut encryption_y: EncryptionGroupState<M>,
         auth_message: &AuthMessage<C>,
         current_members: Vec<ActorId>,
         next_members: Vec<ActorId>,
         rng: &Rng,
-    ) -> Result<(EncryptionGroupState<M>, Vec<EncryptionMessage>), SpaceError<ID, S, F, M, C, RS>>
-    {
+    ) -> Result<
+        (EncryptionGroupState<M>, Vec<EncryptionDirectMessage>),
+        SpaceError<ID, S, F, M, C, RS>,
+    > {
         // Make the DGM aware of group members after this group membership change has been
         // processed.
         encryption_y.dcgka.dgm = EncryptionMembershipState {
             members: HashSet::from_iter(next_members.clone().into_iter()),
         };
 
-        let mut messages = vec![];
+        let mut direct_messages = vec![];
         let encryption_y = {
             match &auth_message.payload().action {
                 AuthGroupAction::Create { .. } => {
                     let (encryption_y, message) =
                         EncryptionGroup::create(encryption_y, next_members.clone(), rng)
                             .map_err(SpaceError::EncryptionGroup)?;
-                    messages.push(message);
+                    direct_messages.extend(message.direct_messages());
                     encryption_y
                 }
                 AuthGroupAction::Add { .. } => {
@@ -406,7 +404,7 @@ where
                             EncryptionGroup::add(encryption_y, added, rng)
                                 .map_err(SpaceError::EncryptionGroup)?;
                         encryption_y = encryption_y_inner;
-                        messages.push(message);
+                        direct_messages.extend(message.direct_messages());
                     }
                     encryption_y
                 }
@@ -422,7 +420,7 @@ where
                             EncryptionGroup::remove(encryption_y, removed, rng)
                                 .map_err(SpaceError::EncryptionGroup)?;
                         encryption_y = encryption_y_inner;
-                        messages.push(message);
+                        direct_messages.extend(message.direct_messages());
                     }
                     encryption_y
                 }
@@ -430,7 +428,7 @@ where
             }
         };
 
-        Ok((encryption_y, messages))
+        Ok((encryption_y, direct_messages))
     }
 
     /// Handle space application messages.

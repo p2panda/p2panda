@@ -24,8 +24,7 @@ use crate::store::{AuthStore, SpaceStore};
 use crate::test_utils::MemoryStore;
 use crate::traits::SpaceId;
 use crate::types::{
-    ActorId, AuthControlMessage, AuthGroupAction, AuthGroupState, EncryptionControlMessage,
-    OperationId, StrongRemoveResolver,
+    ActorId, AuthControlMessage, AuthGroupAction, AuthGroupState, OperationId, StrongRemoveResolver,
 };
 
 type SeqNum = u64;
@@ -230,7 +229,7 @@ async fn create_space() {
         group_id,
         space_dependencies,
         auth_message_id,
-        control_messages: space_control_messages,
+        direct_messages,
     } = message_02.args()
     else {
         panic!("expected system message");
@@ -254,20 +253,8 @@ async fn create_space() {
         },
     );
 
-    // There is one encryption control message.
-    assert_eq!(space_control_messages.len(), 1);
-    let space_control_message = space_control_messages[0].clone();
-
-    // The encryption control message is an "add" for bob.
-    assert_eq!(
-        space_control_message.encryption_control_message(),
-        EncryptionControlMessage::Create {
-            initial_members: vec![my_id]
-        }
-    );
-
     // No direct messages as we are the only member.
-    assert!(space_control_message.direct_messages().is_empty());
+    assert!(direct_messages.is_empty());
 
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
@@ -404,7 +391,7 @@ async fn add_member_to_space() {
         space_id,
         group_id,
         space_dependencies,
-        control_messages: space_control_messages,
+        direct_messages,
         ..
     } = message_04.args()
     else {
@@ -434,18 +421,7 @@ async fn add_member_to_space() {
         },
     );
 
-    // There is one encryption control message.
-    assert_eq!(space_control_messages.len(), 1);
-    let space_control_message = space_control_messages[0].clone();
-
-    // The encryption control message is an "add" for bob.
-    assert_eq!(
-        space_control_message.encryption_control_message(),
-        EncryptionControlMessage::Add { added: bob_id }
-    );
-
-    // There is one direct message and it's also for bob.
-    let direct_messages = space_control_message.direct_messages();
+    // There is one direct message and it's for bob.
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
     assert!(matches!(
@@ -593,7 +569,7 @@ async fn add_pull_member_to_space() {
         group_id,
         space_dependencies,
         auth_message_id,
-        control_messages: encryption_control_messages,
+        direct_messages,
     } = message_04.args()
     else {
         panic!("expected system message");
@@ -625,8 +601,8 @@ async fn add_pull_member_to_space() {
         },
     );
 
-    // There are no encryption control messages.
-    assert_eq!(encryption_control_messages.len(), 0);
+    // There are no direct messages.
+    assert!(direct_messages.is_empty());
 
     let manager_ref = manager.inner.read().await;
     // Auth order has been updated.
@@ -821,7 +797,7 @@ async fn remove_member() {
 
     let SpacesArgs::SpaceMembership {
         group_id,
-        control_messages: space_control_messages,
+        direct_messages,
         ..
     } = message_04.args()
     else {
@@ -839,18 +815,8 @@ async fn remove_member() {
         },
     );
 
-    // There is one encryption control message.
-    assert_eq!(space_control_messages.len(), 1);
-    let space_control_message = space_control_messages[0].clone();
-
-    // The encryption control message is an "remove" of bob.
-    assert_eq!(
-        space_control_message.encryption_control_message(),
-        EncryptionControlMessage::Remove { removed: bob_id }
-    );
-
     // There are no direct messages (Bob shouldn't receive the new group secret).
-    assert_eq!(space_control_message.direct_messages().len(), 0);
+    assert!(direct_messages.is_empty());
 
     // Bob: Receive Message 03 & 04
     // ~~~~~~~~~~~~
@@ -858,8 +824,7 @@ async fn remove_member() {
     let events = bob_manager.process(&message_03).await.unwrap();
     assert!(events.is_empty());
     let events = bob_manager.process(&message_04).await.unwrap();
-    let event = events.first().unwrap();
-    assert!(matches!(event, Event::Removed { .. }));
+    assert!(matches!(events[0], Event::Removed { .. }));
 }
 
 #[tokio::test]
@@ -979,7 +944,7 @@ async fn concurrent_removal_conflict() {
 
     let SpacesArgs::SpaceMembership {
         group_id,
-        control_messages: space_control_messages,
+        direct_messages,
         ..
     } = message_06.args()
     else {
@@ -998,18 +963,7 @@ async fn concurrent_removal_conflict() {
         },
     );
 
-    // There is one encryption control message.
-    assert_eq!(space_control_messages.len(), 1);
-    let space_control_message = space_control_messages[0].clone();
-
-    // The encryption control message is an "add" of dave.
-    assert_eq!(
-        space_control_message.encryption_control_message(),
-        EncryptionControlMessage::Add { added: dave_id }
-    );
-
     // There is one direct message and it's for dave.
-    let direct_messages = space_control_message.direct_messages();
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
     assert!(matches!(
@@ -1100,7 +1054,7 @@ async fn space_from_existing_auth_state() {
     );
 
     let SpacesArgs::SpaceMembership {
-        control_messages: space_control_messages,
+        direct_messages,
         auth_message_id,
         ..
     } = message_03.args()
@@ -1112,10 +1066,10 @@ async fn space_from_existing_auth_state() {
     assert_eq!(*auth_message_id, message_01.id());
 
     // There are no encryption control message.
-    assert_eq!(space_control_messages.len(), 0);
+    assert!(direct_messages.is_empty());
 
     let SpacesArgs::SpaceMembership {
-        control_messages: space_control_messages,
+        direct_messages,
         auth_message_id,
         ..
     } = message_04.args()
@@ -1126,22 +1080,7 @@ async fn space_from_existing_auth_state() {
     // Space message references auth "create" message for space group.
     assert_eq!(*auth_message_id, message_02.id());
 
-    // There is one encryption control message.
-    assert_eq!(space_control_messages.len(), 1);
-    let space_control_message = space_control_messages[0].clone();
-
-    // The encryption control message is a "create" with alice, bob and claire as initial members.
-    assert!(matches!(space_control_message.encryption_control_message(),
-    EncryptionControlMessage::Create {
-        initial_members
-    } if {
-        let mut initial_members = initial_members.clone();
-        initial_members.sort();
-        initial_members == vec![alice_id, bob_id, claire_id]
-    }));
-
     // There are two direct messages.
-    let direct_messages = space_control_message.direct_messages();
     assert_eq!(direct_messages.len(), 2);
 
     // The messages are for bob and claire.
