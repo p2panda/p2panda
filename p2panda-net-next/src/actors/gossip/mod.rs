@@ -23,8 +23,11 @@ use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
-use crate::network::{FromNetwork, ToNetwork};
-use crate::{TopicId, from_public_key};
+use crate::{from_public_key, TopicId};
+
+/// Bytes received from gossip, along with the public key of the peer from whom the message was
+/// received. Note that the delivering peer is not necessarily the author of the bytes.
+pub type MsgBytesAndDeliverer = (Vec<u8>, PublicKey);
 
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
@@ -36,7 +39,7 @@ pub enum ToGossip {
     Subscribe(
         TopicId,
         Vec<PublicKey>,
-        RpcReplyPort<(Sender<ToNetwork>, Receiver<FromNetwork>)>,
+        RpcReplyPort<(Sender<Vec<u8>>, Receiver<MsgBytesAndDeliverer>)>,
     ),
 
     /// Join a set of peers on the given gossip topic.
@@ -80,7 +83,7 @@ pub struct GossipState {
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, Vec<ActorRef<ToGossipSession>>>,
     neighours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
-    from_gossip_senders: HashMap<TopicId, Vec<Sender<FromNetwork>>>,
+    from_gossip_senders: HashMap<TopicId, Vec<Sender<MsgBytesAndDeliverer>>>,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
@@ -261,10 +264,7 @@ impl Actor for Gossip {
                 topic_id,
                 session_id: _,
             } => {
-                let msg = FromNetwork::GossipMessage {
-                    bytes,
-                    delivered_from,
-                };
+                let msg = (bytes, delivered_from);
 
                 // Store the delivery scope of the received message.
                 state
@@ -413,18 +413,17 @@ impl Actor for Gossip {
 mod tests {
     use std::time::Duration;
 
-    use iroh::discovery::NodeInfo;
     use iroh::discovery::static_provider::StaticProvider;
+    use iroh::discovery::NodeInfo;
     use iroh::protocol::Router as IrohRouter;
     use iroh::{Endpoint as IrohEndpoint, Watcher as _};
-    use iroh_gossip::ALPN as GOSSIP_ALPN;
     use iroh_gossip::proto::Config as IrohGossipConfig;
+    use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
-    use ractor::{Actor, call};
+    use ractor::{call, Actor};
     use tokio::sync::mpsc::error::TryRecvError;
     use tokio::time::sleep;
 
-    use crate::network::{FromNetwork, ToNetwork};
     use crate::{from_private_key, from_public_key};
 
     use super::{Gossip, ToGossip};
@@ -506,47 +505,25 @@ mod tests {
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
-        ant_to_gossip
-            .send(ToNetwork::Message {
-                bytes: ant_msg_to_bat.clone(),
-            })
-            .await
-            .unwrap();
+        ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
         let Some(msg) = bat_from_gossip.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: ant_msg_to_bat,
-                delivered_from: ant_public_key
-            }
-        );
+        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
-        bat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: bat_msg_to_ant.clone(),
-            })
-            .await
-            .unwrap();
+        bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
         let Some(msg) = ant_from_gossip.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: bat_msg_to_ant,
-                delivered_from: bat_public_key
-            }
-        );
+        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -670,9 +647,7 @@ mod tests {
         // Send message from cat to ant and bat.
         let cat_msg_to_ant_and_bat = b"hi ant and bat!".to_vec();
         cat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: cat_msg_to_ant_and_bat.clone(),
-            })
+            .send(cat_msg_to_ant_and_bat.clone())
             .await
             .unwrap();
 
@@ -681,20 +656,12 @@ mod tests {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: cat_msg_to_ant_and_bat,
-                delivered_from: cat_public_key
-            }
-        );
+        assert_eq!(msg, (cat_msg_to_ant_and_bat, cat_public_key));
 
         // Send message from ant to bat and cat.
         let ant_msg_to_bat_and_cat = b"hi bat and cat!".to_vec();
         ant_to_gossip
-            .send(ToNetwork::Message {
-                bytes: ant_msg_to_bat_and_cat.clone(),
-            })
+            .send(ant_msg_to_bat_and_cat.clone())
             .await
             .unwrap();
 
@@ -703,14 +670,8 @@ mod tests {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: ant_msg_to_bat_and_cat,
-                // NOTE: message is delivered by bat; not directly from ant.
-                delivered_from: bat_public_key
-            }
-        );
+        // NOTE: In this case the message is delivered by bat; not directly from ant.
+        assert_eq!(msg, (ant_msg_to_bat_and_cat, bat_public_key));
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -827,47 +788,25 @@ mod tests {
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
-        ant_to_gossip
-            .send(ToNetwork::Message {
-                bytes: ant_msg_to_bat.clone(),
-            })
-            .await
-            .unwrap();
+        ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
         let Some(msg) = bat_from_gossip.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: ant_msg_to_bat,
-                delivered_from: ant_public_key
-            }
-        );
+        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
-        bat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: bat_msg_to_ant.clone(),
-            })
-            .await
-            .unwrap();
+        bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
         let Some(msg) = ant_from_gossip.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: bat_msg_to_ant,
-                delivered_from: bat_public_key
-            }
-        );
+        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
 
         // Stop the gossip actor and router for ant (going offline).
         ant_gossip_actor.stop(None);
@@ -882,12 +821,7 @@ mod tests {
 
         // Send message from cat to bat.
         let cat_msg_to_bat = b"hi bat!".to_vec();
-        cat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: cat_msg_to_bat.clone(),
-            })
-            .await
-            .unwrap();
+        cat_to_gossip.send(cat_msg_to_bat.clone()).await.unwrap();
 
         // Briefly sleep to allow processing of sent message.
         sleep(Duration::from_millis(50)).await;
@@ -897,12 +831,7 @@ mod tests {
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"anyone out there?".to_vec();
-        bat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: bat_msg_to_cat.clone(),
-            })
-            .await
-            .unwrap();
+        bat_to_gossip.send(bat_msg_to_cat.clone()).await.unwrap();
 
         // Briefly sleep to allow processing of sent message.
         sleep(Duration::from_millis(50)).await;
@@ -926,12 +855,7 @@ mod tests {
 
         // Send message from cat to bat.
         let cat_msg_to_bat = b"you there bat?".to_vec();
-        cat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: cat_msg_to_bat.clone(),
-            })
-            .await
-            .unwrap();
+        cat_to_gossip.send(cat_msg_to_bat.clone()).await.unwrap();
 
         // Briefly sleep to allow processing of sent message.
         sleep(Duration::from_millis(50)).await;
@@ -941,22 +865,11 @@ mod tests {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: cat_msg_to_bat,
-                delivered_from: cat_public_key
-            }
-        );
+        assert_eq!(msg, (cat_msg_to_bat, cat_public_key));
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"yoyo!".to_vec();
-        bat_to_gossip
-            .send(ToNetwork::Message {
-                bytes: bat_msg_to_cat.clone(),
-            })
-            .await
-            .unwrap();
+        bat_to_gossip.send(bat_msg_to_cat.clone()).await.unwrap();
 
         // Briefly sleep to allow processing of sent message.
         sleep(Duration::from_millis(500)).await;
@@ -966,13 +879,7 @@ mod tests {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::GossipMessage {
-                bytes: bat_msg_to_cat,
-                delivered_from: bat_public_key
-            }
-        );
+        assert_eq!(msg, (bat_msg_to_cat, bat_public_key));
 
         // Stop gossip actors.
         bat_gossip_actor.stop(None);

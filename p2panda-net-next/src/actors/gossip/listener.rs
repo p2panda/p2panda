@@ -7,7 +7,6 @@ use tokio::sync::mpsc::Receiver;
 use tracing::warn;
 
 use crate::actors::gossip::sender::ToGossipSender;
-use crate::network::ToNetwork;
 
 pub enum ToGossipListener {
     /// Wait for a message on the gossip topic channel.
@@ -17,7 +16,7 @@ pub enum ToGossipListener {
 impl Message for ToGossipListener {}
 
 pub struct GossipListenerState {
-    receiver: Option<Receiver<ToNetwork>>,
+    receiver: Option<Receiver<Vec<u8>>>,
 }
 
 pub struct GossipListener {
@@ -33,7 +32,7 @@ impl GossipListener {
 impl Actor for GossipListener {
     type State = GossipListenerState;
     type Msg = ToGossipListener;
-    type Arguments = Receiver<ToNetwork>;
+    type Arguments = Receiver<Vec<u8>>;
 
     async fn pre_start(
         &self,
@@ -76,9 +75,8 @@ impl Actor for GossipListener {
     ) -> Result<(), ActorProcessingErr> {
         if let Some(receiver) = &mut state.receiver {
             match receiver.recv().await {
-                Some(msg) => {
+                Some(bytes) => {
                     // Forward the message bytes to the gossip sender for broadcast.
-                    let ToNetwork::Message { bytes } = msg;
                     let _ = self.sender.cast(ToGossipSender::Broadcast(bytes));
                 }
                 None => {
