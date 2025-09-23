@@ -1609,7 +1609,7 @@ async fn events() {
             }
             5 => {
                 assert_eq!(events.len(), 1);
-                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Added { added, .. }) if added == dave_id);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Added { added, .. }) if added == vec![dave_id]);
             }
             // Dave removed from space auth group and encryption context.
             6 => {
@@ -1618,14 +1618,14 @@ async fn events() {
             }
             7 => {
                 assert_eq!(events.len(), 1);
-                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == dave_id);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == vec![dave_id]);
             }
             // Dave added to auth group with pull access and no resulting encryption context change.
             8 => {
                 assert_eq!(events.len(), 1);
                 assert_matches!(events[0].clone(), Event::Group(GroupEvent::Added { added, .. }) if added == Member::individual(dave_id));
             }
-            9 => assert_eq!(events.len(), 0),
+            9 => assert_eq!(events.len(), 0, "{:?}", events),
             // Remove member group from space auth group, both bob and claire removed from space
             // encryption context.
             10 => {
@@ -1633,14 +1633,9 @@ async fn events() {
                 assert_matches!(events[0].clone(), Event::Group(GroupEvent::Removed { removed, .. }) if removed == Member::group(group.id()));
             }
             11 => {
-                assert_eq!(events.len(), 4);
-                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == bob_id || removed == claire_id);
+                assert_eq!(events.len(), 2);
+                assert_matches!(events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == vec![bob_id, claire_id]);
                 assert_matches!(events[1].clone(), Event::Space(SpaceEvent::Ejected { .. }));
-                assert_matches!(events[2].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == bob_id || removed == claire_id);
-                // @TODO: unexpected second "ejected" received here, believe it's due to how
-                // "is_removed" flag is computed inside EncryptionGroup::receive(..) and the fact
-                // that multiple members can be removed in one go now.
-                assert_matches!(events[3].clone(), Event::Space(SpaceEvent::Ejected { .. }));
             }
             _ => panic!(),
         }
@@ -1851,16 +1846,6 @@ async fn events() {
             }
             11 => {
                 let Event::Space(SpaceEvent::Removed { mut members, .. }) = events[0].clone()
-                else {
-                    panic!()
-                };
-
-                let mut expected_members = vec![alice_id, bob_id];
-                expected_members.sort();
-                members.sort();
-                assert_eq!(members, expected_members);
-
-                let Event::Space(SpaceEvent::Removed { mut members, .. }) = events[2].clone()
                 else {
                     panic!()
                 };

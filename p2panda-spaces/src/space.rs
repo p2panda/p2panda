@@ -16,7 +16,7 @@ use crate::auth::orderer::AuthOrdererState;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
-use crate::event::{Event, encryption_message_to_space_event, encryption_output_to_space_events};
+use crate::event::{Event, encryption_output_to_space_events, space_message_to_space_event};
 use crate::forge::Forge;
 use crate::group::{Group, GroupError};
 use crate::manager::Manager;
@@ -25,8 +25,8 @@ use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
-    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
-    EncryptionGroupState, OperationId,
+    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
+    OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -307,6 +307,7 @@ where
         auth_message: &AuthMessage<C>,
     ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
+            space_id,
             group_id,
             space_dependencies,
             ..
@@ -317,14 +318,16 @@ where
 
         // Get space state and current members.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
-        let current_members = secret_members(y.auth_y.members(y.group_id));
+        let mut current_members = secret_members(y.auth_y.members(y.group_id));
+        current_members.sort();
 
         // Process auth message on space auth state.
         y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
         y.processed_auth.insert(auth_message.id());
 
         // Get next space members.
-        let next_members = secret_members(y.auth_y.members(y.group_id));
+        let mut next_members = secret_members(y.auth_y.members(y.group_id));
+        next_members.sort();
 
         // Make the dgm aware of the new space members.
         y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
@@ -335,12 +338,12 @@ where
             space_message,
             my_id,
             auth_message,
-            current_members,
-            next_members,
+            &current_members,
+            &next_members,
         );
 
         // Process encryption message.
-        let (encryption_y, _encryption_output) =
+        let (encryption_y, encryption_output) =
             EncryptionGroup::receive(y.encryption_y, &encryption_message)
                 .map_err(SpaceError::EncryptionGroup)?;
 
@@ -360,8 +363,28 @@ where
                 .map_err(SpaceError::SpaceStore)?;
         }
 
-        // @TODO: compute events.
-        Ok(vec![])
+        let mut events = encryption_output_to_space_events(space_id, encryption_output);
+
+        // If current and next member sets are equal it indicates that the space is not affected
+        // by this auth change. This can be because the space wasn't created yet, or the auth
+        // change simply does not effect the members of this space. In either case we don't want
+        // to emit any membership change event.
+        if current_members == next_members {
+            return Ok(events);
+        };
+
+        // Construct space membership event.
+        let membership_event = space_message_to_space_event(
+            space_message,
+            auth_message,
+            current_members,
+            next_members,
+        );
+
+        // Insert membership event at front of vec.
+        events.insert(0, membership_event);
+
+        Ok(events)
     }
 
     /// Apply a group membership change to the group encryption state.

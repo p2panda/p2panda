@@ -3,11 +3,12 @@
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
-use p2panda_encryption::data_scheme::{ControlMessage, GroupOutput};
+use p2panda_encryption::data_scheme::GroupOutput;
 
 use crate::ActorId;
 use crate::auth::message::AuthMessage;
-use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
+use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::space::{added_members, removed_members};
 use crate::traits::SpaceId;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 
@@ -46,6 +47,7 @@ impl Member {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Event<ID, C> {
     Application { space_id: ID, data: Vec<u8> },
     Group(GroupEvent<C>),
@@ -113,7 +115,7 @@ pub enum SpaceEvent<ID> {
         /// Individual in the spaces' encryption context.
         members: Vec<ActorId>,
     },
-    /// An individual was added to the space.
+    /// One or many individuals were added to the space.
     Added {
         /// Space id.
         space_id: ID,
@@ -121,13 +123,13 @@ pub enum SpaceEvent<ID> {
         /// Id of the group associated with this space.
         group_id: ActorId,
 
-        /// Individual added to the encryption context.
-        added: ActorId,
+        /// Individuals added to the encryption context.
+        added: Vec<ActorId>,
 
-        /// Individual in the spaces' encryption context.
+        /// Individuals in the spaces' encryption context.
         members: Vec<ActorId>,
     },
-    /// An individual was removed from the space.
+    /// One or many individuals were removed from the space.
     Removed {
         /// Space id.
         space_id: ID,
@@ -135,10 +137,10 @@ pub enum SpaceEvent<ID> {
         /// Id of the group associated with this space.
         group_id: ActorId,
 
-        /// Individual removed from the encryption context.
-        removed: ActorId,
+        /// Individuals removed from the encryption context.
+        removed: Vec<ActorId>,
 
-        /// Individual in the spaces' encryption context.
+        /// Individuals in the spaces' encryption context.
         members: Vec<ActorId>,
     },
     /// Local actor was removed from the space.
@@ -165,68 +167,13 @@ where
             }),
             GroupOutput::Control(_control_message) => {
                 // @TODO: when do control messages get emitted in group output?
-                todo!()
+                unimplemented!()
             }
             GroupOutput::Removed => Some(Event::Space(SpaceEvent::Ejected {
                 space_id: *space_id,
             })),
         })
         .collect()
-}
-
-pub(crate) fn encryption_message_to_space_event<ID, C>(
-    space_id: &ID,
-    group_id: ActorId,
-    current_members: &mut Vec<ActorId>,
-    encryption_message: &EncryptionMessage,
-) -> Option<Event<ID, C>>
-where
-    ID: SpaceId,
-    C: Conditions,
-{
-    let args = match encryption_message {
-        EncryptionMessage::Args(auth_args) => auth_args,
-        EncryptionMessage::Forged { args, .. } => args,
-    };
-
-    if let EncryptionArgs::System {
-        control_message, ..
-    } = args
-    {
-        let event = match control_message {
-            ControlMessage::Create { initial_members } => SpaceEvent::Created {
-                space_id: *space_id,
-                group_id,
-                members: initial_members.to_owned(),
-            },
-            ControlMessage::Remove { removed } => SpaceEvent::Removed {
-                space_id: *space_id,
-                group_id,
-                removed: *removed,
-                members: {
-                    let (idx, _) = current_members
-                        .iter()
-                        .enumerate()
-                        .find(|(_, member)| **member == *removed)
-                        .expect("member exists");
-                    current_members.remove(idx);
-                    current_members.clone()
-                },
-            },
-            ControlMessage::Add { added } => SpaceEvent::Added {
-                space_id: *space_id,
-                group_id,
-                added: *added,
-                members: {
-                    current_members.push(*added);
-                    current_members.clone()
-                },
-            },
-            ControlMessage::Update => unimplemented!(),
-        };
-        return Some(Event::Space(event));
-    }
-    None
 }
 
 pub(crate) fn auth_message_to_group_event<ID, C>(
@@ -279,4 +226,57 @@ where
     };
 
     Event::Group(group_event)
+}
+
+pub(crate) fn space_message_to_space_event<ID, C, M>(
+    space_message: &M,
+    auth_message: &AuthMessage<C>,
+    current_members: Vec<ActorId>,
+    next_members: Vec<ActorId>,
+) -> Event<ID, C>
+where
+    ID: SpaceId,
+    C: Conditions,
+    M: AuthoredMessage + SpacesMessage<ID, C>,
+{
+    let auth_args = match auth_message {
+        AuthMessage::Args(auth_args) => auth_args,
+        AuthMessage::Forged { args, .. } => args,
+    };
+
+    let SpacesArgs::SpaceMembership { space_id, .. } = space_message.args() else {
+        panic!("unexpected message type");
+    };
+    let space_id = *space_id;
+
+    let group_id = auth_args.control_message.group_id();
+    let space_event = match auth_args.control_message.action.clone() {
+        AuthGroupAction::Create { .. } => SpaceEvent::Created {
+            space_id,
+            group_id,
+            members: next_members,
+        },
+        AuthGroupAction::Add { .. } => {
+            let added = added_members(current_members, next_members.clone());
+            SpaceEvent::Added {
+                space_id,
+                group_id,
+                added,
+                members: next_members,
+            }
+        }
+        AuthGroupAction::Remove { .. } => {
+            let removed = removed_members(current_members, next_members.clone());
+            SpaceEvent::Removed {
+                space_id,
+                group_id,
+                removed,
+                members: next_members,
+            }
+        }
+        AuthGroupAction::Promote { .. } => unimplemented!(),
+        AuthGroupAction::Demote { .. } => unimplemented!(),
+    };
+
+    Event::Space(space_event)
 }
