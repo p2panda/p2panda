@@ -49,8 +49,8 @@ pub struct Space<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Space<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
+    F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,

@@ -8,10 +8,11 @@ use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
 use thiserror::Error;
 
+use crate::OperationId;
 use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
-use crate::manager::{Manager, ManagerError};
+use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
@@ -38,8 +39,8 @@ pub struct Group<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Group<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
+    F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
@@ -83,7 +84,7 @@ where
         let space_messages = manager_ref
             .sync_spaces(&auth_message)
             .await
-            .map_err(|err| GroupError::Manager(Box::new(err)))?;
+            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -120,7 +121,7 @@ where
             .manager
             .sync_spaces(&auth_message)
             .await
-            .map_err(|err| GroupError::Manager(Box::new(err)))?;
+            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -147,7 +148,7 @@ where
             .manager
             .sync_spaces(&auth_message)
             .await
-            .map_err(|err| GroupError::Manager(Box::new(err)))?;
+            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
         let mut messages = vec![auth_message];
         messages.extend(space_messages);
@@ -229,8 +230,6 @@ where
                 .map_err(GroupError::AuthStore)?;
         }
 
-        // @TODO: apply message to all local spaces we're a member of.
-
         Ok(message)
     }
 
@@ -283,9 +282,8 @@ where
     #[error("{0}")]
     MessageStore(<S as MessageStore<M>>::Error),
 
-    // @TODO: boxing is required here as ManagerError and GroupError reference each other and
-    // therefore cause an unbounded recursion cycle. We need to coerce from ManagerError as we
-    // call manager.sync_spaces inside of the Group api. Need to consider other solutions here.
-    #[error("{0}")]
-    Manager(Box<ManagerError<ID, S, F, M, C, RS>>),
+    // @TODO: We lose the concrete error type which caused sync of spaces to fail, ideal we would
+    // retain this type information.
+    #[error("error syncing group change {0} with local spaces: {1}")]
+    SyncSpaces(OperationId, String),
 }

@@ -59,8 +59,11 @@ pub(crate) struct ManagerInner<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Manager<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    // @TODO: the Debug bound is required as we are string formatting the manager error in
+    // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
+    // satisfactory way then this bound can be removed.
+    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
+    F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
