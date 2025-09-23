@@ -6,14 +6,17 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.97"
 futures-lite = "2.6.1"
-iroh = { version = "0.91.2", default-features = false }
-iroh-base = "0.91.2"
-iroh-gossip = "0.91.0"
+iroh = { version = "0.92.0", default-features = false }
+iroh-base = "0.92.0"
+iroh-gossip = "0.92.0"
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 ractor = { version = "0.15.8", features = ["cluster"] }
 serde = { version = "1.0.219", features = ["derive"] }
-tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
+tokio = { version = "1.47.1", features = ["rt", "sync"] }
 tracing = "0.1.41"
+
+[dev-dependencies]
+tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 
 [lints]
 workspace = true
