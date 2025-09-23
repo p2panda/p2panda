@@ -1,58 +1,97 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::cell::RefCell;
+use std::fmt::Display;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use thiserror::Error;
+use p2panda_stream::partial::{PartialOrder, PartialOrderError, PartialOrderStore};
+use tokio::sync::Notify;
 
 use crate::Processor;
 
+pub type OrdererError = PartialOrderError;
+
+// @TODO: Decide where this lives. Is it part of the core crate?
+pub trait OperationId: Clone + Copy + PartialEq + Eq + Display + StdHash {}
+
 pub trait Ordering<ID> {
+    // @TODO: Is this part of `Ordering` or another "id" trait?
+    fn id(&self) -> &ID;
+
     fn dependencies(&self) -> &[ID];
 }
 
-pub struct Orderer<ID> {
+pub struct Orderer<ID, S> {
+    inner: RefCell<PartialOrder<ID, S>>,
+    notify: Notify,
     _marker: PhantomData<ID>,
 }
 
-impl<ID> Orderer<ID> {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+impl<ID, S> Orderer<ID, S>
+where
+    ID: OperationId,
+    S: PartialOrderStore<ID>,
+{
+    pub fn new(store: S) -> Self {
+        let inner = PartialOrder::new(store);
+
         Self {
+            inner: RefCell::new(inner),
+            notify: Notify::new(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T, ID> Processor<T> for Orderer<ID>
+impl<T, ID, S> Processor<T> for Orderer<ID, S>
 where
     T: Ordering<ID>,
+    ID: OperationId,
+    S: PartialOrderStore<ID>,
 {
     type Output = T;
 
     type Error = OrdererError;
 
-    async fn process(&self, _input: T) -> Result<(), Self::Error> {
-        todo!()
+    async fn process(&self, input: T) -> Result<(), Self::Error> {
+        let mut inner = self.inner.borrow_mut();
+        inner.process(*input.id(), input.dependencies()).await?;
+        self.notify.notify_one(); // Wake up any pending next call
+        Ok(())
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
-        todo!()
+        loop {
+            let mut inner = self.inner.borrow_mut();
+            match inner.next().await {
+                Ok(Some(_id)) => {
+                    // @TODO: Get item from database.
+                    todo!()
+                }
+                Ok(None) => (),
+                Err(err) => return Err(err),
+            }
+
+            self.notify.notified().await;
+        }
     }
 }
-
-#[derive(Debug, Error)]
-pub enum OrdererError {}
 
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_stream::partial::MemoryStore;
     use serde::{Deserialize, Serialize};
     use tokio::task;
 
     use crate::StreamLayerExt;
 
-    use super::{Orderer, Ordering};
+    use super::{OperationId, Orderer, Ordering};
+
+    // @TODO: This should be implemented automatically in our crates.
+    impl OperationId for Hash {}
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     struct TestExtension {
@@ -60,7 +99,11 @@ mod tests {
     }
 
     impl Ordering<Hash> for Operation<TestExtension> {
-        fn dependencies<'a>(&'a self) -> &'a [Hash] {
+        fn id(&self) -> &Hash {
+            &self.hash
+        }
+
+        fn dependencies(&self) -> &[Hash] {
             match self.header.extensions {
                 Some(ref extensions) => &extensions.dependencies,
                 None => &[],
@@ -124,8 +167,10 @@ mod tests {
 
         local
             .run_until(async move {
+                let store = MemoryStore::default();
+
                 // Prepare processing pipeline for message ordering.
-                let orderer = Orderer::<Hash>::new();
+                let orderer = Orderer::<Hash, _>::new(store);
 
                 // @TODO: Finish test.
                 // Process Icebear's operation first. It will arrive "out of order".

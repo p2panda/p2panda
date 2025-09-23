@@ -30,6 +30,5 @@ mod processors;
 mod test_utils;
 
 #[cfg(feature = "orderer")]
-pub use orderer::{Orderer, OrdererError, Ordering};
+pub use orderer::{Orderer, Ordering};
 pub use processors::*;
-

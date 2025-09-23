@@ -11,12 +11,13 @@ workspace = true
 
 [features]
 default = ["orderer"]
-orderer = ["dep:thiserror"]
+orderer = ["dep:p2panda-stream"]
 
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+# @TODO: Remove this as soon as we've brought p2panda-stream-next into p2panda-stream.
+p2panda-stream = { path = "../p2panda-stream", version = "0.4.0", optional = true }
 pin-project = "1.1.10"
-thiserror = { version = "2.0.16", optional = true }
 tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
