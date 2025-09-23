@@ -23,8 +23,13 @@
 //!
 //! Processors are meant to only be executed within a single thread and do not allow `Send` or
 //! `Sync` types. Users need to make sure to run this code in a "local" tokio runtime.
+#[cfg(feature = "orderer")]
+mod orderer;
 mod processors;
 #[cfg(test)]
 mod test_utils;
 
+#[cfg(feature = "orderer")]
+pub use orderer::{Orderer, OrdererError, Ordering};
 pub use processors::*;
+
