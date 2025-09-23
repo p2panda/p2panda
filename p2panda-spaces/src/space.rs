@@ -143,9 +143,9 @@ where
         group.remove(member).await.map_err(SpaceError::Group)
     }
 
-    /// Wrap an already forged auth message in a space message and apply any required group
-    /// membership changes to the encryption group context. Any resulting encryption control
-    /// messages are published on the space message alongside a reference to the auth message.
+    /// Forge a space message from an already existing auth message and apply any resulting group
+    /// membership changes. Any resulting encryption direct messages are included in the space
+    /// message alongside a reference to the auth message.
     pub(crate) async fn process_auth_message(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         mut y: SpaceState<ID, M, C>,

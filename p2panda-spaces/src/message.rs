@@ -35,7 +35,6 @@ pub enum SpacesArgs<ID, C> {
         /// "Control message" describing group operation ("add member", "remove member", etc.).
         control_message: AuthControlMessage<C>,
 
-        // @TODO: We eventually want application dependencies here too.
         /// Auth dependencies. These are the latest heads of the global auth control message graph.
         auth_dependencies: Vec<OperationId>,
     },
