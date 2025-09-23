@@ -81,14 +81,12 @@ where
         // if the processor has more work to do. Processors never seize operation and are only
         // stopped via higher level logic. This is why we also continue here in the `Stream` and
         // never terminate.
-        let input = match this.input_stream.as_mut().poll_next(cx) {
-            Poll::Ready(Some(input)) => Some(input),
-            Poll::Ready(None) | Poll::Pending => None,
+        match this.input_stream.as_mut().poll_next(cx) {
+            Poll::Ready(Some(input)) => {
+                let _ = this.tx.send(input);
+            }
+            Poll::Ready(None) | Poll::Pending => (),
         };
-
-        if let Some(input) = input {
-            let _ = this.tx.send(input);
-        }
 
         // Check output of processor.
         //
