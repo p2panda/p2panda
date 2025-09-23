@@ -436,6 +436,13 @@ where
         &self,
         message: &M,
     ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+        let SpacesArgs::Application {
+            space_dependencies, ..
+        } = message.args()
+        else {
+            panic!("unexpected message type")
+        };
+
         let mut y = self.state().await?;
 
         // Process encryption message.
@@ -445,10 +452,12 @@ where
                 .map_err(SpaceError::EncryptionGroup)?
         };
 
-        // @TODO: application messages are not included in the encryption orderer state. We need
-        //        to decide what to do with them.
-
         y.encryption_y = encryption_y;
+
+        // Update dependencies.
+        y.encryption_y
+            .orderer
+            .add_dependency(encryption_message.id(), space_dependencies);
 
         // Persist new state.
         let mut manager = self.manager.inner.write().await;
@@ -623,11 +632,14 @@ where
 
         let mut manager = self.manager.inner.write().await;
 
+        // Encrypt plaintext towards encryption group members.
         let (encryption_y, encryption_args) =
             EncryptionGroup::send(y.encryption_y, plaintext, &manager.rng)
                 .map_err(SpaceError::EncryptionGroup)?;
+        y.encryption_y = encryption_y;
 
-        let args = {
+        // Construct space args.
+        let (args, dependencies) = {
             let EncryptionMessage::Args(encryption_args) = encryption_args else {
                 panic!("here we're only dealing with local operations");
             };
@@ -641,27 +653,30 @@ where
             else {
                 panic!("unexpected message type");
             };
-            SpacesArgs::Application {
+            let args = SpacesArgs::Application {
                 space_id: y.space_id,
-                space_dependencies: dependencies,
+                space_dependencies: dependencies.clone(),
                 group_secret_id,
                 nonce,
                 ciphertext,
-            }
+            };
+            (args, dependencies)
         };
 
-        // @TODO: application messages are not included in the encryption orderer state. We need
-        //        to decide what to do with them.
+        // Forge message.
+        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
 
-        y.encryption_y = encryption_y;
+        // Update dependencies.
+        y.encryption_y
+            .orderer
+            .add_dependency(message.id(), &dependencies);
 
+        // Persist space state.
         manager
             .store
             .set_space(&self.id, y)
             .await
             .map_err(SpaceError::SpaceStore)?;
-
-        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
 
         Ok(message)
     }

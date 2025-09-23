@@ -314,14 +314,28 @@ async fn send_and_receive() {
 
     // Bob sends a message to Alice.
 
-    let bob_space = bob.manager.space(alice_space.id()).await.unwrap().unwrap();
-
+    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
     let message = bob_space.publish(b"Hello, Alice!").await.unwrap();
+
+    // Bob's orderer state is updated.
+
+    let manager_ref = bob.manager.inner.read().await;
+    let bob_space_y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(vec![message.id()], bob_space_y.encryption_y.orderer.heads());
 
     // Alice processes Bob's encrypted message.
 
     let events = alice.manager.process(&message).await.unwrap();
     assert_eq!(events.len(), 1);
+
+    // Alice's orderer state is updated.
+
+    let manager_ref = alice.manager.inner.read().await;
+    let alice_space_y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
+    assert_eq!(
+        vec![message.id()],
+        alice_space_y.encryption_y.orderer.heads()
+    );
 
     #[allow(irrefutable_let_patterns)]
     let Event::Application { space_id, data } = events.first().unwrap() else {
