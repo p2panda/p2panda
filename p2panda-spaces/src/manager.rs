@@ -3,13 +3,13 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::time::Duration;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::Rng;
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
-use p2panda_encryption::key_registry::KeyRegistry;
-use p2panda_encryption::traits::PreKeyManager;
+use p2panda_encryption::key_bundle::Lifetime;
+use p2panda_encryption::key_manager::KeyManagerError;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -17,6 +17,7 @@ use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError};
+use crate::identity::{Identity, IdentityError};
 use crate::member::Member;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError};
@@ -50,6 +51,8 @@ pub struct Manager<ID, S, F, M, C, RS> {
 
 #[derive(Debug)]
 pub(crate) struct ManagerInner<ID, S, F, M, C, RS> {
+    pub(crate) config: ManagerConfig,
+    pub(crate) my_keys_rotated_at: u64, // UNIX timestamp in secs
     pub(crate) store: S,
     pub(crate) forge: F,
     pub(crate) rng: Rng,
@@ -72,7 +75,21 @@ where
     /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
     pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<ID, S, F, M, C, RS>> {
+        Self::new_with_config(store, forge, ManagerConfig::default(), rng)
+    }
+
+    /// Instantiate a new manager with custom configuration.
+    #[allow(clippy::result_large_err)]
+    pub fn new_with_config(
+        store: S,
+        forge: F,
+        config: ManagerConfig,
+        rng: Rng,
+    ) -> Result<Self, ManagerError<ID, S, F, M, C, RS>> {
         let inner = ManagerInner {
+            config,
+            // @TODO: generate and register our first key bundles.
+            my_keys_rotated_at: 0,
             store,
             forge,
             rng,
@@ -155,56 +172,6 @@ where
         Ok((group, messages))
     }
 
-    // @TODO: Make it work without async
-    /// The public key of the local actor.
-    pub async fn id(&self) -> ActorId {
-        let inner = self.inner.read().await;
-        inner.forge.public_key().into()
-    }
-
-    /// The local actor id and their long-term key bundle.
-    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, F, M, C, RS>> {
-        let inner = self.inner.read().await;
-
-        let y = inner
-            .store
-            .key_manager()
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        // @TODO: What happens if the forge changes their private key?
-        let my_id = inner.forge.public_key().into();
-
-        Ok(Member::new(my_id, KeyManager::prekey_bundle(&y)))
-    }
-
-    /// Register a member with long-term key bundle material.
-    pub async fn register_member(
-        &self,
-        member: &Member,
-    ) -> Result<(), ManagerError<ID, S, F, M, C, RS>> {
-        // @TODO: Reject invalid / expired key bundles.
-
-        let mut inner = self.inner.write().await;
-
-        let y = inner
-            .store
-            .key_registry()
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        // @TODO: Setting longterm bundle should overwrite previous one if this is newer.
-        let y_ii = KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone());
-
-        inner
-            .store
-            .set_key_registry(&y_ii)
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        Ok(())
-    }
-
     /// Process a spaces message.
     ///
     /// We expect messages to be signature-checked, dependency-checked & partially ordered.
@@ -215,11 +182,13 @@ where
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
-            SpacesArgs::KeyBundle {} => {
-                // @TODO:
-                // - Check if it is valid
-                // - Store it in key manager if it is newer than our previously stored one (if given)
-                todo!()
+            SpacesArgs::KeyBundle { key_bundle } => {
+                Identity::process_key_bundle(self.clone(), message.author(), key_bundle)
+                    .await
+                    .map_err(ManagerError::Identity)?;
+
+                // @TODO: introduce key bundle events.
+                vec![]
             }
             SpacesArgs::Auth { .. } => {
                 let event = Group::process(self.clone(), message)
@@ -249,6 +218,39 @@ where
         };
 
         Ok(events)
+    }
+
+    // @TODO: Make it work without async
+    /// The public key of the local actor.
+    pub async fn id(&self) -> ActorId {
+        Identity::id(self.clone()).await
+    }
+
+    /// The local actor id and their long-term key bundle.
+    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, F, M, C, RS>> {
+        Identity::me(self.clone())
+            .await
+            .map_err(ManagerError::Identity)
+    }
+
+    /// Register a member with long-term key bundle material.
+    pub async fn register_member(
+        &self,
+        member: &Member,
+    ) -> Result<(), ManagerError<ID, S, F, M, C, RS>> {
+        Identity::register_member(self.clone(), member)
+            .await
+            .map_err(ManagerError::Identity)
+    }
+
+    pub async fn key_bundle_expired(&self) -> bool {
+        Identity::key_bundle_expired(self.clone()).await
+    }
+
+    pub async fn key_bundle(&mut self) -> Result<M, ManagerError<ID, S, F, M, C, RS>> {
+        Identity::key_bundle(self.clone())
+            .await
+            .map_err(ManagerError::Identity)
     }
 
     /// Apply an auth message applied to the shared auth state to each space we know about
@@ -358,6 +360,31 @@ impl<ID, S, F, M, C, RS> Clone for Manager<ID, S, F, M, C, RS> {
     }
 }
 
+#[derive(Debug)]
+pub struct ManagerConfig {
+    // This is when a key bundle gets considered expired and thus invalid.
+    pub(crate) pre_key_lifetime: Duration,
+
+    // We rotate our own pre keys after this duration, to allow some time between peers receiving
+    // our new one and the old one expiring.
+    pub(crate) pre_key_rotate_after: Duration,
+}
+
+impl Default for ManagerConfig {
+    fn default() -> Self {
+        Self {
+            pre_key_lifetime: Duration::from_secs(60 * 60 * 24 * 90), // 90 days
+            pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 60), // 60 days
+        }
+    }
+}
+
+impl ManagerConfig {
+    pub fn lifetime(&self) -> Lifetime {
+        Lifetime::new(self.pre_key_lifetime.as_secs())
+    }
+}
+
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
 pub enum ManagerError<ID, S, F, M, C, RS>
@@ -373,6 +400,9 @@ where
 
     #[error(transparent)]
     Group(#[from] GroupError<ID, S, F, M, C, RS>),
+
+    #[error(transparent)]
+    Identity(#[from] IdentityError<ID, S, F, M, C>),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),

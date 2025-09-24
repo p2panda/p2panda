@@ -8,6 +8,7 @@ pub mod encryption;
 pub mod event;
 pub mod forge;
 pub mod group;
+pub mod identity;
 pub mod manager;
 pub mod member;
 pub mod message;

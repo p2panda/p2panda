@@ -228,7 +228,6 @@ where
         auth_message: Option<&AuthMessage<C>>,
     ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let events = match space_message.args() {
-            SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
                 let auth_message =

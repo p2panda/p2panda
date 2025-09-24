@@ -2,8 +2,8 @@
 
 use std::fmt::Debug;
 
-use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
+use p2panda_encryption::{crypto::xchacha20::XAeadNonce, key_bundle::LongTermKeyBundle};
 use serde::{Deserialize, Serialize};
 
 use crate::types::{ActorId, AuthControlMessage, EncryptionDirectMessage, OperationId};
@@ -27,9 +27,7 @@ pub enum SpacesArgs<ID, C> {
     /// System message, contains key bundle of the given author.
     ///
     /// Note: Applications should check if the key bundle was authored by the sender.
-    KeyBundle {
-        // @TODO: Key bundle material.
-    },
+    KeyBundle { key_bundle: LongTermKeyBundle },
 
     /// System message containing an auth control message.
     Auth {
