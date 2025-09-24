@@ -78,7 +78,7 @@ where
         // buffer queue. If there's nothing in it (Poll::Pending), we continue.
         //
         // If the input stream terminated, we ignore this and continue as well since we don't know
-        // if the processor has more work to do. Processors never seize operation and are only
+        // if the processor has more work to do. Processors never cease operation and are only
         // stopped via higher level logic. This is why we also continue here in the `Stream` and
         // never terminate.
         match this.input_stream.as_mut().poll_next(cx) {
