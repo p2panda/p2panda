@@ -5,12 +5,12 @@ use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use p2panda_stream::partial::{PartialOrder, PartialOrderError, PartialOrderStore};
+use p2panda_store_next::operations::OperationStore;
+use p2panda_stream::orderer::{PartialOrder, PartialOrderStore};
+use thiserror::Error;
 use tokio::sync::Notify;
 
 use crate::Processor;
-
-pub type OrdererError = PartialOrderError;
 
 // @TODO: Decide where this lives. Is it part of the core crate?
 pub trait OperationId: Clone + Copy + PartialEq + Eq + Display + StdHash {}
@@ -22,41 +22,48 @@ pub trait Ordering<ID> {
     fn dependencies(&self) -> &[ID];
 }
 
-pub struct Orderer<ID, S> {
-    inner: RefCell<PartialOrder<ID, S>>,
+pub struct Orderer<T, ID, PS, OS> {
+    inner: RefCell<PartialOrder<ID, PS>>,
+    operation_store: OS,
     notify: Notify,
-    _marker: PhantomData<ID>,
+    _marker: PhantomData<T>,
 }
 
-impl<ID, S> Orderer<ID, S>
+impl<T, ID, PS, OS> Orderer<T, ID, PS, OS>
 where
     ID: OperationId,
-    S: PartialOrderStore<ID>,
+    PS: PartialOrderStore<ID>,
+    OS: OperationStore<T, ID>,
 {
-    pub fn new(store: S) -> Self {
+    pub fn new(store: PS, operation_store: OS) -> Self {
         let inner = PartialOrder::new(store);
 
         Self {
             inner: RefCell::new(inner),
+            operation_store,
             notify: Notify::new(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T, ID, S> Processor<T> for Orderer<ID, S>
+impl<T, ID, PS, OS> Processor<T> for Orderer<T, ID, PS, OS>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    S: PartialOrderStore<ID>,
+    PS: PartialOrderStore<ID>,
+    OS: OperationStore<T, ID>,
 {
     type Output = T;
 
-    type Error = OrdererError;
+    type Error = OrdererError<T, ID, PS, OS>;
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let mut inner = self.inner.borrow_mut();
-        inner.process(*input.id(), input.dependencies()).await?;
+        inner
+            .process(*input.id(), input.dependencies())
+            .await
+            .map_err(|err| OrdererError::PartialOrderStore(err))?;
         self.notify.notify_one(); // Wake up any pending next call
         Ok(())
     }
@@ -70,7 +77,7 @@ where
                     todo!()
                 }
                 Ok(None) => (),
-                Err(err) => return Err(err),
+                Err(err) => return Err(OrdererError::PartialOrderStore(err)),
             }
 
             self.notify.notified().await;
@@ -78,11 +85,26 @@ where
     }
 }
 
+#[derive(Debug, Error)]
+pub enum OrdererError<T, ID, PS, OS>
+where
+    T: Ordering<ID>,
+    ID: OperationId,
+    PS: PartialOrderStore<ID>,
+    OS: OperationStore<T, ID>,
+{
+    #[error("{0}")]
+    PartialOrderStore(PS::Error),
+
+    #[error("{0}")]
+    OperationStore(OS::Error),
+}
+
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_stream::partial::MemoryStore;
+    use p2panda_stream::orderer::MemoryStore;
     use serde::{Deserialize, Serialize};
     use tokio::task;
 
@@ -167,16 +189,16 @@ mod tests {
 
         local
             .run_until(async move {
-                let store = MemoryStore::default();
-
-                // Prepare processing pipeline for message ordering.
-                let orderer = Orderer::<Hash, _>::new(store);
-
                 // @TODO: Finish test.
-                // Process Icebear's operation first. It will arrive "out of order".
-                // Process Pandas's operation next. It will "free" Icebear's operation.
-                let mut _stream =
-                    stream::iter(vec![operation_icebear, operation_panda]).layer(orderer);
+                // let store = MemoryStore::default();
+                //
+                // // Prepare processing pipeline for message ordering.
+                // let orderer = Orderer::new(store, operation_store);
+                //
+                // // Process Icebear's operation first. It will arrive "out of order".
+                // // Process Pandas's operation next. It will "free" Icebear's operation.
+                // let mut _stream =
+                //     stream::iter(vec![operation_icebear, operation_panda]).layer(orderer);
             })
             .await;
     }
