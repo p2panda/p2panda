@@ -81,7 +81,7 @@ pub struct GossipState {
     gossip: IrohGossip,
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, Vec<ActorRef<ToGossipSession>>>,
-    neighours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
+    neighbours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
     from_gossip_senders: HashMap<TopicId, Vec<Sender<MsgBytesAndDeliverer>>>,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
@@ -112,7 +112,7 @@ impl Actor for Gossip {
 
         let sessions_by_actor_id = HashMap::new();
         let sessions_by_topic_id = HashMap::new();
-        let neighours_by_topic_id = HashMap::new();
+        let neighbours_by_topic_id = HashMap::new();
         let from_gossip_senders = HashMap::new();
         let gossip_joined_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
@@ -125,7 +125,7 @@ impl Actor for Gossip {
             gossip,
             sessions_by_actor_id,
             sessions_by_topic_id,
-            neighours_by_topic_id,
+            neighbours_by_topic_id,
             from_gossip_senders,
             gossip_joined_senders,
             topic_delivery_scopes,
@@ -299,14 +299,14 @@ impl Actor for Gossip {
                 let peer_set = HashSet::from_iter(peers);
 
                 // Store the neighbours with whom we have joined the topic.
-                state.neighours_by_topic_id.insert(topic_id, peer_set);
+                state.neighbours_by_topic_id.insert(topic_id, peer_set);
 
                 Ok(())
             }
             ToGossip::NeighborUp { peer, session_id } => {
                 // Insert the peer into the set of neighbours.
                 if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighours_by_topic_id.get_mut(topic_id) {
+                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
                         peer_set.insert(peer);
                     }
                 }
@@ -316,7 +316,7 @@ impl Actor for Gossip {
             ToGossip::NeighborDown { peer, session_id } => {
                 // Remove the peer from the set of neighbours.
                 if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighours_by_topic_id.get_mut(topic_id) {
+                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
                         peer_set.remove(&peer);
                     }
                 }
@@ -355,7 +355,7 @@ impl Actor for Gossip {
                     {
                         drop(gossip_session_actor)
                     }
-                    if let Some(neighbours) = state.neighours_by_topic_id.remove(&topic_id) {
+                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
                         drop(neighbours)
                     }
                     if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
@@ -390,7 +390,7 @@ impl Actor for Gossip {
                     {
                         drop(gossip_session_actor)
                     }
-                    if let Some(neighbours) = state.neighours_by_topic_id.remove(&topic_id) {
+                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
                         drop(neighbours)
                     }
                     if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
@@ -421,11 +421,168 @@ mod tests {
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
     use tokio::sync::mpsc::error::TryRecvError;
+    use tokio::sync::oneshot;
     use tokio::time::sleep;
 
+    use crate::actors::test_utils::{ActorResult, TestSupervisor};
     use crate::{from_private_key, from_public_key};
 
-    use super::{Gossip, ToGossip};
+    use super::{Gossip, GossipState, ToGossip};
+
+    #[tokio::test]
+    async fn correct_termination_state() {
+        // This test asserts that the state of `sessions_by_topic_id` and `neighbours_by_topic_id`
+        // is correctly updated within the `Gossip` actor.
+        // Scenario:
+        //
+        // - Ant joins the gossip topic
+        // - Bat joins the gossip topic using ant as bootstrap peer
+        // - Cat joins the gossip topic using ant as bootstrap peer
+        // - Terminate ant's gossip actor
+        // - Assert: Ant's gossip actor state includes the topic that was subscribed to
+        // - Assert: Ant's gossip actor state maps the subscribed topic id to the public keys of
+        //           bat and cat (neighbours)
+
+        // Create topic id.
+        let topic_id = [3; 32];
+
+        // Create keypairs.
+        let ant_private_key = PrivateKey::new();
+        let bat_private_key = PrivateKey::new();
+        let cat_private_key = PrivateKey::new();
+
+        let ant_public_key = ant_private_key.public_key();
+        let bat_public_key = bat_private_key.public_key();
+        let cat_public_key = cat_private_key.public_key();
+
+        // Create endpoints.
+        let ant_discovery = StaticProvider::new();
+        let ant_endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(ant_private_key))
+            .add_discovery(ant_discovery.clone())
+            .bind()
+            .await
+            .unwrap();
+
+        let bat_discovery = StaticProvider::new();
+        let bat_endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(bat_private_key))
+            .add_discovery(bat_discovery.clone())
+            .bind()
+            .await
+            .unwrap();
+
+        let cat_discovery = StaticProvider::new();
+        let cat_endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(cat_private_key))
+            .add_discovery(cat_discovery.clone())
+            .bind()
+            .await
+            .unwrap();
+
+        // Obtain ant's node information including direct addresses.
+        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
+            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+
+        // Bat discovers ant through some out-of-band process.
+        bat_discovery.add_node_info(ant_node_info.clone());
+
+        // Cat discovers ant through some out-of-band process.
+        cat_discovery.add_node_info(ant_node_info);
+
+        // Spawn gossip actors.
+        let gossip_config = IrohGossipConfig::default();
+        let (ant_gossip_actor, ant_gossip_actor_handle) =
+            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+                .await
+                .unwrap();
+        let (bat_gossip_actor, bat_gossip_actor_handle) =
+            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+                .await
+                .unwrap();
+        let (cat_gossip_actor, cat_gossip_actor_handle) =
+            Actor::spawn(None, Gossip, (cat_endpoint.clone(), gossip_config.clone()))
+                .await
+                .unwrap();
+
+        // Get handles to gossip.
+        let ant_gossip = call!(ant_gossip_actor, ToGossip::Handle).unwrap();
+        let bat_gossip = call!(bat_gossip_actor, ToGossip::Handle).unwrap();
+        let cat_gossip = call!(bat_gossip_actor, ToGossip::Handle).unwrap();
+
+        // Build and spawn routers.
+        let ant_router = IrohRouter::builder(ant_endpoint.clone())
+            .accept(GOSSIP_ALPN, ant_gossip)
+            .spawn();
+        let bat_router = IrohRouter::builder(bat_endpoint.clone())
+            .accept(GOSSIP_ALPN, bat_gossip)
+            .spawn();
+        let cat_router = IrohRouter::builder(cat_endpoint.clone())
+            .accept(GOSSIP_ALPN, cat_gossip)
+            .spawn();
+
+        // Subscribe to the gossip topic.
+        let ant_peers = Vec::new();
+        let bat_peers = vec![ant_public_key];
+        let cat_peers = vec![ant_public_key];
+
+        let (_ant_to_gossip, _ant_from_gossip) =
+            call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
+        let (_bat_to_gossip, mut _bat_from_gossip) =
+            call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+        let (_cat_to_gossip, mut _cat_from_gossip) =
+            call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        // Spawn a test supervisor actor.
+        let (ant_supervisor_tx, ant_supervisor_rx) = oneshot::channel();
+        let (ant_supervisor_actor, ant_supervisor_actor_handle) =
+            Actor::spawn(None, TestSupervisor, ant_supervisor_tx)
+                .await
+                .unwrap();
+
+        // Link ant's gossip actor to the test supervisor.
+        ant_gossip_actor.link(ant_supervisor_actor.into());
+
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
+
+        // Stop ant's actors and router.
+        ant_gossip_actor.stop(None);
+        ant_gossip_actor_handle.await.unwrap();
+
+        ant_router.shutdown().await.unwrap();
+
+        // Get the termination result from ant's supervisor actor.
+        let Ok(ant_gossip_actor_result) = ant_supervisor_rx.await else {
+            panic!("expected result from gossip actor")
+        };
+        let ActorResult::Terminated(state, _reason) = ant_gossip_actor_result else {
+            panic!("expected clean termination of gossip actor")
+        };
+        let Some(mut boxed_state) = state else {
+            panic!("expected state to be returned from terminated gossip actor")
+        };
+
+        // Ensure state expectations are correct for ant's gossip actor.
+        if let Ok(state) = boxed_state.take::<GossipState>() {
+            assert!(state.sessions_by_topic_id.contains_key(&topic_id));
+
+            let neighbours = state.neighbours_by_topic_id.get(&topic_id).unwrap();
+            assert!(neighbours.contains(&bat_public_key));
+            assert!(neighbours.contains(&cat_public_key));
+        }
+
+        // Stop all other actors and routers.
+        bat_gossip_actor.stop(None);
+        cat_gossip_actor.stop(None);
+        bat_gossip_actor_handle.await.unwrap();
+        cat_gossip_actor_handle.await.unwrap();
+        ant_supervisor_actor_handle.await.unwrap();
+
+        bat_router.shutdown().await.unwrap();
+        cat_router.shutdown().await.unwrap();
+    }
 
     #[tokio::test]
     async fn two_peer_gossip() {
