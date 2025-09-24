@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_auth::traits::{Conditions};
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_bundle::{KeyBundleError, LongTermKeyBundle};
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
 use p2panda_encryption::key_registry::KeyRegistry;
@@ -39,7 +39,7 @@ where
     }
 
     /// The local actor id and their long-term key bundle.
-    /// 
+    ///
     /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub(crate) async fn me(
         manager_ref: Manager<ID, S, F, M, C, RS>,
@@ -127,7 +127,7 @@ where
     }
 
     /// Forge a key bundle message containing my latest key bundle.
-    /// 
+    ///
     /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn key_bundle(
         manager_ref: Manager<ID, S, F, M, C, RS>,
@@ -145,7 +145,7 @@ where
         Ok(message)
     }
 
-    /// Process a key bundle received from the network. 
+    /// Process a key bundle received from the network.
     pub async fn process_key_bundle(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         author: ActorId,
@@ -155,10 +155,7 @@ where
         let identity_key = ActorId::from_bytes(key_bundle.identity_key().as_bytes())
             .expect("valid public key bytes");
         if identity_key == author {
-            return Err(IdentityError::KeyBundleAuthor(
-                identity_key,
-                author,
-            ));
+            return Err(IdentityError::KeyBundleAuthor(identity_key, author));
         }
 
         // @TODO: Setting longterm bundle should overwrite previous one if this is newer.
