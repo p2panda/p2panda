@@ -13,10 +13,9 @@
 //! techniques for outdated operations etc.
 mod macros;
 pub mod operation;
-mod ordering;
+pub mod orderer;
 mod stream;
 #[cfg(test)]
 mod test_utils;
 
-pub use ordering::*;
 pub use stream::*;

@@ -1,22 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod operations;
 pub mod store;
 
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use thiserror::Error;
-
-pub use crate::partial::store::{MemoryStore, PartialOrderStore};
-
-/// Error types which may be returned from `PartialOrder` methods.
-#[derive(Debug, Error)]
-pub enum PartialOrderError {
-    #[error("store error: {0}")]
-    StoreError(String),
-}
+pub use crate::orderer::store::{MemoryStore, PartialOrderStore};
 
 /// Struct for establishing partial order over a set of items which form a dependency graph.
 ///
@@ -99,12 +89,12 @@ where
     }
 
     /// Pop the next item from the ready queue.
-    pub async fn next(&mut self) -> Result<Option<K>, PartialOrderError> {
+    pub async fn next(&mut self) -> Result<Option<K>, S::Error> {
         self.store.take_next_ready().await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), PartialOrderError> {
+    pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), S::Error> {
         if !self.store.ready(dependencies).await? {
             self.store.mark_pending(key, dependencies.to_vec()).await?;
             return Ok(());
@@ -120,7 +110,7 @@ where
     }
 
     /// Recursively check if any pending items now have their dependencies met.
-    async fn process_pending(&mut self, key: K) -> Result<(), PartialOrderError> {
+    async fn process_pending(&mut self, key: K) -> Result<(), S::Error> {
         // Get all items which depend on the passed key.
         let Some(dependents) = self.store.get_next_pending(key).await? else {
             return Ok(());
