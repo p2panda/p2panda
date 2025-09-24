@@ -6,8 +6,8 @@
 //! in handy for many peer-to-peer applications.
 //!
 //! Developers can "stack up" different stream processors on top of each other and layer them based
-//! on the application's needs. Each processor will formulate requirements (in form of a Rust
-//! trait) to the underlying data type you either "bring yourself" or use our `Operation` data type
+//! on the application's needs. Each processor will formulate requirements (in the form of a Rust
+//! trait) to the underlying data type; you either "bring your own" or use our `Operation` data type
 //! which has most requirements implemented.
 //!
 //! In p2panda we clearly separate the "event delivery" layer from the "event processing" one. This

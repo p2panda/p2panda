@@ -4,7 +4,7 @@
 ///
 /// Processors take in items (input) and yield "processed" or "enriched" versions of them at _some
 /// point_ (output). Please note that these items do _not_ necessarily need to come out in the same
-/// order as they came in. Processors can keep items around until it's internal logic decided
+/// order as they came in. Processors can keep items around until their internal logic decides
 /// they're ready to go, and this can happen in any order required.
 ///
 /// Users of processors will use the `process` method to insert "input" items and call `next` to

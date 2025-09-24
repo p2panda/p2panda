@@ -221,7 +221,7 @@ async fn expensive_async_processing() {
     local
         .run_until(async move {
             // Have a "slow" processing layer which will not return a result instantly (first
-            // poll will _not_ yield Poll::Ready(T).
+            // poll will _not_ yield Poll::Ready(T)).
             let slow = SlowProcessor::new()
                 .with_process_delay(Duration::from_millis(25))
                 .with_next_delay(Duration::from_millis(50));
