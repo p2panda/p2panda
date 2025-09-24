@@ -1,0 +1,23 @@
+[package]
+name = "p2panda-stream-next"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
+
+[dependencies]
+futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+pin-project = "1.1.10"
+tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
+
+[dev-dependencies]
+futures-test = { version = "0.3.31" }
+futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
+serde = { version = "1.0.219" }
+tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }
+tokio-stream = { version = "0.1.17", default-features = false }
