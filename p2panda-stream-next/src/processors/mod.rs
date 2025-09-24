@@ -4,7 +4,7 @@
 //!
 //! Every processor observes incoming events (as part of a stream) and processes them internally.
 //! This usually involves some sort of "materialisation logic" where state is derived from
-//! observing these events, enhancing the underlying core data type with additional (security,
+//! observing these events and enhancing the underlying core data type with additional (security,
 //! integrity, etc.) guarantees which can be queried by further layers. Eventually the "enhanced",
 //! processed events will be put back on the stream and then further processed by additional layers
 //! or forwarded to the application layer.
