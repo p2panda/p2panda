@@ -26,7 +26,7 @@ use crate::utils::{typed_member, typed_members};
 pub struct Group<ID, S, F, M, C, RS> {
     /// Reference to the manager.
     ///
-    /// This allows us build an API where users can treat "group" instances independently from the
+    /// This allows us to build an API where users can treat "group" instances independently from the
     /// manager API, even though internally it has a reference to it.
     manager: Manager<ID, S, F, M, C, RS>,
 
