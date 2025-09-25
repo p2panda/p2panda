@@ -82,7 +82,7 @@ where
         let auth_message =
             Self::process_local_control(manager_ref.clone(), control_message).await?;
         let space_messages = manager_ref
-            .sync_spaces(&auth_message)
+            .apply_group_change_to_spaces(&auth_message)
             .await
             .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
@@ -119,7 +119,7 @@ where
             Self::process_local_control(self.manager.clone(), control_message).await?;
         let space_messages = self
             .manager
-            .sync_spaces(&auth_message)
+            .apply_group_change_to_spaces(&auth_message)
             .await
             .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
@@ -146,7 +146,7 @@ where
             Self::process_local_control(self.manager.clone(), control_message).await?;
         let space_messages = self
             .manager
-            .sync_spaces(&auth_message)
+            .apply_group_change_to_spaces(&auth_message)
             .await
             .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 

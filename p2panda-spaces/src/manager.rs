@@ -256,7 +256,7 @@ where
     /// This is required so that all spaces stay "in sync" with the shared auth state and produce
     /// any required encryption direct messages in order to correctly update a spaces' encryption
     /// state.
-    pub(crate) async fn sync_spaces(
+    pub(crate) async fn apply_group_change_to_spaces(
         &self,
         auth_message: &M,
     ) -> Result<Vec<M>, ManagerError<ID, S, F, M, C, RS>> {
@@ -275,7 +275,7 @@ where
                 panic!("expect space to exist");
             };
             let Some(message) = space
-                .sync_auth(auth_message)
+                .handle_auth_group_change(auth_message)
                 .await
                 .map_err(ManagerError::Space)?
             else {

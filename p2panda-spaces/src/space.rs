@@ -471,7 +471,7 @@ where
     }
 
     /// Sync a shared auth state change with this space.
-    pub(crate) async fn sync_auth(
+    pub(crate) async fn handle_auth_group_change(
         &self,
         auth_message: &M,
     ) -> Result<Option<M>, SpaceError<ID, S, F, M, C, RS>> {
