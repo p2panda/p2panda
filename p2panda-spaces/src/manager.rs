@@ -252,7 +252,7 @@ where
 
     /// Apply an auth message applied to the shared auth state to each space we know about
     /// locally.
-    /// 
+    ///
     /// This is required so that all spaces stay "in sync" with the shared auth state and produce
     /// any required encryption direct messages in order to correctly update a spaces' encryption
     /// state.

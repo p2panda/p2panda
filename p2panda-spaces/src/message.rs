@@ -39,7 +39,7 @@ pub enum SpacesArgs<ID, C> {
         /// Auth dependencies. These are the latest heads of the global auth control message graph.
         auth_dependencies: Vec<OperationId>,
     },
-    
+
     /// System message containing a reference to an `SpacesArgs::Auth` message and additional
     /// fields for applying the resulting membership change to a specific space.
     SpaceMembership {
