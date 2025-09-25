@@ -3,6 +3,7 @@
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::traits::SpaceId;
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 #[derive(Clone, Debug)]
@@ -26,15 +27,14 @@ impl<C> AuthMessage<C>
 where
     C: Conditions,
 {
-    pub(crate) fn from_forged<M>(message: &M) -> Self
+    pub(crate) fn from_forged<ID, M>(message: &M) -> Self
     where
-        M: AuthoredMessage + SpacesMessage<C>,
+        ID: SpaceId,
+        M: AuthoredMessage + SpacesMessage<ID, C>,
     {
-        let SpacesArgs::ControlMessage {
-            id,
+        let SpacesArgs::Auth {
             control_message,
             auth_dependencies,
-            ..
         } = message.args()
         else {
             panic!("unexpected message type")
@@ -44,10 +44,7 @@ where
             operation_id: message.id(),
             args: AuthArgs {
                 dependencies: auth_dependencies.clone(),
-                control_message: AuthControlMessage {
-                    group_id: *id,
-                    action: control_message.to_auth_action(),
-                },
+                control_message: control_message.to_owned(),
             },
         }
     }
