@@ -29,7 +29,7 @@ use crate::types::{
 
 type SeqNum = u64;
 
-// Implement SpaceId for i32 which is what we use space identifiers in the tests.
+// Implement SpaceId for i32 which is what we use as space identifiers in the tests.
 impl SpaceId for i32 {}
 
 #[derive(Clone, Debug)]
