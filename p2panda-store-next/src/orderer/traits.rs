@@ -25,6 +25,7 @@ pub trait OrdererStore<T> {
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get all pending items which directly depend on the given key.
+    #[allow(clippy::type_complexity)]
     fn get_next_pending(
         &self,
         key: T,

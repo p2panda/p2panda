@@ -9,6 +9,7 @@ use std::rc::Rc;
 use crate::orderer::OrdererStore;
 
 /// In-Memory database implementation of the `OrdererStore` trait.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct OrdererMemoryStore<K> {
     pub(crate) ready: Rc<RefCell<HashSet<K>>>,

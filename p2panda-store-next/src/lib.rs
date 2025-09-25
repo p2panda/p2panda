@@ -2,3 +2,5 @@
 
 pub mod operations;
 pub mod orderer;
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
