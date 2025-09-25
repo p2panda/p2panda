@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod store;
-
 use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-pub use crate::orderer::store::{MemoryStore, PartialOrderStore};
+// @TODO: Change this to p2panda_store when ready.
+use p2panda_store_next::orderer::OrdererStore;
 
 /// Struct for establishing partial order over a set of items which form a dependency graph.
 ///
@@ -79,7 +78,7 @@ pub struct PartialOrder<K, S> {
 impl<K, S> PartialOrder<K, S>
 where
     K: Clone + Copy + Display + StdHash + PartialEq + Eq,
-    S: PartialOrderStore<K>,
+    S: OrdererStore<K>,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -141,7 +140,10 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use super::{MemoryStore, PartialOrder};
+    // @TODO: Change this to p2panda_store when ready.
+    use p2panda_store_next::orderer::OrdererMemoryStore;
+
+    use super::PartialOrder;
 
     #[tokio::test]
     async fn partial_order() {
@@ -158,36 +160,36 @@ mod tests {
         ];
 
         // A has no dependencies and so it's added straight to the processed set and ready queue.
-        let store = MemoryStore::default();
+        let store = OrdererMemoryStore::default();
         let mut checker = PartialOrder::new(store);
         let item = graph[0].clone();
         checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 1);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 1);
+        assert_eq!(checker.store.ready_len(), 1);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 1);
 
         // B has it's dependencies met and so it too is added to the processed set and ready
         // queue.
         let item = graph[1].clone();
         checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 2);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 2);
+        assert_eq!(checker.store.ready_len(), 2);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 2);
 
         // D doesn't have both its dependencies met yet so it waits in the pending queue.
         let item = graph[3].clone();
         checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 2);
-        assert_eq!(checker.store.pending.len(), 1);
-        assert_eq!(checker.store.ready_queue.len(), 2);
+        assert_eq!(checker.store.ready_len(), 2);
+        assert_eq!(checker.store.pending_len(), 1);
+        assert_eq!(checker.store.ready_queue_len(), 2);
 
         // C satisfies D's dependencies and so both C & D are added to the processed set
         // and ready queue.
         let item = graph[2].clone();
         checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 4);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 4);
+        assert_eq!(checker.store.ready_len(), 4);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 4);
 
         let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
@@ -217,14 +219,14 @@ mod tests {
             ("G", vec!["F"]),
         ];
 
-        let store = MemoryStore::default();
+        let store = OrdererMemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
         }
-        assert_eq!(checker.store.ready.len(), 1);
-        assert_eq!(checker.store.pending.len(), 5);
-        assert_eq!(checker.store.ready_queue.len(), 1);
+        assert_eq!(checker.store.ready_len(), 1);
+        assert_eq!(checker.store.pending_len(), 5);
+        assert_eq!(checker.store.ready_queue_len(), 1);
 
         let missing_dependency = ("B", vec!["A"]);
 
@@ -232,9 +234,9 @@ mod tests {
             .process(missing_dependency.0, &missing_dependency.1)
             .await
             .unwrap();
-        assert_eq!(checker.store.ready.len(), 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 7);
+        assert_eq!(checker.store.ready_len(), 7);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 7);
 
         let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
@@ -273,16 +275,16 @@ mod tests {
             ("D", vec!["C1", "C2", "C3"]),
         ];
 
-        let store = MemoryStore::default();
+        let store = OrdererMemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
         }
 
         // A1, B1 and C1 have dependencies met and were already processed.
-        assert!(checker.store.ready.len() == 3);
-        assert_eq!(checker.store.pending.len(), 3);
-        assert_eq!(checker.store.ready_queue.len(), 3);
+        assert!(checker.store.ready_len() == 3);
+        assert_eq!(checker.store.pending_len(), 3);
+        assert_eq!(checker.store.ready_queue_len(), 3);
 
         let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));
@@ -294,7 +296,7 @@ mod tests {
         assert!(item.is_none());
 
         // No more ready items.
-        assert_eq!(checker.store.ready_queue.len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 0);
 
         // Process the missing item.
         let missing_dependency = ("B2", vec!["A"]);
@@ -304,9 +306,9 @@ mod tests {
             .unwrap();
 
         // All items have now been processed and new ones are waiting in the ready queue.
-        assert_eq!(checker.store.ready.len(), 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 4);
+        assert_eq!(checker.store.ready_len(), 7);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 4);
 
         let mut concurrent_items = HashSet::from(["C2", "C3"]);
 
@@ -340,15 +342,15 @@ mod tests {
             ("A", vec![]),
         ];
 
-        let store = MemoryStore::default();
+        let store = OrdererMemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in out_of_order_graph {
             checker.process(key, &dependencies).await.unwrap();
         }
 
-        assert!(checker.store.ready.len() == 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 7);
+        assert!(checker.store.ready_len() == 7);
+        assert_eq!(checker.store.pending_len(), 0);
+        assert_eq!(checker.store.ready_queue_len(), 7);
 
         let item = checker.next().await.unwrap();
         assert_eq!(item, Some("A"));

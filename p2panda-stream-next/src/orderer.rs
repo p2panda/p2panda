@@ -5,8 +5,12 @@ use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
+// @TODO: Change these to p2panda_store when ready.
 use p2panda_store_next::operations::OperationStore;
-use p2panda_stream::orderer::{PartialOrder, PartialOrderStore};
+use p2panda_store_next::orderer::OrdererStore;
+// @TODO: We'll merge `p2panda-stream-next` soon with the old crate, then this will came from the
+// same source.
+use p2panda_stream::orderer::PartialOrder;
 use thiserror::Error;
 use tokio::sync::Notify;
 
@@ -32,7 +36,7 @@ pub struct Orderer<T, ID, PS, OS> {
 impl<T, ID, PS, OS> Orderer<T, ID, PS, OS>
 where
     ID: OperationId,
-    PS: PartialOrderStore<ID>,
+    PS: OrdererStore<ID>,
     OS: OperationStore<T, ID>,
 {
     pub fn new(store: PS, operation_store: OS) -> Self {
@@ -51,7 +55,7 @@ impl<T, ID, PS, OS> Processor<T> for Orderer<T, ID, PS, OS>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    PS: PartialOrderStore<ID>,
+    PS: OrdererStore<ID>,
     OS: OperationStore<T, ID>,
 {
     type Output = T;
@@ -63,7 +67,8 @@ where
         inner
             .process(*input.id(), input.dependencies())
             .await
-            .map_err(|err| OrdererError::PartialOrderStore(err))?;
+            .map_err(|err| OrdererError::OrdererStore(err))?;
+
         self.notify.notify_one(); // Wake up any pending next call
         Ok(())
     }
@@ -71,13 +76,12 @@ where
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         loop {
             let mut inner = self.inner.borrow_mut();
-            match inner.next().await {
-                Ok(Some(_id)) => {
-                    // @TODO: Get item from database.
-                    todo!()
-                }
-                Ok(None) => (),
-                Err(err) => return Err(OrdererError::PartialOrderStore(err)),
+            if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
+                return self
+                    .operation_store
+                    .get_operation(&id)
+                    .await
+                    .map_err(OrdererError::OperationStore);
             }
 
             self.notify.notified().await;
@@ -90,11 +94,11 @@ pub enum OrdererError<T, ID, PS, OS>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    PS: PartialOrderStore<ID>,
+    PS: OrdererStore<ID>,
     OS: OperationStore<T, ID>,
 {
     #[error("{0}")]
-    PartialOrderStore(PS::Error),
+    OrdererStore(PS::Error),
 
     #[error("{0}")]
     OperationStore(OS::Error),
@@ -104,7 +108,7 @@ where
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_stream::orderer::MemoryStore;
+    use p2panda_store_next::orderer::OrdererMemoryStore;
     use serde::{Deserialize, Serialize};
     use tokio::task;
 
@@ -189,9 +193,9 @@ mod tests {
 
         local
             .run_until(async move {
+                let _store = OrdererMemoryStore::<Hash>::default();
+
                 // @TODO: Finish test.
-                // let store = MemoryStore::default();
-                //
                 // // Prepare processing pipeline for message ordering.
                 // let orderer = Orderer::new(store, operation_store);
                 //

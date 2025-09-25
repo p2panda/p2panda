@@ -9,4 +9,8 @@ all-features = true
 [lints]
 workspace = true
 
+[features]
+default = []
+test_utils = []
+
 [dependencies]
