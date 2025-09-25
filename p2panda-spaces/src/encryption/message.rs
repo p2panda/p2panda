@@ -109,7 +109,7 @@ impl EncryptionMessage {
         assert_eq!(auth_message.id(), *auth_message_id);
 
         // Check if there are any direct messages for me.
-        let my_direct_message = direct_messages
+        let hash_my_direct_messages = direct_messages
             .iter()
             .any(|message| message.recipient == my_id);
 
@@ -132,7 +132,7 @@ impl EncryptionMessage {
             // their id as the only thing we care about is making sure the direct messages are
             // processed.
             AuthGroupAction::Add { member, .. } => {
-                let control_message = if my_direct_message {
+                let control_message = if hash_my_direct_messages {
                     EncryptionControlMessage::Add { added: my_id }
                 } else {
                     EncryptionControlMessage::Add { added: member.id() }

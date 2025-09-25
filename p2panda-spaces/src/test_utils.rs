@@ -66,7 +66,7 @@ where
         Ok(self.spaces.contains_key(id))
     }
 
-    async fn spaces(&self) -> Result<Vec<ID>, Self::Error> {
+    async fn spaces_ids(&self) -> Result<Vec<ID>, Self::Error> {
         Ok(self.spaces.keys().cloned().collect())
     }
 

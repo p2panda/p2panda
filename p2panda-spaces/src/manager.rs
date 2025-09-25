@@ -250,7 +250,12 @@ where
         Ok(events)
     }
 
-    /// Sync all spaces with a shared auth state change.
+    /// Apply an auth message applied to the shared auth state to each space we know about
+    /// locally.
+    /// 
+    /// This is required so that all spaces stay "in sync" with the shared auth state and produce
+    /// any required encryption direct messages in order to correctly update a spaces' encryption
+    /// state.
     pub(crate) async fn sync_spaces(
         &self,
         auth_message: &M,
@@ -259,7 +264,7 @@ where
             let manager = self.inner.read().await;
             manager
                 .store
-                .spaces()
+                .spaces_ids()
                 .await
                 .map_err(ManagerError::SpaceStore)?
         };

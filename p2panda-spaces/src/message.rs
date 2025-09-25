@@ -30,6 +30,7 @@ pub enum SpacesArgs<ID, C> {
     KeyBundle {
         // @TODO: Key bundle material.
     },
+
     /// System message containing an auth control message.
     Auth {
         /// "Control message" describing group operation ("add member", "remove member", etc.).
@@ -38,6 +39,9 @@ pub enum SpacesArgs<ID, C> {
         /// Auth dependencies. These are the latest heads of the global auth control message graph.
         auth_dependencies: Vec<OperationId>,
     },
+    
+    /// System message containing a reference to an `SpacesArgs::Auth` message and additional
+    /// fields for applying the resulting membership change to a specific space.
     SpaceMembership {
         /// Space this message should be applied to.
         space_id: ID,
@@ -58,6 +62,8 @@ pub enum SpacesArgs<ID, C> {
         /// message on this space.
         direct_messages: Vec<EncryptionDirectMessage>,
     },
+
+    /// Rotate the entropy for a space's encryption context.
     SpaceUpdate {
         /// Space this message should be applied to.
         space_id: ID,
@@ -68,6 +74,8 @@ pub enum SpacesArgs<ID, C> {
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
     },
+
+    /// An encrypted application message.
     Application {
         /// Space this message should be applied to.
         space_id: ID,
