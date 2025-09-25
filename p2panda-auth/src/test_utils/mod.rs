@@ -7,6 +7,8 @@ pub mod partial_ord;
 
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+
 use crate::Access;
 use crate::group::resolver::StrongRemove;
 use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
@@ -20,7 +22,7 @@ pub type MessageId = u32;
 pub type Conditions = ();
 pub type TestResolver = StrongRemove<MemberId, MessageId, Conditions, TestOperation>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TestOperation {
     pub id: u32,
     pub author: char,

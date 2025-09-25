@@ -13,6 +13,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
+#[cfg(any(test, feature = "serde"))]
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::Access;
@@ -48,6 +50,7 @@ pub enum GroupMembershipError<ID> {
 ///
 /// Counters are used to allow conflict-free merging of states.
 #[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct MemberState<C> {
     pub(crate) member_counter: usize,
     pub(crate) access: Access<C>,
@@ -91,13 +94,17 @@ where
 
 /// The membership state of all known groups.
 #[derive(Clone, Debug)]
-pub struct GroupMembersState<ID, C> {
+#[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
+pub struct GroupMembersState<ID, C>
+where
+    ID: Hash + Eq,
+{
     pub(crate) members: HashMap<ID, MemberState<C>>,
 }
 
 impl<ID, C> Default for GroupMembersState<ID, C>
 where
-    C: Conditions,
+    ID: Hash + Eq,
 {
     fn default() -> Self {
         Self {
