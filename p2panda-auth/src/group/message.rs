@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#[cfg(any(test, feature = "serde"))]
+use serde::{Deserialize, Serialize};
+
 use crate::group::GroupAction;
 
 /// Control messages which are processed in order to update group state.
@@ -8,6 +11,7 @@ use crate::group::GroupAction;
 /// action should be applied. The other is a special message which can be used to "undo" a message which
 /// has been previously applied to the group.
 #[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct GroupControlMessage<ID, C> {
     pub group_id: ID,
     pub action: GroupAction<ID, C>,

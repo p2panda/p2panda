@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Introduce `Conditions` super-trait in `p2panda-auth` [#780](https://github.com/p2panda/p2panda/pull/780)
+- Add `serde` derives to all state structs in `p2panda-auth` [809](https://github.com/p2panda/p2panda/pull/809) 
 
 ### Changed
 

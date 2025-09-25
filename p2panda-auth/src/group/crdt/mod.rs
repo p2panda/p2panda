@@ -8,6 +8,10 @@ use std::marker::PhantomData;
 
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
+#[cfg(any(test, feature = "serde"))]
+use serde::de::DeserializeOwned;
+#[cfg(any(test, feature = "serde"))]
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::access::Access;
@@ -67,6 +71,7 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 /// including operation graph and membership snapshots.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct GroupCrdtInnerState<ID, OP, C, M>
 where
     ID: IdentityHandle,
@@ -281,6 +286,17 @@ where
 /// state.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[cfg_attr(
+    any(test, feature = "serde"),
+    derive(Deserialize, Serialize),
+    serde(bound = "
+            ID: DeserializeOwned + Serialize, 
+            OP: DeserializeOwned + Serialize, 
+            C: DeserializeOwned + Serialize, 
+            ORD::Operation: DeserializeOwned + Serialize,
+            ORD::State: DeserializeOwned + Serialize
+        ")
+)]
 pub struct GroupCrdtState<ID, OP, C, ORD>
 where
     ID: IdentityHandle,
@@ -1659,5 +1675,31 @@ pub(crate) mod tests {
             result.is_err(),
             "Creating a group cycle should cause an error"
         );
+    }
+
+    #[test]
+    fn serde_to_from_bytes() {
+        let y = TestGroupState::new(());
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let members = y_i.members(G1);
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        // Serialize auth state to cbor bytes.
+        let mut bytes = vec![];
+        ciborium::ser::into_writer(&y_i, &mut bytes).unwrap();
+
+        // Deserialize auth state from cbor bytes.
+        let y_i_de: TestGroupState = ciborium::from_reader(&bytes[..]).unwrap();
+
+        // Assert members are the same.
+        let members = y_i_de.members(G1);
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
     }
 }
