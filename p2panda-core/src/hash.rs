@@ -22,6 +22,8 @@ use std::str::FromStr;
 use arbitrary::Arbitrary;
 use thiserror::Error;
 
+use crate::traits::OperationId;
+
 /// The length of a BLAKE3 hash in bytes.
 pub const HASH_LEN: usize = blake3::KEY_LEN;
 
@@ -138,6 +140,8 @@ impl fmt::Debug for Hash {
         f.debug_tuple("Hash").field(self.0.as_bytes()).finish()
     }
 }
+
+impl OperationId for Hash {}
 
 #[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for Hash {
