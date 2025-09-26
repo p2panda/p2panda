@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use sqlx::query;
 
 use crate::orderer::OrdererStore;
-use crate::sqlite::{SqliteError, SqlitePool};
+use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<'a, T> OrdererStore<T> for SqlitePool<'a> {
+impl<'a, T> OrdererStore<T> for SqliteStore<'a> {
     type Error = SqliteError;
 
     async fn mark_ready(&self, _key: T) -> Result<bool, Self::Error> {

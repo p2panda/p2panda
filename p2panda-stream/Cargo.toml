@@ -26,7 +26,7 @@ futures-util = { version = "0.3.31", features = ["sink"] }
 p2panda-core = { path = "../p2panda-core", version = "0.4.0", features = ["prune"] }
 p2panda-store = { path = "../p2panda-store", version = "0.4.0" }
 # @TODO: This will soon replace `p2panda-store`.
-p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0" }
+p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", features = ["memory", "test_utils"], default-features = false }
 pin-project = "1.1.10"
 pin-utils = "0.1.0"
 thiserror = "2.0.12"

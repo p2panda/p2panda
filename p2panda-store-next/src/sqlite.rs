@@ -47,14 +47,14 @@ pub async fn run_pending_migrations(pool: &sqlx::SqlitePool) -> Result<(), Sqlit
     Ok(())
 }
 
-pub struct SqlitePoolBuilder {
+pub struct SqliteStoreBuilder {
     url: String,
     max_connections: u32,
     run_migrations: bool,
     create_database: bool,
 }
 
-impl Default for SqlitePoolBuilder {
+impl Default for SqliteStoreBuilder {
     fn default() -> Self {
         Self {
             url: "sqlite::memory:".into(),
@@ -65,7 +65,7 @@ impl Default for SqlitePoolBuilder {
     }
 }
 
-impl SqlitePoolBuilder {
+impl SqliteStoreBuilder {
     pub fn new() -> Self {
         Self::default()
     }
@@ -104,7 +104,7 @@ impl SqlitePoolBuilder {
         self
     }
 
-    pub async fn build<'a>(self) -> Result<SqlitePool<'a>, SqliteError> {
+    pub async fn build<'a>(self) -> Result<SqliteStore<'a>, SqliteError> {
         if self.create_database {
             create_database(&self.url).await?;
         }
@@ -118,13 +118,13 @@ impl SqlitePoolBuilder {
             run_pending_migrations(&pool).await?;
         }
 
-        Ok(SqlitePool::new(pool))
+        Ok(SqliteStore::new(pool))
     }
 }
 
 pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 
-/// SQLite connection pool with transaction provider.
+/// SQLite database with connection pool and transaction provider.
 ///
 /// This struct can be cloned and used in multiple places in the application. Every cloned instance
 /// will re-use the same connection pool and have access to the same transaction instance if one
@@ -174,13 +174,13 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 /// handled internally now. Like this it is possible to separate the "logic" from the "storage"
 /// layer and keep the code clean.
 #[derive(Clone)]
-pub struct SqlitePool<'a> {
+pub struct SqliteStore<'a> {
     tx: Arc<Mutex<Option<Transaction<'a>>>>,
     pool: sqlx::SqlitePool,
     semaphore: Arc<Semaphore>,
 }
 
-impl<'a> SqlitePool<'a> {
+impl<'a> SqliteStore<'a> {
     pub(crate) fn new(pool: sqlx::SqlitePool) -> Self {
         Self {
             tx: Arc::default(),
@@ -318,11 +318,11 @@ mod tests {
     use sqlx::{Executor, query, query_as};
     use tokio::pin;
 
-    use crate::sqlite::{SqliteError, SqlitePoolBuilder};
+    use crate::sqlite::{SqliteError, SqliteStoreBuilder};
 
     #[tokio::test]
     async fn transaction_provider() {
-        let pool = SqlitePoolBuilder::new()
+        let pool = SqliteStoreBuilder::new()
             .run_default_migrations(false)
             .random_memory_url()
             .build()
@@ -364,7 +364,7 @@ mod tests {
 
     #[tokio::test]
     async fn serialized_transactions() {
-        let pool_1 = SqlitePoolBuilder::new()
+        let pool_1 = SqliteStoreBuilder::new()
             .run_default_migrations(false)
             .max_connections(1)
             .random_memory_url()

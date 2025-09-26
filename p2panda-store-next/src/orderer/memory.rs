@@ -6,6 +6,7 @@ use std::convert::Infallible;
 use std::hash::Hash as StdHash;
 use std::rc::Rc;
 
+use crate::memory::MemoryStore;
 use crate::orderer::OrdererStore;
 
 /// In-Memory database implementation of the `OrdererStore` trait.
@@ -27,16 +28,16 @@ impl<K> Default for OrdererMemoryStore<K> {
     }
 }
 
-impl<K> OrdererStore<K> for OrdererMemoryStore<K>
+impl<K> OrdererStore<K> for MemoryStore<K>
 where
     K: Copy + Eq + StdHash,
 {
     type Error = Infallible;
 
     async fn mark_ready(&self, key: K) -> Result<bool, Infallible> {
-        let result = self.ready.borrow_mut().insert(key);
+        let result = self.orderer.ready.borrow_mut().insert(key);
         if result {
-            self.ready_queue.borrow_mut().push_back(key);
+            self.orderer.ready_queue.borrow_mut().push_back(key);
         }
         Ok(result)
     }
@@ -44,11 +45,11 @@ where
     async fn mark_pending(&self, key: K, dependencies: Vec<K>) -> Result<bool, Infallible> {
         let insert_occured = false;
         for dep_key in &dependencies {
-            if self.ready.borrow().contains(dep_key) {
+            if self.orderer.ready.borrow().contains(dep_key) {
                 continue;
             }
 
-            let mut pending = self.pending.borrow_mut();
+            let mut pending = self.orderer.pending.borrow_mut();
             let dependents = pending.entry(*dep_key).or_default();
             dependents.insert((key, dependencies.clone()));
         }
@@ -57,35 +58,46 @@ where
     }
 
     async fn get_next_pending(&self, key: K) -> Result<Option<HashSet<(K, Vec<K>)>>, Infallible> {
-        Ok(self.pending.borrow().get(&key).cloned())
+        Ok(self.orderer.pending.borrow().get(&key).cloned())
     }
 
     async fn take_next_ready(&self) -> Result<Option<K>, Infallible> {
-        Ok(self.ready_queue.borrow_mut().pop_front())
+        Ok(self.orderer.ready_queue.borrow_mut().pop_front())
     }
 
     async fn remove_pending(&self, key: K) -> Result<bool, Infallible> {
-        Ok(self.pending.borrow_mut().remove(&key).is_some())
+        Ok(self.orderer.pending.borrow_mut().remove(&key).is_some())
     }
 
     async fn ready(&self, dependencies: &[K]) -> Result<bool, Infallible> {
         let deps_set = HashSet::from_iter(dependencies.iter().cloned());
-        let result = self.ready.borrow().is_superset(&deps_set);
+        let result = self.orderer.ready.borrow().is_superset(&deps_set);
         Ok(result)
     }
 }
 
+// Test abstraction for other crates so they can write tests without getting caught up by
+// implementation details of the storage layer in this crate.
 #[cfg(any(test, feature = "test_utils"))]
-impl<K> OrdererMemoryStore<K> {
-    pub fn ready_len(&self) -> usize {
-        self.ready.borrow().len()
+pub trait OrdererTestExt {
+    fn ready_len(&self) -> usize;
+
+    fn ready_queue_len(&self) -> usize;
+
+    fn pending_len(&self) -> usize;
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl<K> OrdererTestExt for MemoryStore<K> {
+    fn ready_len(&self) -> usize {
+        self.orderer.ready.borrow().len()
     }
 
-    pub fn ready_queue_len(&self) -> usize {
-        self.ready_queue.borrow().len()
+    fn ready_queue_len(&self) -> usize {
+        self.orderer.ready_queue.borrow().len()
     }
 
-    pub fn pending_len(&self) -> usize {
-        self.pending.borrow().len()
+    fn pending_len(&self) -> usize {
+        self.orderer.pending.borrow().len()
     }
 }

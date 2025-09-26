@@ -141,7 +141,8 @@ mod tests {
     use std::collections::HashSet;
 
     // @TODO: Change this to p2panda_store when ready.
-    use p2panda_store_next::orderer::OrdererMemoryStore;
+    use p2panda_store_next::memory::MemoryStore;
+    use p2panda_store_next::orderer::OrdererTestExt;
 
     use super::PartialOrder;
 
@@ -160,7 +161,7 @@ mod tests {
         ];
 
         // A has no dependencies and so it's added straight to the processed set and ready queue.
-        let store = OrdererMemoryStore::default();
+        let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         let item = graph[0].clone();
         checker.process(item.0, &item.1).await.unwrap();
@@ -219,7 +220,7 @@ mod tests {
             ("G", vec!["F"]),
         ];
 
-        let store = OrdererMemoryStore::default();
+        let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
@@ -275,7 +276,7 @@ mod tests {
             ("D", vec!["C1", "C2", "C3"]),
         ];
 
-        let store = OrdererMemoryStore::default();
+        let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
@@ -342,7 +343,7 @@ mod tests {
             ("A", vec![]),
         ];
 
-        let store = OrdererMemoryStore::default();
+        let store = MemoryStore::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in out_of_order_graph {
             checker.process(key, &dependencies).await.unwrap();

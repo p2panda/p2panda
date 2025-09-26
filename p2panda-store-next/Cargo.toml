@@ -10,7 +10,8 @@ all-features = true
 workspace = true
 
 [features]
-default = ["sqlite"]
+default = ["memory", "sqlite"]
+memory = []
 sqlite = [
   "dep:sqlx",
   "dep:thiserror",
