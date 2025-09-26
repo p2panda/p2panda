@@ -25,3 +25,4 @@ tokio = { version = "1.47.1", features = ["sync"], optional = true }
 
 [dev-dependencies]
 rand = "0.9.2"
+tokio = { version = "1.47.1", features = ["rt", "macros"] }

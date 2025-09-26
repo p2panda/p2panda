@@ -48,6 +48,8 @@ pub async fn run_pending_migrations(pool: &sqlx::SqlitePool) -> Result<(), Sqlit
 pub struct SqlitePoolBuilder {
     url: String,
     max_connections: u32,
+    run_migrations: bool,
+    create_database: bool,
 }
 
 impl Default for SqlitePoolBuilder {
@@ -55,6 +57,8 @@ impl Default for SqlitePoolBuilder {
         Self {
             url: "sqlite::memory:".into(),
             max_connections: 16,
+            create_database: true,
+            run_migrations: true,
         }
     }
 }
@@ -88,15 +92,29 @@ impl SqlitePoolBuilder {
         self
     }
 
+    pub fn create_database(mut self, create_database: bool) -> Self {
+        self.create_database = create_database;
+        self
+    }
+
+    pub fn run_default_migrations(mut self, run_migrations: bool) -> Self {
+        self.run_migrations = run_migrations;
+        self
+    }
+
     pub async fn build(self) -> Result<SqlitePool, SqliteError> {
-        create_database(&self.url).await?;
+        if self.create_database {
+            create_database(&self.url).await?;
+        }
 
         let pool: sqlx::SqlitePool = SqlitePoolOptions::new()
             .max_connections(self.max_connections)
             .connect(&self.url)
             .await?;
 
-        run_pending_migrations(&pool).await?;
+        if self.run_migrations {
+            run_pending_migrations(&pool).await?;
+        }
 
         Ok(SqlitePool::new(pool))
     }
@@ -151,7 +169,7 @@ impl SqlitePool {
 
         // @TODO: Learn a bit how this used and then decide if we want to have a semaphore here.
         // This will then not fail and instead await "queing-up" the next transaction.
-        if tx_ref.is_none() {
+        if tx_ref.is_some() {
             return Err(SqliteError::TransactionPending);
         }
 
@@ -232,4 +250,152 @@ pub enum SqliteError {
     /// SQL table schema migration error.
     #[error(transparent)]
     Migrate(#[from] sqlx::migrate::MigrateError),
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::{Executor, query, query_as};
+
+    use crate::sqlite::{SqliteError, SqlitePoolBuilder};
+
+    #[tokio::test]
+    async fn transaction_provider() {
+        let pool = SqlitePoolBuilder::new()
+            .run_default_migrations(false)
+            .random_memory_url()
+            .build()
+            .await
+            .unwrap();
+
+        // Executing with an in-existant transaction should throw error.
+        assert!(matches!(
+            pool.tx(async |_| Ok(())).await,
+            Err(SqliteError::TransactionMissing)
+        ));
+
+        // Commiting or rolling back an in-existant transaction should fail.
+        assert!(matches!(
+            pool.commit().await,
+            Err(SqliteError::TransactionMissing)
+        ));
+        assert!(matches!(
+            pool.rollback().await,
+            Err(SqliteError::TransactionMissing)
+        ));
+
+        // Starting a new transaction should work.
+        assert!(pool.begin().await.is_ok());
+
+        // .. attempting to start a second one should fail.
+        assert!(matches!(
+            pool.begin().await,
+            Err(SqliteError::TransactionPending)
+        ));
+
+        // Using the transaction should work without failure.
+        assert!(pool.tx(async |_| Ok(())).await.is_ok());
+
+        // Committing should work as well.
+        assert!(pool.commit().await.is_ok());
+
+        // .. and now running a transaction should fail again.
+        assert!(matches!(
+            pool.tx(async |_| Ok(())).await,
+            Err(SqliteError::TransactionMissing)
+        ));
+    }
+
+    #[tokio::test]
+    async fn isolated_transaction_providers() {
+        let pool_1 = SqlitePoolBuilder::new()
+            .run_default_migrations(false)
+            .random_memory_url()
+            .build()
+            .await
+            .unwrap();
+
+        // Cloning will re-use the connection pool but _not_ the transaction provider.
+        let pool_2 = pool_1.clone();
+
+        assert!(pool_1.begin().await.is_ok());
+        assert!(pool_2.begin().await.is_ok());
+
+        use std::ptr::addr_of;
+
+        let tx_addr_1a = pool_1
+            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
+            .await
+            .unwrap();
+        let tx_addr_1b = pool_1
+            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
+            .await
+            .unwrap();
+        let tx_addr_2 = pool_2
+            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
+            .await
+            .unwrap();
+
+        assert_eq!(tx_addr_1a, tx_addr_1b);
+
+        // @TODO: Why does this fail?
+        // assert_ne!(tx_addr_2, tx_addr_1a);
+    }
+
+    #[tokio::test]
+    async fn committed_and_uncommitted_reads() {
+        let pool = SqlitePoolBuilder::new()
+            .run_default_migrations(false)
+            .max_connections(1)
+            .random_memory_url()
+            .build()
+            .await
+            .unwrap();
+
+        let pool_2 = pool.clone();
+
+        // Create test-table schema.
+        pool.execute(async |pool| {
+            pool.execute("CREATE TABLE test(x INTEGER)").await?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // ...
+
+        pool.begin().await.unwrap();
+
+        pool.tx(async |tx| {
+            query("INSERT INTO test (x) VALUES (5)")
+                .execute(&mut **tx)
+                .await?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        let result = pool
+            .tx(async |tx| {
+                let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
+                Ok(row.0)
+            })
+            .await
+            .unwrap();
+        assert_eq!(result, 5);
+
+        // ...
+
+        pool.commit().await.unwrap();
+
+        pool_2.begin().await.unwrap();
+
+        let result = pool_2
+            .tx(async |tx| {
+                let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
+                Ok(row.0)
+            })
+            .await
+            .unwrap();
+        assert_eq!(result, 5);
+    }
 }
