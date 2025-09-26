@@ -142,13 +142,14 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 ///
 /// This storage API design was chosen to make the dynamics of the underlying SQLite database
 /// explicit. Internally any process can access the transaction object to do writes and
-/// (uncommitted) reads. Care is required when designing systems like that as it's still possible
-/// to allow concurrent processes to read and write within the same transaction and potentially
-/// introducing suble bugs (like one process could roll back the transaction while the other one
-/// assumed it will be committed). Usually developers want design _writes_ to the database within
-/// one atomic transaction if they need consistency guarantees. Unrelated queries _can_ be "pooled"
-/// in one transaction (for performance reasons for example, see "Transaction II" in the diagram)
-/// if consistency is guaranteed by all involved processes and the underlying data-model.
+/// (uncommitted) reads (see "Transaction I" in diagram). Care is required when designing systems
+/// like that as it's still possible to allow concurrent processes to read and write within the
+/// same transaction and potentially introducing suble bugs (like one process could roll back the
+/// transaction while the other one assumed it will be committed). Usually developers want to
+/// design _writes_ to the database within a transaction if they need consistency and atomicity
+/// guarantees. "Unrelated" queries _can_ be "pooled" in one transaction (for performance reasons
+/// for example) if consistency is guaranteed by all involved processes and the underlying
+/// data-model (see "Transaction II" in diagram).
 ///
 /// ```text
 /// Transaction I:
@@ -167,10 +168,11 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 ///                                                   --> read --> write --->
 /// ```
 ///
-/// Another design decision is to not expose transaction design to the high-level storage APIs.
-/// Users of the storage methods like `get_operation` (in `OperationStore`) etc. do _not_ need to
-/// explicity deal with transaction objects, as this is handled internally now. Like this it is
-/// possible to separate the "logic" from the "storage" layer and keep the code clean.
+/// Another design decision is to not expose transactions to the high-level storage APIs (similar
+/// to the "Repository Pattern"). Users of the storage methods like `get_operation` (in
+/// `OperationStore`) etc. do _not_ need to explicity deal with transaction objects, as this is
+/// handled internally now. Like this it is possible to separate the "logic" from the "storage"
+/// layer and keep the code clean.
 #[derive(Clone)]
 pub struct SqlitePool<'a> {
     tx: Arc<Mutex<Option<Transaction<'a>>>>,
