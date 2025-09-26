@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::{Debug, Display};
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 // @TODO: Change this to p2panda_store when ready.
@@ -69,16 +67,16 @@ use p2panda_store_next::orderer::OrdererStore;
 /// Note that no checks are made for cycles occurring in the graph, this should be validated on
 /// another layer.
 #[derive(Debug)]
-pub struct PartialOrder<K, S> {
+pub struct PartialOrder<ID, S> {
     /// Store for managing "ready" and "pending" items.
     store: S,
-    _phantom: PhantomData<K>,
+    _phantom: PhantomData<ID>,
 }
 
-impl<K, S> PartialOrder<K, S>
+impl<ID, S> PartialOrder<ID, S>
 where
-    K: Clone + Copy + Display + StdHash + PartialEq + Eq,
-    S: OrdererStore<K>,
+    ID: Copy,
+    S: OrdererStore<ID>,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -88,12 +86,12 @@ where
     }
 
     /// Pop the next item from the ready queue.
-    pub async fn next(&mut self) -> Result<Option<K>, S::Error> {
+    pub async fn next(&mut self) -> Result<Option<ID>, S::Error> {
         self.store.take_next_ready().await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), S::Error> {
+    pub async fn process(&mut self, key: ID, dependencies: &[ID]) -> Result<(), S::Error> {
         if !self.store.ready(dependencies).await? {
             self.store.mark_pending(key, dependencies.to_vec()).await?;
             return Ok(());
@@ -109,7 +107,7 @@ where
     }
 
     /// Recursively check if any pending items now have their dependencies met.
-    async fn process_pending(&mut self, key: K) -> Result<(), S::Error> {
+    async fn process_pending(&mut self, key: ID) -> Result<(), S::Error> {
         // Get all items which depend on the passed key.
         let Some(dependents) = self.store.get_next_pending(key).await? else {
             return Ok(());
@@ -161,7 +159,7 @@ mod tests {
         ];
 
         // A has no dependencies and so it's added straight to the processed set and ready queue.
-        let store = MemoryStore::new();
+        let store = MemoryStore::<(), &'static str>::default();
         let mut checker = PartialOrder::new(store);
         let item = graph[0].clone();
         checker.process(item.0, &item.1).await.unwrap();
@@ -220,7 +218,7 @@ mod tests {
             ("G", vec!["F"]),
         ];
 
-        let store = MemoryStore::new();
+        let store = MemoryStore::<(), &'static str>::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
@@ -276,7 +274,7 @@ mod tests {
             ("D", vec!["C1", "C2", "C3"]),
         ];
 
-        let store = MemoryStore::new();
+        let store = MemoryStore::<(), &'static str>::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in incomplete_graph {
             checker.process(key, &dependencies).await.unwrap();
@@ -343,7 +341,7 @@ mod tests {
             ("A", vec![]),
         ];
 
-        let store = MemoryStore::new();
+        let store = MemoryStore::<(), &'static str>::default();
         let mut checker = PartialOrder::new(store);
         for (key, dependencies) in out_of_order_graph {
             checker.process(key, &dependencies).await.unwrap();

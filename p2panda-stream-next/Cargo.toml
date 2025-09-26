@@ -11,10 +11,16 @@ workspace = true
 
 [features]
 default = ["orderer"]
-orderer = ["dep:thiserror", "dep:p2panda-stream", "dep:p2panda-store-next"]
+orderer = [
+  "dep:p2panda-core",
+  "dep:p2panda-store-next",
+  "dep:p2panda-stream",
+  "dep:thiserror",
+]
 
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true }
 p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", optional = true }
 # @TODO: Remove this as soon as we've brought p2panda-stream-next into p2panda-stream.
 p2panda-stream = { path = "../p2panda-stream", version = "0.4.0", optional = true }

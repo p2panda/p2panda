@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::cell::RefCell;
-use std::fmt::Display;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use p2panda_core::traits::OperationId;
 // @TODO: Change these to p2panda_store when ready.
 use p2panda_store_next::operations::OperationStore;
 use p2panda_store_next::orderer::OrdererStore;
@@ -16,9 +15,6 @@ use thiserror::Error;
 use tokio::sync::Notify;
 
 use crate::Processor;
-
-// @TODO: Decide where this lives. Is it part of the core crate?
-pub trait OperationId: Clone + Copy + PartialEq + Eq + Display + StdHash {}
 
 pub trait Ordering<ID> {
     // @TODO: Is this part of `Ordering` or another "id" trait?
@@ -80,11 +76,19 @@ where
         loop {
             let mut inner = self.inner.borrow_mut();
             if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
-                return self
+                match self
                     .store
                     .get_operation(&id)
                     .await
-                    .map_err(OrdererError::OperationStore);
+                    .map_err(OrdererError::OperationStore)
+                {
+                    Ok(Some(operation)) => return Ok(operation),
+                    Ok(None) => {
+                        // @TODO: Inconsistency!
+                        todo!();
+                    }
+                    Err(err) => return Err(err),
+                }
             }
 
             self.notify.notified().await;
@@ -117,9 +121,6 @@ mod tests {
     use crate::StreamLayerExt;
 
     use super::{OperationId, Orderer, Ordering};
-
-    // @TODO: This should be implemented automatically in our crates.
-    impl OperationId for Hash {}
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     struct TestExtension {
@@ -195,12 +196,12 @@ mod tests {
 
         local
             .run_until(async move {
-                let store = MemoryStore::<Hash>::new();
+                let store = MemoryStore::<Operation<TestExtension>, Hash>::new();
 
                 // @TODO: Finish test.
-                // // Prepare processing pipeline for message ordering.
-                // let orderer = Orderer::new(store);
-                //
+                // Prepare processing pipeline for message ordering.
+                let orderer = Orderer::new(store);
+
                 // // Process Icebear's operation first. It will arrive "out of order".
                 // // Process Pandas's operation next. It will "free" Icebear's operation.
                 // let mut _stream =
