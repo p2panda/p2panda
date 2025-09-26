@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::rc::Rc;
 
 use p2panda_core::traits::OperationId;
@@ -11,7 +12,7 @@ use crate::memory::MemoryStore;
 use crate::operations::OperationStore;
 
 #[allow(clippy::type_complexity)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OperationMemoryStore<T, ID> {
     operations: Rc<RefCell<HashMap<ID, T>>>,
 }
@@ -32,8 +33,8 @@ impl<T, ID> Default for OperationMemoryStore<T, ID> {
 
 impl<T, ID> OperationStore<T, ID> for MemoryStore<T, ID>
 where
-    T: Clone,
-    ID: OperationId,
+    T: Debug + Clone,
+    ID: Debug + OperationId,
 {
     type Error = Infallible;
 

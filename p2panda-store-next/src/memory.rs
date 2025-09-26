@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
 use crate::operations::OperationMemoryStore;
 use crate::orderer::OrdererMemoryStore;
 
@@ -7,13 +9,21 @@ use crate::orderer::OrdererMemoryStore;
 ///
 /// This does not persist data permamently, all changes are lost when the process ends. Use this
 /// only in development or test contexts.
-#[derive(Clone)]
-pub struct MemoryStore<T, ID> {
+#[derive(Debug, Clone)]
+pub struct MemoryStore<T, ID>
+where
+    T: Debug,
+    ID: Debug,
+{
     pub orderer: OrdererMemoryStore<ID>,
     pub operations: OperationMemoryStore<T, ID>,
 }
 
-impl<T, ID> MemoryStore<T, ID> {
+impl<T, ID> MemoryStore<T, ID>
+where
+    T: Debug,
+    ID: Debug,
+{
     pub fn new() -> Self {
         Self {
             orderer: OrdererMemoryStore::new(),
@@ -22,7 +32,11 @@ impl<T, ID> MemoryStore<T, ID> {
     }
 }
 
-impl<T, ID> Default for MemoryStore<T, ID> {
+impl<T, ID> Default for MemoryStore<T, ID>
+where
+    T: Debug,
+    ID: Debug,
+{
     fn default() -> Self {
         Self::new()
     }

@@ -7,10 +7,10 @@ use sqlx::query;
 use crate::orderer::OrdererStore;
 use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<'a, T> OrdererStore<T> for SqliteStore<'a> {
+impl<'a, ID> OrdererStore<ID> for SqliteStore<'a> {
     type Error = SqliteError;
 
-    async fn mark_ready(&self, _key: T) -> Result<bool, Self::Error> {
+    async fn mark_ready(&self, _key: ID) -> Result<bool, Self::Error> {
         self.tx(async |tx| {
             // @TODO: Finalize this query.
             query("COUNT()").execute(&mut **tx).await?;
@@ -19,23 +19,26 @@ impl<'a, T> OrdererStore<T> for SqliteStore<'a> {
         .await
     }
 
-    async fn mark_pending(&self, _key: T, _dependencies: Vec<T>) -> Result<bool, Self::Error> {
+    async fn mark_pending(&self, _key: ID, _dependencies: Vec<ID>) -> Result<bool, Self::Error> {
         todo!()
     }
 
-    async fn get_next_pending(&self, _key: T) -> Result<Option<HashSet<(T, Vec<T>)>>, Self::Error> {
+    async fn get_next_pending(
+        &self,
+        _key: ID,
+    ) -> Result<Option<HashSet<(ID, Vec<ID>)>>, Self::Error> {
         todo!()
     }
 
-    async fn take_next_ready(&self) -> Result<Option<T>, Self::Error> {
+    async fn take_next_ready(&self) -> Result<Option<ID>, Self::Error> {
         todo!()
     }
 
-    async fn remove_pending(&self, _key: T) -> Result<bool, Self::Error> {
+    async fn remove_pending(&self, _key: ID) -> Result<bool, Self::Error> {
         todo!()
     }
 
-    async fn ready(&self, _keys: &[T]) -> Result<bool, Self::Error> {
+    async fn ready(&self, _keys: &[ID]) -> Result<bool, Self::Error> {
         todo!()
     }
 }

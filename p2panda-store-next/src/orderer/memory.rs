@@ -3,14 +3,16 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::Infallible;
-use std::hash::Hash as StdHash;
+use std::fmt::Debug;
 use std::rc::Rc;
+
+use p2panda_core::traits::OperationId;
 
 use crate::memory::MemoryStore;
 use crate::orderer::OrdererStore;
 
 #[allow(clippy::type_complexity)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrdererMemoryStore<ID> {
     pub(crate) ready: Rc<RefCell<HashSet<ID>>>,
     pub(crate) ready_queue: Rc<RefCell<VecDeque<ID>>>,
@@ -35,7 +37,8 @@ impl<ID> Default for OrdererMemoryStore<ID> {
 
 impl<T, ID> OrdererStore<ID> for MemoryStore<T, ID>
 where
-    ID: Copy + Eq + StdHash,
+    T: Debug,
+    ID: Debug + OperationId,
 {
     type Error = Infallible;
 
@@ -96,7 +99,11 @@ pub trait OrdererTestExt {
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<T, ID> OrdererTestExt for MemoryStore<T, ID> {
+impl<T, ID> OrdererTestExt for MemoryStore<T, ID>
+where
+    T: Debug,
+    ID: Debug + OperationId,
+{
     fn ready_len(&self) -> usize {
         self.orderer.ready.borrow().len()
     }
