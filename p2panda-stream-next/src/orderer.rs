@@ -27,8 +27,7 @@ pub struct Orderer<T, ID, S> {
     inner: RefCell<PartialOrder<ID, S>>,
     store: S,
     notify: Notify,
-    // Workaround to signal !Send to users of this struct in Rust stable.
-    _marker: PhantomData<(T, Rc<()>)>,
+    _marker: PhantomData<(T, Rc<()>)>, // !Send
 }
 
 impl<T, ID, S> Orderer<T, ID, S>
@@ -76,19 +75,16 @@ where
         loop {
             let mut inner = self.inner.borrow_mut();
             if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
-                match self
+                return match self
                     .store
                     .get_operation(&id)
                     .await
                     .map_err(OrdererError::OperationStore)
                 {
-                    Ok(Some(operation)) => return Ok(operation),
-                    Ok(None) => {
-                        // @TODO: Inconsistency!
-                        todo!();
-                    }
-                    Err(err) => return Err(err),
-                }
+                    Ok(Some(operation)) => Ok(operation),
+                    Ok(None) => Err(OrdererError::StoreInconsistency(id)),
+                    Err(err) => Err(err),
+                };
             }
 
             self.notify.notified().await;
@@ -103,6 +99,9 @@ where
     ID: OperationId,
     S: OrdererStore<ID> + OperationStore<T, ID>,
 {
+    #[error("could not find item with id {0} in operation store")]
+    StoreInconsistency(ID),
+
     #[error("{0}")]
     OrdererStore(<S as OrdererStore<ID>>::Error),
 
@@ -112,15 +111,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_store_next::memory::MemoryStore;
+    use p2panda_store_next::{memory::MemoryStore, operations::OperationStore};
     use serde::{Deserialize, Serialize};
     use tokio::task;
 
-    use crate::StreamLayerExt;
+    use crate::{PipelineBuilder, Processor};
 
-    use super::{OperationId, Orderer, Ordering};
+    use super::{Orderer, Ordering};
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     struct TestExtension {
@@ -198,14 +196,34 @@ mod tests {
             .run_until(async move {
                 let store = MemoryStore::<Operation<TestExtension>, Hash>::new();
 
-                // @TODO: Finish test.
+                // Insert operations into store.
+                store
+                    .insert_operation(&operation_panda.hash, operation_panda.clone())
+                    .await
+                    .unwrap();
+                store
+                    .insert_operation(&operation_icebear.hash, operation_icebear.clone())
+                    .await
+                    .unwrap();
+
                 // Prepare processing pipeline for message ordering.
                 let orderer = Orderer::new(store);
 
-                // // Process Icebear's operation first. It will arrive "out of order".
-                // // Process Pandas's operation next. It will "free" Icebear's operation.
-                // let mut _stream =
-                //     stream::iter(vec![operation_icebear, operation_panda]).layer(orderer);
+                let pipeline = PipelineBuilder::<Operation<TestExtension>>::new()
+                    .layer(orderer)
+                    .build();
+
+                // Process Icebear's operation first. It will arrive "out of order".
+                pipeline.process(operation_icebear.clone()).await.unwrap();
+
+                // Process Pandas's operation next. It will "free" Icebear's operation.
+                pipeline.process(operation_panda.clone()).await.unwrap();
+
+                let operation = pipeline.next().await.unwrap();
+                assert_eq!(operation, operation_panda);
+
+                let operation = pipeline.next().await.unwrap();
+                assert_eq!(operation, operation_icebear);
             })
             .await;
     }
