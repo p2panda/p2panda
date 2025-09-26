@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 // @TODO: Change these to p2panda_store when ready.
 use p2panda_store_next::operations::OperationStore;
@@ -26,41 +27,43 @@ pub trait Ordering<ID> {
     fn dependencies(&self) -> &[ID];
 }
 
-pub struct Orderer<T, ID, PS, OS> {
-    inner: RefCell<PartialOrder<ID, PS>>,
-    operation_store: OS,
+pub struct Orderer<T, ID, S> {
+    inner: RefCell<PartialOrder<ID, S>>,
+    store: S,
     notify: Notify,
-    _marker: PhantomData<T>,
+    // Workaround to signal !Send to users of this struct in Rust stable.
+    _marker: PhantomData<(T, Rc<()>)>,
 }
 
-impl<T, ID, PS, OS> Orderer<T, ID, PS, OS>
+impl<T, ID, S> Orderer<T, ID, S>
 where
     ID: OperationId,
-    PS: OrdererStore<ID>,
-    OS: OperationStore<T, ID>,
+    S: Clone + OrdererStore<ID> + OperationStore<T, ID>,
 {
-    pub fn new(store: PS, operation_store: OS) -> Self {
-        let inner = PartialOrder::new(store);
+    pub fn new(store: S) -> Self {
+        let inner = PartialOrder::new(store.clone());
 
         Self {
             inner: RefCell::new(inner),
-            operation_store,
+            store,
             notify: Notify::new(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T, ID, PS, OS> Processor<T> for Orderer<T, ID, PS, OS>
+// It's okay to hold the ref cell across await points as within processors we're in a
+// single-threaded environment aka !Send.
+#[allow(clippy::await_holding_refcell_ref)]
+impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    PS: OrdererStore<ID>,
-    OS: OperationStore<T, ID>,
+    S: OrdererStore<ID> + OperationStore<T, ID>,
 {
     type Output = T;
 
-    type Error = OrdererError<T, ID, PS, OS>;
+    type Error = OrdererError<T, ID, S>;
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let mut inner = self.inner.borrow_mut();
@@ -78,7 +81,7 @@ where
             let mut inner = self.inner.borrow_mut();
             if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
                 return self
-                    .operation_store
+                    .store
                     .get_operation(&id)
                     .await
                     .map_err(OrdererError::OperationStore);
@@ -90,25 +93,24 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum OrdererError<T, ID, PS, OS>
+pub enum OrdererError<T, ID, S>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    PS: OrdererStore<ID>,
-    OS: OperationStore<T, ID>,
+    S: OrdererStore<ID> + OperationStore<T, ID>,
 {
     #[error("{0}")]
-    OrdererStore(PS::Error),
+    OrdererStore(<S as OrdererStore<ID>>::Error),
 
     #[error("{0}")]
-    OperationStore(OS::Error),
+    OperationStore(<S as OperationStore<T, ID>>::Error),
 }
 
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-    use p2panda_store_next::orderer::OrdererMemoryStore;
+    use p2panda_store_next::memory::MemoryStore;
     use serde::{Deserialize, Serialize};
     use tokio::task;
 
@@ -193,11 +195,11 @@ mod tests {
 
         local
             .run_until(async move {
-                let _store = OrdererMemoryStore::<Hash>::default();
+                let store = MemoryStore::<Hash>::new();
 
                 // @TODO: Finish test.
                 // // Prepare processing pipeline for message ordering.
-                // let orderer = Orderer::new(store, operation_store);
+                // let orderer = Orderer::new(store);
                 //
                 // // Process Icebear's operation first. It will arrive "out of order".
                 // // Process Pandas's operation next. It will "free" Icebear's operation.

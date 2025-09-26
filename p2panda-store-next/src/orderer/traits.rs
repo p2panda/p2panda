@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
+use std::error::Error;
 
 /// Trait defining a store API for handling ready and pending dependencies backing causal / partial
 /// ordering implementations.
@@ -11,7 +12,7 @@ use std::collections::HashSet;
 /// - Maintain a list of items which don't have their dependencies met
 /// - Return all pending items which depend on a given item
 pub trait OrdererStore<T> {
-    type Error;
+    type Error: Error;
 
     /// Add an item to the store which has all it's dependencies met already. If this is the first
     /// time the item has been added it should also be pushed to the end of a "ready" queue.

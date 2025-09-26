@@ -18,13 +18,19 @@ pub struct OrdererMemoryStore<K> {
     pub(crate) pending: Rc<RefCell<HashMap<K, HashSet<(K, Vec<K>)>>>>,
 }
 
-impl<K> Default for OrdererMemoryStore<K> {
-    fn default() -> Self {
+impl<K> OrdererMemoryStore<K> {
+    pub fn new() -> Self {
         Self {
             ready: Rc::new(RefCell::new(HashSet::new())),
             ready_queue: Rc::new(RefCell::new(VecDeque::new())),
             pending: Rc::new(RefCell::new(HashMap::new())),
         }
+    }
+}
+
+impl<K> Default for OrdererMemoryStore<K> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

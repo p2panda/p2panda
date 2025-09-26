@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::error::Error;
+
 /// Interface for storing, deleting and querying operations.
 ///
 /// The concrete type of an "operation" is generic and implementors can use the same interface for
 /// different approaches: sets, append-only logs or hash-graphs etc.
 pub trait OperationStore<T, ID> {
-    type Error;
+    type Error: Error;
 
     /// Insert an operation.
     ///
