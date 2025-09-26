@@ -9,16 +9,15 @@ use std::rc::Rc;
 use crate::memory::MemoryStore;
 use crate::orderer::OrdererStore;
 
-/// In-Memory database implementation of the `OrdererStore` trait.
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct OrdererMemoryStore<K> {
-    pub(crate) ready: Rc<RefCell<HashSet<K>>>,
-    pub(crate) ready_queue: Rc<RefCell<VecDeque<K>>>,
-    pub(crate) pending: Rc<RefCell<HashMap<K, HashSet<(K, Vec<K>)>>>>,
+pub struct OrdererMemoryStore<ID> {
+    pub(crate) ready: Rc<RefCell<HashSet<ID>>>,
+    pub(crate) ready_queue: Rc<RefCell<VecDeque<ID>>>,
+    pub(crate) pending: Rc<RefCell<HashMap<ID, HashSet<(ID, Vec<ID>)>>>>,
 }
 
-impl<K> OrdererMemoryStore<K> {
+impl<ID> OrdererMemoryStore<ID> {
     pub fn new() -> Self {
         Self {
             ready: Rc::new(RefCell::new(HashSet::new())),
@@ -28,19 +27,19 @@ impl<K> OrdererMemoryStore<K> {
     }
 }
 
-impl<K> Default for OrdererMemoryStore<K> {
+impl<ID> Default for OrdererMemoryStore<ID> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K> OrdererStore<K> for MemoryStore<K>
+impl<T, ID> OrdererStore<ID> for MemoryStore<T, ID>
 where
-    K: Copy + Eq + StdHash,
+    ID: Copy + Eq + StdHash,
 {
     type Error = Infallible;
 
-    async fn mark_ready(&self, key: K) -> Result<bool, Infallible> {
+    async fn mark_ready(&self, key: ID) -> Result<bool, Infallible> {
         let result = self.orderer.ready.borrow_mut().insert(key);
         if result {
             self.orderer.ready_queue.borrow_mut().push_back(key);
@@ -48,7 +47,7 @@ where
         Ok(result)
     }
 
-    async fn mark_pending(&self, key: K, dependencies: Vec<K>) -> Result<bool, Infallible> {
+    async fn mark_pending(&self, key: ID, dependencies: Vec<ID>) -> Result<bool, Infallible> {
         let insert_occured = false;
         for dep_key in &dependencies {
             if self.orderer.ready.borrow().contains(dep_key) {
@@ -63,19 +62,22 @@ where
         Ok(insert_occured)
     }
 
-    async fn get_next_pending(&self, key: K) -> Result<Option<HashSet<(K, Vec<K>)>>, Infallible> {
+    async fn get_next_pending(
+        &self,
+        key: ID,
+    ) -> Result<Option<HashSet<(ID, Vec<ID>)>>, Infallible> {
         Ok(self.orderer.pending.borrow().get(&key).cloned())
     }
 
-    async fn take_next_ready(&self) -> Result<Option<K>, Infallible> {
+    async fn take_next_ready(&self) -> Result<Option<ID>, Infallible> {
         Ok(self.orderer.ready_queue.borrow_mut().pop_front())
     }
 
-    async fn remove_pending(&self, key: K) -> Result<bool, Infallible> {
+    async fn remove_pending(&self, key: ID) -> Result<bool, Infallible> {
         Ok(self.orderer.pending.borrow_mut().remove(&key).is_some())
     }
 
-    async fn ready(&self, dependencies: &[K]) -> Result<bool, Infallible> {
+    async fn ready(&self, dependencies: &[ID]) -> Result<bool, Infallible> {
         let deps_set = HashSet::from_iter(dependencies.iter().cloned());
         let result = self.orderer.ready.borrow().is_superset(&deps_set);
         Ok(result)
@@ -94,7 +96,7 @@ pub trait OrdererTestExt {
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<K> OrdererTestExt for MemoryStore<K> {
+impl<T, ID> OrdererTestExt for MemoryStore<T, ID> {
     fn ready_len(&self) -> usize {
         self.orderer.ready.borrow().len()
     }

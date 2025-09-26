@@ -11,7 +11,9 @@ workspace = true
 
 [features]
 default = ["memory", "sqlite"]
-memory = []
+memory = [
+  "dep:p2panda-core",
+]
 sqlite = [
   "dep:sqlx",
   "dep:thiserror",
@@ -20,6 +22,7 @@ sqlite = [
 test_utils = []
 
 [dependencies]
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true, default-features = false }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
 thiserror = { version = "2.0.16", optional = true }
 tokio = { version = "1.47.1", features = ["sync"], optional = true }

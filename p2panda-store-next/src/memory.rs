@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::operations::OperationMemoryStore;
 use crate::orderer::OrdererMemoryStore;
 
 /// In-memory store.
@@ -7,19 +8,21 @@ use crate::orderer::OrdererMemoryStore;
 /// This does not persist data permamently, all changes are lost when the process ends. Use this
 /// only in development or test contexts.
 #[derive(Clone)]
-pub struct MemoryStore<ID> {
+pub struct MemoryStore<T, ID> {
     pub orderer: OrdererMemoryStore<ID>,
+    pub operations: OperationMemoryStore<T, ID>,
 }
 
-impl<ID> MemoryStore<ID> {
+impl<T, ID> MemoryStore<T, ID> {
     pub fn new() -> Self {
         Self {
             orderer: OrdererMemoryStore::new(),
+            operations: OperationMemoryStore::new(),
         }
     }
 }
 
-impl<ID> Default for MemoryStore<ID> {
+impl<T, ID> Default for MemoryStore<T, ID> {
     fn default() -> Self {
         Self::new()
     }

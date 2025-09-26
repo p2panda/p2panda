@@ -20,7 +20,7 @@ pub trait OperationStore<T, ID> {
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get an operation by id.
-    fn get_operation(&self, id: &ID) -> impl Future<Output = Result<T, Self::Error>>;
+    fn get_operation(&self, id: &ID) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
     /// Query the existence of an operation.
     ///
