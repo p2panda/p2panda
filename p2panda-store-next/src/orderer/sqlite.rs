@@ -7,7 +7,7 @@ use sqlx::query;
 use crate::orderer::OrdererStore;
 use crate::sqlite::{SqliteError, SqlitePool};
 
-impl<T> OrdererStore<T> for SqlitePool {
+impl<'a, T> OrdererStore<T> for SqlitePool<'a> {
     type Error = SqliteError;
 
     async fn mark_ready(&self, _key: T) -> Result<bool, Self::Error> {

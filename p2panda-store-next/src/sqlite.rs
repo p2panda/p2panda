@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::Arc;
+
 use sqlx::migrate::{MigrateDatabase, Migrator};
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Sqlite, migrate};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 /// Create SQLite database if it doesn't already exist.
 pub async fn create_database(url: &str) -> Result<(), SqliteError> {
@@ -102,7 +104,7 @@ impl SqlitePoolBuilder {
         self
     }
 
-    pub async fn build(self) -> Result<SqlitePool, SqliteError> {
+    pub async fn build<'a>(self) -> Result<SqlitePool<'a>, SqliteError> {
         if self.create_database {
             create_database(&self.url).await?;
         }
@@ -120,83 +122,145 @@ impl SqlitePoolBuilder {
     }
 }
 
-pub type Transaction = sqlx::Transaction<'static, Sqlite>;
+pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 
 /// SQLite connection pool with transaction provider.
 ///
 /// This struct can be cloned and used in multiple places in the application. Every cloned instance
-/// will re-use the same connection pool but create a new transaction provider instance. This
-/// allows users to theoretically run multiple transactions.
+/// will re-use the same connection pool and have access to the same transaction instance if one
+/// was started. To guard against sharing transactions unknowingly across unrelated database
+/// queries, a concept of a `TransactionPermit` was introduced which does not protect from misuse
+/// but helps to make "holding" a transaction explicit.
 ///
-/// Please note that SQLite strictly serializes transactions with writes. This abstraction thus
-/// doesn't give us any real performance benefits for parallelization but allows instead designing
-/// isolated and atomic transactions.
+/// Please note that SQLite strictly serializes transactions with _writes_ and will block any
+/// parallel attempt to begin another one. Processes starting a transaction will acquire a
+/// `TransactionPermit` and keep it until the transaction was committed or rolled back. If the
+/// query only involves _reads_ it is recommended to not use transactions and use the `execute`
+/// method directly as acquiring transactions will potentially block other processes to do work.
 ///
-/// Please note that this interface needs to be used with care: Transactions are managed per single
-/// `SqlitePool` instance (and not shared across them, reference-counted etc.) and need to be
-/// explicitly started _before_ any queries can take place, otherwise errors will occur which
-/// should be understood as implementation bugs.
-pub struct SqlitePool {
-    tx: Mutex<Option<Transaction>>,
+/// ## Design decisions
+///
+/// This storage API design was chosen to make the dynamics of the underlying SQLite database
+/// explicit. Internally any process can access the transaction object to do writes and
+/// (uncommitted) reads. Care is required when designing systems like that as it's still possible
+/// to allow concurrent processes to read and write within the same transaction and potentially
+/// introducing suble bugs (like one process could roll back the transaction while the other one
+/// assumed it will be committed). Usually developers want design _writes_ to the database within
+/// one atomic transaction if they need consistency guarantees. Unrelated queries _can_ be "pooled"
+/// in one transaction (for performance reasons for example, see "Transaction II" in the diagram)
+/// if consistency is guaranteed by all involved processes and the underlying data-model.
+///
+/// ```text
+/// Transaction I:
+/// begin ---------------------> commit
+///
+/// Process I:
+///       --> write --> read -->
+///
+///                                             Transaction II:
+///                                             begin ----------------------> commit
+///
+///                                             Process II:
+///                                                   --> write --> write -->
+///
+///                                             Process III:
+///                                                   --> read --> write --->
+/// ```
+///
+/// Another design decision is to not expose transaction design to the high-level storage APIs.
+/// Users of the storage methods like `get_operation` (in `OperationStore`) etc. do _not_ need to
+/// explicity deal with transaction objects, as this is handled internally now. Like this it is
+/// possible to separate the "logic" from the "storage" layer and keep the code clean.
+#[derive(Clone)]
+pub struct SqlitePool<'a> {
+    tx: Arc<Mutex<Option<Transaction<'a>>>>,
     pool: sqlx::SqlitePool,
+    semaphore: Arc<Semaphore>,
 }
 
-impl Clone for SqlitePool {
-    fn clone(&self) -> Self {
-        Self {
-            // Cloning the pool gives us another handle for it but creates a completly new
-            // transaction state only managed by this instance.
-            tx: Mutex::new(None),
-            pool: self.pool.clone(),
-        }
-    }
-}
-
-impl SqlitePool {
+impl<'a> SqlitePool<'a> {
     pub(crate) fn new(pool: sqlx::SqlitePool) -> Self {
         Self {
-            tx: Mutex::new(None),
+            tx: Arc::default(),
             pool,
+            // SQLite only ever allows _one_ transaction at a time. This might be a repetition of
+            // what sqlx and SQLite do under the hood, but we want to make this behaviour explicit
+            // right from the beginning with this semaphore.
+            semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 
-    /// Begins a transaction, otherwise an error is returned.
+    /// Begins a transaction.
     ///
-    /// Any process can now start using the `tx` method to execute writes within this transaction
-    /// or perform uncommitted "dirty" reads on it.
-    pub async fn begin(&self) -> Result<(), SqliteError> {
-        let mut tx_ref = self.tx.lock().await;
+    /// Transactions are strictly serialized, this is expressed in form of a `TransactionPermit`
+    /// processes need to hold when acquiring access to a new transaction. Any concurrent process
+    /// calling it will await here if there's already another process holding a permit, this will
+    /// potentially "slow down" work and should be carefully used.
+    ///
+    /// Any process with a transaction can now start using the `tx` method to execute writes within
+    /// this transaction or perform uncommitted "dirty" reads on it.
+    ///
+    /// It is usually not necessary to acquire a transaction when the logic only requires committed
+    /// _reads_ to the database. Use `execute` instead.
+    pub async fn begin(&self) -> Result<TransactionPermit<'_>, SqliteError> {
+        // Acquire a permit from the semaphore, it will await if currently another process has the
+        // permit. Here we enforce strict serialization of transactions (similar to what SQLite
+        // does under the hood).
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .expect("if semaphore is closed then the whole struct is gone as well");
 
-        // @TODO: Learn a bit how this used and then decide if we want to have a semaphore here.
-        // This will then not fail and instead await "queing-up" the next transaction.
-        if tx_ref.is_some() {
-            return Err(SqliteError::TransactionPending);
-        }
+        // Access the transaction object which we've placed behind a Mutex. This lock follows a
+        // different logic and only makes sure that mutable access to it is exclusive _within_ a
+        // process "holding" the transaction permit.
+        let mut tx_ref = self.tx.lock().await;
+        assert!(
+            tx_ref.is_none(),
+            "can't have an already existing transaction after an just-acquired permit"
+        );
 
         let tx = self.pool.begin().await?;
         tx_ref.replace(tx);
 
-        Ok(())
+        Ok(TransactionPermit(permit))
     }
 
-    /// Rolls back the transaction and with that all pending changes.
+    /// Rolls back the transaction and with that all uncommitted changes.
     ///
-    /// This will return an error if no transaction was given in the first place.
-    pub async fn rollback(&self) -> Result<(), SqliteError> {
-        match self.tx.lock().await.take() {
-            Some(tx) => Ok(tx.rollback().await?),
-            None => Err(SqliteError::TransactionMissing),
-        }
+    /// This takes the permit and frees it after the rollback has finished. Other processes can now
+    /// begin new transactions.
+    pub async fn rollback(&self, permit: TransactionPermit<'_>) -> Result<(), SqliteError> {
+        let Some(tx) = self.tx.lock().await.take() else {
+            panic!("can't have no transaction without dropping permit first")
+        };
+
+        let result = tx.rollback().await.map_err(SqliteError::Sqlite);
+
+        // Always drop the permit, both on successful rollback and error. This will allow other
+        // processes now to begin a new transaction and acquire the permit.
+        drop(permit);
+
+        result
     }
 
     /// Commits the transaction.
     ///
-    /// This will return an error if no transaction was given in the first place.
-    pub async fn commit(&self) -> Result<(), SqliteError> {
-        match self.tx.lock().await.take() {
-            Some(tx) => Ok(tx.commit().await?),
-            None => Err(SqliteError::TransactionMissing),
-        }
+    /// This takes the permit and frees it after the commit has finished. Other processes can now
+    /// begin new transactions.
+    pub async fn commit(&self, permit: TransactionPermit<'_>) -> Result<(), SqliteError> {
+        let Some(tx) = self.tx.lock().await.take() else {
+            panic!("can't have no transaction without dropping permit first")
+        };
+
+        let result = tx.commit().await.map_err(SqliteError::Sqlite);
+
+        // Always drop the permit, both on successful commit and error. This will allow other
+        // processes now to begin a new transaction and acquire the permit.
+        drop(permit);
+
+        result
     }
 
     /// Execute SQL query within transaction.
@@ -204,7 +268,8 @@ impl SqlitePool {
     /// This method will return an error when no transaction is currently given. Make sure to call
     /// `begin` before.
     ///
-    /// If the query fails the transaction is automatically rolled back.
+    /// If the query fails the user probably wants to roll back the transaction and free the
+    /// permit. This is _not_ handled automatically.
     pub async fn tx<F, R>(&self, f: F) -> Result<R, SqliteError>
     where
         F: AsyncFnOnce(&mut Transaction) -> Result<R, SqliteError>,
@@ -212,14 +277,7 @@ impl SqlitePool {
         let mut tx_ref = self.tx.lock().await;
         let tx = tx_ref.as_mut().ok_or(SqliteError::TransactionMissing)?;
 
-        match f(tx).await {
-            Ok(result) => Ok(result),
-            Err(err) => {
-                // Something went wrong, we need to roll back and abort here.
-                self.rollback().await?;
-                Err(err)
-            }
-        }
+        f(tx).await
     }
 
     /// Execute SQL query directly.
@@ -231,15 +289,13 @@ impl SqlitePool {
     }
 }
 
+#[allow(unused)]
+pub struct TransactionPermit<'a>(SemaphorePermit<'a>);
+
 #[derive(Debug, Error)]
 pub enum SqliteError {
-    /// We can't begin a new transaction as one is already pending.
-    #[error("can't begin a new transaction as one is currently pending")]
-    TransactionPending,
-
-    /// This is a critical error as it indicates that something is wrong with our implementation:
-    /// Queries using transactions, commits or rollbacks can only ever occur if a transaction was
-    /// started _before_.
+    /// This is a critical error as it indicates that something is wrong with the usage of this
+    /// API: Queries using transactions can only ever occur if a transaction was started _before_.
     #[error("tried to interact with inexistant transaction")]
     TransactionMissing,
 
@@ -254,7 +310,11 @@ pub enum SqliteError {
 
 #[cfg(test)]
 mod tests {
+    use std::task::Poll;
+
+    use futures_test::task::noop_context;
     use sqlx::{Executor, query, query_as};
+    use tokio::pin;
 
     use crate::sqlite::{SqliteError, SqlitePoolBuilder};
 
@@ -273,32 +333,27 @@ mod tests {
             Err(SqliteError::TransactionMissing)
         ));
 
-        // Commiting or rolling back an in-existant transaction should fail.
-        assert!(matches!(
-            pool.commit().await,
-            Err(SqliteError::TransactionMissing)
-        ));
-        assert!(matches!(
-            pool.rollback().await,
-            Err(SqliteError::TransactionMissing)
-        ));
-
         // Starting a new transaction should work.
-        assert!(pool.begin().await.is_ok());
+        let permit = pool.begin().await.expect("no error");
 
-        // .. attempting to start a second one should fail.
+        // .. attempting to start a second one should make us wait.
         assert!(matches!(
-            pool.begin().await,
-            Err(SqliteError::TransactionPending)
+            {
+                let fut = pool.begin();
+                let mut cx = noop_context();
+                pin!(fut);
+                fut.poll(&mut cx)
+            },
+            Poll::Pending
         ));
 
         // Using the transaction should work without failure.
         assert!(pool.tx(async |_| Ok(())).await.is_ok());
 
         // Committing should work as well.
-        assert!(pool.commit().await.is_ok());
+        assert!(pool.commit(permit).await.is_ok());
 
-        // .. and now running a transaction should fail again.
+        // .. and now running a transaction should fail.
         assert!(matches!(
             pool.tx(async |_| Ok(())).await,
             Err(SqliteError::TransactionMissing)
@@ -306,44 +361,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn isolated_transaction_providers() {
+    async fn serialized_transactions() {
         let pool_1 = SqlitePoolBuilder::new()
-            .run_default_migrations(false)
-            .random_memory_url()
-            .build()
-            .await
-            .unwrap();
-
-        // Cloning will re-use the connection pool but _not_ the transaction provider.
-        let pool_2 = pool_1.clone();
-
-        assert!(pool_1.begin().await.is_ok());
-        assert!(pool_2.begin().await.is_ok());
-
-        use std::ptr::addr_of;
-
-        let tx_addr_1a = pool_1
-            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
-            .await
-            .unwrap();
-        let tx_addr_1b = pool_1
-            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
-            .await
-            .unwrap();
-        let tx_addr_2 = pool_2
-            .tx(async |tx| Ok(format!("{:?}", addr_of!(tx))))
-            .await
-            .unwrap();
-
-        assert_eq!(tx_addr_1a, tx_addr_1b);
-
-        // @TODO: Why does this fail?
-        // assert_ne!(tx_addr_2, tx_addr_1a);
-    }
-
-    #[tokio::test]
-    async fn committed_and_uncommitted_reads() {
-        let pool = SqlitePoolBuilder::new()
             .run_default_migrations(false)
             .max_connections(1)
             .random_memory_url()
@@ -351,30 +370,74 @@ mod tests {
             .await
             .unwrap();
 
-        let pool_2 = pool.clone();
+        let pool_2 = pool_1.clone();
 
         // Create test-table schema.
-        pool.execute(async |pool| {
-            pool.execute("CREATE TABLE test(x INTEGER)").await?;
-            Ok(())
-        })
-        .await
-        .unwrap();
+        pool_1
+            .execute(async |pool| {
+                pool.execute("CREATE TABLE test(x INTEGER)").await?;
+                Ok(())
+            })
+            .await
+            .unwrap();
 
-        // ...
+        // Pool 1 acquires the permit to run a transaction.
+        let permit_1 = pool_1.begin().await.unwrap();
 
-        pool.begin().await.unwrap();
+        // .. parallely Pool 2 also tries to do some work.
+        let handle = tokio::spawn(async move {
+            // Try to acquire a permit, this will "block" for now as pool 1 already is doing
+            // something and we need to wait.
+            let permit_2 = pool_2.begin().await.unwrap();
 
-        pool.tx(async |tx| {
-            query("INSERT INTO test (x) VALUES (5)")
-                .execute(&mut **tx)
-                .await?;
-            Ok(())
-        })
-        .await
-        .unwrap();
+            // We should see now the previously change made by pool 1.
+            let result = pool_2
+                .tx(async |tx| {
+                    let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
+                    Ok(row.0)
+                })
+                .await
+                .unwrap();
+            assert_eq!(result, 5);
 
-        let result = pool
+            // Change the value to something else.
+            pool_2
+                .tx(async |tx| {
+                    query("INSERT INTO test (x) VALUES (10)")
+                        .execute(&mut **tx)
+                        .await?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            // .. but abort the transaction and roll back.
+            pool_2.rollback(permit_2).await.unwrap();
+
+            // The value should still be the same as before.
+            let result = pool_2
+                .execute(async |pool| {
+                    let row: (i64,) = query_as("SELECT x FROM test").fetch_one(pool).await?;
+                    Ok(row.0)
+                })
+                .await
+                .unwrap();
+            assert_eq!(result, 5);
+        });
+
+        // Pool 1 changes the value.
+        pool_1
+            .tx(async |tx| {
+                query("INSERT INTO test (x) VALUES (5)")
+                    .execute(&mut **tx)
+                    .await?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // Result is 5 after during "dirty read".
+        let result = pool_1
             .tx(async |tx| {
                 let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
                 Ok(row.0)
@@ -383,19 +446,21 @@ mod tests {
             .unwrap();
         assert_eq!(result, 5);
 
-        // ...
+        // Commit the change to database and free permit. This will allow now pool_2 to read the
+        // changed value.
+        pool_1.commit(permit_1).await.unwrap();
 
-        pool.commit().await.unwrap();
-
-        pool_2.begin().await.unwrap();
-
-        let result = pool_2
-            .tx(async |tx| {
-                let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
+        // Result is still 5 after commit.
+        let result = pool_1
+            .execute(async |pool| {
+                let row: (i64,) = query_as("SELECT x FROM test").fetch_one(pool).await?;
                 Ok(row.0)
             })
             .await
             .unwrap();
         assert_eq!(result, 5);
+
+        // Make sure we give pool 2 the time it needs to finish.
+        handle.await.unwrap();
     }
 }
