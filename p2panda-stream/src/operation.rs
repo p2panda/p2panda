@@ -168,7 +168,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: crate::test_utils::Extensions::default(),
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
@@ -188,7 +188,7 @@ mod tests {
             seq_num: 12, // we'll be missing 11 operations between the first and this one
             backlink: Some(Hash::new(b"mock operation")),
             previous: vec![],
-            extensions: None,
+            extensions: crate::test_utils::Extensions::default(),
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();

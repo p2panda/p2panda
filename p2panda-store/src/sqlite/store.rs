@@ -160,12 +160,7 @@ where
                 .collect::<Vec<String>>()
                 .concat(),
         )
-        .bind(
-            header
-                .extensions
-                .as_ref()
-                .map(|extensions| encode_cbor(extensions).expect("extenions are serializable")),
-        )
+        .bind(encode_cbor(&header.extensions).expect("extenions are serializable"))
         .bind(body.map(|body| body.to_bytes()))
         .bind(header_bytes)
         .execute(&self.pool)
@@ -551,7 +546,7 @@ mod tests {
             seq_num,
             backlink,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(private_key);
         let header_bytes = header.to_bytes();

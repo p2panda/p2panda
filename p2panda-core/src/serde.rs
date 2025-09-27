@@ -161,9 +161,7 @@ where
 
         seq.serialize_element(&self.previous)?;
 
-        if let Some(extensions) = &self.extensions {
-            seq.serialize_element(extensions)?;
-        }
+        seq.serialize_element(&self.extensions)?;
 
         seq.end()
     }
@@ -258,9 +256,10 @@ where
                     .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
                     .ok_or(SerdeError::custom("previous array missing"))?;
 
-                let extensions: Option<E> = seq
+                let extensions: E = seq
                     .next_element()
-                    .map_err(|err| SerdeError::custom(format!("invalid extensions: {err}")))?;
+                    .map_err(|err| SerdeError::custom(format!("invalid extensions: {err}")))?
+                    .ok_or(SerdeError::custom("extensions missing"))?;
 
                 Ok(Header {
                     version,
@@ -438,23 +437,7 @@ mod tests {
                 seq_num: 0,
                 backlink: None,
                 previous: vec![],
-                extensions: Some(extensions.clone()),
-                signature: None,
-            },
-            &private_key,
-        );
-
-        assert_serde_roundtrip(
-            Header::<CustomExtensions> {
-                version: 1,
-                public_key: private_key.public_key(),
-                payload_size: 0,
-                payload_hash: None,
-                timestamp: 0,
-                seq_num: 7,
-                backlink: Some(Hash::new(vec![1, 2, 3])),
-                previous: vec![],
-                extensions: None,
+                extensions: extensions.clone(),
                 signature: None,
             },
             &private_key,
@@ -470,7 +453,7 @@ mod tests {
                 seq_num: 0,
                 backlink: None,
                 previous: vec![],
-                extensions: Some(extensions),
+                extensions: extensions,
                 signature: None,
             },
             &private_key,
@@ -492,7 +475,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(&private_key);
 
@@ -510,7 +493,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(&private_key);
 
@@ -528,7 +511,7 @@ mod tests {
             seq_num: 0,
             backlink: Some(Hash::new([0, 1, 2])),
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(&private_key);
 
@@ -546,7 +529,7 @@ mod tests {
             seq_num: 10,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(&private_key);
 
@@ -575,7 +558,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: Some(()),
+            extensions: (),
         };
         header.sign(&private_key);
 
@@ -606,7 +589,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header_0.sign(&private_key);
 
@@ -633,7 +616,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![header_0.hash()],
-            extensions: None,
+            extensions: (),
         };
         header_0_with_previous.sign(&private_key);
 
@@ -663,7 +646,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![header_0.hash()],
-            extensions: None,
+            extensions: (),
         };
         header_0_with_previous_and_body.sign(&private_key);
 
@@ -693,7 +676,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header_1.sign(&private_key);
 
@@ -722,7 +705,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![header_0.hash()],
-            extensions: None,
+            extensions: (),
         };
         header_1_with_previous.sign(&private_key);
 
@@ -756,7 +739,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(&private_key);
 
