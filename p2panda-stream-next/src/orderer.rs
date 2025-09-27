@@ -111,12 +111,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
     use p2panda_store_next::{memory::MemoryStore, operations::OperationStore};
     use serde::{Deserialize, Serialize};
     use tokio::task;
+    use tokio_stream::StreamExt;
 
-    use crate::{PipelineBuilder, Processor};
+    use crate::StreamLayerExt;
 
     use super::{Orderer, Ordering};
 
@@ -209,20 +211,18 @@ mod tests {
                 // Prepare processing pipeline for message ordering.
                 let orderer = Orderer::new(store);
 
-                let pipeline = PipelineBuilder::<Operation<TestExtension>>::new()
-                    .layer(orderer)
-                    .build();
+                let mut stream = stream::iter(vec![
+                    // Process Icebear's operation first. It will arrive "out of order".
+                    operation_icebear.clone(),
+                    // Process Pandas's operation next. It will "free" Icebear's operation.
+                    operation_panda.clone(),
+                ])
+                .layer(orderer);
 
-                // Process Icebear's operation first. It will arrive "out of order".
-                pipeline.process(operation_icebear.clone()).await.unwrap();
-
-                // Process Pandas's operation next. It will "free" Icebear's operation.
-                pipeline.process(operation_panda.clone()).await.unwrap();
-
-                let operation = pipeline.next().await.unwrap();
+                let operation = stream.next().await.unwrap().unwrap();
                 assert_eq!(operation, operation_panda);
 
-                let operation = pipeline.next().await.unwrap();
+                let operation = stream.next().await.unwrap().unwrap();
                 assert_eq!(operation, operation_icebear);
             })
             .await;
