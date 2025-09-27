@@ -377,3 +377,36 @@ async fn into_stream() {
         })
         .await;
 }
+
+#[tokio::test]
+async fn processor_stream_polling() {
+    let local = task::LocalSet::new();
+
+    local
+        .run_until(async move {
+            // Input stream and processor output stream are properly polled independently, so new
+            // input doesn't get blocked when processor is still working.
+
+            let input_stream = stream::iter(vec![
+                "hey".to_string(),
+                "ho".to_string(),
+                "lets go".to_string(),
+            ]);
+
+            // Create a processor with delay on processing (_not_ on next).
+            let slow_processor = SlowProcessor::new().with_process_delay(Duration::from_millis(50));
+            let stream = slow_processor.into_stream(input_stream);
+
+            // Collect all results - this should work without getting stuck even though the
+            // processor has delays.
+            let results: Vec<_> = stream
+                .take(3)
+                .filter_map(|item| async { item.ok() })
+                .collect()
+                .await;
+
+            assert_eq!(results.len(), 3);
+            assert!(results.iter().all(|s| s.starts_with("processed_")));
+        })
+        .await;
+}
