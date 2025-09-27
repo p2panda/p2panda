@@ -71,6 +71,7 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut this = self.project();
+        let mut made_progress = false;
 
         // Check input stream.
         //
@@ -84,6 +85,7 @@ where
         match this.input_stream.as_mut().poll_next(cx) {
             Poll::Ready(Some(input)) => {
                 let _ = this.tx.send(input);
+                made_progress = true;
             }
             Poll::Ready(None) | Poll::Pending => (),
         };
@@ -95,7 +97,16 @@ where
         //
         // If the next method returns a pending state we assume this is because there are no items
         // given.
-        this.rx.poll_recv(cx)
+        match this.rx.poll_recv(cx) {
+            Poll::Ready(item) => Poll::Ready(item),
+            Poll::Pending => {
+                if made_progress {
+                    // We sent new input, try again immediately.
+                    cx.waker().wake_by_ref();
+                }
+                Poll::Pending
+            }
+        }
     }
 }
 
