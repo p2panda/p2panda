@@ -308,6 +308,30 @@ pub enum SqliteError {
     /// SQL table schema migration error.
     #[error(transparent)]
     Migrate(#[from] sqlx::migrate::MigrateError),
+
+    /// An I/O error occurred while encoding bytes before storing them into the database. This is a
+    /// critical error.
+    #[error("failed encoding '{0}' value before storing to database: {1}")]
+    Encode(String, EncodeError),
+
+    /// Invalid, corrupted data was found in the database. This is a critical error.
+    #[error("could not decode corrupted '{0}' value from database: {1}")]
+    Decode(String, DecodeError),
+}
+
+#[derive(Debug, Error)]
+pub enum DecodeError {
+    #[error(transparent)]
+    DecodeCbor(#[from] p2panda_core::cbor::DecodeError),
+
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+
+    #[error(transparent)]
+    Hash(#[from] p2panda_core::hash::HashError),
+
+    #[error(transparent)]
+    Identity(#[from] p2panda_core::identity::IdentityError),
 }
 
 #[cfg(test)]
