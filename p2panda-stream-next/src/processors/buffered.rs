@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::marker::PhantomData;
+use std::rc::Rc;
+
 use tokio::sync::mpsc;
 use tokio::task::{self, JoinHandle};
 
@@ -9,6 +12,7 @@ use crate::processors::Processor;
 /// to input new items and forwarding processed items on a channel sender.
 pub struct Buffer {
     handle: JoinHandle<()>,
+    _marker: PhantomData<Rc<()>>, // !Send
 }
 
 pub type BufferSender<T> = mpsc::UnboundedSender<T>;
@@ -48,7 +52,14 @@ impl Buffer {
             }
         });
 
-        (Self { handle }, input_tx, output_rx)
+        (
+            Self {
+                handle,
+                _marker: PhantomData,
+            },
+            input_tx,
+            output_rx,
+        )
     }
 }
 

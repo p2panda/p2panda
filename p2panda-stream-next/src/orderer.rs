@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Identifier, OperationId};
 // @TODO: Change these to p2panda_store when ready.
 use p2panda_store_next::operations::OperationStore;
 use p2panda_store_next::orderer::OrdererStore;
@@ -17,9 +17,6 @@ use tokio::sync::Notify;
 use crate::Processor;
 
 pub trait Ordering<ID> {
-    // @TODO: Is this part of `Ordering` or another "id" trait?
-    fn id(&self) -> &ID;
-
     fn dependencies(&self) -> &[ID];
 }
 
@@ -27,7 +24,8 @@ pub struct Orderer<T, ID, S> {
     inner: RefCell<PartialOrder<ID, S>>,
     store: S,
     notify: Notify,
-    _marker: PhantomData<(T, Rc<()>)>, // !Send
+    _marker: PhantomData<T>,
+    _marker2: PhantomData<Rc<()>>, // !Send
 }
 
 impl<T, ID, S> Orderer<T, ID, S>
@@ -43,6 +41,7 @@ where
             store,
             notify: Notify::new(),
             _marker: PhantomData,
+            _marker2: PhantomData,
         }
     }
 }
@@ -52,7 +51,7 @@ where
 #[allow(clippy::await_holding_refcell_ref)]
 impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
-    T: Ordering<ID>,
+    T: Identifier<ID> + Ordering<ID>,
     ID: OperationId,
     S: OrdererStore<ID> + OperationStore<T, ID>,
 {
@@ -128,10 +127,6 @@ mod tests {
     }
 
     impl Ordering<Hash> for Operation<TestExtension> {
-        fn id(&self) -> &Hash {
-            &self.hash
-        }
-
         fn dependencies(&self) -> &[Hash] {
             match self.header.extensions {
                 Some(ref extensions) => &extensions.dependencies,

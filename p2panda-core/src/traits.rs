@@ -2,4 +2,11 @@
 
 use std::hash::Hash as StdHash;
 
-pub trait OperationId: Clone + Copy + PartialEq + Eq + StdHash {}
+pub trait OperationId: Copy + Clone + PartialEq + Eq + StdHash {}
+
+pub trait Identifier<ID>
+where
+    ID: OperationId,
+{
+    fn id(&self) -> &ID;
+}
