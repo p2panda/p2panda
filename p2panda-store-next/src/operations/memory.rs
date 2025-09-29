@@ -4,9 +4,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::rc::Rc;
-
-use p2panda_core::traits::OperationId;
 
 use crate::memory::MemoryStore;
 use crate::operations::OperationStore;
@@ -33,14 +32,14 @@ impl<T, ID> Default for OperationMemoryStore<T, ID> {
 
 impl<T, ID> OperationStore<T, ID> for MemoryStore<T, ID>
 where
-    T: Debug + Clone,
-    ID: Debug + OperationId,
+    T: Clone + Debug,
+    ID: Clone + Eq + Debug + StdHash,
 {
     type Error = Infallible;
 
     async fn insert_operation(&self, id: &ID, operation: T) -> Result<bool, Self::Error> {
         let mut operations = self.operations.operations.borrow_mut();
-        Ok(operations.insert(*id, operation).is_none())
+        Ok(operations.insert(id.clone(), operation).is_none())
     }
 
     async fn get_operation(&self, id: &ID) -> Result<Option<T>, Self::Error> {
@@ -55,6 +54,6 @@ where
 
     async fn delete_operation(&self, id: &ID) -> Result<bool, Self::Error> {
         let mut operations = self.operations.operations.borrow_mut();
-        Ok(operations.remove(id).is_none())
+        Ok(operations.remove(id).is_some())
     }
 }

@@ -23,7 +23,8 @@ where
             .tx(async |tx| {
                 query(
                     "
-                    INSERT INTO
+                    INSERT OR IGNORE
+                    INTO
                         operations_v1 (
                             hash,
                             version,
@@ -34,7 +35,7 @@ where
                             timestamp,
                             header,
                             body,
-                            extensions,
+                            extensions
                         )
                     VALUES
                         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -53,9 +54,10 @@ where
                 )
                 .bind(operation.body.map(|body| body.to_bytes()))
                 .bind(match operation.header.extensions {
-                    Some(ref extensions) => Some(encode_cbor(extensions).map_err(|err| {
-                        SqliteError::Encode("extensions".to_string(), err)
-                    })?),
+                    Some(ref extensions) => Some(
+                        encode_cbor(extensions)
+                            .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
+                    ),
                     None => None,
                 })
                 .execute(&mut **tx)

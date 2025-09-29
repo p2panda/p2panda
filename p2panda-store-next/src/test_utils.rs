@@ -19,14 +19,15 @@ macro_rules! assert_all_stores {
     (|$store:ident| $test_body:expr) => {
         // Test with MemoryStore.
         {
-            let $store = p2panda_store_next::memory::MemoryStore::<(), String>::default();
+            let $store = $crate::memory::MemoryStore::default();
             $test_body.await;
         }
 
         // Test with SqliteStore.
         {
-            let sqlite_store = p2panda_store_next::sqlite::SqliteStoreBuilder::new()
+            let sqlite_store = $crate::sqlite::SqliteStoreBuilder::new()
                 .random_memory_url()
+                // We're running in a single test thread and can't have more parallel connections.
                 .max_connections(1)
                 .build()
                 .await

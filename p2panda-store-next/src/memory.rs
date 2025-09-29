@@ -15,8 +15,8 @@ where
     T: Debug,
     ID: Debug,
 {
-    pub orderer: OrdererMemoryStore<ID>,
     pub operations: OperationMemoryStore<T, ID>,
+    pub orderer: OrdererMemoryStore<ID>,
 }
 
 impl<T, ID> MemoryStore<T, ID>

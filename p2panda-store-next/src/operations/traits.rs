@@ -5,7 +5,7 @@ use std::error::Error;
 /// Interface for storing, deleting and querying operations.
 ///
 /// The concrete type of an "operation" is generic and implementors can use the same interface for
-/// different approaches: sets, append-only logs or hash-graphs etc.
+/// different approaches: sets, append-only logs, hash-graphs (DAG) etc.
 pub trait OperationStore<T, ID> {
     type Error: Error;
 
