@@ -43,41 +43,16 @@ where
 {
     type Error = Infallible;
 
-    async fn mark_ready(&self, key: ID) -> Result<bool, Infallible> {
-        let result = self.orderer.ready.borrow_mut().insert(key.clone());
+    async fn mark_ready(&self, id: ID) -> Result<bool, Infallible> {
+        let result = self.orderer.ready.borrow_mut().insert(id.clone());
         if result {
-            self.orderer.ready_queue.borrow_mut().push_back(key);
+            self.orderer.ready_queue.borrow_mut().push_back(id);
         }
         Ok(result)
     }
 
-    async fn mark_pending(&self, key: ID, dependencies: Vec<ID>) -> Result<bool, Infallible> {
+    async fn mark_pending(&self, id: ID, dependencies: Vec<ID>) -> Result<bool, Infallible> {
         let mut insert_occured = false;
-
-        // 2 \
-        //    1
-        // 3 /
-        //
-        // 1, [2, 3]
-        //
-        // is 2 ready? no.
-        // is 3 ready? no.
-        //
-        // pending[2] = (1, [2, 3])
-        // pending[3] = (1, [2, 3])
-        //         |     |     |
-        //         |     |     |
-        //         key   key dependencies
-        //
-        // 1, [3]
-        //
-        // is 3 ready? no.
-        //
-        // pending[3] = (1, [3])
-        //
-        // 1, [2, 3]
-        //
-        // .. no insertion, already exists
 
         for dep_key in &dependencies {
             if self.orderer.ready.borrow().contains(dep_key) {
@@ -86,7 +61,7 @@ where
 
             let mut pending = self.orderer.pending.borrow_mut();
             let dependents = pending.entry(dep_key.clone()).or_default();
-            if dependents.insert((key.clone(), dependencies.clone())) {
+            if dependents.insert((id.clone(), dependencies.clone())) {
                 insert_occured = true;
             }
         }
@@ -94,19 +69,16 @@ where
         Ok(insert_occured)
     }
 
-    async fn get_next_pending(
-        &self,
-        key: ID,
-    ) -> Result<Option<HashSet<(ID, Vec<ID>)>>, Infallible> {
-        Ok(self.orderer.pending.borrow().get(&key).cloned())
+    async fn get_next_pending(&self, id: ID) -> Result<Option<HashSet<(ID, Vec<ID>)>>, Infallible> {
+        Ok(self.orderer.pending.borrow().get(&id).cloned())
     }
 
     async fn take_next_ready(&self) -> Result<Option<ID>, Infallible> {
         Ok(self.orderer.ready_queue.borrow_mut().pop_front())
     }
 
-    async fn remove_pending(&self, key: ID) -> Result<bool, Infallible> {
-        Ok(self.orderer.pending.borrow_mut().remove(&key).is_some())
+    async fn remove_pending(&self, id: ID) -> Result<bool, Infallible> {
+        Ok(self.orderer.pending.borrow_mut().remove(&id).is_some())
     }
 
     async fn ready(&self, dependencies: &[ID]) -> Result<bool, Infallible> {
