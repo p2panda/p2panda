@@ -61,8 +61,8 @@ where
         let manager = Self {
             credentials: config.credentials().to_owned(),
             key_store,
-            pre_key_lifetime: config.pre_key_lifetime.clone(),
-            pre_key_rotate_after: config.pre_key_rotate_after.clone(),
+            pre_key_lifetime: config.pre_key_lifetime,
+            pre_key_rotate_after: config.pre_key_rotate_after,
             my_keys_rotated_at: 0,
             rng,
             _phantom: PhantomData,

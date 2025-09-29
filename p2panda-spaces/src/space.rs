@@ -578,7 +578,7 @@ where
                 y
             }
             None => {
-                let my_id: ActorId = manager.identity.id().into();
+                let my_id = manager.identity.id();
 
                 let dgm = EncryptionMembershipState {
                     members: HashSet::new(),

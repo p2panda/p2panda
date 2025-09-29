@@ -92,7 +92,7 @@ where
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
         // @TODO: kick off service which will handle key bundle rotation and space repair.
         // @TODO: return rx channel where new events/messages will be emitted.
-        let identity = IdentityManager::new(key_store, &config, &rng).await?;
+        let identity = IdentityManager::new(key_store, config, &rng).await?;
         let inner = ManagerInner {
             config: config.clone(),
             my_keys_rotated_at: 0,
