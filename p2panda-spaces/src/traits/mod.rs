@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod spaces_store;
 pub mod key_store;
 pub mod message;
+pub mod spaces_store;
 
 use std::fmt::Debug;
 

@@ -6,8 +6,8 @@ use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
-use crate::message::SpacesArgs;
 use crate::ActorId;
+use crate::message::SpacesArgs;
 
 pub trait Forge<ID, M, C> {
     type Error: Debug;

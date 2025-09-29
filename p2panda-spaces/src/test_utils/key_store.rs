@@ -9,9 +9,9 @@ use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 
 use crate::Config;
 use crate::message::SpacesArgs;
-use crate::traits::key_store::{Forge, KeyStore};
 use crate::test_utils::{SeqNum, TestConditions, TestMessage};
 use crate::traits::SpaceId;
+use crate::traits::key_store::{Forge, KeyStore};
 use crate::types::ActorId;
 
 #[derive(Debug)]

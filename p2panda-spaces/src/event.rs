@@ -7,10 +7,10 @@ use p2panda_encryption::data_scheme::GroupOutput;
 
 use crate::ActorId;
 use crate::auth::message::AuthMessage;
-use crate::message::{SpacesArgs};
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::message::SpacesArgs;
 use crate::space::{added_members, removed_members};
 use crate::traits::SpaceId;
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -9,8 +9,8 @@ use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::SpacesArgs;
 use crate::space::removed_members;
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::SpaceId;
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{
     ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };

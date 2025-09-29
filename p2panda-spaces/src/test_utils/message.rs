@@ -4,8 +4,8 @@ use p2panda_core::{Hash, PublicKey};
 
 use crate::message::SpacesArgs;
 use crate::test_utils::{SeqNum, TestConditions};
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::SpaceId;
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::{ActorId, OperationId};
 
 #[derive(Clone, Debug)]
