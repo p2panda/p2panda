@@ -17,7 +17,7 @@ use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
 use crate::traits::key_store::{Forge, KeyStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
-use crate::types::{ActorId, OperationId};
+use crate::types::ActorId;
 use crate::utils::now;
 use crate::{Config, Credentials};
 
@@ -54,6 +54,9 @@ where
         config: &Config,
         rng: &Rng,
     ) -> Result<Self, IdentityError<ID, K, M, C>> {
+        // @TODO: needed to take Rng::from_seed out from behind the test_utils flag in
+        // p2panda-encryption in order to do this. It's needed so that IdentityManager can have
+        // it's own rng without having a handle to the manager (as we do elsewhere).
         let rng = Rng::from_seed(rng.random_array()?);
         let manager = Self {
             credentials: config.credentials().to_owned(),
@@ -296,11 +299,9 @@ mod tests {
 
         // Rotate identity secret
         config.credentials.identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let identity_manager = IdentityManager::new(key_store, &config, &rng)
-            .await
-            .unwrap();
+
         assert_matches!(
-            identity_manager.validate().await,
+            IdentityManager::new(key_store, &config, &rng).await,
             Err(IdentityError::IdentitySecretRotated)
         );
     }
@@ -315,11 +316,9 @@ mod tests {
         // Rotate private key
         let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
         config.credentials.private_key = private_key;
-        let identity_manager = IdentityManager::new(key_store, &config, &rng)
-            .await
-            .unwrap();
+
         assert_matches!(
-            identity_manager.validate().await,
+            IdentityManager::new(key_store, &config, &rng).await,
             Err(IdentityError::PrivateKeyRotated)
         );
     }

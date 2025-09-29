@@ -21,6 +21,10 @@ pub struct Credentials {
 impl Credentials {
     pub fn new(rng: &Rng) -> Result<Self, RngError> {
         let private_key = PrivateKey::from_bytes(&rng.random_array()?);
+
+        // @TODO: needed to make this method public in p2panda-encryption in order to construct a
+        // new SecretKey manually here. If the method indeed shouldn't be public we can adjust
+        // this constructor method to accept the SecretKey from outside as an argument.
         let identity_secret = SecretKey::from_bytes(rng.random_array()?);
         Ok(Self {
             private_key,
