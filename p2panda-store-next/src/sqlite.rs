@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use p2panda_core::cbor::EncodeError;
 use sqlx::migrate::{MigrateDatabase, Migrator};
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Sqlite, migrate};
@@ -70,7 +71,7 @@ impl SqliteStoreBuilder {
         Self::default()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_utils"))]
     pub fn random_memory_url(mut self) -> Self {
         // Combining Rust tests with in-memory databases can lead to unsound behaviour, this
         // "workaround" assigns every temporary database a different, random name and keeps them
@@ -332,6 +333,9 @@ pub enum DecodeError {
 
     #[error(transparent)]
     Identity(#[from] p2panda_core::identity::IdentityError),
+
+    #[error("{0}")]
+    Custom(String),
 }
 
 #[cfg(test)]
