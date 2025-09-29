@@ -16,9 +16,17 @@ sqlite = [
   "dep:p2panda-core",
   "dep:sqlx",
   "dep:thiserror",
+  "dep:tokio",
 ]
+test_utils = []
 
 [dependencies]
 p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true, default-features = false }
+rand = "0.9.2"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
 thiserror = { version = "2.0.16", optional = true }
+tokio = { version = "1.47.1", features = ["sync"], optional = true }
+
+[dev-dependencies]
+futures-test = "0.3.31"
+tokio = { version = "1.47.1", features = ["rt", "macros"] }
