@@ -19,7 +19,7 @@ macro_rules! assert_all_stores {
     (|$store:ident| $test_body:expr) => {
         // Test with MemoryStore.
         {
-            let $store = $crate::memory::MemoryStore::default();
+            let $store = $crate::memory::MemoryStore::<(), String>::default();
             $test_body.await;
         }
 
