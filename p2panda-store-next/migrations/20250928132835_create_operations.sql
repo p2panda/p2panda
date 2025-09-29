@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     payload_size            TEXT            NOT NULL,
     payload_hash            TEXT            NULL,
     timestamp               TEXT            NOT NULL,
-    header                  BLOB            NOT NULL
+    header                  BLOB            NOT NULL,
     body                    BLOB            NULL,
-    extensions              BLOB            NULL,
+    extensions              BLOB            NULL
 );

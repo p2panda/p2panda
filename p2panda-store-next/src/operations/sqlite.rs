@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::str::FromStr;
-
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::hash::{Hash, HashError};
-use p2panda_core::{Extensions, Header, Operation, PublicKey, Signature};
+use p2panda_core::{Extensions, Operation};
 use sqlx::{FromRow, query, query_as};
 
 use crate::operations::OperationStore;
@@ -75,15 +73,8 @@ where
                     "
                     SELECT
                         hash,
-                        version,
-                        public_key,
-                        signature,
-                        payload_size,
-                        payload_hash,
-                        timestamp,
                         header,
-                        body,
-                        extensions,
+                        body
                     FROM
                         operations_v1
                     WHERE
@@ -130,8 +121,7 @@ where
             .tx(async |tx| {
                 query(
                     "
-                    DELETE
-                    FROM
+                    DELETE FROM
                         operations_v1
                     WHERE
                         hash = ?
@@ -148,18 +138,11 @@ where
 }
 
 /// Single operation row as it is inserted in the SQLite database.
-#[derive(Clone, Debug, PartialEq, Eq, FromRow)]
-pub struct OperationRow {
+#[derive(Debug, FromRow)]
+struct OperationRow {
     hash: String,
-    version: String,
-    public_key: String,
-    signature: String,
-    payload_size: String,
-    payload_hash: Option<String>,
-    timestamp: String,
     header: Vec<u8>,
     body: Option<Vec<u8>>,
-    extensions: Option<Vec<u8>>,
 }
 
 impl<E> TryFrom<OperationRow> for Operation<E>
@@ -169,53 +152,13 @@ where
     type Error = SqliteError;
 
     fn try_from(row: OperationRow) -> Result<Self, Self::Error> {
-        let header = Header {
-            version: row
-                .version
-                .parse::<u64>()
-                .map_err(|err| SqliteError::Decode("version".to_string(), err.into()))?,
-            public_key: PublicKey::from_str(&row.public_key)
-                .map_err(|err| SqliteError::Decode("public_key".to_string(), err.into()))?,
-            signature: Some(
-                Signature::from_str(&row.signature)
-                    .map_err(|err| SqliteError::Decode("signature".to_string(), err.into()))?,
-            ),
-            payload_size: row
-                .payload_size
-                .parse::<u64>()
-                .map_err(|err| SqliteError::Decode("payload_size".to_string(), err.into()))?,
-            payload_hash: {
-                match row.payload_hash {
-                    Some(hash_str) => Some(Hash::from_str(&hash_str).map_err(|err| {
-                        SqliteError::Decode("payload_hash".to_string(), err.into())
-                    })?),
-                    None => None,
-                }
-            },
-            timestamp: row
-                .timestamp
-                .parse::<u64>()
-                .map_err(|err| SqliteError::Decode("timestamp".to_string(), err.into()))?,
-            extensions: {
-                match row.extensions {
-                    Some(bytes) => Some(decode_cbor(&bytes[..]).map_err(|err| {
-                        SqliteError::Decode("extensions".to_string(), err.into())
-                    })?),
-                    None => None,
-                }
-            },
-            // @TODO: These fields will be moved from "header" into "extensions" soon:
-            seq_num: 0,
-            backlink: None,
-            previous: Vec::new(),
-        };
-
         Ok(Operation {
             hash: row
                 .hash
                 .parse()
                 .map_err(|err: HashError| SqliteError::Decode("hash".to_string(), err.into()))?,
-            header,
+            header: decode_cbor(&row.header[..])
+                .map_err(|err| SqliteError::Decode("header".into(), err.into()))?,
             body: row.body.map(|body| body.into()),
         })
     }
