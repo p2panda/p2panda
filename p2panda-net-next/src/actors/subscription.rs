@@ -9,7 +9,7 @@ impl Message for ToSubscription {}
 
 pub struct SubscriptionState {}
 
-pub struct Subscription;
+pub struct Subscription {}
 
 impl Actor for Subscription {
     type State = SubscriptionState;
