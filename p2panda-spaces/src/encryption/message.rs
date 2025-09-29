@@ -7,8 +7,9 @@ use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessa
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::message::SpacesArgs;
 use crate::space::removed_members;
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,

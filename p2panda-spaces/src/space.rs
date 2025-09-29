@@ -17,12 +17,14 @@ use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
 use crate::event::{Event, encryption_output_to_space_events, space_message_to_space_event};
-use crate::forge::Forge;
 use crate::group::{Group, GroupError};
+use crate::identity::IdentityError;
 use crate::manager::Manager;
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
+use crate::traits::key_store::{Forge, KeyStore};
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
@@ -49,8 +51,8 @@ pub struct Space<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Space<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
-    F: Forge<ID, M, C> + Debug,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    F: KeyStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
@@ -73,14 +75,18 @@ where
     ) -> Result<(Self, Vec<M>), SpaceError<ID, S, F, M, C, RS>> {
         let my_id: ActorId = {
             let manager = manager_ref.inner.read().await;
-            manager.forge.public_key().into()
+            manager.identity.id()
         };
 
         // Get the global auth state. We use this state in a following step to initialise the
         // space state and we don't want it to contain the group for the space itself.
         let auth_y = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(SpaceError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(SpaceError::AuthStore)?
         };
 
         // Automatically add ourselves with "manage" level without any conditions as default.
@@ -193,9 +199,9 @@ where
             };
 
             let mut manager = manager_ref.inner.write().await;
-            let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+            let message = manager.identity.forge(args).await?;
             manager
-                .store
+                .spaces_store
                 .set_message(&message.id(), &message)
                 .await
                 .map_err(SpaceError::MessageStore)?;
@@ -212,7 +218,7 @@ where
 
             let space_id = y.space_id;
             manager
-                .store
+                .spaces_store
                 .set_space(&space_id, y)
                 .await
                 .map_err(SpaceError::SpaceStore)?;
@@ -284,10 +290,10 @@ where
                 direct_messages: vec![],
                 space_dependencies,
             };
-            let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+            let message = manager.identity.forge(args).await?;
 
             manager
-                .store
+                .spaces_store
                 .set_message(&message.id(), &message)
                 .await
                 .map_err(SpaceError::MessageStore)?;
@@ -356,7 +362,7 @@ where
                 .orderer
                 .add_dependency(space_message.id(), space_dependencies);
             manager
-                .store
+                .spaces_store
                 .set_space(&self.id, y)
                 .await
                 .map_err(SpaceError::SpaceStore)?;
@@ -488,7 +494,7 @@ where
         let events = encryption_output_to_space_events(&y.space_id, encryption_output);
         let mut manager = self.manager.inner.write().await;
         manager
-            .store
+            .spaces_store
             .set_space(&self.id, y)
             .await
             .map_err(SpaceError::SpaceStore)?;
@@ -529,24 +535,16 @@ where
     ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
         let mut space_y = manager
-            .store
+            .spaces_store
             .space(&self.id)
             .await
             .map_err(SpaceError::SpaceStore)?
             .ok_or(SpaceError::UnknownSpace(self.id))?;
 
         // Inject latest key material to space DCGKA state.
-        let key_manager_y = manager
-            .store
-            .key_manager()
-            .await
-            .map_err(SpaceError::KeyStore)?;
+        let key_manager_y = manager.identity.key_manager().await?;
 
-        let key_registry_y = manager
-            .store
-            .key_registry()
-            .await
-            .map_err(SpaceError::KeyStore)?;
+        let key_registry_y = manager.identity.key_registry().await?;
 
         space_y.encryption_y.dcgka.my_keys = key_manager_y;
         space_y.encryption_y.dcgka.pki = key_registry_y;
@@ -562,20 +560,12 @@ where
     ) -> Result<SpaceState<ID, M, C>, SpaceError<ID, S, F, M, C, RS>> {
         let manager = manager_ref.inner.read().await;
 
-        let key_manager_y = manager
-            .store
-            .key_manager()
-            .await
-            .map_err(SpaceError::KeyStore)?;
+        let key_manager_y = manager.identity.key_manager().await?;
 
-        let key_registry_y = manager
-            .store
-            .key_registry()
-            .await
-            .map_err(SpaceError::KeyStore)?;
+        let key_registry_y = manager.identity.key_registry().await?;
 
         let result = manager
-            .store
+            .spaces_store
             .space(&space_id)
             .await
             .map_err(SpaceError::SpaceStore)?;
@@ -588,7 +578,7 @@ where
                 y
             }
             None => {
-                let my_id: ActorId = manager.forge.public_key().into();
+                let my_id: ActorId = manager.identity.id().into();
 
                 let dgm = EncryptionMembershipState {
                     members: HashSet::new(),
@@ -690,7 +680,8 @@ where
         };
 
         // Forge message.
-        let message = manager.forge.forge(args).await.map_err(SpaceError::Forge)?;
+        let message = manager.identity.forge(args).await?;
+        // @TODO: persist message.
 
         // Update dependencies.
         y.encryption_y
@@ -699,7 +690,7 @@ where
 
         // Persist space state.
         manager
-            .store
+            .spaces_store
             .set_space(&self.id, y)
             .await
             .map_err(SpaceError::SpaceStore)?;
@@ -772,8 +763,8 @@ pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>
 pub enum SpaceError<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    F: KeyStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
 {
@@ -789,17 +780,14 @@ where
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError<M>),
 
-    #[error("{0}")]
-    Forge(F::Error),
+    #[error(transparent)]
+    IdentityManager(#[from] IdentityError<ID, F, M, C>),
 
     #[error("{0}")]
     AuthStore(<S as AuthStore<C>>::Error),
 
     #[error("{0}")]
     MessageStore(<S as MessageStore<M>>::Error),
-
-    #[error("{0}")]
-    KeyStore(<S as KeyStore>::Error),
 
     #[error("{0}")]
     SpaceStore(<S as SpaceStore<ID, M, C>>::Error),

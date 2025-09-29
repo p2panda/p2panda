@@ -5,23 +5,22 @@ use std::convert::Infallible;
 use std::hash::Hash;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerState};
-use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
-use p2panda_encryption::traits::PreKeyManager;
 
 use crate::OperationId;
+use crate::auth::orderer::AuthOrderer;
 use crate::space::SpaceState;
-use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::test_utils::{TestConditions, TestMessage};
 use crate::traits::SpaceId;
-use crate::types::{ActorId, AuthGroupState};
+use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
+use crate::types::AuthGroupState;
+
+pub type TestSpacesStore<ID> = MemoryStore<ID, TestMessage<ID>, TestConditions>;
 
 #[derive(Debug)]
 pub struct MemoryStore<ID, M, C>
 where
     C: Conditions,
 {
-    key_manager: KeyManagerState,
-    key_registry: KeyRegistryState<ActorId>,
     auth: AuthGroupState<C>,
     spaces: HashMap<ID, SpaceState<ID, M, C>>,
     messages: HashMap<OperationId, M>,
@@ -32,18 +31,12 @@ where
     ID: SpaceId,
     C: Conditions,
 {
-    pub fn new(my_id: ActorId, key_manager: KeyManagerState, auth: AuthGroupState<C>) -> Self {
-        // Register our own pre-keys.
-        let key_registry = {
-            let key_bundle = KeyManager::prekey_bundle(&key_manager);
-            let y = KeyRegistry::init();
-            KeyRegistry::add_longterm_bundle(y, my_id, key_bundle)
-        };
+    pub fn new() -> Self {
+        let orderer_y = AuthOrderer::init();
+        let auth_y = AuthGroupState::new(orderer_y);
 
         Self {
-            key_manager,
-            key_registry,
-            auth,
+            auth: auth_y,
             spaces: HashMap::new(),
             messages: HashMap::new(),
         }
@@ -72,32 +65,6 @@ where
 
     async fn set_space(&mut self, id: &ID, y: SpaceState<ID, M, C>) -> Result<(), Self::Error> {
         self.spaces.insert(*id, y);
-        Ok(())
-    }
-}
-
-impl<ID, M, C> KeyStore for MemoryStore<ID, M, C>
-where
-    ID: SpaceId,
-    C: Conditions,
-{
-    type Error = Infallible;
-
-    async fn key_manager(&self) -> Result<KeyManagerState, Self::Error> {
-        Ok(self.key_manager.clone())
-    }
-
-    async fn key_registry(&self) -> Result<KeyRegistryState<ActorId>, Self::Error> {
-        Ok(self.key_registry.clone())
-    }
-
-    async fn set_key_manager(&mut self, y: &KeyManagerState) -> Result<(), Self::Error> {
-        self.key_manager = y.clone();
-        Ok(())
-    }
-
-    async fn set_key_registry(&mut self, y: &KeyRegistryState<ActorId>) -> Result<(), Self::Error> {
-        self.key_registry = y.clone();
         Ok(())
     }
 }

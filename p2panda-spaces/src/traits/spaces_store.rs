@@ -3,13 +3,11 @@
 use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_encryption::key_manager::KeyManagerState;
-use p2panda_encryption::key_registry::KeyRegistryState;
 
 use crate::OperationId;
 use crate::space::SpaceState;
 use crate::traits::SpaceId;
-use crate::types::{ActorId, AuthGroupState};
+use crate::types::AuthGroupState;
 
 pub trait SpaceStore<ID, M, C>
 where
@@ -31,24 +29,6 @@ where
         &mut self,
         id: &ID,
         y: SpaceState<ID, M, C>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
-}
-
-pub trait KeyStore {
-    type Error: Debug;
-
-    fn key_manager(&self) -> impl Future<Output = Result<KeyManagerState, Self::Error>>;
-
-    fn key_registry(&self) -> impl Future<Output = Result<KeyRegistryState<ActorId>, Self::Error>>;
-
-    fn set_key_manager(
-        &mut self,
-        y: &KeyManagerState,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
-
-    fn set_key_registry(
-        &mut self,
-        y: &KeyRegistryState<ActorId>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 

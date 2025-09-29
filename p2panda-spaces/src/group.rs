@@ -11,11 +11,13 @@ use thiserror::Error;
 use crate::OperationId;
 use crate::auth::message::AuthMessage;
 use crate::event::{Event, auth_message_to_group_event};
-use crate::forge::Forge;
+use crate::identity::IdentityError;
 use crate::manager::Manager;
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
+use crate::traits::key_store::{Forge, KeyStore};
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
     AuthResolver, EncryptionGroupError,
@@ -39,8 +41,8 @@ pub struct Group<ID, S, F, M, C, RS> {
 impl<ID, S, F, M, C, RS> Group<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
-    F: Forge<ID, M, C> + Debug,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    F: Forge<ID, M, C> + KeyStore + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
@@ -106,7 +108,11 @@ where
     ) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+            let auth_y = manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?;
             typed_member(&auth_y, member)
         };
 
@@ -133,7 +139,11 @@ where
     pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+            let auth_y = manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?;
             typed_member(&auth_y, member)
         };
 
@@ -165,7 +175,11 @@ where
 
         let mut auth_y = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?
         };
 
         let mut manager = manager_ref.inner.write().await;
@@ -174,12 +188,12 @@ where
             .orderer_y
             .add_dependency(message.id(), &auth_message.dependencies());
         manager
-            .store
+            .spaces_store
             .set_auth(&auth_y)
             .await
             .map_err(GroupError::AuthStore)?;
         manager
-            .store
+            .spaces_store
             .set_message(&message.id(), message)
             .await
             .map_err(GroupError::MessageStore)?;
@@ -194,7 +208,11 @@ where
     ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
         let auth_y = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?
         };
 
         let (mut auth_y, auth_message) =
@@ -207,9 +225,9 @@ where
 
         let message = {
             let mut manager = manager_ref.inner.write().await;
-            let message = manager.forge.forge(args).await.map_err(GroupError::Forge)?;
+            let message = manager.identity.forge(args).await?;
             manager
-                .store
+                .spaces_store
                 .set_message(&message.id(), &message)
                 .await
                 .map_err(GroupError::MessageStore)?;
@@ -224,7 +242,7 @@ where
                 .orderer_y
                 .add_dependency(message.id(), &auth_message.dependencies());
             manager
-                .store
+                .spaces_store
                 .set_auth(&auth_y)
                 .await
                 .map_err(GroupError::AuthStore)?;
@@ -236,7 +254,11 @@ where
     /// Get the global auth state.
     async fn state(&self) -> Result<AuthGroupState<C>, GroupError<ID, S, F, M, C, RS>> {
         let manager = self.manager.inner.read().await;
-        let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+        let auth_y = manager
+            .spaces_store
+            .auth()
+            .await
+            .map_err(GroupError::AuthStore)?;
         Ok(auth_y)
     }
 
@@ -259,8 +281,8 @@ where
 pub enum GroupError<ID, S, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    F: KeyStore + Forge<ID, M, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
@@ -273,8 +295,8 @@ where
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError<M>),
 
-    #[error("{0}")]
-    Forge(F::Error),
+    #[error(transparent)]
+    IdentityManager(#[from] IdentityError<ID, F, M, C>),
 
     #[error("{0}")]
     AuthStore(<S as AuthStore<C>>::Error),
