@@ -3,7 +3,15 @@ name = "p2panda-store-next"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
+
+[features]
+default = ["memory", "sqlite"]
+memory = []
+sqlite = []
+
+[dependencies]
