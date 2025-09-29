@@ -2,6 +2,8 @@
 
 #[cfg(feature = "memory")]
 mod memory;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 mod traits;
 
 pub use memory::OrdererMemoryStore;
