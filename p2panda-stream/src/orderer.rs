@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::{Debug, Display};
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use thiserror::Error;
-
-/// Error types which may be returned from `PartialOrder` methods.
-#[derive(Debug, Error)]
-pub enum PartialOrderError {
-    #[error("store error: {0}")]
-    StoreError(String),
-}
+// @TODO: Change this to p2panda_store when ready.
+use p2panda_store_next::orderer::OrdererStore;
 
 /// Struct for establishing partial order over a set of items which form a dependency graph.
 ///
@@ -75,16 +67,16 @@ pub enum PartialOrderError {
 /// Note that no checks are made for cycles occurring in the graph, this should be validated on
 /// another layer.
 #[derive(Debug)]
-pub struct PartialOrder<K, S> {
+pub struct PartialOrder<ID, S> {
     /// Store for managing "ready" and "pending" items.
     store: S,
-    _phantom: PhantomData<K>,
+    _phantom: PhantomData<ID>,
 }
 
-impl<K, S> PartialOrder<K, S>
+impl<ID, S> PartialOrder<ID, S>
 where
-    K: Clone + Copy + Display + StdHash + PartialEq + Eq,
-    S: PartialOrderStore<K>,
+    ID: Clone,
+    S: OrdererStore<ID>,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -94,18 +86,20 @@ where
     }
 
     /// Pop the next item from the ready queue.
-    pub async fn next(&mut self) -> Result<Option<K>, PartialOrderError> {
+    pub async fn next(&mut self) -> Result<Option<ID>, S::Error> {
         self.store.take_next_ready().await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&mut self, key: K, dependencies: &[K]) -> Result<(), PartialOrderError> {
+    pub async fn process(&mut self, key: ID, dependencies: &[ID]) -> Result<(), S::Error> {
         if !self.store.ready(dependencies).await? {
-            self.store.mark_pending(key, dependencies.to_vec()).await?;
+            self.store
+                .mark_pending(key.clone(), dependencies.to_vec())
+                .await?;
             return Ok(());
         }
 
-        self.store.mark_ready(key).await?;
+        self.store.mark_ready(key.clone()).await?;
 
         // We added a new ready item to the store so now we want to process any pending items
         // which depend on it as they may now have transitioned into a ready state.
@@ -115,9 +109,9 @@ where
     }
 
     /// Recursively check if any pending items now have their dependencies met.
-    async fn process_pending(&mut self, key: K) -> Result<(), PartialOrderError> {
+    async fn process_pending(&mut self, key: ID) -> Result<(), S::Error> {
         // Get all items which depend on the passed key.
-        let Some(dependents) = self.store.get_next_pending(key).await? else {
+        let Some(dependents) = self.store.get_next_pending(key.clone()).await? else {
             return Ok(());
         };
 
@@ -128,7 +122,7 @@ where
                 continue;
             }
 
-            self.store.mark_ready(next_key).await?;
+            self.store.mark_ready(next_key.clone()).await?;
 
             // Recurse down the dependency graph by now checking any pending items which depend on
             // the current item.
@@ -146,233 +140,296 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use super::{MemoryStore, PartialOrder};
+    // @TODO: Change this to p2panda_store when ready.
+    use p2panda_store_next::assert_all_stores;
+    use p2panda_store_next::orderer::OrdererTestExt;
+
+    use super::PartialOrder;
 
     #[tokio::test]
     async fn partial_order() {
-        // Graph
-        //
-        // A <-- B <--------- D
-        //        \--- C <---/
-        //
-        let graph = [
-            ("A", vec![]),
-            ("B", vec!["A"]),
-            ("C", vec!["B"]),
-            ("D", vec!["B", "C"]),
-        ];
+        assert_all_stores!(|store| async {
+            // Graph
+            //
+            // A <-- B <--------- D
+            //        \--- C <---/
+            //
+            let graph = [
+                ("A".to_string(), vec![]),
+                ("B".to_string(), vec!["A".to_string()]),
+                ("C".to_string(), vec!["B".to_string()]),
+                ("D".to_string(), vec!["B".to_string(), "C".to_string()]),
+            ];
 
-        // A has no dependencies and so it's added straight to the processed set and ready queue.
-        let store = MemoryStore::default();
-        let mut checker = PartialOrder::new(store);
-        let item = graph[0].clone();
-        checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 1);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 1);
+            // A has no dependencies and so it's added straight to the processed set and ready
+            // queue.
 
-        // B has it's dependencies met and so it too is added to the processed set and ready
-        // queue.
-        let item = graph[1].clone();
-        checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 2);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 2);
+            let mut orderer = PartialOrder::new(store);
+            let item = graph[0].clone();
+            orderer.process(item.0, &item.1).await.unwrap();
+            assert_eq!(orderer.store.ready_len().await, 1);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 1);
 
-        // D doesn't have both its dependencies met yet so it waits in the pending queue.
-        let item = graph[3].clone();
-        checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 2);
-        assert_eq!(checker.store.pending.len(), 1);
-        assert_eq!(checker.store.ready_queue.len(), 2);
+            // B has it's dependencies met and so it too is added to the processed set and ready
+            // queue.
+            let item = graph[1].clone();
+            orderer.process(item.0, &item.1).await.unwrap();
+            assert_eq!(orderer.store.ready_len().await, 2);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 2);
 
-        // C satisfies D's dependencies and so both C & D are added to the processed set
-        // and ready queue.
-        let item = graph[2].clone();
-        checker.process(item.0, &item.1).await.unwrap();
-        assert_eq!(checker.store.ready.len(), 4);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 4);
+            // D doesn't have both its dependencies met yet so it waits in the pending queue.
+            let item = graph[3].clone();
+            orderer.process(item.0, &item.1).await.unwrap();
+            assert_eq!(orderer.store.ready_len().await, 2);
+            assert_eq!(orderer.store.pending_len().await, 1);
+            assert_eq!(orderer.store.ready_queue_len().await, 2);
 
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("A"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("B"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("C"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("D"));
-        let item = checker.next().await.unwrap();
-        assert!(item.is_none());
+            // C satisfies D's dependencies and so both C & D are added to the processed set
+            // and ready queue.
+            let item = graph[2].clone();
+            orderer.process(item.0, &item.1).await.unwrap();
+            assert_eq!(orderer.store.ready_len().await, 4);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 4);
+
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("A".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("B".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("C".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("D".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert!(item.is_none());
+        });
+    }
+
+    #[tokio::test]
+    async fn idempotency() {
+        assert_all_stores!(|store| async {
+            // Graph
+            //
+            // A <-- B
+            //
+            let graph = [
+                ("A".to_string(), vec![]),
+                ("B".to_string(), vec!["A".to_string()]),
+            ];
+
+            let mut orderer = PartialOrder::new(store);
+
+            let item_a = graph[0].clone();
+            let item_b = graph[1].clone();
+
+            orderer.process(item_b.clone().0, &item_b.1).await.unwrap();
+
+            // No dependencies met yet.
+            assert!(orderer.next().await.unwrap().is_none());
+
+            // A and B is ready now after processing A.
+            orderer.process(item_a.clone().0, &item_a.1).await.unwrap();
+            assert_eq!(orderer.next().await.unwrap(), Some(item_a.0.clone()));
+            assert_eq!(orderer.next().await.unwrap(), Some(item_b.0.clone()));
+
+            assert_eq!(orderer.store.ready_len().await, 2);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 0);
+
+            // Re-process B, it should just get forwarded without changes to the orderer state.
+            orderer.process(item_b.clone().0, &item_b.1).await.unwrap();
+            assert_eq!(orderer.next().await.unwrap(), Some(item_b.0.clone()));
+
+            assert_eq!(orderer.store.ready_len().await, 2);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 0);
+        });
     }
 
     #[tokio::test]
     async fn partial_order_with_recursion() {
-        // Graph
-        //
-        // A <-- B <--------- D
-        //        \--- C <---/
-        //
-        let incomplete_graph = [
-            ("A", vec![]),
-            ("C", vec!["B"]),
-            ("D", vec!["C"]),
-            ("E", vec!["D"]),
-            ("F", vec!["E"]),
-            ("G", vec!["F"]),
-        ];
+        assert_all_stores!(|store| async {
+            // Graph
+            //
+            // A <-- B <--------- D
+            //        \--- C <---/
+            //
+            let incomplete_graph = [
+                ("A".to_string(), vec![]),
+                ("C".to_string(), vec!["B".to_string()]),
+                ("D".to_string(), vec!["C".to_string()]),
+                ("E".to_string(), vec!["D".to_string()]),
+                ("F".to_string(), vec!["E".to_string()]),
+                ("G".to_string(), vec!["F".to_string()]),
+            ];
 
-        let store = MemoryStore::default();
-        let mut checker = PartialOrder::new(store);
-        for (key, dependencies) in incomplete_graph {
-            checker.process(key, &dependencies).await.unwrap();
-        }
-        assert_eq!(checker.store.ready.len(), 1);
-        assert_eq!(checker.store.pending.len(), 5);
-        assert_eq!(checker.store.ready_queue.len(), 1);
+            let mut orderer = PartialOrder::new(store);
+            for (key, dependencies) in incomplete_graph {
+                orderer.process(key, &dependencies).await.unwrap();
+            }
+            assert_eq!(orderer.store.ready_len().await, 1);
+            assert_eq!(orderer.store.pending_len().await, 5);
+            assert_eq!(orderer.store.ready_queue_len().await, 1);
 
-        let missing_dependency = ("B", vec!["A"]);
+            let missing_dependency = ("B".to_string(), vec!["A".to_string()]);
 
-        checker
-            .process(missing_dependency.0, &missing_dependency.1)
-            .await
-            .unwrap();
-        assert_eq!(checker.store.ready.len(), 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 7);
+            orderer
+                .process(missing_dependency.0, &missing_dependency.1)
+                .await
+                .unwrap();
+            assert_eq!(orderer.store.ready_len().await, 7);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 7);
 
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("A"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("B"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("C"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("D"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("E"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("F"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("G"));
-        let item = checker.next().await.unwrap();
-        assert!(item.is_none());
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("A".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("B".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("C".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("D".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("E".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("F".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("G".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert!(item.is_none());
+        });
     }
 
     #[tokio::test]
     async fn complex_graph() {
-        // Graph
-        //
-        // A <-- B1 <-- C1 <--\
-        //   \-- ?? <-- C2 <-- D
-        //        \---- C3 <--/
-        //
-        let incomplete_graph = [
-            ("A", vec![]),
-            ("B1", vec!["A"]),
-            // This item is missing.
-            // ("B2", vec!["A"]),
-            ("C1", vec!["B1"]),
-            ("C2", vec!["B2"]),
-            ("C3", vec!["B2"]),
-            ("D", vec!["C1", "C2", "C3"]),
-        ];
+        assert_all_stores!(|store| async {
+            // Graph
+            //
+            // A <-- B1 <-- C1 <--\
+            //   \-- ?? <-- C2 <-- D
+            //        \---- C3 <--/
+            //
+            let incomplete_graph = [
+                ("A".to_string(), vec![]),
+                ("B1".to_string(), vec!["A".to_string()]),
+                // This item is missing.
+                // ("B2", vec!["A"]),
+                ("C1".to_string(), vec!["B1".to_string()]),
+                ("C2".to_string(), vec!["B2".to_string()]),
+                ("C3".to_string(), vec!["B2".to_string()]),
+                (
+                    "D".to_string(),
+                    vec!["C1".to_string(), "C2".to_string(), "C3".to_string()],
+                ),
+            ];
 
-        let store = MemoryStore::default();
-        let mut checker = PartialOrder::new(store);
-        for (key, dependencies) in incomplete_graph {
-            checker.process(key, &dependencies).await.unwrap();
-        }
+            let mut orderer = PartialOrder::new(store);
+            for (key, dependencies) in incomplete_graph {
+                orderer.process(key, &dependencies).await.unwrap();
+            }
 
-        // A1, B1 and C1 have dependencies met and were already processed.
-        assert!(checker.store.ready.len() == 3);
-        assert_eq!(checker.store.pending.len(), 3);
-        assert_eq!(checker.store.ready_queue.len(), 3);
+            // A1, B1 and C1 have dependencies met and were already processed.
+            assert!(orderer.store.ready_len().await == 3);
+            assert_eq!(orderer.store.pending_len().await, 3);
+            assert_eq!(orderer.store.ready_queue_len().await, 3);
 
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("A"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("B1"));
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("C1"));
-        let item = checker.next().await.unwrap();
-        assert!(item.is_none());
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("A".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("B1".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("C1".to_string()));
+            let item = orderer.next().await.unwrap();
+            assert!(item.is_none());
 
-        // No more ready items.
-        assert_eq!(checker.store.ready_queue.len(), 0);
+            // No more ready items.
+            assert_eq!(orderer.store.ready_queue_len().await, 0);
 
-        // Process the missing item.
-        let missing_dependency = ("B2", vec!["A"]);
-        checker
-            .process(missing_dependency.0, &missing_dependency.1)
-            .await
-            .unwrap();
+            // Process the missing item.
+            let missing_dependency = ("B2".to_string(), vec!["A".to_string()]);
+            orderer
+                .process(missing_dependency.0, &missing_dependency.1)
+                .await
+                .unwrap();
 
-        // All items have now been processed and new ones are waiting in the ready queue.
-        assert_eq!(checker.store.ready.len(), 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 4);
+            // All items have now been processed and new ones are waiting in the ready queue.
+            assert_eq!(orderer.store.ready_len().await, 7);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 4);
 
-        let mut concurrent_items = HashSet::from(["C2", "C3"]);
+            let mut concurrent_items = HashSet::from(["C2".to_string(), "C3".to_string()]);
 
-        let item = checker.next().await.unwrap().unwrap();
-        assert_eq!(item, "B2");
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert_eq!(item, "D");
-        let item = checker.next().await.unwrap();
-        assert!(item.is_none());
+            let item = orderer.next().await.unwrap().unwrap();
+            assert_eq!(item, "B2".to_string());
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert_eq!(item, "D".to_string());
+            let item = orderer.next().await.unwrap();
+            assert!(item.is_none());
+        });
     }
 
     #[tokio::test]
     async fn very_out_of_order() {
-        // Graph
-        //
-        // A <-- B1 <-- C1 <--\
-        //   \-- B2 <-- C2 <-- D
-        //        \---- C3 <--/
-        //
-        let out_of_order_graph = [
-            ("D", vec!["C1", "C2", "C3"]),
-            ("C1", vec!["B1"]),
-            ("B1", vec!["A"]),
-            ("B2", vec!["A"]),
-            ("C3", vec!["B2"]),
-            ("C2", vec!["B2"]),
-            ("A", vec![]),
-        ];
+        assert_all_stores!(|store| async {
+            // Graph
+            //
+            // A <-- B1 <-- C1 <--\
+            //   \-- B2 <-- C2 <-- D
+            //        \---- C3 <--/
+            //
+            let out_of_order_graph = [
+                (
+                    "D".to_string(),
+                    vec!["C1".to_string(), "C2".to_string(), "C3".to_string()],
+                ),
+                ("C1".to_string(), vec!["B1".to_string()]),
+                ("B1".to_string(), vec!["A".to_string()]),
+                ("B2".to_string(), vec!["A".to_string()]),
+                ("C3".to_string(), vec!["B2".to_string()]),
+                ("C2".to_string(), vec!["B2".to_string()]),
+                ("A".to_string(), vec![]),
+            ];
 
-        let store = MemoryStore::default();
-        let mut checker = PartialOrder::new(store);
-        for (key, dependencies) in out_of_order_graph {
-            checker.process(key, &dependencies).await.unwrap();
-        }
+            let mut orderer = PartialOrder::new(store);
+            for (key, dependencies) in out_of_order_graph {
+                orderer.process(key, &dependencies).await.unwrap();
+            }
 
-        assert!(checker.store.ready.len() == 7);
-        assert_eq!(checker.store.pending.len(), 0);
-        assert_eq!(checker.store.ready_queue.len(), 7);
+            assert_eq!(orderer.store.ready_len().await, 7);
+            assert_eq!(orderer.store.pending_len().await, 0);
+            assert_eq!(orderer.store.ready_queue_len().await, 7);
 
-        let item = checker.next().await.unwrap();
-        assert_eq!(item, Some("A"));
+            let item = orderer.next().await.unwrap();
+            assert_eq!(item, Some("A".to_string()));
 
-        let mut concurrent_items = HashSet::from(["B1", "B2", "C1", "C2", "C3"]);
+            let mut concurrent_items = HashSet::from([
+                "B1".to_string(),
+                "B2".to_string(),
+                "C1".to_string(),
+                "C2".to_string(),
+                "C3".to_string(),
+            ]);
 
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert!(concurrent_items.remove(item));
-        let item = checker.next().await.unwrap().unwrap();
-        assert_eq!(item, "D");
-        let item = checker.next().await.unwrap();
-        assert!(item.is_none());
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert!(concurrent_items.remove(&item));
+            let item = orderer.next().await.unwrap().unwrap();
+            assert_eq!(item, "D".to_string());
+            let item = orderer.next().await.unwrap();
+            assert!(item.is_none());
+        });
     }
 }
