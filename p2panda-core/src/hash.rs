@@ -22,6 +22,8 @@ use std::str::FromStr;
 use arbitrary::Arbitrary;
 use thiserror::Error;
 
+use crate::traits::OperationId;
+
 /// The length of a BLAKE3 hash in bytes.
 pub const HASH_LEN: usize = blake3::KEY_LEN;
 
@@ -146,6 +148,8 @@ impl<'a> Arbitrary<'a> for Hash {
         Ok(Hash::from_bytes(bytes))
     }
 }
+
+impl OperationId for Hash {}
 
 /// Error types for `Hash` struct.
 #[derive(Error, Debug)]
