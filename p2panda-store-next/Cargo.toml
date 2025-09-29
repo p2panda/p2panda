@@ -12,6 +12,13 @@ workspace = true
 [features]
 default = ["memory", "sqlite"]
 memory = []
-sqlite = []
+sqlite = [
+  "dep:p2panda-core",
+  "dep:sqlx",
+  "dep:thiserror",
+]
 
 [dependencies]
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true, default-features = false }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
+thiserror = { version = "2.0.16", optional = true }
