@@ -9,10 +9,15 @@
 /// ## Example
 ///
 /// ```rust
-/// assert_all_stores!(|store| async move {
+/// # use crate::p2panda_store_next::orderer::OrdererStore;
+/// # use crate::p2panda_store_next::orderer::OrdererTestExt;
+/// # use p2panda_store_next::assert_all_stores;
+/// # async fn run() {
+/// assert_all_stores!(|store| async {
 ///     store.mark_ready("test".to_string()).await.unwrap();
 ///     assert_eq!(store.ready_len().await, 1);
 /// });
+/// # }
 /// ```
 #[macro_export]
 macro_rules! assert_all_stores {
