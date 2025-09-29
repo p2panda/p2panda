@@ -59,7 +59,57 @@ where
             .execute(&mut **tx)
             .await?;
 
-            Ok(result.rows_affected() > 0)
+            // If no rows have been affected by this INSERT we know the item already exists in the
+            // "ready" table.
+            //
+            // This means that we've tried to mark an already existing item as ready _again_ and
+            // can happen when an item got re-processed by the orderer.
+            //
+            // Since we want the system to always behave the same and allow idempotency (and not
+            // "swallow" items when they got re-processed), we check if this "ready" item is still
+            // in the queue. If not, we re-queue it.
+            if result.rows_affected() == 0 {
+                let was_in_queue: (bool,) = query_as(
+                    "
+                    SELECT
+                        in_queue
+                    FROM
+                        orderer_ready_v1
+                    WHERE
+                        id = ?
+                    ",
+                )
+                .bind(id.to_string())
+                .fetch_one(&mut **tx)
+                .await?;
+
+                // Do nothing when item is still in queue (waiting to be picked up).
+                if was_in_queue.0 {
+                    return Ok(false);
+                }
+
+                // Re-queue item otherwise with new queue index.
+                query(
+                    "
+                    UPDATE
+                        orderer_ready_v1
+                    SET
+                        queue_index = ?,
+                        in_queue = ?
+                    WHERE
+                        id = ?
+                    ",
+                )
+                .bind(queue_index)
+                .bind(in_queue)
+                .bind(id.to_string())
+                .execute(&mut **tx)
+                .await?;
+
+                Ok(true)
+            } else {
+                Ok(result.rows_affected() > 0)
+            }
         })
         .await
     }

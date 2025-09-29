@@ -45,9 +45,11 @@ where
 
     async fn mark_ready(&self, id: ID) -> Result<bool, Infallible> {
         let result = self.orderer.ready.borrow_mut().insert(id.clone());
-        if result {
-            self.orderer.ready_queue.borrow_mut().push_back(id);
-        }
+
+        // Always push to queue, even if item was already processed once, we want the system to
+        // have similar behaviour when re-processing the same items (with idempotency).
+        self.orderer.ready_queue.borrow_mut().push_back(id);
+
         Ok(result)
     }
 
