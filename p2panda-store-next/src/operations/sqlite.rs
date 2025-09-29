@@ -49,12 +49,12 @@ where
                 .bind(operation.header.timestamp.to_string())
                 .bind(
                     encode_cbor(&operation.header)
-                        .map_err(|err| SqliteError::Encode("header".to_string(), err.into()))?,
+                        .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
                 )
                 .bind(operation.body.map(|body| body.to_bytes()))
                 .bind(match operation.header.extensions {
                     Some(ref extensions) => Some(encode_cbor(extensions).map_err(|err| {
-                        SqliteError::Encode("extensions".to_string(), err.into())
+                        SqliteError::Encode("extensions".to_string(), err)
                     })?),
                     None => None,
                 })

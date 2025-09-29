@@ -194,20 +194,13 @@ where
                 .fetch_all(&mut **tx)
                 .await?;
 
-                let child_id = ID::from_str(&child_id).map_err(|_| {
-                    SqliteError::Decode(
-                        "child_id".into(),
-                        DecodeError::Custom("decoding failed".into()),
-                    )
-                })?;
+                let child_id = ID::from_str(&child_id)
+                    .map_err(|_| SqliteError::Decode("child_id".into(), DecodeError::FromStr))?;
 
                 let mut dependencies = Vec::new();
                 for (parent_id,) in parent_ids {
                     let parent_id = ID::from_str(&parent_id).map_err(|_| {
-                        SqliteError::Decode(
-                            "parent_id".into(),
-                            DecodeError::Custom("decoding id failed".into()),
-                        )
+                        SqliteError::Decode("parent_id".into(), DecodeError::FromStr)
                     })?;
                     dependencies.push(parent_id);
                 }
@@ -243,12 +236,8 @@ where
                 return Ok(None);
             };
 
-            let id = ID::from_str(&id_str).map_err(|_| {
-                SqliteError::Decode(
-                    "id".into(),
-                    DecodeError::Custom("decoding id failed".into()),
-                )
-            })?;
+            let id = ID::from_str(&id_str)
+                .map_err(|_| SqliteError::Decode("id".into(), DecodeError::FromStr))?;
 
             query(
                 "

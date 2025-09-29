@@ -326,16 +326,10 @@ pub enum DecodeError {
     DecodeCbor(#[from] p2panda_core::cbor::DecodeError),
 
     #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-
-    #[error(transparent)]
     Hash(#[from] p2panda_core::hash::HashError),
 
-    #[error(transparent)]
-    Identity(#[from] p2panda_core::identity::IdentityError),
-
-    #[error("{0}")]
-    Custom(String),
+    #[error("parsing from string failed")]
+    FromStr,
 }
 
 #[cfg(test)]
