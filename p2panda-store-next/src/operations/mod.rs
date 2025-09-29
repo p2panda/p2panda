@@ -2,6 +2,10 @@
 
 #[cfg(feature = "memory")]
 mod memory;
+#[cfg(feature = "sqlite")]
+mod sqlite;
+#[cfg(test)]
+mod tests;
 mod traits;
 
 #[cfg(feature = "memory")]
