@@ -9,6 +9,8 @@ use std::rc::Rc;
 
 use crate::memory::MemoryStore;
 use crate::orderer::OrdererStore;
+#[cfg(any(test, feature = "test_utils"))]
+use crate::orderer::OrdererTestExt;
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone, Debug)]
@@ -85,5 +87,24 @@ where
         let deps_set = HashSet::from_iter(dependencies.iter().cloned());
         let result = self.orderer.ready.borrow().is_superset(&deps_set);
         Ok(result)
+    }
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl<T, ID> OrdererTestExt for MemoryStore<T, ID>
+where
+    T: Debug,
+    ID: Debug,
+{
+    async fn ready_len(&self) -> usize {
+        self.orderer.ready.borrow().len()
+    }
+
+    async fn ready_queue_len(&self) -> usize {
+        self.orderer.ready_queue.borrow().len()
+    }
+
+    async fn pending_len(&self) -> usize {
+        self.orderer.pending.borrow().len()
     }
 }
