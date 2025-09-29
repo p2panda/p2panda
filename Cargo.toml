@@ -10,6 +10,7 @@ members = [
     "p2panda-encryption",
     "p2panda-net",
     "p2panda-spaces",
+    "p2panda-net-next",
     "p2panda-store",
     "p2panda-stream",
     "p2panda-sync", "p2panda-sync-next",
