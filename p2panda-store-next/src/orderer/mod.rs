@@ -6,5 +6,6 @@ mod memory;
 mod sqlite;
 mod traits;
 
+#[cfg(feature = "memory")]
 pub use memory::OrdererMemoryStore;
 pub use traits::OrdererStore;
