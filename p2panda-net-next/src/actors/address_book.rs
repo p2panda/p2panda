@@ -9,7 +9,7 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
 use rand::seq::IteratorRandom;
 
 use crate::addrs::NodeAddress;
-use crate::{NetworkId, TopicId};
+use crate::TopicId;
 
 // TODO: Proper configuration.
 //
@@ -38,9 +38,6 @@ pub enum ToAddressBook {
 impl Message for ToAddressBook {}
 
 pub struct AddressBookState {
-    // Inclusion of `network_id` allows us to load and store a separate address book for each
-    // network.
-    network_id: NetworkId,
     peer_addresses: HashMap<PublicKey, HashSet<NodeAddress>>,
     peer_topic_ids: HashMap<PublicKey, HashSet<TopicId>>,
 }
@@ -50,12 +47,14 @@ pub struct AddressBook;
 impl Actor for AddressBook {
     type State = AddressBookState;
     type Msg = ToAddressBook;
-    type Arguments = NetworkId;
+    // TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
+    // address subsets in the future.
+    type Arguments = ();
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
-        network_id: Self::Arguments,
+        _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // TODO: Load the address book from disk.
 
@@ -63,7 +62,6 @@ impl Actor for AddressBook {
         let peer_topic_ids = HashMap::new();
 
         let state = AddressBookState {
-            network_id,
             peer_addresses,
             peer_topic_ids,
         };
