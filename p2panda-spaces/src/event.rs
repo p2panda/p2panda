@@ -13,12 +13,12 @@ use crate::traits::SpaceId;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Member {
+pub struct GroupActor {
     id: ActorId,
     is_group: bool,
 }
 
-impl Member {
+impl GroupActor {
     pub fn individual(id: ActorId) -> Self {
         Self {
             id,
@@ -32,8 +32,8 @@ impl Member {
 
     pub fn from_group_member(group_member: GroupMember<ActorId>) -> Self {
         match group_member {
-            GroupMember::Individual(id) => Member::individual(id),
-            GroupMember::Group(id) => Member::group(id),
+            GroupMember::Individual(id) => GroupActor::individual(id),
+            GroupMember::Group(id) => GroupActor::group(id),
         }
     }
 
@@ -54,6 +54,24 @@ pub enum Event<ID, C> {
     Space(SpaceEvent<ID>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GroupContext<C> {
+    /// Root members, can be individuals or groups.
+    pub group_actors: Vec<(GroupActor, Access<C>)>,
+
+    /// Transitive members, can only be individuals.
+    pub members: Vec<(ActorId, Access<C>)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpaceContext {
+    /// Id of the group associated with this space.
+    pub group_id: ActorId,
+
+    /// Members in the spaces' encryption context.
+    pub members: Vec<ActorId>,
+}
+
 /// Events emitted on auth group membership change.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupEvent<C> {
@@ -62,42 +80,34 @@ pub enum GroupEvent<C> {
         /// Group id.
         group_id: ActorId,
 
-        /// Root members, can be individuals or groups.
-        members: Vec<(Member, Access<C>)>,
+        initial_members: Vec<(GroupActor, Access<C>)>,
 
-        /// Transitive members, can only be individuals.
-        transitive_members: Vec<(Member, Access<C>)>,
+        context: GroupContext<C>,
     },
+
     /// A member was added to a group.
     Added {
         /// Group id.
         group_id: ActorId,
 
         /// Member that was added, can be individual or group.
-        added: Member,
+        added: GroupActor,
 
         /// Access level assigned to the added members.
         access: Access<C>,
 
-        /// Root members, can be individuals or groups.
-        members: Vec<(Member, Access<C>)>,
-
-        /// Transitive members, can only be individuals.
-        transitive_members: Vec<(Member, Access<C>)>,
+        context: GroupContext<C>,
     },
+
     /// A member was removed from a group.
     Removed {
         /// Group id.
         group_id: ActorId,
 
-        /// Member that was removed, can be individual or group.
-        removed: Member,
+        /// GroupActor that was removed, can be individual or group.
+        removed: GroupActor,
 
-        /// Root members, can be individuals or groups.
-        members: Vec<(Member, Access<C>)>,
-
-        /// Transitive members, can only be individuals.
-        transitive_members: Vec<(Member, Access<C>)>,
+        context: GroupContext<C>,
     },
 }
 
@@ -109,40 +119,33 @@ pub enum SpaceEvent<ID> {
         /// Space id.
         space_id: ID,
 
-        /// Id of the group associated with this space.
-        group_id: ActorId,
+        initial_members: Vec<ActorId>,
 
-        /// Individual in the spaces' encryption context.
-        members: Vec<ActorId>,
+        context: SpaceContext,
     },
+
     /// One or many individuals were added to the space.
     Added {
         /// Space id.
         space_id: ID,
 
-        /// Id of the group associated with this space.
-        group_id: ActorId,
-
-        /// Individuals added to the encryption context.
+        /// Members added to the encryption context.
         added: Vec<ActorId>,
 
-        /// Individuals in the spaces' encryption context.
-        members: Vec<ActorId>,
+        context: SpaceContext,
     },
+
     /// One or many individuals were removed from the space.
     Removed {
         /// Space id.
         space_id: ID,
 
-        /// Id of the group associated with this space.
-        group_id: ActorId,
-
-        /// Individuals removed from the encryption context.
+        /// Members removed from the encryption context.
         removed: Vec<ActorId>,
 
-        /// Individuals in the spaces' encryption context.
-        members: Vec<ActorId>,
+        context: SpaceContext,
     },
+
     /// Local actor was removed from the space.
     Ejected {
         /// Space id.
@@ -189,37 +192,45 @@ where
     };
 
     let group_id = args.control_message.group_id();
-    let members = auth_y
+    let group_actors = auth_y
         .root_members(group_id)
         .into_iter()
-        .map(|(member, access)| (Member::from_group_member(member), access))
+        .map(|(member, access)| (GroupActor::from_group_member(member), access))
         .collect();
-    let transitive_members = auth_y
-        .members(group_id)
-        .into_iter()
-        .map(|(member, access)| (Member::individual(member), access))
-        .collect();
+    let members = auth_y.members(group_id);
+
     let group_event = match args.control_message.action.clone() {
-        AuthGroupAction::Create { initial_members } => GroupEvent::Created {
-            group_id,
-            members: initial_members
+        AuthGroupAction::Create { initial_members } => {
+            let initial_members: Vec<(GroupActor, Access<C>)> = initial_members
                 .into_iter()
-                .map(|(member, access)| (Member::from_group_member(member), access))
-                .collect(),
-            transitive_members,
-        },
+                .map(|(member, access)| (GroupActor::from_group_member(member), access))
+                .collect();
+            let context = GroupContext {
+                members,
+                group_actors: initial_members.clone(),
+            };
+            GroupEvent::Created {
+                group_id,
+                initial_members,
+                context,
+            }
+        }
         AuthGroupAction::Add { member, access } => GroupEvent::Added {
             group_id,
-            added: Member::from_group_member(member),
+            added: GroupActor::from_group_member(member),
             access,
-            members,
-            transitive_members,
+            context: GroupContext {
+                group_actors,
+                members,
+            },
         },
         AuthGroupAction::Remove { member } => GroupEvent::Removed {
             group_id,
-            removed: Member::from_group_member(member),
-            members,
-            transitive_members,
+            removed: GroupActor::from_group_member(member),
+            context: GroupContext {
+                group_actors,
+                members,
+            },
         },
         AuthGroupAction::Promote { .. } => unimplemented!(),
         AuthGroupAction::Demote { .. } => unimplemented!(),
@@ -253,25 +264,32 @@ where
     let space_event = match auth_args.control_message.action.clone() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
             space_id,
-            group_id,
-            members: next_members,
+            initial_members: next_members.clone(),
+            context: SpaceContext {
+                group_id,
+                members: next_members,
+            },
         },
         AuthGroupAction::Add { .. } => {
             let added = added_members(current_members, next_members.clone());
             SpaceEvent::Added {
                 space_id,
-                group_id,
                 added,
-                members: next_members,
+                context: SpaceContext {
+                    group_id,
+                    members: next_members,
+                },
             }
         }
         AuthGroupAction::Remove { .. } => {
             let removed = removed_members(current_members, next_members.clone());
             SpaceEvent::Removed {
                 space_id,
-                group_id,
                 removed,
-                members: next_members,
+                context: SpaceContext {
+                    group_id,
+                    members: next_members,
+                },
             }
         }
         AuthGroupAction::Promote { .. } => unimplemented!(),
