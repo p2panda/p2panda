@@ -142,12 +142,12 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 /// ## Design decisions
 ///
 /// This storage API design was chosen to make the dynamics of the underlying SQLite database
-/// explicit. Internally any process can access the transaction object to do writes and
-/// (uncommitted) reads (see "Transaction I" in diagram). Care is required when designing systems
-/// like that as it's still possible to allow concurrent processes to read and write within the
-/// same transaction and potentially introducing suble bugs (like one process could roll back the
-/// transaction while the other one assumed it will be committed). Usually developers want to
-/// design _writes_ to the database within a transaction if they need consistency and atomicity
+/// explicit to avoid potentially introducing subtle bugs. Internally any process can access the
+/// transaction object to do writes and (uncommitted) reads (see "Transaction I" in diagram). Care
+/// is required when designing systems like that as it's still possible to allow concurrent
+/// processes to read and write within the same transaction (for example one process could roll
+/// back the transaction while the other one assumed it will be committed). Usually developers want
+/// to design _writes_ to the database within a transaction if they need consistency and atomicity
 /// guarantees. "Unrelated" queries _can_ be "pooled" in one transaction (for performance reasons
 /// for example) if consistency is guaranteed by all involved processes and the underlying
 /// data-model (see "Transaction II" in diagram).
