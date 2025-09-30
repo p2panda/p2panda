@@ -7,6 +7,7 @@
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
+use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::endpoint::{Endpoint, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
 
@@ -19,6 +20,8 @@ pub struct NetworkState {
     events_failures: u16,
     endpoint_actor: ActorRef<ToEndpoint>,
     endpoint_failures: u16,
+    address_book_actor: ActorRef<ToAddressBook>,
+    address_book_failures: u16,
 }
 
 pub struct Network {}
@@ -35,17 +38,28 @@ impl Actor for Network {
     ) -> Result<Self::State, ActorProcessingErr> {
         // Spawn the events actor.
         let (events_actor, _) =
-            Actor::spawn_linked(None, Events {}, (), myself.clone().into()).await?;
+            Actor::spawn_linked(Some("events"), Events {}, (), myself.clone().into()).await?;
 
         // Spawn the endpoint actor.
         let (endpoint_actor, _) =
-            Actor::spawn_linked(None, Endpoint {}, (), myself.clone().into()).await?;
+            Actor::spawn_linked(Some("endpoint"), Endpoint {}, (), myself.clone().into()).await?;
+
+        // Spawn the address book actor.
+        let (address_book_actor, _) = Actor::spawn_linked(
+            Some("address book"),
+            AddressBook {},
+            (),
+            myself.clone().into(),
+        )
+        .await?;
 
         let state = NetworkState {
             events_actor,
             events_failures: 0,
             endpoint_actor,
             endpoint_failures: 0,
+            address_book_actor,
+            address_book_failures: 0,
         };
 
         Ok(state)
@@ -110,6 +124,17 @@ impl Actor for Network {
 
                         state.endpoint_failures += 1;
                         state.endpoint_actor = endpoint_actor;
+                    }
+                    Some("address book") => {
+                        warn!("network actor: address book actor failed: {}", panic_msg);
+
+                        // Respawn the address book actor.
+                        let (address_book_actor, _) =
+                            Actor::spawn_linked(None, AddressBook {}, (), myself.clone().into())
+                                .await?;
+
+                        state.address_book_failures += 1;
+                        state.address_book_actor = address_book_actor;
                     }
                     _ => warn!("network actor: unnamed actor failed: {}", panic_msg),
                 }
