@@ -15,6 +15,8 @@ use crate::to_public_key;
 /// Default STUN port used by the relay server.
 ///
 /// The STUN port as defined by [RFC 8489](<https://www.rfc-editor.org/rfc/rfc8489#section-18.6>)
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub const DEFAULT_STUN_PORT: u16 = 3478;
 
 /// URL identifying a relay server.
@@ -49,6 +51,8 @@ impl From<RelayUrl> for IrohRelayUrl {
 }
 
 /// Converts a `iroh` relay url type to the `p2panda-net` implementation.
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub(crate) fn to_relay_url(url: IrohRelayUrl) -> RelayUrl {
     RelayUrl(url)
 }
@@ -62,6 +66,8 @@ pub struct NodeAddress {
 }
 
 impl NodeAddress {
+    // TODO: Remove once used.
+    #[allow(dead_code)]
     pub fn from_public_key(public_key: PublicKey) -> Self {
         Self {
             public_key,
@@ -72,6 +78,8 @@ impl NodeAddress {
 }
 
 /// Converts an `iroh` node address type to the `p2panda-net` implementation.
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub(crate) fn to_node_addr(addr: IrohNodeAddr) -> NodeAddress {
     NodeAddress {
         public_key: to_public_key(addr.node_id),
@@ -85,6 +93,8 @@ pub(crate) fn to_node_addr(addr: IrohNodeAddr) -> NodeAddress {
 }
 
 /// Converts a `p2panda-net` node address type to the `iroh` implementation.
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub(crate) fn from_node_addr(addr: NodeAddress) -> IrohNodeAddr {
     let node_id = NodeId::from_bytes(addr.public_key.as_bytes()).expect("invalid public key");
     let mut node_addr =

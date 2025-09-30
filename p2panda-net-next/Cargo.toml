@@ -11,6 +11,7 @@ iroh-base = "0.92.0"
 iroh-gossip = "0.92.0"
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 ractor = { version = "0.15.8", features = ["cluster"] }
+rand = "0.9.2"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.47.1", features = ["rt", "sync"] }
 tracing = "0.1.41"

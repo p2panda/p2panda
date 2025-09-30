@@ -28,6 +28,8 @@ use crate::{TopicId, from_public_key};
 /// received. Note that the delivering peer is not necessarily the author of the bytes.
 pub type MsgBytesAndDeliverer = (Vec<u8>, PublicKey);
 
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
     ///
@@ -71,6 +73,8 @@ pub enum ToGossip {
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
+        // TODO: Remove once used.
+        #[allow(dead_code)]
         session_id: ActorId,
     },
 }
