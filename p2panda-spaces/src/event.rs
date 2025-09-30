@@ -189,8 +189,7 @@ where
                 data: plaintext,
             }),
             GroupOutput::Control(_control_message) => {
-                // @TODO: when do control messages get emitted in group output?
-                unimplemented!()
+                unreachable!()
             }
             GroupOutput::Removed => Some(Event::Space(SpaceEvent::Ejected {
                 space_id: *space_id,
