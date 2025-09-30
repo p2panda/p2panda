@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Sync sender actor.
-
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
 pub enum ToSyncSender {}
