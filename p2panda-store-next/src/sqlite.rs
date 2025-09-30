@@ -405,7 +405,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Pool 1 acquires the permit to run a transaction.
+        // 1. Pool 1 acquires the permit to run a transaction.
         let permit_1 = pool_1.begin().await.unwrap();
 
         // .. parallely Pool 2 also tries to do some work.
@@ -414,7 +414,7 @@ mod tests {
             // something and we need to wait.
             let permit_2 = pool_2.begin().await.unwrap();
 
-            // We should see now the previously change made by pool 1.
+            // 5. We should see now the previously change made by pool 1.
             let result = pool_2
                 .tx(async |tx| {
                     let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
@@ -424,7 +424,7 @@ mod tests {
                 .unwrap();
             assert_eq!(result, 5);
 
-            // Change the value to something else.
+            // 6. Change the value to something else.
             pool_2
                 .tx(async |tx| {
                     query("INSERT INTO test (x) VALUES (10)")
@@ -435,7 +435,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            // .. but abort the transaction and roll back.
+            // 7. .. but abort the transaction and roll back.
             pool_2.rollback(permit_2).await.unwrap();
 
             // The value should still be the same as before.
@@ -449,7 +449,7 @@ mod tests {
             assert_eq!(result, 5);
         });
 
-        // Pool 1 changes the value.
+        // 2. Pool 1 changes the value.
         pool_1
             .tx(async |tx| {
                 query("INSERT INTO test (x) VALUES (5)")
@@ -460,7 +460,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Result is 5 after during "dirty read".
+        // 3. Result is already 5 during "dirty read".
         let result = pool_1
             .tx(async |tx| {
                 let row: (i64,) = query_as("SELECT x FROM test").fetch_one(&mut **tx).await?;
@@ -470,8 +470,8 @@ mod tests {
             .unwrap();
         assert_eq!(result, 5);
 
-        // Commit the change to database and free permit. This will allow now pool_2 to read the
-        // changed value.
+        // 4. Commit the change to database and free permit. This will allow now pool_2 to read the
+        //    changed value.
         pool_1.commit(permit_1).await.unwrap();
 
         // Result is still 5 after commit.
