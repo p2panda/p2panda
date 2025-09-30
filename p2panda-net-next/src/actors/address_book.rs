@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Address book actor for storing and querying peer addresses and topics of interest.
-
 use std::collections::{HashMap, HashSet};
 
 use p2panda_core::PublicKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
 use rand::seq::IteratorRandom;
 
-use crate::addrs::NodeAddress;
 use crate::TopicId;
+use crate::addrs::NodeAddress;
 
 // TODO: Proper configuration.
 //

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Subscription actor.
-
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
 pub enum ToSubscription {}
@@ -10,7 +9,7 @@ impl Message for ToSubscription {}
 
 pub struct SubscriptionState {}
 
-pub struct Subscription {}
+pub struct Subscription;
 
 impl Actor for Subscription {
     type State = SubscriptionState;
