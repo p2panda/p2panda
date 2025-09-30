@@ -3,6 +3,8 @@
 //! Endpoint actor.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub struct EndpointConfig {}
 
 pub enum ToEndpoint {}

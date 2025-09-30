@@ -3,6 +3,8 @@
 //! Router actor for registering ALPNs.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub struct RouterConfig {}
 
 pub enum ToRouter {}

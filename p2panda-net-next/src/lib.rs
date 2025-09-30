@@ -16,6 +16,8 @@ pub(crate) fn from_public_key(key: p2panda_core::PublicKey) -> iroh_base::Public
 }
 
 /// Converts a `p2panda-core` private key to the "iroh" type.
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub(crate) fn from_private_key(key: p2panda_core::PrivateKey) -> iroh_base::SecretKey {
     iroh_base::SecretKey::from_bytes(key.as_bytes())
 }
