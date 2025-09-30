@@ -7,6 +7,7 @@
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
+use crate::actors::endpoint::{Endpoint, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
 
 pub enum ToNetwork {}
@@ -16,6 +17,8 @@ impl Message for ToNetwork {}
 pub struct NetworkState {
     events_actor: ActorRef<ToEvents>,
     events_failures: u16,
+    endpoint_actor: ActorRef<ToEndpoint>,
+    endpoint_failures: u16,
 }
 
 pub struct Network {}
@@ -34,9 +37,15 @@ impl Actor for Network {
         let (events_actor, _) =
             Actor::spawn_linked(None, Events {}, (), myself.clone().into()).await?;
 
+        // Spawn the endpoint actor.
+        let (endpoint_actor, _) =
+            Actor::spawn_linked(None, Endpoint {}, (), myself.clone().into()).await?;
+
         let state = NetworkState {
             events_actor,
             events_failures: 0,
+            endpoint_actor,
+            endpoint_failures: 0,
         };
 
         Ok(state)
@@ -80,15 +89,29 @@ impl Actor for Network {
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                if let Some("events") = actor.get_name().as_deref() {
-                    warn!("network actor: events actor failed: {}", panic_msg);
+                match actor.get_name().as_deref() {
+                    Some("router") => {
+                        warn!("network actor: events actor failed: {}", panic_msg);
 
-                    // Respawn the events actor.
-                    let (events_actor, _) =
-                        Actor::spawn_linked(None, Events {}, (), myself.clone().into()).await?;
+                        // Respawn the events actor.
+                        let (events_actor, _) =
+                            Actor::spawn_linked(None, Events {}, (), myself.clone().into()).await?;
 
-                    state.events_failures += 1;
-                    state.events_actor = events_actor;
+                        state.events_failures += 1;
+                        state.events_actor = events_actor;
+                    }
+                    Some("endpoint") => {
+                        warn!("network actor: endpoint actor failed: {}", panic_msg);
+
+                        // Respawn the endpoint actor.
+                        let (endpoint_actor, _) =
+                            Actor::spawn_linked(None, Endpoint {}, (), myself.clone().into())
+                                .await?;
+
+                        state.endpoint_failures += 1;
+                        state.endpoint_actor = endpoint_actor;
+                    }
+                    _ => warn!("network actor: unnamed actor failed: {}", panic_msg),
                 }
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
