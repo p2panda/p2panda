@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Events actor.
+//!
+//! Receives events from other actors, aggregating and enriching them before informing
+//! upstream subscribers.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
 pub enum ToEvents {}
