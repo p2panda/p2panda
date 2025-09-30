@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -9,13 +8,13 @@ use p2panda_core::traits::{Identifier, OperationId};
 use p2panda_store_next::operations::OperationStore;
 use p2panda_store_next::orderer::OrdererStore;
 use thiserror::Error;
-use tokio::sync::Notify;
+use tokio::sync::{Mutex, Notify};
 
 use crate::orderer::{CausalOrderer, Ordering};
 use crate::processors::Processor;
 
 pub struct Orderer<T, ID, S> {
-    inner: RefCell<CausalOrderer<ID, S>>,
+    inner: Mutex<CausalOrderer<ID, S>>,
     store: S,
     notify: Notify,
     _marker: PhantomData<T>,
@@ -31,7 +30,7 @@ where
         let inner = CausalOrderer::new(store.clone());
 
         Self {
-            inner: RefCell::new(inner),
+            inner: Mutex::new(inner),
             store,
             notify: Notify::new(),
             _marker: PhantomData,
@@ -54,7 +53,7 @@ where
     type Error = OrdererError<T, ID, S>;
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().await;
         inner
             .process(*input.id(), input.dependencies())
             .await
@@ -66,7 +65,8 @@ where
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         loop {
-            let mut inner = self.inner.borrow_mut();
+            let mut inner = self.inner.lock().await;
+
             if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
                 return match self
                     .store
