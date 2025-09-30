@@ -7,8 +7,8 @@ use p2panda_core::PublicKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
 use rand::seq::IteratorRandom;
 
-use crate::TopicId;
 use crate::addrs::NodeAddress;
+use crate::TopicId;
 
 // TODO: Proper configuration.
 //

@@ -9,6 +9,8 @@ use iroh::Endpoint as IrohEndpoint;
 use iroh_gossip::ALPN as GOSSIP_ALPN;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub struct RouterConfig {}
 
 pub enum ToRouter {}

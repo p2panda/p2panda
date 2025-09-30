@@ -22,7 +22,7 @@ use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
-use crate::{TopicId, from_public_key};
+use crate::{from_public_key, TopicId};
 
 /// Bytes received from gossip, along with the public key of the peer from whom the message was
 /// received. Note that the delivering peer is not necessarily the author of the bytes.
@@ -416,14 +416,14 @@ impl Actor for Gossip {
 mod tests {
     use std::time::Duration;
 
-    use iroh::discovery::NodeInfo;
     use iroh::discovery::static_provider::StaticProvider;
+    use iroh::discovery::NodeInfo;
     use iroh::protocol::Router as IrohRouter;
     use iroh::{Endpoint as IrohEndpoint, Watcher as _};
-    use iroh_gossip::ALPN as GOSSIP_ALPN;
     use iroh_gossip::proto::Config as IrohGossipConfig;
+    use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
-    use ractor::{Actor, call};
+    use ractor::{call, Actor};
     use tokio::sync::mpsc::error::TryRecvError;
     use tokio::sync::oneshot;
     use tokio::time::sleep;
