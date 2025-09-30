@@ -2,6 +2,7 @@
 
 mod address_book;
 mod discovery;
+mod endpoint;
 mod events;
 mod gossip;
 mod router;
