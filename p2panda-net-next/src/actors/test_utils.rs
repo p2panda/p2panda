@@ -6,8 +6,10 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::oneshot::Sender;
 
 #[derive(Debug)]
+// TODO: Remove once used.
 pub(crate) enum ActorResult {
     Terminated(Option<BoxedState>, Option<String>),
+    #[allow(dead_code)]
     Failed(ActorProcessingErr),
 }
 
