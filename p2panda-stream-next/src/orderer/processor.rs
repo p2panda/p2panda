@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 use p2panda_core::traits::{Identifier, OperationId};
 // @TODO: Change these to p2panda_store when ready.
@@ -18,7 +17,6 @@ pub struct Orderer<T, ID, S> {
     store: S,
     notify: Notify,
     _marker: PhantomData<T>,
-    _marker2: PhantomData<Rc<()>>, // !Send
 }
 
 impl<T, ID, S> Orderer<T, ID, S>
@@ -34,7 +32,6 @@ where
             store,
             notify: Notify::new(),
             _marker: PhantomData,
-            _marker2: PhantomData,
         }
     }
 }
