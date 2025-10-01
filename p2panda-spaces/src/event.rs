@@ -193,7 +193,7 @@ where
             }
             // A removal of the local actor from a space could also be detected from observing
             // changes to the auth group state, we hook into the encryption output here though to
-            // improve observability of the internal encryption state. 
+            // improve observability of the internal encryption state.
             GroupOutput::Removed => Some(Event::Space(SpaceEvent::Ejected {
                 space_id: *space_id,
             })),
