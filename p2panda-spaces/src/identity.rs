@@ -182,9 +182,6 @@ where
         key_bundle: &LongTermKeyBundle,
     ) -> Result<(), IdentityError<ID, K, M, C>> {
         key_bundle.verify()?;
-
-        // @TODO: validate that the key bundle was indeed created by the correct author.
-
         let member = Member::new(author, key_bundle.clone());
         self.register_member(&member).await?;
         Ok(())
