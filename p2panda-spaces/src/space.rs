@@ -16,7 +16,7 @@ use crate::auth::orderer::AuthOrdererState;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
-use crate::event::Event;
+use crate::event::{Event, encryption_output_to_space_events, space_message_to_space_event};
 use crate::forge::Forge;
 use crate::group::{Group, GroupError};
 use crate::manager::Manager;
@@ -25,8 +25,8 @@ use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
-    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupOutput,
-    EncryptionGroupState, OperationId,
+    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
+    OperationId,
 };
 
 /// Encrypted data context with authorization boundary.
@@ -226,7 +226,7 @@ where
         &self,
         space_message: &M,
         auth_message: Option<&AuthMessage<C>>,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let events = match space_message.args() {
             SpacesArgs::KeyBundle {} => unreachable!("can't process key bundles here"),
             SpacesArgs::SpaceMembership { space_id, .. } => {
@@ -305,8 +305,9 @@ where
         &self,
         space_message: &M,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
+            space_id,
             group_id,
             space_dependencies,
             ..
@@ -317,14 +318,16 @@ where
 
         // Get space state and current members.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
-        let current_members = secret_members(y.auth_y.members(y.group_id));
+        let mut current_members = secret_members(y.auth_y.members(y.group_id));
+        current_members.sort();
 
         // Process auth message on space auth state.
         y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
         y.processed_auth.insert(auth_message.id());
 
         // Get next space members.
-        let next_members = secret_members(y.auth_y.members(y.group_id));
+        let mut next_members = secret_members(y.auth_y.members(y.group_id));
+        next_members.sort();
 
         // Make the dgm aware of the new space members.
         y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
@@ -335,8 +338,8 @@ where
             space_message,
             my_id,
             auth_message,
-            current_members,
-            next_members,
+            &current_members,
+            &next_members,
         );
 
         // Process encryption message.
@@ -347,6 +350,7 @@ where
         y.encryption_y = encryption_y;
 
         // Persist new space state.
+
         {
             let mut manager = self.manager.inner.write().await;
             y.encryption_y
@@ -358,7 +362,29 @@ where
                 .await
                 .map_err(SpaceError::SpaceStore)?;
         }
-        Ok(encryption_output_to_events(self.id(), encryption_output))
+
+        let mut events = encryption_output_to_space_events(space_id, encryption_output);
+
+        // If current and next member sets are equal it indicates that the space is not affected
+        // by this auth change. This can be because the space wasn't created yet, or the auth
+        // change simply does not effect the members of this space. In either case we don't want
+        // to emit any membership change event.
+        if current_members == next_members {
+            return Ok(events);
+        };
+
+        // Construct space membership event.
+        let membership_event = space_message_to_space_event(
+            space_message,
+            auth_message,
+            current_members,
+            next_members,
+        );
+
+        // Insert membership event at front of vec.
+        events.insert(0, membership_event);
+
+        Ok(events)
     }
 
     /// Apply a group membership change to the group encryption state.
@@ -435,7 +461,7 @@ where
     async fn handle_application_message(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID>>, SpaceError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, F, M, C, RS>> {
         let SpacesArgs::Application {
             space_dependencies, ..
         } = message.args()
@@ -460,6 +486,7 @@ where
             .add_dependency(encryption_message.id(), space_dependencies);
 
         // Persist new state.
+        let events = encryption_output_to_space_events(&y.space_id, encryption_output);
         let mut manager = self.manager.inner.write().await;
         manager
             .store
@@ -467,7 +494,7 @@ where
             .await
             .map_err(SpaceError::SpaceStore)?;
 
-        Ok(encryption_output_to_events(self.id(), encryption_output))
+        Ok(events)
     }
 
     /// Sync a shared auth state change with this space.
@@ -740,31 +767,6 @@ pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>
         .cloned()
         .filter(|actor| !next_members.contains(actor))
         .collect::<Vec<_>>()
-}
-
-fn encryption_output_to_events<ID, M>(
-    space_id: ID,
-    encryption_output: Vec<EncryptionGroupOutput<M>>,
-) -> Vec<Event<ID>>
-where
-    ID: SpaceId,
-{
-    encryption_output
-        .into_iter()
-        .map(|event| {
-            match event {
-                EncryptionGroupOutput::Application { plaintext } => Event::Application {
-                    space_id,
-                    data: plaintext,
-                },
-                EncryptionGroupOutput::Removed => Event::Removed { space_id },
-                _ => {
-                    // We only expect "application" events inside this function.
-                    unreachable!();
-                }
-            }
-        })
-        .collect()
 }
 
 #[derive(Debug, Error)]
