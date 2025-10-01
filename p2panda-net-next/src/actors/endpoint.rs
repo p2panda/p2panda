@@ -155,3 +155,36 @@ impl Actor for Endpoint {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ractor::Actor;
+    use tokio::time::{sleep, Duration};
+    use tracing_test::traced_test;
+
+    use super::Endpoint;
+
+    #[tokio::test]
+    #[traced_test]
+    async fn endpoint_child_actors_are_started() {
+        let (endpoint_actor, endpoint_actor_handle) =
+            Actor::spawn(Some("endpoint".to_string()), Endpoint {}, ())
+                .await
+                .unwrap();
+
+        // Sleep briefly to allow time for all actors to be ready.
+        sleep(Duration::from_millis(50)).await;
+
+        endpoint_actor.stop(None);
+        endpoint_actor_handle.await.unwrap();
+
+        assert!(logs_contain(
+            "endpoint actor: received ready from subscription actor"
+        ));
+        assert!(logs_contain(
+            "endpoint actor: received ready from router actor"
+        ));
+
+        assert!(!logs_contain("actor failed"));
+    }
+}
