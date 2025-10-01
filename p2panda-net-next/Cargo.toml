@@ -18,6 +18,7 @@ tracing = "0.1.41"
 
 [dev-dependencies]
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
+tracing-test = "0.2.5"
 
 [lints]
 workspace = true

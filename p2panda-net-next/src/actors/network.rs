@@ -202,3 +202,42 @@ impl Actor for Network {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ractor::Actor;
+    use tokio::time::{sleep, Duration};
+    use tracing_test::traced_test;
+
+    use super::Network;
+
+    #[tokio::test]
+    #[traced_test]
+    async fn network_child_actors_are_started() {
+        let (network_actor, network_actor_handle) =
+            Actor::spawn(Some("network".to_string()), Network {}, ())
+                .await
+                .unwrap();
+
+        // Sleep briefly to allow time for all actors to be ready.
+        sleep(Duration::from_millis(50)).await;
+
+        network_actor.stop(None);
+        network_actor_handle.await.unwrap();
+
+        assert!(logs_contain(
+            "network actor: received ready from events actor"
+        ));
+        assert!(logs_contain(
+            "network actor: received ready from endpoint actor"
+        ));
+        assert!(logs_contain(
+            "network actor: received ready from address book actor"
+        ));
+        assert!(logs_contain(
+            "network actor: received ready from discovery actor"
+        ));
+
+        assert!(!logs_contain("actor failed"));
+    }
+}
