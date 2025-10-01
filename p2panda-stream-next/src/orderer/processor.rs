@@ -36,9 +36,6 @@ where
     }
 }
 
-// It's okay to hold the ref cell across await points as within processors we're in a
-// single-threaded environment aka !Send.
-#[allow(clippy::await_holding_refcell_ref)]
 impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
     T: Identifier<ID> + Ordering<ID>,
