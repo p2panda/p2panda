@@ -11,6 +11,7 @@ use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
+use crate::actors::subscription::{Subscription, ToSubscription};
 
 pub enum ToNetwork {}
 
@@ -25,6 +26,8 @@ pub struct NetworkState {
     address_book_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
+    subscription_actor: ActorRef<ToSubscription>,
+    subscription_actor_failures: u16,
 }
 
 pub struct Network {}
@@ -75,6 +78,15 @@ impl Actor for Network {
         )
         .await?;
 
+        // Spawn the subscription actor.
+        let (subscription_actor, _) = Actor::spawn_linked(
+            Some("subscription".to_string()),
+            Subscription {},
+            (),
+            myself.into(),
+        )
+        .await?;
+
         let state = NetworkState {
             events_actor,
             events_failures: 0,
@@ -84,6 +96,8 @@ impl Actor for Network {
             address_book_failures: 0,
             discovery_actor,
             discovery_actor_failures: 0,
+            subscription_actor,
+            subscription_actor_failures: 0,
         };
 
         Ok(state)
@@ -187,6 +201,21 @@ impl Actor for Network {
 
                         state.discovery_actor_failures += 1;
                         state.discovery_actor = discovery_actor;
+                    }
+                    Some("subscription") => {
+                        warn!("network actor: subscription actor failed: {}", panic_msg);
+
+                        // Respawn the subscription actor.
+                        let (subscription_actor, _) = Actor::spawn_linked(
+                            Some("subscription".to_string()),
+                            Subscription {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
+
+                        state.subscription_actor_failures += 1;
+                        state.subscription_actor = subscription_actor;
                     }
                     _ => warn!("network actor: unnamed actor failed: {}", panic_msg),
                 }
