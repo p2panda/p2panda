@@ -146,3 +146,39 @@ impl Actor for Subscription {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use iroh::Endpoint as IrohEndpoint;
+    use ractor::Actor;
+    use tokio::time::{sleep, Duration};
+    use tracing_test::traced_test;
+
+    use super::Subscription;
+
+    #[tokio::test]
+    #[traced_test]
+    async fn subscription_child_actors_are_started() {
+        let endpoint = IrohEndpoint::builder().bind().await.unwrap();
+
+        let (subscription_actor, subscription_actor_handle) =
+            Actor::spawn(Some("subscription".to_string()), Subscription {}, endpoint)
+                .await
+                .unwrap();
+
+        // Sleep briefly to allow time for all actors to be ready.
+        sleep(Duration::from_millis(50)).await;
+
+        subscription_actor.stop(None);
+        subscription_actor_handle.await.unwrap();
+
+        assert!(logs_contain(
+            "subscription actor: received ready from gossip actor"
+        ));
+        assert!(logs_contain(
+            "subscription actor: received ready from sync actor"
+        ));
+
+        assert!(!logs_contain("actor failed"));
+    }
+}
