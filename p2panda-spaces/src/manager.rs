@@ -79,7 +79,14 @@ where
         credentials: &Credentials,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
-        Self::new_with_config(spaces_store, key_store, &Config::new(credentials), rng).await
+        Self::new_with_config(
+            spaces_store,
+            key_store,
+            credentials,
+            &Config::default(),
+            rng,
+        )
+        .await
     }
 
     /// Instantiate a new manager with custom configuration.
@@ -87,12 +94,13 @@ where
     pub async fn new_with_config(
         spaces_store: S,
         key_store: K,
+        credentials: &Credentials,
         config: &Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
         // @TODO: kick off service which will handle key bundle rotation and space repair.
         // @TODO: return rx channel where new events/messages will be emitted.
-        let identity = IdentityManager::new(key_store, config, &rng).await?;
+        let identity = IdentityManager::new(key_store, credentials, config, &rng).await?;
         let inner = ManagerInner {
             config: config.clone(),
             my_keys_rotated_at: 0,

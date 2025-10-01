@@ -7,7 +7,7 @@ use p2panda_encryption::Rng;
 use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 
-use crate::Config;
+use crate::{Config, Credentials};
 use crate::message::SpacesArgs;
 use crate::test_utils::{SeqNum, TestConditions, TestMessage};
 use crate::traits::SpaceId;
@@ -24,16 +24,16 @@ pub struct TestKeyStore<ID> {
 }
 
 impl<ID> TestKeyStore<ID> {
-    pub fn new(config: &Config, rng: &Rng) -> Result<Self, KeyManagerError> {
-        let key_manager = KeyManager::init(
-            &config.credentials().identity_secret(),
-            config.lifetime(),
-            rng,
-        )?;
+    pub fn new(
+        credentials: &Credentials,
+        config: &Config,
+        rng: &Rng,
+    ) -> Result<Self, KeyManagerError> {
+        let key_manager = KeyManager::init(&credentials.identity_secret(), config.lifetime(), rng)?;
         let key_registry = KeyRegistry::init();
         Ok(Self {
             next_seq_num: 0,
-            private_key: config.credentials().private_key(),
+            private_key: credentials.private_key(),
             key_manager,
             key_registry,
             _phantom: PhantomData,

@@ -51,12 +51,13 @@ where
 {
     pub async fn new(
         key_store: K,
+        credentials: &Credentials,
         config: &Config,
         rng: &Rng,
     ) -> Result<Self, IdentityError<ID, K, M, C>> {
         let rng = Rng::from_rng(rng)?;
         let manager = Self {
-            credentials: config.credentials().to_owned(),
+            credentials: credentials.to_owned(),
             key_store,
             pre_key_lifetime: config.pre_key_lifetime,
             pre_key_rotate_after: config.pre_key_rotate_after,
@@ -290,15 +291,15 @@ mod tests {
     #[tokio::test]
     async fn identity_secret_rotated() {
         let rng = Rng::from_seed([1; 32]);
-        let credentials = Credentials::new(&rng).unwrap();
-        let mut config = Config::new(&credentials);
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&config, &rng).unwrap();
+        let mut credentials = Credentials::from_rng(&rng).unwrap();
+        let config = Config::default();
+        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
 
         // Rotate identity secret
-        config.credentials.identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        credentials.identity_secret = SecretKey::from_rng(&rng).unwrap();
 
         assert_matches!(
-            IdentityManager::new(key_store, &config, &rng).await,
+            IdentityManager::new(key_store, &credentials, &config, &rng).await,
             Err(IdentityError::IdentitySecretRotated)
         );
     }
@@ -306,16 +307,16 @@ mod tests {
     #[tokio::test]
     async fn private_key_rotated() {
         let rng = Rng::from_seed([1; 32]);
-        let credentials = Credentials::new(&rng).unwrap();
-        let mut config = Config::new(&credentials);
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&config, &rng).unwrap();
+        let mut credentials = Credentials::from_rng(&rng).unwrap();
+        let config = Config::default();
+        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
 
         // Rotate private key
         let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
-        config.credentials.private_key = private_key;
+        credentials.private_key = private_key;
 
         assert_matches!(
-            IdentityManager::new(key_store, &config, &rng).await,
+            IdentityManager::new(key_store, &credentials, &config, &rng).await,
             Err(IdentityError::PrivateKeyRotated)
         );
     }
@@ -323,10 +324,10 @@ mod tests {
     #[tokio::test]
     async fn me_returns_valid_member() {
         let rng = Rng::from_seed([1; 32]);
-        let credentials = Credentials::new(&rng).unwrap();
-        let config = Config::new(&credentials);
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&config, &rng).unwrap();
-        let mut identity_manager = IdentityManager::new(key_store, &config, &rng)
+        let credentials = Credentials::from_rng(&rng).unwrap();
+        let config = Config::default();
+        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let mut identity_manager = IdentityManager::new(key_store, &credentials, &config, &rng)
             .await
             .unwrap();
 
@@ -341,10 +342,10 @@ mod tests {
     #[tokio::test]
     async fn key_bundle_message_forged() {
         let rng = Rng::from_seed([1; 32]);
-        let credentials = Credentials::new(&rng).unwrap();
-        let config = Config::new(&credentials);
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&config, &rng).unwrap();
-        let mut identity_manager = IdentityManager::new(key_store, &config, &rng)
+        let credentials = Credentials::from_rng(&rng).unwrap();
+        let config = Config::default();
+        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let mut identity_manager = IdentityManager::new(key_store, &credentials, &config, &rng)
             .await
             .unwrap();
 
@@ -363,22 +364,28 @@ mod tests {
     #[tokio::test]
     async fn process_key_bundle_registers_member() {
         let alice_rng = Rng::from_seed([1; 32]);
-        let alice_credentials = Credentials::new(&alice_rng).unwrap();
-        let alice_config = Config::new(&alice_credentials);
+        let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
+        let alice_config = Config::default();
         let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(&alice_config, &alice_rng).unwrap();
-        let mut alice_identity_manager =
-            IdentityManager::new(alice_key_store, &alice_config, &alice_rng)
-                .await
-                .unwrap();
+            TestKeyStore::new(&alice_credentials, &alice_config, &alice_rng).unwrap();
+        let mut alice_identity_manager = IdentityManager::new(
+            alice_key_store,
+            &alice_credentials,
+            &alice_config,
+            &alice_rng,
+        )
+        .await
+        .unwrap();
 
         let bob_rng = Rng::from_seed([2; 32]);
-        let bob_credentials = Credentials::new(&bob_rng).unwrap();
-        let bob_config = Config::new(&bob_credentials);
-        let bob_key_store: TestKeyStore<i32> = TestKeyStore::new(&bob_config, &bob_rng).unwrap();
-        let mut bob_identity_manager = IdentityManager::new(bob_key_store, &bob_config, &bob_rng)
-            .await
-            .unwrap();
+        let bob_credentials = Credentials::from_rng(&bob_rng).unwrap();
+        let bob_config = Config::default();
+        let bob_key_store: TestKeyStore<i32> =
+            TestKeyStore::new(&bob_credentials, &bob_config, &bob_rng).unwrap();
+        let mut bob_identity_manager =
+            IdentityManager::new(bob_key_store, &bob_credentials, &bob_config, &bob_rng)
+                .await
+                .unwrap();
         let bob_id = bob_credentials.public_key().into();
 
         let bob_member = bob_identity_manager.me().await.unwrap();
@@ -403,14 +410,18 @@ mod tests {
     #[tokio::test]
     async fn me_rotates_key_bundle_when_expired() {
         let alice_rng = Rng::from_seed([1; 32]);
-        let alice_credentials = Credentials::new(&alice_rng).unwrap();
-        let alice_config = Config::new(&alice_credentials);
+        let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
+        let alice_config = Config::default();
         let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(&alice_config, &alice_rng).unwrap();
-        let mut alice_identity_manager =
-            IdentityManager::new(alice_key_store, &alice_config, &alice_rng)
-                .await
-                .unwrap();
+            TestKeyStore::new(&alice_credentials, &alice_config, &alice_rng).unwrap();
+        let mut alice_identity_manager = IdentityManager::new(
+            alice_key_store,
+            &alice_credentials,
+            &alice_config,
+            &alice_rng,
+        )
+        .await
+        .unwrap();
 
         let alice_1 = alice_identity_manager.me().await.unwrap();
         let bundle_1 = alice_1.key_bundle().clone();

@@ -19,7 +19,7 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn new(rng: &Rng) -> Result<Self, RngError> {
+    pub fn from_rng(rng: &Rng) -> Result<Self, RngError> {
         let private_key = PrivateKey::from_bytes(&rng.random_array()?);
         let identity_secret = SecretKey::from_rng(rng)?;
         Ok(Self {
