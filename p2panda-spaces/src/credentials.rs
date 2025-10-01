@@ -5,13 +5,13 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::{Rng, RngError};
 use serde::{Deserialize, Serialize};
 
-/// Every peer has two secret keys and _both_ required in order to interact with
-/// p2panda-spaces and neither can be rotated without losing access to all spaces. _If_ key
-/// rotation is required then both keys should be rotated together.
+/// Every peer has two secret keys and _both_ required in order to interact with p2panda-spaces
+/// and neither can be rotated without losing access to all spaces. _If_ key rotation is required
+/// then both keys should be rotated together.
 ///  
-/// A peers' identity secret is used for key agreement and encryption of messages in
-/// p2panda-encryption. Their private key is used to sign messages and the associated public key
-/// is used to identify the peer (eg. for access control purposes).  
+/// A peers' identity secret is used for key agreement in p2panda-encryption. Their private key is
+/// used to sign messages and the associated public key is used to identify the peer (eg. for
+/// access control purposes).  
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Credentials {
     pub(crate) private_key: PrivateKey,
