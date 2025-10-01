@@ -24,7 +24,10 @@
 //! Processors are meant to only be executed within a single thread and do not allow `Send` or
 //! `Sync` types. Users need to make sure to run this code in a "local" tokio runtime.
 mod processors;
+#[cfg(feature = "spaces")]
+pub mod spaces;
 #[cfg(test)]
 mod test_utils;
+mod utils;
 
 pub use processors::*;

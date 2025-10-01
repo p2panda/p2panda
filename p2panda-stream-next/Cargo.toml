@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-stream-next"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2024"
 
 [package.metadata.docs.rs]
@@ -9,8 +9,21 @@ all-features = true
 [lints]
 workspace = true
 
+[features]
+default = []
+spaces = [
+  "dep:p2panda-auth",
+  "dep:p2panda-core",
+  "dep:p2panda-encryption",
+  "dep:p2panda-spaces",
+]
+
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true }
+p2panda-auth = { path = "../p2panda-auth", version = "0.4.0", optional = true }
+p2panda-encryption = { path = "../p2panda-encryption", version = "0.4.0", optional = true }
+p2panda-spaces = { path = "../p2panda-spaces", version = "0.1.0", optional = true }
 pin-project = "1.1.10"
 tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
 

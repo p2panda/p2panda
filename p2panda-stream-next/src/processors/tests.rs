@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::convert::Infallible;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
@@ -12,14 +11,15 @@ use tokio::{task, time};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::processors::buffered::Buffer;
-use crate::test_utils::{AsyncBuffer, assert_poll_eq};
+use crate::test_utils::assert_poll_eq;
+use crate::utils::AsyncBuffer;
 
 use super::*;
 
 /// Processor turning all strings into UPPERCASE.
 #[derive(Default)]
 struct UppercaseProcessor {
-    outputs: RefCell<AsyncBuffer<String>>,
+    outputs: AsyncBuffer<String>,
 }
 
 impl Processor<String> for UppercaseProcessor {
@@ -28,25 +28,25 @@ impl Processor<String> for UppercaseProcessor {
     type Error = Infallible;
 
     async fn process(&self, input: String) -> Result<(), Self::Error> {
-        self.outputs.borrow_mut().push(input.to_uppercase());
+        self.outputs.push(input.to_uppercase()).await;
         Ok(())
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
-        Ok(self.outputs.borrow_mut().pop().await)
+        Ok(self.outputs.pop().await)
     }
 }
 
 /// Processor adding a counter to any item.
 struct CounterProcessor<T> {
-    outputs: RefCell<AsyncBuffer<WithCounter<T>>>,
+    outputs: AsyncBuffer<WithCounter<T>>,
     counter: AtomicU64,
 }
 
 impl<T> CounterProcessor<T> {
     pub fn new() -> Self {
         Self {
-            outputs: RefCell::new(AsyncBuffer::new()),
+            outputs: AsyncBuffer::new(),
             counter: AtomicU64::new(0),
         }
     }
@@ -77,15 +77,13 @@ impl<T> Processor<T> for CounterProcessor<T> {
             .counter
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        self.outputs
-            .borrow_mut()
-            .push(WithCounter { item, counter });
+        self.outputs.push(WithCounter { item, counter }).await;
 
         Ok(())
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
-        Ok(self.outputs.borrow_mut().pop().await)
+        Ok(self.outputs.pop().await)
     }
 }
 
@@ -93,7 +91,7 @@ impl<T> Processor<T> for CounterProcessor<T> {
 struct SlowProcessor<T> {
     process_delay: Duration,
     next_delay: Duration,
-    output_queue: RefCell<AsyncBuffer<String>>,
+    output_queue: AsyncBuffer<String>,
     should_error: bool,
     _marker: PhantomData<T>,
 }
@@ -106,7 +104,7 @@ where
         Self {
             process_delay: Duration::from_millis(0),
             next_delay: Duration::from_millis(0),
-            output_queue: RefCell::new(AsyncBuffer::new()),
+            output_queue: AsyncBuffer::new(),
             should_error: false,
             _marker: PhantomData,
         }
@@ -144,8 +142,8 @@ where
         }
 
         self.output_queue
-            .borrow_mut()
-            .push(format!("processed_{}", input.to_string()));
+            .push(format!("processed_{}", input.to_string()))
+            .await;
 
         Ok(())
     }
@@ -157,7 +155,7 @@ where
             return Err("error in next method".to_string());
         }
 
-        Ok(self.output_queue.borrow_mut().pop().await)
+        Ok(self.output_queue.pop().await)
     }
 }
 
