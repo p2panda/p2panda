@@ -132,8 +132,13 @@ impl Actor for Network {
                         warn!("network actor: events actor failed: {}", panic_msg);
 
                         // Respawn the events actor.
-                        let (events_actor, _) =
-                            Actor::spawn_linked(None, Events {}, (), myself.clone().into()).await?;
+                        let (events_actor, _) = Actor::spawn_linked(
+                            Some("router".to_string()),
+                            Events {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
 
                         state.events_failures += 1;
                         state.events_actor = events_actor;
@@ -142,9 +147,13 @@ impl Actor for Network {
                         warn!("network actor: endpoint actor failed: {}", panic_msg);
 
                         // Respawn the endpoint actor.
-                        let (endpoint_actor, _) =
-                            Actor::spawn_linked(None, Endpoint {}, (), myself.clone().into())
-                                .await?;
+                        let (endpoint_actor, _) = Actor::spawn_linked(
+                            Some("endpoint".to_string()),
+                            Endpoint {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
 
                         state.endpoint_failures += 1;
                         state.endpoint_actor = endpoint_actor;
@@ -153,9 +162,13 @@ impl Actor for Network {
                         warn!("network actor: address book actor failed: {}", panic_msg);
 
                         // Respawn the address book actor.
-                        let (address_book_actor, _) =
-                            Actor::spawn_linked(None, AddressBook {}, (), myself.clone().into())
-                                .await?;
+                        let (address_book_actor, _) = Actor::spawn_linked(
+                            Some("address book".to_string()),
+                            AddressBook {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
 
                         state.address_book_failures += 1;
                         state.address_book_actor = address_book_actor;
@@ -164,9 +177,13 @@ impl Actor for Network {
                         warn!("network actor: discovery actor failed: {}", panic_msg);
 
                         // Respawn the discovery actor.
-                        let (discovery_actor, _) =
-                            Actor::spawn_linked(None, Discovery {}, (), myself.clone().into())
-                                .await?;
+                        let (discovery_actor, _) = Actor::spawn_linked(
+                            Some("discovery".to_string()),
+                            Discovery {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
 
                         state.discovery_actor_failures += 1;
                         state.discovery_actor = discovery_actor;
