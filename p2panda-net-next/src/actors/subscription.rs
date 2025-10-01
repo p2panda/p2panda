@@ -151,7 +151,7 @@ impl Actor for Subscription {
 mod tests {
     use iroh::Endpoint as IrohEndpoint;
     use ractor::Actor;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     use super::Subscription;

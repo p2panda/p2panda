@@ -206,7 +206,7 @@ impl Actor for Network {
 #[cfg(test)]
 mod tests {
     use ractor::Actor;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     use super::Network;
