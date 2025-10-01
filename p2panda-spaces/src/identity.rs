@@ -54,10 +54,7 @@ where
         config: &Config,
         rng: &Rng,
     ) -> Result<Self, IdentityError<ID, K, M, C>> {
-        // @TODO: needed to take Rng::from_seed out from behind the test_utils flag in
-        // p2panda-encryption in order to do this. It's needed so that IdentityManager can have
-        // it's own rng without having a handle to the manager (as we do elsewhere).
-        let rng = Rng::from_seed(rng.random_array()?);
+        let rng = Rng::from_rng(rng)?;
         let manager = Self {
             credentials: config.credentials().to_owned(),
             key_store,

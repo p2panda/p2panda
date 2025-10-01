@@ -7,7 +7,7 @@ use curve25519_dalek::scalar::clamp_integer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::crypto::Secret;
+use crate::{crypto::Secret, Rng, RngError};
 
 /// 256-bit secret key size.
 pub const SECRET_KEY_SIZE: usize = 32;
@@ -23,8 +23,18 @@ pub const SHARED_SECRET_SIZE: usize = 32;
 pub struct SecretKey(Secret<SECRET_KEY_SIZE>);
 
 impl SecretKey {
+    #[cfg(not(feature = "test_utils"))]
+    pub(crate) fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
+        SecretKey(Secret::from_bytes(clamp_integer(bytes)))
+    }
+
+    #[cfg(feature = "test_utils")]
     pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
+    }
+
+    pub fn from_rng(rng: &Rng) -> Result<Self, RngError> {
+        Ok(Self::from_bytes(rng.random_array()?))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
