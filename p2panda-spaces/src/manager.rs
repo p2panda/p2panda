@@ -18,7 +18,7 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyStore};
+use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
@@ -65,7 +65,7 @@ where
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
-    K: KeyStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
@@ -407,7 +407,7 @@ pub enum ManagerError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
-    K: KeyStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {

@@ -5,13 +5,13 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_encryption::data_scheme::DirectMessage;
 
+use crate::ActorId;
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, SpaceStore};
 use crate::types::{AuthControlMessage, AuthGroupAction};
-use crate::ActorId;
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.id().cmp(&actor_b.id()));

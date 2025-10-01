@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyStore};
+use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::ActorId;
 use crate::utils::now;
@@ -45,7 +45,7 @@ pub struct IdentityManager<ID, K, M, C> {
 impl<ID, K, M, C> IdentityManager<ID, K, M, C>
 where
     ID: SpaceId,
-    K: KeyStore + Forge<ID, M, C> + Debug,
+    K: KeyManagerStore + KeyRegistryStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
 {
@@ -73,11 +73,7 @@ where
     /// key store. If their is a mis-match of either this indicates that key rotation has occurred
     /// unexpectedly.
     pub async fn validate(&self) -> Result<(), IdentityError<ID, K, M, C>> {
-        let key_manager_y = self
-            .key_store
-            .key_manager()
-            .await
-            .map_err(IdentityError::KeyStore)?;
+        let key_manager_y = self.key_manager().await?;
         let identity_secret = KeyManager::identity_secret(&key_manager_y);
         if identity_secret != &self.credentials.identity_secret() {
             return Err(IdentityError::IdentitySecretRotated);
@@ -101,11 +97,7 @@ where
     pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<ID, K, M, C>> {
         let my_id = self.id();
 
-        let key_manager_y = self
-            .key_store
-            .key_manager()
-            .await
-            .map_err(IdentityError::KeyStore)?;
+        let key_manager_y = self.key_manager().await?;
 
         // Automatically rotate pre key when it reached critical expiry date.
         let key_bundle = if now() - self.my_keys_rotated_at > self.pre_key_rotate_after.as_secs() {
@@ -118,11 +110,7 @@ where
                 &self.rng,
             )?;
 
-            let key_registry_y = self
-                .key_store
-                .key_registry()
-                .await
-                .map_err(IdentityError::KeyStore)?;
+            let key_registry_y = self.key_registry().await?;
 
             // Register our own key bundle.
             let key_bundle = KeyManager::prekey_bundle(&key_manager_y_i);
@@ -132,11 +120,11 @@ where
             self.key_store
                 .set_key_manager(&key_manager_y_i)
                 .await
-                .map_err(IdentityError::KeyStore)?;
+                .map_err(IdentityError::KeyManagerStore)?;
             self.key_store
                 .set_key_registry(&key_registry_y_i)
                 .await
-                .map_err(IdentityError::KeyStore)?;
+                .map_err(IdentityError::KeyRegistryStore)?;
 
             key_bundle
         } else {
@@ -153,11 +141,7 @@ where
     ) -> Result<(), IdentityError<ID, K, M, C>> {
         member.key_bundle().verify()?;
 
-        let y = self
-            .key_store
-            .key_registry()
-            .await
-            .map_err(IdentityError::KeyStore)?;
+        let y = self.key_registry().await?;
 
         // @TODO: Setting longterm bundle should overwrite previous one if this is newer.
         let y_ii = KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone());
@@ -165,7 +149,7 @@ where
         self.key_store
             .set_key_registry(&y_ii)
             .await
-            .map_err(IdentityError::KeyStore)?;
+            .map_err(IdentityError::KeyRegistryStore)?;
 
         Ok(())
     }
@@ -220,7 +204,7 @@ where
         self.key_store
             .key_manager()
             .await
-            .map_err(IdentityError::KeyStore)
+            .map_err(IdentityError::KeyManagerStore)
     }
 
     pub async fn key_registry(
@@ -229,7 +213,7 @@ where
         self.key_store
             .key_registry()
             .await
-            .map_err(IdentityError::KeyStore)
+            .map_err(IdentityError::KeyRegistryStore)
     }
 }
 
@@ -238,7 +222,7 @@ where
 pub enum IdentityError<ID, K, M, C>
 where
     ID: SpaceId,
-    K: KeyStore + Forge<ID, M, C>,
+    K: KeyManagerStore + KeyRegistryStore + Forge<ID, M, C>,
     C: Conditions,
 {
     #[error("{0}")]
@@ -257,7 +241,10 @@ where
     KeyBundleAuthor(ActorId, ActorId),
 
     #[error("{0}")]
-    KeyStore(<K as KeyStore>::Error),
+    KeyRegistryStore(<K as KeyRegistryStore>::Error),
+
+    #[error("{0}")]
+    KeyManagerStore(<K as KeyManagerStore>::Error),
 
     #[error(
         "identity key unexpectedly rotated which will result in loss of access to existing spaces"
