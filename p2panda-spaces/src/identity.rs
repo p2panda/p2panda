@@ -39,7 +39,7 @@ pub struct IdentityManager<ID, K, M, C> {
     pre_key_rotate_after: Duration,
     my_keys_rotated_at: u64,
     rng: Rng,
-    _phantom: PhantomData<(ID, K, M, C)>,
+    _phantom: PhantomData<(ID, M, C)>,
 }
 
 impl<ID, K, M, C> IdentityManager<ID, K, M, C>
