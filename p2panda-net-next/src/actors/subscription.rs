@@ -1,27 +1,66 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Subscription actor.
+//!
+//! This actor is responsible for spawning the gossip and sync actors. It also performs supervision
+//! of the spawned actors, restarting them in the event of failure.
+//!
+//! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
+//! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
+//! respawned.
+use iroh::Endpoint as IrohEndpoint;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use tracing::{debug, warn};
+
+use crate::actors::gossip::{Gossip, ToGossip};
+use crate::actors::sync::{Sync, ToSync};
 
 pub enum ToSubscription {}
 
 impl Message for ToSubscription {}
 
-pub struct SubscriptionState {}
+pub struct SubscriptionState {
+    endpoint: IrohEndpoint,
+    gossip_actor: ActorRef<ToGossip>,
+    gossip_actor_failures: u16,
+    sync_actor: ActorRef<ToSync>,
+    sync_actor_failures: u16,
+}
 
 pub struct Subscription;
 
 impl Actor for Subscription {
     type State = SubscriptionState;
     type Msg = ToSubscription;
-    type Arguments = ();
+    type Arguments = IrohEndpoint;
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
-        _args: Self::Arguments,
+        myself: ActorRef<Self::Msg>,
+        endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(SubscriptionState {})
+        // Spawn the gossip actor.
+        let (gossip_actor, _) = Actor::spawn_linked(
+            Some("gossip".to_string()),
+            Gossip {},
+            endpoint.clone(),
+            myself.clone().into(),
+        )
+        .await?;
+
+        // Spawn the sync actor.
+        let (sync_actor, _) =
+            Actor::spawn_linked(Some("sync".to_string()), Sync {}, (), myself.into()).await?;
+
+        let state = SubscriptionState {
+            endpoint,
+            gossip_actor,
+            gossip_actor_failures: 0,
+            sync_actor,
+            sync_actor_failures: 0,
+        };
+
+        Ok(state)
     }
 
     async fn post_start(
@@ -51,10 +90,59 @@ impl Actor for Subscription {
 
     async fn handle_supervisor_evt(
         &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: SupervisionEvent,
-        _state: &mut Self::State,
+        myself: ActorRef<Self::Msg>,
+        message: SupervisionEvent,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SupervisionEvent::ActorStarted(actor) => {
+                if let Some(name) = actor.get_name() {
+                    debug!("subscription actor: received ready from {} actor", name);
+                }
+            }
+            SupervisionEvent::ActorFailed(actor, panic_msg) => {
+                match actor.get_name().as_deref() {
+                    Some("gossip") => {
+                        warn!("subscription actor: gossip actor failed: {}", panic_msg);
+
+                        // Respawn the gossip actor.
+                        let (gossip_actor, _) = Actor::spawn_linked(
+                            Some("gossip".to_string()),
+                            Gossip {},
+                            state.endpoint.clone(),
+                            myself.clone().into(),
+                        )
+                        .await?;
+
+                        state.gossip_actor_failures += 1;
+                        state.gossip_actor = gossip_actor;
+                    }
+                    Some("sync") => {
+                        warn!("subscription actor: sync actor failed: {}", panic_msg);
+
+                        // Respawn the sync actor.
+                        let (sync_actor, _) = Actor::spawn_linked(
+                            Some("sync".to_string()),
+                            Sync {},
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
+
+                        state.sync_actor_failures += 1;
+                        state.sync_actor = sync_actor;
+                    }
+                    _ => (),
+                }
+            }
+            SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
+                if let Some(name) = actor.get_name() {
+                    debug!("subscription actor: {} actor terminated", name);
+                }
+            }
+            _ => (),
+        }
+
         Ok(())
     }
 }
