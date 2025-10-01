@@ -3,14 +3,12 @@
 use crate::message::SpacesArgs;
 use crate::{ActorId, OperationId};
 
-// @TODO: This could be an interesting trait for `p2panda-core`, next to another one where we
-// declare dependencies.
+// @TODO: Use traits from p2panda-core when ready:
+// https://github.com/p2panda/p2panda/blob/a6762e9831ccc8b6c008caf655468d6e75cff408/p2panda-core/src/traits.rs
 pub trait AuthoredMessage {
     fn id(&self) -> OperationId;
 
     fn author(&self) -> ActorId;
-
-    // @TODO: Do we need a method here to check the signature?
 }
 
 pub trait SpacesMessage<ID, C> {
