@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! An iroh-specific router actor for registering ALPNs.
-
-use std::time::Duration;
-
-use iroh::protocol::Router as IrohRouter;
-use iroh::Endpoint as IrohEndpoint;
-use iroh_gossip::ALPN as GOSSIP_ALPN;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 
 // TODO: Remove once used.
