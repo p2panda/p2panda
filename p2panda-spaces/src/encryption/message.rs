@@ -87,8 +87,8 @@ impl EncryptionMessage {
         space_message: &M,
         my_id: ActorId,
         auth_message: &AuthMessage<C>,
-        current_members: Vec<ActorId>,
-        next_members: Vec<ActorId>,
+        current_members: &Vec<ActorId>,
+        next_members: &Vec<ActorId>,
     ) -> Self
     where
         ID: SpaceId,
@@ -118,7 +118,7 @@ impl EncryptionMessage {
             // message is constructed containing only the next secret members.
             AuthGroupAction::Create { .. } => {
                 let control_message = EncryptionControlMessage::Create {
-                    initial_members: next_members,
+                    initial_members: next_members.to_owned(),
                 };
                 EncryptionArgs::System {
                     dependencies: space_dependencies.to_owned(),
@@ -147,7 +147,7 @@ impl EncryptionMessage {
             // removed member, otherwise use the ActorId of the actual removed member (which may
             // be an individual or group).
             AuthGroupAction::Remove { member } => {
-                let removed = removed_members(current_members, next_members);
+                let removed = removed_members(current_members.to_owned(), next_members.to_owned());
                 let control_message = if removed.contains(&my_id) {
                     EncryptionControlMessage::Remove { removed: my_id }
                 } else {
