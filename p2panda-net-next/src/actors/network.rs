@@ -142,12 +142,12 @@ impl Actor for Network {
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 match actor.get_name().as_deref() {
-                    Some("router") => {
+                    Some("events") => {
                         warn!("network actor: events actor failed: {}", panic_msg);
 
                         // Respawn the events actor.
                         let (events_actor, _) = Actor::spawn_linked(
-                            Some("router".to_string()),
+                            Some("events".to_string()),
                             Events {},
                             (),
                             myself.clone().into(),
