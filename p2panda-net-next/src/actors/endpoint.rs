@@ -159,6 +159,7 @@ impl Actor for Endpoint {
 #[cfg(test)]
 mod tests {
     use ractor::Actor;
+    use serial_test::serial;
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
@@ -166,6 +167,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[serial]
     async fn endpoint_child_actors_are_started() {
         let (endpoint_actor, endpoint_actor_handle) =
             Actor::spawn(Some("endpoint".to_string()), Endpoint {}, ())

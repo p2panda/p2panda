@@ -17,6 +17,7 @@ tokio = { version = "1.47.1", features = ["rt", "sync"] }
 tracing = "0.1.41"
 
 [dev-dependencies]
+serial_test = { version = "3.2.0", default-features = false, features = ["async"] }
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 tracing-test = "0.2.5"
 

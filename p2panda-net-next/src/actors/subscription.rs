@@ -151,6 +151,7 @@ impl Actor for Subscription {
 mod tests {
     use iroh::Endpoint as IrohEndpoint;
     use ractor::Actor;
+    use serial_test::serial;
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
@@ -158,6 +159,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[serial]
     async fn subscription_child_actors_are_started() {
         let endpoint = IrohEndpoint::builder().bind().await.unwrap();
 
