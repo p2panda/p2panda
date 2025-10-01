@@ -2,12 +2,13 @@
 
 //! Network actor.
 //!
-//! The root of the entire system supervision tree. It's only role is to spawn and
+//! The root of the entire system supervision tree; it's only role is to spawn and
 //! supervise other actors.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{AddressBook, ToAddressBook};
+use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
 
@@ -22,6 +23,8 @@ pub struct NetworkState {
     endpoint_failures: u16,
     address_book_actor: ActorRef<ToAddressBook>,
     address_book_failures: u16,
+    discovery_actor: ActorRef<ToDiscovery>,
+    discovery_actor_failures: u16,
 }
 
 pub struct Network {}
@@ -37,17 +40,36 @@ impl Actor for Network {
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // Spawn the events actor.
-        let (events_actor, _) =
-            Actor::spawn_linked(Some("events"), Events {}, (), myself.clone().into()).await?;
+        let (events_actor, _) = Actor::spawn_linked(
+            Some("events".to_string()),
+            Events {},
+            (),
+            myself.clone().into(),
+        )
+        .await?;
 
         // Spawn the endpoint actor.
-        let (endpoint_actor, _) =
-            Actor::spawn_linked(Some("endpoint"), Endpoint {}, (), myself.clone().into()).await?;
+        let (endpoint_actor, _) = Actor::spawn_linked(
+            Some("endpoint".to_string()),
+            Endpoint {},
+            (),
+            myself.clone().into(),
+        )
+        .await?;
 
         // Spawn the address book actor.
         let (address_book_actor, _) = Actor::spawn_linked(
-            Some("address book"),
+            Some("address book".to_string()),
             AddressBook {},
+            (),
+            myself.clone().into(),
+        )
+        .await?;
+
+        // Spawn the discovery actor.
+        let (discovery_actor, _) = Actor::spawn_linked(
+            Some("discovery".to_string()),
+            Discovery {},
             (),
             myself.clone().into(),
         )
@@ -60,6 +82,8 @@ impl Actor for Network {
             endpoint_failures: 0,
             address_book_actor,
             address_book_failures: 0,
+            discovery_actor,
+            discovery_actor_failures: 0,
         };
 
         Ok(state)
@@ -135,6 +159,17 @@ impl Actor for Network {
 
                         state.address_book_failures += 1;
                         state.address_book_actor = address_book_actor;
+                    }
+                    Some("discovery") => {
+                        warn!("network actor: discovery actor failed: {}", panic_msg);
+
+                        // Respawn the discovery actor.
+                        let (discovery_actor, _) =
+                            Actor::spawn_linked(None, Discovery {}, (), myself.clone().into())
+                                .await?;
+
+                        state.discovery_actor_failures += 1;
+                        state.discovery_actor = discovery_actor;
                     }
                     _ => warn!("network actor: unnamed actor failed: {}", panic_msg),
                 }
