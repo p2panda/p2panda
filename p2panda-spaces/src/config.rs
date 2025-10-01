@@ -35,7 +35,7 @@ impl Config {
         &self.credentials
     }
 
-    pub fn lifetime(&self) -> Lifetime {
+    pub(crate) fn lifetime(&self) -> Lifetime {
         Lifetime::new(self.pre_key_lifetime.as_secs())
     }
 }
