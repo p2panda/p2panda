@@ -43,7 +43,7 @@ where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: Forge<ID, M, C> + KeyRegistryStore + KeyManagerStore + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {

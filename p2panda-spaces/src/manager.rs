@@ -66,7 +66,7 @@ where
     // satisfactory way then this bound can be removed.
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + AuthResolver<C>,
