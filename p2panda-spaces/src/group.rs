@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::OperationId;
 use crate::auth::message::AuthMessage;
-use crate::event::Event;
+use crate::event::{Event, auth_message_to_group_event};
 use crate::forge::Forge;
 use crate::manager::Manager;
 use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
@@ -160,7 +160,7 @@ where
     pub(crate) async fn process(
         manager_ref: Manager<ID, S, F, M, C, RS>,
         message: &M,
-    ) -> Result<Vec<Event<ID>>, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<Event<ID, C>, GroupError<ID, S, F, M, C, RS>> {
         let auth_message = AuthMessage::from_forged(message);
 
         let mut auth_y = {
@@ -184,7 +184,7 @@ where
             .await
             .map_err(GroupError::MessageStore)?;
 
-        Ok(vec![])
+        Ok(auth_message_to_group_event(&auth_y, &auth_message))
     }
 
     /// Process a local control message.

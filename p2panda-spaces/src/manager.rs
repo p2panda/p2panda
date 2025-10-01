@@ -211,7 +211,7 @@ where
     pub async fn process(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, F, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
@@ -222,9 +222,10 @@ where
                 todo!()
             }
             SpacesArgs::Auth { .. } => {
-                Group::process(self.clone(), message)
+                let event = Group::process(self.clone(), message)
                     .await
-                    .map_err(ManagerError::Group)?
+                    .map_err(ManagerError::Group)?;
+                vec![event]
 
                 // @TODO: check that this message was applied to all spaces and apply it ourselves
                 // if not.
@@ -290,7 +291,7 @@ where
     async fn handle_space_membership_message(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, F, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
             space_id,
             auth_message_id,

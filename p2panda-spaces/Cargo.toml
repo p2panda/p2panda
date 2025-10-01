@@ -34,6 +34,7 @@ thiserror = "2.0.12"
 tokio = { version = "1.46.1", features = ["sync"] }
 
 [dev-dependencies]
+assert_matches = "1.5.0"
 p2panda-auth = { path = "../p2panda-auth", version = "0.4.0", features = ["test_utils"], default-features = false }
 p2panda-encryption = { path = "../p2panda-encryption", version = "0.4.0", features = ["test_utils"], default-features = false }
 tokio = { version = "1.46.1", features = ["rt", "macros"] }
