@@ -281,6 +281,9 @@ where
                 space_dependencies,
             };
             let message = manager.identity.forge(args).await?;
+
+            // Record that this auth message has been processed.
+            y.processed_auth.insert(id);
             space_dependencies = vec![message.id()];
             messages.push(message);
         }
