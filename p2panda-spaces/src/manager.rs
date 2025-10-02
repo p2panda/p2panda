@@ -51,7 +51,6 @@ pub struct Manager<ID, S, K, M, C, RS> {
 #[derive(Debug)]
 pub(crate) struct ManagerInner<ID, S, K, M, C, RS> {
     pub(crate) config: Config,
-    pub(crate) my_keys_rotated_at: u64, // UNIX timestamp in secs
     pub(crate) spaces_store: S,
     pub(crate) identity: IdentityManager<ID, K, M, C>,
     pub(crate) rng: Rng,
@@ -101,7 +100,6 @@ where
         let identity = IdentityManager::new(key_store, credentials, config, &rng).await?;
         let inner = ManagerInner {
             config: config.clone(),
-            my_keys_rotated_at: 0,
             spaces_store,
             identity,
             rng,
