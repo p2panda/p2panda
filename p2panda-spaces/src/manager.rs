@@ -243,11 +243,9 @@ where
     }
 
     /// Process a batch of messages.
-    ///
-    /// @TODO: explain why this method is preferred of `process`.
     pub async fn process_batch(
         &self,
-        messages: Vec<&M>,
+        messages: &Vec<M>,
     ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
         let mut events = vec![];
         for message in messages {
@@ -255,12 +253,9 @@ where
             events.extend(events_inner);
         }
 
-        // Check if any spaces require repairing (became out-of-sync) after processing this batch
-        // of messages.
-        let repair_required = self.spaces_repair_required().await?;
-        // @TODO: Messages we generate ourselves should be converted into events and returned here
-        // with all other events.
-        let _messages = self.repair_spaces(&repair_required).await?;
+        // @TODO: We _could_ repair any out-of-sync spaces here after processing a batch of
+        // messages. However this would introduce inconsistent behaviour with process(). So for
+        // now making repairing a concern of the user is maybe best.
 
         Ok(events)
     }
@@ -379,12 +374,14 @@ where
         &self,
         space_ids: &Vec<ID>,
     ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
-        let manager = self.inner.write().await;
-        let auth_y = manager
-            .spaces_store
-            .auth()
-            .await
-            .map_err(ManagerError::AuthStore)?;
+        let auth_y = {
+            let manager = self.inner.write().await;
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(ManagerError::AuthStore)?
+        };
         let operation_ids =
             toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
 
@@ -393,12 +390,15 @@ where
         // graph tips and the global auth graph tips. Then we could apply only the missing
         // operations rather than applying all operations as we do here.
         for id in operation_ids {
-            let message = manager
-                .spaces_store
-                .message(&id)
-                .await
-                .map_err(ManagerError::MessageStore)?
-                .expect("message present in store");
+            let message = {
+                let manager = self.inner.write().await;
+                manager
+                    .spaces_store
+                    .message(&id)
+                    .await
+                    .map_err(ManagerError::MessageStore)?
+                    .expect("message present in store")
+            };
             for id in space_ids {
                 if let Some(message) = self.apply_group_change_to_space(&message, *id).await? {
                     messages.push(message);
