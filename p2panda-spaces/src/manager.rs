@@ -7,11 +7,13 @@ use std::sync::Arc;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::Rng;
+use petgraph::algo::toposort;
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tokio::task::Id;
 
 use crate::auth::message::AuthMessage;
-use crate::event::Event;
+use crate::event::{Event, space_message_to_space_event};
 use crate::group::{Group, GroupError};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
@@ -241,6 +243,29 @@ where
         Ok(events)
     }
 
+    /// Process a batch of messages.
+    /// 
+    /// @TODO: explain why this method is preferred of `process`.
+    pub async fn process_batch(
+        &self,
+        messages: Vec<&M>,
+    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
+        let mut events = vec![];
+        for message in messages {
+            let events_inner = self.process(message).await?;
+            events.extend(events_inner);
+        }
+
+        // Check if any spaces require repairing (became out-of-sync) after processing this batch
+        // of messages.
+        let repair_required = self.spaces_repair_required().await?;
+        // @TODO: Messages we generate ourselves should be converted into events and returned here
+        // with all other events.
+        let _messages = self.repair_spaces(&repair_required).await?;
+
+        return Ok(events);
+    }
+
     /// The public key of the local actor.
     pub fn id(&self) -> ActorId {
         self.actor_id
@@ -305,8 +330,87 @@ where
         Ok(message)
     }
 
-    /// Apply an auth message applied to the shared auth state to each space we know about
-    /// locally.
+    /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
+    ///
+    /// All spaces hold a local reference to each message in the shared auth state graph. A space
+    /// can get out-of-sync with this state if auth messages were published without the local peer
+    /// knowing about a space, either because they are not a member or because they were yet to
+    /// learn about it.
+    ///
+    /// On identifying that spaces need "repairing" _any_ current space member can publish a
+    /// message into the space referencing the missing auth message. This is done by calling
+    /// manager.repair_spaces(..).
+    pub async fn spaces_repair_required(
+        &self,
+    ) -> Result<Vec<ID>, ManagerError<ID, S, K, M, C, RS>> {
+        let manager = self.inner.read().await;
+
+        let auth_y = manager
+            .spaces_store
+            .auth()
+            .await
+            .map_err(ManagerError::AuthStore)?;
+
+        let space_ids = manager
+            .spaces_store
+            .spaces_ids()
+            .await
+            .map_err(ManagerError::SpaceStore)?;
+
+        let mut in_need_of_repair = vec![];
+        for id in space_ids {
+            let space_y = manager
+                .spaces_store
+                .space(&id)
+                .await
+                .map_err(ManagerError::SpaceStore)?
+                .expect("space present in store");
+            if space_y.auth_y.inner.heads() != auth_y.inner.heads() {
+                in_need_of_repair.push(id);
+            }
+        }
+
+        Ok(in_need_of_repair)
+    }
+
+    /// Apply any missing messages from the shared auth state into the passed spaces.
+    ///
+    /// This is required when a space has become "out-of-sync" with the shared auth state.
+    pub async fn repair_spaces(
+        &self,
+        space_ids: &Vec<ID>,
+    ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
+        let manager = self.inner.write().await;
+        let auth_y = manager
+            .spaces_store
+            .auth()
+            .await
+            .map_err(ManagerError::AuthStore)?;
+        let operation_ids =
+            toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
+
+        let mut messages = vec![];
+        // @TODO: we can optimize here by calculating the diff between the current space auth
+        // graph tips and the global auth graph tips. Then we could apply only the missing
+        // operations rather than applying all operations as we do here.
+        for id in operation_ids {
+            let message = manager
+                .spaces_store
+                .message(&id)
+                .await
+                .map_err(ManagerError::MessageStore)?
+                .expect("message present in store");
+            for id in space_ids {
+                if let Some(message) = self.apply_group_change_to_space(&message, *id).await? {
+                    messages.push(message);
+                };
+            }
+        }
+
+        Ok(messages)
+    }
+
+    /// Apply an auth message from the shared auth state to each space we know about locally.
     ///
     /// This is required so that all spaces stay "in sync" with the shared auth state and produce
     /// any required encryption direct messages in order to correctly update a spaces' encryption
@@ -315,7 +419,7 @@ where
         &self,
         auth_message: &M,
     ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
-        let spaces = {
+        let space_ids = {
             let manager = self.inner.read().await;
             manager
                 .spaces_store
@@ -325,21 +429,33 @@ where
         };
 
         let mut messages = vec![];
-        for id in spaces {
-            let Some(space) = self.space(id).await? else {
-                panic!("expect space to exist");
-            };
-            let Some(message) = space
-                .handle_auth_group_change(auth_message)
-                .await
-                .map_err(ManagerError::Space)?
-            else {
+        for id in space_ids {
+            let Some(message) = self.apply_group_change_to_space(auth_message, id).await? else {
                 continue;
             };
             messages.push(message);
         }
 
         Ok(messages)
+    }
+
+    /// Apply a message from the shared auth state to a single space.
+    pub(crate) async fn apply_group_change_to_space(
+        &self,
+        auth_message: &M,
+        space_id: ID,
+    ) -> Result<Option<M>, ManagerError<ID, S, K, M, C, RS>> {
+        let Some(space) = self.space(space_id).await? else {
+            panic!("expect space to exist");
+        };
+        let Some(message) = space
+            .handle_auth_group_change(auth_message)
+            .await
+            .map_err(ManagerError::Space)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(message))
     }
 
     async fn handle_space_membership_message(
