@@ -720,10 +720,10 @@ async fn concurrent_removal_conflict() {
     let claire_manager = claire.manager.clone();
     let dave_manager = dave.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle().await.unwrap();
-    let claire_bundle = claire_manager.key_bundle().await.unwrap();
-    let dave_bundle = dave_manager.key_bundle().await.unwrap();
+    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
+    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
+    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
 
     for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
         alice_manager.process(&bundle).await.unwrap();
@@ -1320,10 +1320,10 @@ async fn events() {
     let claire_manager = claire.manager.clone();
     let dave_manager = dave.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle().await.unwrap();
-    let claire_bundle = claire_manager.key_bundle().await.unwrap();
-    let dave_bundle = dave_manager.key_bundle().await.unwrap();
+    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
+    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
+    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
 
     for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
         alice_manager.process(&bundle).await.unwrap();

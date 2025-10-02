@@ -162,7 +162,7 @@ where
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle(&mut self) -> Result<M, IdentityError<ID, K, M, C>> {
+    pub async fn key_bundle_message(&mut self) -> Result<M, IdentityError<ID, K, M, C>> {
         let me = self.me().await?;
         let args = SpacesArgs::KeyBundle {
             key_bundle: me.key_bundle().clone(),
@@ -333,7 +333,7 @@ mod tests {
             .await
             .unwrap();
 
-        let msg = identity_manager.key_bundle().await.unwrap();
+        let msg = identity_manager.key_bundle_message().await.unwrap();
 
         let actor_id: ActorId = credentials.private_key().public_key().into();
         assert_eq!(msg.author(), actor_id);

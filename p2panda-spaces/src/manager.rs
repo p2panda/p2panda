@@ -246,6 +246,8 @@ where
     }
 
     /// The local actor id and their long-term key bundle.
+    ///
+    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn me(&self) -> Result<Member, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager
@@ -268,20 +270,31 @@ where
             .map_err(ManagerError::IdentityManager)
     }
 
+    /// Check if my latest key bundle has expired.
+    ///
+    /// If `true` then users should rotate their pre-key and generate a new bundle message (which
+    /// should then be published) by calling key_bundle_message().
     pub async fn key_bundle_expired(&self) -> bool {
         let manager = self.inner.read().await;
         manager.identity.key_bundle_expired().await
     }
 
-    pub async fn key_bundle(&self) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
+    /// Forge a key bundle message containing my latest key bundle.
+    ///
+    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    pub async fn key_bundle_message(&self) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager
             .identity
-            .key_bundle()
+            .key_bundle_message()
             .await
             .map_err(ManagerError::IdentityManager)
     }
 
+    /// Create a new message from passed spaces args.
+    ///
+    /// The returned generic message type implements `AuthoredMessage` and `SpacesMessage<ID, C>`
+    /// traits.
     pub(crate) async fn forge(
         &mut self,
         args: SpacesArgs<ID, C>,
