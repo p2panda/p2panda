@@ -10,10 +10,9 @@ use p2panda_encryption::Rng;
 use petgraph::algo::toposort;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tokio::task::Id;
 
 use crate::auth::message::AuthMessage;
-use crate::event::{Event, space_message_to_space_event};
+use crate::event::Event;
 use crate::group::{Group, GroupError};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
@@ -244,7 +243,7 @@ where
     }
 
     /// Process a batch of messages.
-    /// 
+    ///
     /// @TODO: explain why this method is preferred of `process`.
     pub async fn process_batch(
         &self,
@@ -263,7 +262,7 @@ where
         // with all other events.
         let _messages = self.repair_spaces(&repair_required).await?;
 
-        return Ok(events);
+        Ok(events)
     }
 
     /// The public key of the local actor.
