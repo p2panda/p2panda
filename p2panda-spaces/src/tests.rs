@@ -25,10 +25,10 @@ fn sort_members(members: &mut Vec<(ActorId, Access<TestConditions>)>) {
 async fn create_space() {
     let alice = TestPeer::new(0).await;
     let manager = alice.manager.clone();
-    let alice_id = manager.id().await;
+    let alice_id = manager.id();
 
     // Methods return the correct identity handle.
-    assert_eq!(manager.id().await, alice_id);
+    assert_eq!(manager.id(), alice_id);
 
     assert_eq!(manager.me().await.unwrap().id(), alice_id);
     assert!(manager.me().await.unwrap().verify().is_ok());
@@ -107,7 +107,7 @@ async fn create_space() {
     // would like to sign it with the ephemeral key instead.
     //
     // Author of this message is _not_ us but an ephemeral key.
-    // assert_ne!(ActorId::from(message.public_key), manager.id().await);
+    // assert_ne!(ActorId::from(message.public_key), manager.id());
     //
     // Public key of this message is the space id.
     // assert_eq!(ActorId::from(message.public_key), space.id());
@@ -136,14 +136,14 @@ async fn send_and_receive() {
     let space_id = 0;
     let (alice_space, alice_messages) = alice
         .manager
-        .create_space(space_id, &[(bob.manager.id().await, Access::write())])
+        .create_space(space_id, &[(bob.manager.id(), Access::write())])
         .await
         .unwrap();
 
     // @TODO: Currently the "create" message has been signed by the author's permament key. We
     // would like to sign it with the ephemeral key instead.
     // let alice_create_message = alice_create_messages.pop().unwrap();
-    // assert_eq!(alice_create_message.author(), alice.manager.id().await);
+    // assert_eq!(alice_create_message.author(), alice.manager.id());
 
     // Bob processes Alice's messages.
 
@@ -208,8 +208,8 @@ async fn add_member_to_space() {
         .await
         .unwrap();
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
 
     let manager = alice.manager.clone();
 
@@ -230,10 +230,7 @@ async fn add_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let messages = space
-        .add(bob.manager.id().await, Access::read())
-        .await
-        .unwrap();
+    let messages = space.add(bob.manager.id(), Access::read()).await.unwrap();
     let mut members = space.members().await.unwrap();
     drop(space);
 
@@ -335,7 +332,7 @@ async fn register_key_bundles_after_space_creation() {
     // Add new member to Space
     // ~~~~~~~~~~~~
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let result = space.add(bob.manager.id().await, Access::read()).await;
+    let result = space.add(bob.manager.id(), Access::read()).await;
 
     assert!(result.is_ok());
 }
@@ -345,7 +342,7 @@ async fn send_and_receive_after_add() {
     let alice = TestPeer::new(0).await;
     let bob = TestPeer::new(1).await;
 
-    let bob_id = bob.manager.id().await;
+    let bob_id = bob.manager.id();
 
     // Manually register key bundles of all members.
 
@@ -394,8 +391,8 @@ async fn add_pull_member_to_space() {
         .await
         .unwrap();
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
 
     let manager = alice.manager.clone();
 
@@ -413,10 +410,7 @@ async fn add_pull_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let messages = space
-        .add(bob.manager.id().await, Access::pull())
-        .await
-        .unwrap();
+    let messages = space.add(bob.manager.id(), Access::pull()).await.unwrap();
     let mut members = space.members().await.unwrap();
 
     // There are two messages (one auth, one space)
@@ -507,8 +501,8 @@ async fn receive_control_messages() {
         .await
         .unwrap();
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
@@ -569,10 +563,7 @@ async fn receive_control_messages() {
     // Alice: Add new member to Space
     // ~~~~~~~~~~~~
 
-    let messages = space
-        .add(bob.manager.id().await, Access::read())
-        .await
-        .unwrap();
+    let messages = space.add(bob.manager.id(), Access::read()).await.unwrap();
     let message_04 = messages[0].clone();
     let message_05 = messages[1].clone();
 
@@ -634,7 +625,7 @@ async fn remove_member() {
         .await
         .unwrap();
 
-    let bob_id = bob.manager.id().await;
+    let bob_id = bob.manager.id();
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
@@ -741,9 +732,9 @@ async fn concurrent_removal_conflict() {
         dave_manager.process(&bundle).await.unwrap();
     }
 
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
-    let dave_id = dave.manager.id().await;
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+    let dave_id = dave.manager.id();
 
     // Alice: Create Space with themselves and bob
     // ~~~~~~~~~~~~
@@ -848,9 +839,9 @@ async fn space_from_existing_auth_state() {
     let bob = <TestPeer>::new(1).await;
     let claire = <TestPeer>::new(2).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
@@ -980,8 +971,8 @@ async fn create_group() {
     let alice = <TestPeer>::new(0).await;
     let bob = <TestPeer>::new(1).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
     let manager = alice.manager.clone();
 
     // Create Group
@@ -1040,9 +1031,9 @@ async fn add_member_to_group() {
     let bob = <TestPeer>::new(1).await;
     let claire = <TestPeer>::new(2).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
     let manager = alice.manager.clone();
 
     // Create Group
@@ -1106,8 +1097,8 @@ async fn remove_member_from_group() {
     let alice = <TestPeer>::new(0).await;
     let bob = <TestPeer>::new(1).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
     let manager = alice.manager.clone();
 
     // Create Group
@@ -1165,9 +1156,9 @@ async fn receive_auth_messages() {
     let bob = <TestPeer>::new(1).await;
     let claire = <TestPeer>::new(2).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
@@ -1236,9 +1227,9 @@ async fn shared_auth_state() {
         .await
         .unwrap();
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
 
     let manager = alice.manager.clone();
 
@@ -1319,10 +1310,10 @@ async fn events() {
     let claire = <TestPeer>::new(2).await;
     let dave = <TestPeer>::new(3).await;
 
-    let alice_id = alice.manager.id().await;
-    let bob_id = bob.manager.id().await;
-    let claire_id = claire.manager.id().await;
-    let dave_id = dave.manager.id().await;
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+    let dave_id = dave.manager.id();
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();

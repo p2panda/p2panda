@@ -73,10 +73,7 @@ where
         space_id: ID,
         mut initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<(Self, Vec<M>), SpaceError<ID, S, K, M, C, RS>> {
-        let my_id: ActorId = {
-            let manager = manager_ref.inner.read().await;
-            manager.identity.id()
-        };
+        let my_id = manager_ref.id();
 
         // Get the global auth state. We use this state in a following step to initialise the
         // space state and we don't want it to contain the group for the space itself.
@@ -338,7 +335,7 @@ where
         y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
 
         // Construct encryption message.
-        let my_id = self.manager.id().await;
+        let my_id = self.manager.id();
         let encryption_message = EncryptionMessage::from_membership(
             space_message,
             my_id,
@@ -513,7 +510,7 @@ where
             return Ok(None);
         }
 
-        let my_id = self.manager.id().await;
+        let my_id = self.manager.id();
         let is_reader = self
             .members()
             .await?

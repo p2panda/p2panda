@@ -44,6 +44,7 @@ use crate::{Config, Credentials};
 // Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
 pub struct Manager<ID, S, K, M, C, RS> {
+    pub(crate) actor_id: ActorId,
     #[allow(clippy::type_complexity)]
     pub(crate) inner: Arc<RwLock<ManagerInner<ID, S, K, M, C, RS>>>,
 }
@@ -97,6 +98,7 @@ where
         config: &Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
+        let actor_id: ActorId = credentials.public_key().into();
         let identity = IdentityManager::new(key_store, credentials, config, &rng).await?;
         let inner = ManagerInner {
             config: config.clone(),
@@ -107,6 +109,7 @@ where
         };
 
         Ok(Self {
+            actor_id,
             inner: Arc::new(RwLock::new(inner)),
         })
     }
@@ -237,11 +240,9 @@ where
         Ok(events)
     }
 
-    // @TODO: Make it work without async
     /// The public key of the local actor.
-    pub async fn id(&self) -> ActorId {
-        let manager = self.inner.read().await;
-        manager.identity.id()
+    pub fn id(&self) -> ActorId {
+        self.actor_id
     }
 
     /// The local actor id and their long-term key bundle.
@@ -392,6 +393,7 @@ where
 impl<ID, S, K, M, C, RS> Clone for Manager<ID, S, K, M, C, RS> {
     fn clone(&self) -> Self {
         Self {
+            actor_id: self.actor_id,
             inner: self.inner.clone(),
         }
     }
