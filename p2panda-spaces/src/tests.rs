@@ -1771,7 +1771,9 @@ async fn idempotent_api() {
     // Bob: Receive Message 01 & 02
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
+    bob_manager.persist_message(&message_02).await.unwrap();
     bob_manager.process(&message_02).await.unwrap();
 
     // Bob can process both messages again, no state should change, and no events should be
