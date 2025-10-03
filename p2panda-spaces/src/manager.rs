@@ -196,6 +196,18 @@ where
         &self,
         message: &M,
     ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
+        // Only persist messages here when testing. Outside of tests we expect that all messages
+        // have already been persisted to the message store before being processed on spaces.
+        #[cfg(test)]
+        {
+            let mut manager = self.inner.write().await;
+            manager
+                .spaces_store
+                .set_message(&message.id(), message)
+                .await
+                .map_err(ManagerError::MessageStore)?;
+        }
+
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
