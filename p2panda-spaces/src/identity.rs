@@ -12,6 +12,7 @@ use p2panda_encryption::traits::{IdentityManager as EncIdentityManager, KeyBundl
 use p2panda_encryption::{Rng, RngError};
 use thiserror::Error;
 
+use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
@@ -180,11 +181,11 @@ where
         &mut self,
         author: ActorId,
         key_bundle: &LongTermKeyBundle,
-    ) -> Result<(), IdentityError<ID, K, M, C>> {
+    ) -> Result<Event<ID, C>, IdentityError<ID, K, M, C>> {
         key_bundle.verify()?;
         let member = Member::new(author, key_bundle.clone());
         self.register_member(&member).await?;
-        Ok(())
+        Ok(Event::KeyBundle { author })
     }
 
     pub async fn forge(

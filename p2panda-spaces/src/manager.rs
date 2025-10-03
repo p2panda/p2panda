@@ -201,14 +201,13 @@ where
             // Received key bundle from a member.
             SpacesArgs::KeyBundle { key_bundle } => {
                 let mut manager = self.inner.write().await;
-                manager
+                let event = manager
                     .identity
                     .process_key_bundle(message.author(), key_bundle)
                     .await
                     .map_err(ManagerError::IdentityManager)?;
 
-                // @TODO: introduce key bundle events.
-                vec![]
+                vec![event]
             }
             SpacesArgs::Auth { .. } => {
                 let event = Group::process(self.clone(), message)

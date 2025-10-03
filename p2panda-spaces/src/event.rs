@@ -51,6 +51,8 @@ impl GroupActor {
 #[allow(clippy::large_enum_variant)]
 pub enum Event<ID, C> {
     Application { space_id: ID, data: Vec<u8> },
+    // @TODO: Could maybe add field to show when the bundle is valid until?
+    KeyBundle{ author: ActorId },
     Group(GroupEvent<C>),
     Space(SpaceEvent<ID>),
 }
