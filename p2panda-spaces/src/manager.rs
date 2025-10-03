@@ -214,9 +214,6 @@ where
                     .await
                     .map_err(ManagerError::Group)?;
                 vec![event]
-
-                // @TODO: check that this message was applied to all spaces and apply it ourselves
-                // if not. The "repair service" will take care of this.
             }
             // Received control message related to a space.
             SpacesArgs::SpaceMembership { .. } => {
