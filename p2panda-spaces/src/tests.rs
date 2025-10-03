@@ -1839,6 +1839,13 @@ async fn batch_process() {
     // Bob: Batch process all messages.
     // ~~~~~~~~~~~~
 
+    // First persist all messages as spaces expects this to be done before processing.
+    bob_manager.persist_message(&message_01).await.unwrap();
+    bob_manager.persist_message(&message_02).await.unwrap();
+    bob_manager.persist_message(&message_03).await.unwrap();
+    bob_manager.persist_message(&message_04).await.unwrap();
+    bob_manager.persist_message(&message_05).await.unwrap();
+
     let _ = bob
         .manager
         .process_batch(&vec![
@@ -1923,15 +1930,21 @@ async fn repair_space() {
     // Bob: Process message_01 (create group) and add a member to the group without learning about any space yet.
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
     let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
-    let bob_message_01 = group.add(claire_id, Access::read()).await.unwrap();
+    let messages = group.add(claire_id, Access::read()).await.unwrap();
+    let bob_message_01 = messages[0].clone();
     drop(group);
 
     // Alice: Process Bob's message (published concurrently to the space creation).
     // ~~~~~~~~~~~~
 
-    alice_manager.process(&bob_message_01[0]).await.unwrap();
+    alice_manager
+        .persist_message(&bob_message_01)
+        .await
+        .unwrap();
+    alice_manager.process(&bob_message_01).await.unwrap();
 
     // Detect if any spaces require repairing.
     let repair_required = alice_manager.spaces_repair_required().await.unwrap();
@@ -1956,6 +1969,12 @@ async fn repair_space() {
 
     // Bob: process all Alice's remaining messages (including the message repairing the space).
     // ~~~~~~~~~~~~
+
+    // First persist all messages as spaces expects this to be done before processing.
+    bob_manager.persist_message(&message_02).await.unwrap();
+    bob_manager.persist_message(&message_03).await.unwrap();
+    bob_manager.persist_message(&message_04).await.unwrap();
+    bob_manager.persist_message(&message_05).await.unwrap();
 
     bob_manager
         .process_batch(&vec![message_02, message_03, message_04, message_05])
