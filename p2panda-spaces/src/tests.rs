@@ -1723,3 +1723,64 @@ async fn events() {
         }
     }
 }
+
+#[tokio::test]
+async fn idempotent_api() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::new(1).await;
+
+    // Manually register bob's key bundle.
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register alice's key bundle.
+
+    bob.manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    let alice_id = alice_manager.id();
+
+    // Alice: Create Space
+    // ~~~~~~~~~~~~
+
+    let space_id = 0;
+    let (_, messages) = alice_manager.create_space(space_id, &[]).await.unwrap();
+
+    let message_01 = messages[0].clone();
+    let message_02 = messages[1].clone();
+
+    // Alice can process both messages again, no state should change, and no events should be
+    // returned.
+    let events = alice_manager.process(&message_01).await.unwrap();
+    assert!(events.is_empty());
+    let events = alice_manager.process(&message_02).await.unwrap();
+    assert!(events.is_empty());
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let members = space.members().await.unwrap();
+    assert_eq!(members, vec![(alice_id, Access::manage()),]);
+
+    // Bob: Receive Message 01 & 02
+    // ~~~~~~~~~~~~
+
+    bob_manager.process(&message_01).await.unwrap();
+    bob_manager.process(&message_02).await.unwrap();
+
+    // Bob can process both messages again, no state should change, and no events should be
+    // returned.
+    let events = bob_manager.process(&message_01).await.unwrap();
+    assert!(events.is_empty());
+    let events = bob_manager.process(&message_02).await.unwrap();
+    assert!(events.is_empty());
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let members = space.members().await.unwrap();
+    assert_eq!(members, vec![(alice_id, Access::manage()),]);
+}

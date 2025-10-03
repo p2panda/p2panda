@@ -113,7 +113,7 @@ where
             Self::process_auth_message(manager_ref.clone(), y, &messages[0]).await?;
 
         // Push the message for the newly created space to the messages vec.
-        messages.push(space_message);
+        messages.push(space_message.expect("new space message not yet processed"));
 
         Ok((
             Self {
@@ -153,9 +153,9 @@ where
         manager_ref: Manager<ID, S, K, M, C, RS>,
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
-    ) -> Result<M, SpaceError<ID, S, K, M, C, RS>> {
+    ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
         if !y.processed_auth.insert(auth_message.id()) {
-            panic!("only un-processed auth messages expected")
+            return Ok(None);
         }
 
         // Get current space members.
@@ -202,6 +202,7 @@ where
         // Update space state and persist it.
         {
             let mut manager = manager_ref.inner.write().await;
+            y.processed_space.insert(space_message.id());
             y.encryption_y
                 .orderer
                 .add_dependency(space_message.id(), &dependencies);
@@ -214,7 +215,7 @@ where
                 .map_err(SpaceError::SpaceStore)?;
         }
 
-        Ok(space_message)
+        Ok(Some(space_message))
     }
 
     /// Process a space message along with it's relevant auth message (if required).
@@ -306,6 +307,12 @@ where
 
         // Get space state and current members.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
+
+        // If we already processed this message return here.
+        if !y.processed_space.insert(space_message.id()) {
+            return Ok(vec![]);
+        }
+
         let mut current_members = secret_members(y.auth_y.members(y.group_id));
         current_members.sort();
 
@@ -490,8 +497,8 @@ where
         &self,
         auth_message: &M,
     ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
-        // If this space already processed this auth message then skip it.
         let y = self.state().await?;
+        // If this space already processed this auth message then skip it.
         if y.processed_auth.contains(&auth_message.id()) {
             return Ok(None);
         }
@@ -506,7 +513,7 @@ where
         if is_reader {
             let space_message =
                 Space::process_auth_message(self.manager.clone(), y, auth_message).await?;
-            return Ok(Some(space_message));
+            return Ok(space_message);
         }
 
         Ok(None)
@@ -694,7 +701,10 @@ where
     // persist. We can make the fields public in `p2panda-encryption` and extract only the
     // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
+    /// Messages from the global auth state which have been applied to this space.
     pub processed_auth: HashSet<OperationId>,
+    /// Space messages which have been applied to this space.
+    pub processed_space: HashSet<OperationId>,
 }
 
 impl<ID, M, C> SpaceState<ID, M, C>
@@ -714,6 +724,7 @@ where
             auth_y,
             encryption_y,
             processed_auth: HashSet::default(),
+            processed_space: HashSet::default(),
         }
     }
 }

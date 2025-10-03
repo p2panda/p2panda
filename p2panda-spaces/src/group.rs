@@ -170,7 +170,7 @@ where
     pub(crate) async fn process(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         message: &M,
-    ) -> Result<Event<ID, C>, GroupError<ID, S, K, M, C, RS>> {
+    ) -> Result<Option<Event<ID, C>>, GroupError<ID, S, K, M, C, RS>> {
         let auth_message = AuthMessage::from_forged(message);
 
         let mut auth_y = {
@@ -181,6 +181,11 @@ where
                 .await
                 .map_err(GroupError::AuthStore)?
         };
+
+        // If we already processed this auth message then return now.
+        if auth_y.inner.operations.contains_key(&auth_message.id()) {
+            return Ok(None);
+        }
 
         let mut manager = manager_ref.inner.write().await;
         auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
@@ -193,7 +198,7 @@ where
             .await
             .map_err(GroupError::AuthStore)?;
 
-        Ok(auth_message_to_group_event(&auth_y, &auth_message))
+        Ok(Some(auth_message_to_group_event(&auth_y, &auth_message)))
     }
 
     /// Process a local control message.
