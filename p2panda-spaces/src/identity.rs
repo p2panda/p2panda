@@ -415,8 +415,13 @@ mod tests {
         let alice_rng = Rng::from_seed([1; 32]);
         let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
         let alice_config = Config::default();
-        let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(TestSpacesStore::new(), &alice_credentials, &alice_config, &alice_rng).unwrap();
+        let alice_key_store: TestKeyStore<i32> = TestKeyStore::new(
+            TestSpacesStore::new(),
+            &alice_credentials,
+            &alice_config,
+            &alice_rng,
+        )
+        .unwrap();
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
             &alice_credentials,

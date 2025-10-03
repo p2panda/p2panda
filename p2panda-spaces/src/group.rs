@@ -220,8 +220,7 @@ where
 
         let message = {
             let mut manager = manager_ref.inner.write().await;
-            let message = manager.identity.forge(args).await?;
-            message
+            manager.identity.forge(args).await?
         };
 
         {
