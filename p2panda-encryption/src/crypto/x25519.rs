@@ -7,7 +7,8 @@ use curve25519_dalek::scalar::clamp_integer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{crypto::Secret, Rng, RngError};
+use crate::crypto::Secret;
+use crate::{Rng, RngError};
 
 /// 256-bit secret key size.
 pub const SECRET_KEY_SIZE: usize = 32;
