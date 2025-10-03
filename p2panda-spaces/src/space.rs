@@ -197,12 +197,6 @@ where
 
             let mut manager = manager_ref.inner.write().await;
             let message = manager.identity.forge(args).await?;
-            manager
-                .spaces_store
-                .set_message(&message.id(), &message)
-                .await
-                .map_err(SpaceError::MessageStore)?;
-
             message
         };
 
@@ -288,13 +282,6 @@ where
                 space_dependencies,
             };
             let message = manager.identity.forge(args).await?;
-
-            manager
-                .spaces_store
-                .set_message(&message.id(), &message)
-                .await
-                .map_err(SpaceError::MessageStore)?;
-
             space_dependencies = vec![message.id()];
             messages.push(message);
         }
@@ -678,7 +665,6 @@ where
 
         // Forge message.
         let message = manager.identity.forge(args).await?;
-        // @TODO: persist message.
 
         // Update dependencies.
         y.encryption_y
