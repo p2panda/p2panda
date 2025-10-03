@@ -254,8 +254,9 @@ where
         }
 
         // @TODO: We _could_ repair any out-of-sync spaces here after processing a batch of
-        // messages. However this would introduce inconsistent behaviour with process(). So for
-        // now making repairing a concern of the user is maybe best.
+        // messages. However this would introduce inconsistent behaviour with process() as we
+        // don't want to repair there in order to avoid redundant messages. So for now making
+        // repairing a concern of the user is maybe best.
 
         Ok(events)
     }
