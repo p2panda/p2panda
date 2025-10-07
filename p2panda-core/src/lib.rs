@@ -85,6 +85,8 @@ pub mod operation;
 #[cfg(feature = "prune")]
 pub mod prune;
 mod serde;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
 
 pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
