@@ -395,6 +395,24 @@ where
             .await
             .map_err(ManagerError::Space)
     }
+
+    /// Persist a message in the message store.
+    ///
+    /// Only exposed for testing purposes as in normal use we expect all messages to be already
+    /// persisted in the store.
+    #[cfg(test)]
+    pub async fn persist_message(
+        &self,
+        message: &M,
+    ) -> Result<(), ManagerError<ID, S, K, M, C, RS>> {
+        let mut manager = self.inner.write().await;
+        manager
+            .spaces_store
+            .set_message(&message.id(), message)
+            .await
+            .map_err(ManagerError::MessageStore)?;
+        Ok(())
+    }
 }
 
 // Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping

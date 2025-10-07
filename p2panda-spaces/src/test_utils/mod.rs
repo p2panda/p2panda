@@ -70,7 +70,7 @@ where
         rng: Rng,
     ) -> Self {
         let store = TestSpacesStore::new();
-        let key_store = TestKeyStore::new(credentials, &config, &rng).unwrap();
+        let key_store = TestKeyStore::new(store.clone(), credentials, &config, &rng).unwrap();
         let manager = TestManager::new_with_config(store, key_store, credentials, config, rng)
             .await
             .unwrap();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::convert::Infallible;
 use std::sync::Arc;
-use std::{convert::Infallible, marker::PhantomData};
 
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_encryption::Rng;
@@ -10,9 +10,11 @@ use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use tokio::sync::RwLock;
 
 use crate::message::SpacesArgs;
-use crate::test_utils::{SeqNum, TestConditions, TestMessage};
+use crate::test_utils::{SeqNum, TestConditions, TestMessage, TestSpacesStore};
 use crate::traits::SpaceId;
 use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::message::AuthoredMessage;
+use crate::traits::spaces_store::MessageStore;
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
@@ -22,7 +24,7 @@ pub struct TestKeyStoreInner<ID> {
     private_key: PrivateKey,
     key_manager: KeyManagerState,
     key_registry: KeyRegistryState<ActorId>,
-    _phantom: PhantomData<ID>,
+    spaces_store: TestSpacesStore<ID>,
 }
 
 #[derive(Debug)]
@@ -33,6 +35,7 @@ pub struct TestKeyStore<ID> {
 
 impl<ID> TestKeyStore<ID> {
     pub fn new(
+        spaces_store: TestSpacesStore<ID>,
         credentials: &Credentials,
         config: &Config,
         rng: &Rng,
@@ -45,7 +48,7 @@ impl<ID> TestKeyStore<ID> {
             private_key: credentials.private_key(),
             key_manager,
             key_registry,
-            _phantom: PhantomData,
+            spaces_store,
         };
         Ok(Self {
             public_key,
@@ -107,10 +110,16 @@ where
         let mut inner = self.inner.write().await;
         let seq_num = inner.next_seq_num;
         inner.next_seq_num += 1;
-        Ok(TestMessage {
+        let message = TestMessage {
             seq_num,
             public_key: self.public_key.clone(),
             spaces_args: args,
-        })
+        };
+        inner
+            .spaces_store
+            .set_message(&message.id(), &message)
+            .await
+            .unwrap();
+        Ok(message)
     }
 }
