@@ -98,6 +98,7 @@ use thiserror::Error;
 use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::traits::Identifier;
 use crate::{Extension, Extensions};
 
 /// Encoded bytes of an operation header and optional body.
@@ -129,6 +130,12 @@ impl<E> PartialOrd for Operation<E> {
 impl<E> Ord for Operation<E> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.hash.cmp(&other.hash)
+    }
+}
+
+impl<E> Identifier<Hash> for Operation<E> {
+    fn id(&self) -> &Hash {
+        &self.hash
     }
 }
 

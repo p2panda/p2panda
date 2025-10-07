@@ -9,6 +9,8 @@ use p2panda_core::Hash;
 use sqlx::{query, query_as};
 
 use crate::orderer::OrdererStore;
+#[cfg(any(test, feature = "test_utils"))]
+use crate::orderer::OrdererTestExt;
 use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 
 impl<'a, ID> OrdererStore<ID> for SqliteStore<'a>
@@ -346,6 +348,65 @@ where
             Ok(result.0 as usize == dependencies.len())
         })
         .await
+    }
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl<'a> OrdererTestExt for SqliteStore<'a> {
+    async fn ready_len(&self) -> usize {
+        self.tx(async |tx| {
+            let row: (i64,) = query_as(
+                "
+                SELECT
+                    COUNT(id)
+                FROM
+                    orderer_ready_v1
+                ",
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+            Ok(row.0 as usize)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn ready_queue_len(&self) -> usize {
+        self.tx(async |tx| {
+            let row: (i64,) = query_as(
+                "
+                SELECT
+                    COUNT(id)
+                FROM
+                    orderer_ready_v1
+                WHERE
+                    in_queue = TRUE
+                ",
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+            Ok(row.0 as usize)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn pending_len(&self) -> usize {
+        self.tx(async |tx| {
+            let row: (i64,) = query_as(
+                "
+                SELECT
+                    COUNT(DISTINCT id)
+                FROM
+                    orderer_pending_v1
+                ",
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+            Ok(row.0 as usize)
+        })
+        .await
+        .unwrap()
     }
 }
 
