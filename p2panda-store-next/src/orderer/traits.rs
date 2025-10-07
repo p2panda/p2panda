@@ -41,3 +41,14 @@ pub trait OrdererStore<ID> {
     /// Returns `true` if all the passed keys are present in the ready list.
     fn ready(&self, keys: &[ID]) -> impl Future<Output = Result<bool, Self::Error>>;
 }
+
+// Test abstraction for other crates so they can write tests without getting caught up by
+// implementation details of the storage layer in this crate.
+#[cfg(any(test, feature = "test_utils"))]
+pub trait OrdererTestExt {
+    fn ready_len(&self) -> impl Future<Output = usize>;
+
+    fn ready_queue_len(&self) -> impl Future<Output = usize>;
+
+    fn pending_len(&self) -> impl Future<Output = usize>;
+}
