@@ -7,22 +7,22 @@ use std::sync::Arc;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::Rng;
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerError};
-use p2panda_encryption::key_registry::KeyRegistry;
-use p2panda_encryption::traits::PreKeyManager;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::auth::message::AuthMessage;
 use crate::event::Event;
-use crate::forge::Forge;
 use crate::group::{Group, GroupError};
+use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
-use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
 use crate::traits::SpaceId;
+use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
+use crate::{Config, Credentials};
 
 // Create and manage spaces and groups.
 //
@@ -43,43 +43,73 @@ use crate::types::{ActorId, AuthResolver, OperationId};
 //
 // Is agnostic to current p2panda-streams, networking layer, data type.
 #[derive(Debug)]
-pub struct Manager<ID, S, F, M, C, RS> {
+pub struct Manager<ID, S, K, M, C, RS> {
+    pub(crate) actor_id: ActorId,
     #[allow(clippy::type_complexity)]
-    pub(crate) inner: Arc<RwLock<ManagerInner<ID, S, F, M, C, RS>>>,
+    pub(crate) inner: Arc<RwLock<ManagerInner<ID, S, K, M, C, RS>>>,
 }
 
 #[derive(Debug)]
-pub(crate) struct ManagerInner<ID, S, F, M, C, RS> {
-    pub(crate) store: S,
-    pub(crate) forge: F,
+pub(crate) struct ManagerInner<ID, S, K, M, C, RS> {
+    pub(crate) config: Config,
+    pub(crate) spaces_store: S,
+    pub(crate) identity: IdentityManager<ID, K, M, C>,
     pub(crate) rng: Rng,
     _marker: PhantomData<(ID, M, C, RS)>,
 }
 
-impl<ID, S, F, M, C, RS> Manager<ID, S, F, M, C, RS>
+impl<ID, S, K, M, C, RS> Manager<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     // @TODO: the Debug bound is required as we are string formatting the manager error in
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
-    F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
     RS: Debug + AuthResolver<C>,
 {
     /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
-    pub fn new(store: S, forge: F, rng: Rng) -> Result<Self, ManagerError<ID, S, F, M, C, RS>> {
+    pub async fn new(
+        spaces_store: S,
+        key_store: K,
+        credentials: &Credentials,
+        rng: Rng,
+    ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
+        Self::new_with_config(
+            spaces_store,
+            key_store,
+            credentials,
+            &Config::default(),
+            rng,
+        )
+        .await
+    }
+
+    /// Instantiate a new manager with custom configuration.
+    #[allow(clippy::result_large_err)]
+    pub async fn new_with_config(
+        spaces_store: S,
+        key_store: K,
+        credentials: &Credentials,
+        config: &Config,
+        rng: Rng,
+    ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
+        let actor_id: ActorId = credentials.public_key().into();
+        let identity = IdentityManager::new(key_store, credentials, config, &rng).await?;
         let inner = ManagerInner {
-            store,
-            forge,
+            config: config.clone(),
+            spaces_store,
+            identity,
             rng,
             _marker: PhantomData,
         };
 
         Ok(Self {
+            actor_id,
             inner: Arc::new(RwLock::new(inner)),
         })
     }
@@ -88,11 +118,11 @@ where
     pub async fn space(
         &self,
         id: ID,
-    ) -> Result<Option<Space<ID, S, F, M, C, RS>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Option<Space<ID, S, K, M, C, RS>>, ManagerError<ID, S, K, M, C, RS>> {
         let has_space = {
             let inner = self.inner.read().await;
             inner
-                .store
+                .spaces_store
                 .has_space(&id)
                 .await
                 .map_err(ManagerError::SpaceStore)?
@@ -109,10 +139,14 @@ where
     pub async fn group(
         &self,
         id: ActorId,
-    ) -> Result<Option<Group<ID, S, F, M, C, RS>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Option<Group<ID, S, K, M, C, RS>>, ManagerError<ID, S, K, M, C, RS>> {
         let auth_y = {
             let manager = self.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?
         };
 
         // Check if this group exists in the auth state.
@@ -131,7 +165,7 @@ where
         &self,
         id: ID,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<ID, S, F, M, C, RS>, Vec<M>), ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<(Space<ID, S, K, M, C, RS>, Vec<M>), ManagerError<ID, S, K, M, C, RS>> {
         let (space, messages) = Space::create(self.clone(), id, initial_members.to_owned())
             .await
             .map_err(ManagerError::Space)?;
@@ -147,62 +181,12 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<ID, S, F, M, C, RS>, Vec<M>), ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<(Group<ID, S, K, M, C, RS>, Vec<M>), ManagerError<ID, S, K, M, C, RS>> {
         let (group, messages) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
         Ok((group, messages))
-    }
-
-    // @TODO: Make it work without async
-    /// The public key of the local actor.
-    pub async fn id(&self) -> ActorId {
-        let inner = self.inner.read().await;
-        inner.forge.public_key().into()
-    }
-
-    /// The local actor id and their long-term key bundle.
-    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, F, M, C, RS>> {
-        let inner = self.inner.read().await;
-
-        let y = inner
-            .store
-            .key_manager()
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        // @TODO: What happens if the forge changes their private key?
-        let my_id = inner.forge.public_key().into();
-
-        Ok(Member::new(my_id, KeyManager::prekey_bundle(&y)))
-    }
-
-    /// Register a member with long-term key bundle material.
-    pub async fn register_member(
-        &self,
-        member: &Member,
-    ) -> Result<(), ManagerError<ID, S, F, M, C, RS>> {
-        // @TODO: Reject invalid / expired key bundles.
-
-        let mut inner = self.inner.write().await;
-
-        let y = inner
-            .store
-            .key_registry()
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        // @TODO: Setting longterm bundle should overwrite previous one if this is newer.
-        let y_ii = KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone());
-
-        inner
-            .store
-            .set_key_registry(&y_ii)
-            .await
-            .map_err(ManagerError::KeyStore)?;
-
-        Ok(())
     }
 
     /// Process a spaces message.
@@ -211,24 +195,25 @@ where
     pub async fn process(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
         let events = match message.args() {
             // Received key bundle from a member.
-            SpacesArgs::KeyBundle {} => {
-                // @TODO:
-                // - Check if it is valid
-                // - Store it in key manager if it is newer than our previously stored one (if given)
-                todo!()
+            SpacesArgs::KeyBundle { key_bundle } => {
+                let mut manager = self.inner.write().await;
+                let event = manager
+                    .identity
+                    .process_key_bundle(message.author(), key_bundle)
+                    .await
+                    .map_err(ManagerError::IdentityManager)?;
+
+                vec![event]
             }
             SpacesArgs::Auth { .. } => {
                 let event = Group::process(self.clone(), message)
                     .await
                     .map_err(ManagerError::Group)?;
                 vec![event]
-
-                // @TODO: check that this message was applied to all spaces and apply it ourselves
-                // if not.
             }
             // Received control message related to a space.
             SpacesArgs::SpaceMembership { .. } => {
@@ -251,6 +236,70 @@ where
         Ok(events)
     }
 
+    /// The public key of the local actor.
+    pub fn id(&self) -> ActorId {
+        self.actor_id
+    }
+
+    /// The local actor id and their long-term key bundle.
+    ///
+    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, K, M, C, RS>> {
+        let mut manager = self.inner.write().await;
+        manager
+            .identity
+            .me()
+            .await
+            .map_err(ManagerError::IdentityManager)
+    }
+
+    /// Register a member with long-term key bundle material.
+    pub async fn register_member(
+        &self,
+        member: &Member,
+    ) -> Result<(), ManagerError<ID, S, K, M, C, RS>> {
+        let mut manager = self.inner.write().await;
+        manager
+            .identity
+            .register_member(member)
+            .await
+            .map_err(ManagerError::IdentityManager)
+    }
+
+    /// Check if my latest key bundle has expired.
+    ///
+    /// If `true` then users should rotate their pre-key and generate a new bundle message (which
+    /// should then be published) by calling key_bundle_message().
+    pub async fn key_bundle_expired(&self) -> bool {
+        let manager = self.inner.read().await;
+        manager.identity.key_bundle_expired().await
+    }
+
+    /// Forge a key bundle message containing my latest key bundle.
+    ///
+    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    pub async fn key_bundle_message(&self) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
+        let mut manager = self.inner.write().await;
+        manager
+            .identity
+            .key_bundle_message()
+            .await
+            .map_err(ManagerError::IdentityManager)
+    }
+
+    /// Create a new message from passed spaces args.
+    ///
+    /// The returned generic message type implements `AuthoredMessage` and `SpacesMessage<ID, C>`
+    /// traits.
+    pub(crate) async fn forge(
+        &mut self,
+        args: SpacesArgs<ID, C>,
+    ) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
+        let mut manager = self.inner.write().await;
+        let message = manager.identity.forge(args).await?;
+        Ok(message)
+    }
+
     /// Apply an auth message applied to the shared auth state to each space we know about
     /// locally.
     ///
@@ -260,11 +309,11 @@ where
     pub(crate) async fn apply_group_change_to_spaces(
         &self,
         auth_message: &M,
-    ) -> Result<Vec<M>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
         let spaces = {
             let manager = self.inner.read().await;
             manager
-                .store
+                .spaces_store
                 .spaces_ids()
                 .await
                 .map_err(ManagerError::SpaceStore)?
@@ -291,7 +340,7 @@ where
     async fn handle_space_membership_message(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
         let SpacesArgs::SpaceMembership {
             space_id,
             auth_message_id,
@@ -305,7 +354,7 @@ where
         let auth_message = {
             let inner = self.inner.read().await;
             let Some(message) = inner
-                .store
+                .spaces_store
                 .message(auth_message_id)
                 .await
                 .map_err(ManagerError::MessageStore)?
@@ -350,9 +399,10 @@ where
 
 // Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping
 // them in an Arc. Related: https://stackoverflow.com/questions/72150623
-impl<ID, S, F, M, C, RS> Clone for Manager<ID, S, F, M, C, RS> {
+impl<ID, S, K, M, C, RS> Clone for Manager<ID, S, K, M, C, RS> {
     fn clone(&self) -> Self {
         Self {
+            actor_id: self.actor_id,
             inner: self.inner.clone(),
         }
     }
@@ -360,25 +410,22 @@ impl<ID, S, F, M, C, RS> Clone for Manager<ID, S, F, M, C, RS> {
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum ManagerError<ID, S, F, M, C, RS>
+pub enum ManagerError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
     #[error(transparent)]
-    Space(#[from] SpaceError<ID, S, F, M, C, RS>),
+    Space(#[from] SpaceError<ID, S, K, M, C, RS>),
 
     #[error(transparent)]
-    Group(#[from] GroupError<ID, S, F, M, C, RS>),
+    Group(#[from] GroupError<ID, S, K, M, C, RS>),
 
     #[error(transparent)]
-    KeyManager(#[from] KeyManagerError),
-
-    #[error("{0}")]
-    KeyStore(<S as KeyStore>::Error),
+    IdentityManager(#[from] IdentityError<ID, K, M, C>),
 
     #[error("{0}")]
     SpaceStore(<S as SpaceStore<ID, M, C>>::Error),

@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::crypto::x25519::PublicKey;
 use crate::crypto::xeddsa::{XEdDSAError, XSignature, xeddsa_verify};
-use crate::key_bundle::{LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
+use crate::key_bundle::{Lifetime, LifetimeError, OneTimePreKey, OneTimePreKeyId, PreKey};
 use crate::traits::KeyBundle;
 
 /// Key-bundle with public keys to be used exactly _once_.
@@ -52,6 +52,10 @@ impl KeyBundle for OneTimeKeyBundle {
 
     fn onetime_prekey_id(&self) -> Option<OneTimePreKeyId> {
         self.onetime_prekey.as_ref().map(|key| key.id())
+    }
+
+    fn lifetime(&self) -> &Lifetime {
+        self.signed_prekey.lifetime()
     }
 
     fn verify(&self) -> Result<(), KeyBundleError> {
@@ -112,6 +116,10 @@ impl KeyBundle for LongTermKeyBundle {
     fn onetime_prekey_id(&self) -> Option<OneTimePreKeyId> {
         // No one-time pre-key in long-term key bundle.
         None
+    }
+
+    fn lifetime(&self) -> &Lifetime {
+        self.signed_prekey.lifetime()
     }
 
     fn verify(&self) -> Result<(), KeyBundleError> {
