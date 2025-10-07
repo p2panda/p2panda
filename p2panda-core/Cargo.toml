@@ -22,6 +22,7 @@ workspace = true
 [features]
 default = ["prune"]
 prune = []
+test_utils = []
 
 [dependencies]
 arbitrary = { version = "1.4.1", optional = true, features = ["derive"] }
