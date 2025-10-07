@@ -3,6 +3,7 @@
 use std::fmt::Debug;
 
 use crate::operations::OperationMemoryStore;
+use crate::orderer::OrdererMemoryStore;
 
 /// In-memory store.
 ///
@@ -15,6 +16,7 @@ where
     ID: Debug,
 {
     pub operations: OperationMemoryStore<T, ID>,
+    pub orderer: OrdererMemoryStore<ID>,
 }
 
 impl<T, ID> MemoryStore<T, ID>
@@ -25,6 +27,7 @@ where
     pub fn new() -> Self {
         Self {
             operations: OperationMemoryStore::new(),
+            orderer: OrdererMemoryStore::new(),
         }
     }
 }
