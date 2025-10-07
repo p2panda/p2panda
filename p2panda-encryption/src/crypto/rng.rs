@@ -19,16 +19,11 @@ impl Default for Rng {
     }
 }
 
-#[cfg(any(test, feature = "test_utils"))]
 impl Rng {
-    pub fn from_seed(seed: [u8; 32]) -> Self {
-        Self {
-            rng: Mutex::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
-        }
+    pub fn from_rng(rng: &Rng) -> Result<Self, RngError> {
+        Ok(Self::from_seed(rng.random_array()?))
     }
-}
 
-impl Rng {
     pub fn random_array<const N: usize>(&self) -> Result<[u8; N], RngError> {
         let mut rng = self.rng.lock().map_err(|_| RngError::LockPoisoned)?;
         let mut out = [0u8; N];
@@ -43,6 +38,20 @@ impl Rng {
         rng.try_fill_bytes(&mut out)
             .map_err(|_| RngError::NotEnoughRandomness)?;
         Ok(out)
+    }
+
+    #[cfg(any(test, feature = "test_utils"))]
+    pub fn from_seed(seed: [u8; 32]) -> Self {
+        Self {
+            rng: Mutex::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
+        }
+    }
+
+    #[cfg(not(any(test, feature = "test_utils")))]
+    fn from_seed(seed: [u8; 32]) -> Self {
+        Self {
+            rng: Mutex::new(rand_chacha::ChaCha20Rng::from_seed(seed)),
+        }
     }
 }
 

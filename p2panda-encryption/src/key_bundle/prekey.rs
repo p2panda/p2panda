@@ -32,6 +32,10 @@ impl PreKey {
         xeddsa_sign(self.0.as_bytes(), secret_key, rng)
     }
 
+    pub fn lifetime(&self) -> &Lifetime {
+        &self.1
+    }
+
     pub fn verify_lifetime(&self) -> Result<(), LifetimeError> {
         self.1.verify()
     }

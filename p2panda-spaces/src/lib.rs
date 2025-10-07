@@ -4,15 +4,16 @@
 #![allow(dead_code)]
 
 pub mod auth;
+pub mod config;
+pub mod credentials;
 pub mod encryption;
 pub mod event;
-pub mod forge;
 pub mod group;
+pub mod identity;
 pub mod manager;
 pub mod member;
 pub mod message;
 pub mod space;
-pub mod store;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
@@ -21,4 +22,6 @@ pub mod traits;
 pub mod types;
 pub mod utils;
 
+pub use config::Config;
+pub use credentials::Credentials;
 pub use types::{ActorId, OperationId};

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::Secret;
+use crate::{Rng, RngError};
 
 /// 256-bit secret key size.
 pub const SECRET_KEY_SIZE: usize = 32;
@@ -31,6 +32,10 @@ impl SecretKey {
     #[cfg(feature = "test_utils")]
     pub fn from_bytes(bytes: [u8; SECRET_KEY_SIZE]) -> Self {
         SecretKey(Secret::from_bytes(clamp_integer(bytes)))
+    }
+
+    pub fn from_rng(rng: &Rng) -> Result<Self, RngError> {
+        Ok(Self::from_bytes(rng.random_array()?))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {

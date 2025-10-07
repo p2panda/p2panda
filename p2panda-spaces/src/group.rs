@@ -11,11 +11,13 @@ use thiserror::Error;
 use crate::OperationId;
 use crate::auth::message::AuthMessage;
 use crate::event::{Event, auth_message_to_group_event};
-use crate::forge::Forge;
+use crate::identity::IdentityError;
 use crate::manager::Manager;
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
-use crate::store::{AuthStore, KeyStore, MessageStore, SpaceStore};
+use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
+use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
     AuthResolver, EncryptionGroupError,
@@ -23,12 +25,12 @@ use crate::types::{
 use crate::utils::{typed_member, typed_members};
 
 #[derive(Debug)]
-pub struct Group<ID, S, F, M, C, RS> {
+pub struct Group<ID, S, K, M, C, RS> {
     /// Reference to the manager.
     ///
     /// This allows us to build an API where users can treat "group" instances independently from the
     /// manager API, even though internally it has a reference to it.
-    manager: Manager<ID, S, F, M, C, RS>,
+    manager: Manager<ID, S, K, M, C, RS>,
 
     /// Id of the group.
     ///
@@ -36,16 +38,16 @@ pub struct Group<ID, S, F, M, C, RS> {
     id: ActorId,
 }
 
-impl<ID, S, F, M, C, RS> Group<ID, S, F, M, C, RS>
+impl<ID, S, K, M, C, RS> Group<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M> + Debug,
-    F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    K: Forge<ID, M, C> + KeyRegistryStore + KeyManagerStore + Debug,
+    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
-    pub(crate) fn new(manager_ref: Manager<ID, S, F, M, C, RS>, id: ActorId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<ID, S, K, M, C, RS>, id: ActorId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -58,9 +60,9 @@ where
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible.
     pub(crate) async fn create(
-        manager_ref: Manager<ID, S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, K, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, Vec<M>), GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>), GroupError<ID, S, K, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -103,10 +105,14 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<M>, GroupError<ID, S, K, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+            let auth_y = manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?;
             typed_member(&auth_y, member)
         };
 
@@ -130,10 +136,14 @@ where
     }
 
     /// Remove member from an existing group.
-    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, GroupError<ID, S, F, M, C, RS>> {
+    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, GroupError<ID, S, K, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+            let auth_y = manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?;
             typed_member(&auth_y, member)
         };
 
@@ -158,14 +168,18 @@ where
 
     /// Process a remote message.
     pub(crate) async fn process(
-        manager_ref: Manager<ID, S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, K, M, C, RS>,
         message: &M,
-    ) -> Result<Event<ID, C>, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<Event<ID, C>, GroupError<ID, S, K, M, C, RS>> {
         let auth_message = AuthMessage::from_forged(message);
 
         let mut auth_y = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?
         };
 
         let mut manager = manager_ref.inner.write().await;
@@ -174,12 +188,12 @@ where
             .orderer_y
             .add_dependency(message.id(), &auth_message.dependencies());
         manager
-            .store
+            .spaces_store
             .set_auth(&auth_y)
             .await
             .map_err(GroupError::AuthStore)?;
         manager
-            .store
+            .spaces_store
             .set_message(&message.id(), message)
             .await
             .map_err(GroupError::MessageStore)?;
@@ -189,12 +203,16 @@ where
 
     /// Process a local control message.
     async fn process_local_control(
-        manager_ref: Manager<ID, S, F, M, C, RS>,
+        manager_ref: Manager<ID, S, K, M, C, RS>,
         control_message: AuthControlMessage<C>,
-    ) -> Result<M, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, K, M, C, RS>> {
         let auth_y = {
             let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager
+                .spaces_store
+                .auth()
+                .await
+                .map_err(GroupError::AuthStore)?
         };
 
         let (mut auth_y, auth_message) =
@@ -207,9 +225,9 @@ where
 
         let message = {
             let mut manager = manager_ref.inner.write().await;
-            let message = manager.forge.forge(args).await.map_err(GroupError::Forge)?;
+            let message = manager.identity.forge(args).await?;
             manager
-                .store
+                .spaces_store
                 .set_message(&message.id(), &message)
                 .await
                 .map_err(GroupError::MessageStore)?;
@@ -224,7 +242,7 @@ where
                 .orderer_y
                 .add_dependency(message.id(), &auth_message.dependencies());
             manager
-                .store
+                .spaces_store
                 .set_auth(&auth_y)
                 .await
                 .map_err(GroupError::AuthStore)?;
@@ -234,9 +252,13 @@ where
     }
 
     /// Get the global auth state.
-    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<ID, S, F, M, C, RS>> {
+    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<ID, S, K, M, C, RS>> {
         let manager = self.manager.inner.read().await;
-        let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+        let auth_y = manager
+            .spaces_store
+            .auth()
+            .await
+            .map_err(GroupError::AuthStore)?;
         Ok(auth_y)
     }
 
@@ -248,7 +270,7 @@ where
     /// Current group members and access levels.
     pub async fn members(
         &self,
-    ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, F, M, C, RS>> {
+    ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
         let group_members = y.members(self.id);
         Ok(group_members)
@@ -256,11 +278,11 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum GroupError<ID, S, F, M, C, RS>
+pub enum GroupError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + KeyStore + AuthStore<C> + MessageStore<M>,
-    F: Forge<ID, M, C>,
+    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C>,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
@@ -273,8 +295,8 @@ where
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError<M>),
 
-    #[error("{0}")]
-    Forge(F::Error),
+    #[error(transparent)]
+    IdentityManager(#[from] IdentityError<ID, K, M, C>),
 
     #[error("{0}")]
     AuthStore(<S as AuthStore<C>>::Error),
