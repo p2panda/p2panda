@@ -93,3 +93,35 @@ pub enum SpacesArgs<ID, C> {
         ciphertext: Vec<u8>,
     },
 }
+
+impl<ID, C> SpacesArgs<ID, C> {
+    /// Return all dependencies for this spaces message.
+    ///
+    /// These dependencies can be used to causally order messages before processing them on the
+    /// spaces manager. A message should only be processed once all of it' dependencies have
+    /// themselves been processed.
+    pub fn dependencies(&self) -> Vec<OperationId> {
+        match self {
+            // @TODO: do key bundles have dependencies?
+            SpacesArgs::KeyBundle { .. } => todo!(),
+            SpacesArgs::Auth {
+                auth_dependencies, ..
+            } => auth_dependencies.to_owned(),
+            SpacesArgs::SpaceMembership {
+                space_dependencies,
+                auth_message_id,
+                ..
+            } => {
+                let mut dependencies = vec![*auth_message_id];
+                dependencies.extend(space_dependencies.to_owned());
+                dependencies
+            }
+            SpacesArgs::SpaceUpdate {
+                space_dependencies, ..
+            } => space_dependencies.to_owned(),
+            SpacesArgs::Application {
+                space_dependencies, ..
+            } => space_dependencies.to_owned(),
+        }
+    }
+}
