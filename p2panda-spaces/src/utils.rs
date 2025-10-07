@@ -46,3 +46,7 @@ pub(crate) fn now() -> u64 {
         .expect("system time before unix epoch")
         .as_secs()
 }
+
+pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+}

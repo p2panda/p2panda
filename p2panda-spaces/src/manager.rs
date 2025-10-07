@@ -162,16 +162,22 @@ where
     ///
     /// If not already included, then the local actor (creator of this space) will be added to the
     /// initial members and given manage access level.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub async fn create_space(
         &self,
         id: ID,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<ID, S, K, M, C, RS>, Vec<M>), ManagerError<ID, S, K, M, C, RS>> {
-        let (space, messages) = Space::create(self.clone(), id, initial_members.to_owned())
+    ) -> Result<
+        (Space<ID, S, K, M, C, RS>, Vec<M>, Vec<Event<ID, C>>),
+        ManagerError<ID, S, K, M, C, RS>,
+    > {
+        let (space, messages, events) = Space::create(self.clone(), id, initial_members.to_owned())
             .await
             .map_err(ManagerError::Space)?;
 
-        Ok((space, messages))
+        Ok((space, messages, events))
     }
 
     /// Create a new group containing initial members with associated access levels.
@@ -179,20 +185,26 @@ where
     /// It is possible to create a group where the creator is not an initial member or is a member
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<ID, S, K, M, C, RS>, Vec<M>), ManagerError<ID, S, K, M, C, RS>> {
-        let (group, messages) = Group::create(self.clone(), initial_members.to_owned())
+    ) -> Result<(Group<ID, S, K, M, C, RS>, Vec<M>, Event<ID, C>), ManagerError<ID, S, K, M, C, RS>>
+    {
+        let (group, messages, event) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
-        Ok((group, messages))
+        Ok((group, messages, event))
     }
 
     /// Process a spaces message.
     ///
     /// We expect messages to be signature-checked, dependency-checked & partially ordered.
+    ///
+    /// Returns events which inform users of any state changes which occurred.
     pub async fn process(
         &self,
         message: &M,
@@ -384,7 +396,7 @@ where
     pub async fn repair_spaces(
         &self,
         space_ids: &Vec<ID>,
-    ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), ManagerError<ID, S, K, M, C, RS>> {
         let auth_y = {
             let manager = self.inner.write().await;
             manager
@@ -397,6 +409,7 @@ where
             toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
 
         let mut messages = vec![];
+        let mut events = vec![];
         // @TODO: we can optimize here by calculating the diff between the current space auth
         // graph tips and the global auth graph tips. Then we could apply only the missing
         // operations rather than applying all operations as we do here.
@@ -411,13 +424,17 @@ where
                     .expect("message present in store")
             };
             for id in space_ids {
-                if let Some(message) = self.apply_group_change_to_space(&message, *id).await? {
+                let (message, event) = self.apply_group_change_to_space(&message, *id).await?;
+                if let Some(message) = message {
                     messages.push(message);
-                };
+                }
+                if let Some(event) = event {
+                    events.push(event)
+                }
             }
         }
 
-        Ok(messages)
+        Ok((messages, events))
     }
 
     /// Apply an auth message from the shared auth state to each space we know about locally.
@@ -428,7 +445,7 @@ where
     pub(crate) async fn apply_group_change_to_spaces(
         &self,
         auth_message: &M,
-    ) -> Result<Vec<M>, ManagerError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), ManagerError<ID, S, K, M, C, RS>> {
         let space_ids = {
             let manager = self.inner.read().await;
             manager
@@ -439,14 +456,18 @@ where
         };
 
         let mut messages = vec![];
+        let mut events = vec![];
         for id in space_ids {
-            let Some(message) = self.apply_group_change_to_space(auth_message, id).await? else {
-                continue;
-            };
-            messages.push(message);
+            let (message, event) = self.apply_group_change_to_space(auth_message, id).await?;
+            if let Some(message) = message {
+                messages.push(message);
+            }
+            if let Some(event) = event {
+                events.push(event)
+            }
         }
 
-        Ok(messages)
+        Ok((messages, events))
     }
 
     /// Apply a message from the shared auth state to a single space.
@@ -454,18 +475,14 @@ where
         &self,
         auth_message: &M,
         space_id: ID,
-    ) -> Result<Option<M>, ManagerError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Option<M>, Option<Event<ID, C>>), ManagerError<ID, S, K, M, C, RS>> {
         let Some(space) = self.space(space_id).await? else {
             panic!("expect space to exist");
         };
-        let Some(message) = space
+        space
             .handle_auth_group_change(auth_message)
             .await
-            .map_err(ManagerError::Space)?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(message))
+            .map_err(ManagerError::Space)
     }
 
     async fn handle_space_membership_message(

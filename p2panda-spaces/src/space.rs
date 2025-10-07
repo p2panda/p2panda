@@ -30,6 +30,7 @@ use crate::types::{
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
     OperationId,
 };
+use crate::utils::sort_members;
 
 /// Encrypted data context with authorization boundary.
 ///
@@ -68,11 +69,14 @@ where
     ///
     /// If not already included, then the local actor (creator of this space) will be added to the
     /// initial members and given manage access level.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         space_id: ID,
         mut initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, Vec<M>), SpaceError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, M, C, RS>> {
         let my_id = manager_ref.id();
 
         // Get the global auth state. We use this state in a following step to initialise the
@@ -92,7 +96,7 @@ where
         }
 
         // Create new group for the space.
-        let (group, mut messages) = Group::create(manager_ref.clone(), initial_members)
+        let (group, mut messages, auth_event) = Group::create(manager_ref.clone(), initial_members)
             .await
             .map_err(SpaceError::Group)?;
 
@@ -109,11 +113,11 @@ where
         // Apply the "create" auth message to the space state.
         //
         // We know the first message is the auth message.
-        let space_message =
+        let (space_message, space_event) =
             Self::process_auth_message(manager_ref.clone(), y, &messages[0]).await?;
 
-        // Push the message for the newly created space to the messages vec.
-        messages.push(space_message.expect("new space message not yet processed"));
+        messages.push(space_message.expect("creating space results in message"));
+        let space_event = space_event.expect("creating space results in event");
 
         Ok((
             Self {
@@ -121,15 +125,19 @@ where
                 manager: manager_ref,
             },
             messages,
+            vec![auth_event, space_event],
         ))
     }
 
     /// Add a member to the space with assigned access level.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub async fn add(
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<Vec<M>, SpaceError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
@@ -138,7 +146,13 @@ where
     }
 
     /// Remove a member from the space.
-    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, SpaceError<ID, S, K, M, C, RS>> {
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
+    pub async fn remove(
+        &self,
+        member: ActorId,
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
@@ -153,9 +167,9 @@ where
         manager_ref: Manager<ID, S, K, M, C, RS>,
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
-    ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Option<M>, Option<Event<ID, C>>), SpaceError<ID, S, K, M, C, RS>> {
         if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
-            return Ok(None);
+            return Ok((None, None));
         }
 
         // Get current space members.
@@ -174,8 +188,8 @@ where
             Self::apply_secret_member_change(
                 y.encryption_y,
                 &auth_message,
-                current_members,
-                next_members,
+                current_members.clone(),
+                next_members.clone(),
                 &manager.rng,
             )
             .await?
@@ -214,10 +228,28 @@ where
                 .map_err(SpaceError::SpaceStore)?;
         }
 
-        Ok(Some(space_message))
+        // If current and next member sets are equal it indicates that the space is not affected
+        // by this auth change. This can be because the space wasn't created yet, or the auth
+        // change simply does not effect the members of this space. In either case we don't want
+        // to emit any membership change event.
+        if current_members == next_members {
+            return Ok((Some(space_message), None));
+        };
+
+        // Construct space membership event.
+        let space_event = space_message_to_space_event(
+            &space_message,
+            &auth_message,
+            current_members,
+            next_members,
+        );
+
+        Ok((Some(space_message), Some(space_event)))
     }
 
     /// Process a space message along with it's relevant auth message (if required).
+    ///
+    /// Returns events which inform users of any state changes which occurred.
     pub(crate) async fn process(
         &self,
         space_message: &M,
@@ -512,11 +544,11 @@ where
     pub(crate) async fn handle_auth_group_change(
         &self,
         auth_message: &M,
-    ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
-        let y = self.state().await?;
+    ) -> Result<(Option<M>, Option<Event<ID, C>>), SpaceError<ID, S, K, M, C, RS>> {
         // If this space already processed this auth message then skip it.
+        let y = self.state().await?;
         if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
-            return Ok(None);
+            return Ok((None, None));
         }
 
         let my_id = self.manager.id();
@@ -527,12 +559,10 @@ where
             .any(|(member, access)| *member == my_id && access > &Access::pull());
 
         if is_reader {
-            let space_message =
-                Space::process_auth_message(self.manager.clone(), y, auth_message).await?;
-            return Ok(space_message);
+            return Space::process_auth_message(self.manager.clone(), y, auth_message).await;
         }
 
-        Ok(None)
+        Ok((None, None))
     }
 
     /// Get the space state.
@@ -640,7 +670,8 @@ where
         &self,
     ) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
-        let group_members = y.auth_y.members(y.group_id);
+        let mut group_members = y.auth_y.members(y.group_id);
+        sort_members(&mut group_members);
         Ok(group_members)
     }
 
@@ -740,26 +771,32 @@ where
 }
 
 pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
-    members
+    let mut members: Vec<ActorId> = members
         .into_iter()
         .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })
-        .collect()
+        .collect();
+    members.sort();
+    members
 }
 
 pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
-    next_members
+    let mut members = next_members
         .iter()
         .cloned()
         .filter(|actor| !current_members.contains(actor))
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    members.sort();
+    members
 }
 
 pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
-    current_members
+    let mut members = current_members
         .iter()
         .cloned()
         .filter(|actor| !next_members.contains(actor))
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    members.sort();
+    members
 }
 
 #[derive(Debug, Error)]
