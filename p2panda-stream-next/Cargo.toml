@@ -9,15 +9,30 @@ all-features = true
 [lints]
 workspace = true
 
+[features]
+default = ["orderer"]
+orderer = [
+  "dep:p2panda-core",
+  "dep:p2panda-store-next",
+  "dep:p2panda-stream",
+  "dep:thiserror",
+]
+
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
+p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true }
+p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", optional = true }
+# @TODO: Remove this as soon as we've brought p2panda-stream-next into p2panda-stream.
+p2panda-stream = { path = "../p2panda-stream", version = "0.4.0", optional = true }
 pin-project = "1.1.10"
+thiserror = { version = "2.0.16", optional = true }
 tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
 futures-test = { version = "0.3.31" }
 futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
+p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", features = ["test_utils"] }
 serde = { version = "1.0.219" }
 tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { version = "0.1.17", default-features = false }
