@@ -192,11 +192,6 @@ where
             .set_auth(&auth_y)
             .await
             .map_err(GroupError::AuthStore)?;
-        manager
-            .spaces_store
-            .set_message(&message.id(), message)
-            .await
-            .map_err(GroupError::MessageStore)?;
 
         Ok(auth_message_to_group_event(&auth_y, &auth_message))
     }
@@ -225,13 +220,7 @@ where
 
         let message = {
             let mut manager = manager_ref.inner.write().await;
-            let message = manager.identity.forge(args).await?;
-            manager
-                .spaces_store
-                .set_message(&message.id(), &message)
-                .await
-                .map_err(GroupError::MessageStore)?;
-            message
+            manager.identity.forge(args).await?
         };
 
         {

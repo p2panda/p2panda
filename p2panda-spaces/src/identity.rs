@@ -267,7 +267,7 @@ mod tests {
 
     use crate::identity::IdentityError;
     use crate::message::SpacesArgs;
-    use crate::test_utils::TestKeyStore;
+    use crate::test_utils::{TestKeyStore, TestSpacesStore};
     use crate::traits::message::{AuthoredMessage, SpacesMessage};
     use crate::{ActorId, Config, Credentials};
 
@@ -278,7 +278,9 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
         let mut credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let spaces_store = TestSpacesStore::new();
+        let key_store: TestKeyStore<i32> =
+            TestKeyStore::new(spaces_store, &credentials, &config, &rng).unwrap();
 
         // Rotate identity secret
         credentials.identity_secret = SecretKey::from_rng(&rng).unwrap();
@@ -294,7 +296,9 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
         let mut credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let spaces_store = TestSpacesStore::new();
+        let key_store: TestKeyStore<i32> =
+            TestKeyStore::new(spaces_store, &credentials, &config, &rng).unwrap();
 
         // Rotate private key
         let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
@@ -311,7 +315,9 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let spaces_store = TestSpacesStore::new();
+        let key_store: TestKeyStore<i32> =
+            TestKeyStore::new(spaces_store, &credentials, &config, &rng).unwrap();
         let mut identity_manager = IdentityManager::new(key_store, &credentials, &config, &rng)
             .await
             .unwrap();
@@ -329,7 +335,9 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(&credentials, &config, &rng).unwrap();
+        let spaces_store = TestSpacesStore::new();
+        let key_store: TestKeyStore<i32> =
+            TestKeyStore::new(spaces_store, &credentials, &config, &rng).unwrap();
         let mut identity_manager = IdentityManager::new(key_store, &credentials, &config, &rng)
             .await
             .unwrap();
@@ -351,8 +359,13 @@ mod tests {
         let alice_rng = Rng::from_seed([1; 32]);
         let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
         let alice_config = Config::default();
-        let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(&alice_credentials, &alice_config, &alice_rng).unwrap();
+        let alice_key_store: TestKeyStore<i32> = TestKeyStore::new(
+            TestSpacesStore::new(),
+            &alice_credentials,
+            &alice_config,
+            &alice_rng,
+        )
+        .unwrap();
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
             &alice_credentials,
@@ -365,8 +378,13 @@ mod tests {
         let bob_rng = Rng::from_seed([2; 32]);
         let bob_credentials = Credentials::from_rng(&bob_rng).unwrap();
         let bob_config = Config::default();
-        let bob_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(&bob_credentials, &bob_config, &bob_rng).unwrap();
+        let bob_key_store: TestKeyStore<i32> = TestKeyStore::new(
+            TestSpacesStore::new(),
+            &bob_credentials,
+            &bob_config,
+            &bob_rng,
+        )
+        .unwrap();
         let mut bob_identity_manager =
             IdentityManager::new(bob_key_store, &bob_credentials, &bob_config, &bob_rng)
                 .await
@@ -397,8 +415,13 @@ mod tests {
         let alice_rng = Rng::from_seed([1; 32]);
         let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
         let alice_config = Config::default();
-        let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(&alice_credentials, &alice_config, &alice_rng).unwrap();
+        let alice_key_store: TestKeyStore<i32> = TestKeyStore::new(
+            TestSpacesStore::new(),
+            &alice_credentials,
+            &alice_config,
+            &alice_rng,
+        )
+        .unwrap();
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
             &alice_credentials,
