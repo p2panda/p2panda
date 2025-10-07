@@ -39,4 +39,4 @@ where
     }
 }
 
-// Trait implementations are in the regaring modules, see for example `orderer` or `operation` etc.
+// Trait implementations are in the relevant modules, see for example `orderer` or `operation` etc.
