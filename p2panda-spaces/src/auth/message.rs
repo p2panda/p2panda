@@ -2,8 +2,9 @@
 
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
-use crate::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
+use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
+use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 #[derive(Clone, Debug)]
