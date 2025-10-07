@@ -25,24 +25,29 @@ use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
-// Create and manage spaces and groups.
-//
-// Takes care of ingesting operations, updating spaces, groups and member key-material. Has access
-// to the operation and group stores, orderer, key-registry and key-manager.
-//
-// Routes operations to the correct space(s), group(s) or member.
-//
-// Only one instance of `Spaces` per app user.
-//
-// Operations are created and published within the spaces service, reacting to arriving
-// operations, due to api calls (create group, create space), or triggered by key-bundles
-// expiring.
-//
-// Users of spaces can subscribe to events which inform about member, group or space state
-// changes, application data being decrypted, pre-key bundles being published, we were added or
-// removed from a space.
-//
-// Is agnostic to current p2panda-streams, networking layer, data type.
+/// The manager holds a handle to data and key stores and is the root api for creating and
+/// managing groups and spaces. There should be only one manager instance per application. Any
+/// messages received from other instances must be processed on the manager. All methods which
+/// mutate state locally return M message(s) which must be replicated to and processed by other
+/// instances. Any action which mutates state (both local method calls and processed messages)
+/// will emit events which can be sent to any higher levels to inform of any state changes.
+///
+/// In order to add an actor to a space, we first need to have a key bundle generated from a valid
+/// pre-key. The manager offers an api for checking our latest key-bundle is valid, and issuing
+/// new key bundles to be replicated with other instances.
+///  
+/// All methods are idempotent, meaning messages can be processed multiple times without causing
+/// any additional state changes. Note that events will only be emitted the first time a message
+/// is processed.
+///
+/// p2panda-spaces is agnostic to the concrete message type control and application messages are
+/// sent on, as long as trait requirements are met.
+///
+/// ## Requirements
+///
+/// All messages must be ordered according to their causal relationship _before_ being processed on
+/// the manager. All messages created within p2panda-spaces express their dependencies, these
+/// should be used to perform partial ordering of all incoming messages.
 #[derive(Debug)]
 pub struct Manager<ID, S, K, M, C, RS> {
     pub(crate) actor_id: ActorId,
@@ -116,6 +121,9 @@ where
     }
 
     /// Get a space by id.
+    ///
+    /// A space instance provides an api for adding and removing members from the space and
+    /// querying the current space members.
     pub async fn space(
         &self,
         id: ID,
@@ -137,6 +145,9 @@ where
     }
 
     /// Get a group by id.
+    ///
+    /// A group instance provides an api for adding and removing members from a group and querying
+    /// the current group members.
     pub async fn group(
         &self,
         id: ActorId,
