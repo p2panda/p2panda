@@ -9,3 +9,5 @@ mod traits;
 #[cfg(feature = "memory")]
 pub use memory::OrdererMemoryStore;
 pub use traits::OrdererStore;
+#[cfg(any(test, feature = "test_utils"))]
+pub use traits::OrdererTestExt;
