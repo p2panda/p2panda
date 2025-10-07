@@ -148,6 +148,7 @@ async fn send_and_receive() {
     // Bob processes Alice's messages.
 
     for message in alice_messages {
+        bob.manager.persist_message(&message).await.unwrap();
         bob.manager.process(&message).await.unwrap();
     }
 
@@ -169,6 +170,7 @@ async fn send_and_receive() {
 
     // Alice processes Bob's encrypted message.
 
+    alice.manager.persist_message(&message).await.unwrap();
     let events = alice.manager.process(&message).await.unwrap();
     assert_eq!(events.len(), 1);
 
@@ -370,10 +372,15 @@ async fn send_and_receive_after_add() {
 
     // Bob processes all of Alice's messages.
 
+    bob.manager.persist_message(&message_01).await.unwrap();
     bob.manager.process(&message_01).await.unwrap();
+    bob.manager.persist_message(&message_02).await.unwrap();
     bob.manager.process(&message_02).await.unwrap();
+    bob.manager.persist_message(&message_03).await.unwrap();
     bob.manager.process(&message_03).await.unwrap();
+    bob.manager.persist_message(&message_04).await.unwrap();
     bob.manager.process(&message_04).await.unwrap();
+    bob.manager.persist_message(&message_05).await.unwrap();
     let events = bob.manager.process(&message_05).await.unwrap();
     assert_eq!(events.len(), 1);
 }
@@ -520,7 +527,9 @@ async fn receive_control_messages() {
 
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
-    bob.manager.process(&message_01).await.unwrap();
+
+    bob_manager.persist_message(&message_01).await.unwrap();
+    bob_manager.process(&message_01).await.unwrap();
 
     // Global auth state has been updated.
     {
@@ -531,7 +540,8 @@ async fn receive_control_messages() {
         assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
     }
 
-    bob.manager.process(&message_02).await.unwrap();
+    bob_manager.persist_message(&message_02).await.unwrap();
+    bob_manager.process(&message_02).await.unwrap();
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
 
     // Alice is the only group member.
@@ -572,10 +582,13 @@ async fn receive_control_messages() {
     // Bob: Receive Message 03, 04 and 05
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_03).await.unwrap();
     let events = bob.manager.process(&message_03).await.unwrap();
     assert!(events.is_empty());
+    bob_manager.persist_message(&message_04).await.unwrap();
     let _ = bob.manager.process(&message_04).await.unwrap();
     assert!(events.is_empty());
+    bob_manager.persist_message(&message_05).await.unwrap();
     let events = bob.manager.process(&message_05).await.unwrap();
     // The application message arrives only after bob is welcomed.
     assert_eq!(events.len(), 2);
@@ -648,8 +661,10 @@ async fn remove_member() {
     // Bob: Receive Message 01 & 02
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_01).await.unwrap();
     let events = bob_manager.process(&message_01).await.unwrap();
     assert_eq!(events.len(), 1);
+    bob_manager.persist_message(&message_02).await.unwrap();
     let events = bob_manager.process(&message_02).await.unwrap();
     assert_eq!(events.len(), 1);
 
@@ -698,8 +713,10 @@ async fn remove_member() {
     // Bob: Receive Message 03 & 04
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_03).await.unwrap();
     let events = bob_manager.process(&message_03).await.unwrap();
     assert_eq!(events.len(), 1);
+    bob_manager.persist_message(&message_04).await.unwrap();
     let events = bob_manager.process(&message_04).await.unwrap();
     assert_eq!(events.len(), 2);
     assert!(matches!(
@@ -754,7 +771,9 @@ async fn concurrent_removal_conflict() {
     // Bob: Receive alice's messages
     // ~~~~~~~~~~~~
 
+    bob_manager.persist_message(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
+    bob_manager.persist_message(&message_02).await.unwrap();
     bob_manager.process(&message_02).await.unwrap();
 
     // Alice: Removes bob (concurrently)
@@ -779,7 +798,9 @@ async fn concurrent_removal_conflict() {
     // Alice: process bobs' message
     // ~~~~~~~~~~~~
 
+    alice_manager.persist_message(&message_03).await.unwrap();
     alice_manager.process(&message_03).await.unwrap();
+    alice_manager.persist_message(&message_04).await.unwrap();
     alice_manager.process(&message_04).await.unwrap();
 
     // Alice: Adds dave
@@ -1376,6 +1397,7 @@ async fn events() {
 
     // Test basic expected event types.
     for (idx, message) in all_messages.iter().enumerate() {
+        bob_manager.persist_message(&message).await.unwrap();
         let events = bob_manager.process(&message).await.unwrap();
         match idx {
             // Member auth group created.
@@ -1446,6 +1468,7 @@ async fn events() {
 
     // Test expected members.
     for (idx, message) in all_messages.iter().enumerate() {
+        claire_manager.persist_message(&message).await.unwrap();
         let events = claire_manager.process(&message).await.unwrap();
         match idx {
             // Member auth group created.
