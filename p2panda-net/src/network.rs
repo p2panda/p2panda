@@ -892,7 +892,7 @@ mod tests {
         seq_num: u64,
         timestamp: u64,
         backlink: Option<Hash>,
-        extensions: Option<E>,
+        extensions: E,
     ) -> (Hash, Header<E>, Vec<u8>) {
         let mut header = Header {
             version: 1,
@@ -1212,11 +1212,11 @@ mod tests {
         // Create some operations.
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (hash_0, header_0, header_bytes_0) =
-            create_operation(&peer_a_private_key, &body, 0, 0, None, None);
+            create_operation(&peer_a_private_key, &body, 0, 0, None, ());
         let (hash_1, header_1, header_bytes_1) =
-            create_operation(&peer_a_private_key, &body, 1, 100, Some(hash_0), None);
+            create_operation(&peer_a_private_key, &body, 1, 100, Some(hash_0), ());
         let (hash_2, header_2, header_bytes_2) =
-            create_operation(&peer_a_private_key, &body, 2, 200, Some(hash_1), None);
+            create_operation(&peer_a_private_key, &body, 2, 200, Some(hash_1), ());
 
         // Create store for peer b and populate with operations.
         let mut store_b = MemoryStore::default();
