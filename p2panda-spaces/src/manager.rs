@@ -349,12 +349,14 @@ where
     ///
     /// ## Out-of-sync Space
     ///
+    /// ```text
     /// Shared Auth State     Space State
     ///
     ///       [x]
     ///       [x] <-------------- [z]
     ///       [x] <-------------- [z]
     ///       [x] <-------------- [z]
+    /// ```
     ///
     /// On identifying that a space needs "repairing" by calling spaces_repair_required(), _any_
     /// current space member can publish a message into the space referencing the missing auth
@@ -367,16 +369,18 @@ where
     ///
     /// ## Redundant pointers
     ///
+    /// ```text
     /// Shared Auth State     Space State
     ///
     ///       [x] <-----------[z1][z2][z3]
     ///       [x] <-------------- [z]
     ///       [x] <-------------- [z]
     ///       [x] <-------------- [z]
+    /// ```
     ///
     /// A sensible approach to detecting and repairing spaces will involve processing messages in
     /// logical batches and only detecting and repairing any out-of-sync spaces after a batch has
-    /// been processed. Alternatively some scheduling or throttling logic could be employed. 
+    /// been processed. Alternatively some scheduling or throttling logic could be employed.
     pub async fn repair_spaces(
         &self,
         space_ids: &Vec<ID>,
