@@ -64,6 +64,18 @@ impl Default for Lifetime {
     }
 }
 
+impl Ord for Lifetime {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.not_after.cmp(&other.not_after)
+    }
+}
+
+impl PartialOrd for Lifetime {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.not_after.cmp(&other.not_after))
+    }
+}
+
 #[cfg(test)]
 impl Lifetime {
     pub fn from_range(not_before: u64, not_after: u64) -> Self {

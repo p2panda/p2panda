@@ -11,6 +11,9 @@ use crate::key_bundle::{Lifetime, LifetimeError};
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreKey(PublicKey, Lifetime);
 
+/// Unique identifier of a member's pre-key which can be used to address long-term key bundles.
+pub type PreKeyId = PublicKey;
+
 impl PreKey {
     pub fn new(prekey: PublicKey, lifetime: Lifetime) -> Self {
         Self(prekey, lifetime)

@@ -14,7 +14,7 @@ use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature};
 use crate::crypto::{Rng, RngError};
 use crate::key_bundle::{
-    Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId, PreKey,
+    Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId, PreKey, PreKeyId,
 };
 use crate::traits::{IdentityManager, PreKeyManager};
 
@@ -28,11 +28,89 @@ pub struct KeyManager;
 pub struct KeyManagerState {
     identity_secret: SecretKey,
     identity_key: PublicKey,
-    prekey_secret: SecretKey,
-    prekey: PreKey,
-    prekey_signature: XSignature,
+    prekeys: HashMap<PreKeyId, PreKeyState>,
     onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
     onetime_next_id: OneTimePreKeyId,
+}
+
+impl KeyManagerState {
+    fn latest_prekey(&self) -> Option<PreKeyState> {
+        let mut latest: Option<PreKeyState> = None;
+
+        for prekey in self.prekeys.values() {
+            // Remove all prekeys which are _too early_ or _too late_ (expired).
+            //
+            //                   Now
+            // too late --> [---] |
+            //                    | [----] <-- too early
+            //              [-----|----] <-- valid
+            //                    |
+            //
+            //                  t -->
+            //
+            if prekey.lifetime().verify().is_err() {
+                continue;
+            }
+
+            // Of all other, valid ones, find the one which has the "furthest" expiry date and is
+            // therefore the "latest" key bundle.
+            //
+            //                   Now
+            //                    |
+            //                  [-|---------]
+            //              [-----|------------] <-- "latest"
+            //          [---------|-----]
+            //                    |
+            //
+            //                  t -->
+            //
+            match latest {
+                Some(ref current_prekey) => {
+                    if prekey.lifetime() > current_prekey.lifetime() {
+                        latest = Some(prekey.clone());
+                    }
+                }
+                None => {
+                    latest = Some(prekey.clone());
+                }
+            }
+        }
+
+        latest
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PreKeyState {
+    prekey: PreKey,
+    signature: XSignature,
+    secret: SecretKey,
+}
+
+impl PreKeyState {
+    pub fn init(
+        identity_secret: &SecretKey,
+        lifetime: Lifetime,
+        rng: &Rng,
+    ) -> Result<Self, KeyManagerError> {
+        let secret = SecretKey::from_bytes(rng.random_array()?);
+        let prekey = PreKey::new(secret.public_key()?, lifetime);
+        let signature = prekey.sign(identity_secret, rng)?;
+
+        Ok(Self {
+            prekey,
+            signature,
+            secret,
+        })
+    }
+
+    pub fn id(&self) -> PreKeyId {
+        *self.prekey.key()
+    }
+
+    pub fn lifetime(&self) -> &Lifetime {
+        self.prekey.lifetime()
+    }
 }
 
 impl KeyManager {
@@ -43,15 +121,12 @@ impl KeyManager {
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<KeyManagerState, KeyManagerError> {
-        let prekey_secret = SecretKey::from_bytes(rng.random_array()?);
-        let prekey = PreKey::new(prekey_secret.public_key()?, lifetime);
-        let prekey_signature = prekey.sign(identity_secret, rng)?;
+        let prekey = PreKeyState::init(&identity_secret, lifetime, &rng)?;
+
         Ok(KeyManagerState {
             identity_key: identity_secret.public_key()?,
             identity_secret: identity_secret.clone(),
-            prekey_secret,
-            prekey_signature,
-            prekey,
+            prekeys: HashMap::from([(prekey.id(), prekey)]),
             onetime_secrets: HashMap::new(),
             onetime_next_id: 0,
         })
@@ -70,26 +145,38 @@ impl PreKeyManager for KeyManager {
 
     type Error = KeyManagerError;
 
-    /// Returns long-term pre-key secret.
-    fn prekey_secret(y: &Self::State) -> &SecretKey {
-        &y.prekey_secret
+    /// Returns long-term pre-key secret by id.
+    ///
+    /// Throws an error if pre-key was not found (for example because it expired and was removed).
+    fn prekey_secret<'a>(
+        y: &'a Self::State,
+        id: &'a PreKeyId,
+    ) -> Result<&'a SecretKey, Self::Error> {
+        match y.prekeys.get(&id) {
+            Some(prekey) => Ok(&prekey.secret),
+            None => Err(KeyManagerError::UnknownPreKeySecret(*id)),
+        }
     }
 
     /// Generates a new long-term pre-key secret with the given lifetime.
     fn rotate_prekey(
-        y: Self::State,
+        mut y: Self::State,
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<Self::State, Self::Error> {
-        Self::init(&y.identity_secret, lifetime, rng)
+        let prekey = PreKeyState::init(&y.identity_secret, lifetime, &rng)?;
+        y.prekeys.insert(prekey.id(), prekey);
+        Ok(y)
     }
 
-    /// Returns public long-term key-bundle which can be published on the network.
+    /// Returns latest, public long-term key-bundle which can be published on the network.
     ///
-    /// Note that returned key-bundles can be expired and thus invalid. Applications need to check
-    /// the validity of the bundles and generate new ones when necessary.
-    fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle {
-        LongTermKeyBundle::new(y.identity_key, y.prekey, y.prekey_signature)
+    /// Note that key bundles can be expired and thus invalid, this method will return an error in
+    /// this case and applications need to generate new ones when necessary.
+    fn prekey_bundle(y: &Self::State) -> Result<LongTermKeyBundle, Self::Error> {
+        y.latest_prekey()
+            .map(|latest| LongTermKeyBundle::new(y.identity_key, latest.prekey, latest.signature))
+            .ok_or(KeyManagerError::NoPreKeysAvailable)
     }
 
     /// Creates a new public one-time key-bundle.
@@ -97,6 +184,10 @@ impl PreKeyManager for KeyManager {
         mut y: Self::State,
         rng: &Rng,
     ) -> Result<(Self::State, OneTimeKeyBundle), Self::Error> {
+        let latest = y
+            .latest_prekey()
+            .ok_or(KeyManagerError::NoPreKeysAvailable)?;
+
         let onetime_secret = SecretKey::from_bytes(rng.random_array()?);
         let onetime_key = OneTimePreKey::new(onetime_secret.public_key()?, y.onetime_next_id);
 
@@ -111,8 +202,8 @@ impl PreKeyManager for KeyManager {
 
         let bundle = OneTimeKeyBundle::new(
             y.identity_key,
-            y.prekey,
-            y.prekey_signature,
+            latest.prekey,
+            latest.signature,
             Some(onetime_key),
         );
 
@@ -152,6 +243,12 @@ pub enum KeyManagerError {
 
     #[error("could not find one-time pre-key secret with id {0}")]
     UnknownOneTimeSecret(OneTimePreKeyId),
+
+    #[error("could not find pre-key secret with id {0}")]
+    UnknownPreKeySecret(PreKeyId),
+
+    #[error("no valid pre-keys available, they are either expired or too early")]
+    NoPreKeysAvailable,
 }
 
 #[cfg(test)]
@@ -159,6 +256,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::crypto::x25519::SecretKey;
+    use crate::key_manager::KeyManagerError;
     use crate::traits::KeyBundle;
     use crate::{crypto::Rng, key_bundle::Lifetime};
 
@@ -177,7 +275,10 @@ mod tests {
         // Prekey stays the same between each bundle and match the secret key.
         assert_eq!(
             bundle_1.signed_prekey(),
-            &KeyManager::prekey_secret(&state).public_key().unwrap()
+            &KeyManager::prekey_secret(&state, bundle_1.signed_prekey())
+                .expect("non-expired prekey exists")
+                .public_key()
+                .unwrap()
         );
         assert_eq!(bundle_1.signed_prekey(), bundle_2.signed_prekey());
 
@@ -249,20 +350,13 @@ mod tests {
         .unwrap();
 
         // Current pre-key bundle is invalid.
-        let key_bundle = KeyManager::prekey_bundle(&y);
+        assert!(matches!(
+            KeyManager::prekey_bundle(&y),
+            Err(KeyManagerError::NoPreKeysAvailable)
+        ));
 
-        // Check pre-key bundle and generate a new one when invalid.
-        let (key_bundle_i, _y_i) = {
-            if key_bundle.verify().is_ok() {
-                (key_bundle.clone(), y)
-            } else {
-                let y_i = KeyManager::rotate_prekey(y, Lifetime::default(), &rng).unwrap();
-                let key_bundle_i = KeyManager::prekey_bundle(&y_i);
-                (key_bundle_i, y_i)
-            }
-        };
-
-        // Make sure new pre-key bundle is different.
-        assert_ne!(key_bundle, key_bundle_i);
+        // Generate a new one.
+        let y_i = KeyManager::rotate_prekey(y, Lifetime::default(), &rng).unwrap();
+        assert!(KeyManager::prekey_bundle(&y_i).is_ok());
     }
 }
