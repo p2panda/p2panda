@@ -39,7 +39,7 @@ pub fn init_dcgka_state<const N: usize>(
 
         let mut bundle_list = Vec::with_capacity(member_ids.len());
         for _ in member_ids {
-            let key_bundle = KeyManager::prekey_bundle(&manager);
+            let key_bundle = KeyManager::prekey_bundle(&manager).unwrap();
             bundle_list.push(key_bundle);
         }
 

@@ -35,7 +35,7 @@ fn group_operations() {
     let alice_pki = KeyRegistry::init();
     let alice_keys = KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
 
-    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys);
+    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys).unwrap();
 
     // Bob initialises their key material.
 
@@ -45,7 +45,7 @@ fn group_operations() {
     let bob_pki = KeyRegistry::init();
     let bob_keys = KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
 
-    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys);
+    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys).unwrap();
 
     // Charlie initialises their key material.
 
@@ -56,7 +56,7 @@ fn group_operations() {
     let charlie_keys =
         KeyManager::init(&charlie_identity_secret, Lifetime::default(), &rng).unwrap();
 
-    let charlie_prekeys = KeyManager::prekey_bundle(&charlie_keys);
+    let charlie_prekeys = KeyManager::prekey_bundle(&charlie_keys).unwrap();
 
     // Register key bundles.
 

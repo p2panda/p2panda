@@ -121,7 +121,7 @@ impl KeyManager {
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<KeyManagerState, KeyManagerError> {
-        let prekey = PreKeyState::init(&identity_secret, lifetime, &rng)?;
+        let prekey = PreKeyState::init(identity_secret, lifetime, rng)?;
 
         Ok(KeyManagerState {
             identity_key: identity_secret.public_key()?,
@@ -152,7 +152,7 @@ impl PreKeyManager for KeyManager {
         y: &'a Self::State,
         id: &'a PreKeyId,
     ) -> Result<&'a SecretKey, Self::Error> {
-        match y.prekeys.get(&id) {
+        match y.prekeys.get(id) {
             Some(prekey) => Ok(&prekey.secret),
             None => Err(KeyManagerError::UnknownPreKeySecret(*id)),
         }
@@ -164,7 +164,7 @@ impl PreKeyManager for KeyManager {
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<Self::State, Self::Error> {
-        let prekey = PreKeyState::init(&y.identity_secret, lifetime, &rng)?;
+        let prekey = PreKeyState::init(&y.identity_secret, lifetime, rng)?;
         y.prekeys.insert(prekey.id(), prekey);
         Ok(y)
     }

@@ -641,7 +641,7 @@ mod tests {
         let alice_manager =
             KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
 
-        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager);
+        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager).unwrap();
 
         // Bob generates their long-term key material.
 
@@ -649,7 +649,7 @@ mod tests {
         let bob_manager =
             KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
 
-        let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager);
+        let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager).unwrap();
 
         // Alice and Bob set up the 2SM protocol handlers for each other.
 

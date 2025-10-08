@@ -72,7 +72,7 @@ impl Ord for Lifetime {
 
 impl PartialOrd for Lifetime {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.not_after.cmp(&other.not_after))
+        Some(self.cmp(other))
     }
 }
 
