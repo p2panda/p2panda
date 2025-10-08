@@ -1894,13 +1894,149 @@ async fn repair_space() {
     // Bob: process all Alice's remaining messages (including the message repairing the space).
     // ~~~~~~~~~~~~
 
-    // First persist all messages as spaces expects this to be done before processing.
+    // Persist and process all messages from alice.
     for message in [message_02, message_03, message_04, message_05] {
         bob_manager.persist_message(&message).await.unwrap();
         bob_manager.process(&message).await.unwrap();
     }
 
     // Bob now knows about the space and has correct members.
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    assert_eq!(members, expected_members);
+}
+
+#[tokio::test]
+async fn duplicate_auth_state_references() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+    let claire = <TestPeer>::new(2).await;
+
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Manually register all key bundles on bob.
+
+    bob_manager
+        .register_member(&alice_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Alice: Create Group with Bob as a manager.
+    // ~~~~~~~~~~~~
+
+    let (group, messages) = alice_manager
+        .create_group(&[(bob_id, Access::manage())])
+        .await
+        .unwrap();
+    let member_group_id = group.id();
+
+    assert_eq!(messages.len(), 1);
+    let message_01 = messages[0].clone();
+
+    // Alice: Create Space with group as member.
+    // ~~~~~~~~~~~~
+
+    let space_id = 0;
+    let (space, messages) = alice_manager
+        .create_space(space_id, &[(member_group_id, Access::read())])
+        .await
+        .unwrap();
+    drop(space);
+
+    let message_02 = messages[0].clone();
+    let message_03 = messages[1].clone();
+    let message_04 = messages[2].clone();
+
+    // Bob: Process message_01 (create group) and add a member to the group without learning about any space yet.
+    // ~~~~~~~~~~~~
+
+    bob_manager.persist_message(&message_01).await.unwrap();
+    bob_manager.process(&message_01).await.unwrap();
+    let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
+    let messages = group.add(claire_id, Access::read()).await.unwrap();
+    let bob_message_01 = messages[0].clone();
+    drop(group);
+
+    // Alice: Process Bob's message (published concurrently to the space creation).
+    // ~~~~~~~~~~~~
+
+    alice_manager
+        .persist_message(&bob_message_01)
+        .await
+        .unwrap();
+    alice_manager.process(&bob_message_01).await.unwrap();
+
+    // Detect if any spaces require repairing.
+    let repair_required = alice_manager.spaces_repair_required().await.unwrap();
+    assert_eq!(vec![space_id], repair_required);
+
+    // Trigger repair of the space.
+    let messages = alice_manager.repair_spaces(&repair_required).await.unwrap();
+    let message_05 = messages[0].clone();
+    // @TODO: assert the correct events are present once we return events for messages we created ourselves.
+
+    // Alice's space members now contain Claire (the space was repaired).
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let mut members = space.members().await.unwrap();
+    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+    let expected_members = vec![
+        (alice_id, Access::manage()),
+        (bob_id, Access::read()),
+        (claire_id, Access::read()),
+    ];
+    assert_eq!(members, expected_members);
+    drop(space);
+
+    // Bob: processes Alice's messages except the "auth pointer" published to repair the space.
+    // ~~~~~~~~~~~~
+
+    for message in [message_02, message_03, message_04] {
+        bob_manager.persist_message(&message).await.unwrap();
+        bob_manager.process(&message).await.unwrap();
+    }
+
+    // Bob: repair the space (as alice's auth pointer not yet received)
+    // ~~~~~~~~~~~~
+
+    // Detect if any spaces require repairing.
+    let repair_required = bob_manager.spaces_repair_required().await.unwrap();
+    assert_eq!(vec![space_id], repair_required);
+
+    // Trigger repair of the space.
+    let messages = bob_manager.repair_spaces(&repair_required).await.unwrap();
+    let bob_message_02 = messages[0].clone();
+
+    // Bob: processes Alice's (duplicate) auth state pointer.
+    // ~~~~~~~~~~~~
+
+    bob_manager.persist_message(&message_05).await.unwrap();
+    bob_manager.process(&message_05).await.unwrap();
+
+    // Bob arrived at the expected state without error.
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
     let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
