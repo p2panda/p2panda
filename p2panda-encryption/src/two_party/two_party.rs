@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::crypto::hpke::{HpkeCiphertext, HpkeError, hpke_open, hpke_seal};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle};
+use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle, PreKeyId};
 use crate::key_manager::KeyManager;
 use crate::traits::{IdentityManager, KeyBundle, PreKeyManager};
 use crate::two_party::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
@@ -321,7 +321,9 @@ where
                 let plaintext = x3dh_decrypt(
                     &ciphertext,
                     KMG::identity_secret(&y_manager_i),
-                    KMG::prekey_secret(&y_manager_i),
+                    KMG::prekey_secret(&y_manager_i, &ciphertext.prekey_id)
+                        // Fails when sender used an invalid / expired pre-key for initial X3DH.
+                        .map_err(|_| TwoPartyError::UnknownPreKeyUsed(ciphertext.prekey_id))?,
                     onetime_secret.as_ref(),
                 )?;
 
@@ -424,6 +426,9 @@ pub enum TwoPartyError {
 
     #[error("tried to decrypt with unknown 2SM secret at index {0}")]
     UnknownSecretUsed(u64),
+
+    #[error("tried to decrypt with unknown initial X3DH pre-key {0}")]
+    UnknownPreKeyUsed(PreKeyId),
 
     #[error("invalid ciphertext for message type")]
     InvalidCiphertextType,
