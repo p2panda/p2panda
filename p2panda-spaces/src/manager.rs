@@ -326,15 +326,6 @@ where
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
-    ///
-    /// All spaces hold a local reference to each message in the shared auth state graph. A space
-    /// can get out-of-sync with this state if auth messages were published without the local peer
-    /// knowing about a space, either because they are not a member or because they were yet to
-    /// learn about it.
-    ///
-    /// On identifying that spaces need "repairing" _any_ current space member can publish a
-    /// message into the space referencing the missing auth message. This is done by calling
-    /// manager.repair_spaces(..).
     pub async fn spaces_repair_required(
         &self,
     ) -> Result<Vec<ID>, ManagerError<ID, S, K, M, C, RS>> {
@@ -368,9 +359,43 @@ where
         Ok(in_need_of_repair)
     }
 
-    /// Apply any missing messages from the shared auth state into the passed spaces.
+    /// Publish a reference to any auth messages missing from the passed spaces.
     ///
-    /// This is required when a space has become "out-of-sync" with the shared auth state.
+    /// Each space holds a copy of the shared auth state by publishing a reference to each auth
+    /// control message it witnesses. A space can get out-of-sync with this shared state if auth
+    /// messages were published without the local peer knowing about a space, either because they
+    /// are not a member or because they were yet to learn about it.
+    ///
+    /// ## Out-of-sync Space
+    ///
+    /// Shared Auth State     Space State
+    ///
+    ///       [x]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///
+    /// On identifying that a space needs "repairing" by calling spaces_repair_required(), _any_
+    /// current space member can publish a message into the space referencing the missing auth
+    /// message.
+    ///
+    /// It is recommended that repair does not occur after every call to process() as this would
+    /// cause peers to publish redundant pointers into the spaces graph. Although these duplicates do not
+    /// introduce any buggy or unexpected behavior, repairing after every processed message would
+    /// introduce an undesirable level of redundancy.  
+    ///
+    /// ## Redundant pointers
+    ///
+    /// Shared Auth State     Space State
+    ///
+    ///       [x] <-----------[z1][z2][z3]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///
+    /// A sensible approach to detecting and repairing spaces will involve processing messages in
+    /// logical batches and only detecting and repairing any out-of-sync spaces after a batch has
+    /// been processed. Alternatively some scheduling or throttling logic could be employed. 
     pub async fn repair_spaces(
         &self,
         space_ids: &Vec<ID>,
