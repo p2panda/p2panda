@@ -29,7 +29,7 @@ pub struct OperationRow {
     pub(crate) seq_num: String,
     backlink: Option<String>,
     previous: String,
-    extensions: Option<Vec<u8>>,
+    extensions: Vec<u8>,
     pub(crate) body: Option<Vec<u8>>,
     header_bytes: Vec<u8>,
 }
@@ -58,9 +58,7 @@ where
             seq_num: row.seq_num.parse::<u64>().unwrap(),
             backlink: row.backlink.map(|hex| Hash::from_str(&hex).unwrap()),
             previous,
-            extensions: row
-                .extensions
-                .map(|extensions| decode_cbor(&extensions[..]).unwrap()),
+            extensions: decode_cbor(&row.extensions[..]).unwrap(),
         }
     }
 }
