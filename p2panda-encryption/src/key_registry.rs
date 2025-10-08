@@ -46,6 +46,34 @@ where
         }
     }
 
+    /// Remove all expired key bundles from registry.
+    pub fn remove_expired(mut y: KeyRegistryState<ID>) -> KeyRegistryState<ID> {
+        y.longterm_bundles =
+            y.longterm_bundles
+                .into_iter()
+                .fold(HashMap::new(), |mut acc, (id, bundles)| {
+                    let bundles = bundles
+                        .into_iter()
+                        .filter(|bundle| bundle.verify().is_ok())
+                        .collect::<Vec<LongTermKeyBundle>>();
+                    acc.insert(id.clone(), bundles);
+                    acc
+                });
+
+        y.onetime_bundles =
+            y.onetime_bundles
+                .into_iter()
+                .fold(HashMap::new(), |mut acc, (id, bundles)| {
+                    let bundles = bundles
+                        .into_iter()
+                        .filter(|bundle| bundle.verify().is_ok())
+                        .collect::<Vec<OneTimeKeyBundle>>();
+                    acc.insert(id.clone(), bundles);
+                    acc
+                });
+        y
+    }
+
     /// Adds long-term pre-key bundle to the registry.
     ///
     /// This throws an error if an expired or invalid bundle was added.
@@ -65,6 +93,20 @@ where
             .and_modify(|bundles| bundles.push(key_bundle.clone()))
             .or_insert(vec![key_bundle]);
         Ok(y)
+    }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    fn add_longterm_bundle_UNVERIFIED(
+        mut y: KeyRegistryState<ID>,
+        id: ID,
+        key_bundle: LongTermKeyBundle,
+    ) -> KeyRegistryState<ID> {
+        y.longterm_bundles
+            .entry(id)
+            .and_modify(|bundles| bundles.push(key_bundle.clone()))
+            .or_insert(vec![key_bundle]);
+        y
     }
 
     /// Adds one-time pre-key bundle to the registry.
@@ -164,8 +206,7 @@ mod tests {
     use crate::Rng;
     use crate::crypto::x25519::SecretKey;
     use crate::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
-    use crate::key_manager::KeyManager;
-    use crate::traits::{PreKeyManager, PreKeyRegistry};
+    use crate::traits::PreKeyRegistry;
 
     use super::KeyRegistry;
 
@@ -179,22 +220,39 @@ mod tests {
             .as_secs();
 
         let member_id = 0;
-
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
-        // Initialize key manager with first bundle.
-        let keys = KeyManager::init(
-            &identity_secret,
-            Lifetime::from_range(now - 60, now + 60),
-            &rng,
-        )
-        .unwrap();
-        let bundle_1 = KeyManager::prekey_bundle(&keys).unwrap();
+        // Generate first bundle.
+        let bundle_1 = {
+            let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            let prekey = PreKey::new(
+                prekey_secret.public_key().unwrap(),
+                Lifetime::from_range(now - 60, now + 60),
+            );
+            let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+
+            LongTermKeyBundle::new(
+                identity_secret.public_key().unwrap(),
+                prekey,
+                prekey_signature,
+            )
+        };
 
         // Generate second bundle (which expires earlier).
-        let keys = KeyManager::rotate_prekey(keys, Lifetime::from_range(now - 60, now + 30), &rng)
-            .unwrap();
-        let bundle_2 = KeyManager::prekey_bundle(&keys).unwrap();
+        let bundle_2 = {
+            let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            let prekey = PreKey::new(
+                prekey_secret.public_key().unwrap(),
+                Lifetime::from_range(now - 60, now + 30),
+            );
+            let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+
+            LongTermKeyBundle::new(
+                identity_secret.public_key().unwrap(),
+                prekey,
+                prekey_signature,
+            )
+        };
 
         // Initialize key registry and register both bundles there.
         let pki = {
@@ -221,23 +279,105 @@ mod tests {
             .as_secs();
 
         let member_id = 0;
-
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
-        let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let prekey = PreKey::new(
-            prekey_secret.public_key().unwrap(),
-            Lifetime::from_range(now - 60, now - 30),
-        );
-        let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+        let invalid_bundle = {
+            let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            let prekey = PreKey::new(
+                prekey_secret.public_key().unwrap(),
+                Lifetime::from_range(now - 60, now - 30),
+            );
+            let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
-        let invalid_bundle = LongTermKeyBundle::new(
-            identity_secret.public_key().unwrap(),
-            prekey,
-            prekey_signature,
-        );
+            LongTermKeyBundle::new(
+                identity_secret.public_key().unwrap(),
+                prekey,
+                prekey_signature,
+            )
+        };
 
         let pki = KeyRegistry::init();
-        assert!(KeyRegistry::add_longterm_bundle(pki, member_id, invalid_bundle.clone()).is_err());
+
+        // Registry should throw an error when trying to add an expired bundle.
+        assert!(
+            KeyRegistry::add_longterm_bundle(pki.clone(), member_id, invalid_bundle.clone())
+                .is_err()
+        );
+
+        let pki =
+            KeyRegistry::add_longterm_bundle_UNVERIFIED(pki, member_id, invalid_bundle.clone());
+
+        // Registry should throw an error when we only have expired bundles of that member.
+        assert_eq!(pki.longterm_bundles.get(&member_id).unwrap().len(), 1);
+        assert!(
+            <KeyRegistry<usize> as PreKeyRegistry<usize, LongTermKeyBundle>>::key_bundle(
+                pki.clone(),
+                &member_id
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn garbage_collection() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let member_id = 0;
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        let invalid_bundle = {
+            let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            let prekey = PreKey::new(
+                prekey_secret.public_key().unwrap(),
+                Lifetime::from_range(now - 60, now - 30),
+            );
+            let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+
+            LongTermKeyBundle::new(
+                identity_secret.public_key().unwrap(),
+                prekey,
+                prekey_signature,
+            )
+        };
+
+        let valid_bundle = {
+            let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            let prekey = PreKey::new(
+                prekey_secret.public_key().unwrap(),
+                Lifetime::from_range(now - 60, now + 60),
+            );
+            let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+
+            LongTermKeyBundle::new(
+                identity_secret.public_key().unwrap(),
+                prekey,
+                prekey_signature,
+            )
+        };
+
+        let pki = {
+            let y = KeyRegistry::init();
+            let y =
+                KeyRegistry::add_longterm_bundle_UNVERIFIED(y, member_id, invalid_bundle.clone());
+            let y = KeyRegistry::add_longterm_bundle_UNVERIFIED(y, member_id, valid_bundle.clone());
+            y
+        };
+
+        assert_eq!(pki.longterm_bundles.get(&member_id).unwrap().len(), 2);
+
+        // Remove invalid bundles.
+        let pki = KeyRegistry::remove_expired(pki);
+        assert_eq!(pki.longterm_bundles.get(&member_id).unwrap().len(), 1);
+
+        // Registry returns correct and valid bundle.
+        assert_eq!(
+            KeyRegistry::key_bundle(pki, &member_id).unwrap().1,
+            Some(valid_bundle)
+        );
     }
 }
