@@ -30,7 +30,7 @@ pub struct KeyManagerState {
     identity_secret: SecretKey,
     identity_key: PublicKey,
     prekeys: HashMap<PreKeyId, PreKeyState>,
-    onetime_secrets: HashMap<OneTimePreKeyId, SecretKey>,
+    onetime_secrets: HashMap<OneTimePreKeyId, (PreKeyId, SecretKey)>,
     onetime_next_id: OneTimePreKeyId,
 }
 
@@ -98,6 +98,25 @@ impl KeyManager {
             onetime_next_id: 0,
         })
     }
+
+    /// Remove all expired key bundles from manager.
+    pub fn remove_expired(mut y: KeyManagerState) -> KeyManagerState {
+        // Remove all expired pre keys.
+        y.prekeys = y
+            .prekeys
+            .into_iter()
+            .filter(|(_, prekey)| prekey.prekey.verify_lifetime().is_ok())
+            .collect();
+
+        // Remove one-time bundles which do not have a valid pre-key anymore.
+        y.onetime_secrets = y
+            .onetime_secrets
+            .into_iter()
+            .filter(|(_, (prekey_id, _))| y.prekeys.contains_key(prekey_id))
+            .collect();
+
+        y
+    }
 }
 
 impl IdentityManager<KeyManagerState> for KeyManager {
@@ -159,7 +178,9 @@ impl PreKeyManager for KeyManager {
         let onetime_key = OneTimePreKey::new(onetime_secret.public_key()?, y.onetime_next_id);
 
         {
-            let existing_key = y.onetime_secrets.insert(onetime_key.id(), onetime_secret);
+            let existing_key = y
+                .onetime_secrets
+                .insert(onetime_key.id(), (latest.id(), onetime_secret));
             // Sanity check.
             assert!(
                 existing_key.is_none(),
@@ -191,7 +212,7 @@ impl PreKeyManager for KeyManager {
         id: OneTimePreKeyId,
     ) -> Result<(Self::State, Option<SecretKey>), Self::Error> {
         match y.onetime_secrets.remove(&id) {
-            Some(secret) => Ok((y, Some(secret))),
+            Some(secret) => Ok((y, Some(secret.1))),
             None => Err(KeyManagerError::UnknownOneTimeSecret(id)),
         }
     }
@@ -323,8 +344,42 @@ mod tests {
             Err(KeyManagerError::NoPreKeysAvailable)
         ));
 
+        // Can't generate one-time key bundle with expired pre keys.
+        assert!(matches!(
+            KeyManager::generate_onetime_bundle(y.clone(), &rng),
+            Err(KeyManagerError::NoPreKeysAvailable)
+        ));
+
         // Generate a new one.
         let y_i = KeyManager::rotate_prekey(y, Lifetime::default(), &rng).unwrap();
         assert!(KeyManager::prekey_bundle(&y_i).is_ok());
+    }
+
+    #[test]
+    fn garbage_collection() {
+        let rng = Rng::from_seed([1; 32]);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        // Initialise key manager with one invalid key bundle.
+        let y = KeyManager::init(
+            &identity_secret,
+            Lifetime::from_range(now - 120, now - 60), // expired lifetime
+            &rng,
+        )
+        .unwrap();
+        assert_eq!(y.prekeys.len(), 1);
+
+        // Add second _valid_ key bundle.
+        let y = KeyManager::rotate_prekey(y, Lifetime::default(), &rng).unwrap();
+        assert_eq!(y.prekeys.len(), 2);
+
+        // Remove all expired bundles.
+        let y = KeyManager::remove_expired(y);
+        assert_eq!(y.prekeys.len(), 1);
     }
 }
