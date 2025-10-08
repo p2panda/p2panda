@@ -30,19 +30,13 @@ pub struct Extensions {
 
 impl Extension<StreamName> for Extensions {
     fn extract(header: &Header<Self>) -> Option<StreamName> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.stream_name.clone())
+        Some(header.extensions.stream_name.clone())
     }
 }
 
 impl Extension<PruneFlag> for Extensions {
     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.prune_flag.clone())
+        Some(header.extensions.prune_flag.clone())
     }
 }
 
@@ -71,7 +65,7 @@ pub fn mock_stream() -> impl Stream<Item = RawOperation> {
                 seq_num,
                 backlink,
                 previous: vec![],
-                extensions: Some(extensions),
+                extensions: extensions,
             };
             header.sign(&private_key);
 

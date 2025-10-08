@@ -45,7 +45,7 @@
 //!     seq_num: 0,
 //!     backlink: None,
 //!     previous: vec![],
-//!     extensions: None::<()>,
+//!     extensions: (),
 //! };
 //!
 //! header.sign(&private_key);
@@ -159,7 +159,7 @@ impl<E> Ord for Operation<E> {
 ///     seq_num: 0,
 ///     backlink: None,
 ///     previous: vec![],
-///     extensions: None::<()>,
+///     extensions: (),
 /// };
 ///
 /// // Sign the header with the author's private key.
@@ -204,10 +204,10 @@ pub struct Header<E = ()> {
     pub previous: Vec<Hash>,
 
     /// Custom meta data.
-    pub extensions: Option<E>,
+    pub extensions: E,
 }
 
-impl<E> Default for Header<E> {
+impl<E: Default> Default for Header<E> {
     fn default() -> Self {
         Self {
             version: 1,
@@ -219,7 +219,7 @@ impl<E> Default for Header<E> {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: E::default(),
         }
     }
 }
@@ -283,8 +283,9 @@ impl<E> Header<E> {
     ///
     /// Fields instantiated with `None` values are excluded from the count.
     pub(crate) fn field_count(&self) -> usize {
-        // There will always be a minimum of six fields in a complete header.
-        let mut count = 6;
+        // There will always be a minimum of 7 fields in a complete header.
+        // (this counts the `E` extensions field, even if it is zero-sized).
+        let mut count = 7;
 
         if self.signature.is_some() {
             count += 1;
@@ -295,10 +296,6 @@ impl<E> Header<E> {
         }
 
         if self.backlink.is_some() {
-            count += 1;
-        }
-
-        if self.extensions.is_some() {
             count += 1;
         }
 
@@ -522,7 +519,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None::<()>,
+            extensions: (),
         };
 
         header.sign(&private_key);
@@ -573,7 +570,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header_0.sign(&private_key);
         assert!(validate_header(&header_0).is_ok());
@@ -588,7 +585,7 @@ mod tests {
             seq_num: 1,
             backlink: Some(header_0.hash()),
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header_1.sign(&private_key);
         assert!(validate_header(&header_1).is_ok());
@@ -611,7 +608,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
 
         // Incompatible operation format
@@ -697,20 +694,13 @@ mod tests {
                     return Some(LogId(header.hash()));
                 };
 
-                let Some(extensions) = header.extensions.as_ref() else {
-                    return None;
-                };
-
-                extensions.log_id.clone()
+                header.extensions.log_id.clone()
             }
         }
 
         impl Extension<Expiry> for CustomExtensions {
             fn extract(header: &Header<Self>) -> Option<Expiry> {
-                header
-                    .extensions
-                    .as_ref()
-                    .map(|extensions| extensions.expires.clone())
+                Some(header.extensions.expires.clone())
             }
         }
 
@@ -732,7 +722,7 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: Some(extensions.clone()),
+            extensions: extensions.clone(),
         };
 
         header.sign(&private_key);

@@ -25,20 +25,13 @@ impl Extension<LogId> for CustomExtensions {
             return Some(LogId(header.hash()));
         };
 
-        let Some(extensions) = header.extensions.as_ref() else {
-            return None;
-        };
-
-        extensions.log_id.clone()
+        header.extensions.log_id.clone()
     }
 }
 
 impl Extension<Expiry> for CustomExtensions {
     fn extract(header: &Header<Self>) -> Option<Expiry> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.expires.clone())
+        Some(header.extensions.expires.clone())
     }
 }
 
@@ -61,7 +54,7 @@ fn main() {
         seq_num: 0,
         backlink: None,
         previous: vec![],
-        extensions: Some(extensions.clone()),
+        extensions: extensions.clone(),
     };
 
     header.sign(&private_key);

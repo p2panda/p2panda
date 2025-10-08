@@ -478,7 +478,7 @@ mod tests {
             seq_num,
             backlink,
             previous: vec![],
-            extensions: None,
+            extensions: (),
         };
         header.sign(private_key);
         let header_bytes = header.to_bytes();
