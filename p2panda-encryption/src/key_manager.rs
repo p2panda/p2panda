@@ -100,6 +100,7 @@ impl KeyManager {
     }
 
     /// Remove all expired key bundles from manager.
+    #[allow(clippy::manual_retain)]
     pub fn remove_expired(mut y: KeyManagerState) -> KeyManagerState {
         // Remove all expired pre keys.
         y.prekeys = y

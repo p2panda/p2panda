@@ -106,7 +106,7 @@ pub fn latest_prekey<'a>(prekeys: Vec<&'a PreKey>) -> Option<&'a PreKey> {
         //                  t -->
         //
         match latest {
-            Some(ref current_prekey) => {
+            Some(current_prekey) => {
                 if prekey.lifetime() > current_prekey.lifetime() {
                     latest = Some(prekey);
                 }

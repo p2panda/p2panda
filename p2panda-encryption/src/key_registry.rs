@@ -56,7 +56,7 @@ where
                         .into_iter()
                         .filter(|bundle| bundle.verify().is_ok())
                         .collect::<Vec<LongTermKeyBundle>>();
-                    acc.insert(id.clone(), bundles);
+                    acc.insert(id, bundles);
                     acc
                 });
 
@@ -68,7 +68,7 @@ where
                         .into_iter()
                         .filter(|bundle| bundle.verify().is_ok())
                         .collect::<Vec<OneTimeKeyBundle>>();
-                    acc.insert(id.clone(), bundles);
+                    acc.insert(id, bundles);
                     acc
                 });
         y

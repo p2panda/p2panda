@@ -173,7 +173,7 @@ where
         //                  t -->
         //
         match latest {
-            Some(ref current_bundle) => {
+            Some(current_bundle) => {
                 if bundle.lifetime() > current_bundle.lifetime() {
                     latest = Some(bundle);
                 }
