@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Router actor for registering ALPNs.
+//! An iroh-specific router actor for registering ALPNs.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
 
 // TODO: Remove once used.
