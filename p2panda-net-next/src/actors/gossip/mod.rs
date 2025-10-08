@@ -96,17 +96,15 @@ pub struct Gossip;
 impl Actor for Gossip {
     type State = GossipState;
     type Msg = ToGossip;
-    type Arguments = (IrohEndpoint, IrohGossipConfig);
+    // TODO: Pass in any required config.
+    type Arguments = IrohEndpoint;
 
-    // Configure the gossip actor.
-    //
-    // A cloned IrohEndpoint is passed in when this actor is spawned by the Endpoint actor.
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
-        args: Self::Arguments,
+        endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (endpoint, config) = args;
+        let config = IrohGossipConfig::default();
 
         let gossip = IrohGossip::builder()
             .max_message_size(config.max_message_size)
@@ -421,7 +419,6 @@ mod tests {
     use iroh::protocol::Router as IrohRouter;
     use iroh::{Endpoint as IrohEndpoint, Watcher as _};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
-    use iroh_gossip::proto::Config as IrohGossipConfig;
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
     use tokio::sync::mpsc::error::TryRecvError;
@@ -496,17 +493,16 @@ mod tests {
         cat_discovery.add_node_info(ant_node_info);
 
         // Spawn gossip actors.
-        let gossip_config = IrohGossipConfig::default();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, ant_endpoint.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, bat_endpoint.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (cat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, cat_endpoint.clone())
                 .await
                 .unwrap();
 
@@ -632,13 +628,12 @@ mod tests {
         bat_discovery.add_node_info(ant_node_info);
 
         // Spawn gossip actors.
-        let gossip_config = IrohGossipConfig::default();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, ant_endpoint.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, bat_endpoint.clone())
                 .await
                 .unwrap();
 
@@ -751,17 +746,16 @@ mod tests {
         bat_discovery.add_node_info(ant_node_info);
 
         // Spawn gossip actors.
-        let gossip_config = IrohGossipConfig::default();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, ant_endpoint.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, bat_endpoint.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (cat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, cat_endpoint.clone())
                 .await
                 .unwrap();
 
@@ -907,17 +901,16 @@ mod tests {
         bat_discovery.add_node_info(ant_node_info);
 
         // Spawn gossip actors.
-        let gossip_config = IrohGossipConfig::default();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (ant_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, ant_endpoint.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (bat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, bat_endpoint.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, (cat_endpoint.clone(), gossip_config.clone()))
+            Actor::spawn(None, Gossip, cat_endpoint.clone())
                 .await
                 .unwrap();
 
