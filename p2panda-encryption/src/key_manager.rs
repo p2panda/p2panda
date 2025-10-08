@@ -222,10 +222,11 @@ pub enum KeyManagerError {
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use crate::crypto::Rng;
     use crate::crypto::x25519::SecretKey;
+    use crate::key_bundle::Lifetime;
     use crate::key_manager::KeyManagerError;
     use crate::traits::KeyBundle;
-    use crate::{crypto::Rng, key_bundle::Lifetime};
 
     use super::{KeyManager, PreKeyManager};
 

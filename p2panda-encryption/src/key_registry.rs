@@ -10,9 +10,10 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::crypto::x25519::PublicKey;
-use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle, latest_key_bundle};
+use crate::key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle, latest_key_bundle};
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
 
 /// Key registry to maintain public key material of other members we've collected.
@@ -46,11 +47,14 @@ where
     }
 
     /// Adds long-term pre-key bundle to the registry.
+    ///
+    /// This throws an error if an expired or invalid bundle was added.
     pub fn add_longterm_bundle(
         mut y: KeyRegistryState<ID>,
         id: ID,
         key_bundle: LongTermKeyBundle,
-    ) -> KeyRegistryState<ID> {
+    ) -> Result<KeyRegistryState<ID>, KeyRegistryError> {
+        key_bundle.verify()?;
         let existing = y.identities.insert(id, *key_bundle.identity_key());
         if let Some(existing) = existing {
             // Sanity check.
@@ -60,15 +64,18 @@ where
             .entry(id)
             .and_modify(|bundles| bundles.push(key_bundle.clone()))
             .or_insert(vec![key_bundle]);
-        y
+        Ok(y)
     }
 
     /// Adds one-time pre-key bundle to the registry.
+    ///
+    /// This throws an error if an expired or invalid bundle was added.
     pub fn add_onetime_bundle(
         mut y: KeyRegistryState<ID>,
         id: ID,
         key_bundle: OneTimeKeyBundle,
-    ) -> KeyRegistryState<ID> {
+    ) -> Result<KeyRegistryState<ID>, KeyRegistryError> {
+        key_bundle.verify()?;
         let existing = y.identities.insert(id, *key_bundle.identity_key());
         if let Some(existing) = existing {
             // Sanity check.
@@ -78,7 +85,7 @@ where
             .entry(id)
             .and_modify(|bundles| bundles.push(key_bundle.clone()))
             .or_insert(vec![key_bundle]);
-        y
+        Ok(y)
     }
 }
 
@@ -108,7 +115,7 @@ where
 {
     type State = KeyRegistryState<ID>;
 
-    type Error = Infallible;
+    type Error = KeyRegistryError;
 
     fn key_bundle(
         y: Self::State,
@@ -118,8 +125,14 @@ where
             return Ok((y, None));
         };
 
-        let bundle = latest_key_bundle(bundles).cloned();
-        Ok((y, bundle))
+        let valid_bundle = latest_key_bundle(bundles).cloned();
+
+        // Even though key bundles are available we couldn't find any non-expired ones.
+        if !bundles.is_empty() && valid_bundle.is_none() {
+            return Err(KeyRegistryError::KeyBundlesExpired);
+        }
+
+        Ok((y, valid_bundle))
     }
 }
 
@@ -135,13 +148,22 @@ where
     }
 }
 
+#[derive(Debug, Error)]
+pub enum KeyRegistryError {
+    #[error(transparent)]
+    KeyBundle(#[from] KeyBundleError),
+
+    #[error("all available key bundles of this member expired")]
+    KeyBundlesExpired,
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::Rng;
     use crate::crypto::x25519::SecretKey;
-    use crate::key_bundle::Lifetime;
+    use crate::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
     use crate::key_manager::KeyManager;
     use crate::traits::{PreKeyManager, PreKeyRegistry};
 
@@ -177,8 +199,8 @@ mod tests {
         // Initialize key registry and register both bundles there.
         let pki = {
             let y = KeyRegistry::init();
-            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_1.clone());
-            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_2);
+            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_1.clone()).unwrap();
+            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_2).unwrap();
             y
         };
 
@@ -187,5 +209,35 @@ mod tests {
             KeyRegistry::key_bundle(pki, &member_id).unwrap().1,
             Some(bundle_1)
         );
+    }
+
+    #[test]
+    fn invalid_bundles() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let member_id = 0;
+
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+        let prekey = PreKey::new(
+            prekey_secret.public_key().unwrap(),
+            Lifetime::from_range(now - 60, now - 30),
+        );
+        let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
+
+        let invalid_bundle = LongTermKeyBundle::new(
+            identity_secret.public_key().unwrap(),
+            prekey,
+            prekey_signature,
+        );
+
+        let pki = KeyRegistry::init();
+        assert!(KeyRegistry::add_longterm_bundle(pki, member_id, invalid_bundle.clone()).is_err());
     }
 }

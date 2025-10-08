@@ -59,7 +59,7 @@ pub fn init_dcgka_state<const N: usize>(
             let mut state = KeyRegistry::init();
             for bundle_id in member_ids {
                 let bundle = key_bundles.get_mut(&bundle_id).unwrap().pop().unwrap();
-                let state_i = KeyRegistry::add_onetime_bundle(state, bundle_id, bundle);
+                let state_i = KeyRegistry::add_onetime_bundle(state, bundle_id, bundle).unwrap();
                 state = state_i;
             }
             state
