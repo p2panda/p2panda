@@ -14,7 +14,8 @@ use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::xeddsa::{XEdDSAError, XSignature};
 use crate::crypto::{Rng, RngError};
 use crate::key_bundle::{
-    Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId, PreKey, PreKeyId,
+    Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKey, OneTimePreKeyId, PreKey,
+    PreKeyId, latest_prekey,
 };
 use crate::traits::{IdentityManager, PreKeyManager};
 
@@ -35,48 +36,14 @@ pub struct KeyManagerState {
 
 impl KeyManagerState {
     fn latest_prekey(&self) -> Option<PreKeyState> {
-        let mut latest: Option<PreKeyState> = None;
-
-        for prekey in self.prekeys.values() {
-            // Remove all prekeys which are _too early_ or _too late_ (expired).
-            //
-            //                   Now
-            // too late --> [---] |
-            //                    | [----] <-- too early
-            //              [-----|----] <-- valid
-            //                    |
-            //
-            //                  t -->
-            //
-            if prekey.lifetime().verify().is_err() {
-                continue;
-            }
-
-            // Of all other, valid ones, find the one which has the "furthest" expiry date and is
-            // therefore the "latest" key bundle.
-            //
-            //                   Now
-            //                    |
-            //                  [-|---------]
-            //              [-----|------------] <-- "latest"
-            //          [---------|-----]
-            //                    |
-            //
-            //                  t -->
-            //
-            match latest {
-                Some(ref current_prekey) => {
-                    if prekey.lifetime() > current_prekey.lifetime() {
-                        latest = Some(prekey.clone());
-                    }
-                }
-                None => {
-                    latest = Some(prekey.clone());
-                }
-            }
-        }
-
-        latest
+        let prekeys = self.prekeys.values().map(|state| &state.prekey).collect();
+        let latest = latest_prekey(prekeys);
+        latest.map(|prekey| {
+            self.prekeys
+                .get(prekey.key())
+                .expect("we know the item exists in the set")
+                .clone()
+        })
     }
 }
 

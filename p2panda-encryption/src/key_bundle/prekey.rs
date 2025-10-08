@@ -72,3 +72,50 @@ impl OneTimePreKey {
         self.0.to_bytes()
     }
 }
+
+/// Helper method to identify the "latest" (valid and with furthest expiry date) pre-key from a
+/// set. Returns `None` if no valid key was given.
+pub fn latest_prekey<'a>(prekeys: Vec<&'a PreKey>) -> Option<&'a PreKey> {
+    let mut latest: Option<&'a PreKey> = None;
+
+    for prekey in prekeys {
+        // Remove all prekeys which are _too early_ or _too late_ (expired).
+        //
+        //                   Now
+        // too late --> [---] |
+        //                    | [----] <-- too early
+        //              [-----|----] <-- valid
+        //                    |
+        //
+        //                  t -->
+        //
+        if prekey.lifetime().verify().is_err() {
+            continue;
+        }
+
+        // Of all other, valid ones, find the one which has the "furthest" expiry date and is
+        // therefore the "latest" key bundle.
+        //
+        //                   Now
+        //                    |
+        //                  [-|---------]
+        //              [-----|------------] <-- "latest"
+        //          [---------|-----]
+        //                    |
+        //
+        //                  t -->
+        //
+        match latest {
+            Some(ref current_prekey) => {
+                if prekey.lifetime() > current_prekey.lifetime() {
+                    latest = Some(prekey);
+                }
+            }
+            None => {
+                latest = Some(prekey);
+            }
+        }
+    }
+
+    latest
+}

@@ -137,6 +137,56 @@ impl KeyBundle for LongTermKeyBundle {
     }
 }
 
+/// Helper method to identify the "latest" (valid and with furthest expiry date) key bundle from a
+/// set. Returns `None` if no valid bundle was given.
+pub fn latest_key_bundle<'a, KB>(bundles: &'a [KB]) -> Option<&'a KB>
+where
+    KB: KeyBundle,
+{
+    let mut latest: Option<&'a KB> = None;
+
+    for bundle in bundles {
+        // Remove all prekeys which are _too early_ or _too late_ (expired).
+        //
+        //                   Now
+        // too late --> [---] |
+        //                    | [----] <-- too early
+        //              [-----|----] <-- valid
+        //                    |
+        //
+        //                  t -->
+        //
+        if bundle.lifetime().verify().is_err() {
+            continue;
+        }
+
+        // Of all other, valid ones, find the one which has the "furthest" expiry date and is
+        // therefore the "latest" key bundle.
+        //
+        //                   Now
+        //                    |
+        //                  [-|---------]
+        //              [-----|------------] <-- "latest"
+        //          [---------|-----]
+        //                    |
+        //
+        //                  t -->
+        //
+        match latest {
+            Some(ref current_bundle) => {
+                if bundle.lifetime() > current_bundle.lifetime() {
+                    latest = Some(bundle);
+                }
+            }
+            None => {
+                latest = Some(bundle);
+            }
+        }
+    }
+
+    latest
+}
+
 #[derive(Debug, Error)]
 pub enum KeyBundleError {
     #[error(transparent)]

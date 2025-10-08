@@ -200,9 +200,11 @@ where
 
         // Accept "add" control messages if we are being added by it.
         if let GroupMessageContent::Control(ControlMessage::Add { added }) = message_content
-            && !y.is_welcomed && added == y.my_id {
-                is_create_or_welcome = true;
-            }
+            && !y.is_welcomed
+            && added == y.my_id
+        {
+            is_create_or_welcome = true;
+        }
 
         let y_orderer_i = ORD::queue(y.orderer, message).map_err(GroupError::Orderer)?;
         y.orderer = y_orderer_i;

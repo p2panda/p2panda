@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::x25519::PublicKey;
-use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle};
+use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle, latest_key_bundle};
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
 
 /// Key registry to maintain public key material of other members we've collected.
@@ -111,13 +111,14 @@ where
     type Error = Infallible;
 
     fn key_bundle(
-        mut y: Self::State,
+        y: Self::State,
         id: &ID,
     ) -> Result<(Self::State, Option<LongTermKeyBundle>), Self::Error> {
-        let bundle = y
-            .longterm_bundles
-            .get_mut(id)
-            .and_then(|bundles| bundles.pop());
+        let Some(bundles) = y.longterm_bundles.get(id) else {
+            return Ok((y, None));
+        };
+
+        let bundle = latest_key_bundle(bundles).cloned();
         Ok((y, bundle))
     }
 }
@@ -131,5 +132,60 @@ where
     fn identity_key(y: &KeyRegistryState<ID>, id: &ID) -> Result<Option<PublicKey>, Self::Error> {
         let key = y.identities.get(id).cloned();
         Ok(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::Rng;
+    use crate::crypto::x25519::SecretKey;
+    use crate::key_bundle::Lifetime;
+    use crate::key_manager::KeyManager;
+    use crate::traits::{PreKeyManager, PreKeyRegistry};
+
+    use super::KeyRegistry;
+
+    #[test]
+    fn latest_key_bundle() {
+        let rng = Rng::from_seed([1; 32]);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let member_id = 0;
+
+        let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+        // Initialize key manager with first bundle.
+        let keys = KeyManager::init(
+            &identity_secret,
+            Lifetime::from_range(now - 60, now + 60),
+            &rng,
+        )
+        .unwrap();
+        let bundle_1 = KeyManager::prekey_bundle(&keys).unwrap();
+
+        // Generate second bundle (which expires earlier).
+        let keys = KeyManager::rotate_prekey(keys, Lifetime::from_range(now - 60, now + 30), &rng)
+            .unwrap();
+        let bundle_2 = KeyManager::prekey_bundle(&keys).unwrap();
+
+        // Initialize key registry and register both bundles there.
+        let pki = {
+            let y = KeyRegistry::init();
+            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_1.clone());
+            let y = KeyRegistry::add_longterm_bundle(y, member_id, bundle_2);
+            y
+        };
+
+        // Registry returns bundle which has the "furthest" expiry date.
+        assert_eq!(
+            KeyRegistry::key_bundle(pki, &member_id).unwrap().1,
+            Some(bundle_1)
+        );
     }
 }
