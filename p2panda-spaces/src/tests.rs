@@ -1788,82 +1788,6 @@ async fn idempotent_api() {
 }
 
 #[tokio::test]
-async fn batch_process() {
-    let alice = TestPeer::new(0).await;
-    let bob = TestPeer::new(1).await;
-
-    // Manually register bob's key bundle.
-
-    alice
-        .manager
-        .register_member(&bob.manager.me().await.unwrap())
-        .await
-        .unwrap();
-
-    // Manually register alice's key bundle.
-
-    bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
-        .await
-        .unwrap();
-
-    let alice_id = alice.manager.id();
-    let bob_id = bob.manager.id();
-
-    let alice_manager = alice.manager.clone();
-    let bob_manager = bob.manager.clone();
-
-    // Alice: Create Space
-    // ~~~~~~~~~~~~
-
-    let space_id = 0;
-    let (space, messages) = alice_manager.create_space(space_id, &[]).await.unwrap();
-
-    let message_01 = messages[0].clone();
-    let message_02 = messages[1].clone();
-
-    // Alice: Publishes a message into the space
-    // ~~~~~~~~~~~~
-
-    let message_03 = space.publish(&[0, 1, 2]).await.unwrap();
-
-    // Alice: Add new member to Space
-    // ~~~~~~~~~~~~
-
-    let messages = space.add(bob_id, Access::read()).await.unwrap();
-    let message_04 = messages[0].clone();
-    let message_05 = messages[1].clone();
-
-    drop(space);
-
-    // Bob: Batch process all messages.
-    // ~~~~~~~~~~~~
-
-    // First persist all messages as spaces expects this to be done before processing.
-    bob_manager.persist_message(&message_01).await.unwrap();
-    bob_manager.persist_message(&message_02).await.unwrap();
-    bob_manager.persist_message(&message_03).await.unwrap();
-    bob_manager.persist_message(&message_04).await.unwrap();
-    bob_manager.persist_message(&message_05).await.unwrap();
-
-    let _ = bob
-        .manager
-        .process_batch(&vec![
-            message_01, message_02, message_03, message_04, message_05,
-        ])
-        .await
-        .unwrap();
-
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
-    let mut members = space.members().await.unwrap();
-    members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
-    assert_eq!(
-        members,
-        vec![(alice_id, Access::manage()), (bob_id, Access::read())]
-    );
-}
-
-#[tokio::test]
 async fn repair_space() {
     let alice = TestPeer::new(0).await;
     let bob = <TestPeer>::new(1).await;
@@ -1971,15 +1895,10 @@ async fn repair_space() {
     // ~~~~~~~~~~~~
 
     // First persist all messages as spaces expects this to be done before processing.
-    bob_manager.persist_message(&message_02).await.unwrap();
-    bob_manager.persist_message(&message_03).await.unwrap();
-    bob_manager.persist_message(&message_04).await.unwrap();
-    bob_manager.persist_message(&message_05).await.unwrap();
-
-    bob_manager
-        .process_batch(&vec![message_02, message_03, message_04, message_05])
-        .await
-        .unwrap();
+    for message in [message_02, message_03, message_04, message_05] {
+        bob_manager.persist_message(&message).await.unwrap();
+        bob_manager.process(&message).await.unwrap();
+    }
 
     // Bob now knows about the space and has correct members.
     let space = bob_manager.space(space_id).await.unwrap().unwrap();

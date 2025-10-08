@@ -242,25 +242,6 @@ where
         Ok(events)
     }
 
-    /// Process a batch of messages.
-    pub async fn process_batch(
-        &self,
-        messages: &Vec<M>,
-    ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, M, C, RS>> {
-        let mut events = vec![];
-        for message in messages {
-            let events_inner = self.process(message).await?;
-            events.extend(events_inner);
-        }
-
-        // @TODO: We _could_ repair any out-of-sync spaces here after processing a batch of
-        // messages. However this would introduce inconsistent behaviour with process() as we
-        // don't want to repair there in order to avoid redundant messages. So for now making
-        // repairing a concern of the user is maybe best.
-
-        Ok(events)
-    }
-
     /// The public key of the local actor.
     pub fn id(&self) -> ActorId {
         self.actor_id
