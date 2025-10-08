@@ -154,7 +154,7 @@ where
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
     ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
-        if !y.processed_auth.insert(auth_message.id()) {
+        if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
             return Ok(None);
         }
 
@@ -202,7 +202,6 @@ where
         // Update space state and persist it.
         {
             let mut manager = manager_ref.inner.write().await;
-            y.processed_space.insert(space_message.id());
             y.encryption_y
                 .orderer
                 .add_dependency(space_message.id(), &dependencies);
@@ -309,7 +308,7 @@ where
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
 
         // If we already processed this message return here.
-        if !y.processed_space.insert(space_message.id()) {
+        if y.encryption_y.orderer.has_seen(space_message.id()) {
             return Ok(vec![]);
         }
 
@@ -318,7 +317,6 @@ where
 
         // Process auth message on space auth state.
         y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
-        y.processed_auth.insert(auth_message.id());
 
         // Get next space members.
         let mut next_members = secret_members(y.auth_y.members(y.group_id));
@@ -499,7 +497,7 @@ where
     ) -> Result<Option<M>, SpaceError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
         // If this space already processed this auth message then skip it.
-        if y.processed_auth.contains(&auth_message.id()) {
+        if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
             return Ok(None);
         }
 
@@ -701,10 +699,6 @@ where
     // persist. We can make the fields public in `p2panda-encryption` and extract only the
     // information we really need.
     pub encryption_y: EncryptionGroupState<M>,
-    /// Messages from the global auth state which have been applied to this space.
-    pub processed_auth: HashSet<OperationId>,
-    /// Space messages which have been applied to this space.
-    pub processed_space: HashSet<OperationId>,
 }
 
 impl<ID, M, C> SpaceState<ID, M, C>
@@ -723,8 +717,6 @@ where
             group_id,
             auth_y,
             encryption_y,
-            processed_auth: HashSet::default(),
-            processed_space: HashSet::default(),
         }
     }
 }
