@@ -2028,7 +2028,7 @@ async fn duplicate_auth_state_references() {
 
     // Trigger repair of the space.
     let messages = bob_manager.repair_spaces(&repair_required).await.unwrap();
-    let bob_message_02 = messages[0].clone();
+    let _ = messages[0].clone();
 
     // Bob: processes Alice's (duplicate) auth state pointer.
     // ~~~~~~~~~~~~

@@ -313,20 +313,32 @@ where
             return Ok(vec![]);
         }
 
+        let duplicate_pointer = y.auth_y.inner.operations.contains_key(&auth_message.id());
+
         let mut current_members = secret_members(y.auth_y.members(y.group_id));
         current_members.sort();
 
         // Process auth message on space auth state.
-        y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
-
-        // Get next space members.
-        let mut next_members = secret_members(y.auth_y.members(y.group_id));
-        next_members.sort();
+        //
+        // Skip processing if this auth message has already been processed. This can happen when
+        // multiple peers concurrently publish pointers to some auth message into the space.
+        let next_members = if !duplicate_pointer {
+            y.auth_y = AuthGroup::process(y.auth_y, auth_message).map_err(SpaceError::AuthGroup)?;
+            // Get next space members.
+            let mut next_members = secret_members(y.auth_y.members(y.group_id));
+            next_members.sort();
+            next_members
+        } else {
+            current_members.clone()
+        };
 
         // Make the dgm aware of the new space members.
         y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
 
         // Construct encryption message.
+        //
+        // We do this even when the auth message was not processed above, to make sure that we
+        // still consume all direct messages.
         let my_id = self.manager.id();
         let encryption_message = EncryptionMessage::from_membership(
             space_message,
@@ -357,26 +369,31 @@ where
                 .map_err(SpaceError::SpaceStore)?;
         }
 
-        let mut events = encryption_output_to_space_events(space_id, encryption_output);
+        let events = if !duplicate_pointer {
+            let mut events = encryption_output_to_space_events(space_id, encryption_output);
 
-        // If current and next member sets are equal it indicates that the space is not affected
-        // by this auth change. This can be because the space wasn't created yet, or the auth
-        // change simply does not effect the members of this space. In either case we don't want
-        // to emit any membership change event.
-        if current_members == next_members {
-            return Ok(events);
+            // If current and next member sets are equal it indicates that the space is not affected
+            // by this auth change. This can be because the space wasn't created yet, or the auth
+            // change simply does not effect the members of this space. In either case we don't want
+            // to emit any membership change event.
+            if current_members == next_members {
+                return Ok(events);
+            };
+
+            // Construct space membership event.
+            let membership_event = space_message_to_space_event(
+                space_message,
+                auth_message,
+                current_members,
+                next_members,
+            );
+
+            // Insert membership event at front of vec.
+            events.insert(0, membership_event);
+            events
+        } else {
+            vec![]
         };
-
-        // Construct space membership event.
-        let membership_event = space_message_to_space_event(
-            space_message,
-            auth_message,
-            current_members,
-            next_members,
-        );
-
-        // Insert membership event at front of vec.
-        events.insert(0, membership_event);
 
         Ok(events)
     }
