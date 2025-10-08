@@ -213,7 +213,12 @@ where
                 let event = Group::process(self.clone(), message)
                     .await
                     .map_err(ManagerError::Group)?;
-                vec![event]
+
+                if let Some(event) = event {
+                    vec![event]
+                } else {
+                    vec![]
+                }
             }
             // Received control message related to a space.
             SpacesArgs::SpaceMembership { .. } => {

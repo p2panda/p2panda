@@ -104,6 +104,10 @@ impl EncryptionOrdererState {
     pub fn is_welcomed(&self) -> bool {
         self.welcome_message.is_some()
     }
+
+    pub fn has_seen(&self, id: OperationId) -> bool {
+        self.graph.contains_node(id)
+    }
 }
 
 impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
