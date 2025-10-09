@@ -12,6 +12,7 @@ use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
+use crate::protocols::ProtocolMap;
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
@@ -214,7 +215,7 @@ impl Actor for Network {
 mod tests {
     use ractor::Actor;
     use serial_test::serial;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tracing_test::traced_test;
 
     use super::Network;
