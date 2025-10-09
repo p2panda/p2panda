@@ -60,17 +60,17 @@ where
         let rng = Rng::from_seed([peer_id; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        Self::new_with_config(peer_id, &credentials, &config, rng).await
+        Self::new_with_config(peer_id, credentials, &config, rng).await
     }
 
     pub async fn new_with_config(
         peer_id: u8,
-        credentials: &Credentials,
+        credentials: Credentials,
         config: &Config,
         rng: Rng,
     ) -> Self {
         let store = TestSpacesStore::new();
-        let key_store = TestKeyStore::new(store.clone(), credentials, &config, &rng).unwrap();
+        let key_store = TestKeyStore::new(store.clone(), &credentials).unwrap();
         let manager = TestManager::new_with_config(store, key_store, credentials, config, rng)
             .await
             .unwrap();

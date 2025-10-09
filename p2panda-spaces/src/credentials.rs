@@ -8,11 +8,12 @@ use serde::{Deserialize, Serialize};
 /// Every peer has two secret keys and _both_ required in order to interact with p2panda-spaces
 /// and neither can be rotated without losing access to all spaces. _If_ key rotation is required
 /// then both keys should be rotated together.
-///  
+///
 /// A peers' identity secret is used for key agreement in p2panda-encryption. Their private key is
 /// used to sign messages and the associated public key is used to identify the peer (eg. for
-/// access control purposes).  
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// access control purposes).
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Credentials {
     pub(crate) private_key: PrivateKey,
     pub(crate) identity_secret: SecretKey,

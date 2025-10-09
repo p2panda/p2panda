@@ -19,7 +19,7 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
@@ -66,7 +66,7 @@ where
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
@@ -77,7 +77,7 @@ where
     pub async fn new(
         spaces_store: S,
         key_store: K,
-        credentials: &Credentials,
+        credentials: Credentials,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
         Self::new_with_config(
@@ -95,7 +95,7 @@ where
     pub async fn new_with_config(
         spaces_store: S,
         key_store: K,
-        credentials: &Credentials,
+        credentials: Credentials,
         config: &Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
@@ -580,7 +580,7 @@ pub enum ManagerError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
