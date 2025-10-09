@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use p2panda_core::traits::{Identifier, OperationId};
+use p2panda_core::traits::{Digest, OperationId};
 // @TODO: Change these to p2panda_store when ready.
 use p2panda_store_next::operations::OperationStore;
 use p2panda_store_next::orderer::OrdererStore;
@@ -38,7 +38,7 @@ where
 
 impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
-    T: Identifier<ID> + Ordering<ID>,
+    T: Digest<ID> + Ordering<ID>,
     ID: OperationId,
     S: OrdererStore<ID> + OperationStore<T, ID>,
 {
