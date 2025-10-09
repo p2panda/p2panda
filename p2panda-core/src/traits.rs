@@ -5,10 +5,10 @@ use std::hash::Hash as StdHash;
 /// Identifier of a single operation.
 pub trait OperationId: Copy + Clone + PartialEq + Eq + StdHash {}
 
-/// Type returning it's own identifier.
-pub trait Identifier<ID>
+/// Returns (unique) hash digest, which can be used as identifier of this published data type.
+pub trait Digest<ID>
 where
     ID: OperationId,
 {
-    fn id(&self) -> &ID;
+    fn hash(&self) -> ID;
 }
