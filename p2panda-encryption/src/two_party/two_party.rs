@@ -452,7 +452,7 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init_with_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
         let (alice_manager, alice_prekey_bundle) =
@@ -462,7 +462,8 @@ mod tests {
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init_with_prekey(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (bob_manager, bob_prekey_bundle) =
             KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();
@@ -640,7 +641,7 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init_with_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
         let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager).unwrap();
@@ -649,7 +650,8 @@ mod tests {
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init_with_prekey(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager).unwrap();
 
@@ -715,7 +717,7 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init_with_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
         let (alice_manager, alice_prekey_bundle) =
@@ -725,7 +727,8 @@ mod tests {
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init_with_prekey(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (bob_manager, bob_prekey_bundle) =
             KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();

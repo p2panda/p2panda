@@ -166,7 +166,7 @@ impl KeyManager {
     /// Returns newly initialised key-manager state, holding our identity secret and an
     /// automatically generated, first pre-key secret which can be used to generate key-bundles.
     #[cfg(any(test, feature = "test_utils"))]
-    pub fn init_with_prekey(
+    pub fn init_and_generate_prekey(
         identity_secret: &SecretKey,
         lifetime: Lifetime,
         rng: &Rng,
@@ -340,7 +340,8 @@ mod tests {
 
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let state =
-            KeyManager::init_with_prekey(&identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (state, bundle_1) = KeyManager::generate_onetime_bundle(state, &rng).unwrap();
         let (state, bundle_2) = KeyManager::generate_onetime_bundle(state, &rng).unwrap();
@@ -415,7 +416,7 @@ mod tests {
 
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
-        let y = KeyManager::init_with_prekey(
+        let y = KeyManager::init_and_generate_prekey(
             &identity_secret,
             Lifetime::from_range(now - 120, now - 60), // expired lifetime
             &rng,
@@ -450,7 +451,7 @@ mod tests {
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
         // Initialise key manager with one invalid key bundle.
-        let y = KeyManager::init_with_prekey(
+        let y = KeyManager::init_and_generate_prekey(
             &identity_secret,
             Lifetime::from_range(now - 120, now - 60), // expired lifetime
             &rng,

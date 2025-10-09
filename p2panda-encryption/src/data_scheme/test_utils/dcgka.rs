@@ -36,7 +36,8 @@ pub fn init_dcgka_state<const N: usize>(
     for id in member_ids {
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let manager =
-            KeyManager::init_with_prekey(&identity_secret, Lifetime::default(), rng).unwrap();
+            KeyManager::init_and_generate_prekey(&identity_secret, Lifetime::default(), rng)
+                .unwrap();
 
         let mut bundle_list = Vec::with_capacity(member_ids.len());
         for _ in member_ids {
