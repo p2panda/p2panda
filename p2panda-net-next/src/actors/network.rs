@@ -9,8 +9,9 @@ use tracing::{debug, warn};
 
 use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
-use crate::actors::endpoint::{Endpoint, ToEndpoint};
+use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
+use crate::protocols::ProtocolMap;
 
 pub enum ToNetwork {}
 
@@ -20,39 +21,39 @@ pub struct NetworkState {
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     endpoint_actor: ActorRef<ToEndpoint>,
-    endpoint_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook>,
     address_book_actor_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
 }
 
-pub struct Network {}
+pub struct Network;
 
 impl Actor for Network {
     type State = NetworkState;
     type Msg = ToNetwork;
-    type Arguments = ();
+    type Arguments = ProtocolMap;
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        _args: Self::Arguments,
+        protocols: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
             Some("events".to_string()),
-            Events {},
+            Events,
             (),
             myself.clone().into(),
         )
         .await?;
 
         // Spawn the endpoint actor.
+        let endpoint_config = EndpointConfig::new(protocols);
         let (endpoint_actor, _) = Actor::spawn_linked(
             Some("endpoint".to_string()),
-            Endpoint {},
-            (),
+            Endpoint,
+            endpoint_config,
             myself.clone().into(),
         )
         .await?;
@@ -79,7 +80,6 @@ impl Actor for Network {
             events_actor,
             events_actor_failures: 0,
             endpoint_actor,
-            endpoint_actor_failures: 0,
             address_book_actor,
             address_book_actor_failures: 0,
             discovery_actor,
@@ -100,8 +100,16 @@ impl Actor for Network {
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        let reason = Some("network system is shutting down".to_string());
+
+        // Stop all the actors which are supervised by the network actor.
+        state.events_actor.stop(reason.clone());
+        state.endpoint_actor.stop(reason.clone());
+        state.address_book_actor.stop(reason.clone());
+        state.discovery_actor.stop(reason);
+
         Ok(())
     }
 
@@ -146,17 +154,9 @@ impl Actor for Network {
                     Some("endpoint") => {
                         warn!("network actor: endpoint actor failed: {}", panic_msg);
 
-                        // Respawn the endpoint actor.
-                        let (endpoint_actor, _) = Actor::spawn_linked(
-                            Some("endpoint".to_string()),
-                            Endpoint {},
-                            (),
-                            myself.clone().into(),
-                        )
-                        .await?;
-
-                        state.endpoint_actor_failures += 1;
-                        state.endpoint_actor = endpoint_actor;
+                        // If the endpoint actor fails then the entire system is compromised and we
+                        // stop the top-level network actor.
+                        myself.stop(Some("endpoint actor failed".to_string()));
                     }
                     Some("address book") => {
                         warn!("network actor: address book actor failed: {}", panic_msg);
@@ -216,8 +216,10 @@ mod tests {
     #[traced_test]
     #[serial]
     async fn network_child_actors_are_started() {
+        let protocols = Default::default();
+
         let (network_actor, network_actor_handle) =
-            Actor::spawn(Some("network".to_string()), Network {}, ())
+            Actor::spawn(Some("network".to_string()), Network, protocols)
                 .await
                 .unwrap();
 
