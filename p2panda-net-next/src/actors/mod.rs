@@ -6,7 +6,6 @@ mod endpoint;
 mod events;
 mod gossip;
 mod network;
-mod router;
 mod subscription;
 mod sync;
 #[cfg(test)]
