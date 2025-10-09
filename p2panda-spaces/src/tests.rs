@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::thread;
+use std::time::Duration;
+
 use assert_matches::assert_matches;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+use p2panda_encryption::Rng;
+use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::data_scheme::DirectMessage;
+use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 
 use crate::ActorId;
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
+use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, SpaceStore};
 use crate::types::{AuthControlMessage, AuthGroupAction};
+use crate::utils::now;
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.id().cmp(&actor_b.id()));
@@ -2053,4 +2061,53 @@ async fn key_store_expired() {
     // Publish a new key bundle with newly generated pre-keys and we should be fine.
     let _message = peer.manager.key_bundle_message().await.unwrap();
     assert!(!peer.manager.key_bundle_expired().await.unwrap());
+}
+
+#[tokio::test]
+async fn add_expired_member_to_group() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::<i32>::new(1).await;
+
+    // Create key bundle which expires in 1 second.
+    let expired_member = {
+        let rng = Rng::from_seed([1; 32]);
+
+        // Generate pre-key & sign it.
+        let prekey_secret = SecretKey::from_rng(&rng).unwrap();
+        let prekey = PreKey::new(
+            prekey_secret.public_key().unwrap(),
+            Lifetime::from_range(now() - 60, now() + 1),
+        );
+        let signature = prekey
+            .sign(&bob.credentials.identity_secret(), &rng)
+            .unwrap();
+
+        // Wrap it in key bundle.
+        let bundle = LongTermKeyBundle::new(
+            bob.credentials.identity_secret().public_key().unwrap(),
+            prekey,
+            signature,
+        );
+
+        Member::new(bob.manager.id(), bundle)
+    };
+
+    // Alice adds Bob's key bundle. At this point it is still valid.
+    alice
+        .manager
+        .register_member(&expired_member)
+        .await
+        .unwrap();
+
+    // Sleep two seconds to make bundle expire.
+    thread::sleep(Duration::from_secs(1));
+
+    // Alice creates a space with Bob but it should fail since the key bundle has expired.
+    assert!(
+        alice
+            .manager
+            .create_space(0, &[(expired_member.id(), Access::write())])
+            .await
+            .is_err()
+    );
 }

@@ -50,6 +50,7 @@ pub type TestSpaceError<ID> = SpaceError<
 pub struct TestPeer<ID = i32> {
     pub(crate) id: u8,
     pub(crate) manager: TestManager<ID>,
+    pub(crate) credentials: Credentials,
 }
 
 impl<ID> TestPeer<ID>
@@ -71,13 +72,15 @@ where
     ) -> Self {
         let store = TestSpacesStore::new();
         let key_store = TestKeyStore::new(store.clone(), &credentials).unwrap();
-        let manager = TestManager::new_with_config(store, key_store, credentials, config, rng)
-            .await
-            .unwrap();
+        let manager =
+            TestManager::new_with_config(store, key_store, credentials.clone(), config, rng)
+                .await
+                .unwrap();
 
         Self {
             id: peer_id,
             manager,
+            credentials,
         }
     }
 }

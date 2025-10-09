@@ -109,7 +109,7 @@ impl PartialOrd for Lifetime {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl Lifetime {
     pub fn from_range(not_before: u64, not_after: u64) -> Self {
         Self {

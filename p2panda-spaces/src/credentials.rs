@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// used to sign messages and the associated public key is used to identify the peer (eg. for
 /// access control purposes).
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(test, derive(Clone))]
+#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct Credentials {
     pub(crate) private_key: PrivateKey,
     pub(crate) identity_secret: SecretKey,
