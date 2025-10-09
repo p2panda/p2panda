@@ -10,8 +10,8 @@
 //! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
 //! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
 //! endpoint actor itself fails, the entire network system is shutdown.
-use iroh::protocol::Router as IrohRouter;
 use iroh::Endpoint as IrohEndpoint;
+use iroh::protocol::Router as IrohRouter;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
@@ -157,7 +157,7 @@ impl Actor for Endpoint {
 mod tests {
     use ractor::Actor;
     use serial_test::serial;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     use super::{Endpoint, EndpointConfig};

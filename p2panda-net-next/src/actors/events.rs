@@ -12,7 +12,7 @@ impl Message for ToEvents {}
 
 pub struct EventsState {}
 
-pub struct Events {}
+pub struct Events;
 
 impl Actor for Events {
     type State = EventsState;
