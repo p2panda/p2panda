@@ -92,6 +92,21 @@ impl KeyManager {
         })
     }
 
+    /// Returns newly initialised key-manager state, holding our identity secret with existing
+    /// pre-keys.
+    pub fn init_from_prekeys(
+        identity_secret: &SecretKey,
+        prekeys: &[PreKeyState],
+    ) -> Result<KeyManagerState, KeyManagerError> {
+        Ok(KeyManagerState {
+            identity_key: identity_secret.public_key()?,
+            identity_secret: identity_secret.clone(),
+            prekeys: HashMap::from_iter(prekeys.iter().map(|prekey| (prekey.id(), prekey.clone()))),
+            onetime_secrets: HashMap::new(),
+            onetime_next_id: 0,
+        })
+    }
+
     /// Returns newly initialised key-manager state, holding our identity secret and an
     /// automatically generated, first pre-key secret which can be used to generate key-bundles.
     pub fn init_with_prekey(
