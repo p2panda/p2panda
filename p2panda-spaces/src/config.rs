@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
+#[cfg(any(test, feature = "test_utils"))]
 use p2panda_encryption::key_bundle::Lifetime;
 use serde::{Deserialize, Serialize};
 
