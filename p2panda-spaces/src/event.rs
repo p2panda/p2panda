@@ -12,6 +12,7 @@ use crate::space::{added_members, removed_members};
 use crate::traits::SpaceId;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
+use crate::utils::sort_members;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupActor {
@@ -217,12 +218,14 @@ where
     };
 
     let group_id = args.control_message.group_id();
-    let group_actors = auth_y
+    let mut group_actors: Vec<_> = auth_y
         .root_members(group_id)
         .into_iter()
         .map(|(member, access)| (GroupActor::from_group_member(member), access))
         .collect();
-    let members = auth_y.members(group_id);
+    sort_members(&mut group_actors);
+    let mut members = auth_y.members(group_id);
+    sort_members(&mut members);
 
     let context = GroupContext {
         author: auth_message.author(),
