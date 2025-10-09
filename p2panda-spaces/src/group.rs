@@ -22,7 +22,7 @@ use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
     AuthResolver, EncryptionGroupError,
 };
-use crate::utils::{typed_member, typed_members};
+use crate::utils::{sort_members, typed_member, typed_members};
 
 #[derive(Debug)]
 pub struct Group<ID, S, K, M, C, RS> {
@@ -59,10 +59,13 @@ where
     /// It is possible to create a group where the creator is not an initial member or is a member
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, Vec<M>), GroupError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>, Event<ID, C>), GroupError<ID, S, K, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -81,15 +84,13 @@ where
             },
         };
 
-        let auth_message =
+        let (messages, mut events) =
             Self::process_local_control(manager_ref.clone(), control_message).await?;
-        let space_messages = manager_ref
-            .apply_group_change_to_spaces(&auth_message)
-            .await
-            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
-        let mut messages = vec![auth_message];
-        messages.extend(space_messages);
+        // Sanity check: there should only one event as this group was only just
+        // created and cannot be associated with any space yet.
+        assert_eq!(events.len(), 1);
+        let event = events.remove(0);
 
         Ok((
             Self {
@@ -97,15 +98,19 @@ where
                 manager: manager_ref,
             },
             messages,
+            event,
         ))
     }
 
     /// Add member to an existing group with specified access level.
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
     pub async fn add(
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<Vec<M>, GroupError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager
@@ -121,22 +126,20 @@ where
             action: AuthGroupAction::Add { member, access },
         };
 
-        let auth_message =
+        let (messages, events) =
             Self::process_local_control(self.manager.clone(), control_message).await?;
-        let space_messages = self
-            .manager
-            .apply_group_change_to_spaces(&auth_message)
-            .await
-            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
-        let mut messages = vec![auth_message];
-        messages.extend(space_messages);
-
-        Ok(messages)
+        Ok((messages, events))
     }
 
     /// Remove member from an existing group.
-    pub async fn remove(&self, member: ActorId) -> Result<Vec<M>, GroupError<ID, S, K, M, C, RS>> {
+    ///
+    /// Returns messages for replication to other instances and events which inform users of any
+    /// state changes which occurred.
+    pub async fn remove(
+        &self,
+        member: ActorId,
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, M, C, RS>> {
         let member = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager
@@ -152,21 +155,15 @@ where
             action: AuthGroupAction::Remove { member },
         };
 
-        let auth_message =
+        let (messages, events) =
             Self::process_local_control(self.manager.clone(), control_message).await?;
-        let space_messages = self
-            .manager
-            .apply_group_change_to_spaces(&auth_message)
-            .await
-            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
 
-        let mut messages = vec![auth_message];
-        messages.extend(space_messages);
-
-        Ok(messages)
+        Ok((messages, events))
     }
 
     /// Process a remote message.
+    ///
+    /// Returns events which inform users of any state changes which occurred.
     pub(crate) async fn process(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         message: &M,
@@ -205,7 +202,7 @@ where
     async fn process_local_control(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         control_message: AuthControlMessage<C>,
-    ) -> Result<M, GroupError<ID, S, K, M, C, RS>> {
+    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, M, C, RS>> {
         let auth_y = {
             let manager = manager_ref.inner.read().await;
             manager
@@ -227,14 +224,14 @@ where
             let mut manager = manager_ref.inner.write().await;
             manager.identity.forge(args).await?
         };
+        let auth_message = AuthMessage::from_forged(&message);
 
         {
             let mut manager = manager_ref.inner.write().await;
-            let auth_message = AuthMessage::from_forged(&message);
             auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
             auth_y
                 .orderer_y
-                .add_dependency(message.id(), &auth_message.dependencies());
+                .add_dependency(auth_message.id(), &auth_message.dependencies());
             manager
                 .spaces_store
                 .set_auth(&auth_y)
@@ -242,7 +239,18 @@ where
                 .map_err(GroupError::AuthStore)?;
         }
 
-        Ok(message)
+        let auth_event = auth_message_to_group_event(&auth_y, &auth_message);
+        let (space_messages, space_events) = manager_ref
+            .apply_group_change_to_spaces(&message)
+            .await
+            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
+
+        let mut messages = vec![message];
+        let mut events = vec![auth_event];
+        messages.extend(space_messages);
+        events.extend(space_events);
+
+        Ok((messages, events))
     }
 
     /// Get the global auth state.
@@ -266,7 +274,8 @@ where
         &self,
     ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, K, M, C, RS>> {
         let y = self.state().await?;
-        let group_members = y.members(self.id);
+        let mut group_members = y.members(self.id);
+        sort_members(&mut group_members);
         Ok(group_members)
     }
 }
