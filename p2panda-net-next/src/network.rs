@@ -5,10 +5,10 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::PrivateKey;
 
-use crate::NetworkId;
 use crate::actors::network::NetworkConfig;
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
+use crate::NetworkId;
 
 /// Builds an overlay network for eventually-consistent pub/sub.
 ///
