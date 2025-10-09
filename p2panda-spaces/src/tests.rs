@@ -2042,3 +2042,15 @@ async fn duplicate_auth_state_references() {
     let members = space.members().await.unwrap();
     assert_eq!(members, expected_members);
 }
+
+#[tokio::test]
+async fn key_store_expired() {
+    let peer = TestPeer::<i32>::new(0).await;
+
+    // Any just created instance will need a pre-key in the beginning.
+    assert!(peer.manager.key_bundle_expired().await.unwrap());
+
+    // Publish a new key bundle with newly generated pre-keys and we should be fine.
+    let _message = peer.manager.key_bundle_message().await.unwrap();
+    assert!(!peer.manager.key_bundle_expired().await.unwrap());
+}
