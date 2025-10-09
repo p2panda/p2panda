@@ -180,10 +180,13 @@ impl AssertableDcgka {
 
         // Group "creator" considers that all members are part of the group now and every member
         // has processed the "create" control message.
-        assert_members_view(dcgka, &[ExpectedMembers {
-            viewer: expected_members,
-            expected: expected_members,
-        }]);
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: expected_members,
+                expected: expected_members,
+            }],
+        );
 
         // Update Secrets
         // ~~~~~~~~~~~~~~
@@ -259,10 +262,13 @@ impl AssertableDcgka {
 
         // "Processor" of "create" considers all members part of the group now and every member has
         // processed the "create" control message.
-        assert_members_view(dcgka, &[ExpectedMembers {
-            viewer: expected_members,
-            expected: expected_members,
-        }]);
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: expected_members,
+                expected: expected_members,
+            }],
+        );
 
         // Update Secrets
         // ~~~~~~~~~~~~~~
@@ -481,10 +487,13 @@ impl AssertableDcgka {
 
         // "Added" considers all members as part of the group now and that "adder" has the same
         // view as them.
-        assert_members_view(dcgka, &[ExpectedMembers {
-            viewer: &[added_id, adder_id],
-            expected: expected_members,
-        }]);
+        assert_members_view(
+            dcgka,
+            &[ExpectedMembers {
+                viewer: &[added_id, adder_id],
+                expected: expected_members,
+            }],
+        );
 
         // Update Secrets
         // ~~~~~~~~~~~~~~
