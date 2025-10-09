@@ -24,38 +24,94 @@ use crate::traits::{IdentityManager, PreKeyManager};
 #[derive(Clone, Debug)]
 pub struct KeyManager;
 
-/// Serializable state of key manager (for persistence).
+/// Serializable state of key manager.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyManagerState {
     identity_secret: SecretKey,
     identity_key: PublicKey,
-    prekeys: HashMap<PreKeyId, PreKeyState>,
+    prekeys: PreKeyBundlesState,
+    // @TODO(adz): Could make sense to factor out one-time secrets into a similar structure like
+    // pre-keys as well, so they can be independently handled in a storage layer.
     onetime_secrets: HashMap<OneTimePreKeyId, (PreKeyId, SecretKey)>,
     onetime_next_id: OneTimePreKeyId,
 }
 
 impl KeyManagerState {
-    fn latest_prekey(&self) -> Option<PreKeyState> {
-        let prekeys = self.prekeys.values().map(|state| &state.prekey).collect();
+    pub fn prekey_bundles(&self) -> &PreKeyBundlesState {
+        &self.prekeys
+    }
+}
+
+/// Collection of all known, publishable pre-keys with their regarding secrets and signatures in
+/// this key manager. Offers a form of "garbage collection" to automatically remove expired
+/// pre-keys.
+///
+/// This can be serialized and independently stored from the identity secrets.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PreKeyBundlesState(HashMap<PreKeyId, PreKeyBundle>);
+
+impl PreKeyBundlesState {
+    /// Initializes and returns new instance of pre-key bundles state.
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns latest pre-key if valid and available and `None` otherwise.
+    fn latest(&self) -> Option<PreKeyBundle> {
+        let prekeys = self.0.values().map(|state| &state.prekey).collect();
         let latest = latest_prekey(prekeys);
         latest.map(|prekey| {
-            self.prekeys
+            self.0
                 .get(prekey.key())
                 .expect("we know the item exists in the set")
                 .clone()
         })
     }
+
+    fn contains(&self, id: &PreKeyId) -> bool {
+        self.0.contains_key(id)
+    }
+
+    #[allow(unused)]
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn get(&self, id: &PreKeyId) -> Option<&PreKeyBundle> {
+        self.0.get(id)
+    }
+
+    /// Insert pre-key bundle into set.
+    fn insert(mut self, bundle: PreKeyBundle) -> Self {
+        self.0.insert(bundle.id(), bundle);
+        self
+    }
+
+    /// Remove all expired key bundles from manager.
+    #[allow(clippy::manual_retain)]
+    fn remove_expired(self) -> Self {
+        Self(
+            self.0
+                .into_iter()
+                .filter(|(_, prekey)| prekey.prekey.verify_lifetime().is_ok())
+                .collect(),
+        )
+    }
 }
 
+/// Extended pre-key struct holding the public and secret parts and signature, authenticating the
+/// pre-key with an identity.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PreKeyState {
+pub struct PreKeyBundle {
     prekey: PreKey,
     signature: XSignature,
     secret: SecretKey,
 }
 
-impl PreKeyState {
-    pub fn init(
+impl PreKeyBundle {
+    /// Generates, signs new pre-key and returns struct holding signature and pre-key secret
+    /// next to the public part.
+    pub fn new(
         identity_secret: &SecretKey,
         lifetime: Lifetime,
         rng: &Rng,
@@ -86,22 +142,22 @@ impl KeyManager {
         Ok(KeyManagerState {
             identity_key: identity_secret.public_key()?,
             identity_secret: identity_secret.clone(),
-            prekeys: HashMap::new(),
+            prekeys: PreKeyBundlesState::new(),
             onetime_secrets: HashMap::new(),
             onetime_next_id: 0,
         })
     }
 
     /// Returns newly initialised key-manager state, holding our identity secret with existing
-    /// pre-keys.
-    pub fn init_from_prekeys(
+    /// pre-key bundles.
+    pub fn init_from_prekey_bundles(
         identity_secret: &SecretKey,
-        prekeys: &[PreKeyState],
+        prekeys: PreKeyBundlesState,
     ) -> Result<KeyManagerState, KeyManagerError> {
         Ok(KeyManagerState {
             identity_key: identity_secret.public_key()?,
             identity_secret: identity_secret.clone(),
-            prekeys: HashMap::from_iter(prekeys.iter().map(|prekey| (prekey.id(), prekey.clone()))),
+            prekeys,
             onetime_secrets: HashMap::new(),
             onetime_next_id: 0,
         })
@@ -109,37 +165,35 @@ impl KeyManager {
 
     /// Returns newly initialised key-manager state, holding our identity secret and an
     /// automatically generated, first pre-key secret which can be used to generate key-bundles.
+    #[cfg(any(test, feature = "test_utils"))]
     pub fn init_with_prekey(
         identity_secret: &SecretKey,
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<KeyManagerState, KeyManagerError> {
-        let prekey = PreKeyState::init(identity_secret, lifetime, rng)?;
+        let bundle = PreKeyBundle::new(identity_secret, lifetime, rng)?;
+        let prekeys = PreKeyBundlesState::new().insert(bundle);
 
         Ok(KeyManagerState {
             identity_key: identity_secret.public_key()?,
             identity_secret: identity_secret.clone(),
-            prekeys: HashMap::from([(prekey.id(), prekey)]),
+            prekeys,
             onetime_secrets: HashMap::new(),
             onetime_next_id: 0,
         })
     }
 
-    /// Remove all expired key bundles from manager.
+    /// Remove all expired pre-key bundles from manager.
     #[allow(clippy::manual_retain)]
     pub fn remove_expired(mut y: KeyManagerState) -> KeyManagerState {
         // Remove all expired pre keys.
-        y.prekeys = y
-            .prekeys
-            .into_iter()
-            .filter(|(_, prekey)| prekey.prekey.verify_lifetime().is_ok())
-            .collect();
+        y.prekeys = y.prekeys.remove_expired();
 
         // Remove one-time bundles which do not have a valid pre-key anymore.
         y.onetime_secrets = y
             .onetime_secrets
             .into_iter()
-            .filter(|(_, (prekey_id, _))| y.prekeys.contains_key(prekey_id))
+            .filter(|(_, (prekey_id, _))| y.prekeys.contains(prekey_id))
             .collect();
 
         y
@@ -177,8 +231,8 @@ impl PreKeyManager for KeyManager {
         lifetime: Lifetime,
         rng: &Rng,
     ) -> Result<Self::State, Self::Error> {
-        let prekey = PreKeyState::init(&y.identity_secret, lifetime, rng)?;
-        y.prekeys.insert(prekey.id(), prekey);
+        let prekey = PreKeyBundle::new(&y.identity_secret, lifetime, rng)?;
+        y.prekeys = y.prekeys.insert(prekey);
         Ok(y)
     }
 
@@ -187,7 +241,8 @@ impl PreKeyManager for KeyManager {
     /// Note that key bundles can be expired and thus invalid, this method will return an error in
     /// this case and applications need to generate new ones when necessary.
     fn prekey_bundle(y: &Self::State) -> Result<LongTermKeyBundle, Self::Error> {
-        y.latest_prekey()
+        y.prekeys
+            .latest()
             .map(|latest| LongTermKeyBundle::new(y.identity_key, latest.prekey, latest.signature))
             .ok_or(KeyManagerError::NoPreKeysAvailable)
     }
@@ -198,7 +253,8 @@ impl PreKeyManager for KeyManager {
         rng: &Rng,
     ) -> Result<(Self::State, OneTimeKeyBundle), Self::Error> {
         let latest = y
-            .latest_prekey()
+            .prekeys
+            .latest()
             .ok_or(KeyManagerError::NoPreKeysAvailable)?;
 
         let onetime_secret = SecretKey::from_bytes(rng.random_array()?);
