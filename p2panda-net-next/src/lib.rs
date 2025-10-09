@@ -2,6 +2,8 @@
 
 mod actors;
 mod addrs;
+mod network;
+mod protocols;
 
 pub type TopicId = [u8; 32];
 
