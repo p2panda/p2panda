@@ -261,7 +261,7 @@ where
 
     /// The local actor id and their long-term key bundle.
     ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn me(&self) -> Result<Member, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager
@@ -287,15 +287,15 @@ where
     /// Check if my latest key bundle has expired.
     ///
     /// If `true` then users should rotate their pre-key and generate a new bundle message (which
-    /// should then be published) by calling key_bundle_message().
-    pub async fn key_bundle_expired(&self) -> bool {
+    /// should then be published) by calling `key_bundle_message`.
+    pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<ID, S, K, M, C, RS>> {
         let manager = self.inner.read().await;
-        manager.identity.key_bundle_expired().await
+        Ok(manager.identity.key_bundle_expired().await?)
     }
 
     /// Forge a key bundle message containing my latest key bundle.
     ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn key_bundle_message(&self) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager

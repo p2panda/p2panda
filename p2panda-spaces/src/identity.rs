@@ -18,7 +18,6 @@ use crate::traits::SpaceId;
 use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::ActorId;
-use crate::utils::now;
 use crate::{Config, Credentials};
 
 /// Manager for functionality relating to a peers identity, holds all cryptographic secrets for key
@@ -36,7 +35,6 @@ pub struct IdentityManager<ID, K, M, C> {
     key_store: K,
     credentials: Credentials,
     config: Config,
-    my_keys_rotated_at: u64,
     rng: Rng,
     _marker: PhantomData<(ID, M, C)>,
 }
@@ -59,7 +57,6 @@ where
             credentials: credentials.to_owned(),
             key_store,
             config: config.clone(),
-            my_keys_rotated_at: 0,
             rng,
             _marker: PhantomData,
         };
@@ -90,45 +87,82 @@ where
 
     /// The local actor id and their long-term key bundle.
     ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<ID, K, M, C>> {
-        let my_id = self.id();
+        Ok(Member::new(self.id(), self.key_bundle().await?))
+    }
 
+    /// Returns "latest", publishable key bundle of us or automatically generates a new one if
+    /// either nothing was generated yet, if previous bundles expired or are about to be expired
+    /// (given an additional "pessimistic" rotation window).
+    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<ID, K, M, C>> {
         let key_manager_y = self.key_manager().await?;
 
-        // Automatically rotate pre key when it reached critical expiry date.
-        let key_bundle =
-            if now() - self.my_keys_rotated_at > self.config.pre_key_rotate_after.as_secs() {
-                self.my_keys_rotated_at = now();
+        let valid_bundle = match KeyManager::prekey_bundle(&key_manager_y) {
+            Ok(bundle) => bundle
+                .lifetime()
+                .verify_with_window(self.config.pre_key_rotate_after)
+                .map_or(None, |_| Some(bundle)),
+            Err(KeyManagerError::NoPreKeysAvailable) => None,
+            Err(err) => return Err(err.into()),
+        };
 
-                let key_manager_y_i = KeyManager::rotate_prekey(
-                    key_manager_y,
-                    Lifetime::new(self.config.pre_key_lifetime.as_secs()),
-                    &self.rng,
-                )?;
+        if let Some(bundle) = valid_bundle {
+            return Ok(bundle);
+        }
 
-                let key_registry_y = self.key_registry().await?;
+        // Automatically rotate pre key.
+        let key_manager_y_i = KeyManager::rotate_prekey(
+            key_manager_y,
+            Lifetime::new(self.config.pre_key_lifetime.as_secs()),
+            &self.rng,
+        )?;
 
-                // Register our own key bundle.
-                let key_bundle = KeyManager::prekey_bundle(&key_manager_y_i)?;
-                let key_registry_y_i =
-                    KeyRegistry::add_longterm_bundle(key_registry_y, my_id, key_bundle.clone())?;
+        let key_registry_y = self.key_registry().await?;
 
-                self.key_store
-                    .set_key_manager(&key_manager_y_i)
-                    .await
-                    .map_err(IdentityError::KeyManagerStore)?;
-                self.key_store
-                    .set_key_registry(&key_registry_y_i)
-                    .await
-                    .map_err(IdentityError::KeyRegistryStore)?;
+        // Register our own key bundle.
+        let key_bundle = KeyManager::prekey_bundle(&key_manager_y_i)?;
+        let key_registry_y_i =
+            KeyRegistry::add_longterm_bundle(key_registry_y, self.id(), key_bundle.clone())?;
 
-                key_bundle
-            } else {
-                KeyManager::prekey_bundle(&key_manager_y)?
-            };
+        self.key_store
+            .set_key_manager(&key_manager_y_i)
+            .await
+            .map_err(IdentityError::KeyManagerStore)?;
+        self.key_store
+            .set_key_registry(&key_registry_y_i)
+            .await
+            .map_err(IdentityError::KeyRegistryStore)?;
 
-        Ok(Member::new(my_id, key_bundle))
+        Ok(key_bundle)
+    }
+
+    /// Returns `true` if my latest key bundle has expired or is about to expire.
+    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<ID, K, M, C>> {
+        let key_manager_y = self.key_manager().await?;
+        match KeyManager::prekey_bundle(&key_manager_y) {
+            Ok(bundle) => Ok(bundle
+                .lifetime()
+                .verify_with_window(self.config.pre_key_rotate_after)
+                .is_err()),
+            Err(KeyManagerError::NoPreKeysAvailable) => Ok(true),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Forge a key bundle message containing my latest key bundle.
+    ///
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
+    pub async fn key_bundle_message(&mut self) -> Result<M, IdentityError<ID, K, M, C>> {
+        let args = SpacesArgs::KeyBundle {
+            key_bundle: self.key_bundle().await?,
+        };
+        let message = self
+            .key_store
+            .forge(args)
+            .await
+            .map_err(IdentityError::Forge)?;
+        Ok(message)
     }
 
     /// Register a member with long-term key bundle material.
@@ -149,27 +183,6 @@ where
             .map_err(IdentityError::KeyRegistryStore)?;
 
         Ok(())
-    }
-
-    /// Check if my latest key bundle has expired.
-    pub async fn key_bundle_expired(&self) -> bool {
-        now() - self.my_keys_rotated_at > self.config.pre_key_rotate_after.as_secs()
-    }
-
-    /// Forge a key bundle message containing my latest key bundle.
-    ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&mut self) -> Result<M, IdentityError<ID, K, M, C>> {
-        let me = self.me().await?;
-        let args = SpacesArgs::KeyBundle {
-            key_bundle: me.key_bundle().clone(),
-        };
-        let message = self
-            .key_store
-            .forge(args)
-            .await
-            .map_err(IdentityError::Forge)?;
-        Ok(message)
     }
 
     /// Process a key bundle received from the network.
@@ -256,6 +269,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use assert_matches::assert_matches;
     use p2panda_core::PrivateKey;
     use p2panda_encryption::Rng;
@@ -433,16 +448,18 @@ mod tests {
         let alice_1 = alice_identity_manager.me().await.unwrap();
         let bundle_1 = alice_1.key_bundle().clone();
 
-        // Force expiry
-        {
-            alice_identity_manager.my_keys_rotated_at = 0;
-        }
+        // Override max. lifetime of 90 days (default) with pre-rotation window to force rotation.
+        alice_identity_manager.config.pre_key_rotate_after =
+            Duration::from_secs(60 * 60 * 24 * 1024);
 
         let alice_2 = alice_identity_manager.me().await.unwrap();
         let bundle_2 = alice_2.key_bundle().clone();
 
+        // Key bundles are valid, we only forced the generate a new one to pessimistically already
+        // distribute it, but the "old" one is still fine!
         assert!(bundle_1.verify().is_ok());
         assert!(bundle_2.verify().is_ok());
+
         assert_ne!(
             bundle_1.signed_prekey(),
             bundle_2.signed_prekey(),
