@@ -49,7 +49,7 @@ where
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let mut inner = self.inner.lock().await;
         inner
-            .process(*input.id(), input.dependencies())
+            .process(input.hash(), input.dependencies())
             .await
             .map_err(|err| OrdererError::OrdererStore(err))?;
 
