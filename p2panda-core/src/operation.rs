@@ -134,8 +134,8 @@ impl<E> Ord for Operation<E> {
 }
 
 impl<E> Digest<Hash> for Operation<E> {
-    fn id(&self) -> &Hash {
-        &self.hash
+    fn hash(&self) -> Hash {
+        self.hash
     }
 }
 
