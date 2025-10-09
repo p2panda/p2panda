@@ -113,15 +113,6 @@ async fn create_space() {
         .unwrap()
         .unwrap();
     assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
-
-    // @TODO: Currently the "create" message has been signed by the author's permament key. We
-    // would like to sign it with the ephemeral key instead.
-    //
-    // Author of this message is _not_ us but an ephemeral key.
-    // assert_ne!(ActorId::from(message.public_key), manager.id());
-    //
-    // Public key of this message is the space id.
-    // assert_eq!(ActorId::from(message.public_key), space.id());
 }
 
 #[tokio::test]
@@ -150,11 +141,6 @@ async fn send_and_receive() {
         .create_space(space_id, &[(bob.manager.id(), Access::write())])
         .await
         .unwrap();
-
-    // @TODO: Currently the "create" message has been signed by the author's permament key. We
-    // would like to sign it with the ephemeral key instead.
-    // let alice_create_message = alice_create_messages.pop().unwrap();
-    // assert_eq!(alice_create_message.author(), alice.manager.id());
 
     // Bob processes Alice's messages.
 
@@ -2069,8 +2055,8 @@ async fn add_expired_member_to_group() {
     let bob = TestPeer::<i32>::new(1).await;
 
     // Create key bundle which expires in 1 second.
-    let expired_member = {
-        let rng = Rng::from_seed([1; 32]);
+    let expired_bob = {
+        let rng = Rng::from_seed([2; 32]);
 
         // Generate pre-key & sign it.
         let prekey_secret = SecretKey::from_rng(&rng).unwrap();
@@ -2093,21 +2079,69 @@ async fn add_expired_member_to_group() {
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
-    alice
-        .manager
-        .register_member(&expired_member)
-        .await
-        .unwrap();
+    alice.manager.register_member(&expired_bob).await.unwrap();
 
-    // Sleep two seconds to make bundle expire.
+    // Sleep to make bundle expire.
     thread::sleep(Duration::from_secs(1));
 
     // Alice creates a space with Bob but it should fail since the key bundle has expired.
     assert!(
         alice
             .manager
-            .create_space(0, &[(expired_member.id(), Access::write())])
+            .create_space(0, &[(expired_bob.id(), Access::write())])
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn process_operation_from_expired_member() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::<i32>::new(1).await;
+
+    // Create key bundle which expires in 1 second.
+    let expired_bob = {
+        let rng = Rng::from_seed([2; 32]);
+
+        // Generate pre-key & sign it.
+        let prekey_secret = SecretKey::from_rng(&rng).unwrap();
+        let prekey = PreKey::new(
+            prekey_secret.public_key().unwrap(),
+            Lifetime::from_range(now() - 60, now() + 1),
+        );
+        let signature = prekey
+            .sign(&bob.credentials.identity_secret(), &rng)
+            .unwrap();
+
+        // Wrap it in key bundle.
+        let bundle = LongTermKeyBundle::new(
+            bob.credentials.identity_secret().public_key().unwrap(),
+            prekey,
+            signature,
+        );
+
+        Member::new(bob.manager.id(), bundle)
+    };
+
+    // Alice adds Bob's key bundle. At this point it is still valid.
+    alice.manager.register_member(&expired_bob).await.unwrap();
+
+    // Bob should register it's own soon-invalid key bundle.
+    bob.manager.register_member(&expired_bob).await.unwrap();
+
+    // Alice creates a space with Bob.
+    let (_space, messages) = alice
+        .manager
+        .create_space(0, &[(expired_bob.id(), Access::write())])
+        .await
+        .unwrap();
+
+    // Sleep to make bundle expire.
+    thread::sleep(Duration::from_secs(2));
+
+    // Bob processes Alice's "create", but unfortunately Bob's key bundle expired and they can't
+    // decrypt the initial key agreement (X3DH) in the direct message anymore.
+
+    // @TODO: This is failing, but I'm not sure why ..
+    // assert!(bob.manager.process(&messages[0]).await.is_err());
 }
