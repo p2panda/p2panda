@@ -108,12 +108,17 @@ where
         let key_registry_y_i =
             KeyRegistry::add_longterm_bundle(key_registry_y, self.id(), key_bundle.clone())?;
 
+        // Clean up expired key bundles ("garbage collection").
+        let key_manager_y_ii = KeyManager::remove_expired(key_manager_y_i);
+        let key_registry_y_ii = KeyRegistry::remove_expired(key_registry_y_i);
+
+        // Persist new state in store.
         self.key_store
-            .set_prekey_secrets(key_manager_y_i.prekey_bundles())
+            .set_prekey_secrets(key_manager_y_ii.prekey_bundles())
             .await
             .map_err(IdentityError::KeyManagerStore)?;
         self.key_store
-            .set_key_registry(&key_registry_y_i)
+            .set_key_registry(&key_registry_y_ii)
             .await
             .map_err(IdentityError::KeyRegistryStore)?;
 
