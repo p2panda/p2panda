@@ -33,7 +33,8 @@ fn group_operations() {
 
     let alice_dgm = TestDgm::init(alice);
     let alice_pki = KeyRegistry::init();
-    let alice_keys = KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+    let alice_keys =
+        KeyManager::init_with_prekey(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
 
     let alice_prekeys = KeyManager::prekey_bundle(&alice_keys).unwrap();
 
@@ -43,7 +44,8 @@ fn group_operations() {
 
     let bob_dgm = TestDgm::init(bob);
     let bob_pki = KeyRegistry::init();
-    let bob_keys = KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+    let bob_keys =
+        KeyManager::init_with_prekey(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
 
     let bob_prekeys = KeyManager::prekey_bundle(&bob_keys).unwrap();
 
@@ -54,7 +56,7 @@ fn group_operations() {
     let charlie_dgm = TestDgm::init(charlie);
     let charlie_pki = KeyRegistry::init();
     let charlie_keys =
-        KeyManager::init(&charlie_identity_secret, Lifetime::default(), &rng).unwrap();
+        KeyManager::init_with_prekey(&charlie_identity_secret, Lifetime::default(), &rng).unwrap();
 
     let charlie_prekeys = KeyManager::prekey_bundle(&charlie_keys).unwrap();
 
