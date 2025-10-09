@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Trait interfaces expressing signed space messages.
 use crate::message::SpacesArgs;
 use crate::{ActorId, OperationId};
 

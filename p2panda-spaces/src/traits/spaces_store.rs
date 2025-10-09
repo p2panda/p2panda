@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Trait interfaces for interacting with data storage layers.
 use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
@@ -9,6 +10,7 @@ use crate::space::SpaceState;
 use crate::traits::SpaceId;
 use crate::types::AuthGroupState;
 
+/// Methods for setting and fetching space state.
 pub trait SpaceStore<ID, M, C>
 where
     ID: SpaceId,
@@ -32,6 +34,7 @@ where
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
+/// Methods for setting and fetching auth state.
 pub trait AuthStore<C>
 where
     C: Conditions,
@@ -43,6 +46,8 @@ where
     fn set_auth(&mut self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
+// @TODO: replace this with existing OperationStore trait from p2panda-store.
+/// Methods for setting and fetching messages.
 pub trait MessageStore<M> {
     type Error: Debug;
 

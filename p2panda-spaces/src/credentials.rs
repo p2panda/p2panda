@@ -5,6 +5,8 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::{Rng, RngError};
 use serde::{Deserialize, Serialize};
 
+/// A members' private key and identity secret.
+///
 /// Every peer has two secret keys and _both_ required in order to interact with p2panda-spaces
 /// and neither can be rotated without losing access to all spaces. _If_ key rotation is required
 /// then both keys should be rotated together.

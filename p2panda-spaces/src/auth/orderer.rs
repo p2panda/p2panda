@@ -9,10 +9,12 @@ use petgraph::visit::NodeIndexable;
 use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
+/// Implementation of Orderer trait from p2panda-auth which computes dependencies for auth
+/// messages. It does _not_ take care of ordering of control and application messages,
+/// p2panda-spaces expects messages to be orderer before being processed.
 #[derive(Clone, Debug)]
 pub struct AuthOrdererState {
     pub heads: Vec<OperationId>,
-
     pub graph: DiGraphMap<OperationId, ()>,
 }
 
@@ -26,13 +28,11 @@ impl AuthOrdererState {
     pub fn new() -> Self {
         Self {
             heads: Default::default(),
-
-            // @TODO: We don't look at application message dependencies quite yet. More research
-            // needed into requirements around bi-directional dependencies between dags.
             graph: Default::default(),
         }
     }
 
+    /// Add a new dependency relationship to the operation graph.
     pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
         if self.graph.contains_node(id) {
             return;
@@ -51,6 +51,7 @@ impl AuthOrdererState {
             .collect::<Vec<_>>();
     }
 
+    /// Get the current dependency graph heads.
     pub fn heads(&self) -> &[OperationId] {
         &self.heads
     }

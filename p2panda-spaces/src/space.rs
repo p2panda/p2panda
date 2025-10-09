@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! API for managing members of a space and sending/receiving messages.
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -30,11 +31,21 @@ use crate::types::{
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
     OperationId,
 };
-use crate::utils::sort_members;
+use crate::utils::{added_members, removed_members, secret_members, sort_members};
 
-/// Encrypted data context with authorization boundary.
+/// A single encryption context with associated group of actors who will participate in the key
+/// agreement protocol.
 ///
-/// Only members with suitable access to the space can read and write to it.
+/// Members in the encryption context can publish application messages to the group which will be
+/// encrypted with the latest group secret. All other members will be able to decrypt and read the
+/// message.
+///
+/// Actors can be added or removed from the space, an actor may be an individual or a group.
+/// Access levels are assigned to all members, these access levels can be used by authorization
+/// layers outside of p2panda-spaces to enforce access control rules.
+///
+/// Members with only Pull access are not included in the encryption context and won't receive any
+/// group secrets. Only members with Manage access level are allowed to manage the groups members.
 #[derive(Debug)]
 pub struct Space<ID, S, K, M, C, RS> {
     /// Reference to the manager.
@@ -160,9 +171,9 @@ where
         group.remove(member).await.map_err(SpaceError::Group)
     }
 
-    /// Forge a space message from an already existing auth message and apply any resulting group
-    /// membership changes. Any resulting encryption direct messages are included in the space
-    /// message alongside a reference to the auth message.
+    /// Forge a "pointer" space message from an already existing auth message and apply any
+    /// resulting group membership changes. Any resulting encryption direct messages are included
+    /// in the space message alongside a reference to the auth message.
     pub(crate) async fn process_auth_message(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         mut y: SpaceState<ID, M, C>,
@@ -275,10 +286,10 @@ where
 
     /// Instantiate space state from existing global auth state.
     ///
-    /// Every space contains a "wrapped" reference to all messages published to the global auth
-    /// state. This method iterates through all existing auth messages and re-publishes them
-    /// towards this space. None of the messages will contain encryption control messages as they
-    /// were published before the space existed.
+    /// Every space contains pointers to all messages published to the global auth state. This
+    /// method iterates through all existing auth messages and publishes these pointers to the
+    /// space. None of the messages will contain encryption control messages as they were
+    /// published before the space existed.
     async fn state_from_auth(
         manager_ref: Manager<ID, S, K, M, C, RS>,
         auth_y: AuthGroupState<C>,
@@ -289,8 +300,8 @@ where
         // Instantiate empty space state.
         let mut y = { Self::get_or_init_state(space_id, group_id, manager_ref.clone()).await? };
 
-        // Publish space messages for all operations in the global auth graph. We topologically
-        // sort the operations and publish them in this linear order.
+        // Publish pointers for all operations in the global auth graph. We topologically sort the
+        // operations and publish them in this linear order.
         //
         // These won't contain any encryption messages as they were published _before_ the space
         // was created.
@@ -321,7 +332,8 @@ where
         Ok(y)
     }
 
-    /// Handle messages which effect the space membership.
+    /// Handle messages which effect the space membership. Each of these messages contained a
+    /// pointer to an auth message, and the auth message is required here.
     async fn handle_membership_message(
         &self,
         space_message: &M,
@@ -735,6 +747,7 @@ where
     }
 }
 
+/// Space state object.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct SpaceState<ID, M, C>
@@ -770,35 +783,7 @@ where
     }
 }
 
-pub fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
-    let mut members: Vec<ActorId> = members
-        .into_iter()
-        .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })
-        .collect();
-    members.sort();
-    members
-}
-
-pub fn added_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
-    let mut members = next_members
-        .iter()
-        .cloned()
-        .filter(|actor| !current_members.contains(actor))
-        .collect::<Vec<_>>();
-    members.sort();
-    members
-}
-
-pub fn removed_members(current_members: Vec<ActorId>, next_members: Vec<ActorId>) -> Vec<ActorId> {
-    let mut members = current_members
-        .iter()
-        .cloned()
-        .filter(|actor| !next_members.contains(actor))
-        .collect::<Vec<_>>();
-    members.sort();
-    members
-}
-
+/// Space error type.
 #[derive(Debug, Error)]
 pub enum SpaceError<ID, S, K, M, C, RS>
 where

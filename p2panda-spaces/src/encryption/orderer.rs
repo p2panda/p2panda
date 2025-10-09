@@ -14,6 +14,10 @@ use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
 
+/// Implementation of Ordering trait from p2panda-encryption which computes
+/// dependencies for encryption messages and performs some internal buffering. It does _not_ take
+/// care of ordering of control and application messages, p2panda-spaces expects messages to be
+/// orderer before being processed.
 #[derive(Clone, Debug)]
 pub struct EncryptionOrderer<M> {
     _marker: PhantomData<M>,
@@ -33,11 +37,14 @@ impl<M> EncryptionOrderer<M> {
     }
 }
 
+/// Orderer for encryption messages.
 #[derive(Clone, Debug)]
 pub struct EncryptionOrdererState {
     /// Current graph heads (cache)
     heads: Vec<OperationId>,
 
+    // @TODO: currently application messages are also included in the dependency graph, we want
+    // to separate these from control messages eventually in order to support pruning.
     /// Graph of all operations processed by this group.
     graph: DiGraphMap<OperationId, ()>,
 
@@ -63,22 +70,18 @@ impl Default for EncryptionOrdererState {
 }
 
 impl EncryptionOrdererState {
+    /// Instantiate new orderer state.
     pub fn new() -> Self {
         Self {
             heads: Default::default(),
-
-            // @TODO: We don't look at application message dependencies quite yet. More research
-            // needed into requirements around bi-directional dependencies between dags.
             graph: Default::default(),
-
             queue: Default::default(),
-
             messages: Default::default(),
-
             welcome_message: Default::default(),
         }
     }
 
+    /// Add a new dependency relationship to the operation graph.
     pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
         if self.graph.contains_node(id) {
             return;
@@ -97,14 +100,17 @@ impl EncryptionOrdererState {
             .collect::<Vec<_>>();
     }
 
+    /// Get the current dependency graph heads.
     pub fn heads(&self) -> &[OperationId] {
         &self.heads
     }
 
+    /// Has the local actor been welcomed to the encryption group.
     pub fn is_welcomed(&self) -> bool {
         self.welcome_message.is_some()
     }
 
+    /// Has the orderer seen a certain message.
     pub fn has_seen(&self, id: OperationId) -> bool {
         self.graph.contains_node(id)
     }
@@ -115,7 +121,7 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
 {
     type State = EncryptionOrdererState;
 
-    type Error = Infallible; // @TODO
+    type Error = Infallible;
 
     type Message = EncryptionMessage;
 
@@ -124,7 +130,6 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         control_message: &EncryptionControlMessage,
         direct_messages: &[EncryptionDirectMessage],
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // NOTE: Updating the orderer state is taken care of outside of the orderer itself.
         let dependencies = y.heads().to_vec();
         Ok((
             y,
@@ -142,7 +147,6 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
     ) -> Result<(Self::State, Self::Message), Self::Error> {
-        // NOTE: Updating the orderer state is taken care of outside of the orderer itself.
         let dependencies = y.heads().to_vec();
         Ok((
             y,

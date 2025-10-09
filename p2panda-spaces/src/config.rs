@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Serializable configuration object.
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -23,11 +24,5 @@ impl Default for Config {
             pre_key_lifetime: Duration::from_secs(60 * 60 * 24 * 90), // 90 days
             pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 60), // 60 days
         }
-    }
-}
-
-impl Config {
-    pub(crate) fn lifetime(&self) -> Lifetime {
-        Lifetime::new(self.pre_key_lifetime.as_secs())
     }
 }

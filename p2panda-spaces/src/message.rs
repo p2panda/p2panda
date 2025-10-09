@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{ActorId, AuthControlMessage, EncryptionDirectMessage, OperationId};
 
+/// Enum representing all possible message types.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SpacesArgs<ID, C> {
     /// System message, contains key bundle of the given author.
