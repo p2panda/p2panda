@@ -271,7 +271,8 @@ where
             .map_err(ManagerError::IdentityManager)
     }
 
-    /// Register a member with long-term key bundle material.
+    /// Register a member with long-term key bundle material which was provided through another
+    /// channel (QR code scan etc.).
     pub async fn register_member(
         &self,
         member: &Member,
