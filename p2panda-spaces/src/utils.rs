@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use p2panda_auth::traits::Conditions;
 use p2panda_auth::{Access, group::GroupMember};
 
@@ -38,13 +36,6 @@ where
         .into_iter()
         .map(|(member, access)| (typed_member(&auth_y, member), access))
         .collect())
-}
-
-pub(crate) fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time before unix epoch")
-        .as_secs()
 }
 
 pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
