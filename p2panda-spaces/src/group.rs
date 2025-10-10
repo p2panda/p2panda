@@ -30,7 +30,7 @@ use crate::utils::{sort_members, typed_member, typed_members};
 /// A single group which exists in the global auth context.
 ///
 /// Actors can be added or removed from the group; an actor may be an individual or a group.
-/// Access levels are assigned to all members, these access levels can be used by authorization
+/// Access levels are assigned to all members. These access levels can be used by authorisation
 /// layers outside of p2panda-spaces to enforce access control rules.
 ///
 /// A group can be a member of many spaces, or indeed other groups, and any changes effect all
