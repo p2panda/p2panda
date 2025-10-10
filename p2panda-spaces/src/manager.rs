@@ -143,7 +143,7 @@ where
 
     /// Get a group by id.
     ///
-    /// A group instance provides an api for adding and removing members from a group and querying
+    /// A group instance provides an API for adding and removing members from a group and querying
     /// the current group members.
     pub async fn group(
         &self,
