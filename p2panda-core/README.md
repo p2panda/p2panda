@@ -63,7 +63,7 @@ let mut header = Header {
     seq_num: 0,
     backlink: None,
     previous: vec![],
-    extensions: None::<()>,
+    extensions: (),
 };
 
 header.sign(&private_key);
@@ -94,10 +94,7 @@ struct CustomExtensions {
 // header.
 impl Extension<Expiry> for CustomExtensions {
     fn extract(header: &Header<Self>) -> Option<Expiry> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.expiry.clone())
+        Some(header.extensions.expiry.clone())
     }
 }
 ```
