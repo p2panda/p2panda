@@ -2,8 +2,7 @@
 
 //! API for managing members of a group in the shared auth context.
 //!
-//! Group membership changes which occur on a group effect any spaces or groups it is itself a
-//! member of.
+//! Group membership changes also effect all spaces and groups for which the altered group is itself a member.
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
