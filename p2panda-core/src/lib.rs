@@ -71,7 +71,7 @@
 //!     seq_num: 0,
 //!     backlink: None,
 //!     previous: vec![],
-//!     extensions: None::<()>,
+//!     extensions: (),
 //! };
 //!
 //! // Sign the header with the author's private key. From now on it's ready to be sent!
