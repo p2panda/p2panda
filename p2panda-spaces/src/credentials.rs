@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// A member's private key and identity secret.
 ///
-/// Every peer has two secret keys and _both_ required in order to interact with p2panda-spaces
+/// Every peer has two secret keys; _both_ are required in order to interact with p2panda-spaces
 /// and neither can be rotated without losing access to all spaces. _If_ key rotation is required
 /// then both keys should be rotated together.
 ///
