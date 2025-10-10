@@ -16,7 +16,7 @@ use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, O
 
 /// Implementation of Ordering trait from p2panda-encryption which computes
 /// dependencies for encryption messages and performs some internal buffering. It does _not_ take
-/// care of ordering of control and application messages, p2panda-spaces expects messages to be
+/// care of ordering of control and application messages; p2panda-spaces expects messages to be
 /// orderer before being processed.
 #[derive(Clone, Debug)]
 pub struct EncryptionOrderer<M> {
