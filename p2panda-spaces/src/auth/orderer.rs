@@ -10,7 +10,7 @@ use crate::auth::message::{AuthArgs, AuthMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 /// Implementation of Orderer trait from p2panda-auth which computes dependencies for auth
-/// messages. It does _not_ take care of ordering of control and application messages,
+/// messages. It does _not_ take care of ordering of control and application messages;
 /// p2panda-spaces expects messages to be orderer before being processed.
 #[derive(Clone, Debug)]
 pub struct AuthOrdererState {
