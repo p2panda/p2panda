@@ -17,7 +17,7 @@ use crate::crypto::aead::{AeadError, AeadNonce, aead_decrypt, aead_encrypt};
 use crate::crypto::hkdf::{HkdfError, hkdf};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::key_bundle::{KeyBundleError, OneTimePreKeyId};
+use crate::key_bundle::{KeyBundleError, OneTimePreKeyId, PreKeyId};
 use crate::traits::KeyBundle;
 
 /// ASCII string identifying the application as specified in X3DH used for KDF.
@@ -34,6 +34,9 @@ pub struct X3dhCiphertext {
     /// in long-term key bundles).
     pub onetime_prekey_id: Option<OneTimePreKeyId>,
 
+    /// Identifier of the used long-term pre-key.
+    pub prekey_id: PreKeyId,
+
     /// Encrypted payload for the receiver.
     pub ciphertext: Vec<u8>,
 
@@ -48,6 +51,7 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
     their_prekey_bundle: &KB,
     rng: &Rng,
 ) -> Result<X3dhCiphertext, X3dhError> {
+    // Ensure we're not using an expired bundle of receiver.
     their_prekey_bundle.verify()?;
 
     let our_identity_key = our_identity_secret.public_key()?;
@@ -109,6 +113,7 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
         ciphertext,
         ephemeral_key: our_ephemeral_key,
         identity_key: our_identity_key,
+        prekey_id: *their_prekey_bundle.signed_prekey(),
         onetime_prekey_id: their_prekey_bundle.onetime_prekey_id(),
     })
 }

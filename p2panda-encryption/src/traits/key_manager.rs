@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::crypto::Rng;
 use crate::crypto::x25519::SecretKey;
-use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKeyId};
+use crate::key_bundle::{Lifetime, LongTermKeyBundle, OneTimeKeyBundle, OneTimePreKeyId, PreKeyId};
 
 /// Manages our own identity secret.
 pub trait IdentityManager<Y> {
@@ -20,7 +20,10 @@ pub trait PreKeyManager {
 
     type Error: Error;
 
-    fn prekey_secret(y: &Self::State) -> &SecretKey;
+    fn prekey_secret<'a>(
+        y: &'a Self::State,
+        id: &'a PreKeyId,
+    ) -> Result<&'a SecretKey, Self::Error>;
 
     fn rotate_prekey(
         y: Self::State,
@@ -28,7 +31,7 @@ pub trait PreKeyManager {
         rng: &Rng,
     ) -> Result<Self::State, Self::Error>;
 
-    fn prekey_bundle(y: &Self::State) -> LongTermKeyBundle;
+    fn prekey_bundle(y: &Self::State) -> Result<LongTermKeyBundle, Self::Error>;
 
     fn generate_onetime_bundle(
         y: Self::State,

@@ -37,7 +37,9 @@ pub fn init_dcgka_state<const N: usize>(
     // Generate a pre-key bundle for each other member of the group.
     for id in member_ids {
         let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let mut manager = KeyManager::init(&identity_secret, Lifetime::default(), rng).unwrap();
+        let mut manager =
+            KeyManager::init_and_generate_prekey(&identity_secret, Lifetime::default(), rng)
+                .unwrap();
 
         let mut bundle_list = Vec::with_capacity(member_ids.len());
         for _ in member_ids {
@@ -59,7 +61,7 @@ pub fn init_dcgka_state<const N: usize>(
             let mut state = KeyRegistry::init();
             for bundle_id in member_ids {
                 let bundle = key_bundles.get_mut(&bundle_id).unwrap().pop().unwrap();
-                let state_i = KeyRegistry::add_onetime_bundle(state, bundle_id, bundle);
+                let state_i = KeyRegistry::add_onetime_bundle(state, bundle_id, bundle).unwrap();
                 state = state_i;
             }
             state

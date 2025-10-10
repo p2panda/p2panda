@@ -52,6 +52,6 @@ mod key_bundle;
 mod lifetime;
 mod prekey;
 
-pub use key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle};
+pub use key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle, latest_key_bundle};
 pub use lifetime::{Lifetime, LifetimeError};
-pub use prekey::{OneTimePreKey, OneTimePreKeyId, PreKey};
+pub use prekey::{OneTimePreKey, OneTimePreKeyId, PreKey, PreKeyId, latest_prekey};
