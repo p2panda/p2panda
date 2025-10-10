@@ -19,7 +19,7 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
@@ -66,7 +66,7 @@ where
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     // @TODO: Can we get rid of this Debug requirement here?
@@ -77,7 +77,7 @@ where
     pub async fn new(
         spaces_store: S,
         key_store: K,
-        credentials: &Credentials,
+        credentials: Credentials,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
         Self::new_with_config(
@@ -95,7 +95,7 @@ where
     pub async fn new_with_config(
         spaces_store: S,
         key_store: K,
-        credentials: &Credentials,
+        credentials: Credentials,
         config: &Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, M, C, RS>> {
@@ -261,7 +261,7 @@ where
 
     /// The local actor id and their long-term key bundle.
     ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn me(&self) -> Result<Member, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager
@@ -271,7 +271,8 @@ where
             .map_err(ManagerError::IdentityManager)
     }
 
-    /// Register a member with long-term key bundle material.
+    /// Register a member with long-term key bundle material which was provided through another
+    /// channel (QR code scan etc.).
     pub async fn register_member(
         &self,
         member: &Member,
@@ -287,15 +288,15 @@ where
     /// Check if my latest key bundle has expired.
     ///
     /// If `true` then users should rotate their pre-key and generate a new bundle message (which
-    /// should then be published) by calling key_bundle_message().
-    pub async fn key_bundle_expired(&self) -> bool {
+    /// should then be published) by calling `key_bundle_message`.
+    pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<ID, S, K, M, C, RS>> {
         let manager = self.inner.read().await;
-        manager.identity.key_bundle_expired().await
+        Ok(manager.identity.key_bundle_expired().await?)
     }
 
     /// Forge a key bundle message containing my latest key bundle.
     ///
-    /// Note: key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn key_bundle_message(&self) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
         let mut manager = self.inner.write().await;
         manager
@@ -580,7 +581,7 @@ pub enum ManagerError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {

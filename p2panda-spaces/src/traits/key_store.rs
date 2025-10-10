@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use p2panda_core::PublicKey;
-use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
 use crate::ActorId;
@@ -30,11 +30,13 @@ pub trait KeyRegistryStore {
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
-pub trait KeyManagerStore {
+pub trait KeySecretStore {
     type Error: Debug;
 
-    fn key_manager(&self) -> impl Future<Output = Result<KeyManagerState, Self::Error>>;
+    fn prekey_secrets(&self) -> impl Future<Output = Result<PreKeyBundlesState, Self::Error>>;
 
-    fn set_key_manager(&self, y: &KeyManagerState)
-    -> impl Future<Output = Result<(), Self::Error>>;
+    fn set_prekey_secrets(
+        &self,
+        y: &PreKeyBundlesState,
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 }

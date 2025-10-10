@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::thread;
+use std::time::Duration;
+
 use assert_matches::assert_matches;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+use p2panda_encryption::Rng;
+use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::data_scheme::DirectMessage;
+use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 
 use crate::ActorId;
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
+use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, SpaceStore};
 use crate::types::{AuthControlMessage, AuthGroupAction};
+use crate::utils::now;
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.id().cmp(&actor_b.id()));
@@ -105,15 +113,6 @@ async fn create_space() {
         .unwrap()
         .unwrap();
     assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
-
-    // @TODO: Currently the "create" message has been signed by the author's permament key. We
-    // would like to sign it with the ephemeral key instead.
-    //
-    // Author of this message is _not_ us but an ephemeral key.
-    // assert_ne!(ActorId::from(message.public_key), manager.id());
-    //
-    // Public key of this message is the space id.
-    // assert_eq!(ActorId::from(message.public_key), space.id());
 }
 
 #[tokio::test]
@@ -142,11 +141,6 @@ async fn send_and_receive() {
         .create_space(space_id, &[(bob.manager.id(), Access::write())])
         .await
         .unwrap();
-
-    // @TODO: Currently the "create" message has been signed by the author's permament key. We
-    // would like to sign it with the ephemeral key instead.
-    // let alice_create_message = alice_create_messages.pop().unwrap();
-    // assert_eq!(alice_create_message.author(), alice.manager.id());
 
     // Bob processes Alice's messages.
 
@@ -2041,4 +2035,113 @@ async fn duplicate_auth_state_references() {
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, expected_members);
+}
+
+#[tokio::test]
+async fn key_store_expired() {
+    let peer = TestPeer::<i32>::new(0).await;
+
+    // Any just created instance will need a pre-key in the beginning.
+    assert!(peer.manager.key_bundle_expired().await.unwrap());
+
+    // Publish a new key bundle with newly generated pre-keys and we should be fine.
+    let _message = peer.manager.key_bundle_message().await.unwrap();
+    assert!(!peer.manager.key_bundle_expired().await.unwrap());
+}
+
+#[tokio::test]
+async fn add_expired_member_to_group() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::<i32>::new(1).await;
+
+    // Create key bundle which expires in 1 second.
+    let expired_bob = {
+        let rng = Rng::from_seed([2; 32]);
+
+        // Generate pre-key & sign it.
+        let prekey_secret = SecretKey::from_rng(&rng).unwrap();
+        let prekey = PreKey::new(
+            prekey_secret.public_key().unwrap(),
+            Lifetime::from_range(now() - 60, now() + 1),
+        );
+        let signature = prekey
+            .sign(&bob.credentials.identity_secret(), &rng)
+            .unwrap();
+
+        // Wrap it in key bundle.
+        let bundle = LongTermKeyBundle::new(
+            bob.credentials.identity_secret().public_key().unwrap(),
+            prekey,
+            signature,
+        );
+
+        Member::new(bob.manager.id(), bundle)
+    };
+
+    // Alice adds Bob's key bundle. At this point it is still valid.
+    alice.manager.register_member(&expired_bob).await.unwrap();
+
+    // Sleep to make bundle expire.
+    thread::sleep(Duration::from_secs(1));
+
+    // Alice creates a space with Bob but it should fail since the key bundle has expired.
+    assert!(
+        alice
+            .manager
+            .create_space(0, &[(expired_bob.id(), Access::write())])
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn process_operation_from_expired_member() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::<i32>::new(1).await;
+
+    // Create key bundle which expires in 1 second.
+    let expired_bob = {
+        let rng = Rng::from_seed([2; 32]);
+
+        // Generate pre-key & sign it.
+        let prekey_secret = SecretKey::from_rng(&rng).unwrap();
+        let prekey = PreKey::new(
+            prekey_secret.public_key().unwrap(),
+            Lifetime::from_range(now() - 60, now() + 1),
+        );
+        let signature = prekey
+            .sign(&bob.credentials.identity_secret(), &rng)
+            .unwrap();
+
+        // Wrap it in key bundle.
+        let bundle = LongTermKeyBundle::new(
+            bob.credentials.identity_secret().public_key().unwrap(),
+            prekey,
+            signature,
+        );
+
+        Member::new(bob.manager.id(), bundle)
+    };
+
+    // Alice adds Bob's key bundle. At this point it is still valid.
+    alice.manager.register_member(&expired_bob).await.unwrap();
+
+    // Bob should register it's own soon-invalid key bundle.
+    bob.manager.register_member(&expired_bob).await.unwrap();
+
+    // Alice creates a space with Bob.
+    let (_space, messages, _events) = alice
+        .manager
+        .create_space(0, &[(expired_bob.id(), Access::write())])
+        .await
+        .unwrap();
+
+    // Sleep to make bundle expire.
+    thread::sleep(Duration::from_secs(2));
+
+    // Bob processes Alice's "create group" message.
+    bob.manager.process(&messages[0]).await.unwrap();
+    // Bob processes Alice's "create space", but unfortunately Bob's key bundle expired and they
+    // can't decrypt the initial key agreement (X3DH) in the direct message anymore.
+    assert!(bob.manager.process(&messages[1]).await.is_err());
 }
