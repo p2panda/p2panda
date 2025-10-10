@@ -22,6 +22,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Enable nonblocking for unbound socket used in mdns discovery [#794](https://github.com/p2panda/p2panda/pull/794)
+- Allow managing multiple long-term pre-keys [#830](https://github.com/p2panda/p2panda/pull/830)
 
 ## [0.4.0] - 07/07/2025
 

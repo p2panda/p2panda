@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::crypto::hpke::{HpkeCiphertext, HpkeError, hpke_open, hpke_seal};
 use crate::crypto::x25519::{PublicKey, SecretKey, X25519Error};
 use crate::crypto::{Rng, RngError};
-use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle};
+use crate::key_bundle::{LongTermKeyBundle, OneTimeKeyBundle, PreKeyId};
 use crate::key_manager::KeyManager;
 use crate::traits::{IdentityManager, KeyBundle, PreKeyManager};
 use crate::two_party::{X3dhCiphertext, X3dhError, x3dh_decrypt, x3dh_encrypt};
@@ -321,7 +321,9 @@ where
                 let plaintext = x3dh_decrypt(
                     &ciphertext,
                     KMG::identity_secret(&y_manager_i),
-                    KMG::prekey_secret(&y_manager_i),
+                    KMG::prekey_secret(&y_manager_i, &ciphertext.prekey_id)
+                        // Fails when sender used an invalid / expired pre-key for initial X3DH.
+                        .map_err(|_| TwoPartyError::UnknownPreKeyUsed(ciphertext.prekey_id))?,
                     onetime_secret.as_ref(),
                 )?;
 
@@ -425,6 +427,9 @@ pub enum TwoPartyError {
     #[error("tried to decrypt with unknown 2SM secret at index {0}")]
     UnknownSecretUsed(u64),
 
+    #[error("tried to decrypt with unknown initial X3DH pre-key {0}")]
+    UnknownPreKeyUsed(PreKeyId),
+
     #[error("invalid ciphertext for message type")]
     InvalidCiphertextType,
 }
@@ -447,7 +452,8 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (alice_manager, alice_prekey_bundle) =
             KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
@@ -456,7 +462,8 @@ mod tests {
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (bob_manager, bob_prekey_bundle) =
             KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();
@@ -634,17 +641,19 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
-        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager);
+        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager).unwrap();
 
         // Bob generates their long-term key material.
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
-        let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager);
+        let bob_prekey_bundle = KeyManager::prekey_bundle(&bob_manager).unwrap();
 
         // Alice and Bob set up the 2SM protocol handlers for each other.
 
@@ -708,7 +717,8 @@ mod tests {
 
         let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let alice_manager =
-            KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (alice_manager, alice_prekey_bundle) =
             KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
@@ -717,7 +727,8 @@ mod tests {
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let bob_manager =
-            KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+            KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+                .unwrap();
 
         let (bob_manager, bob_prekey_bundle) =
             KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();
