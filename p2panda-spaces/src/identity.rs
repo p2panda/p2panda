@@ -16,8 +16,7 @@ use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::{AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, SpacesMessage};
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
@@ -32,36 +31,38 @@ use crate::{Config, Credentials};
 /// undefined behavior. Rotating both keys is possible but will result in the loss of access to
 /// existing spaces.
 #[derive(Debug)]
-pub struct IdentityManager<ID, K, M, C> {
+pub struct IdentityManager<ID, K, F, M, C> {
     key_store: K,
+    forge: F,
     credentials: Credentials,
     config: Config,
     rng: Rng,
-    _marker: PhantomData<(ID, M, C)>,
+    _marker: PhantomData<(ID, F, M, C)>,
 }
 
-impl<ID, K, M, C> IdentityManager<ID, K, M, C>
+impl<ID, K, F, M, C> IdentityManager<ID, K, F, M, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore + Forge<ID, M, C> + Debug,
+    K: KeySecretStore + KeyRegistryStore + Debug,
+    F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C>,
     C: Conditions,
 {
     pub async fn new(
         key_store: K,
+        forge: F,
         credentials: Credentials,
         config: &Config,
         rng: &Rng,
-    ) -> Result<Self, IdentityError<ID, K, M, C>> {
-        let rng = Rng::from_rng(rng)?;
-        let manager = Self {
-            credentials,
+    ) -> Result<Self, IdentityError<ID, K, F, M, C>> {
+        Ok(Self {
             key_store,
+            forge,
+            credentials,
             config: config.clone(),
-            rng,
+            rng: Rng::from_rng(rng)?,
             _marker: PhantomData,
-        };
-        Ok(manager)
+        })
     }
 
     /// The public key of the local actor.
@@ -72,14 +73,14 @@ where
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<ID, K, M, C>> {
+    pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<ID, K, F, M, C>> {
         Ok(Member::new(self.id(), self.key_bundle().await?))
     }
 
     /// Returns "latest", publishable key bundle of us or automatically generates a new one if
     /// either nothing was generated yet, if previous bundles expired or are about to be expired
     /// (given an additional "pessimistic" rotation window).
-    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<ID, K, M, C>> {
+    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<ID, K, F, M, C>> {
         let key_manager_y = self.key_manager().await?;
 
         let valid_bundle = match KeyManager::prekey_bundle(&key_manager_y) {
@@ -127,7 +128,7 @@ where
     }
 
     /// Returns `true` if my latest key bundle has expired or is about to expire.
-    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<ID, K, M, C>> {
+    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<ID, K, F, M, C>> {
         let key_manager_y = self.key_manager().await?;
         match KeyManager::prekey_bundle(&key_manager_y) {
             Ok(bundle) => Ok(bundle
@@ -142,15 +143,11 @@ where
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&mut self) -> Result<M, IdentityError<ID, K, M, C>> {
+    pub async fn key_bundle_message(&mut self) -> Result<M, IdentityError<ID, K, F, M, C>> {
         let args = SpacesArgs::KeyBundle {
             key_bundle: self.key_bundle().await?,
         };
-        let message = self
-            .key_store
-            .forge(args)
-            .await
-            .map_err(IdentityError::Forge)?;
+        let message = self.forge.forge(args).await.map_err(IdentityError::Forge)?;
         Ok(message)
     }
 
@@ -165,7 +162,7 @@ where
     pub async fn register_member(
         &mut self,
         member: &Member,
-    ) -> Result<(), IdentityError<ID, K, M, C>> {
+    ) -> Result<(), IdentityError<ID, K, F, M, C>> {
         let pki = {
             let y = self.key_registry().await?;
             KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone())?
@@ -184,7 +181,7 @@ where
         &mut self,
         author: ActorId,
         key_bundle: &LongTermKeyBundle,
-    ) -> Result<Event<ID, C>, IdentityError<ID, K, M, C>> {
+    ) -> Result<Event<ID, C>, IdentityError<ID, K, F, M, C>> {
         key_bundle.verify()?;
         let member = Member::new(author, key_bundle.clone());
         self.register_member(&member).await?;
@@ -194,15 +191,12 @@ where
     pub async fn forge(
         &mut self,
         args: SpacesArgs<ID, C>,
-    ) -> Result<M, IdentityError<ID, K, M, C>> {
-        self.key_store
-            .forge(args)
-            .await
-            .map_err(IdentityError::Forge)
+    ) -> Result<M, IdentityError<ID, K, F, M, C>> {
+        self.forge.forge(args).await.map_err(IdentityError::Forge)
     }
 
     /// Assemble and return key manager state from persisted pre-key bundles and identity secret.
-    pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<ID, K, M, C>> {
+    pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<ID, K, F, M, C>> {
         let prekeys = self
             .key_store
             .prekey_secrets()
@@ -217,7 +211,7 @@ where
 
     pub async fn key_registry(
         &self,
-    ) -> Result<KeyRegistryState<ActorId>, IdentityError<ID, K, M, C>> {
+    ) -> Result<KeyRegistryState<ActorId>, IdentityError<ID, K, F, M, C>> {
         self.key_store
             .key_registry()
             .await
@@ -227,14 +221,15 @@ where
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum IdentityError<ID, K, M, C>
+pub enum IdentityError<ID, K, F, M, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore + Forge<ID, M, C>,
+    K: KeySecretStore + KeyRegistryStore,
+    F: Forge<ID, M, C>,
     C: Conditions,
 {
     #[error("{0}")]
-    Forge(<K as Forge<ID, M, C>>::Error),
+    Forge(F::Error),
 
     #[error(transparent)]
     KeyManager(#[from] KeyManagerError),
@@ -268,8 +263,8 @@ mod tests {
     use p2panda_encryption::traits::{KeyBundle, PreKeyRegistry};
 
     use crate::message::SpacesArgs;
-    use crate::test_utils::{TestKeyStore, TestSpacesStore};
-    use crate::traits::message::{AuthoredMessage, SpacesMessage};
+    use crate::test_utils::{TestForge, TestKeyStore, TestStore};
+    use crate::traits::{AuthoredMessage, SpacesMessage};
     use crate::{ActorId, Config, Credentials};
 
     use super::IdentityManager;
@@ -277,12 +272,16 @@ mod tests {
     #[tokio::test]
     async fn me_returns_valid_member() {
         let rng = Rng::from_seed([1; 32]);
+
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let spaces_store = TestSpacesStore::new();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(spaces_store, &credentials).unwrap();
+
+        let message_store = TestStore::new();
+        let key_store = TestKeyStore::new();
+        let forge = TestForge::new(message_store, credentials.private_key());
+
         let mut identity_manager =
-            IdentityManager::new(key_store, credentials.clone(), &config, &rng)
+            IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
                 .await
                 .unwrap();
 
@@ -297,12 +296,16 @@ mod tests {
     #[tokio::test]
     async fn key_bundle_message_forged() {
         let rng = Rng::from_seed([1; 32]);
+
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        let spaces_store = TestSpacesStore::new();
-        let key_store: TestKeyStore<i32> = TestKeyStore::new(spaces_store, &credentials).unwrap();
+
+        let message_store = TestStore::new();
+        let key_store = TestKeyStore::new();
+        let forge = TestForge::new(message_store, credentials.private_key());
+
         let mut identity_manager =
-            IdentityManager::new(key_store, credentials.clone(), &config, &rng)
+            IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
                 .await
                 .unwrap();
 
@@ -323,10 +326,14 @@ mod tests {
         let alice_rng = Rng::from_seed([1; 32]);
         let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
         let alice_config = Config::default();
-        let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(TestSpacesStore::new(), &alice_credentials).unwrap();
+
+        let alice_message_store = TestStore::new();
+        let alice_key_store = TestKeyStore::new();
+        let alice_forge = TestForge::new(alice_message_store, alice_credentials.private_key());
+
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
+            alice_forge,
             alice_credentials,
             &alice_config,
             &alice_rng,
@@ -337,10 +344,14 @@ mod tests {
         let bob_rng = Rng::from_seed([2; 32]);
         let bob_credentials = Credentials::from_rng(&bob_rng).unwrap();
         let bob_config = Config::default();
-        let bob_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(TestSpacesStore::new(), &bob_credentials).unwrap();
+
+        let bob_message_store = TestStore::new();
+        let bob_key_store = TestKeyStore::new();
+        let bob_forge = TestForge::new(bob_message_store, bob_credentials.private_key());
+
         let mut bob_identity_manager = IdentityManager::new(
             bob_key_store,
+            bob_forge,
             bob_credentials.clone(),
             &bob_config,
             &bob_rng,
@@ -370,19 +381,18 @@ mod tests {
 
     #[tokio::test]
     async fn me_rotates_key_bundle_when_expired() {
-        let alice_rng = Rng::from_seed([1; 32]);
-        let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
-        let alice_config = Config::default();
-        let alice_key_store: TestKeyStore<i32> =
-            TestKeyStore::new(TestSpacesStore::new(), &alice_credentials).unwrap();
-        let mut alice_identity_manager = IdentityManager::new(
-            alice_key_store,
-            alice_credentials,
-            &alice_config,
-            &alice_rng,
-        )
-        .await
-        .unwrap();
+        let rng = Rng::from_seed([1; 32]);
+        let credentials = Credentials::from_rng(&rng).unwrap();
+        let config = Config::default();
+
+        let message_store = TestStore::new();
+        let key_store = TestKeyStore::new();
+        let forge = TestForge::new(message_store, credentials.private_key());
+
+        let mut alice_identity_manager =
+            IdentityManager::new(key_store, forge, credentials, &config, &rng)
+                .await
+                .unwrap();
 
         let alice_1 = alice_identity_manager.me().await.unwrap();
         let bundle_1 = alice_1.key_bundle().clone();
