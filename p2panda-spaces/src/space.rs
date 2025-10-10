@@ -22,7 +22,7 @@ use crate::identity::IdentityError;
 use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{
@@ -53,7 +53,7 @@ impl<ID, S, K, M, C, RS> Space<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
@@ -804,7 +804,7 @@ pub enum SpaceError<ID, S, K, M, C, RS>
 where
     ID: SpaceId,
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
-    K: KeyRegistryStore + KeyManagerStore + Forge<ID, M, C> + Debug,
+    K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
 {

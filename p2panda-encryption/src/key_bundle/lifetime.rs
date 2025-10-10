@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -56,6 +56,39 @@ impl Lifetime {
             Err(LifetimeError::InvalidLifetime)
         }
     }
+
+    /// Returns true if this lifetime with an additional window is valid.
+    ///
+    /// This method can be used to calculate if an lifetime _is about_ to expire, given a defined
+    /// time "window".
+    ///
+    /// ```plain
+    ///               [-------]
+    ///               |       |
+    /// Lifetime: [---|----]  |
+    ///               |       |
+    ///              now  + window
+    ///
+    ///         -- t -->
+    /// ```
+    pub fn verify_with_window(&self, window: Duration) -> Result<(), LifetimeError> {
+        let is_valid = match SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+        {
+            Ok(elapsed) => {
+                let elapsed = elapsed + window.as_secs();
+                self.not_before < elapsed && elapsed < self.not_after
+            }
+            Err(err) => return Err(LifetimeError::SystemTime(err)),
+        };
+
+        if is_valid {
+            Ok(())
+        } else {
+            Err(LifetimeError::InvalidLifetime)
+        }
+    }
 }
 
 impl Default for Lifetime {
@@ -76,7 +109,7 @@ impl PartialOrd for Lifetime {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 impl Lifetime {
     pub fn from_range(not_before: u64, not_after: u64) -> Self {
         Self {
@@ -97,7 +130,7 @@ pub enum LifetimeError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use super::Lifetime;
 
@@ -115,6 +148,11 @@ mod tests {
         // Lifetimes of a minute are correct.
         let lifetime = Lifetime::new(60);
         assert!(lifetime.verify().is_ok());
+        assert!(
+            lifetime
+                .verify_with_window(Duration::from_secs(120))
+                .is_err()
+        );
 
         // Test interface for lifetime is correct.
         let lifetime = Lifetime::from_range(now - 60, now + 60);
