@@ -35,7 +35,8 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
 
     let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
     let alice_manager =
-        KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+        KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
 
     let (mut alice_manager, alice_prekey_bundle) =
         KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
@@ -43,7 +44,9 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
     // Bob generates their long-term key material.
 
     let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-    let bob_manager = KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+    let bob_manager =
+        KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
 
     let (mut bob_manager, bob_prekey_bundle) =
         KeyManager::generate_onetime_bundle(bob_manager, &rng).unwrap();

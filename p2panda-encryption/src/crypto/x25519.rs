@@ -2,6 +2,7 @@
 
 //! Elliptic-curve Diffie–Hellman (ECDH) key agreement scheme (X25519).
 use std::fmt;
+use std::hash::Hash as StdHash;
 
 use curve25519_dalek::scalar::clamp_integer;
 use serde::{Deserialize, Serialize};
@@ -60,7 +61,7 @@ impl SecretKey {
 }
 
 /// Public Curve25519 key used for ECDH key agreement.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; PUBLIC_KEY_SIZE]);
 
 impl PublicKey {

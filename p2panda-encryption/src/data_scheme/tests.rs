@@ -33,9 +33,11 @@ fn group_operations() {
 
     let alice_dgm = TestDgm::init(alice);
     let alice_pki = KeyRegistry::init();
-    let alice_keys = KeyManager::init(&alice_identity_secret, Lifetime::default(), &rng).unwrap();
+    let alice_keys =
+        KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
 
-    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys);
+    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys).unwrap();
 
     // Bob initialises their key material.
 
@@ -43,9 +45,11 @@ fn group_operations() {
 
     let bob_dgm = TestDgm::init(bob);
     let bob_pki = KeyRegistry::init();
-    let bob_keys = KeyManager::init(&bob_identity_secret, Lifetime::default(), &rng).unwrap();
+    let bob_keys =
+        KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
 
-    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys);
+    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys).unwrap();
 
     // Charlie initialises their key material.
 
@@ -54,24 +58,30 @@ fn group_operations() {
     let charlie_dgm = TestDgm::init(charlie);
     let charlie_pki = KeyRegistry::init();
     let charlie_keys =
-        KeyManager::init(&charlie_identity_secret, Lifetime::default(), &rng).unwrap();
+        KeyManager::init_and_generate_prekey(&charlie_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
 
-    let charlie_prekeys = KeyManager::prekey_bundle(&charlie_keys);
+    let charlie_prekeys = KeyManager::prekey_bundle(&charlie_keys).unwrap();
 
     // Register key bundles.
 
-    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, alice, alice_prekeys.clone());
-    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, bob, bob_prekeys.clone());
-    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, charlie, charlie_prekeys.clone());
+    let alice_pki =
+        KeyRegistry::add_longterm_bundle(alice_pki, alice, alice_prekeys.clone()).unwrap();
+    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, bob, bob_prekeys.clone()).unwrap();
+    let alice_pki =
+        KeyRegistry::add_longterm_bundle(alice_pki, charlie, charlie_prekeys.clone()).unwrap();
 
-    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, alice, alice_prekeys.clone());
-    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, bob, bob_prekeys.clone());
-    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, charlie, charlie_prekeys.clone());
+    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, alice, alice_prekeys.clone()).unwrap();
+    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, bob, bob_prekeys.clone()).unwrap();
+    let bob_pki =
+        KeyRegistry::add_longterm_bundle(bob_pki, charlie, charlie_prekeys.clone()).unwrap();
 
-    let charlie_pki = KeyRegistry::add_longterm_bundle(charlie_pki, alice, alice_prekeys.clone());
-    let charlie_pki = KeyRegistry::add_longterm_bundle(charlie_pki, bob, bob_prekeys.clone());
     let charlie_pki =
-        KeyRegistry::add_longterm_bundle(charlie_pki, charlie, charlie_prekeys.clone());
+        KeyRegistry::add_longterm_bundle(charlie_pki, alice, alice_prekeys.clone()).unwrap();
+    let charlie_pki =
+        KeyRegistry::add_longterm_bundle(charlie_pki, bob, bob_prekeys.clone()).unwrap();
+    let charlie_pki =
+        KeyRegistry::add_longterm_bundle(charlie_pki, charlie, charlie_prekeys.clone()).unwrap();
 
     // Initialise DCGKA states.
 
