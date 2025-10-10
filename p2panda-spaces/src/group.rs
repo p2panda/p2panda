@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! API for managing members of a group in the shared auth context.
+//!
+//! Group membership changes also effect all spaces and groups for which the altered group is itself a member.
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -24,6 +27,16 @@ use crate::types::{
 };
 use crate::utils::{sort_members, typed_member, typed_members};
 
+/// A single group which exists in the global auth context.
+///
+/// Actors can be added or removed from the group; an actor may be an individual or a group.
+/// Access levels are assigned to all members. These access levels can be used by authorisation
+/// layers outside of p2panda-spaces to enforce access control rules.
+///
+/// A group can be a member of many spaces, or indeed other groups, and any changes effect all
+/// parents.
+///
+/// Only members with Manage access level are allowed to manage the groups members.
 #[derive(Debug)]
 pub struct Group<ID, S, K, M, C, RS> {
     /// Reference to the manager.
@@ -45,7 +58,7 @@ where
     K: Forge<ID, M, C> + KeyRegistryStore + KeySecretStore + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
-    RS: Debug + AuthResolver<C>,
+    RS: AuthResolver<C> + Debug,
 {
     pub(crate) fn new(manager_ref: Manager<ID, S, K, M, C, RS>, id: ActorId) -> Self {
         Self {
@@ -58,7 +71,7 @@ where
     ///
     /// It is possible to create a group where the creator is not an initial member or is a member
     /// without manager rights. If this is done then after creation no further change of the group
-    /// membership would be possible.
+    /// membership would be possible by the local actor.
     ///
     /// Returns messages for replication to other instances and events which inform users of any
     /// state changes which occurred.
@@ -102,7 +115,7 @@ where
         ))
     }
 
-    /// Add member to an existing group with specified access level.
+    /// Add member to group with specified access level.
     ///
     /// Returns messages for replication to other instances and events which inform users of any
     /// state changes which occurred.
@@ -132,7 +145,7 @@ where
         Ok((messages, events))
     }
 
-    /// Remove member from an existing group.
+    /// Remove member from group.
     ///
     /// Returns messages for replication to other instances and events which inform users of any
     /// state changes which occurred.
@@ -280,6 +293,7 @@ where
     }
 }
 
+/// Group error type.
 #[derive(Debug, Error)]
 pub enum GroupError<ID, S, K, M, C, RS>
 where
@@ -287,7 +301,7 @@ where
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
     K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C>,
     C: Conditions,
-    RS: Debug + AuthResolver<C>,
+    RS: AuthResolver<C> + Debug,
 {
     #[error(transparent)]
     Rng(#[from] RngError),

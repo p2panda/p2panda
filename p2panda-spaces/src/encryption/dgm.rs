@@ -10,10 +10,12 @@ use crate::types::{ActorId, OperationId};
 // @TODO: It's strange that Serialize & Deserialize (along with other traits)
 // are required here. It's only a requirement because EncryptionGroupMembership
 // is a generic parameter on EncryptionDirectMessage.
+/// Placeholder for DGM implementation which satisfies required trait interfaces in
+/// p2panda-encryption. Most methods perform no actual actions as group management is handled by
+/// p2panda-auth.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionGroupMembership {}
 
-// @TODO: Maybe put `serde` features behind a feature-flag in `p2panda-encryption`?
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
     pub(crate) members: HashSet<ActorId>,
@@ -24,7 +26,7 @@ impl p2panda_encryption::traits::GroupMembership<ActorId, OperationId>
 {
     type State = EncryptionMembershipState;
 
-    type Error = Infallible; // @TODO
+    type Error = Infallible;
 
     fn create(_my_id: ActorId, initial_members: &[ActorId]) -> Result<Self::State, Self::Error> {
         Ok(EncryptionMembershipState {

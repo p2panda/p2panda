@@ -8,11 +8,10 @@ use p2panda_encryption::data_scheme::GroupOutput;
 use crate::ActorId;
 use crate::auth::message::AuthMessage;
 use crate::message::SpacesArgs;
-use crate::space::{added_members, removed_members};
 use crate::traits::SpaceId;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
-use crate::utils::sort_members;
+use crate::utils::{added_members, removed_members, sort_members};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupActor {
@@ -48,6 +47,7 @@ impl GroupActor {
     }
 }
 
+/// Events emitted when system state changes or application messages are processed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<ID, C> {
@@ -58,6 +58,7 @@ pub enum Event<ID, C> {
     Space(SpaceEvent<ID>),
 }
 
+/// Additional context attached to group events.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupContext<C> {
     /// The actor who authored this action.
@@ -70,6 +71,7 @@ pub struct GroupContext<C> {
     pub members: Vec<(ActorId, Access<C>)>,
 }
 
+/// Additional context attached to space events.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpaceContext {
     /// The actor who authored this group change action.
@@ -88,7 +90,7 @@ pub struct SpaceContext {
     pub members: Vec<ActorId>,
 }
 
-/// Events emitted on auth group membership change.
+/// Events emitted when global auth state changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupEvent<C> {
     /// A group was created.
@@ -131,7 +133,7 @@ pub enum GroupEvent<C> {
     },
 }
 
-/// Events emitted on space encryption group membership change.
+/// Events emitted when space encryption group membership changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpaceEvent<ID> {
     /// A space was created.

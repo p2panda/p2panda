@@ -8,13 +8,14 @@ use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessa
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::SpacesArgs;
-use crate::space::removed_members;
 use crate::traits::SpaceId;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{
     ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
+use crate::utils::removed_members;
 
+/// Arguments which are returned from p2panda-encryption APIs.
 #[derive(Clone, Debug)]
 pub enum EncryptionArgs {
     System {
@@ -30,6 +31,7 @@ pub enum EncryptionArgs {
     },
 }
 
+/// Message which can be processed by p2panda-encryption APIs.
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum EncryptionMessage {

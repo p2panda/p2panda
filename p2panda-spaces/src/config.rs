@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Serializable configuration object.
 use std::fmt::Debug;
 use std::time::Duration;
 
+#[cfg(any(test, feature = "test_utils"))]
 use p2panda_encryption::key_bundle::Lifetime;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +28,7 @@ impl Default for Config {
     }
 }
 
+#[cfg(any(test, feature = "test_utils"))]
 impl Config {
     pub(crate) fn lifetime(&self) -> Lifetime {
         Lifetime::new(self.pre_key_lifetime.as_secs())

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Types used across p2panda-spaces.
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
@@ -25,7 +26,9 @@ use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
 
 pub const ACTOR_ID_SIZE: usize = PUBLIC_KEY_LEN;
+pub const OPERATION_ID_SIZE: usize = HASH_LEN;
 
+/// Identifier for an actor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ActorId(pub(crate) PublicKey);
 
@@ -108,8 +111,7 @@ pub enum ActorIdError {
     Identity(#[from] IdentityError),
 }
 
-pub const OPERATION_ID_SIZE: usize = HASH_LEN;
-
+/// Identifier for an operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub(crate) Hash);
 
@@ -185,8 +187,6 @@ pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 pub type StrongRemoveResolver<C> =
     p2panda_auth::group::resolver::StrongRemove<ActorId, OperationId, C, AuthMessage<C>>;
 
-// @TODO: We can bound this state requirement in p2panda-auth to reduce
-// complexity in this trait signature.
 pub trait AuthResolver<C>:
     Resolver<
         ActorId,

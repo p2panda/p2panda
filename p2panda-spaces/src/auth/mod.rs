@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod message;
-pub mod orderer;
+//! Message types and trait implementations required by p2panda-auth.
+pub(crate) mod message;
+pub(crate) mod orderer;

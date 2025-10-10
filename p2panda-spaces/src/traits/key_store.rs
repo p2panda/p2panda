@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Trait interfaces for managing key material and forging messages.
 use std::fmt::Debug;
 
 use p2panda_core::PublicKey;
