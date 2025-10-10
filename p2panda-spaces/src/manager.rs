@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! High-level API for managing spaces, groups and member keys.
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -25,24 +26,27 @@ use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
-// Create and manage spaces and groups.
-//
-// Takes care of ingesting operations, updating spaces, groups and member key-material. Has access
-// to the operation and group stores, orderer, key-registry and key-manager.
-//
-// Routes operations to the correct space(s), group(s) or member.
-//
-// Only one instance of `Spaces` per app user.
-//
-// Operations are created and published within the spaces service, reacting to arriving
-// operations, due to api calls (create group, create space), or triggered by key-bundles
-// expiring.
-//
-// Users of spaces can subscribe to events which inform about member, group or space state
-// changes, application data being decrypted, pre-key bundles being published, we were added or
-// removed from a space.
-//
-// Is agnostic to current p2panda-streams, networking layer, data type.
+/// API for creating and managing groups and spaces. There should be only one manager instance per
+/// application. Any messages received from other instances must be processed on the manager. All
+/// methods which mutate state locally return M message(s) which must be replicated to and
+/// processed by other instances. Any action which mutates state (both local method calls and
+/// processed messages) will emit events which can be sent to any higher levels to inform of any
+/// state changes.
+///
+/// In order to add an actor to a space, we first need to have a key bundle generated from a
+/// not-expired pre-key. The manager offers an API for checking our latest key-bundle is valid
+/// and issuing new key bundles to be replicated with other instances.
+///  
+/// All methods are idempotent; messages can be processed multiple times without causing any
+/// additional state changes.
+///
+/// p2panda-spaces is agnostic to the concrete message type used to send control and application messages, providing the trait requirements are met.
+///
+/// ## Requirements
+///
+/// All messages must be ordered according to their causal relationship _before_ being processed
+/// on the manager. All messages created within p2panda-spaces express their dependencies; these
+/// should be used to perform partial ordering of all incoming messages.
 #[derive(Debug)]
 pub struct Manager<ID, S, K, M, C, RS> {
     pub(crate) actor_id: ActorId,
@@ -52,7 +56,6 @@ pub struct Manager<ID, S, K, M, C, RS> {
 
 #[derive(Debug)]
 pub(crate) struct ManagerInner<ID, S, K, M, C, RS> {
-    pub(crate) config: Config,
     pub(crate) spaces_store: S,
     pub(crate) identity: IdentityManager<ID, K, M, C>,
     pub(crate) rng: Rng,
@@ -69,8 +72,7 @@ where
     K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
     C: Conditions,
-    // @TODO: Can we get rid of this Debug requirement here?
-    RS: Debug + AuthResolver<C>,
+    RS: AuthResolver<C> + Debug,
 {
     /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
@@ -102,7 +104,6 @@ where
         let actor_id: ActorId = credentials.public_key().into();
         let identity = IdentityManager::new(key_store, credentials, config, &rng).await?;
         let inner = ManagerInner {
-            config: config.clone(),
             spaces_store,
             identity,
             rng,
@@ -116,6 +117,9 @@ where
     }
 
     /// Get a space by id.
+    ///
+    /// A space instance provides an API for adding and removing members from the space and
+    /// querying the current space members.
     pub async fn space(
         &self,
         id: ID,
@@ -137,6 +141,9 @@ where
     }
 
     /// Get a group by id.
+    ///
+    /// A group instance provides an API for adding and removing members from a group and querying
+    /// the current group members.
     pub async fn group(
         &self,
         id: ActorId,
@@ -304,19 +311,6 @@ where
             .key_bundle_message()
             .await
             .map_err(ManagerError::IdentityManager)
-    }
-
-    /// Create a new message from passed spaces args.
-    ///
-    /// The returned generic message type implements `AuthoredMessage` and `SpacesMessage<ID, C>`
-    /// traits.
-    pub(crate) async fn forge(
-        &mut self,
-        args: SpacesArgs<ID, C>,
-    ) -> Result<M, ManagerError<ID, S, K, M, C, RS>> {
-        let mut manager = self.inner.write().await;
-        let message = manager.identity.forge(args).await?;
-        Ok(message)
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
@@ -583,7 +577,7 @@ where
     S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
     K: KeyRegistryStore + KeySecretStore + Forge<ID, M, C> + Debug,
     C: Conditions,
-    RS: Debug + AuthResolver<C>,
+    RS: AuthResolver<C> + Debug,
 {
     #[error(transparent)]
     Space(#[from] SpaceError<ID, S, K, M, C, RS>),

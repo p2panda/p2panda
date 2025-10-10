@@ -5,6 +5,7 @@ use p2panda_encryption::traits::KeyBundle;
 
 use crate::types::ActorId;
 
+/// A group member and their long-term key bundle.
 #[derive(Debug)]
 pub struct Member {
     id: ActorId,
@@ -23,14 +24,17 @@ impl Member {
         Self { id, key_bundle }
     }
 
+    /// Identifier for this member.
     pub fn id(&self) -> ActorId {
         self.id
     }
 
+    /// Long-term key bundle for this member.
     pub fn key_bundle(&self) -> &LongTermKeyBundle {
         &self.key_bundle
     }
 
+    /// Verify the key bundle.
     pub fn verify(&self) -> Result<(), KeyBundleError> {
         self.key_bundle.verify()
     }

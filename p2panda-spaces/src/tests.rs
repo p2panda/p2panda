@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use assert_matches::assert_matches;
 use p2panda_auth::Access;
@@ -19,7 +19,6 @@ use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::traits::spaces_store::{AuthStore, SpaceStore};
 use crate::types::{AuthControlMessage, AuthGroupAction};
-use crate::utils::now;
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.id().cmp(&actor_b.id()));
@@ -2058,11 +2057,16 @@ async fn add_expired_member_to_group() {
     let expired_bob = {
         let rng = Rng::from_seed([2; 32]);
 
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_secs();
+
         // Generate pre-key & sign it.
         let prekey_secret = SecretKey::from_rng(&rng).unwrap();
         let prekey = PreKey::new(
             prekey_secret.public_key().unwrap(),
-            Lifetime::from_range(now() - 60, now() + 1),
+            Lifetime::from_range(now - 60, now + 1),
         );
         let signature = prekey
             .sign(&bob.credentials.identity_secret(), &rng)
@@ -2103,11 +2107,16 @@ async fn process_operation_from_expired_member() {
     let expired_bob = {
         let rng = Rng::from_seed([2; 32]);
 
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_secs();
+
         // Generate pre-key & sign it.
         let prekey_secret = SecretKey::from_rng(&rng).unwrap();
         let prekey = PreKey::new(
             prekey_secret.public_key().unwrap(),
-            Lifetime::from_range(now() - 60, now() + 1),
+            Lifetime::from_range(now - 60, now + 1),
         );
         let signature = prekey
             .sign(&bob.credentials.identity_secret(), &rng)

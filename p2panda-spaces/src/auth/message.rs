@@ -7,12 +7,14 @@ use crate::traits::SpaceId;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
+/// Arguments which are returned from p2panda-auth APIs.
 #[derive(Clone, Debug)]
 pub struct AuthArgs<C> {
     pub(crate) dependencies: Vec<OperationId>,
     pub(crate) control_message: AuthControlMessage<C>,
 }
 
+/// Message which can be processed by p2panda-auth APIs.
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum AuthMessage<C> {
