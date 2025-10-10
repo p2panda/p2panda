@@ -12,9 +12,9 @@ use crate::Credentials;
 use crate::message::SpacesArgs;
 use crate::test_utils::{SeqNum, TestConditions, TestMessage, TestSpacesStore};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
+use crate::traits::forge::Forge;
 use crate::traits::message::AuthoredMessage;
-use crate::traits::spaces_store::MessageStore;
+use crate::traits::store::{KeyRegistryStore, KeySecretStore, MessageStore};
 use crate::types::ActorId;
 
 #[derive(Debug)]

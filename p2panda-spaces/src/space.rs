@@ -23,9 +23,9 @@ use crate::identity::IdentityError;
 use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
+use crate::traits::forge::Forge;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
-use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
+use crate::traits::store::{AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpaceStore};
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,

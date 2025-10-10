@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_auth::Access;
+use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
-use p2panda_auth::{Access, group::GroupMember};
 
+use crate::ActorId;
 use crate::manager::Manager;
-use crate::traits::spaces_store::AuthStore;
-use crate::{ActorId, types::AuthGroupState};
+use crate::traits::store::AuthStore;
+use crate::types::AuthGroupState;
 
 /// Assign a GroupMember type to passed actor based on looking up if the actor is a group in the
 /// auth state.

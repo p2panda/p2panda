@@ -20,9 +20,9 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
+use crate::traits::forge::Forge;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
-use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
+use crate::traits::store::{AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpaceStore};
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 

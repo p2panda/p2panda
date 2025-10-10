@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Traits interfaces.
-pub mod key_store;
+pub mod forge;
 pub mod message;
-pub mod spaces_store;
+pub mod store;
 
 use std::fmt::Debug;
 

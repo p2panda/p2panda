@@ -17,7 +17,7 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
-use crate::traits::spaces_store::{AuthStore, SpaceStore};
+use crate::traits::store::{AuthStore, SpaceStore};
 use crate::types::{AuthControlMessage, AuthGroupAction};
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {

@@ -13,7 +13,7 @@ use crate::auth::orderer::AuthOrderer;
 use crate::space::SpaceState;
 use crate::test_utils::{TestConditions, TestMessage};
 use crate::traits::SpaceId;
-use crate::traits::spaces_store::{AuthStore, MessageStore, SpaceStore};
+use crate::traits::store::{AuthStore, MessageStore, SpaceStore};
 use crate::types::AuthGroupState;
 
 pub type TestSpacesStore<ID> = MemoryStore<ID, TestMessage<ID>, TestConditions>;

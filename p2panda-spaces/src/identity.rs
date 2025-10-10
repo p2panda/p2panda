@@ -16,8 +16,9 @@ use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
+use crate::traits::forge::Forge;
 use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::store::{KeyRegistryStore, KeySecretStore};
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
