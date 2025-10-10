@@ -34,7 +34,7 @@ use crate::{Config, Credentials};
 /// state changes.
 ///
 /// In order to add an actor to a space, we first need to have a key bundle generated from a
-/// not-expired pre-key. The manager offers an api for checking our latest key-bundle is valid,
+/// not-expired pre-key. The manager offers an API for checking our latest key-bundle is valid
 /// and issuing new key bundles to be replicated with other instances.
 ///  
 /// All methods are idempotent, messages can be processed multiple times without causing any
