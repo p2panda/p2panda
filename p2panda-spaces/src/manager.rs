@@ -46,7 +46,7 @@ use crate::{Config, Credentials};
 /// ## Requirements
 ///
 /// All messages must be ordered according to their causal relationship _before_ being processed
-/// on the manager. All messages created within p2panda-spaces express their dependencies, these
+/// on the manager. All messages created within p2panda-spaces express their dependencies; these
 /// should be used to perform partial ordering of all incoming messages.
 #[derive(Debug)]
 pub struct Manager<ID, S, K, M, C, RS> {
