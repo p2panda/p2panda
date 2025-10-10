@@ -37,7 +37,7 @@ use crate::{Config, Credentials};
 /// not-expired pre-key. The manager offers an API for checking our latest key-bundle is valid
 /// and issuing new key bundles to be replicated with other instances.
 ///  
-/// All methods are idempotent, messages can be processed multiple times without causing any
+/// All methods are idempotent; messages can be processed multiple times without causing any
 /// additional state changes.
 ///
 /// p2panda-spaces is agnostic to the concrete message type control and application messages are
