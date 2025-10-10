@@ -4,25 +4,24 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_encryption::Rng;
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
+use p2panda_encryption::key_manager::{KeyManagerError, PreKeyBundlesState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use tokio::sync::RwLock;
 
+use crate::Credentials;
 use crate::message::SpacesArgs;
 use crate::test_utils::{SeqNum, TestConditions, TestMessage, TestSpacesStore};
 use crate::traits::SpaceId;
-use crate::traits::key_store::{Forge, KeyManagerStore, KeyRegistryStore};
+use crate::traits::key_store::{Forge, KeyRegistryStore, KeySecretStore};
 use crate::traits::message::AuthoredMessage;
 use crate::traits::spaces_store::MessageStore;
 use crate::types::ActorId;
-use crate::{Config, Credentials};
 
 #[derive(Debug)]
 pub struct TestKeyStoreInner<ID> {
     next_seq_num: SeqNum,
     private_key: PrivateKey,
-    key_manager: KeyManagerState,
+    prekey_secrets: PreKeyBundlesState,
     key_registry: KeyRegistryState<ActorId>,
     spaces_store: TestSpacesStore<ID>,
 }
@@ -37,17 +36,13 @@ impl<ID> TestKeyStore<ID> {
     pub fn new(
         spaces_store: TestSpacesStore<ID>,
         credentials: &Credentials,
-        config: &Config,
-        rng: &Rng,
     ) -> Result<Self, KeyManagerError> {
-        let key_manager = KeyManager::init(&credentials.identity_secret(), config.lifetime(), rng)?;
-        let key_registry = KeyRegistry::init();
         let public_key = credentials.public_key();
         let inner = TestKeyStoreInner {
             next_seq_num: 0,
             private_key: credentials.private_key(),
-            key_manager,
-            key_registry,
+            prekey_secrets: PreKeyBundlesState::default(),
+            key_registry: KeyRegistry::init(),
             spaces_store,
         };
         Ok(Self {
@@ -75,20 +70,20 @@ where
     }
 }
 
-impl<ID> KeyManagerStore for TestKeyStore<ID>
+impl<ID> KeySecretStore for TestKeyStore<ID>
 where
     ID: SpaceId,
 {
     type Error = Infallible;
 
-    async fn key_manager(&self) -> Result<KeyManagerState, Self::Error> {
+    async fn prekey_secrets(&self) -> Result<PreKeyBundlesState, Self::Error> {
         let inner = self.inner.read().await;
-        Ok(inner.key_manager.clone())
+        Ok(inner.prekey_secrets.clone())
     }
 
-    async fn set_key_manager(&self, y: &KeyManagerState) -> Result<(), Self::Error> {
+    async fn set_prekey_secrets(&self, y: &PreKeyBundlesState) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().await;
-        inner.key_manager = y.clone();
+        inner.prekey_secrets = y.clone();
         Ok(())
     }
 }
