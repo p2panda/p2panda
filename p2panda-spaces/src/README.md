@@ -28,9 +28,9 @@ management is achieved through an integration with p2panda-auth groups.
 
 ## Features
 
-* Decentralized group key agreement with forward secrecy and encrypted messaging with
+* Decentralised group key agreement with forward secrecy and encrypted messaging with
   post-compromise security
-* Decentralized group management with robust conflict resolution strategies
+* Decentralised group management with robust conflict resolution strategies
 * Private space identifiers
 * Re-use of groups across encryption boundaries
 * Nested groups allowing for modelling multi-device profiles
