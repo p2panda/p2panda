@@ -40,8 +40,7 @@ use crate::{Config, Credentials};
 /// All methods are idempotent; messages can be processed multiple times without causing any
 /// additional state changes.
 ///
-/// p2panda-spaces is agnostic to the concrete message type control and application messages are
-/// sent on, as long as trait requirements are met.
+/// p2panda-spaces is agnostic to the concrete message type used to send control and application messages, providing the trait requirements are met.
 ///
 /// ## Requirements
 ///
