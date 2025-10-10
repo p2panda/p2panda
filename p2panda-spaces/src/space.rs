@@ -40,7 +40,7 @@ use crate::utils::{added_members, removed_members, secret_members, sort_members}
 /// encrypted with the latest group secret. All other members will be able to decrypt and read the
 /// message.
 ///
-/// Actors can be added or removed from the space, an actor may be an individual or a group.
+/// Actors can be added or removed from the space; an actor may be an individual or a group.
 /// Access levels are assigned to all members, these access levels can be used by authorization
 /// layers outside of p2panda-spaces to enforce access control rules.
 ///
