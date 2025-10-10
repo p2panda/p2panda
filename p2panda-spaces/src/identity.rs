@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! API for managing members and their key bundles.
 use std::fmt::Debug;
 use std::marker::PhantomData;
 

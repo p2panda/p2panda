@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use p2panda_auth::traits::Conditions;
 use p2panda_auth::{Access, group::GroupMember};
 
@@ -40,13 +38,41 @@ where
         .collect())
 }
 
-pub(crate) fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time before unix epoch")
-        .as_secs()
-}
-
 pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
+}
+
+pub(crate) fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<ActorId> {
+    let mut members: Vec<ActorId> = members
+        .into_iter()
+        .filter_map(|(id, access)| if access.is_pull() { None } else { Some(id) })
+        .collect();
+    members.sort();
+    members
+}
+
+pub(crate) fn added_members(
+    current_members: Vec<ActorId>,
+    next_members: Vec<ActorId>,
+) -> Vec<ActorId> {
+    let mut members = next_members
+        .iter()
+        .cloned()
+        .filter(|actor| !current_members.contains(actor))
+        .collect::<Vec<_>>();
+    members.sort();
+    members
+}
+
+pub(crate) fn removed_members(
+    current_members: Vec<ActorId>,
+    next_members: Vec<ActorId>,
+) -> Vec<ActorId> {
+    let mut members = current_members
+        .iter()
+        .cloned()
+        .filter(|actor| !next_members.contains(actor))
+        .collect::<Vec<_>>();
+    members.sort();
+    members
 }
