@@ -333,7 +333,7 @@ where
     }
 
     /// Handle messages which effect the space membership. Each of these messages contained a
-    /// pointer to an auth message, and the auth message is required here.
+    /// pointer to an auth message and the auth message is required here.
     async fn handle_membership_message(
         &self,
         space_message: &M,
