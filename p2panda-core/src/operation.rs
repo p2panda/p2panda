@@ -66,11 +66,7 @@
 //!
 //! impl Extension<PruneFlag> for CustomExtensions {
 //!     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-//!         let Some(extensions) = header.extensions.as_ref() else {
-//!             return None;
-//!         };
-//!
-//!         Some(extensions.prune_flag.clone())
+//!         Some(header.extensions.prune_flag.clone())
 //!     }
 //! }
 //!
@@ -89,7 +85,7 @@
 //!     seq_num: 0,
 //!     backlink: None,
 //!     previous: vec![],
-//!     extensions: Some(extensions),
+//!     extensions,
 //! };
 //!
 //! header.sign(&private_key);
