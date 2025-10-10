@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-mod key_store;
+mod forge;
 mod message;
-mod spaces_store;
+mod store;
 
-use std::hash::Hash as StdHash;
-
-pub use key_store::TestKeyStore;
-pub use message::TestMessage;
 use p2panda_auth::traits::Conditions;
 use p2panda_encryption::Rng;
-pub use spaces_store::TestSpacesStore;
 
 use crate::Config;
 use crate::Credentials;
@@ -19,45 +14,49 @@ use crate::space::SpaceError;
 use crate::traits::SpaceId;
 use crate::types::StrongRemoveResolver;
 
-type SeqNum = u64;
+pub use forge::TestForge;
+pub use message::TestMessage;
+pub use store::{TestKeyStore, TestStore};
 
-// Implement SpaceId for i32 which is what we use as space identifiers in the tests.
-impl SpaceId for i32 {}
+pub type TestSpaceId = usize;
+
+impl SpaceId for TestSpaceId {}
+
+pub type TestPeerId = u8;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct TestConditions {}
 
 impl Conditions for TestConditions {}
 
-pub type TestManager<ID> = Manager<
-    ID,
-    TestSpacesStore<ID>,
-    TestKeyStore<ID>,
-    TestMessage<ID>,
+pub type TestManager = Manager<
+    TestSpaceId,
+    TestStore,
+    TestKeyStore,
+    TestForge<TestStore>,
+    TestMessage,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
-pub type TestSpaceError<ID> = SpaceError<
-    ID,
-    TestSpacesStore<ID>,
-    TestKeyStore<ID>,
-    TestMessage<ID>,
+pub type TestSpaceError = SpaceError<
+    TestSpaceId,
+    TestStore,
+    TestKeyStore,
+    TestForge<TestStore>,
+    TestMessage,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
-pub struct TestPeer<ID = i32> {
-    pub(crate) id: u8,
-    pub(crate) manager: TestManager<ID>,
+pub struct TestPeer {
+    pub(crate) id: TestPeerId,
+    pub(crate) manager: TestManager,
     pub(crate) credentials: Credentials,
 }
 
-impl<ID> TestPeer<ID>
-where
-    ID: SpaceId + StdHash,
-{
-    pub async fn new(peer_id: u8) -> Self {
+impl TestPeer {
+    pub async fn new(peer_id: TestPeerId) -> Self {
         let rng = Rng::from_seed([peer_id; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
@@ -65,17 +64,25 @@ where
     }
 
     pub async fn new_with_config(
-        peer_id: u8,
+        peer_id: TestPeerId,
         credentials: Credentials,
         config: &Config,
         rng: Rng,
     ) -> Self {
-        let store = TestSpacesStore::new();
-        let key_store = TestKeyStore::new(store.clone(), &credentials).unwrap();
-        let manager =
-            TestManager::new_with_config(store, key_store, credentials.clone(), config, rng)
-                .await
-                .unwrap();
+        let spaces_store = TestStore::new();
+        let key_store = TestKeyStore::new();
+        let forge = TestForge::new(spaces_store.clone(), credentials.private_key());
+
+        let manager = TestManager::new_with_config(
+            spaces_store,
+            key_store,
+            forge,
+            credentials.clone(),
+            config,
+            rng,
+        )
+        .await
+        .unwrap();
 
         Self {
             id: peer_id,
