@@ -119,7 +119,7 @@ where
 
     /// Get a space by id.
     ///
-    /// A space instance provides an api for adding and removing members from the space and
+    /// A space instance provides an API for adding and removing members from the space and
     /// querying the current space members.
     pub async fn space(
         &self,
