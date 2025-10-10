@@ -2130,7 +2130,7 @@ async fn process_operation_from_expired_member() {
     bob.manager.register_member(&expired_bob).await.unwrap();
 
     // Alice creates a space with Bob.
-    let (_space, messages) = alice
+    let (_space, messages, _events) = alice
         .manager
         .create_space(0, &[(expired_bob.id(), Access::write())])
         .await
@@ -2139,9 +2139,9 @@ async fn process_operation_from_expired_member() {
     // Sleep to make bundle expire.
     thread::sleep(Duration::from_secs(2));
 
-    // Bob processes Alice's "create", but unfortunately Bob's key bundle expired and they can't
-    // decrypt the initial key agreement (X3DH) in the direct message anymore.
-
-    // @TODO: This is failing, but I'm not sure why ..
-    // assert!(bob.manager.process(&messages[0]).await.is_err());
+    // Bob processes Alice's "create group" message.
+    bob.manager.process(&messages[0]).await.unwrap();
+    // Bob processes Alice's "create space", but unfortunately Bob's key bundle expired and they
+    // can't decrypt the initial key agreement (X3DH) in the direct message anymore.
+    assert!(bob.manager.process(&messages[1]).await.is_err());
 }
