@@ -31,7 +31,7 @@ where
     fn spaces_ids(&self) -> impl Future<Output = Result<Vec<ID>, Self::Error>>;
 
     fn set_space(
-        &mut self,
+        &self,
         id: &ID,
         y: SpaceState<ID, M, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
@@ -46,7 +46,7 @@ where
 
     fn auth(&self) -> impl Future<Output = Result<AuthGroupState<C>, Self::Error>>;
 
-    fn set_auth(&mut self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
+    fn set_auth(&self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
 pub trait KeyRegistryStore {
@@ -79,7 +79,7 @@ pub trait MessageStore<M> {
     fn message(&self, id: &OperationId) -> impl Future<Output = Result<Option<M>, Self::Error>>;
 
     fn set_message(
-        &mut self,
+        &self,
         id: &OperationId,
         message: &M,
     ) -> impl Future<Output = Result<(), Self::Error>>;

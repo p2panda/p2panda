@@ -3,8 +3,7 @@
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::SpacesArgs;
-use crate::traits::SpaceId;
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
+use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
 use crate::types::{ActorId, AuthControlMessage, OperationId};
 
 /// Arguments which are returned from p2panda-auth APIs.

@@ -16,8 +16,7 @@ use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, Sp
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestPeer, TestSpaceError};
-use crate::traits::message::{AuthoredMessage, SpacesMessage};
-use crate::traits::store::{AuthStore, SpaceStore};
+use crate::traits::{AuthStore, AuthoredMessage, SpaceStore, SpacesMessage};
 use crate::types::{AuthControlMessage, AuthGroupAction};
 
 fn sort_group_actors(members: &mut Vec<(GroupActor, Access<TestConditions>)>) {
@@ -102,15 +101,10 @@ async fn create_space() {
 
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
 
-    let y = manager_ref
-        .spaces_store
-        .space(&space.id())
-        .await
-        .unwrap()
-        .unwrap();
+    let y = manager_ref.store.space(&space.id()).await.unwrap().unwrap();
     assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
 }
 
@@ -156,12 +150,7 @@ async fn send_and_receive() {
     // Bob's orderer state is updated.
 
     let manager_ref = bob.manager.inner.read().await;
-    let bob_space_y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let bob_space_y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     assert_eq!(vec![message.id()], bob_space_y.encryption_y.orderer.heads());
 
     // Alice processes Bob's encrypted message.
@@ -173,12 +162,7 @@ async fn send_and_receive() {
     // Alice's orderer state is updated.
 
     let manager_ref = alice.manager.inner.read().await;
-    let alice_space_y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let alice_space_y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     assert_eq!(
         vec![message.id()],
         alice_space_y.encryption_y.orderer.heads()
@@ -291,15 +275,10 @@ async fn add_member_to_space() {
 
     // Orderer states have been updated.
     let manager_ref = manager.inner.read().await;
-    let y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     assert_eq!(vec![message_04.id()], y.encryption_y.orderer.heads());
 
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 }
 
@@ -469,15 +448,10 @@ async fn add_pull_member_to_space() {
 
     let manager_ref = manager.inner.read().await;
     // Auth order has been updated.
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_03.id()], auth_y.orderer_y.heads);
 
-    let y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     // Encryption order has been updated.
     assert_eq!(vec![message_04.id()], y.encryption_y.orderer.heads());
 }
@@ -528,7 +502,7 @@ async fn receive_control_messages() {
     // Global auth state has been updated.
     {
         let manager_ref = bob_manager.inner.read().await;
-        let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+        let auth_y = manager_ref.store.auth().await.unwrap();
         let members = auth_y.members(group_id);
         assert_eq!(members, vec![(alice_id, Access::manage())]);
         assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
@@ -548,12 +522,7 @@ async fn receive_control_messages() {
 
     // Orderer state has been updated.
     let manager_ref = bob_manager.inner.read().await;
-    let y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     assert_eq!(vec![message_02.id()], y.encryption_y.orderer.heads());
 
     drop(manager_ref);
@@ -599,15 +568,10 @@ async fn receive_control_messages() {
     // Orderer states have been updated.
     let manager_ref = bob_manager.inner.read().await;
 
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_04.id()], auth_y.orderer_y.heads);
 
-    let y = manager_ref
-        .spaces_store
-        .space(&space_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let y = manager_ref.store.space(&space_id).await.unwrap().unwrap();
     assert_eq!(vec![message_05.id()], y.encryption_y.orderer.heads());
 }
 
@@ -1033,7 +997,7 @@ async fn create_group() {
 
     // Orderer state has been updated.
     let manager_ref = manager.inner.read().await;
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_01.id()], auth_y.orderer_y.heads());
 }
 
@@ -1099,7 +1063,7 @@ async fn add_member_to_group() {
 
     // Orderer state has been updated.
     let manager_ref = manager.inner.read().await;
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
 }
 
@@ -1157,7 +1121,7 @@ async fn remove_member_from_group() {
 
     // Orderer state has been updated.
     let manager_ref = manager.inner.read().await;
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
 }
 
@@ -1213,7 +1177,7 @@ async fn receive_auth_messages() {
 
     // Orderer state has been updated.
     let manager_ref = bob_manager.inner.read().await;
-    let auth_y = manager_ref.spaces_store.auth().await.unwrap();
+    let auth_y = manager_ref.store.auth().await.unwrap();
     assert_eq!(vec![message_02.id()], auth_y.orderer_y.heads());
 }
 
@@ -2038,7 +2002,7 @@ async fn duplicate_auth_state_references() {
 
 #[tokio::test]
 async fn key_store_expired() {
-    let peer = TestPeer::<i32>::new(0).await;
+    let peer = TestPeer::new(0).await;
 
     // Any just created instance will need a pre-key in the beginning.
     assert!(peer.manager.key_bundle_expired().await.unwrap());
@@ -2051,7 +2015,7 @@ async fn key_store_expired() {
 #[tokio::test]
 async fn add_expired_member_to_group() {
     let alice = TestPeer::new(0).await;
-    let bob = TestPeer::<i32>::new(1).await;
+    let bob = TestPeer::new(1).await;
 
     // Create key bundle which expires in 1 second.
     let expired_bob = {
@@ -2101,7 +2065,7 @@ async fn add_expired_member_to_group() {
 #[tokio::test]
 async fn process_operation_from_expired_member() {
     let alice = TestPeer::new(0).await;
-    let bob = TestPeer::<i32>::new(1).await;
+    let bob = TestPeer::new(1).await;
 
     // Create key bundle which expires in 1 second.
     let expired_bob = {
