@@ -5,19 +5,25 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::PrivateKey;
 
+use crate::NetworkId;
 use crate::actors::network::NetworkConfig;
 use crate::addrs::RelayUrl;
+use crate::protocols::{self, ProtocolId};
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct NetworkBuilder {
+    network_id: NetworkId,
     network_config: NetworkConfig,
 }
 
 impl NetworkBuilder {
     /// Returns a new instance of `NetworkBuilder` with default values assigned for all fields.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(network_id: NetworkId) -> Self {
+        Self {
+            network_id,
+            network_config: NetworkConfig::default(),
+        }
     }
 
     /// Sets or overwrites the local IP for IPv4 sockets.
@@ -62,10 +68,16 @@ impl NetworkBuilder {
     }
 
     /// Adds a custom protocol for communication between two peers.
-    pub fn _protocol(mut self, identifier: Vec<u8>, handler: impl ProtocolHandler) -> Self {
+    pub fn _protocol(mut self, id: ProtocolId, handler: impl ProtocolHandler) -> Self {
+        // XOR the protocol ID with the network ID.
+        //
+        // The XOR'd ID is what will be registered with the iroh `Endpoint`.
+        let identifier_xor = protocols::protocol_id_xor(id, self.network_id);
+
         self.network_config
+            .endpoint_config
             .protocols
-            .insert(identifier, Box::new(handler));
+            .insert(identifier_xor, Box::new(handler));
         self
     }
 
