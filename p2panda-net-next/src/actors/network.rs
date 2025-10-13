@@ -12,7 +12,6 @@ use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
-use crate::protocols::ProtocolMap;
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
