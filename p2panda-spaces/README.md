@@ -22,9 +22,11 @@
   </h3>
 </div>
 
-This crate provides an API for establishing and managing encryption contexts with dynamic groups of
-actors. The p2panda-encryption Data Encryption scheme is used for key agreement and group
-management is achieved through an integration with p2panda-auth groups.
+This crate provides an API for establishing and managing encryption contexts with dynamic groups
+of actors. The p2panda-encryption [Data
+Encryption](https://docs.rs/p2panda-encryption/latest/p2panda_encryption/data_scheme/index.html)
+scheme is used for key agreement and group management is achieved through an integration with
+[p2panda-auth groups](https://docs.rs/p2panda-auth/latest/p2panda_auth/).
 
 ## Features
 
