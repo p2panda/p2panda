@@ -10,21 +10,48 @@
 //! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
 //! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
 //! endpoint actor itself fails, the entire network system is shutdown.
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+
 use iroh::Endpoint as IrohEndpoint;
+use iroh::RelayMap as IrohRelayMap;
+use iroh::RelayMode as IrohRelayMode;
+use iroh::RelayUrl as IrohRelayUrl;
+use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use iroh::protocol::Router as IrohRouter;
+use p2panda_core::PrivateKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::subscription::{Subscription, ToSubscription};
+use crate::addrs::RelayUrl;
+use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
+use crate::from_private_key;
 use crate::protocols::ProtocolMap;
 
+#[derive(Debug)]
+// TODO: Remove once used.
+#[allow(dead_code)]
 pub(crate) struct EndpointConfig {
+    pub(crate) bind_ip_v4: Ipv4Addr,
+    pub(crate) bind_port_v4: u16,
+    pub(crate) bind_ip_v6: Ipv6Addr,
+    pub(crate) bind_port_v6: u16,
+    pub(crate) private_key: PrivateKey,
     protocols: ProtocolMap,
+    pub(crate) relays: Vec<RelayUrl>,
 }
 
-impl EndpointConfig {
-    pub(crate) fn new(protocols: ProtocolMap) -> Self {
-        Self { protocols }
+impl Default for EndpointConfig {
+    fn default() -> Self {
+        Self {
+            bind_ip_v4: Ipv4Addr::UNSPECIFIED,
+            bind_port_v4: DEFAULT_BIND_PORT,
+            bind_ip_v6: Ipv6Addr::UNSPECIFIED,
+            bind_port_v6: DEFAULT_BIND_PORT + 1,
+            private_key: Default::default(),
+            protocols: Default::default(),
+            relays: Vec::new(),
+        }
     }
 }
 
@@ -51,14 +78,31 @@ impl Actor for Endpoint {
         myself: ActorRef<Self::Msg>,
         config: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        // TODO: Build with proper configuration.
-        let endpoint = IrohEndpoint::builder().bind().await?;
+        let mut transport_config = IrohTransportConfig::default();
+        transport_config
+            .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
+            .max_concurrent_uni_streams(0u32.into());
 
-        let mut protocols = config.protocols;
+        let relays: Vec<IrohRelayUrl> = config.relays.into_iter().map(|url| url.into()).collect();
+        let relay_map = IrohRelayMap::from_iter(relays);
+        let relay_mode = IrohRelayMode::Custom(relay_map);
+
+        let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
+        let socket_address_v6 = SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
+
+        let endpoint = IrohEndpoint::builder()
+            .secret_key(from_private_key(config.private_key))
+            .transport_config(transport_config)
+            .relay_mode(relay_mode)
+            .bind_addr_v4(socket_address_v4)
+            .bind_addr_v6(socket_address_v6)
+            .bind()
+            .await?;
 
         let mut router_builder = IrohRouter::builder(endpoint.clone());
 
         // Register protocols with router.
+        let mut protocols = config.protocols;
         while let Some((identifier, handler)) = protocols.pop_first() {
             router_builder = router_builder.accept(identifier, handler);
         }
@@ -166,8 +210,7 @@ mod tests {
     #[traced_test]
     #[serial]
     async fn endpoint_child_actors_are_started() {
-        let protocols = Default::default();
-        let endpoint_config = EndpointConfig::new(protocols);
+        let endpoint_config = EndpointConfig::default();
         let (endpoint_actor, endpoint_actor_handle) =
             Actor::spawn(Some("endpoint".to_string()), Endpoint, endpoint_config)
                 .await
