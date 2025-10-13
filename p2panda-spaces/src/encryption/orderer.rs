@@ -1,35 +1,36 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
-use std::convert::Infallible;
+use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::GroupMessage;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
+use thiserror::Error;
+use tokio::runtime::Handle;
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
+use crate::traits::{AuthoredMessage, MessageStore, SpaceId, SpacesMessage};
 use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
 
 /// Implementation of Ordering trait from p2panda-encryption which computes
 /// dependencies for encryption messages and performs some internal buffering. It does _not_ take
 /// care of ordering of control and application messages; p2panda-spaces expects messages to be
 /// orderer before being processed.
-#[derive(Clone, Debug)]
-pub struct EncryptionOrderer<M> {
-    _marker: PhantomData<M>,
+#[derive(Clone, Default, Debug)]
+pub struct EncryptionOrderer<ID, S, M, C> {
+    _marker: PhantomData<(ID, S, M, C)>,
 }
 
-impl<M> Default for EncryptionOrderer<M> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<M> EncryptionOrderer<M> {
+impl<ID, S, M, C> EncryptionOrderer<ID, S, M, C>
+where
+    S: MessageStore<M>,
+{
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
@@ -39,7 +40,7 @@ impl<M> EncryptionOrderer<M> {
 
 /// Orderer for encryption messages.
 #[derive(Clone, Debug)]
-pub struct EncryptionOrdererState {
+pub struct EncryptionOrdererState<ID, S, M, C> {
     /// Current graph heads (cache)
     heads: Vec<OperationId>,
 
@@ -54,30 +55,26 @@ pub struct EncryptionOrdererState {
     /// message.
     queue: VecDeque<OperationId>,
 
-    // @TODO: We keep all messages in memory currently which is bad. We need a persistence
-    // layer where we can fetch messages from.
-    /// In-memory store of all messages.
-    messages: HashMap<OperationId, EncryptionMessage>,
-
     /// "Create" or "Add" message which got us into the group.
     welcome_message: Option<EncryptionMessage>,
+
+    /// Store with read-access to all messages.
+    store: S,
+
+    _marker: PhantomData<(ID, M, C)>,
 }
 
-impl Default for EncryptionOrdererState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl EncryptionOrdererState {
-    /// Instantiate new orderer state.
-    pub fn new() -> Self {
+impl<ID, S, M, C> EncryptionOrdererState<ID, S, M, C> {
+    pub fn new(store: S) -> Self {
         Self {
             heads: Default::default(),
+            // @TODO: We don't look at application message dependencies quite yet. More research
+            // needed into requirements around bi-directional dependencies between DAGs.
             graph: Default::default(),
             queue: Default::default(),
-            messages: Default::default(),
+            store,
             welcome_message: Default::default(),
+            _marker: PhantomData,
         }
     }
 
@@ -116,12 +113,18 @@ impl EncryptionOrdererState {
     }
 }
 
-impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
-    for EncryptionOrderer<M>
+impl<ID, S, M, C>
+    p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
+    for EncryptionOrderer<ID, S, M, C>
+where
+    ID: SpaceId,
+    M: SpacesMessage<ID, C> + AuthoredMessage + Debug,
+    S: MessageStore<M> + Debug,
+    C: Conditions,
 {
-    type State = EncryptionOrdererState;
+    type State = EncryptionOrdererState<ID, S, M, C>;
 
-    type Error = Infallible;
+    type Error = EncryptionOrdererError<S, M>;
 
     type Message = EncryptionMessage;
 
@@ -161,7 +164,6 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
 
     fn queue(mut y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
         let id = message.id();
-        y.messages.insert(id, message.clone());
         y.queue.push_back(id);
         Ok(y)
     }
@@ -182,13 +184,34 @@ impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGro
             return Ok((y, None));
         };
 
-        let message = y.queue.pop_front().map(|id| {
-            y.messages
-                .get(&id)
-                .expect("ids map consistently to messages")
-                .to_owned()
-        });
+        let Some(id) = y.queue.pop_front() else {
+            return Ok((y, None));
+        };
 
-        Ok((y, message))
+        let (message, y) = tokio::task::block_in_place(|| {
+            Handle::current().block_on(async move {
+                let message = y
+                    .store
+                    .message(&id)
+                    .await
+                    .map_err(|err| EncryptionOrdererError::OperationStore(err))?
+                    .ok_or(EncryptionOrdererError::StoreInconsistency(id))?;
+                Ok((message, y))
+            })
+        })?;
+
+        Ok((y, Some(EncryptionMessage::from_application(&message))))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum EncryptionOrdererError<S, M>
+where
+    S: MessageStore<M>,
+{
+    #[error("could not find item with id {0} in operation store")]
+    StoreInconsistency(OperationId),
+
+    #[error("{0}")]
+    OperationStore(S::Error),
 }
