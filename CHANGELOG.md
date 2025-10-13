@@ -19,6 +19,7 @@ Highlights are marked with a pancake 🥞
 
 - One global state object and operation graph for all groups [#781](https://github.com/p2panda/p2panda/pull/781)
 - Handle strong removal edge cases and cycles in nested groups, improve concurrent re-adds [#788](https://github.com/p2panda/p2panda/pull/788)
+- Make `Extensions` non-optional [#811](https://github.com/p2panda/p2panda/pull/811)
 
 ### Fixed
 
