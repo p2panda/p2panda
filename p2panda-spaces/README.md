@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Group encryption for scoped data streams</strong>
+  <strong>Data encryption for groups and multiple devices</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -22,8 +22,8 @@
   </h3>
 </div>
 
-This crate provides an API for managing scoped message streams encrypted towards a dynamic group
-of actors. The p2panda-encryption Data Encryption scheme is used for key agreement and group
+This crate provides an API for establishing and managing encryption contexts with dynamic groups of
+actors. The p2panda-encryption Data Encryption scheme is used for key agreement and group
 management is achieved through an integration with p2panda-auth groups.
 
 ## Features
