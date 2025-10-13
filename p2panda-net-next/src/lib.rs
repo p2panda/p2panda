@@ -10,6 +10,19 @@ pub use network::NetworkBuilder;
 
 pub type TopicId = [u8; 32];
 
+/// Unique 32 byte identifier for a network.
+///
+/// The network identifier is used to achieve separation and prevent interoperability between
+/// distinct networks. This is the most global identifier to group peers into networks. Different
+/// applications may choose to share the same underlying network infrastructure by using the same
+/// network identifier.
+///
+/// A bitwise XOR operation is performed against each network protocol identifier which is
+/// registered with `p2panda-net`. Even if two instances of `p2panda-net` are created with the same
+/// network protocols, any communication attempts will fail if they are not using the same network
+/// identifier.
+pub type NetworkId = [u8; 32];
+
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub(crate) fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {
     p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
