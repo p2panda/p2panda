@@ -6,9 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::Access;
 use crate::group::GroupMember;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 /// Actions for creating groups and modifying group membership.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
