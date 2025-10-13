@@ -37,7 +37,7 @@ pub(crate) struct EndpointConfig {
     pub(crate) bind_ip_v6: Ipv6Addr,
     pub(crate) bind_port_v6: u16,
     pub(crate) private_key: PrivateKey,
-    protocols: ProtocolMap,
+    pub(crate) protocols: ProtocolMap,
     pub(crate) relays: Vec<RelayUrl>,
 }
 

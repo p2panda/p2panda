@@ -11,13 +11,11 @@ use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
-use crate::protocols::ProtocolMap;
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct NetworkConfig {
     pub(crate) endpoint_config: EndpointConfig,
-    pub(crate) protocols: ProtocolMap,
 }
 
 pub enum ToNetwork {}
@@ -222,10 +220,10 @@ mod tests {
     #[traced_test]
     #[serial]
     async fn network_child_actors_are_started() {
-        let protocols = Default::default();
+        let network_config = Default::default();
 
         let (network_actor, network_actor_handle) =
-            Actor::spawn(Some("network".to_string()), Network, protocols)
+            Actor::spawn(Some("network".to_string()), Network, network_config)
                 .await
                 .unwrap();
 
