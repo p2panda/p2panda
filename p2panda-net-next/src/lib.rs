@@ -2,8 +2,11 @@
 
 mod actors;
 mod addrs;
+mod defaults;
 mod network;
 mod protocols;
+
+pub use network::NetworkBuilder;
 
 pub type TopicId = [u8; 32];
 
