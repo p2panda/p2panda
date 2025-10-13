@@ -13,6 +13,13 @@ use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
 use crate::protocols::ProtocolMap;
 
+#[allow(dead_code)]
+#[derive(Debug, Default)]
+pub struct NetworkConfig {
+    pub(crate) endpoint_config: EndpointConfig,
+    pub(crate) protocols: ProtocolMap,
+}
+
 pub enum ToNetwork {}
 
 impl Message for ToNetwork {}
@@ -32,12 +39,12 @@ pub struct Network;
 impl Actor for Network {
     type State = NetworkState;
     type Msg = ToNetwork;
-    type Arguments = ProtocolMap;
+    type Arguments = NetworkConfig;
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        protocols: Self::Arguments,
+        config: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
@@ -49,11 +56,10 @@ impl Actor for Network {
         .await?;
 
         // Spawn the endpoint actor.
-        let endpoint_config = EndpointConfig::new(protocols);
         let (endpoint_actor, _) = Actor::spawn_linked(
             Some("endpoint".to_string()),
             Endpoint,
-            endpoint_config,
+            config.endpoint_config,
             myself.clone().into(),
         )
         .await?;
