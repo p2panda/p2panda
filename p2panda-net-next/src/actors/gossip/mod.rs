@@ -292,10 +292,10 @@ impl Actor for Gossip {
                 debug!("joined topic {:?} with peers: {:?}", topic_id, peers);
 
                 // Inform the gossip sender actor that the overlay has been joined.
-                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id) {
-                    if gossip_joined_tx.send(1).is_err() {
-                        warn!("oneshot gossip joined receiver dropped")
-                    }
+                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id)
+                    && gossip_joined_tx.send(1).is_err()
+                {
+                    warn!("oneshot gossip joined receiver dropped")
                 }
 
                 let peer_set = HashSet::from_iter(peers);
@@ -307,20 +307,20 @@ impl Actor for Gossip {
             }
             ToGossip::NeighborUp { peer, session_id } => {
                 // Insert the peer into the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
-                        peer_set.insert(peer);
-                    }
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                {
+                    peer_set.insert(peer);
                 }
 
                 Ok(())
             }
             ToGossip::NeighborDown { peer, session_id } => {
                 // Remove the peer from the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
-                        peer_set.remove(&peer);
-                    }
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                {
+                    peer_set.remove(&peer);
                 }
 
                 Ok(())
