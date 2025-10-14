@@ -8,7 +8,7 @@ use p2panda_core::PrivateKey;
 use crate::NetworkId;
 use crate::actors::network::NetworkConfig;
 use crate::addrs::RelayUrl;
-use crate::protocols::{self, ProtocolId};
+use crate::protocols::{self};
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
