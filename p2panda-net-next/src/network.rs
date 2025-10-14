@@ -68,11 +68,11 @@ impl NetworkBuilder {
     }
 
     /// Adds a custom protocol for communication between two peers.
-    pub fn _protocol(mut self, id: ProtocolId, handler: impl ProtocolHandler) -> Self {
+    pub fn _protocol(mut self, id: impl AsRef<[u8]>, handler: impl ProtocolHandler) -> Self {
         // XOR the protocol ID with the network ID.
         //
         // The XOR'd ID is what will be registered with the iroh `Endpoint`.
-        let identifier_xor = protocols::protocol_id_xor(id, self.network_id);
+        let identifier_xor = protocols::protocol_id_xor(id.as_ref(), self.network_id);
 
         self.network_config
             .endpoint_config
