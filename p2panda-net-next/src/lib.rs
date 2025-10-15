@@ -17,9 +17,12 @@ pub type TopicId = [u8; 32];
 /// applications may choose to share the same underlying network infrastructure by using the same
 /// network identifier.
 ///
-/// A bitwise XOR operation is performed against each network protocol identifier which is
-/// registered with `p2panda-net`. Even if two instances of `p2panda-net` are created with the same
-/// network protocols, any communication attempts will fail if they are not using the same network
+/// It is highly recommended to use a cryptographically secure pseudorandom number generator
+/// (CSPRNG) when generating a network identifier.
+///
+/// A blake3 hash function is performed against each protocol identifier which is registered
+/// with `p2panda-net`. Even if two instances of `p2panda-net` are created with the same network
+/// protocols, any communication attempts will fail if they are not using the same network
 /// identifier.
 pub type NetworkId = [u8; 32];
 
