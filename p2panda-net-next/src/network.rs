@@ -8,8 +8,7 @@ use p2panda_core::PrivateKey;
 use crate::NetworkId;
 use crate::actors::network::NetworkConfig;
 use crate::addrs::RelayUrl;
-use crate::protocols::ProtocolId;
-use crate::protocols::{self};
+use crate::protocols::{self, ProtocolId};
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
@@ -70,15 +69,15 @@ impl NetworkBuilder {
 
     /// Adds a custom protocol for communication between two peers.
     pub fn _protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
-        // XOR the protocol ID with the network ID.
+        // Hash the protocol ID with the network ID.
         //
-        // The XOR'd ID is what will be registered with the iroh `Endpoint`.
-        let identifier_xor = protocols::protocol_id_xor(id, self.network_id);
+        // The hashed ID is what will be registered with the iroh `Endpoint`.
+        let identifier_hash = protocols::hash_protocol_id_with_network_id(id, &self.network_id);
 
         self.network_config
             .endpoint_config
             .protocols
-            .insert(identifier_xor, Box::new(handler));
+            .insert(identifier_hash, Box::new(handler));
         self
     }
 
