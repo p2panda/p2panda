@@ -4,6 +4,7 @@
 //!
 //! The root of the entire system supervision tree; it's only role is to spawn and
 //! supervise other actors.
+use p2panda_core::PrivateKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
@@ -37,13 +38,15 @@ pub struct Network;
 impl Actor for Network {
     type State = NetworkState;
     type Msg = ToNetwork;
-    type Arguments = NetworkConfig;
+    type Arguments = (PrivateKey, NetworkConfig);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        config: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (private_key, config) = args;
+
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
             Some("events".to_string()),
@@ -57,7 +60,7 @@ impl Actor for Network {
         let (endpoint_actor, _) = Actor::spawn_linked(
             Some("endpoint".to_string()),
             Endpoint,
-            config.endpoint_config,
+            (private_key, config.endpoint_config),
             myself.clone().into(),
         )
         .await?;

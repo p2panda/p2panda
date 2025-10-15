@@ -15,6 +15,7 @@ use crate::protocols::{self, ProtocolId};
 pub struct NetworkBuilder {
     network_id: NetworkId,
     network_config: NetworkConfig,
+    private_key: Option<PrivateKey>,
 }
 
 impl NetworkBuilder {
@@ -23,6 +24,7 @@ impl NetworkBuilder {
         Self {
             network_id,
             network_config: NetworkConfig::default(),
+            private_key: None,
         }
     }
 
@@ -63,7 +65,7 @@ impl NetworkBuilder {
     /// If this value is not set, the `NetworkBuilder` will generate a new, random key when
     /// building the network.
     pub fn _private_key(mut self, private_key: PrivateKey) -> Self {
-        self.network_config.endpoint_config.private_key = private_key;
+        self.private_key = Some(private_key);
         self
     }
 

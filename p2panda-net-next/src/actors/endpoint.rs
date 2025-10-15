@@ -40,7 +40,6 @@ pub(crate) struct EndpointConfig {
     pub(crate) bind_port_v4: u16,
     pub(crate) bind_ip_v6: Ipv6Addr,
     pub(crate) bind_port_v6: u16,
-    pub(crate) private_key: PrivateKey,
     pub(crate) protocols: ProtocolMap,
     pub(crate) relays: Vec<RelayUrl>,
 }
@@ -52,7 +51,6 @@ impl Default for EndpointConfig {
             bind_port_v4: DEFAULT_BIND_PORT,
             bind_ip_v6: Ipv6Addr::UNSPECIFIED,
             bind_port_v6: DEFAULT_BIND_PORT + 1,
-            private_key: Default::default(),
             protocols: Default::default(),
             relays: Vec::new(),
         }
@@ -75,13 +73,15 @@ pub(crate) struct Endpoint;
 impl Actor for Endpoint {
     type State = EndpointState;
     type Msg = ToEndpoint;
-    type Arguments = EndpointConfig;
+    type Arguments = (PrivateKey, EndpointConfig);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        config: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (private_key, config) = args;
+
         let mut transport_config = IrohTransportConfig::default();
         transport_config
             .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
@@ -96,7 +96,7 @@ impl Actor for Endpoint {
         let socket_address_v6 = SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
         let endpoint = IrohEndpoint::builder()
-            .secret_key(from_private_key(config.private_key))
+            .secret_key(from_private_key(private_key))
             .transport_config(transport_config)
             .relay_mode(relay_mode)
             .bind_addr_v4(socket_address_v4)
@@ -222,6 +222,7 @@ impl Actor for Endpoint {
 
 #[cfg(test)]
 mod tests {
+    use p2panda_core::PrivateKey;
     use ractor::Actor;
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
@@ -233,11 +234,16 @@ mod tests {
     #[traced_test]
     #[serial]
     async fn endpoint_child_actors_are_started() {
+        let private_key = PrivateKey::new();
+
         let endpoint_config = EndpointConfig::default();
-        let (endpoint_actor, endpoint_actor_handle) =
-            Actor::spawn(Some("endpoint".to_string()), Endpoint, endpoint_config)
-                .await
-                .unwrap();
+        let (endpoint_actor, endpoint_actor_handle) = Actor::spawn(
+            Some("endpoint".to_string()),
+            Endpoint,
+            (private_key, endpoint_config),
+        )
+        .await
+        .unwrap();
 
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
