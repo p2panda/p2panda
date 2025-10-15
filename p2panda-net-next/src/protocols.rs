@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
+use p2panda_core::Hash;
 
 use crate::NetworkId;
 
@@ -23,7 +24,7 @@ pub(crate) fn hash_protocol_id_with_network_id(
     network_id: &NetworkId,
 ) -> [u8; 32] {
     let ids = [protocol_id, b"+", network_id].concat();
-    let hash = blake3::hash(&ids);
+    let hash = Hash::new(&ids);
 
     hash.into()
 }

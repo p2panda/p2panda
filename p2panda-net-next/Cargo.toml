@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.97"
-blake3 = "1.8.2"
 futures-lite = "2.6.1"
 iroh = { version = "0.93.2", default-features = false }
 iroh-base = "0.93.2"
