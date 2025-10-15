@@ -8,7 +8,7 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::debug;
 
 pub enum ToEvents {
-    EndpointConnected,
+    ConnectedToRelay,
 }
 
 impl Message for ToEvents {}
@@ -55,7 +55,7 @@ impl Actor for Events {
         match message {
             // TODO: Eventually we want to enrich and forward events to the subscription actor so
             // they can be passed to any subscribers.
-            ToEvents::EndpointConnected => debug!("endpoint connected to relay"),
+            ToEvents::ConnectedToRelay => debug!("endpoint connected to relay"),
         }
 
         Ok(())

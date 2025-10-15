@@ -10,9 +10,9 @@
 //! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
 //! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
 //! endpoint actor itself fails, the entire network system is shutdown.
-mod online;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::time::Duration;
 
 use iroh::Endpoint as IrohEndpoint;
 use iroh::RelayMap as IrohRelayMap;
@@ -21,11 +21,11 @@ use iroh::RelayUrl as IrohRelayUrl;
 use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use iroh::protocol::Router as IrohRouter;
 use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent, registry};
+use tokio::time::timeout;
 use tracing::{debug, warn};
 
-use crate::actors::endpoint::online::Online;
-use crate::actors::endpoint::online::ToOnline;
+use crate::actors::events::ToEvents;
 use crate::actors::subscription::{Subscription, ToSubscription};
 use crate::addrs::RelayUrl;
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
@@ -68,7 +68,6 @@ pub(crate) struct EndpointState {
     router: IrohRouter,
     subscription_actor: ActorRef<ToSubscription>,
     subscription_actor_failures: u16,
-    online_actor: ActorRef<ToOnline>,
 }
 
 pub(crate) struct Endpoint;
@@ -89,6 +88,7 @@ impl Actor for Endpoint {
             .max_concurrent_uni_streams(0u32.into());
 
         let relays: Vec<IrohRelayUrl> = config.relays.into_iter().map(|url| url.into()).collect();
+        let relay_provided = !relays.is_empty();
         let relay_map = IrohRelayMap::from_iter(relays);
         let relay_mode = IrohRelayMode::Custom(relay_map);
 
@@ -104,10 +104,19 @@ impl Actor for Endpoint {
             .bind()
             .await?;
 
-        // Spawn the online actor.
-        //
-        // This actor does not need to be linked / supervised or named; it is "fire-and-forget".
-        let (online_actor, _) = Actor::spawn(None, Online, endpoint.clone()).await?;
+        // Wait for the endpoint to initiate a connection with a relay.
+        if relay_provided
+            && timeout(Duration::from_secs(5), endpoint.online())
+                .await
+                .is_ok()
+        {
+            // Inform the events actor of the connection.
+            if let Some(events_actor) = registry::where_is("events".to_string()) {
+                events_actor.send_message(ToEvents::ConnectedToRelay)?
+            }
+        } else {
+            warn!("endpoint actor: failed to connect to relay")
+        }
 
         let mut router_builder = IrohRouter::builder(endpoint.clone());
 
@@ -133,7 +142,6 @@ impl Actor for Endpoint {
             router,
             subscription_actor,
             subscription_actor_failures: 0,
-            online_actor,
         };
 
         Ok(state)
@@ -158,10 +166,6 @@ impl Actor for Endpoint {
         state
             .subscription_actor
             .stop(Some("endpoint actor is shutting down".to_string()));
-
-        // Since the online actor may be in a five second timeout window, we call `kill()` instead
-        // of `stop()` to forcefully terminate any ongoing async work.
-        state.online_actor.kill();
 
         Ok(())
     }
