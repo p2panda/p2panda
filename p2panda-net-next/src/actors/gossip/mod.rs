@@ -119,10 +119,6 @@ impl Actor for Gossip {
         let gossip_joined_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
 
-        // TODO: The router needs to be configured to accept gossip protocol.
-        // This needs to be done when the router is built.
-        // Consider how to do this via config.
-
         let state = GossipState {
             gossip,
             sessions_by_actor_id,
