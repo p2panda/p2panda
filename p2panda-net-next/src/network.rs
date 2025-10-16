@@ -3,12 +3,16 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
-use p2panda_core::PrivateKey;
+use p2panda_core::{PrivateKey, PublicKey};
+use ractor::{call, registry, ActorRef};
+use thiserror::Error;
 
 use crate::actors::network::NetworkConfig;
+use crate::actors::subscription::ToSubscription;
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
-use crate::NetworkId;
+use crate::topic_streams::EphemeralTopicStream;
+use crate::{NetworkId, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
 ///
@@ -99,4 +103,56 @@ impl NetworkBuilder {
         self.network_config.endpoint_config.relays.push(url);
         self
     }
+}
+
+#[derive(Debug, Error)]
+pub enum NetworkError {
+    #[error("failed to create topic stream")]
+    StreamCreation,
+}
+
+#[derive(Debug)]
+pub struct Network;
+
+impl Network {
+    pub async fn stream(topic: T, live_mode: bool) -> TopicStream {
+        todo!()
+    }
+
+    pub async fn ephemeral_stream(
+        topic_id: &TopicId,
+    ) -> Result<EphemeralTopicStream, NetworkError> {
+        // Get a reference to the subscription actor.
+        if let Some(subscription_actor) = registry::where_is("subscription".to_string()) {
+            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+
+            // Ask the subscription actor for an ephemeral stream.
+            let stream = call!(actor, ToSubscription::CreateEphemeralStream, *topic_id)
+                .map_err(|_| NetworkError::StreamCreation)?;
+
+            Ok(stream)
+        } else {
+            Err(NetworkError::StreamCreation)
+        }
+    }
+}
+
+/// Bytes to be sent into the network.
+#[derive(Clone, Debug)]
+// TODO: Consider turning this into `pub type ToNetwork = Vec<u8>`.
+pub enum ToNetwork {
+    Message { bytes: Vec<u8> },
+}
+
+/// Message received from the network.
+pub enum FromNetwork {
+    EphemeralMessage {
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+    },
+    Message {
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        delivered_from: PublicKey,
+    },
 }
