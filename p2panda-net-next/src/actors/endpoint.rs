@@ -10,7 +10,6 @@
 //! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
 //! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
 //! endpoint actor itself fails, the entire network system is shutdown.
-
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::time::Duration;
 
@@ -32,6 +31,7 @@ use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::from_private_key;
 use crate::protocols::ProtocolMap;
 
+/// Configures the endpoint actor which uses an iroh `Endpoint` internally.
 #[derive(Debug)]
 // TODO: Remove once used.
 #[allow(dead_code)]

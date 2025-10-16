@@ -18,6 +18,12 @@ use crate::NetworkId;
 /// identifier.
 pub type ProtocolId = [u8];
 
+/// Mapping of a hashed protocol identifier to a protocol handler.
+///
+/// The protocol identifier is hashed with the network identifier before being inserted into the
+/// map.
+pub(crate) type ProtocolMap = BTreeMap<[u8; 32], Box<dyn ProtocolHandler>>;
+
 /// Hash the concatenation of the given protocol and network identifiers (using a `+` delimiter).
 pub(crate) fn hash_protocol_id_with_network_id(
     protocol_id: &ProtocolId,
@@ -28,9 +34,3 @@ pub(crate) fn hash_protocol_id_with_network_id(
 
     hash.into()
 }
-
-/// Mapping of a hashed protocol identifier to a protocol handler.
-///
-/// The protocol identifier is hashed with the network identifier before being inserted into the
-/// map.
-pub(crate) type ProtocolMap = BTreeMap<[u8; 32], Box<dyn ProtocolHandler>>;
