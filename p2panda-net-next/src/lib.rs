@@ -8,6 +8,9 @@ mod protocols;
 
 pub use network::NetworkBuilder;
 
+/// Unique 32 byte identifier for an ephemeral messaging topic.
+///
+/// A topic identifier is required when subscribing or publishing to an ephemeral message stream.
 pub type TopicId = [u8; 32];
 
 /// Unique 32 byte identifier for a network.

@@ -10,6 +10,10 @@ use crate::actors::network::NetworkConfig;
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
 
+/// Builds an overlay network for eventually-consistent pub/sub.
+///
+/// Network separation is achieved using the network identifier (`NetworkId`). Nodes using the same
+/// network identifier will gradually discover one another over the lifetime of the network.
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct NetworkBuilder {
@@ -31,7 +35,7 @@ impl NetworkBuilder {
     /// Sets or overwrites the local IP for IPv4 sockets.
     ///
     /// Default is 0.0.0.0 (`UNSPECIFIED`).
-    pub fn _bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
+    pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
         self.network_config.endpoint_config.bind_ip_v4 = ip;
         self
     }
@@ -39,7 +43,7 @@ impl NetworkBuilder {
     /// Sets or overwrites the local bind port for IPv4 sockets.
     ///
     /// Default is 2022.
-    pub fn _bind_port_v4(mut self, port: u16) -> Self {
+    pub fn bind_port_v4(mut self, port: u16) -> Self {
         self.network_config.endpoint_config.bind_port_v4 = port;
         self
     }
@@ -47,7 +51,7 @@ impl NetworkBuilder {
     /// Sets or overwrites the local IP for IPv6 sockets.
     ///
     /// Default is :: (`UNSPECIFIED`).
-    pub fn _bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
+    pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
         self.network_config.endpoint_config.bind_ip_v6 = ip;
         self
     }
@@ -55,7 +59,7 @@ impl NetworkBuilder {
     /// Sets or overwrites the local bind port for IPv6 sockets.
     ///
     /// Default is 2023.
-    pub fn _bind_port_v6(mut self, port: u16) -> Self {
+    pub fn bind_port_v6(mut self, port: u16) -> Self {
         self.network_config.endpoint_config.bind_port_v6 = port;
         self
     }
@@ -64,13 +68,13 @@ impl NetworkBuilder {
     ///
     /// If this value is not set, the `NetworkBuilder` will generate a new, random key when
     /// building the network.
-    pub fn _private_key(mut self, private_key: PrivateKey) -> Self {
+    pub fn private_key(mut self, private_key: PrivateKey) -> Self {
         self.private_key = Some(private_key);
         self
     }
 
     /// Adds a custom protocol for communication between two peers.
-    pub fn _protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
+    pub fn protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
         // Hash the protocol ID with the network ID.
         //
         // The hashed ID is what will be registered with the iroh `Endpoint`.
@@ -91,7 +95,7 @@ impl NetworkBuilder {
     /// (via the Tailscale DERP protocol which is very similar to TURN) if the connection attempt
     /// fails, which will serve to relay the data in that case.
     // TODO: Expose QUIC address discovery address as `Option<u16>` or config struct.
-    pub fn _relay(mut self, url: RelayUrl) -> Self {
+    pub fn relay(mut self, url: RelayUrl) -> Self {
         self.network_config.endpoint_config.relays.push(url);
         self
     }
