@@ -4,10 +4,12 @@
 //!
 //! The root of the entire system supervision tree; it's only role is to spawn and
 //! supervise other actors.
+use std::marker::PhantomData;
+
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 use tracing::{debug, warn};
 
-use crate::actors::address_book::{AddressBook, ToAddressBook};
+use crate::actors::address_book::{AddressBook, AddressBookStore, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
@@ -16,22 +18,40 @@ pub enum ToNetwork {}
 
 impl Message for ToNetwork {}
 
-pub struct NetworkState {
+pub struct NetworkState<T> {
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     endpoint_actor: ActorRef<ToEndpoint>,
     endpoint_actor_failures: u16,
-    address_book_actor: ActorRef<ToAddressBook>,
+    address_book_actor: ActorRef<ToAddressBook<T>>,
     address_book_actor_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
 }
 
-pub struct Network {}
+pub struct Network<S, T> {
+    store: S,
+    _marker: PhantomData<T>,
+}
 
-impl Actor for Network {
-    type State = NetworkState;
+impl<S, T> Network<S, T> {
+    pub fn new(store: S) -> Self {
+        Self {
+            store,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, T> Actor for Network<S, T>
+where
+    S: AddressBookStore + Clone + Send + Sync + 'static,
+    T: Send + Sync + 'static,
+{
+    type State = NetworkState<T>;
+
     type Msg = ToNetwork;
+
     type Arguments = ();
 
     async fn pre_start(
@@ -60,7 +80,7 @@ impl Actor for Network {
         // Spawn the address book actor.
         let (address_book_actor, _) = Actor::spawn_linked(
             Some("address book".to_string()),
-            AddressBook {},
+            AddressBook::new(self.store.clone()),
             (),
             myself.clone().into(),
         )
@@ -164,7 +184,7 @@ impl Actor for Network {
                         // Respawn the address book actor.
                         let (address_book_actor, _) = Actor::spawn_linked(
                             Some("address book".to_string()),
-                            AddressBook {},
+                            AddressBook::new(self.store.clone()),
                             (),
                             myself.clone().into(),
                         )
@@ -210,16 +230,28 @@ mod tests {
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
+    use crate::actors::address_book::AddressBookStore;
+
     use super::Network;
+
+    #[derive(Clone)]
+    struct TestStore;
+
+    impl AddressBookStore for TestStore {}
 
     #[tokio::test]
     #[traced_test]
     #[serial]
     async fn network_child_actors_are_started() {
-        let (network_actor, network_actor_handle) =
-            Actor::spawn(Some("network".to_string()), Network {}, ())
-                .await
-                .unwrap();
+        let store = TestStore;
+
+        let (network_actor, network_actor_handle) = Actor::spawn(
+            Some("network".to_string()),
+            Network::<TestStore, usize>::new(store),
+            (),
+        )
+        .await
+        .unwrap();
 
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
