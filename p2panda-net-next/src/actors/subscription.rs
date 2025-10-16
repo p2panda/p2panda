@@ -9,13 +9,18 @@
 //! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
 //! respawned.
 use iroh::Endpoint as IrohEndpoint;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call};
+use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
+use crate::topic_streams::EphemeralTopicStream;
 
-pub enum ToSubscription {}
+pub enum ToSubscription {
+    CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralTopicStream>),
+}
 
 impl Message for ToSubscription {}
 
@@ -82,9 +87,30 @@ impl Actor for Subscription {
     async fn handle(
         &self,
         _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
+        message: Self::Msg,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        match message {
+            ToSubscription::CreateEphemeralStream(topic_id, reply) => {
+                // TODO: Proper channel handling.
+                // Might need to receive channel(s) from caller.
+                let (to_topic_tx, to_topic_rx) = mpsc::channel(128);
+
+                // TODO: Ask address book for all peers interested in this topic id.
+                let peers = Vec::new();
+
+                // Register session with gossip actor.
+                let (to_gossip_tx, from_gossip_rx) =
+                    call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+
+                let stream = EphemeralTopicStream::new(topic_id, to_topic_tx);
+
+                if !reply.is_closed() {
+                    let _ = reply.send(stream);
+                }
+            }
+        }
+
         Ok(())
     }
 
