@@ -74,7 +74,7 @@ impl NetworkBuilder {
     }
 
     /// Adds a custom protocol for communication between two peers.
-    pub fn protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
+    fn _protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
         // Hash the protocol ID with the network ID.
         //
         // The hashed ID is what will be registered with the iroh `Endpoint`.
