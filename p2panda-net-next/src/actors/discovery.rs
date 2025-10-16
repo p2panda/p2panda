@@ -14,7 +14,9 @@ pub struct Discovery {}
 
 impl Actor for Discovery {
     type State = DiscoveryState;
+
     type Msg = ToDiscovery;
+
     type Arguments = ();
 
     async fn pre_start(
