@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::PublicKey;
+
 mod actors;
 mod addrs;
+pub mod discovery;
+
+pub type NodeId = PublicKey;
 
 pub type TopicId = [u8; 32];
 
