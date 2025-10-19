@@ -1,25 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::hash::Hash as StdHash;
-use std::hash::Hasher;
 use std::net::SocketAddr;
 
+use iroh::RelayUrl;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::from_public_key;
-use crate::{current_timestamp, to_public_key};
-
-/// Default STUN port used by the relay server.
-///
-/// The STUN port as defined by [RFC 8489](<https://www.rfc-editor.org/rfc/rfc8489#section-18.6>)
-// TODO: Remove once used.
-#[allow(dead_code)]
-pub const DEFAULT_STUN_PORT: u16 = 3478;
+use crate::{current_timestamp, from_public_key, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
@@ -44,52 +34,38 @@ pub struct NodeInfo {
     /// Transport protocols we can use to connect to this node.
     ///
     /// If `None` then no information was received and we can't connect yet.
-    pub transports: Option<NodeTransportInfo>,
+    pub transports: Option<TransportInfo>,
 }
 
 impl NodeInfo {
-    pub fn update(mut self, other: NodeInfo) -> NodeInfo {
-        assert_eq!(self.node_id, other.node_id);
+    pub fn update_transports(&mut self, other: TransportInfo) -> Result<(), NodeInfoError> {
+        // Make sure the given info matches the node id.
+        for address in &other.addresses {
+            #[allow(irrefutable_let_patterns)]
+            if let TransportAddress::Iroh(node_addr) = address
+                && to_public_key(node_addr.node_id) != self.node_id
+            {
+                return Err(NodeInfoError::NodeIdMismatch);
+            }
+        }
 
-        // Choose "latest" node info by checking timestamp if given.
-        match (self.transports.as_ref(), other.transports) {
-            (None, None) => {
-                // Nothing to do.
-            }
-            (None, Some(other)) => {
-                self.transports = Some(other);
-            }
-            (Some(_), None) => {
-                // Nothing to do.
-            }
-            (Some(current), Some(other)) => {
+        // Choose "latest" info by checking timestamp if given.
+        match self.transports.as_ref() {
+            None => self.transports = Some(other),
+            Some(current) => {
                 if other.timestamp > current.timestamp {
                     self.transports = Some(other);
                 }
             }
         }
 
-        self
+        Ok(())
     }
 
     pub fn verify(&self) -> Result<(), NodeInfoError> {
         match self.transports {
-            Some(ref transports) => transports.verify(self.node_id),
+            Some(ref transports) => transports.verify(&self.node_id),
             None => Ok(()),
-        }
-    }
-}
-
-impl From<iroh::NodeAddr> for NodeInfo {
-    fn from(addr: iroh::NodeAddr) -> Self {
-        NodeInfo {
-            node_id: to_public_key(addr.node_id),
-            bootstrap: false,
-            transports: Some(NodeTransportInfo {
-                timestamp: current_timestamp(),
-                addresses: HashSet::from([TransportAddress::from(addr)]),
-                signature: None,
-            }),
         }
     }
 }
@@ -98,79 +74,159 @@ impl TryFrom<NodeInfo> for iroh::NodeAddr {
     type Error = NodeInfoError;
 
     fn try_from(node_info: NodeInfo) -> Result<Self, Self::Error> {
-        let node_id = from_public_key(node_info.node_id);
-
         let Some(transports) = node_info.transports else {
             return Err(NodeInfoError::MissingTransportAddresses);
         };
 
-        let result = transports
+        transports
             .addresses
             .into_iter()
             .find_map(|address| match address {
-                TransportAddress::Iroh {
-                    relay_url,
-                    direct_addresses,
-                } => {
-                    let mut node_addr = iroh::NodeAddr::new(node_id)
-                        .with_direct_addresses(direct_addresses.into_iter());
-                    if let Some(url) = relay_url {
-                        node_addr = node_addr.with_relay_url(url);
-                    }
-                    Some(node_addr)
-                }
+                TransportAddress::Iroh(node_addr) => Some(node_addr),
                 #[allow(unreachable_patterns)]
                 _ => None,
-            });
-
-        result.ok_or(NodeInfoError::MissingTransportAddresses)
+            })
+            .ok_or(NodeInfoError::MissingTransportAddresses)
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeTransportInfo {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UnsignedTransportInfo {
     /// UNIX timestamp from when this transport information was published.
     ///
     /// This can be used to find out which information is the "latest".
     pub timestamp: u64,
 
     /// Associated transport addresses to aid establishing a connection to this node.
-    pub addresses: HashSet<TransportAddress>,
+    pub addresses: Vec<TransportAddress>,
+}
 
-    /// Signature to proof authenticity of this node id.
+impl UnsignedTransportInfo {
+    pub fn new() -> Self {
+        Self {
+            timestamp: current_timestamp(),
+            addresses: vec![],
+        }
+    }
+
+    pub fn from_addrs(addrs: impl IntoIterator<Item = TransportAddress>) -> Self {
+        let mut info = Self::new();
+        for addr in addrs {
+            info.add_addr(addr);
+        }
+        info
+    }
+
+    /// Add transport address for this node.
+    ///
+    /// This method automatically de-duplicates transports per type and chooses the last-inserted
+    /// one.
+    pub fn add_addr(&mut self, addr: TransportAddress) {
+        let existing_transport_index =
+            self.addresses
+                .iter()
+                .enumerate()
+                .find_map(|(index, existing_addr)| {
+                    if std::mem::discriminant(&addr) == std::mem::discriminant(existing_addr) {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                });
+
+        if let Some(index) = existing_transport_index {
+            self.addresses.remove(index);
+        }
+
+        self.addresses.push(addr);
+    }
+
+    fn to_bytes(&self) -> Result<Vec<u8>, NodeInfoError> {
+        let bytes = encode_cbor(&self)?;
+        Ok(bytes)
+    }
+
+    /// Returns number of associated transports for this node.
+    pub fn len(&self) -> usize {
+        self.addresses.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.addresses.is_empty()
+    }
+
+    /// Authenticate transport info by signining it with our secret key.
+    pub fn sign(self, signing_key: &PrivateKey) -> Result<TransportInfo, NodeInfoError> {
+        Ok(TransportInfo {
+            timestamp: self.timestamp,
+            signature: {
+                let bytes = self.to_bytes()?;
+                signing_key.sign(&bytes)
+            },
+            addresses: self.addresses,
+        })
+    }
+}
+
+impl Default for UnsignedTransportInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<iroh::NodeAddr> for UnsignedTransportInfo {
+    fn from(addr: iroh::NodeAddr) -> Self {
+        Self::from_addrs([addr.into()])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransportInfo {
+    /// UNIX timestamp from when this transport information was published.
+    ///
+    /// This can be used to find out which information is the "latest".
+    pub timestamp: u64,
+
+    /// Signature to proof authenticity of this transport information.
     ///
     /// Other nodes can validate the authenticity by checking this signature against the associated
     /// node id and info.
     ///
     /// This protects against attacks where nodes maliciously publish wrong information about other
     /// nodes, for example to make them unreachable due to invalid addresses.
-    pub signature: Option<Signature>,
+    pub signature: Signature,
+
+    /// Associated transport addresses to aid establishing a connection to this node.
+    pub addresses: Vec<TransportAddress>,
 }
 
-impl NodeTransportInfo {
-    fn to_signable_bytes(&mut self) -> Result<Vec<u8>, NodeInfoError> {
-        self.signature = None;
-        let bytes = encode_cbor(&self)?;
-        Ok(bytes)
+impl TransportInfo {
+    pub fn new_unsigned() -> UnsignedTransportInfo {
+        UnsignedTransportInfo::new()
     }
 
-    pub fn sign(mut self, private_key: &PrivateKey) -> Result<NodeTransportInfo, NodeInfoError> {
-        let bytes = self.to_signable_bytes()?;
-        self.signature = Some(private_key.sign(&bytes));
-        Ok(self)
+    fn to_unsigned(&self) -> UnsignedTransportInfo {
+        UnsignedTransportInfo {
+            timestamp: self.timestamp,
+            addresses: self.addresses.clone(),
+        }
     }
 
-    pub fn verify(&self, node_id: NodeId) -> Result<(), NodeInfoError> {
-        match self.signature {
-            Some(signature) => {
-                let bytes = self.clone().to_signable_bytes()?;
-                if !node_id.verify(&bytes, &signature) {
-                    Err(NodeInfoError::InvalidSignature)
-                } else {
-                    Ok(())
-                }
-            }
-            None => Err(NodeInfoError::InvalidSignature),
+    /// Returns number of associated transports for this node.
+    pub fn len(&self) -> usize {
+        self.addresses.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.addresses.is_empty()
+    }
+
+    pub fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
+        let bytes = self.to_unsigned().to_bytes()?;
+        if !node_id.verify(&bytes, &self.signature) {
+            Err(NodeInfoError::InvalidSignature)
+        } else {
+            Ok(())
         }
     }
 }
@@ -178,52 +234,39 @@ impl NodeTransportInfo {
 /// Associated transport addresses to aid establishing a connection to this node.
 ///
 /// Currently this only supports using iroh (Internet Protocol) to connect.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub enum TransportAddress {
     /// Information to connect to another node via QUIC / UDP / IP using iroh for holepunching and
     /// relayed connections as a fallback.
     ///
-    /// To connect to another node either their home relay needs to be known (to coordinate
-    /// holepunching or relayed connection fallback) or at least one reachable direct address (IPv4
-    /// or IPv6). If none of these are given, establishing a connection is not possible.
-    Iroh {
-        /// Current iroh home relay of this node.
-        ///
-        /// If `None` this node doesn't use a relay currently. Either because they are attempting
-        /// connection to one or they don't have one configured.
-        relay_url: Option<iroh::RelayUrl>,
+    /// To connect to another node either their "home relay" URL needs to be known (to coordinate
+    /// holepunching or relayed connection fallback) or at least one reachable "direct address"
+    /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
+    Iroh(iroh::NodeAddr),
+}
 
-        /// Direct addresses (IPv4 or IPv6) we can use to directly connect to this node using iroh.
-        direct_addresses: BTreeSet<SocketAddr>,
-    },
+impl TransportAddress {
+    pub fn from_iroh(
+        node_id: NodeId,
+        relay_url: Option<RelayUrl>,
+        direct_addresses: impl IntoIterator<Item = SocketAddr>,
+    ) -> Self {
+        let mut node_addr =
+            iroh::NodeAddr::new(from_public_key(node_id)).with_direct_addresses(direct_addresses);
+
+        if let Some(url) = relay_url {
+            node_addr = node_addr.with_relay_url(url);
+        }
+
+        Self::Iroh(node_addr)
+    }
 }
 
 impl From<iroh::NodeAddr> for TransportAddress {
     fn from(addr: iroh::NodeAddr) -> Self {
-        Self::Iroh {
-            relay_url: addr.relay_url,
-            direct_addresses: addr.direct_addresses,
-        }
+        Self::Iroh(addr)
     }
 }
-
-// Only hash the "key" (discriminant) of the enum, inserting `TransportAddress` into a hash map or
-// -set will overwrite existing values of the same key.
-impl StdHash for TransportAddress {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
-    }
-}
-
-// @TODO: This is weird. Maybe we should not use hash sets and have the "update" method handle
-// duplicate transports manually.
-impl PartialEq for TransportAddress {
-    fn eq(&self, other: &Self) -> bool {
-        core::mem::discriminant(self) == core::mem::discriminant(other)
-    }
-}
-
-impl Eq for TransportAddress {}
 
 #[derive(Debug, Error)]
 pub enum NodeInfoError {
@@ -233,34 +276,130 @@ pub enum NodeInfoError {
     #[error("no addresses given for this transport")]
     MissingTransportAddresses,
 
+    #[error("node id of given transport info does not match")]
+    NodeIdMismatch,
+
     #[error(transparent)]
     Encode(#[from] p2panda_core::cbor::EncodeError),
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeSet, HashSet};
+    use p2panda_core::PrivateKey;
 
-    use super::TransportAddress;
+    use super::{NodeInfo, TransportAddress, TransportInfo, UnsignedTransportInfo};
 
     #[test]
-    fn transport_address_discriminant_hash() {
-        let address_1 = TransportAddress::Iroh {
-            relay_url: None,
-            direct_addresses: BTreeSet::default(),
+    fn deduplicate_transport_address() {
+        let signing_key_1 = PrivateKey::new();
+        let node_id_1 = signing_key_1.public_key();
+
+        // De-duplicate addresses when transport is the same.
+        let mut info = TransportInfo::new_unsigned();
+        info.add_addr(TransportAddress::from_iroh(node_id_1, None, []));
+        info.add_addr(TransportAddress::from_iroh(
+            node_id_1,
+            Some("https://my.relay.net".parse().unwrap()),
+            [],
+        ));
+
+        assert_eq!(info.len(), 1);
+    }
+
+    #[test]
+    fn authenticate_address_infos() {
+        let signing_key_1 = PrivateKey::new();
+        let node_id_1 = signing_key_1.public_key();
+
+        let mut unsigned = UnsignedTransportInfo::new();
+        unsigned.add_addr(TransportAddress::from_iroh(
+            node_id_1,
+            Some("https://my.relay.net".parse().unwrap()),
+            [],
+        ));
+
+        let info = unsigned.sign(&signing_key_1).unwrap();
+        assert!(info.verify(&node_id_1).is_ok());
+
+        // Fails when node id does not match.
+        let signing_key_2 = PrivateKey::new();
+        let node_id_2 = signing_key_2.public_key();
+        assert!(info.verify(&node_id_2).is_err());
+
+        // Fails when information got changed.
+        let mut info = info;
+        info.addresses.pop().unwrap();
+        assert!(info.verify(&node_id_1).is_err());
+    }
+
+    #[test]
+    fn node_id_mismatch() {
+        let signing_key_1 = PrivateKey::new();
+        let node_id_1 = signing_key_1.public_key();
+
+        let signing_key_2 = PrivateKey::new();
+        let node_id_2 = signing_key_2.public_key();
+
+        // Create transport info for node 1.
+        let mut unsigned = UnsignedTransportInfo::new();
+        unsigned.add_addr(TransportAddress::from_iroh(
+            node_id_1,
+            Some("https://my.relay.net".parse().unwrap()),
+            [],
+        ));
+        let transport_info = unsigned.sign(&signing_key_1).unwrap();
+
+        // Create info for node 2 and try to add unrelated transport info.
+        let mut node_info = NodeInfo {
+            node_id: node_id_2,
+            bootstrap: false,
+            transports: None,
+        };
+        assert!(node_info.verify().is_ok());
+        assert!(node_info.update_transports(transport_info).is_err());
+    }
+
+    #[test]
+    fn latest_transport_info_wins() {
+        let signing_key_1 = PrivateKey::new();
+        let node_id_1 = signing_key_1.public_key();
+
+        // Create "newer" transport info.
+        let transport_info_1 = {
+            let mut unsigned = UnsignedTransportInfo::new();
+            unsigned.add_addr(TransportAddress::from_iroh(
+                node_id_1,
+                Some("https://my.relay.net".parse().unwrap()),
+                [],
+            ));
+            unsigned.timestamp = 2; // Force "newer" timestamp.
+            unsigned.sign(&signing_key_1).unwrap()
         };
 
-        let address_2 = TransportAddress::Iroh {
-            relay_url: Some("https://my.relay.org".parse().unwrap()),
-            direct_addresses: BTreeSet::default(),
+        // Create "older" transport info.
+        let transport_info_2 = {
+            let mut unsigned = UnsignedTransportInfo::new();
+            unsigned.add_addr(TransportAddress::from_iroh(
+                node_id_1,
+                Some("https://my.relay.net".parse().unwrap()),
+                [],
+            ));
+            unsigned.timestamp = 1; // Force "older" timestamp.
+            unsigned.sign(&signing_key_1).unwrap()
         };
 
-        let mut map = HashSet::new();
-        map.insert(address_1);
-        map.insert(address_2);
+        // Register both transport infos with node.
+        let mut node_info = NodeInfo {
+            node_id: node_id_1,
+            bootstrap: true,
+            transports: None,
+        };
+        assert!(node_info.verify().is_ok());
+        assert!(node_info.update_transports(transport_info_1).is_ok());
+        assert!(node_info.update_transports(transport_info_2).is_ok());
 
-        // When inserted in a hash set the value gets overwritten to assure uniqueness over the
-        // transport type / enum discriminant.
-        assert_eq!(map.len(), 1);
+        // The "newer" transport info is the only one registered.
+        assert_eq!(node_info.transports.as_ref().unwrap().len(), 1);
+        assert_eq!(node_info.transports.unwrap().timestamp, 2);
     }
 }
