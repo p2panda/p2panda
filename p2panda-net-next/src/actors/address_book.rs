@@ -15,14 +15,20 @@ pub enum ToAddressBook<T> {
     /// Outdated node information will automatically be ignored.
     AddNodeInfo(NodeInfo),
 
-    /// Associate a node with a topic of interest for eventual consistent messaging via sync.
-    AddTopic(NodeId, T),
+    /// Associate a node with set of topics of interest for eventual consistent messaging via sync.
+    SetTopics(NodeId, Vec<T>),
 
-    /// Associate a node with a topic id for ephemeral messaging.
-    AddTopicId(NodeId, TopicId),
+    /// Associate a node with a set of topic ids for ephemeral messaging.
+    SetTopicIds(NodeId, Vec<TopicId>),
 
     /// Return info for the given node.
     NodeInfo(NodeId, RpcReplyPort<Option<NodeInfo>>),
+
+    /// Return infos of nodes which are interested in _at least one_ of the topics in the given
+    /// topic set.
+    NodeInfosByTopics(Vec<T>, RpcReplyPort<Vec<NodeInfo>>),
+
+    NodeInfosByTopicId(TopicId, RpcReplyPort<Option<NodeInfo>>),
 
     /// Return all known node infos.
     AllNodeInfos(RpcReplyPort<Vec<NodeInfo>>),
@@ -35,16 +41,14 @@ pub enum ToAddressBook<T> {
 
     RandomNodeByTopicId(TopicId, RpcReplyPort<Option<NodeInfo>>),
 
-    RemoveExpired(Duration, RpcReplyPort<usize>),
+    RemoveNodeInfosOlderThan(Duration, RpcReplyPort<usize>),
+
+    RemoveNodeInfo(NodeId),
 }
 
 impl<T> Message for ToAddressBook<T> where T: Send + Sync + 'static {}
 
-pub struct AddressBookState {
-    // node_infos: HashMap<NodeId, NodeInfo>,
-    // node_topics: HashMap<NodeId, HashSet<T>>,
-    // node_topic_ids: HashMap<NodeId, HashSet<TopicId>>,
-}
+pub struct AddressBookState;
 
 pub struct AddressBook<T, S> {
     store: S,
