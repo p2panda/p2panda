@@ -8,7 +8,9 @@ mod defaults;
 mod network;
 mod protocols;
 
-pub use addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, TransportAddress};
+pub use addrs::{
+    NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,
+};
 pub use network::NetworkBuilder;
 
 /// Unique 32 byte identifier for an ephemeral messaging topic.
