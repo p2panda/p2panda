@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod address_book;
-mod discovery;
-mod endpoint;
+pub mod discovery;
+pub mod endpoint;
 mod events;
 mod gossip;
-pub(crate) mod network;
+pub mod network;
 mod subscription;
+pub mod supervisor;
 mod sync;
 #[cfg(test)]
 mod test_utils;

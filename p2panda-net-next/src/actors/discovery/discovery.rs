@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Discovery actor.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use iroh::protocol::ProtocolHandler;
+use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent, cast, registry};
 
-// TODO: `AddAddr()` and `RemoveAddr()`.
+use crate::actors::endpoint::router::{ROUTER, ToRouter};
+
+pub const DISCOVERY: &str = "discovery";
+
+pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
+
 pub enum ToDiscovery {}
 
 impl Message for ToDiscovery {}
 
 pub struct DiscoveryState {}
 
-pub struct Discovery {}
+pub struct Discovery;
 
 impl Actor for Discovery {
     type State = DiscoveryState;
@@ -24,7 +29,6 @@ impl Actor for Discovery {
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        // TODO: Create the `StaticProvider`.
         Ok(DiscoveryState {})
     }
 

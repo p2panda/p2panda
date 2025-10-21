@@ -21,8 +21,9 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
-use crate::{TopicId, from_public_key};
+use crate::utils::from_public_key;
 
 /// Bytes received from gossip, along with the public key of the peer from whom the message was
 /// received. Note that the delivering peer is not necessarily the author of the bytes.
@@ -426,7 +427,7 @@ mod tests {
     use tokio::time::sleep;
 
     use crate::actors::test_utils::{ActorResult, TestSupervisor};
-    use crate::{from_private_key, from_public_key};
+    use crate::utils::{from_private_key, from_public_key};
 
     use super::{Gossip, GossipState, ToGossip};
 

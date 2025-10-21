@@ -8,6 +8,9 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
 
 use crate::TopicId;
 use crate::addrs::{NodeId, NodeInfo};
+use crate::store::AddressBookStore;
+
+pub const ADDRESS_BOOK: &str = "address_book";
 
 pub enum ToAddressBook<T> {
     /// Registers information about a node.
@@ -110,6 +113,3 @@ where
         Ok(())
     }
 }
-
-// @TODO: Move this into new `p2panda-store` when ready.
-pub trait AddressBookStore {}

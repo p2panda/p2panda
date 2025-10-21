@@ -16,12 +16,13 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::ToGossip;
 use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::{TopicId, to_public_key};
+use crate::utils::to_public_key;
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
