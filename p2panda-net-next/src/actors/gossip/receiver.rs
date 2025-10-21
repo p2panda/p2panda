@@ -97,19 +97,19 @@ impl Actor for GossipReceiver {
                 let _ = myself.cast(ToGossipReceiver::WaitForEvent);
             }
             ToGossipReceiver::WaitForEvent => {
-                if let Some(receiver) = &mut state.receiver {
-                    if let Some(received) = receiver.next().await {
-                        match received {
-                            Ok(event) => {
-                                // Send the event up the chain for processing.
-                                let _ = self.session.cast(ToGossipSession::ProcessEvent(event));
-                            }
-                            Err(err) => {
-                                error!("gossip receiver actor: {}", err);
-                                myself.stop(Some("channel closed".to_string()));
+                if let Some(receiver) = &mut state.receiver
+                    && let Some(received) = receiver.next().await
+                {
+                    match received {
+                        Ok(event) => {
+                            // Send the event up the chain for processing.
+                            let _ = self.session.cast(ToGossipSession::ProcessEvent(event));
+                        }
+                        Err(err) => {
+                            error!("gossip receiver actor: {}", err);
+                            myself.stop(Some("channel closed".to_string()));
 
-                                return Ok(());
-                            }
+                            return Ok(());
                         }
                     }
                 }
