@@ -292,10 +292,10 @@ impl Actor for Gossip {
                 debug!("joined topic {:?} with peers: {:?}", topic_id, peers);
 
                 // Inform the gossip sender actor that the overlay has been joined.
-                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id) {
-                    if gossip_joined_tx.send(1).is_err() {
-                        warn!("oneshot gossip joined receiver dropped")
-                    }
+                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id)
+                    && gossip_joined_tx.send(1).is_err()
+                {
+                    warn!("oneshot gossip joined receiver dropped")
                 }
 
                 let peer_set = HashSet::from_iter(peers);
@@ -307,20 +307,20 @@ impl Actor for Gossip {
             }
             ToGossip::NeighborUp { peer, session_id } => {
                 // Insert the peer into the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
-                        peer_set.insert(peer);
-                    }
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                {
+                    peer_set.insert(peer);
                 }
 
                 Ok(())
             }
             ToGossip::NeighborDown { peer, session_id } => {
                 // Remove the peer from the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id) {
-                    if let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id) {
-                        peer_set.remove(&peer);
-                    }
+                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                {
+                    peer_set.remove(&peer);
                 }
 
                 Ok(())
@@ -414,10 +414,10 @@ impl Actor for Gossip {
 mod tests {
     use std::time::Duration;
 
+    use iroh::Endpoint as IrohEndpoint;
     use iroh::discovery::NodeInfo;
     use iroh::discovery::static_provider::StaticProvider;
     use iroh::protocol::Router as IrohRouter;
-    use iroh::{Endpoint as IrohEndpoint, Watcher as _};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
@@ -482,9 +482,9 @@ mod tests {
             .unwrap();
 
         // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_addrs = ant_endpoint.node_addr();
         let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(ant_addrs.direct_addresses);
 
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_node_info(ant_node_info.clone());
@@ -620,9 +620,9 @@ mod tests {
             .unwrap();
 
         // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_addrs = ant_endpoint.node_addr();
         let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(ant_addrs.direct_addresses);
 
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_node_info(ant_node_info);
@@ -738,9 +738,9 @@ mod tests {
             .unwrap();
 
         // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_addrs = ant_endpoint.node_addr();
         let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(ant_addrs.direct_addresses);
 
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_node_info(ant_node_info);
@@ -785,9 +785,9 @@ mod tests {
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
 
         // Obtain bat's node information including direct addresses.
-        let bat_addrs = bat_endpoint.direct_addresses().initialized().await;
+        let bat_addrs = bat_endpoint.node_addr();
         let bat_node_info = NodeInfo::new(from_public_key(bat_public_key))
-            .with_direct_addresses(bat_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(bat_addrs.direct_addresses);
 
         // Cat discovers bat through some out-of-band process.
         cat_discovery.add_node_info(bat_node_info);
@@ -893,9 +893,9 @@ mod tests {
             .unwrap();
 
         // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.direct_addresses().initialized().await;
+        let ant_addrs = ant_endpoint.node_addr();
         let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(ant_addrs.direct_addresses);
 
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_node_info(ant_node_info);
@@ -996,9 +996,9 @@ mod tests {
         // topic but cannot "hear" one another.
 
         // Obtain bat's node information including direct addresses.
-        let bat_addrs = bat_endpoint.direct_addresses().initialized().await;
+        let bat_addrs = bat_endpoint.node_addr();
         let bat_node_info = NodeInfo::new(from_public_key(bat_public_key))
-            .with_direct_addresses(bat_addrs.into_iter().map(|direct| direct.addr).collect());
+            .with_direct_addresses(bat_addrs.direct_addresses);
 
         // Cat discovers bat through some out-of-band process.
         cat_discovery.add_node_info(bat_node_info);
