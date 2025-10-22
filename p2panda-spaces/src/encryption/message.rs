@@ -80,10 +80,10 @@ impl EncryptionMessage {
     ///
     /// This method is required when we receive a space message and associated auth message and we
     /// want to adjust our local encryption state accordingly. The main requirement is that we
-    /// process our own direct messages (contained in the space message), in many cases the actual
+    /// process our own direct messages (contained in the space message); in many cases the actual
     /// encryption control message type and content is redundant as the DGM state is always
     /// manually replaced with the latest membership state provided by p2panda-auth. The only case
-    /// where it does matter is if we ourselves were added or removed from the group, here we
+    /// where it does matter is if we ourselves were added or removed from the group; here we
     /// should make sure that the control message contains our own actor id.
     pub(crate) fn from_membership<ID, M, C>(
         space_message: &M,
