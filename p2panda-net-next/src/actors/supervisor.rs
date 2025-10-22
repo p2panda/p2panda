@@ -8,7 +8,7 @@ use tracing::{debug, warn};
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
 use crate::actors::endpoint::supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
-use crate::actors::events::{Events, ToEvents};
+use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::args::ApplicationArguments;
 use crate::store::AddressBookStore;
 
@@ -59,7 +59,7 @@ where
         let supervisor: ActorCell = myself.into();
 
         let (events_actor, _) =
-            Actor::spawn_linked(Some("events".to_string()), Events, (), supervisor.clone()).await?;
+            Actor::spawn_linked(Some(EVENTS.into()), Events, (), supervisor.clone()).await?;
 
         let (address_book_actor, _) = Actor::spawn_linked(
             Some(ADDRESS_BOOK.into()),
@@ -200,6 +200,9 @@ mod tests {
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
+    use crate::actors::address_book::ADDRESS_BOOK;
+    use crate::actors::discovery::DISCOVERY;
+    use crate::actors::events::EVENTS;
     use crate::args::ApplicationArguments;
     use crate::store::MemoryStore;
 
@@ -209,7 +212,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     #[serial]
-    async fn network_child_actors_are_started() {
+    async fn child_actors_are_started() {
         let store = MemoryStore::new();
 
         let (actor, handle) = Actor::spawn(
@@ -226,15 +229,18 @@ mod tests {
         actor.stop(None);
         handle.await.unwrap();
 
-        assert!(logs_contain(
-            "supervisor actor: received ready from events actor"
-        ));
-        assert!(logs_contain(
-            "supervisor actor: received ready from address_book actor"
-        ));
-        assert!(logs_contain(
-            "supervisor actor: received ready from discovery actor"
-        ));
+        assert!(logs_contain(&format!(
+            "supervisor actor: received ready from {} actor",
+            EVENTS
+        )));
+        assert!(logs_contain(&format!(
+            "supervisor actor: received ready from {} actor",
+            ADDRESS_BOOK
+        )));
+        assert!(logs_contain(&format!(
+            "supervisor actor: received ready from {} actor",
+            DISCOVERY
+        )));
 
         assert!(!logs_contain("actor failed"));
     }

@@ -7,6 +7,8 @@
 use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tracing::debug;
 
+pub const EVENTS: &str = "net.events";
+
 pub enum ToEvents {
     ConnectedToRelay,
 }
