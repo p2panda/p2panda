@@ -21,9 +21,7 @@ use iroh::RelayUrl as IrohRelayUrl;
 use iroh::endpoint::ConnectWithOptsError as IrohConnectWithOptsError;
 use iroh::endpoint::Connecting as IrohConnecting;
 use iroh::endpoint::TransportConfig as IrohTransportConfig;
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, registry,
-};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, registry};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::warn;
@@ -77,8 +75,6 @@ pub enum ToIroh {
         RpcReplyPort<Result<IrohConnecting, IrohConnectWithOptsError>>,
     ),
 }
-
-impl Message for ToIroh {}
 
 pub struct IrohState {
     endpoint: IrohEndpoint,
@@ -173,14 +169,6 @@ impl Actor for IrohTransport {
         })
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
@@ -210,15 +198,6 @@ impl Actor for IrohTransport {
             }
         }
 
-        Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: SupervisionEvent,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 }

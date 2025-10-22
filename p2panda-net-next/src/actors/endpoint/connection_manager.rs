@@ -1,36 +1,29 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use iroh::protocol::ProtocolHandler;
-use ractor::{
-    Actor, ActorCell, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call,
-    registry,
-};
+use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use thiserror::Error;
 
 use crate::NodeId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
-use crate::actors::endpoint::connection::{Connection, ToConnection};
+use crate::actors::endpoint::connection::Connection;
 use crate::actors::endpoint::iroh::{IROH_TRANSPORT, ToIroh};
 use crate::protocols::ProtocolId;
 
-pub const CONNECTION_MANAGER: &str = "connection_manager";
+pub const CONNECTION_MANAGER: &str = "net.endpoint.connectionmanager";
 
 pub enum ToConnectionManager {
     Connect(
         NodeId,
         ProtocolId,
-        RpcReplyPort<Result<ActorRef<ToConnection>, ConnectionManagerError>>,
+        RpcReplyPort<Result<ActorRef<()>, ConnectionManagerError>>,
     ),
 }
-
-impl Message for ToConnectionManager {}
-
-pub struct ConnectionManagerState {}
 
 pub struct ConnectionManager;
 
 impl Actor for ConnectionManager {
-    type State = ConnectionManagerState;
+    type State = ();
 
     type Msg = ToConnectionManager;
 
@@ -41,22 +34,6 @@ impl Actor for ConnectionManager {
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(ConnectionManagerState {})
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 
@@ -116,15 +93,6 @@ impl Actor for ConnectionManager {
 
         Ok(())
     }
-
-    async fn handle_supervisor_evt(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: SupervisionEvent,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
@@ -138,7 +106,7 @@ where
 {
     async fn accept(
         &self,
-        connection: iroh::endpoint::Connection,
+        _connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
         todo!()
     }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, SupervisionEvent};
 
 use crate::actors::endpoint::connection_manager::{
     CONNECTION_MANAGER, ConnectionManager, ToConnectionManager,
@@ -9,11 +9,7 @@ use crate::actors::endpoint::iroh::{IROH_TRANSPORT, IrohTransport, ToIroh};
 use crate::actors::endpoint::router::{ROUTER, Router, ToRouter};
 use crate::args::ApplicationArguments;
 
-pub const ENDPOINT_SUPERVISOR: &str = "endpoint_supervisor";
-
-pub enum ToEndpointSupervisor {}
-
-impl Message for ToEndpointSupervisor {}
+pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint.supervisor";
 
 pub struct EndpointSupervisorState {
     application_args: ApplicationArguments,
@@ -30,7 +26,7 @@ pub struct EndpointSupervisor;
 impl Actor for EndpointSupervisor {
     type State = EndpointSupervisorState;
 
-    type Msg = ToEndpointSupervisor;
+    type Msg = ();
 
     type Arguments = ApplicationArguments;
 
@@ -71,14 +67,6 @@ impl Actor for EndpointSupervisor {
         })
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
@@ -87,15 +75,6 @@ impl Actor for EndpointSupervisor {
         let reason = Some("endpoint supervisor is shutting down".to_string());
         state.iroh_actor.stop(reason.clone());
         state.router_actor.stop(reason.clone());
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 

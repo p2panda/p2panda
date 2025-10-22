@@ -2,25 +2,17 @@
 
 use std::marker::PhantomData;
 
-use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
-use crate::actors::endpoint::supervisor::{
-    ENDPOINT_SUPERVISOR, EndpointSupervisor, ToEndpointSupervisor,
-};
+use crate::actors::endpoint::supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{Events, ToEvents};
 use crate::args::ApplicationArguments;
-use crate::config::Config;
 use crate::store::AddressBookStore;
 
-pub const SUPERVISOR: &str = "supervisor";
-
-pub enum ToSupervisor {}
-
-impl Message for ToSupervisor {}
+pub const SUPERVISOR: &str = "net.supervisor";
 
 pub struct SupervisorState<T> {
     application_args: ApplicationArguments,
@@ -30,7 +22,7 @@ pub struct SupervisorState<T> {
     address_book_actor_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
-    endpoint_supervisor: ActorRef<ToEndpointSupervisor>,
+    endpoint_supervisor: ActorRef<()>,
     endpoint_supervisor_failures: u16,
 }
 
@@ -55,7 +47,7 @@ where
 {
     type State = SupervisorState<T>;
 
-    type Msg = ToSupervisor;
+    type Msg = ();
 
     type Arguments = ApplicationArguments;
 
@@ -101,14 +93,6 @@ where
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn post_stop(

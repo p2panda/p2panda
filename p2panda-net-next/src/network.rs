@@ -10,7 +10,7 @@ use ractor::{Actor, ActorRef, SpawnErr};
 use thiserror::Error;
 
 use crate::NetworkId;
-use crate::actors::supervisor::{SUPERVISOR, Supervisor, ToSupervisor};
+use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::args::ApplicationArguments;
 use crate::config::Config;
 use crate::store::MemoryStore;
@@ -124,7 +124,7 @@ impl Network {}
 
 #[derive(Debug)]
 struct NetworkInner {
-    actor: ActorRef<ToSupervisor>,
+    actor: ActorRef<()>,
     actor_handle: JoinHandle<()>,
     args: ApplicationArguments,
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use iroh::endpoint::Incoming as IrohIncoming;
 use iroh::protocol::DynProtocolHandler;
 use n0_future::join_all;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tracing::warn;
@@ -20,16 +20,12 @@ pub enum ToRouter {
     Incoming(IrohIncoming),
 }
 
-impl Message for ToRouter {}
-
 type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
 pub struct RouterState {
     protocols: ProtocolMap,
     accepted: JoinSet<()>,
 }
-
-pub type RouterArguments = ();
 
 pub struct Router;
 
@@ -38,7 +34,7 @@ impl Actor for Router {
 
     type Msg = ToRouter;
 
-    type Arguments = RouterArguments;
+    type Arguments = ();
 
     async fn pre_start(
         &self,
@@ -49,14 +45,6 @@ impl Actor for Router {
             protocols: Arc::default(),
             accepted: JoinSet::new(),
         })
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn post_stop(
@@ -95,15 +83,6 @@ impl Actor for Router {
             }
         }
 
-        Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: SupervisionEvent,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 }

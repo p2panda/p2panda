@@ -14,9 +14,7 @@ use iroh::NodeId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
-use ractor::{
-    Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
-};
+use ractor::{Actor, ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
@@ -80,8 +78,6 @@ pub enum ToGossip {
     },
 }
 
-impl Message for ToGossip {}
-
 pub struct GossipState {
     gossip: IrohGossip,
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
@@ -137,14 +133,6 @@ impl Actor for Gossip {
         Ok(state)
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
@@ -153,7 +141,6 @@ impl Actor for Gossip {
         // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state
         // and connections.
         state.gossip.shutdown().await?;
-
         Ok(())
     }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Listen for messages from the user and forward them to the gossip sender.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc::Receiver;
 use tracing::warn;
 
@@ -11,8 +11,6 @@ pub enum ToGossipListener {
     /// Wait for a message on the gossip topic channel.
     WaitForMessage,
 }
-
-impl Message for ToGossipListener {}
 
 pub struct GossipListenerState {
     receiver: Option<Receiver<Vec<u8>>>,
@@ -48,21 +46,12 @@ impl Actor for GossipListener {
         Ok(state)
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         drop(state.receiver.take());
-
         Ok(())
     }
 
@@ -81,7 +70,6 @@ impl Actor for GossipListener {
                 None => {
                     warn!("gossip listener actor: user dropped sender - channel closed");
                     myself.stop(Some("receiver channel closed".to_string()));
-
                     return Ok(());
                 }
             }
