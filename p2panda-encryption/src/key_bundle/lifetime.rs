@@ -59,7 +59,7 @@ impl Lifetime {
 
     /// Returns true if this lifetime with an additional window is valid.
     ///
-    /// This method can be used to calculate if an lifetime _is about_ to expire, given a defined
+    /// This method can be used to calculate if a lifetime _is about_ to expire, given a defined
     /// time "window".
     ///
     /// ```plain
