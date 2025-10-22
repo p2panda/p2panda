@@ -6,7 +6,7 @@ use crate::actors::endpoint::connection_manager::{
     CONNECTION_MANAGER, ConnectionManager, ToConnectionManager,
 };
 use crate::actors::endpoint::iroh::{IROH_TRANSPORT, IrohTransport, ToIroh};
-use crate::actors::endpoint::router::{ROUTER, Router, ToRouter};
+use crate::actors::endpoint::router::{IROH_ROUTER, IrohRouter, ToIrohRouter};
 use crate::args::ApplicationArguments;
 
 pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint.supervisor";
@@ -15,8 +15,8 @@ pub struct EndpointSupervisorState {
     application_args: ApplicationArguments,
     iroh_actor: ActorRef<ToIroh>,
     iroh_actor_failures: usize,
-    router_actor: ActorRef<ToRouter>,
-    router_actor_failures: usize,
+    iroh_router_actor: ActorRef<ToIrohRouter>,
+    iroh_router_actor_failures: usize,
     connection_manager_actor: ActorRef<ToConnectionManager>,
     connection_manager_actor_failures: usize,
 }
@@ -37,8 +37,9 @@ impl Actor for EndpointSupervisor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let supervisor: ActorCell = myself.into();
 
-        let (router_actor, _) =
-            Actor::spawn_linked(Some(ROUTER.into()), Router, (), supervisor.clone()).await?;
+        let (iroh_router_actor, _) =
+            Actor::spawn_linked(Some(IROH_ROUTER.into()), IrohRouter, (), supervisor.clone())
+                .await?;
 
         let (iroh_actor, _) = Actor::spawn_linked(
             Some(IROH_TRANSPORT.into()),
@@ -60,8 +61,8 @@ impl Actor for EndpointSupervisor {
             application_args: args,
             iroh_actor,
             iroh_actor_failures: 0,
-            router_actor,
-            router_actor_failures: 0,
+            iroh_router_actor,
+            iroh_router_actor_failures: 0,
             connection_manager_actor,
             connection_manager_actor_failures: 0,
         })
@@ -74,7 +75,7 @@ impl Actor for EndpointSupervisor {
     ) -> Result<(), ActorProcessingErr> {
         let reason = Some("endpoint supervisor is shutting down".to_string());
         state.iroh_actor.stop(reason.clone());
-        state.router_actor.stop(reason.clone());
+        state.iroh_router_actor.stop(reason.clone());
         Ok(())
     }
 
@@ -97,11 +98,16 @@ impl Actor for EndpointSupervisor {
                     state.iroh_actor_failures += 1;
                     state.iroh_actor = iroh_actor;
                 }
-                Some(ROUTER) => {
-                    let (router_actor, _) =
-                        Actor::spawn_linked(Some(ROUTER.into()), Router, (), myself.into()).await?;
-                    state.router_actor_failures += 1;
-                    state.router_actor = router_actor;
+                Some(IROH_ROUTER) => {
+                    let (iroh_router_actor, _) = Actor::spawn_linked(
+                        Some(IROH_ROUTER.into()),
+                        IrohRouter,
+                        (),
+                        myself.into(),
+                    )
+                    .await?;
+                    state.iroh_router_actor_failures += 1;
+                    state.iroh_router_actor = iroh_router_actor;
                 }
                 Some(CONNECTION_MANAGER) => {
                     let (connection_manager_actor, _) = Actor::spawn_linked(

@@ -11,28 +11,28 @@ use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tracing::warn;
 
-use crate::protocols::ProtocolId;
+use crate::actors::endpoint::iroh::Alpn;
 
-pub const ROUTER: &str = "router";
+pub const IROH_ROUTER: &str = "net.endpoint.transports.iroh.router";
 
-pub enum ToRouter {
-    RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
+type ProtocolMap = Arc<RwLock<BTreeMap<Alpn, Box<dyn DynProtocolHandler>>>>;
+
+pub enum ToIrohRouter {
+    RegisterProtocol(Alpn, Box<dyn DynProtocolHandler>),
     Incoming(IrohIncoming),
 }
 
-type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
-
-pub struct RouterState {
+pub struct IrohRouterState {
     protocols: ProtocolMap,
     accepted: JoinSet<()>,
 }
 
-pub struct Router;
+pub struct IrohRouter;
 
-impl Actor for Router {
-    type State = RouterState;
+impl Actor for IrohRouter {
+    type State = IrohRouterState;
 
-    type Msg = ToRouter;
+    type Msg = ToIrohRouter;
 
     type Arguments = ();
 
@@ -41,7 +41,7 @@ impl Actor for Router {
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(RouterState {
+        Ok(IrohRouterState {
             protocols: Arc::default(),
             accepted: JoinSet::new(),
         })
@@ -71,11 +71,11 @@ impl Actor for Router {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToRouter::RegisterProtocol(protocol_id, protocol_handler) => {
+            ToIrohRouter::RegisterProtocol(protocol_id, protocol_handler) => {
                 let mut protocols = state.protocols.write().await;
                 protocols.insert(protocol_id, protocol_handler);
             }
-            ToRouter::Incoming(incoming) => {
+            ToIrohRouter::Incoming(incoming) => {
                 let protocols = state.protocols.clone();
                 state.accepted.spawn(async move {
                     handle_connection(incoming, protocols).await;

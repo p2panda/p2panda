@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
 use iroh::protocol::ProtocolHandler;
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use thiserror::Error;
@@ -102,7 +104,7 @@ pub struct IncomingConnectionHandler<T> {
 
 impl<T> ProtocolHandler for IncomingConnectionHandler<T>
 where
-    T: std::fmt::Debug + 'static,
+    T: Debug + 'static,
 {
     async fn accept(
         &self,

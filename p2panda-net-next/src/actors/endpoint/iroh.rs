@@ -26,13 +26,13 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::warn;
 
-use crate::actors::endpoint::router::{ROUTER, ToRouter};
+use crate::actors::endpoint::router::{IROH_ROUTER, ToIrohRouter};
 use crate::actors::events::ToEvents;
 use crate::args::ApplicationArguments;
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::utils::from_private_key;
 
-pub const IROH_TRANSPORT: &str = "iroh_transport";
+pub const IROH_TRANSPORT: &str = "net.endpoint.transports.iroh";
 
 #[derive(Clone, Debug)]
 pub struct IrohConfig {
@@ -156,8 +156,8 @@ impl Actor for IrohTransport {
                         break; // Endpoint is closed.
                     };
 
-                    if let Some(router_actor) = registry::where_is(ROUTER.into()) {
-                        let _ = router_actor.send_message(ToRouter::Incoming(incoming));
+                    if let Some(router_actor) = registry::where_is(IROH_ROUTER.into()) {
+                        let _ = router_actor.send_message(ToIrohRouter::Incoming(incoming));
                     }
                 }
             })
