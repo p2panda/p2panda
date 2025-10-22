@@ -11,6 +11,7 @@ pub type XAeadNonce = [u8; 24];
 pub type XAeadKey = [u8; 32];
 
 /// XChaCha20-Poly1305 AEAD encryption function.
+#[allow(deprecated, reason = "generic_array < v1.0 is deprecated")]
 pub fn x_aead_encrypt(
     key: &XAeadKey,
     plaintext: &[u8],
@@ -30,6 +31,7 @@ pub fn x_aead_encrypt(
 }
 
 /// XChaCha20-Poly1305 AEAD decryption function.
+#[allow(deprecated, reason = "generic_array < v1.0 is deprecated")]
 pub fn x_aead_decrypt(
     key: &XAeadKey,
     ciphertext_with_tag: &[u8],
