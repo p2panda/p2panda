@@ -1,23 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use iroh::{
-    NodeAddr,
-    endpoint::{ConnectWithOptsError, Connecting},
-    protocol::ProtocolHandler,
-};
-use ractor::{ActorRef, RactorErr, call, registry};
+use iroh::NodeAddr;
+use iroh::endpoint::{ConnectWithOptsError, Connecting};
+use iroh::protocol::ProtocolHandler;
+use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 
-use crate::{
-    NodeId,
-    actors::{
-        address_book::{ADDRESS_BOOK, ToAddressBook},
-        endpoint::{
-            iroh::{IROH_TRANSPORT, ToIroh},
-            router::{IROH_ROUTER, ToIrohRouter},
-        },
-    },
-};
+use crate::NodeId;
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::endpoint::iroh::{IROH_TRANSPORT, ToIroh};
+use crate::actors::endpoint::router::{IROH_ROUTER, ToIrohRouter};
 
 mod address_book;
 pub mod discovery;
@@ -64,7 +56,7 @@ pub enum RegisterProtocolError {
 pub async fn connect<T>(
     node_id: NodeId,
     protocol_id: impl AsRef<[u8]>,
-) -> Result<Connecting, ConnectError<T>>
+) -> Result<Connecting, ConnectError>
 where
     T: Send + 'static,
 {
@@ -77,7 +69,8 @@ where
         ActorRef::<ToAddressBook<T>>::from(address_book),
         ToAddressBook::NodeInfo,
         node_id
-    )?
+    )
+    .map_err(|_| ConnectError::ActorNotResponsive(ADDRESS_BOOK.into()))?
     else {
         return Err(ConnectError::NoAddressInfo(node_id));
     };
@@ -96,21 +89,19 @@ where
         ToIroh::Connect,
         node_addr,
         protocol_id.as_ref().to_vec()
-    )?;
+    )
+    .map_err(|_| ConnectError::ActorNotResponsive(IROH_TRANSPORT.into()))?;
 
     Ok(result?)
 }
 
 #[derive(Debug, Error)]
-pub enum ConnectError<T> {
+pub enum ConnectError {
     #[error("actor '{0}' is not available")]
     ActorNotAvailable(String),
 
-    #[error(transparent)]
-    IrohActor(#[from] RactorErr<ToIroh>),
-
-    #[error(transparent)]
-    AddressBookActor(#[from] RactorErr<ToAddressBook<T>>),
+    #[error("actor '{0}' is not responding to call")]
+    ActorNotResponsive(String),
 
     #[error(transparent)]
     Iroh(#[from] ConnectWithOptsError),

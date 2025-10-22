@@ -4,5 +4,5 @@
 mod discovery;
 mod session;
 
-pub use discovery::{DISCOVERY, Discovery, DiscoveryState, ToDiscovery};
-pub use session::{DiscoverySession, DiscoverySessionState};
+pub use discovery::{DISCOVERY, Discovery};
+pub use session::DiscoverySession;

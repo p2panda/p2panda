@@ -6,7 +6,7 @@ use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
+use crate::actors::discovery::{DISCOVERY, Discovery};
 use crate::actors::endpoint::supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::network::{NETWORK, Network, ToNetwork};
@@ -19,7 +19,7 @@ pub struct SupervisorState<T> {
     application_args: ApplicationArguments,
     address_book_actor: ActorRef<ToAddressBook<T>>,
     address_book_actor_failures: u16,
-    discovery_actor: ActorRef<ToDiscovery>,
+    discovery_actor: ActorRef<()>,
     discovery_actor_failures: u16,
     endpoint_supervisor: ActorRef<()>,
     endpoint_supervisor_failures: u16,
@@ -79,8 +79,13 @@ where
         )
         .await?;
 
-        let (discovery_actor, _) =
-            Actor::spawn_linked(Some(DISCOVERY.into()), Discovery, (), supervisor.clone()).await?;
+        let (discovery_actor, _) = Actor::spawn_linked(
+            Some(DISCOVERY.into()),
+            Discovery::<T>::default(),
+            (),
+            supervisor.clone(),
+        )
+        .await?;
 
         let (events_actor, _) =
             Actor::spawn_linked(Some(EVENTS.into()), Events, (), supervisor.clone()).await?;
@@ -153,7 +158,7 @@ where
                     Some(DISCOVERY) => {
                         let (discovery_actor, _) = Actor::spawn_linked(
                             Some(DISCOVERY.into()),
-                            Discovery,
+                            Discovery::<T>::default(),
                             (),
                             myself.clone().into(),
                         )
