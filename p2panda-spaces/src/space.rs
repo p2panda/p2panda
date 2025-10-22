@@ -24,7 +24,7 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpaceStore, SpacesMessage,
+    SpacesStore, SpacesMessage,
 };
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
@@ -63,7 +63,7 @@ pub struct Space<ID, S, K, F, M, C, RS> {
 impl<ID, S, K, F, M, C, RS> Space<ID, S, K, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
@@ -232,7 +232,7 @@ where
                 .store
                 .set_space(&space_id, y)
                 .await
-                .map_err(SpaceError::SpaceStore)?;
+                .map_err(SpaceError::SpacesStore)?;
         }
 
         // If current and next member sets are equal it indicates that the space is not affected
@@ -406,7 +406,7 @@ where
                 .store
                 .set_space(&self.id, y)
                 .await
-                .map_err(SpaceError::SpaceStore)?;
+                .map_err(SpaceError::SpacesStore)?;
         }
 
         let events = if !duplicate_pointer {
@@ -543,7 +543,7 @@ where
             .store
             .set_space(&self.id, y)
             .await
-            .map_err(SpaceError::SpaceStore)?;
+            .map_err(SpaceError::SpacesStore)?;
 
         Ok(events)
     }
@@ -582,7 +582,7 @@ where
             .store
             .space(&self.id)
             .await
-            .map_err(SpaceError::SpaceStore)?
+            .map_err(SpaceError::SpacesStore)?
             .ok_or(SpaceError::UnknownSpace(self.id))?;
 
         // Inject latest key material to space DCGKA state.
@@ -612,7 +612,7 @@ where
             .store
             .space(&space_id)
             .await
-            .map_err(SpaceError::SpaceStore)?;
+            .map_err(SpaceError::SpacesStore)?;
 
         let space_y = match result {
             Some(mut y) => {
@@ -737,7 +737,7 @@ where
             .store
             .set_space(&self.id, y)
             .await
-            .map_err(SpaceError::SpaceStore)?;
+            .map_err(SpaceError::SpacesStore)?;
 
         Ok(message)
     }
@@ -784,7 +784,7 @@ where
 pub enum SpaceError<ID, S, K, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
     C: Conditions,
@@ -812,7 +812,7 @@ where
     MessageStore(<S as MessageStore<M>>::Error),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<ID, M, C>>::Error),
+    SpacesStore(<S as SpacesStore<ID, M, C>>::Error),
 
     #[error("{0}")]
     EncryptionOrderer(Infallible),

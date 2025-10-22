@@ -21,7 +21,7 @@ use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpaceStore, SpacesMessage,
+    SpacesStore, SpacesMessage,
 };
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
@@ -70,7 +70,7 @@ where
     // @TODO: the Debug bound is required as we are string formatting the manager error in
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
@@ -135,7 +135,7 @@ where
                 .store
                 .has_space(&id)
                 .await
-                .map_err(ManagerError::SpaceStore)?
+                .map_err(ManagerError::SpacesStore)?
         };
 
         if has_space {
@@ -332,7 +332,7 @@ where
             .store
             .spaces_ids()
             .await
-            .map_err(ManagerError::SpaceStore)?;
+            .map_err(ManagerError::SpacesStore)?;
 
         let mut in_need_of_repair = vec![];
         for id in space_ids {
@@ -340,7 +340,7 @@ where
                 .store
                 .space(&id)
                 .await
-                .map_err(ManagerError::SpaceStore)?
+                .map_err(ManagerError::SpacesStore)?
                 .expect("space present in store");
             if space_y.auth_y.inner.heads() != auth_y.inner.heads() {
                 in_need_of_repair.push(id);
@@ -450,7 +450,7 @@ where
                 .store
                 .spaces_ids()
                 .await
-                .map_err(ManagerError::SpaceStore)?
+                .map_err(ManagerError::SpacesStore)?
         };
 
         let mut messages = vec![];
@@ -577,7 +577,7 @@ impl<ID, S, K, F, M, C, RS> Clone for Manager<ID, S, K, F, M, C, RS> {
 pub enum ManagerError<ID, S, K, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
     C: Conditions,
@@ -593,7 +593,7 @@ where
     IdentityManager(#[from] IdentityError<ID, K, F, M, C>),
 
     #[error("{0}")]
-    SpaceStore(<S as SpaceStore<ID, M, C>>::Error),
+    SpacesStore(<S as SpacesStore<ID, M, C>>::Error),
 
     #[error("{0}")]
     AuthStore(<S as AuthStore<C>>::Error),
