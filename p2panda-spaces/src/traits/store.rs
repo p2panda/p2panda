@@ -13,7 +13,7 @@ use crate::traits::SpaceId;
 use crate::types::AuthGroupState;
 use crate::{ActorId, OperationId};
 
-/// Methods for setting and fetching space state.
+/// Interface for setting and getting space state.
 pub trait SpaceStore<ID, M, C>
 where
     ID: SpaceId,
@@ -37,7 +37,7 @@ where
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
-/// Methods for setting and fetching auth state.
+/// Interface for setting and getting auth state.
 pub trait AuthStore<C>
 where
     C: Conditions,
@@ -49,6 +49,7 @@ where
     fn set_auth(&self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
+/// Interface for setting and getting key registry state. 
 pub trait KeyRegistryStore {
     type Error: Debug;
 
@@ -60,6 +61,7 @@ pub trait KeyRegistryStore {
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
+/// Interface for setting and getting pre key secrets. 
 pub trait KeySecretStore {
     type Error: Debug;
 
@@ -73,6 +75,7 @@ pub trait KeySecretStore {
 
 // @TODO: This will be replaced with `OperationStore` in `p2panda-store` as soon as it's ready
 // (currently in `stream-next` branch).
+/// Interface for inserting and getting operations.
 pub trait MessageStore<M> {
     type Error: Debug;
 

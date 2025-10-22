@@ -26,21 +26,23 @@ use crate::traits::{
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
-/// API for creating and managing groups and spaces. There should be only one manager instance per
-/// application. Any messages received from other instances must be processed on the manager. All
-/// methods which mutate state locally return M message(s) which must be replicated to and
-/// processed by other instances. Any action which mutates state (both local method calls and
-/// processed messages) will emit events which can be sent to any higher levels to inform of any
-/// state changes.
+/// API for creating and managing groups and spaces. 
+/// 
+/// There should be only one manager instance per application. Any messages received from other
+/// instances must be processed on the manager. All methods which mutate state locally return M
+/// message(s) which must be replicated to and processed by other instances. Any action which
+/// mutates state (both local method calls and processed messages) will emit events which can be
+/// sent to any higher levels to inform of any state changes.
 ///
 /// In order to add an actor to a space, we first need to have a key bundle generated from a
-/// not-expired pre-key. The manager offers an API for checking our latest key-bundle is valid
-/// and issuing new key bundles to be replicated with other instances.
+/// not-expired pre-key. The manager offers an API for checking our latest key-bundle is valid and
+/// issuing new key bundles to be replicated with other instances.
 ///  
 /// All methods are idempotent; messages can be processed multiple times without causing any
 /// additional state changes.
 ///
-/// p2panda-spaces is agnostic to the concrete message type used to send control and application messages, providing the trait requirements are met.
+/// p2panda-spaces is agnostic to the concrete message type used to send control and application
+/// messages, providing the trait requirements are met.
 ///
 /// ## Requirements
 ///
