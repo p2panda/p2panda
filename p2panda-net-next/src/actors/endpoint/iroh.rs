@@ -30,6 +30,7 @@ use crate::actors::endpoint::router::{IROH_ROUTER, ToIrohRouter};
 use crate::actors::events::ToEvents;
 use crate::args::ApplicationArguments;
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
+use crate::protocols::ProtocolId;
 use crate::utils::from_private_key;
 
 pub const IROH_TRANSPORT: &str = "net.endpoint.transports.iroh";
@@ -55,9 +56,6 @@ impl Default for IrohConfig {
     }
 }
 
-/// ALPN byte string, or application-level protocol identifier.
-pub type Alpn = Vec<u8>;
-
 pub enum ToIroh {
     /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
     /// awaited for establishing the final connection.
@@ -71,7 +69,7 @@ pub enum ToIroh {
     /// error.
     Connect(
         iroh::NodeAddr,
-        Alpn,
+        ProtocolId,
         RpcReplyPort<Result<IrohConnecting, IrohConnectWithOptsError>>,
     ),
 }

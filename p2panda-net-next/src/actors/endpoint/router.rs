@@ -4,22 +4,21 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use iroh::endpoint::Incoming as IrohIncoming;
-use iroh::protocol::{DynProtocolHandler as IrohProtocolHandler, ProtocolHandler};
+use iroh::protocol::DynProtocolHandler;
 use n0_future::join_all;
-use ractor::{Actor, ActorProcessingErr, ActorRef, registry};
-use thiserror::Error;
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tracing::warn;
 
-use crate::actors::endpoint::iroh::Alpn;
+use crate::protocols::ProtocolId;
 
 pub const IROH_ROUTER: &str = "net.endpoint.transports.iroh.router";
 
-type ProtocolMap = Arc<RwLock<BTreeMap<Alpn, Box<dyn IrohProtocolHandler>>>>;
+type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
 pub enum ToIrohRouter {
-    AcceptAlpn(Alpn, Box<dyn IrohProtocolHandler>),
+    RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
     Incoming(IrohIncoming),
 }
 
@@ -72,7 +71,7 @@ impl Actor for IrohRouter {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToIrohRouter::AcceptAlpn(protocol_id, protocol_handler) => {
+            ToIrohRouter::RegisterProtocol(protocol_id, protocol_handler) => {
                 // @TODO: Mix protocol id with network id.
                 let mut protocols = state.protocols.write().await;
                 protocols.insert(protocol_id, protocol_handler);
@@ -123,31 +122,4 @@ async fn handle_connection(incoming: IrohIncoming, protocols: ProtocolMap) {
             warn!("handling incoming connecting ended with error: {err}");
         }
     }
-}
-
-pub fn register_protocol<P>(protocol_id: &[u8], handler: P) -> Result<(), RegisterProtocolError>
-where
-    P: ProtocolHandler,
-{
-    let Some(router) = registry::where_is(IROH_ROUTER.into()) else {
-        return Err(RegisterProtocolError::RouterNotAvailable);
-    };
-
-    if let Err(_) = ActorRef::<ToIrohRouter>::from(router).cast(ToIrohRouter::AcceptAlpn(
-        protocol_id.to_vec(),
-        Box::new(handler),
-    )) {
-        return Err(RegisterProtocolError::RegistrationFailed);
-    }
-
-    Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum RegisterProtocolError {
-    #[error("iroh router actor is not available to register protocol handler")]
-    RouterNotAvailable,
-
-    #[error("could not register protocol in router")]
-    RegistrationFailed,
 }

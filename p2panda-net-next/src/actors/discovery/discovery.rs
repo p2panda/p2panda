@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use iroh::protocol::{AcceptError, ProtocolHandler};
+use p2panda_core::PrivateKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 
 use crate::actors::discovery::DiscoverySession;
-use crate::actors::endpoint::router::register_protocol;
+use crate::actors::{connect, register_protocol};
 
 pub const DISCOVERY: &str = "net.discovery";
 
@@ -33,6 +34,18 @@ impl Actor for Discovery {
             DISCOVERY_PROTOCOL_ID,
             DiscoveryProtocolHandler(myself.clone()),
         )?;
+
+        // @TODO: Example: Create a connection
+        let node_id = PrivateKey::new().public_key();
+
+        // @TODO: This should not be part of the actor as it will take too much time.
+        let connecting = connect::<()>(node_id, DISCOVERY_PROTOCOL_ID).await?;
+        let connection = connecting.await?;
+
+        myself
+            .spawn_linked(None, DiscoverySession, (connection,))
+            .await
+            .map_err(|err| AcceptError::from_err(err))?;
 
         Ok(DiscoveryState {})
     }
