@@ -26,7 +26,8 @@ This crate provides an API for establishing and managing encryption contexts wit
 of actors. The p2panda-encryption [Data
 Encryption](https://docs.rs/p2panda-encryption/latest/p2panda_encryption/data_scheme/index.html)
 scheme is used for key agreement and group management is achieved through an integration with
-[p2panda-auth groups](https://docs.rs/p2panda-auth/latest/p2panda_auth/).
+[p2panda-auth groups](https://docs.rs/p2panda-auth/latest/p2panda_auth/). The main entry point for
+users is the `Manager` struct from which groups and spaces can be created.
 
 ## Features
 
