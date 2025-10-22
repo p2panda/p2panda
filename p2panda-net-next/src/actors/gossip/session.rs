@@ -11,17 +11,18 @@ use std::time::Duration;
 use iroh::NodeId;
 use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::ToGossip;
 use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::{TopicId, to_public_key};
+use crate::utils::to_public_key;
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
@@ -33,8 +34,6 @@ pub enum ToGossipSession {
     /// Join the given set of peers.
     JoinPeers(Vec<NodeId>),
 }
-
-impl Message for ToGossipSession {}
 
 pub struct GossipSessionState {
     topic_id: TopicId,
@@ -55,7 +54,9 @@ impl GossipSession {
 
 impl Actor for GossipSession {
     type State = GossipSessionState;
+
     type Msg = ToGossipSession;
+
     type Arguments = (
         TopicId,
         IrohGossipTopic,
@@ -111,22 +112,6 @@ impl Actor for GossipSession {
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn handle(

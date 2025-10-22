@@ -4,10 +4,13 @@
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 
 use crate::TopicId;
 use crate::addrs::{NodeId, NodeInfo};
+use crate::store::AddressBookStore;
+
+pub const ADDRESS_BOOK: &str = "net.addressbook";
 
 pub enum ToAddressBook<T> {
     /// Registers information about a node.
@@ -46,10 +49,6 @@ pub enum ToAddressBook<T> {
     RemoveNodeInfo(NodeId),
 }
 
-impl<T> Message for ToAddressBook<T> where T: Send + Sync + 'static {}
-
-pub struct AddressBookState;
-
 pub struct AddressBook<T, S> {
     store: S,
     _marker: PhantomData<T>,
@@ -69,7 +68,7 @@ where
     S: AddressBookStore + Send + Sync + 'static,
     T: Send + Sync + 'static,
 {
-    type State = AddressBookState;
+    type State = ();
 
     type Msg = ToAddressBook<T>;
 
@@ -82,34 +81,6 @@ where
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(AddressBookState {})
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 }
-
-// @TODO: Move this into new `p2panda-store` when ready.
-pub trait AddressBookStore {}

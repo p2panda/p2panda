@@ -9,15 +9,13 @@
 //! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
 //! respawned.
 use iroh::Endpoint as IrohEndpoint;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
 
 pub enum ToSubscription {}
-
-impl Message for ToSubscription {}
 
 pub struct SubscriptionState {
     endpoint: IrohEndpoint,
@@ -61,31 +59,6 @@ impl Actor for Subscription {
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn handle_supervisor_evt(

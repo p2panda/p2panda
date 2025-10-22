@@ -7,7 +7,7 @@
 //! broadcast messages received before the join signal are queued internally (by the actor) and are
 //! then processed after the signal has been received.
 use iroh_gossip::api::GossipSender as IrohGossipSender;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 
 pub enum ToGossipSender {
@@ -17,8 +17,6 @@ pub enum ToGossipSender {
     /// Broadcast the given bytes into the gossip topic overlay.
     Broadcast(Vec<u8>),
 }
-
-impl Message for ToGossipSender {}
 
 pub struct GossipSenderState {
     sender: Option<IrohGossipSender>,
@@ -48,21 +46,12 @@ impl Actor for GossipSender {
         Ok(state)
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         drop(state.sender.take());
-
         Ok(())
     }
 
