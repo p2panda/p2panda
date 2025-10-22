@@ -19,7 +19,7 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
 use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceStore,
+    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore,
     SpacesMessage,
 };
 use crate::types::{
@@ -55,7 +55,7 @@ pub struct Group<ID, S, K, F, M, C, RS> {
 impl<ID, S, K, F, M, C, RS> Group<ID, S, K, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
     M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
@@ -280,7 +280,7 @@ where
 pub enum GroupError<ID, S, K, F, M, C, RS>
 where
     ID: SpaceId,
-    S: SpaceStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
     K: KeyRegistryStore + KeySecretStore,
     F: Forge<ID, M, C>,
     C: Conditions,

@@ -14,7 +14,7 @@ use crate::types::AuthGroupState;
 use crate::{ActorId, OperationId};
 
 /// Interface for setting and getting space state.
-pub trait SpaceStore<ID, M, C>
+pub trait SpacesStore<ID, M, C>
 where
     ID: SpaceId,
     C: Conditions,
