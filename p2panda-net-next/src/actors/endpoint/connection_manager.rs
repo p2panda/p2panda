@@ -2,19 +2,19 @@
 
 use std::fmt::Debug;
 
-use iroh::protocol::ProtocolHandler;
-use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use thiserror::Error;
 
 use crate::NodeId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::endpoint::connection::Connection;
 use crate::actors::endpoint::iroh::{IROH_TRANSPORT, ToIroh};
-use crate::protocols::ProtocolId;
+use crate::protocols::{ProtocolHandler, ProtocolId};
 
 pub const CONNECTION_MANAGER: &str = "net.endpoint.connectionmanager";
 
 pub enum ToConnectionManager {
+    AcceptIncoming(ProtocolId, Box<dyn ProtocolHandler>),
     Connect(
         NodeId,
         ProtocolId,
@@ -46,6 +46,9 @@ impl Actor for ConnectionManager {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            ToConnectionManager::AcceptIncoming(_protocol_id, _handler) => {
+                todo!()
+            }
             ToConnectionManager::Connect(node_id, protocol_id, reply) => {
                 let Some(actor) = registry::where_is(ADDRESS_BOOK.into()) else {
                     // @TODO: Address book is not running.
@@ -94,31 +97,6 @@ impl Actor for ConnectionManager {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct IncomingConnectionHandler<T> {
-    actor_ref: ActorRef<T>,
-}
-
-impl<T> ProtocolHandler for IncomingConnectionHandler<T>
-where
-    T: Debug + 'static,
-{
-    async fn accept(
-        &self,
-        _connection: iroh::endpoint::Connection,
-    ) -> Result<(), iroh::protocol::AcceptError> {
-        todo!()
-    }
-}
-
-impl<T> IncomingConnectionHandler<T> {
-    pub fn new(actor_cell: ActorCell) -> Self {
-        Self {
-            actor_ref: actor_cell.into(),
-        }
     }
 }
 

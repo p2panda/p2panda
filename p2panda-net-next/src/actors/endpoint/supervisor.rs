@@ -51,7 +51,7 @@ impl Actor for EndpointSupervisor {
 
         let (connection_manager_actor, _) = Actor::spawn_linked(
             Some(CONNECTION_MANAGER.into()),
-            ConnectionManager,
+            ConnectionManager<S, R>,
             (),
             supervisor.clone(),
         )
@@ -112,7 +112,7 @@ impl Actor for EndpointSupervisor {
                 Some(CONNECTION_MANAGER) => {
                     let (connection_manager_actor, _) = Actor::spawn_linked(
                         Some(CONNECTION_MANAGER.into()),
-                        ConnectionManager,
+                        ConnectionManager<S, R>,
                         (),
                         myself.into(),
                     )

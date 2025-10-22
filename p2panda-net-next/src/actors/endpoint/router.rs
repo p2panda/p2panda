@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use iroh::endpoint::Incoming as IrohIncoming;
-use iroh::protocol::DynProtocolHandler;
+use iroh::protocol::DynProtocolHandler as IrohProtocolHandler;
 use n0_future::join_all;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::RwLock;
@@ -15,10 +15,10 @@ use crate::actors::endpoint::iroh::Alpn;
 
 pub const IROH_ROUTER: &str = "net.endpoint.transports.iroh.router";
 
-type ProtocolMap = Arc<RwLock<BTreeMap<Alpn, Box<dyn DynProtocolHandler>>>>;
+type ProtocolMap = Arc<RwLock<BTreeMap<Alpn, Box<dyn IrohProtocolHandler>>>>;
 
 pub enum ToIrohRouter {
-    RegisterProtocol(Alpn, Box<dyn DynProtocolHandler>),
+    AcceptAlpn(Alpn, Box<dyn IrohProtocolHandler>),
     Incoming(IrohIncoming),
 }
 
@@ -71,7 +71,7 @@ impl Actor for IrohRouter {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToIrohRouter::RegisterProtocol(protocol_id, protocol_handler) => {
+            ToIrohRouter::AcceptAlpn(protocol_id, protocol_handler) => {
                 let mut protocols = state.protocols.write().await;
                 protocols.insert(protocol_id, protocol_handler);
             }
