@@ -9,6 +9,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
 use crate::actors::endpoint::supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
+use crate::actors::network::{NETWORK, Network, ToNetwork};
 use crate::args::ApplicationArguments;
 use crate::store::AddressBookStore;
 
@@ -16,14 +17,16 @@ pub const SUPERVISOR: &str = "net.supervisor";
 
 pub struct SupervisorState<T> {
     application_args: ApplicationArguments,
-    events_actor: ActorRef<ToEvents>,
-    events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook<T>>,
     address_book_actor_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
     endpoint_supervisor: ActorRef<()>,
     endpoint_supervisor_failures: u16,
+    events_actor: ActorRef<ToEvents>,
+    events_actor_failures: u16,
+    network_actor: ActorRef<ToNetwork>,
+    network_actor_failures: u16,
 }
 
 pub struct Supervisor<S, T> {
@@ -58,9 +61,6 @@ where
     ) -> Result<Self::State, ActorProcessingErr> {
         let supervisor: ActorCell = myself.into();
 
-        let (events_actor, _) =
-            Actor::spawn_linked(Some(EVENTS.into()), Events, (), supervisor.clone()).await?;
-
         let (address_book_actor, _) = Actor::spawn_linked(
             Some(ADDRESS_BOOK.into()),
             AddressBook::new(self.store.clone()),
@@ -80,16 +80,24 @@ where
         )
         .await?;
 
+        let (events_actor, _) =
+            Actor::spawn_linked(Some(EVENTS.into()), Events, (), supervisor.clone()).await?;
+
+        let (network_actor, _) =
+            Actor::spawn_linked(Some(NETWORK.into()), Network, (), supervisor.clone()).await?;
+
         let state = SupervisorState {
             application_args: args,
-            events_actor,
-            events_actor_failures: 0,
             address_book_actor,
             address_book_actor_failures: 0,
             discovery_actor,
             discovery_actor_failures: 0,
             endpoint_supervisor,
             endpoint_supervisor_failures: 0,
+            events_actor,
+            events_actor_failures: 0,
+            network_actor,
+            network_actor_failures: 0,
         };
 
         Ok(state)
@@ -100,22 +108,15 @@ where
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        let reason = Some("supervisor system is shutting down".to_string());
+        let reason = Some("supervisor is shutting down".to_string());
 
         // Stop all the actors which are supervised by the supervisor actor.
-        state.events_actor.stop(reason.clone());
         state.address_book_actor.stop(reason.clone());
-        state.discovery_actor.stop(reason);
+        state.discovery_actor.stop(reason.clone());
+        state.endpoint_supervisor.stop(reason.clone());
+        state.events_actor.stop(reason.clone());
+        state.network_actor.stop(reason);
 
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 
@@ -132,53 +133,44 @@ where
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
+                let actor_id = actor.get_name().unwrap_or(actor.get_id().to_string());
+                warn!("supervisor: {} actor failed: {}", actor_id, panic_msg);
+
                 match actor.get_name().as_deref() {
-                    Some("events") => {
-                        warn!("supervisor actor: events actor failed: {}", panic_msg);
-
-                        // Respawn the events actor.
-                        let (events_actor, _) = Actor::spawn_linked(
-                            Some("events".to_string()),
-                            Events {},
-                            (),
-                            myself.clone().into(),
-                        )
-                        .await?;
-
-                        state.events_actor_failures += 1;
-                        state.events_actor = events_actor;
-                    }
-                    Some("address book") => {
-                        warn!("supervisor actor: address book actor failed: {}", panic_msg);
-
-                        // Respawn the address book actor.
+                    Some(ADDRESS_BOOK) => {
                         let (address_book_actor, _) = Actor::spawn_linked(
-                            Some("address book".to_string()),
+                            Some(ADDRESS_BOOK.into()),
                             AddressBook::new(self.store.clone()),
                             (),
                             myself.clone().into(),
                         )
                         .await?;
-
                         state.address_book_actor_failures += 1;
                         state.address_book_actor = address_book_actor;
                     }
-                    Some("discovery") => {
-                        warn!("supervisor actor: discovery actor failed: {}", panic_msg);
-
-                        // Respawn the discovery actor.
+                    Some(DISCOVERY) => {
                         let (discovery_actor, _) = Actor::spawn_linked(
-                            Some("discovery".to_string()),
-                            Discovery {},
+                            Some(DISCOVERY.into()),
+                            Discovery,
                             (),
                             myself.clone().into(),
                         )
                         .await?;
-
                         state.discovery_actor_failures += 1;
                         state.discovery_actor = discovery_actor;
                     }
-                    _ => (),
+                    Some(EVENTS) => {
+                        let (events_actor, _) = Actor::spawn_linked(
+                            Some(EVENTS.into()),
+                            Events,
+                            (),
+                            myself.clone().into(),
+                        )
+                        .await?;
+                        state.events_actor_failures += 1;
+                        state.events_actor = events_actor;
+                    }
+                    _ => unreachable!("actor is not managed by this supervisor"),
                 }
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
