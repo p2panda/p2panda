@@ -21,13 +21,13 @@ use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError};
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesStore, SpacesMessage,
+    SpacesMessage, SpacesStore,
 };
 use crate::types::{ActorId, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
-/// API for creating and managing groups and spaces. 
-/// 
+/// API for creating and managing groups and spaces.
+///
 /// There should be only one manager instance per application. Any messages received from other
 /// instances must be processed on the manager. All methods which mutate state locally return M
 /// message(s) which must be replicated to and processed by other instances. Any action which

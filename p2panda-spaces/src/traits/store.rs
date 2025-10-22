@@ -49,7 +49,7 @@ where
     fn set_auth(&self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
-/// Interface for setting and getting key registry state. 
+/// Interface for setting and getting key registry state.
 pub trait KeyRegistryStore {
     type Error: Debug;
 
@@ -61,7 +61,7 @@ pub trait KeyRegistryStore {
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
-/// Interface for setting and getting pre key secrets. 
+/// Interface for setting and getting pre key secrets.
 pub trait KeySecretStore {
     type Error: Debug;
 
