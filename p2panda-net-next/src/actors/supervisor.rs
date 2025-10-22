@@ -61,6 +61,16 @@ where
     ) -> Result<Self::State, ActorProcessingErr> {
         let supervisor: ActorCell = myself.into();
 
+        // Endpoint actor-tree needs to be launched first as other actors will need it to register
+        // their protocol handlers.
+        let (endpoint_supervisor, _) = Actor::spawn_linked(
+            Some(ENDPOINT_SUPERVISOR.into()),
+            EndpointSupervisor,
+            args.clone(),
+            supervisor.clone(),
+        )
+        .await?;
+
         let (address_book_actor, _) = Actor::spawn_linked(
             Some(ADDRESS_BOOK.into()),
             AddressBook::new(self.store.clone()),
@@ -71,14 +81,6 @@ where
 
         let (discovery_actor, _) =
             Actor::spawn_linked(Some(DISCOVERY.into()), Discovery, (), supervisor.clone()).await?;
-
-        let (endpoint_supervisor, _) = Actor::spawn_linked(
-            Some(ENDPOINT_SUPERVISOR.into()),
-            EndpointSupervisor,
-            args.clone(),
-            supervisor.clone(),
-        )
-        .await?;
 
         let (events_actor, _) =
             Actor::spawn_linked(Some(EVENTS.into()), Events, (), supervisor.clone()).await?;

@@ -2,5 +2,7 @@
 
 #[allow(clippy::module_inception)]
 mod discovery;
+mod session;
 
 pub use discovery::{DISCOVERY, Discovery, DiscoveryState, ToDiscovery};
+pub use session::{DiscoverySession, DiscoverySessionState};

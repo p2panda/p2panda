@@ -2,9 +2,6 @@
 
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, SupervisionEvent};
 
-use crate::actors::endpoint::connection_manager::{
-    CONNECTION_MANAGER, ConnectionManager, ToConnectionManager,
-};
 use crate::actors::endpoint::iroh::{IROH_TRANSPORT, IrohTransport, ToIroh};
 use crate::actors::endpoint::router::{IROH_ROUTER, IrohRouter, ToIrohRouter};
 use crate::args::ApplicationArguments;
@@ -17,8 +14,6 @@ pub struct EndpointSupervisorState {
     iroh_actor_failures: usize,
     iroh_router_actor: ActorRef<ToIrohRouter>,
     iroh_router_actor_failures: usize,
-    connection_manager_actor: ActorRef<ToConnectionManager>,
-    connection_manager_actor_failures: usize,
 }
 
 pub struct EndpointSupervisor;
@@ -49,22 +44,12 @@ impl Actor for EndpointSupervisor {
         )
         .await?;
 
-        let (connection_manager_actor, _) = Actor::spawn_linked(
-            Some(CONNECTION_MANAGER.into()),
-            ConnectionManager,
-            (),
-            supervisor.clone(),
-        )
-        .await?;
-
         Ok(EndpointSupervisorState {
             application_args: args,
             iroh_actor,
             iroh_actor_failures: 0,
             iroh_router_actor,
             iroh_router_actor_failures: 0,
-            connection_manager_actor,
-            connection_manager_actor_failures: 0,
         })
     }
 
@@ -108,17 +93,6 @@ impl Actor for EndpointSupervisor {
                     .await?;
                     state.iroh_router_actor_failures += 1;
                     state.iroh_router_actor = iroh_router_actor;
-                }
-                Some(CONNECTION_MANAGER) => {
-                    let (connection_manager_actor, _) = Actor::spawn_linked(
-                        Some(CONNECTION_MANAGER.into()),
-                        ConnectionManager,
-                        (),
-                        myself.into(),
-                    )
-                    .await?;
-                    state.connection_manager_actor_failures += 1;
-                    state.connection_manager_actor = connection_manager_actor;
                 }
                 _ => unreachable!("actor is not managed by this supervisor"),
             },
