@@ -52,8 +52,8 @@ where
         // @TODO: Example: Create a connection
         let node_id = PrivateKey::new().public_key();
 
-        // @TODO: This should not be part of the actor as it will take too much time.
         let connecting = connect::<T>(node_id, DISCOVERY_PROTOCOL_ID).await?;
+        // @TODO: This should not be part of the actor as it will take too much time.
         let connection = connecting.await?;
 
         myself
