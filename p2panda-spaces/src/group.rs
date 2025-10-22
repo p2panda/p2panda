@@ -19,8 +19,8 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
 use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore,
-    SpacesMessage,
+    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore,
+    SpacesMessage, SpacesStore,
 };
 use crate::types::{
     ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,

@@ -24,7 +24,7 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesStore, SpacesMessage,
+    SpacesMessage, SpacesStore,
 };
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
