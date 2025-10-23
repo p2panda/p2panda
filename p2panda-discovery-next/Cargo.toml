@@ -1,0 +1,13 @@
+[package]
+name = "p2panda-discovery-next"
+version = "0.4.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+default = ["address_book"]
+address_book = []
+
+[dependencies]
