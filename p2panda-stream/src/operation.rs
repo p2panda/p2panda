@@ -192,6 +192,7 @@ mod tests {
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
+        let hash1 = header.hash();
 
         let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Complete(_))));
@@ -215,5 +216,25 @@ mod tests {
 
         let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
         assert!(matches!(result, Ok(IngestResult::Retry(_, None, _, 11))));
+
+        // 3. Create an operation which has already advanced in the log (it has a backlink and
+        //    higher sequence number).
+        let mut header = Header {
+            public_key: private_key.public_key(),
+            version: 1,
+            signature: None,
+            payload_size: 0,
+            payload_hash: None,
+            timestamp: 0,
+            seq_num: 1,
+            backlink: Some(hash1),
+            previous: vec![hash1, Hash::new(b"mock operation")],
+            extensions: Extensions::default(),
+        };
+        header.sign(&private_key);
+        let header_bytes = header.to_bytes();
+
+        let result = ingest_operation(&mut store, header, None, header_bytes, &log_id, false).await;
+        assert!(matches!(result, Ok(IngestResult::Retry(_, None, _, 1))));
     }
 }
