@@ -68,6 +68,26 @@ where
                             _ => unreachable!("other error cases have been handled before"),
                         }
                     }
+
+                    let mut missing = 0;
+                    for previous in &operation.header.previous {
+                        if !store.has_operation(*previous).await.map_err(|err| {
+                            IngestError::StoreError(format!(
+                                "could not look up previous operation: {}",
+                                err
+                            ))
+                        })? {
+                            missing += 1;
+                        }
+                    }
+                    if missing > 0 {
+                        return Ok(IngestResult::Retry(
+                            operation.header,
+                            operation.body,
+                            header_bytes,
+                            missing,
+                        ));
+                    }
                 }
                 // We're missing the whole log so far.
                 None => {
