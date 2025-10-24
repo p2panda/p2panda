@@ -8,18 +8,31 @@
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
 //! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
 //! respawned.
+use std::collections::HashMap;
+
 use iroh::Endpoint as IrohEndpoint;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call};
-use tokio::sync::mpsc;
+use ractor::{
+    Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call, cast,
+};
+use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
-use crate::topic_streams::EphemeralTopicStream;
+use crate::network::{FromNetwork, ToNetwork};
+use crate::topic_streams::{EphemeralTopicStream, EphemeralTopicStreamSubscription};
 
 pub enum ToSubscription {
+    /// Subscribe to the topic ID and return a publishing handle.
     CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralTopicStream>),
+
+    /// Return a subscription handle for the given topic ID.
+    ReturnEphemeralSubscription(TopicId, RpcReplyPort<EphemeralTopicStreamSubscription>),
+
+    /// Unsubscribe from an ephemeral stream for the given topic ID.
+    UnsubscribeEphemeral(TopicId),
 }
 
 impl Message for ToSubscription {}
@@ -30,6 +43,8 @@ pub struct SubscriptionState {
     gossip_actor_failures: u16,
     sync_actor: ActorRef<ToSync>,
     sync_actor_failures: u16,
+    ephemeral_senders: HashMap<TopicId, Sender<ToNetwork>>,
+    gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
 }
 
 pub struct Subscription;
@@ -57,12 +72,17 @@ impl Actor for Subscription {
         let (sync_actor, _) =
             Actor::spawn_linked(Some("sync".to_string()), Sync {}, (), myself.into()).await?;
 
+        let ephemeral_senders = HashMap::new();
+        let gossip_senders = HashMap::new();
+
         let state = SubscriptionState {
             endpoint,
             gossip_actor,
             gossip_actor_failures: 0,
             sync_actor,
             sync_actor_failures: 0,
+            ephemeral_senders,
+            gossip_senders,
         };
 
         Ok(state)
@@ -92,22 +112,46 @@ impl Actor for Subscription {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToSubscription::CreateEphemeralStream(topic_id, reply) => {
-                // TODO: Proper channel handling.
-                // Might need to receive channel(s) from caller.
-                let (to_topic_tx, to_topic_rx) = mpsc::channel(128);
-
                 // TODO: Ask address book for all peers interested in this topic id.
                 let peers = Vec::new();
 
-                // Register session with gossip actor.
-                let (to_gossip_tx, from_gossip_rx) =
-                    call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+                // Check if we're already subscribed.
+                let stream = if let Some(to_gossip_tx) = state.ephemeral_senders.get(&topic_id) {
+                    // Inform the gossip actor about the latest set of peers for this topic id.
+                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
 
-                let stream = EphemeralTopicStream::new(topic_id, to_topic_tx);
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx.clone())
+                } else {
+                    // Register a new session with the gossip actor.
+                    let (to_gossip_tx, from_gossip_tx) =
+                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+
+                    // Store the gossip sender. This can be used to create a broadcast receiver
+                    // when the user calls `.subscribe()` on `EphemeralTopicStream`.
+                    state.gossip_senders.insert(topic_id, from_gossip_tx);
+
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx)
+                };
 
                 if !reply.is_closed() {
                     let _ = reply.send(stream);
                 }
+            }
+            ToSubscription::ReturnEphemeralSubscription(topic_id, reply) => {
+                if let Some(from_gossip_tx) = state.gossip_senders.get(&topic_id) {
+                    let from_gossip_rx = from_gossip_tx.subscribe();
+
+                    let subscription =
+                        EphemeralTopicStreamSubscription::new(topic_id, from_gossip_rx);
+
+                    if !reply.is_closed() {
+                        let _ = reply.send(subscription);
+                    }
+                }
+            }
+            ToSubscription::UnsubscribeEphemeral(_topic_id) => {
+                // TODO...
+                todo!()
             }
         }
 
