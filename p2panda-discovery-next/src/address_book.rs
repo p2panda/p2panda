@@ -1,16 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// @TODO: Move this into `p2panda-store` when it's ready.
-use std::collections::{BTreeMap, HashSet};
-use std::convert::Infallible;
-use std::error::Error;
-use std::hash::Hash as StdHash;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use rand::Rng;
-use rand::seq::IteratorRandom;
-use tokio::sync::{Mutex, RwLock};
+use std::time::Duration;
 
 pub trait NodeInfo<ID> {
     /// Returns node id for this information.
@@ -24,7 +14,7 @@ pub trait NodeInfo<ID> {
 }
 
 pub trait AddressBookStore<T, ID, N> {
-    type Error: Error;
+    type Error;
 
     /// Inserts new information for a node if it is newer than the previous one.
     ///
@@ -110,165 +100,183 @@ pub trait AddressBookStore<T, ID, N> {
     fn random_bootstrap_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 }
 
-#[derive(Clone, Debug)]
-pub struct MemoryStore<R, T, ID, N> {
-    rng: Arc<Mutex<R>>,
-    node_infos: Arc<RwLock<BTreeMap<ID, N>>>,
-    node_topics: Arc<RwLock<BTreeMap<ID, HashSet<T>>>>,
-    node_topic_ids: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
-}
+#[cfg(any(test, feature = "test_utils"))]
+pub mod memory {
+    use std::collections::{BTreeMap, HashSet};
+    use std::convert::Infallible;
+    use std::hash::Hash as StdHash;
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-impl<R, T, ID, N> MemoryStore<R, T, ID, N> {
-    pub fn new(rng: R) -> Self {
-        Self {
-            rng: Arc::new(Mutex::new(rng)),
-            node_infos: Arc::new(RwLock::new(BTreeMap::new())),
-            node_topics: Arc::new(RwLock::new(BTreeMap::new())),
-            node_topic_ids: Arc::new(RwLock::new(BTreeMap::new())),
+    use rand::Rng;
+    use rand::seq::IteratorRandom;
+    use tokio::sync::{Mutex, RwLock};
+
+    use super::{AddressBookStore, NodeInfo};
+
+    #[derive(Clone, Debug)]
+    pub struct MemoryStore<R, T, ID, N> {
+        rng: Arc<Mutex<R>>,
+        node_infos: Arc<RwLock<BTreeMap<ID, N>>>,
+        node_topics: Arc<RwLock<BTreeMap<ID, HashSet<T>>>>,
+        node_topic_ids: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
+    }
+
+    impl<R, T, ID, N> MemoryStore<R, T, ID, N> {
+        pub fn new(rng: R) -> Self {
+            Self {
+                rng: Arc::new(Mutex::new(rng)),
+                node_infos: Arc::new(RwLock::new(BTreeMap::new())),
+                node_topics: Arc::new(RwLock::new(BTreeMap::new())),
+                node_topic_ids: Arc::new(RwLock::new(BTreeMap::new())),
+            }
         }
     }
-}
 
-impl<R, T, ID, N> AddressBookStore<T, ID, N> for MemoryStore<R, T, ID, N>
-where
-    R: Rng,
-    T: Eq + StdHash,
-    ID: Clone + Ord,
-    N: Clone + NodeInfo<ID>,
-{
-    type Error = Infallible;
+    impl<R, T, ID, N> AddressBookStore<T, ID, N> for MemoryStore<R, T, ID, N>
+    where
+        R: Rng,
+        T: Eq + StdHash,
+        ID: Clone + Ord,
+        N: Clone + NodeInfo<ID>,
+    {
+        type Error = Infallible;
 
-    async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
-        let is_newer = {
-            match self.node_info(&info.id()).await? {
-                Some(current) => info.timestamp() > current.timestamp(),
-                None => true,
+        async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
+            let is_newer = {
+                match self.node_info(&info.id()).await? {
+                    Some(current) => info.timestamp() > current.timestamp(),
+                    None => true,
+                }
+            };
+            if !is_newer {
+                return Ok(false);
             }
-        };
-        if !is_newer {
-            return Ok(false);
+
+            let mut node_infos = self.node_infos.write().await;
+            node_infos.insert(info.id(), info);
+            Ok(true)
         }
 
-        let mut node_infos = self.node_infos.write().await;
-        node_infos.insert(info.id(), info);
-        Ok(true)
-    }
+        async fn node_info(&self, id: &ID) -> Result<Option<N>, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            Ok(node_infos.get(id).cloned())
+        }
 
-    async fn node_info(&self, id: &ID) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.read().await;
-        Ok(node_infos.get(id).cloned())
-    }
+        async fn selected_node_infos(&self, ids: &[ID]) -> Result<Vec<N>, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            let result = node_infos
+                .iter()
+                .filter_map(
+                    |(id, info)| {
+                        if ids.contains(id) { Some(info) } else { None }
+                    },
+                )
+                .cloned()
+                .collect();
+            Ok(result)
+        }
 
-    async fn selected_node_infos(&self, ids: &[ID]) -> Result<Vec<N>, Self::Error> {
-        let node_infos = self.node_infos.read().await;
-        let result = node_infos
-            .iter()
-            .filter_map(
-                |(id, info)| {
-                    if ids.contains(id) { Some(info) } else { None }
-                },
-            )
-            .cloned()
-            .collect();
-        Ok(result)
-    }
+        async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            Ok(node_infos.values().cloned().collect())
+        }
 
-    async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
-        let node_infos = self.node_infos.read().await;
-        Ok(node_infos.values().cloned().collect())
-    }
+        async fn remove_node_info(&self, id: &ID) -> Result<bool, Self::Error> {
+            let mut node_infos = self.node_infos.write().await;
+            Ok(node_infos.remove(id).is_some())
+        }
 
-    async fn remove_node_info(&self, id: &ID) -> Result<bool, Self::Error> {
-        let mut node_infos = self.node_infos.write().await;
-        Ok(node_infos.remove(id).is_some())
-    }
-
-    async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
-        let mut counter: usize = 0;
-        let mut node_infos = self.node_infos.write().await;
-        node_infos.retain(|_, info| {
-            let keep = info.timestamp() > current_timestamp() - duration.as_secs();
-            if !keep {
-                counter += 1;
-            }
-            keep
-        });
-        Ok(counter)
-    }
-
-    async fn set_topics(
-        &self,
-        id: ID,
-        topics: impl IntoIterator<Item = T>,
-    ) -> Result<(), Self::Error> {
-        let mut node_topics = self.node_topics.write().await;
-        node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
-        Ok(())
-    }
-
-    async fn set_topic_ids(
-        &self,
-        id: ID,
-        topic_ids: impl IntoIterator<Item = [u8; 32]>,
-    ) -> Result<(), Self::Error> {
-        let mut node_topic_ids = self.node_topic_ids.write().await;
-        node_topic_ids.insert(id, HashSet::from_iter(topic_ids.into_iter()));
-        Ok(())
-    }
-
-    async fn node_infos_by_topics(&self, topics: &[T]) -> Result<Vec<N>, Self::Error> {
-        let node_topics = self.node_topics.read().await;
-        let ids: Vec<ID> = node_topics
-            .iter()
-            .filter_map(|(node_id, node_topics)| {
-                if node_topics.iter().any(|t| topics.contains(t)) {
-                    Some(node_id.clone())
-                } else {
-                    None
+        async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
+            let mut counter: usize = 0;
+            let mut node_infos = self.node_infos.write().await;
+            node_infos.retain(|_, info| {
+                let keep = info.timestamp() > current_timestamp() - duration.as_secs();
+                if !keep {
+                    counter += 1;
                 }
-            })
-            .collect();
-        self.selected_node_infos(ids.as_slice()).await
+                keep
+            });
+            Ok(counter)
+        }
+
+        async fn set_topics(
+            &self,
+            id: ID,
+            topics: impl IntoIterator<Item = T>,
+        ) -> Result<(), Self::Error> {
+            let mut node_topics = self.node_topics.write().await;
+            node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
+            Ok(())
+        }
+
+        async fn set_topic_ids(
+            &self,
+            id: ID,
+            topic_ids: impl IntoIterator<Item = [u8; 32]>,
+        ) -> Result<(), Self::Error> {
+            let mut node_topic_ids = self.node_topic_ids.write().await;
+            node_topic_ids.insert(id, HashSet::from_iter(topic_ids.into_iter()));
+            Ok(())
+        }
+
+        async fn node_infos_by_topics(&self, topics: &[T]) -> Result<Vec<N>, Self::Error> {
+            let node_topics = self.node_topics.read().await;
+            let ids: Vec<ID> = node_topics
+                .iter()
+                .filter_map(|(node_id, node_topics)| {
+                    if node_topics.iter().any(|t| topics.contains(t)) {
+                        Some(node_id.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.selected_node_infos(ids.as_slice()).await
+        }
+
+        async fn node_infos_by_topic_ids(
+            &self,
+            topic_ids: &[[u8; 32]],
+        ) -> Result<Vec<N>, Self::Error> {
+            let node_topic_ids = self.node_topic_ids.read().await;
+            let ids: Vec<ID> = node_topic_ids
+                .iter()
+                .filter_map(|(node_id, node_topic_ids)| {
+                    if node_topic_ids.iter().any(|t| topic_ids.contains(t)) {
+                        Some(node_id.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.selected_node_infos(ids.as_slice()).await
+        }
+
+        async fn random_node(&self) -> Result<Option<N>, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            let mut rng = self.rng.lock().await;
+            let result = node_infos.values().choose(&mut *rng);
+            Ok(result.cloned())
+        }
+
+        async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            let mut rng = self.rng.lock().await;
+            let result = node_infos
+                .values()
+                .filter(|info| info.is_bootstrap())
+                .choose(&mut *rng);
+            Ok(result.cloned())
+        }
     }
 
-    async fn node_infos_by_topic_ids(&self, topic_ids: &[[u8; 32]]) -> Result<Vec<N>, Self::Error> {
-        let node_topic_ids = self.node_topic_ids.read().await;
-        let ids: Vec<ID> = node_topic_ids
-            .iter()
-            .filter_map(|(node_id, node_topic_ids)| {
-                if node_topic_ids.iter().any(|t| topic_ids.contains(t)) {
-                    Some(node_id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        self.selected_node_infos(ids.as_slice()).await
+    pub(crate) fn current_timestamp() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is not behind")
+            .as_secs()
     }
-
-    async fn random_node(&self) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.read().await;
-        let mut rng = self.rng.lock().await;
-        let result = node_infos.values().choose(&mut *rng);
-        Ok(result.cloned())
-    }
-
-    async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.read().await;
-        let mut rng = self.rng.lock().await;
-        let result = node_infos
-            .values()
-            .filter(|info| info.is_bootstrap())
-            .choose(&mut *rng);
-        Ok(result.cloned())
-    }
-}
-
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is not behind")
-        .as_secs()
 }
 
 #[cfg(test)]
@@ -278,54 +286,10 @@ mod tests {
     use rand_chacha::ChaCha20Rng;
     use rand_chacha::rand_core::SeedableRng;
 
-    use crate::address_book::current_timestamp;
+    use crate::test_utils::{TestId, TestInfo, TestStore};
 
-    use super::{AddressBookStore, MemoryStore, NodeInfo};
-
-    type TestId = usize;
-
-    type TestTopic = &'static str;
-
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-    struct TestInfo {
-        id: TestId,
-        bootstrap: bool,
-        timestamp: u64,
-    }
-
-    impl TestInfo {
-        pub fn new(id: TestId) -> Self {
-            Self {
-                id,
-                bootstrap: false,
-                timestamp: 0,
-            }
-        }
-
-        pub fn new_bootstrap(id: TestId) -> Self {
-            Self {
-                id,
-                bootstrap: true,
-                timestamp: 0,
-            }
-        }
-    }
-
-    impl NodeInfo<TestId> for TestInfo {
-        fn id(&self) -> TestId {
-            self.id
-        }
-
-        fn is_bootstrap(&self) -> bool {
-            self.bootstrap
-        }
-
-        fn timestamp(&self) -> u64 {
-            self.timestamp
-        }
-    }
-
-    type TestStore<R> = MemoryStore<R, TestTopic, TestId, TestInfo>;
+    use super::memory::current_timestamp;
+    use super::{AddressBookStore, NodeInfo};
 
     #[tokio::test]
     async fn insert_newer_node_info() {
@@ -366,17 +330,23 @@ mod tests {
         let store = TestStore::new(rng);
 
         store.insert_node_info(TestInfo::new(1)).await.unwrap();
-        store.set_topics(1, ["cats", "dogs", "rain"]).await.unwrap();
+        store
+            .set_topics(1, ["cats".into(), "dogs".into(), "rain".into()])
+            .await
+            .unwrap();
 
         store.insert_node_info(TestInfo::new(2)).await.unwrap();
-        store.set_topics(2, ["rain"]).await.unwrap();
+        store.set_topics(2, ["rain".into()]).await.unwrap();
 
         store.insert_node_info(TestInfo::new(3)).await.unwrap();
-        store.set_topics(3, ["dogs", "frogs"]).await.unwrap();
+        store
+            .set_topics(3, ["dogs".into(), "frogs".into()])
+            .await
+            .unwrap();
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["dogs"])
+                .node_infos_by_topics(&["dogs".into()])
                 .await
                 .unwrap()
                 .into_iter()
@@ -387,7 +357,7 @@ mod tests {
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["frogs", "rain"])
+                .node_infos_by_topics(&["frogs".into(), "rain".into()])
                 .await
                 .unwrap()
                 .into_iter()
@@ -398,7 +368,7 @@ mod tests {
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["trains"])
+                .node_infos_by_topics(&["trains".into()])
                 .await
                 .unwrap()
                 .into_iter()
