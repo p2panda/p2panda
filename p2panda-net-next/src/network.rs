@@ -115,10 +115,6 @@ pub enum NetworkError {
 pub struct Network;
 
 impl Network {
-    pub async fn stream(topic: T, live_mode: bool) -> TopicStream {
-        todo!()
-    }
-
     pub async fn ephemeral_stream(
         topic_id: &TopicId,
     ) -> Result<EphemeralTopicStream, NetworkError> {
@@ -138,13 +134,10 @@ impl Network {
 }
 
 /// Bytes to be sent into the network.
-#[derive(Clone, Debug)]
-// TODO: Consider turning this into `pub type ToNetwork = Vec<u8>`.
-pub enum ToNetwork {
-    Message { bytes: Vec<u8> },
-}
+pub type ToNetwork = Vec<u8>;
 
 /// Message received from the network.
+#[derive(Debug, Clone)]
 pub enum FromNetwork {
     EphemeralMessage {
         bytes: Vec<u8>,
@@ -155,4 +148,25 @@ pub enum FromNetwork {
         payload: Option<Vec<u8>>,
         delivered_from: PublicKey,
     },
+}
+
+impl FromNetwork {
+    pub(crate) fn ephemeral_message(bytes: Vec<u8>, delivered_from: PublicKey) -> Self {
+        Self::EphemeralMessage {
+            bytes,
+            delivered_from,
+        }
+    }
+
+    pub(crate) fn message(
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        delivered_from: PublicKey,
+    ) -> Self {
+        Self::Message {
+            header,
+            payload,
+            delivered_from,
+        }
+    }
 }
