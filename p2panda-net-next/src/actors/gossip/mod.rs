@@ -17,16 +17,14 @@ use p2panda_core::PublicKey;
 use ractor::{
     Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
 };
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::broadcast::{self, Sender as BroadcastSender};
+use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
+use crate::network::FromNetwork;
 use crate::{TopicId, from_public_key};
-
-/// Bytes received from gossip, along with the public key of the peer from whom the message was
-/// received. Note that the delivering peer is not necessarily the author of the bytes.
-pub type MsgBytesAndDeliverer = (Vec<u8>, PublicKey);
 
 // TODO: Remove once used.
 #[allow(dead_code)]
@@ -40,7 +38,7 @@ pub enum ToGossip {
     Subscribe(
         TopicId,
         Vec<PublicKey>,
-        RpcReplyPort<(Sender<Vec<u8>>, Receiver<MsgBytesAndDeliverer>)>,
+        RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>,
     ),
 
     /// Join a set of peers on the given gossip topic.
@@ -84,9 +82,10 @@ impl Message for ToGossip {}
 pub struct GossipState {
     gossip: IrohGossip,
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
-    sessions_by_topic_id: HashMap<TopicId, Vec<ActorRef<ToGossipSession>>>,
+    sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
     neighbours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
-    from_gossip_senders: HashMap<TopicId, Vec<Sender<MsgBytesAndDeliverer>>>,
+    to_gossip_senders: HashMap<TopicId, Sender<Vec<u8>>>,
+    from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
@@ -115,6 +114,7 @@ impl Actor for Gossip {
         let sessions_by_actor_id = HashMap::new();
         let sessions_by_topic_id = HashMap::new();
         let neighbours_by_topic_id = HashMap::new();
+        let to_gossip_senders = HashMap::new();
         let from_gossip_senders = HashMap::new();
         let gossip_joined_senders = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
@@ -124,6 +124,7 @@ impl Actor for Gossip {
             sessions_by_actor_id,
             sessions_by_topic_id,
             neighbours_by_topic_id,
+            to_gossip_senders,
             from_gossip_senders,
             gossip_joined_senders,
             topic_delivery_scopes,
@@ -170,15 +171,14 @@ impl Actor for Gossip {
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
-                // TODO: How do we handle a subscribe for a topic that already has an active
-                // subscription? Either we multiplex over a subscription or we establish an
-                // additional session. Right now I (glyph) am leaning towards establishing
-                // additional sessions.
-
                 // Channel to receive messages from the user (to the gossip overlay).
                 let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
+
                 // Channel to receive messages from the gossip overlay (to the user).
-                let (from_gossip_tx, from_gossip_rx) = mpsc::channel(128);
+                //
+                // NOTE: We ignore `from_gossip_rx` because it will be created in the
+                // subscription actor as required by calling `.subscribe()` on the sender.
+                let (from_gossip_tx, _from_gossip_rx) = broadcast::channel(128);
 
                 // Oneshot channel to notify the session sender(s) that the overlay has been
                 // joined.
@@ -192,10 +192,6 @@ impl Actor for Gossip {
 
                 // Subscribe to the gossip topic (without waiting for a connection).
                 let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
-
-                // TODO: Store a clone of the `to_gossip_rx` channel to allow for recovery if the session
-                // fails. This will likely be handled in a higher-level `SubscriptionActor`. We'll
-                // need to use an MPMC channel (e.g. from the `async_channel` crate).
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = Actor::spawn_linked(
@@ -218,23 +214,23 @@ impl Actor for Gossip {
                     .insert(gossip_session_actor_id, gossip_joined_tx);
 
                 // Associate the topic id with the session actor.
-                state
+                let _ = state
                     .sessions_by_topic_id
-                    .entry(topic_id)
-                    .or_default()
-                    .push(gossip_session_actor);
+                    .insert(topic_id, gossip_session_actor);
 
-                // Associate the user channel (sender) with the topic.
-                state
+                // Associate the topic id with the sender from the user to gossip.
+                let _ = state
+                    .to_gossip_senders
+                    .insert(topic_id, to_gossip_tx.clone());
+
+                // Associate the topic id with the sender from gossip to the user.
+                let _ = state
                     .from_gossip_senders
-                    .entry(topic_id)
-                    .or_default()
-                    .push(from_gossip_tx);
+                    .insert(topic_id, from_gossip_tx.clone());
 
                 // Return sender / receiver pair to the user.
                 if !reply.is_closed() {
-                    // TODO: Handle case where receiver channel has been dropped.
-                    let _ = reply.send((to_gossip_tx, from_gossip_rx));
+                    let _ = reply.send((to_gossip_tx, from_gossip_tx));
                 }
 
                 Ok(())
@@ -246,10 +242,8 @@ impl Actor for Gossip {
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
 
-                if let Some(sessions) = state.sessions_by_topic_id.get(&topic_id) {
-                    for session in sessions {
-                        let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
-                    }
+                if let Some(session) = state.sessions_by_topic_id.get(&topic_id) {
+                    let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
                 }
 
                 Ok(())
@@ -261,7 +255,7 @@ impl Actor for Gossip {
                 topic_id,
                 session_id: _,
             } => {
-                let msg = (bytes, delivered_from);
+                let msg = FromNetwork::ephemeral_message(bytes, delivered_from);
 
                 // Store the delivery scope of the received message.
                 state
@@ -271,11 +265,8 @@ impl Actor for Gossip {
                     .push(delivery_scope);
 
                 // Write the received bytes to all subscribers for the associated topic.
-                if let Some(senders) = state.from_gossip_senders.get(&topic_id) {
-                    for sender in senders {
-                        // TODO: We need to tidy up properly when the receiver is dropped.
-                        sender.send(msg.clone()).await?
-                    }
+                if let Some(sender) = state.from_gossip_senders.get(&topic_id) {
+                    let _number_of_subscribers = sender.send(msg.clone())?;
                 }
 
                 Ok(())
