@@ -184,13 +184,10 @@ where
     }
 
     async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock is not behind");
         let mut counter: usize = 0;
         let mut node_infos = self.node_infos.write().await;
-        node_infos.retain(|_id, info| {
-            let keep = Duration::from_secs(info.timestamp()) > now + duration;
+        node_infos.retain(|_, info| {
+            let keep = info.timestamp() > current_timestamp() - duration.as_secs();
             if !keep {
                 counter += 1;
             }
@@ -267,10 +264,21 @@ where
     }
 }
 
+fn current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is not behind")
+        .as_secs()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use rand_chacha::ChaCha20Rng;
     use rand_chacha::rand_core::SeedableRng;
+
+    use crate::address_book::current_timestamp;
 
     use super::{AddressBookStore, MemoryStore, NodeInfo};
 
@@ -283,7 +291,24 @@ mod tests {
         id: TestId,
         bootstrap: bool,
         timestamp: u64,
-        address: String,
+    }
+
+    impl TestInfo {
+        pub fn new(id: TestId) -> Self {
+            Self {
+                id,
+                bootstrap: false,
+                timestamp: 0,
+            }
+        }
+
+        pub fn new_bootstrap(id: TestId) -> Self {
+            Self {
+                id,
+                bootstrap: true,
+                timestamp: 0,
+            }
+        }
     }
 
     impl NodeInfo<TestId> for TestInfo {
@@ -311,7 +336,6 @@ mod tests {
             id: 1,
             bootstrap: false,
             timestamp: 1234,
-            address: "192.168.0.100".into(),
         };
 
         // Correctly inserts and gets node info.
@@ -334,5 +358,119 @@ mod tests {
             store.node_info(&node_info_3.id).await.unwrap(),
             Some(node_info_1)
         );
+    }
+
+    #[tokio::test]
+    async fn set_and_query_topics() {
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng);
+
+        store.insert_node_info(TestInfo::new(1)).await.unwrap();
+        store.set_topics(1, ["cats", "dogs", "rain"]).await.unwrap();
+
+        store.insert_node_info(TestInfo::new(2)).await.unwrap();
+        store.set_topics(2, ["rain"]).await.unwrap();
+
+        store.insert_node_info(TestInfo::new(3)).await.unwrap();
+        store.set_topics(3, ["dogs", "frogs"]).await.unwrap();
+
+        assert_eq!(
+            store
+                .node_infos_by_topics(&["dogs"])
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<TestId>>(),
+            vec![1, 3]
+        );
+
+        assert_eq!(
+            store
+                .node_infos_by_topics(&["frogs", "rain"])
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<TestId>>(),
+            vec![1, 2, 3]
+        );
+
+        assert_eq!(
+            store
+                .node_infos_by_topics(&["trains"])
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<TestId>>(),
+            vec![]
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_outdated_node_infos() {
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng);
+
+        store
+            .insert_node_info(TestInfo {
+                id: 1,
+                bootstrap: false,
+                timestamp: current_timestamp() - (60 * 2), // 2 minutes "old"
+            })
+            .await
+            .unwrap();
+
+        store
+            .insert_node_info(TestInfo {
+                id: 2,
+                bootstrap: false,
+                timestamp: current_timestamp(),
+            })
+            .await
+            .unwrap();
+
+        // Expect removing one item from database.
+        let result = store
+            .remove_older_than(Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(result, 1);
+        assert!(store.node_info(&1).await.unwrap().is_none());
+        assert!(store.node_info(&2).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn sample_random_nodes() {
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng);
+
+        for id in 0..100 {
+            store.insert_node_info(TestInfo::new(id)).await.unwrap();
+        }
+
+        for id in 200..300 {
+            store
+                .insert_node_info(TestInfo::new_bootstrap(id))
+                .await
+                .unwrap();
+        }
+
+        // Sampling random nodes should give us some variety.
+        for _ in 0..100 {
+            assert_ne!(
+                store.random_node().await.unwrap().unwrap(),
+                store.random_node().await.unwrap().unwrap(),
+            );
+        }
+
+        for _ in 0..100 {
+            let sample_1 = store.random_bootstrap_node().await.unwrap().unwrap();
+            let sample_2 = store.random_bootstrap_node().await.unwrap().unwrap();
+            assert_ne!(sample_1, sample_2,);
+            assert!(sample_1.is_bootstrap());
+            assert!(sample_2.is_bootstrap());
+        }
     }
 }
