@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-argon2 = "0.5.3"
+blake3 = "1.8.2"
 curve25519-dalek = { version = "4.1.3", features = ["serde"] }
 futures-lite = "2.6.1"
 iroh = { version = "0.92.0", default-features = false }
@@ -13,6 +13,7 @@ iroh-gossip = "0.92.0"
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 ractor = { version = "0.15.8", features = ["cluster"] }
 rand_core = "0.6.4"
+rand = "0.6.4"
 serde = { version = "1.0.219", features = ["derive"] }
 sha2 = "0.10.9"
 thiserror = "2.0.17"
