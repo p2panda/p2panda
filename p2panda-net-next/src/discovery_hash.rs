@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::io::Write;
 
 use blake3;
-use rand::{thread_rng, RngCore};
+use rand::{RngCore, thread_rng};
 use thiserror::{self};
 use tokio::sync::mpsc;
 
@@ -31,25 +31,21 @@ pub enum DiscoveryError {
     #[error(transparent)]
     Send(#[from] mpsc::error::SendError<DiscoveryMessage>),
 
-    #[error("receive channel unexpectedly closed {0}")]
-    Receive(String),
+    #[error("receive channel unexpectedly closed")]
+    Receive,
 
     #[error("received unexpected message")]
     UnexpectedMessage,
 
-    #[error("not canonical encoding of ristretto point")]
-    InvalidRistrettoEncoding,
-
-    // todo replace with transparent pasword_hash::Error type, had dyn trait problem
-    #[error("error hashing")]
-    HashFunction(Option<String>),
+    #[error(transparent)]
+    HashIO(#[from] std::io::Error)
 }
 
-pub fn hash(data: &Vec<u8>, salt: &Vec<u8>) -> blake3::Hash {
+pub fn hash(data: &Vec<u8>, salt: &Vec<u8>) -> Result<blake3::Hash, DiscoveryError> {
     let mut hash = blake3::Hasher::new();
-    hash.write_all(data);
-    hash.write_all(salt);
-    hash.finalize()
+    hash.write_all(data)?;
+    hash.write_all(salt)?;
+    Ok(hash.finalize())
 }
 
 pub fn generate_salt() -> Vec<u8> {
@@ -74,6 +70,7 @@ pub fn combine_salt(
     output
 }
 
+#[allow(unused)]
 pub async fn alice_protocol(
     alice_topics: &[Vec<u8>],
     tx: mpsc::Sender<DiscoveryMessage>,
@@ -89,9 +86,7 @@ pub async fn alice_protocol(
     let message_2 = match message_2 {
         Some(val) => val,
         None => {
-            return Err(DiscoveryError::Receive(
-                "recieve was none on alice message 2".to_owned(),
-            ));
+            return Err(DiscoveryError::Receive);
         }
     };
 
@@ -109,7 +104,10 @@ pub async fn alice_protocol(
 
     let local_bob_hashed: Vec<[u8; 32]> = alice_topics
         .into_iter()
-        .map(|topic| hash(topic, &bob_final_salt).as_bytes().clone())
+        .map(|topic| hash(topic, &bob_final_salt))
+        .collect::<Result<Vec<blake3::Hash>, _>>()?
+        .into_iter()
+        .map(|h| h.as_bytes().clone())
         .collect();
 
     let bob_hashed_for_alice_map: HashSet<[u8; 32]> =
@@ -127,7 +125,10 @@ pub async fn alice_protocol(
 
     let alice_hashed_for_bob: Vec<[u8; 32]> = alice_topics
         .into_iter()
-        .map(|topic| hash(topic, &alice_final_salt).as_bytes().clone())
+        .map(|topic| hash(topic, &alice_final_salt))
+        .collect::<Result<Vec<blake3::Hash>, _>>()?
+        .into_iter()
+        .map(|h| h.as_bytes().clone())
         .collect();
 
     tx.send(DiscoveryMessage::AliceHashedData {
@@ -138,15 +139,13 @@ pub async fn alice_protocol(
     Ok(alice_intersection)
 }
 
+#[allow(unused)]
 pub async fn bob_protocol(
     bob_topics: &[Vec<u8>],
     tx: mpsc::Sender<DiscoveryMessage>,
     mut rx: mpsc::Receiver<DiscoveryMessage>,
 ) -> Result<Vec<Vec<u8>>, DiscoveryError> {
-    let message_1 = rx
-        .recv()
-        .await
-        .ok_or(DiscoveryError::Receive("bob_failed recieve1".to_owned()))?;
+    let message_1 = rx.recv().await.ok_or(DiscoveryError::Receive)?;
     let DiscoveryMessage::AliceSecretHalf {
         salt_half: alice_salt_half,
     } = message_1
@@ -162,7 +161,10 @@ pub async fn bob_protocol(
 
     let bob_hashed_for_alice = bob_topics
         .into_iter()
-        .map(|topic| hash(topic, &bob_final_salt).as_bytes().clone())
+        .map(|topic| hash(topic, &bob_final_salt))
+        .collect::<Result<Vec<blake3::Hash>, _>>()?
+        .into_iter()
+        .map(|h| h.as_bytes().clone())
         .collect();
 
     tx.send(DiscoveryMessage::BobSecretHalfAndHashedData {
@@ -170,10 +172,7 @@ pub async fn bob_protocol(
         bob_hashed_for_alice,
     })
     .await?;
-    let message_3 = rx
-        .recv()
-        .await
-        .ok_or(DiscoveryError::Receive("bob failed 2".to_owned()))?;
+    let message_3 = rx.recv().await.ok_or(DiscoveryError::Receive)?;
 
     let DiscoveryMessage::AliceHashedData {
         alice_hashed_for_bob,
@@ -187,7 +186,10 @@ pub async fn bob_protocol(
 
     let local_alice_hashed: Vec<[u8; 32]> = bob_topics
         .into_iter()
-        .map(|topic| hash(topic, &alice_final_salt).as_bytes().clone())
+        .map(|topic| hash(topic, &alice_final_salt))
+        .collect::<Result<Vec<blake3::Hash>, _>>()?
+        .into_iter()
+        .map(|h| h.as_bytes().clone())
         .collect();
 
     // bob computes intersection
