@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+
+
 #![allow(unused)]
 
 use std::collections::{hash_set::Intersection, HashSet};
@@ -16,10 +18,10 @@ const ALICE_SALT: [u8; 1] = [0];
 const BOB_SALT: [u8; 1] = [1];
 
 pub enum DiscoveryMessage {
-    AliceSetSecretHalf {
+    AliceSecretHalf {
         salt_half: SaltString,
     },
-    BobSecretAndHashedData {
+    BobSecretHalfAndHashedData {
         salt_half: SaltString,
         bob_hashed_for_alice: Vec<String>,
     },
@@ -33,8 +35,8 @@ pub enum DiscoveryError {
     #[error(transparent)]
     Send(#[from] mpsc::error::SendError<DiscoveryMessage>),
 
-    #[error("receive channel unexpectedly closed")]
-    Receive,
+    #[error("receive channel unexpectedly closed {0}")]
+    Receive(String),
 
     #[error("received unexpected message")]
     UnexpectedMessage,
@@ -84,13 +86,13 @@ pub async fn alice_protocol(
 ) -> Result<Vec<String>, DiscoveryError> {
     let alice_salt_half = SaltString::generate(&mut OsRng);
 
-    let message_1 = DiscoveryMessage::AliceSetSecretHalf {
+    let message_1 = DiscoveryMessage::AliceSecretHalf {
         salt_half: alice_salt_half.clone(),
     };
     tx.send(message_1).await?;
-    let message_2 = rx.recv().await.ok_or(DiscoveryError::Receive)?;
+    let message_2 = rx.recv().await.ok_or(DiscoveryError::Receive("failed 1".to_owned()))?;
 
-    let DiscoveryMessage::BobSecretAndHashedData {
+    let DiscoveryMessage::BobSecretHalfAndHashedData {
         salt_half: bob_salt_half,
         bob_hashed_for_alice,
     } = message_2
@@ -127,4 +129,85 @@ pub async fn alice_protocol(
     tx.send(DiscoveryMessage::AliceHashedData { alice_hashed_for_bob }).await?;
 
     Ok(alice_intersection)
+}
+
+
+pub async fn bob_protocol(
+    bob_topics: &[String],
+    tx: mpsc::Sender<DiscoveryMessage>,
+    mut rx: mpsc::Receiver<DiscoveryMessage>,
+) -> Result<Vec<String>, DiscoveryError> {
+    let bob_salt_half = SaltString::generate(&mut OsRng);
+
+    let message_1 = rx.recv().await.ok_or(DiscoveryError::Receive("bob_failed recieve1".to_owned()))?;
+    let DiscoveryMessage::AliceSecretHalf {
+        salt_half: alice_salt_half,
+    } = message_1
+    else {
+        return Err(DiscoveryError::UnexpectedMessage);
+    };
+
+    // final salts
+    let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT)?;
+    let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT)?;
+
+    let bob_hashed_for_alice = bob_topics
+        .into_iter()
+        .map(|topic| hash(topic, &bob_final_salt))
+        .collect::<Result<Vec<String>, DiscoveryError>>()?;
+    
+
+    tx.send(DiscoveryMessage::BobSecretHalfAndHashedData { salt_half: bob_salt_half, bob_hashed_for_alice }).await?;
+    let message_3 = rx.recv().await.ok_or(DiscoveryError::Receive("bob failed 2".to_owned()))?;
+
+    let DiscoveryMessage::AliceHashedData {
+        alice_hashed_for_bob
+    } = message_3
+    else {
+        return Err(DiscoveryError::UnexpectedMessage);
+    };
+
+    let alice_hashed_for_bob_map: HashSet<String> = HashSet::from_iter(alice_hashed_for_bob.iter().cloned());
+
+    let local_alice_hashed = bob_topics
+        .into_iter()
+        .map(|topic| hash(topic, &alice_final_salt))
+        .collect::<Result<Vec<String>, DiscoveryError>>()?;
+
+    // alice computes intersection of her own work with what bob sent her
+    let mut bob_intersection: Vec<String> = vec![];
+    for (i, local_hash) in local_alice_hashed.iter().enumerate() {
+        if alice_hashed_for_bob_map.contains(local_hash) {
+            bob_intersection.push(bob_topics[i].clone());
+        }
+    }
+
+    Ok(bob_intersection)
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc;
+
+    use super::{DiscoveryMessage, alice_protocol, bob_protocol};
+
+
+    #[tokio::test]
+    async fn alice_is_happy_hashed() {
+        let (alice_tx, alice_rx) = mpsc::channel::<DiscoveryMessage>(16);
+        let (bob_tx, bob_rx) = mpsc::channel::<DiscoveryMessage>(16);
+        let alice_topics = vec!["abc".to_owned(), "def".to_owned()];
+        let bob_topics = vec!["def".to_owned(), "ghi".to_owned()];
+
+        let bob_handle = tokio::task::spawn(async move {
+            bob_protocol(&bob_topics, alice_tx, bob_rx).await
+        });
+
+        let alice_result = alice_protocol(&alice_topics, bob_tx, alice_rx).await.unwrap();
+        let bob_result = bob_handle.await.unwrap().unwrap();
+        assert_eq!(alice_result, vec!["def".to_owned()]);
+        assert_eq!(bob_result, vec!["def".to_owned()]);
+    }
 }
