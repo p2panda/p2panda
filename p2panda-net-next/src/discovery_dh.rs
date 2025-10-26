@@ -228,7 +228,7 @@ mod tests {
     use rand_core::OsRng;
     use tokio::sync::mpsc;
 
-    use crate::discovery::bob_protocol;
+    use crate::discovery_dh::bob_protocol;
 
     use super::{DiscoveryMessage, alice_protocol, scalar_mult, to_ristretto};
 

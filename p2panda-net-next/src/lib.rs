@@ -4,7 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod actors;
 mod addrs;
-mod discovery;
+mod discovery_dh;
+mod discovery_hash;
 
 pub use addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, TransportAddress};
 
