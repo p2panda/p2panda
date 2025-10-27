@@ -46,7 +46,7 @@ impl TestNode {
 
     pub async fn connect<P>(&self, alice_protocol: P, bob_protocol: P, remote: &TestNode)
     where
-        P: DiscoveryProtocol<TestStore<ChaCha20Rng>, TestTopic, TestId, TestInfo> + 'static,
+        P: DiscoveryProtocol<TestTopic, TestId, TestInfo> + 'static,
     {
         let (alice_tx, alice_rx) = mpsc::channel(16);
         let (bob_tx, bob_rx) = mpsc::channel(16);

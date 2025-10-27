@@ -4,18 +4,13 @@ use std::collections::{BTreeMap, HashSet};
 
 use tokio::sync::mpsc;
 
-use crate::address_book::AddressBookStore;
-
 pub trait DiscoveryStrategy<N> {
     type Error;
 
     fn next_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 }
 
-pub trait DiscoveryProtocol<S, T, ID, N>
-where
-    S: AddressBookStore<T, ID, N>,
-{
+pub trait DiscoveryProtocol<T, ID, N> {
     type Error;
 
     type Message;

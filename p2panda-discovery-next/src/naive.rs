@@ -38,7 +38,7 @@ impl<S, P, T, ID, N> NaiveDiscoveryProtocol<S, P, T, ID, N> {
     }
 }
 
-impl<S, P, T, ID, N> DiscoveryProtocol<S, T, ID, N> for NaiveDiscoveryProtocol<S, P, T, ID, N>
+impl<S, P, T, ID, N> DiscoveryProtocol<T, ID, N> for NaiveDiscoveryProtocol<S, P, T, ID, N>
 where
     S: AddressBookStore<T, ID, N>,
     P: SubscriptionInfo<T>,
