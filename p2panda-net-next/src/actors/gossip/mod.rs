@@ -408,11 +408,12 @@ mod tests {
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
-    use tokio::sync::mpsc::error::TryRecvError;
+    use tokio::sync::broadcast::error::TryRecvError;
     use tokio::sync::oneshot;
     use tokio::time::sleep;
 
     use crate::actors::test_utils::{ActorResult, TestSupervisor};
+    use crate::network::FromNetwork;
     use crate::{from_private_key, from_public_key};
 
     use super::{Gossip, GossipState, ToGossip};
@@ -640,32 +641,42 @@ mod tests {
         let ant_peers = Vec::new();
         let bat_peers = vec![ant_public_key];
 
-        let (ant_to_gossip, mut ant_from_gossip) =
+        let (ant_to_gossip, ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (bat_to_gossip, mut bat_from_gossip) =
+        let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
+        let mut ant_from_gossip_rx = ant_from_gossip.subscribe();
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
         ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
+        );
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
         bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
-        let Some(msg) = ant_from_gossip.recv().await else {
+        let Ok(msg) = ant_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
+        );
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -768,8 +779,11 @@ mod tests {
 
         let (ant_to_gossip, _ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (_bat_to_gossip, mut bat_from_gossip) =
+        let (_bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
 
         // Obtain bat's node information including direct addresses.
         let bat_addrs = bat_endpoint.node_addr();
@@ -782,8 +796,10 @@ mod tests {
         let cat_peers = vec![bat_public_key];
 
         // Cat subscribes to topic using bat as bootstrap.
-        let (cat_to_gossip, mut cat_from_gossip) =
+        let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
         // Send message from cat to ant and bat.
         let cat_msg_to_ant_and_bat = b"hi ant and bat!".to_vec();
@@ -793,11 +809,14 @@ mod tests {
             .unwrap();
 
         // Ensure bat receives cat's message.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(msg, (cat_msg_to_ant_and_bat, cat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(cat_msg_to_ant_and_bat, cat_public_key)
+        );
 
         // Send message from ant to bat and cat.
         let ant_msg_to_bat_and_cat = b"hi bat and cat!".to_vec();
@@ -807,12 +826,15 @@ mod tests {
             .unwrap();
 
         // Ensure cat receives ant's message.
-        let Some(msg) = cat_from_gossip.recv().await else {
+        let Ok(msg) = cat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
         // NOTE: In this case the message is delivered by bat; not directly from ant.
-        assert_eq!(msg, (ant_msg_to_bat_and_cat, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat_and_cat, bat_public_key)
+        );
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -921,32 +943,42 @@ mod tests {
         let ant_peers = Vec::new();
         let bat_peers = vec![ant_public_key];
 
-        let (ant_to_gossip, mut ant_from_gossip) =
+        let (ant_to_gossip, ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (bat_to_gossip, mut bat_from_gossip) =
+        let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
+        let mut ant_from_gossip_rx = ant_from_gossip.subscribe();
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
         ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
+        );
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
         bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
-        let Some(msg) = ant_from_gossip.recv().await else {
+        let Ok(msg) = ant_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
+        );
 
         // Stop the gossip actor and router for ant (going offline).
         ant_gossip_actor.stop(None);
@@ -959,6 +991,8 @@ mod tests {
         let (cat_to_gossip, mut cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
 
+        let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
+
         // Send message from cat to bat.
         let cat_msg_to_bat = b"hi bat!".to_vec();
         cat_to_gossip.send(cat_msg_to_bat.clone()).await.unwrap();
@@ -967,7 +1001,7 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure bat has not received the message from cat.
-        assert_eq!(bat_from_gossip.try_recv(), Err(TryRecvError::Empty));
+        assert_eq!(bat_from_gossip_rx.try_recv(), Err(TryRecvError::Empty));
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"anyone out there?".to_vec();
@@ -977,7 +1011,7 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure cat has not received the message from bat.
-        assert_eq!(cat_from_gossip.try_recv(), Err(TryRecvError::Empty));
+        assert_eq!(cat_from_gossip_rx.try_recv(), Err(TryRecvError::Empty));
 
         // At this point we have proof of partition; bat and cat are subscribed to the same gossip
         // topic but cannot "hear" one another.
@@ -1001,11 +1035,14 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure bat receives the message from cat.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(msg, (cat_msg_to_bat, cat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(cat_msg_to_bat, cat_public_key)
+        );
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"yoyo!".to_vec();
@@ -1015,11 +1052,14 @@ mod tests {
         sleep(Duration::from_millis(500)).await;
 
         // Ensure cat receives the message from bat.
-        let Some(msg) = cat_from_gossip.recv().await else {
+        let Ok(msg) = cat_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_cat, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_cat, bat_public_key)
+        );
 
         // Stop gossip actors.
         bat_gossip_actor.stop(None);
