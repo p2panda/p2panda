@@ -5,8 +5,8 @@ mod discovery;
 mod endpoint;
 mod events;
 mod gossip;
-pub(crate) mod network;
 pub(crate) mod subscription;
+pub(crate) mod supervisor;
 mod sync;
 #[cfg(test)]
 mod test_utils;

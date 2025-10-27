@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Network actor.
+//! Supervision actor.
 //!
 //! The root of the entire system supervision tree; it's only role is to spawn and
 //! supervise other actors.
 use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{AddressBook, ToAddressBook};
@@ -19,11 +19,7 @@ pub struct NetworkConfig {
     pub(crate) endpoint_config: EndpointConfig,
 }
 
-pub enum ToNetwork {}
-
-impl Message for ToNetwork {}
-
-pub struct NetworkState {
+pub struct SupervisorState {
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     endpoint_actor: ActorRef<ToEndpoint>,
@@ -33,11 +29,11 @@ pub struct NetworkState {
     discovery_actor_failures: u16,
 }
 
-pub struct Network;
+pub struct Supervisor;
 
-impl Actor for Network {
-    type State = NetworkState;
-    type Msg = ToNetwork;
+impl Actor for Supervisor {
+    type State = SupervisorState;
+    type Msg = ();
     type Arguments = (PrivateKey, NetworkConfig);
 
     async fn pre_start(
@@ -83,7 +79,7 @@ impl Actor for Network {
         )
         .await?;
 
-        let state = NetworkState {
+        let state = SupervisorState {
             events_actor,
             events_actor_failures: 0,
             endpoint_actor,
@@ -111,7 +107,7 @@ impl Actor for Network {
     ) -> Result<(), ActorProcessingErr> {
         let reason = Some("network system is shutting down".to_string());
 
-        // Stop all the actors which are supervised by the network actor.
+        // Stop all the actors which are directly upervised by this actor.
         state.events_actor.stop(reason.clone());
         state.endpoint_actor.stop(reason.clone());
         state.address_book_actor.stop(reason.clone());
@@ -138,13 +134,13 @@ impl Actor for Network {
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("network actor: received ready from {} actor", name);
+                    debug!("supervisor actor: received ready from {} actor", name);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 match actor.get_name().as_deref() {
                     Some("events") => {
-                        warn!("network actor: events actor failed: {}", panic_msg);
+                        warn!("supervisor actor: events actor failed: {}", panic_msg);
 
                         // Respawn the events actor.
                         let (events_actor, _) = Actor::spawn_linked(
@@ -159,14 +155,14 @@ impl Actor for Network {
                         state.events_actor = events_actor;
                     }
                     Some("endpoint") => {
-                        warn!("network actor: endpoint actor failed: {}", panic_msg);
+                        warn!("supervisor actor: endpoint actor failed: {}", panic_msg);
 
                         // If the endpoint actor fails then the entire system is compromised and we
-                        // stop the top-level network actor.
+                        // stop the top-level supervisor actor.
                         myself.stop(Some("endpoint actor failed".to_string()));
                     }
                     Some("address book") => {
-                        warn!("network actor: address book actor failed: {}", panic_msg);
+                        warn!("supervisor actor: address book actor failed: {}", panic_msg);
 
                         // Respawn the address book actor.
                         let (address_book_actor, _) = Actor::spawn_linked(
@@ -181,7 +177,7 @@ impl Actor for Network {
                         state.address_book_actor = address_book_actor;
                     }
                     Some("discovery") => {
-                        warn!("network actor: discovery actor failed: {}", panic_msg);
+                        warn!("supervisor actor: discovery actor failed: {}", panic_msg);
 
                         // Respawn the discovery actor.
                         let (discovery_actor, _) = Actor::spawn_linked(
@@ -200,7 +196,7 @@ impl Actor for Network {
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("network actor: {} actor terminated", name);
+                    debug!("supervisor actor: {} actor terminated", name);
                 }
             }
             _ => (),
