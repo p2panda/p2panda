@@ -4,11 +4,13 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::{PrivateKey, PublicKey};
+use ractor::Actor;
 use ractor::{call, registry, ActorRef};
 use thiserror::Error;
+use tokio::task::JoinHandle;
 
-use crate::actors::network::NetworkConfig;
 use crate::actors::subscription::ToSubscription;
+use crate::actors::supervisor::{NetworkConfig, Supervisor};
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralTopicStream;
@@ -103,6 +105,24 @@ impl NetworkBuilder {
         self.network_config.endpoint_config.relays.push(url);
         self
     }
+
+    /// Returns a handle to a newly-spawned instance of `Network`.
+    pub async fn build(self) -> Result<Network, NetworkError> {
+        let private_key = self.private_key.unwrap_or_default();
+
+        // Spawn the root-level supervisor actor.
+        let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
+            Some("supervisor".to_string()),
+            Supervisor,
+            (private_key, self.network_config),
+        )
+        .await
+        .unwrap();
+
+        let network = Network::new(supervisor_actor, supervisor_actor_handle);
+
+        Ok(network)
+    }
 }
 
 #[derive(Debug, Error)]
@@ -112,10 +132,33 @@ pub enum NetworkError {
 }
 
 #[derive(Debug)]
-pub struct Network;
+pub struct Network {
+    supervisor_actor: ActorRef<()>,
+    supervisor_actor_handle: JoinHandle<()>,
+}
 
 impl Network {
+    fn new(supervisor_actor: ActorRef<()>, supervisor_actor_handle: JoinHandle<()>) -> Self {
+        Self {
+            supervisor_actor,
+            supervisor_actor_handle,
+        }
+    }
+
+    /// Creates an ephemeral messaging stream and returns a handle.
+    ///
+    /// The returned handle can be used to publish ephemeral messages into the stream. These
+    /// messages will be propagated to other nodes which share an interest in the topic ID.
+    ///
+    /// Calling `.subscribe()` on the handle returns an `EphemeralTopicStreamSubscription`; this
+    /// acts as a receiver for messages authored by other nodes for the shared topic ID.
+    ///
+    /// Both the `EphemeralTopicStream` and `EphemeralTopicStreamSubscription` handles can be
+    /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
+    /// the receiver will receive every message. It is also possible to obtain multiple publishing
+    /// handles by calling `ephemeral_stream()` repeatedly.
     pub async fn ephemeral_stream(
+        &self,
         topic_id: &TopicId,
     ) -> Result<EphemeralTopicStream, NetworkError> {
         // Get a reference to the subscription actor.
