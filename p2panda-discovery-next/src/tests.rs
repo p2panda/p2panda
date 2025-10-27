@@ -27,7 +27,7 @@ impl TestNode {
         let store = TestStore::new(rng.clone());
 
         let subscription = TestSubscription::default();
-        let strategy = RandomWalk::new(store.clone(), rng);
+        let strategy = RandomWalk::new(id, store.clone(), rng);
 
         Self {
             id,
@@ -117,6 +117,19 @@ async fn naive_protocol() {
         //    so they have a chance to eventually learn about everyone.
         for my_id in 0..NUM_NODES - 1 {
             let my_node = nodes.get(&my_id).unwrap().read().await;
+
+            // Add ourselves to the address book.
+            my_node
+                .store
+                .insert_node_info(TestInfo {
+                    id: my_id,
+                    bootstrap: false,
+                    timestamp: 1,
+                })
+                .await
+                .unwrap();
+
+            // Add another bootstrap peer to the address book.
             my_node
                 .store
                 .insert_node_info(TestInfo {
@@ -142,13 +155,18 @@ async fn naive_protocol() {
                     }
 
                     let my_node = nodes.get(&my_id).unwrap().read().await;
-                    if let Some(id) = my_node.next_node().await {
-                        let remote_node = nodes.get(&id).unwrap().read().await;
+                    if let Some(remote_id) = my_node.next_node().await {
+                        assert!(
+                            remote_id != my_id,
+                            "next_node should never return ourselves"
+                        );
+
+                        let remote_node = nodes.get(&remote_id).unwrap().read().await;
 
                         let alice_protocol = NaiveDiscoveryProtocol::new(
                             my_node.store.clone(),
                             my_node.subscription.clone(),
-                            id,
+                            remote_id,
                         );
 
                         let bob_protocol = NaiveDiscoveryProtocol::new(
@@ -174,7 +192,7 @@ async fn naive_protocol() {
         for my_id in 0..NUM_NODES {
             let my_node = nodes.get(&my_id).unwrap().read().await;
             let all_infos = my_node.store.all_node_infos().await.unwrap();
-            assert_eq!(all_infos.len(), NUM_NODES - 1);
+            assert_eq!(all_infos.len(), NUM_NODES);
         }
     });
 
