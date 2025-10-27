@@ -50,6 +50,9 @@ pub trait AddressBookStore<T, ID, N> {
     /// Returns a list of all known node informations.
     fn all_node_infos(&self) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
+    /// Returns the number of all known node informations.
+    fn all_node_infos_len(&self) -> impl Future<Output = Result<usize, Self::Error>>;
+
     /// Returns a list of node informations for a selected set.
     fn selected_node_infos(&self, ids: &[ID]) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
@@ -180,6 +183,11 @@ pub mod memory {
         async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
             let node_infos = self.node_infos.read().await;
             Ok(node_infos.values().cloned().collect())
+        }
+
+        async fn all_node_infos_len(&self) -> Result<usize, Self::Error> {
+            let node_infos = self.node_infos.read().await;
+            Ok(node_infos.len())
         }
 
         async fn remove_node_info(&self, id: &ID) -> Result<bool, Self::Error> {
