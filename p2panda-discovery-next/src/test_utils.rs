@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::convert::Infallible;
+use std::hash::Hash as StdHash;
 
 use crate::address_book::NodeInfo;
 use crate::address_book::memory::MemoryStore;
@@ -10,7 +11,7 @@ pub type TestId = usize;
 
 pub type TestTopic = String;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash)]
 pub struct TestInfo {
     pub id: TestId,
     pub bootstrap: bool,
@@ -51,7 +52,7 @@ impl NodeInfo<TestId> for TestInfo {
 
 pub type TestStore<R> = MemoryStore<R, TestTopic, TestId, TestInfo>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TestSubscription {
     pub topics: Vec<TestTopic>,
     pub topic_ids: Vec<[u8; 32]>,
