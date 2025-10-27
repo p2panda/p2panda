@@ -137,7 +137,7 @@ impl Network {
 pub type ToNetwork = Vec<u8>;
 
 /// Message received from the network.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FromNetwork {
     EphemeralMessage {
         bytes: Vec<u8>,
