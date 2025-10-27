@@ -4,7 +4,7 @@
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 
@@ -34,7 +34,7 @@ pub struct EphemeralTopicStream {
 
 impl EphemeralTopicStream {
     /// Returns a handle to an ephemeral messaging stream.
-    pub fn new(topic_id: TopicId, to_topic_tx: Sender<ToNetwork>) -> Self {
+    pub(crate) fn new(topic_id: TopicId, to_topic_tx: Sender<ToNetwork>) -> Self {
         Self {
             topic_id,
             to_topic_tx,
@@ -42,8 +42,11 @@ impl EphemeralTopicStream {
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, bytes: Vec<u8>) -> Result<(), TopicStreamError<Vec<u8>>> {
-        self.to_topic_tx.send(bytes).await?;
+    pub async fn publish(
+        &self,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<(), TopicStreamError<Vec<u8>>> {
+        self.to_topic_tx.send(bytes.into()).await?;
 
         Ok(())
     }
@@ -89,7 +92,7 @@ pub struct EphemeralTopicStreamSubscription {
 
 impl EphemeralTopicStreamSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
-    pub fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
+    pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
         Self {
             topic_id,
             from_topic_rx,
@@ -102,6 +105,11 @@ impl EphemeralTopicStreamSubscription {
             .recv()
             .await
             .map_err(|err| TopicStreamError::Recv(err))
+    }
+
+    /// Attempts to return a pending value on this receiver without awaiting.
+    pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
+        self.from_topic_rx.try_recv()
     }
 
     /// Unsubscribes from the stream.
