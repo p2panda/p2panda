@@ -988,7 +988,7 @@ mod tests {
         // Cat joins the gossip topic (using ant as bootstrap).
         let cat_peers = vec![ant_public_key];
 
-        let (cat_to_gossip, mut cat_from_gossip) =
+        let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
 
         let mut cat_from_gossip_rx = cat_from_gossip.subscribe();

@@ -13,6 +13,8 @@ use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
 
+// TODO: Rename or move...feels out of place here now.
+// adz has an `Arguments` struct in his code; use that.
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct NetworkConfig {
@@ -210,39 +212,39 @@ impl Actor for Supervisor {
 mod tests {
     use ractor::Actor;
     use serial_test::serial;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
-    use super::Network;
+    use super::Supervisor;
 
     #[tokio::test]
     #[traced_test]
     #[serial]
-    async fn network_child_actors_are_started() {
+    async fn supervisor_child_actors_are_started() {
         let network_config = Default::default();
 
-        let (network_actor, network_actor_handle) =
-            Actor::spawn(Some("network".to_string()), Network, network_config)
+        let (supervisor_actor, supervisor_actor_handle) =
+            Actor::spawn(Some("supervisor".to_string()), Supervisor, network_config)
                 .await
                 .unwrap();
 
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
 
-        network_actor.stop(None);
-        network_actor_handle.await.unwrap();
+        supervisor_actor.stop(None);
+        supervisor_actor_handle.await.unwrap();
 
         assert!(logs_contain(
-            "network actor: received ready from events actor"
+            "supervisor actor: received ready from events actor"
         ));
         assert!(logs_contain(
-            "network actor: received ready from endpoint actor"
+            "supervisor actor: received ready from endpoint actor"
         ));
         assert!(logs_contain(
-            "network actor: received ready from address book actor"
+            "supervisor actor: received ready from address book actor"
         ));
         assert!(logs_contain(
-            "network actor: received ready from discovery actor"
+            "supervisor actor: received ready from discovery actor"
         ));
 
         assert!(!logs_contain("actor failed"));
