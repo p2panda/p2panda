@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::marker::PhantomData;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rand::Rng;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::DiscoveryStrategy;
 use crate::address_book::AddressBookStore;
@@ -24,8 +25,8 @@ impl Default for RandomWalkConfig {
 
 pub struct RandomWalk<R, S, T, ID, N> {
     store: S,
-    rng: RefCell<R>,
-    bootstrap_mode: RefCell<bool>,
+    rng: Mutex<R>,
+    bootstrap_mode: AtomicBool,
     config: RandomWalkConfig,
     _marker: PhantomData<(T, ID, N)>,
 }
@@ -42,8 +43,8 @@ where
     pub fn from_config(store: S, rng: R, config: RandomWalkConfig) -> Self {
         Self {
             store,
-            rng: RefCell::new(rng),
-            bootstrap_mode: RefCell::new(true),
+            rng: Mutex::new(rng),
+            bootstrap_mode: AtomicBool::new(true),
             config,
             _marker: PhantomData,
         }
@@ -59,15 +60,16 @@ where
 
     async fn next_node(&self) -> Result<Option<N>, Self::Error> {
         let bootstrap_mode = {
-            if *self.bootstrap_mode.borrow() {
+            if self.bootstrap_mode.load(Ordering::Relaxed) {
                 true
             } else {
                 // Flip a coin to see if we're switching into bootstrap mode.
                 let coin = self
                     .rng
-                    .borrow_mut()
+                    .lock()
+                    .await
                     .random_bool(self.config.bootstrap_mode_probability);
-                self.bootstrap_mode.replace(coin);
+                self.bootstrap_mode.store(true, Ordering::Relaxed);
                 coin
             }
         };
@@ -82,7 +84,7 @@ where
             // No bootstrap nodes available, try to pick any node instead and disable bootstrap
             // mode directly.
             if result.is_none() {
-                self.bootstrap_mode.replace(false);
+                self.bootstrap_mode.store(false, Ordering::Relaxed);
                 self.store
                     .random_node()
                     .await
