@@ -8,7 +8,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::DiscoveryStrategy;
-use crate::address_book::AddressBookStore;
+use crate::address_book::{AddressBookStore, NodeInfo};
 
 #[derive(Debug)]
 pub struct RandomWalkConfig {
@@ -24,6 +24,7 @@ impl Default for RandomWalkConfig {
 }
 
 pub struct RandomWalk<R, S, T, ID, N> {
+    my_id: ID,
     store: S,
     rng: Mutex<R>,
     bootstrap_mode: AtomicBool,
@@ -36,12 +37,13 @@ where
     R: Rng,
     S: AddressBookStore<T, ID, N>,
 {
-    pub fn new(store: S, rng: R) -> Self {
-        Self::from_config(store, rng, RandomWalkConfig::default())
+    pub fn new(my_id: ID, store: S, rng: R) -> Self {
+        Self::from_config(my_id, store, rng, RandomWalkConfig::default())
     }
 
-    pub fn from_config(store: S, rng: R, config: RandomWalkConfig) -> Self {
+    pub fn from_config(my_id: ID, store: S, rng: R, config: RandomWalkConfig) -> Self {
         Self {
+            my_id,
             store,
             rng: Mutex::new(rng),
             bootstrap_mode: AtomicBool::new(true),
@@ -55,6 +57,8 @@ impl<R, S, T, ID, N> DiscoveryStrategy<N> for RandomWalk<R, S, T, ID, N>
 where
     R: Rng,
     S: AddressBookStore<T, ID, N>,
+    ID: Eq,
+    N: NodeInfo<ID>,
 {
     type Error = RandomWalkError<S, T, ID, N>;
 
@@ -74,32 +78,52 @@ where
             }
         };
 
-        let node_info = if bootstrap_mode {
-            let result = self
-                .store
-                .random_bootstrap_node()
-                .await
-                .map_err(RandomWalkError::Store)?;
+        loop {
+            let node_info = if bootstrap_mode {
+                let result = self
+                    .store
+                    .random_bootstrap_node()
+                    .await
+                    .map_err(RandomWalkError::Store)?;
 
-            // No bootstrap nodes available, try to pick any node instead and disable bootstrap
-            // mode directly.
-            if result.is_none() {
-                self.bootstrap_mode.store(false, Ordering::Relaxed);
+                // No bootstrap nodes available, try to pick any node instead and disable bootstrap
+                // mode directly.
+                if result.is_none() {
+                    self.bootstrap_mode.store(false, Ordering::Relaxed);
+                    self.store
+                        .random_node()
+                        .await
+                        .map_err(RandomWalkError::Store)?
+                } else {
+                    result
+                }
+            } else {
                 self.store
                     .random_node()
                     .await
                     .map_err(RandomWalkError::Store)?
-            } else {
-                result
-            }
-        } else {
-            self.store
-                .random_node()
-                .await
-                .map_err(RandomWalkError::Store)?
-        };
+            };
 
-        Ok(node_info)
+            let Some(node_info) = node_info else {
+                return Ok(None);
+            };
+
+            if node_info.id() != self.my_id {
+                return Ok(Some(node_info));
+            }
+
+            // Continue finding another random node if we picked ourselves or yield `None` if it is
+            // the only item in the database (to not hang in this loop forever).
+            let node_infos_len = self
+                .store
+                .all_node_infos_len()
+                .await
+                .map_err(RandomWalkError::Store)?;
+
+            if node_infos_len == 1 {
+                return Ok(None);
+            }
+        }
     }
 }
 
@@ -110,4 +134,37 @@ where
 {
     #[error("{0}")]
     Store(S::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    use crate::address_book::AddressBookStore;
+    use crate::test_utils::{TestInfo, TestStore};
+    use crate::traits::DiscoveryStrategy;
+
+    use super::RandomWalk;
+
+    #[tokio::test]
+    async fn never_yield_own_node_info() {
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng.clone());
+
+        store
+            .insert_node_info(TestInfo {
+                id: 0,
+                bootstrap: true,
+                timestamp: 0,
+            })
+            .await
+            .unwrap();
+
+        let strategy = RandomWalk::new(0, store.clone(), rng);
+
+        // This should never return a value and also not hang in an infinite loop if the only item
+        // is ourselves in the database.
+        assert!(strategy.next_node().await.unwrap().is_none());
+    }
 }
