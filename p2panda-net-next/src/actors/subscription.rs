@@ -126,6 +126,12 @@ impl Actor for Subscription {
                     let (to_gossip_tx, from_gossip_tx) =
                         call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
 
+                    // Store the ephemeral sender which is used to publish messages into the
+                    // topic.
+                    state
+                        .ephemeral_senders
+                        .insert(topic_id, to_gossip_tx.clone());
+
                     // Store the gossip sender. This can be used to create a broadcast receiver
                     // when the user calls `.subscribe()` on `EphemeralTopicStream`.
                     state.gossip_senders.insert(topic_id, from_gossip_tx);
@@ -149,9 +155,16 @@ impl Actor for Subscription {
                     }
                 }
             }
-            ToSubscription::UnsubscribeEphemeral(_topic_id) => {
-                // TODO...
-                todo!()
+            ToSubscription::UnsubscribeEphemeral(topic_id) => {
+                if let Some(to_gossip_tx) = state.ephemeral_senders.remove(&topic_id) {
+                    drop(to_gossip_tx)
+                }
+                if let Some(from_gossip_tx) = state.gossip_senders.remove(&topic_id) {
+                    drop(from_gossip_tx)
+                }
+
+                // Tell the gossip actor to unsubscribe from this topic id.
+                cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
             }
         }
 
