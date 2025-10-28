@@ -29,4 +29,6 @@ async fn two_peer_ephemeral_messaging() {
     let msg = stream_a_subscription.try_recv();
 
     assert_eq!(msg, Err(TryRecvError::Empty));
+
+    stream_a.unsubscribe().unwrap();
 }

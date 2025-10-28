@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Topic stream types and associated methods.
+//!
+//! Topic streams provide an interface for publishing messages into the network and receiving
+//! messages from the network.
+//!
+//! Ephemeral streams are intended to be used for relatively short-lived messages without
+//! persistence and catch-up of past state. In most cases, messages will only be received if they
+//! were published after the subscription was created. The exception to this is if the message was
+//! still propagating through the network at the time of the subscription; then it's possible that
+//! the message is received, even though the publication time was strictly before that of the local
+//! subscription event.
+//!
+//! Use the standard topic stream if you wish to receive past state and (optionally) messages
+//! representing the latest updates in an ongoing manner.
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
@@ -77,8 +90,21 @@ impl EphemeralTopicStream {
     }
 
     /// Returns the topic ID of the stream.
-    fn topic_id(&self) -> TopicId {
+    pub fn topic_id(&self) -> TopicId {
         self.topic_id
+    }
+
+    /// Unsubscribes from the ephemeral messaging stream.
+    pub fn unsubscribe(self) -> Result<(), TopicStreamError<()>> {
+        if let Some(subscription_actor) = registry::where_is("subscription".to_string()) {
+            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+
+            actor
+                .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
+                .map_err(|_| TopicStreamError::SubscriptionNotAvailable)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -89,6 +115,8 @@ pub struct EphemeralTopicStreamSubscription {
     topic_id: TopicId,
     from_topic_rx: BroadcastReceiver<FromNetwork>,
 }
+
+// TODO: Implement `BroadcastStream`.
 
 impl EphemeralTopicStreamSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
@@ -104,7 +132,7 @@ impl EphemeralTopicStreamSubscription {
         self.from_topic_rx
             .recv()
             .await
-            .map_err(|err| TopicStreamError::Recv(err))
+            .map_err(TopicStreamError::Recv)
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
@@ -112,12 +140,8 @@ impl EphemeralTopicStreamSubscription {
         self.from_topic_rx.try_recv()
     }
 
-    /// Unsubscribes from the stream.
-    fn unsubscribe(&self) -> Result<(), ()> {
-        // TODO: How to handle unsubscribe?
-        //
-        // Should there be an `unsubscribe()` method on `EphemeralTopicStreamSubscription` and
-        // `EphemeralTopicStream`?
-        todo!()
+    /// Returns the topic ID of the stream.
+    pub fn topic_id(&self) -> TopicId {
+        self.topic_id
     }
 }
