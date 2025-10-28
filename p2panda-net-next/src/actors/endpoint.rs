@@ -26,7 +26,6 @@ use tracing::{debug, warn};
 
 use crate::actors::events::ToEvents;
 use crate::actors::subscription::{Subscription, ToSubscription};
-use crate::addrs::RelayUrl;
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::from_private_key;
 use crate::protocols::ProtocolMap;
@@ -41,7 +40,7 @@ pub(crate) struct EndpointConfig {
     pub(crate) bind_ip_v6: Ipv6Addr,
     pub(crate) bind_port_v6: u16,
     pub(crate) protocols: ProtocolMap,
-    pub(crate) relays: Vec<RelayUrl>,
+    pub(crate) relays: Vec<IrohRelayUrl>,
 }
 
 impl Default for EndpointConfig {
