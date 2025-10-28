@@ -41,6 +41,9 @@ pub enum ToGossip {
         RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>,
     ),
 
+    /// Unsubscribe from the given topic.
+    Unsubscribe(TopicId),
+
     /// Join a set of peers on the given gossip topic.
     ///
     /// This event requires a prior subscription to the topic via the `ToGossip::Subscribe`.
@@ -232,6 +235,24 @@ impl Actor for Gossip {
                 if !reply.is_closed() {
                     let _ = reply.send((to_gossip_tx, from_gossip_tx));
                 }
+
+                Ok(())
+            }
+            ToGossip::Unsubscribe(topic_id) => {
+                // Stop the session associated with this topic id.
+                if let Some(actor) = state.sessions_by_topic_id.remove(&topic_id) {
+                    let actor_id = actor.get_id();
+                    let _ = state.sessions_by_actor_id.remove(&actor_id);
+                    let _ = state.gossip_joined_senders.remove(&actor_id);
+
+                    actor.stop(Some("received unsubscribe request".to_string()));
+                }
+
+                // Drop all associated state.
+                let _ = state.neighbours_by_topic_id.remove(&topic_id);
+                let _ = state.to_gossip_senders.remove(&topic_id);
+                let _ = state.from_gossip_senders.remove(&topic_id);
+                let _ = state.topic_delivery_scopes.remove(&topic_id);
 
                 Ok(())
             }
