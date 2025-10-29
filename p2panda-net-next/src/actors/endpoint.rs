@@ -13,14 +13,14 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::time::Duration;
 
-use iroh::endpoint::TransportConfig as IrohTransportConfig;
-use iroh::protocol::Router as IrohRouter;
 use iroh::Endpoint as IrohEndpoint;
 use iroh::RelayMap as IrohRelayMap;
 use iroh::RelayMode as IrohRelayMode;
 use iroh::RelayUrl as IrohRelayUrl;
+use iroh::endpoint::TransportConfig as IrohTransportConfig;
+use iroh::protocol::Router as IrohRouter;
 use p2panda_core::PrivateKey;
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent, registry};
 use tokio::time::timeout;
 use tracing::{debug, warn};
 
@@ -225,7 +225,7 @@ mod tests {
     use p2panda_core::PrivateKey;
     use ractor::Actor;
     use serial_test::serial;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
     use super::{Endpoint, EndpointConfig};

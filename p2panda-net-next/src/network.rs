@@ -4,8 +4,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::{PrivateKey, PublicKey};
-use ractor::Actor;
-use ractor::{call, registry, ActorRef};
+use ractor::{Actor, ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
