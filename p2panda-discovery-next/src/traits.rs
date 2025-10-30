@@ -7,10 +7,16 @@ use tokio::sync::mpsc;
 use crate::address_book::NodeInfo;
 
 /// Peer-Sampling Strategy used for discovery.
-pub trait DiscoveryStrategy<N> {
+pub trait DiscoveryStrategy<T, ID, N>
+where
+    N: NodeInfo<ID>,
+{
     type Error;
 
-    fn next_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
+    fn next_node(
+        &self,
+        previous: Option<&DiscoveryResult<T, ID, N>>,
+    ) -> impl Future<Output = Result<Option<ID>, Self::Error>>;
 }
 
 /// Protocol between two parties Alice and Bob to exchange node informations where Alice
@@ -50,6 +56,20 @@ where
     pub node_transport_infos: BTreeMap<ID, N::Transports>,
     pub node_topics: HashSet<T>,
     pub node_topic_ids: HashSet<[u8; 32]>,
+}
+
+impl<T, ID, N> DiscoveryResult<T, ID, N>
+where
+    N: NodeInfo<ID>,
+{
+    pub fn new(remote_node_id: ID) -> Self {
+        Self {
+            remote_node_id,
+            node_transport_infos: BTreeMap::new(),
+            node_topics: HashSet::new(),
+            node_topic_ids: HashSet::new(),
+        }
+    }
 }
 
 pub type Sender<M> = mpsc::Sender<M>;

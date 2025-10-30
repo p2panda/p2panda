@@ -8,40 +8,61 @@ use rand_chacha::ChaCha20Rng;
 use tokio::sync::{RwLock, mpsc};
 use tokio::task::{JoinSet, LocalSet};
 
+use crate::DiscoveryResult;
 use crate::address_book::AddressBookStore;
 use crate::naive::NaiveDiscoveryProtocol;
-use crate::random_walk::RandomWalk;
+use crate::random_walk::RandomWalker;
 use crate::test_utils::{
     TestId, TestInfo, TestStore, TestSubscription, TestTopic, TestTransportInfo,
 };
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
 
+struct TestWalker {
+    #[allow(unused)]
+    id: usize,
+    strategy: RandomWalker<ChaCha20Rng, TestStore<ChaCha20Rng>, TestTopic, TestId, TestInfo>,
+    previous_result: Option<DiscoveryResult<TestTopic, TestId, TestInfo>>,
+}
+
+impl TestWalker {
+    pub async fn next_node(&self) -> Option<TestId> {
+        self.strategy
+            .next_node(self.previous_result.as_ref())
+            .await
+            .unwrap()
+    }
+}
+
 struct TestNode {
     id: TestId,
     subscription: TestSubscription,
     store: TestStore<ChaCha20Rng>,
-    strategy: RandomWalk<ChaCha20Rng, TestStore<ChaCha20Rng>, TestTopic, TestId, TestInfo>,
+    walkers: Vec<TestWalker>,
 }
 
 impl TestNode {
-    pub fn new(id: TestId, rng: ChaCha20Rng) -> Self {
+    pub fn new(id: TestId, walkers_num: usize, rng: ChaCha20Rng) -> Self {
         let store = TestStore::new(rng.clone());
-
         let subscription = TestSubscription::default();
-        let strategy = RandomWalk::new(id, store.clone(), rng);
+
+        // Run multiple random-walkers at the same time.
+        let walkers = {
+            let mut result = Vec::new();
+            for walker_id in 0..walkers_num {
+                result.push(TestWalker {
+                    id: walker_id,
+                    strategy: RandomWalker::new(id, store.clone(), rng.clone()),
+                    previous_result: None,
+                });
+            }
+            result
+        };
 
         Self {
             id,
             subscription,
             store,
-            strategy,
-        }
-    }
-
-    pub async fn next_node(&self) -> Option<TestId> {
-        match self.strategy.next_node().await.unwrap() {
-            Some(info) => Some(info.id),
-            None => None,
+            walkers,
         }
     }
 
@@ -59,7 +80,12 @@ impl TestNode {
         }
     }
 
-    pub async fn connect<P>(&self, alice_protocol: P, bob_protocol: P, remote: &TestNode)
+    pub async fn connect<P>(
+        &self,
+        alice_protocol: P,
+        bob_protocol: P,
+        remote: &TestNode,
+    ) -> DiscoveryResult<TestTopic, TestId, TestInfo>
     where
         P: DiscoveryProtocol<TestTopic, TestId, TestInfo> + 'static,
     {
@@ -73,6 +99,7 @@ impl TestNode {
             result
         });
 
+        // Wait until Alice has finished and store their results
         let Ok(alice_result) = alice_protocol.alice(alice_tx, bob_rx).await else {
             panic!("running alice protocol failed");
         };
@@ -91,29 +118,34 @@ impl TestNode {
             .await
             .expect("store failure");
 
+        // Wait until Bob has finished and store their results.
         let bob_result = bob_handle.await.expect("local task failure");
 
-        for (id, info) in bob_result.node_transport_infos {
-            remote.update_node_info(id, info).await;
+        for (id, info) in &bob_result.node_transport_infos {
+            remote.update_node_info(*id, info.clone()).await;
         }
 
         remote
             .store
-            .set_topics(self.id, bob_result.node_topics)
+            .set_topics(self.id, bob_result.node_topics.clone())
             .await
             .expect("store failure");
 
         remote
             .store
-            .set_topic_ids(self.id, bob_result.node_topic_ids)
+            .set_topic_ids(self.id, bob_result.node_topic_ids.clone())
             .await
             .expect("store failure");
+
+        // Return Bob's delivered info so Alice can continue with it.
+        bob_result
     }
 }
 
 #[tokio::test]
 async fn naive_protocol() {
     const NUM_NODES: usize = 10;
+    const NUM_WALKERS: usize = 4;
     const MAX_RUNS: usize = 10;
 
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
@@ -124,7 +156,10 @@ async fn naive_protocol() {
         let nodes = {
             let mut result = HashMap::new();
             for id in 0..NUM_NODES {
-                result.insert(id, Arc::new(RwLock::new(TestNode::new(id, rng.clone()))));
+                result.insert(
+                    id,
+                    Arc::new(RwLock::new(TestNode::new(id, NUM_WALKERS, rng.clone()))),
+                );
             }
             result
         };
@@ -155,44 +190,48 @@ async fn naive_protocol() {
         let mut set = JoinSet::new();
 
         for my_id in 0..NUM_NODES {
-            let mut my_runs = 0;
-            let nodes = nodes.clone();
+            for walker_id in 0..NUM_WALKERS {
+                let nodes = nodes.clone();
+                let mut walker_runs = 0;
 
-            set.spawn_local(async move {
-                loop {
-                    if my_runs > MAX_RUNS {
-                        break;
+                set.spawn_local(async move {
+                    loop {
+                        if walker_runs > MAX_RUNS {
+                            break;
+                        }
+
+                        let my_node = nodes.get(&my_id).unwrap().read().await;
+                        let walker = my_node.walkers.get(walker_id).unwrap();
+
+                        if let Some(remote_id) = walker.next_node().await {
+                            assert!(
+                                remote_id != my_id,
+                                "next_node should never return ourselves"
+                            );
+
+                            let remote_node = nodes.get(&remote_id).unwrap().read().await;
+
+                            let alice_protocol = NaiveDiscoveryProtocol::new(
+                                my_node.store.clone(),
+                                my_node.subscription.clone(),
+                                remote_id,
+                            );
+
+                            let bob_protocol = NaiveDiscoveryProtocol::new(
+                                remote_node.store.clone(),
+                                remote_node.subscription.clone(),
+                                my_id,
+                            );
+
+                            my_node
+                                .connect(alice_protocol, bob_protocol, &remote_node)
+                                .await;
+                        }
+
+                        walker_runs += 1;
                     }
-
-                    let my_node = nodes.get(&my_id).unwrap().read().await;
-                    if let Some(remote_id) = my_node.next_node().await {
-                        assert!(
-                            remote_id != my_id,
-                            "next_node should never return ourselves"
-                        );
-
-                        let remote_node = nodes.get(&remote_id).unwrap().read().await;
-
-                        let alice_protocol = NaiveDiscoveryProtocol::new(
-                            my_node.store.clone(),
-                            my_node.subscription.clone(),
-                            remote_id,
-                        );
-
-                        let bob_protocol = NaiveDiscoveryProtocol::new(
-                            remote_node.store.clone(),
-                            remote_node.subscription.clone(),
-                            my_id,
-                        );
-
-                        my_node
-                            .connect(alice_protocol, bob_protocol, &remote_node)
-                            .await;
-                    }
-
-                    my_runs += 1;
-                }
-            });
+                });
+            }
         }
 
         // Wait until all tasks have finished.

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::hash::Hash as StdHash;
 
 use rand::Rng;
 use rand_chacha::ChaCha20Rng;
 
+use crate::DiscoveryResult;
 use crate::address_book::NodeInfo;
 use crate::address_book::memory::{MemoryStore, current_timestamp};
 use crate::traits::SubscriptionInfo;
@@ -117,5 +119,20 @@ impl SubscriptionInfo<TestTopic> for TestSubscription {
 
     async fn subscribed_topic_ids(&self) -> Result<Vec<[u8; 32]>, Self::Error> {
         Ok(self.topic_ids.clone())
+    }
+}
+
+impl DiscoveryResult<TestTopic, TestId, TestInfo> {
+    pub fn from_neighbors(remote_node_id: TestId, node_ids: &[TestId]) -> Self {
+        Self {
+            remote_node_id,
+            node_transport_infos: BTreeMap::from_iter(
+                node_ids
+                    .iter()
+                    .map(|id| (id.clone(), TestTransportInfo::new("test"))),
+            ),
+            node_topics: HashSet::new(),
+            node_topic_ids: HashSet::new(),
+        }
     }
 }

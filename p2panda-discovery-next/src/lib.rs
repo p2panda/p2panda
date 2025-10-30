@@ -46,30 +46,26 @@
 //! Our discovery consists of three systems: A discovery "peer sampling strategy" and the
 //! "protocol" itself which is the actual exchange of messages between two nodes and lastly an
 //! "address book" which is strictly speaking more of a storage backend to persist and query known
-//! node information - but important for discovery.
+//! node information and associated topics - but important for discovery.
 //!
-//! For our peer-sampling strategy we're using a basic Random Walk approach: Any random next node
-//! from the address book is selected to initiate the discovery protocol. The protocol itself is a
-//! a simple exchange of salted and hashed topic identifiers, allowing us to confidentially
-//! exchange topics beetween two nodes in linear time (growing with the number of topics).
+//! For our peer-sampling strategy we're using a basic Random Walk approach: Any random bootstrap
+//! node from the address book is selected to initiate depth-first network traversal with frequent
+//! resets to allow exploring the network more "broadly" and prevent getting stuck in cycles. The
+//! protocol itself is a a simple exchange of salted and hashed topic identifiers, allowing us to
+//! confidentially exchange topics beetween two nodes in linear time (growing with the number of
+//! topics).
 //!
 //! Since every topic is a cryptographically secure, randomly generated value, an attacker can not
-//! easily break the underlying value when trying to break the hashing function, even when the
+//! easily learn the underlying value when trying to break the hashing function, even when the
 //! hashing function in itself was not designed to prevent such attacks.
-//!
-//! When the exchange ends we move on and pick another random node from the address book.
-//!
-//! To prevent attacks where an malicious actor might create "cycles" in the network (pointing a
-//! node A at a node B and vice-versa), we're resetting the random walk based on a configurable
-//! probability and start from the set of bootstrap nodes again.
 //!
 //! Bootstrap nodes are a locally configurable set of nodes which are picked first when the
 //! discovery process starts.
 //!
 //! It's also worth mentioning that the random walk can be parallelized in applications (run
-//! multiple instances at the same time) and that it is an "ambient" process, constantly running in
-//! the background, informing other parts of the stack about newly discovered nodes and their
-//! confidentially exchanged sets of topics.
+//! multiple "walkers" at the same time) and that it is an "ambient" process, constantly running in
+//! the background, informing other parts of the stack about confidentially exchanged sets of
+//! topics and nodes.
 //!
 //! ## Inspiration
 //!

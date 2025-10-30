@@ -1,126 +1,132 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use rand::Rng;
+use rand::seq::IteratorRandom;
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
-use crate::DiscoveryStrategy;
 use crate::address_book::{AddressBookStore, NodeInfo};
+use crate::{DiscoveryResult, DiscoveryStrategy};
 
 #[derive(Debug)]
-pub struct RandomWalkConfig {
-    pub bootstrap_mode_probability: f64,
+pub struct RandomWalkerConfig {
+    /// Probability of resetting the random walk and starting from scratch, determined on every
+    /// walking step.
+    ///
+    /// ```text
+    /// 0.0 = Never reset
+    /// 1.0 = Always reset
+    /// ```
+    ///
+    /// Defaults to 0.02 (2%) probability.
+    pub reset_walk_probability: f64,
 }
 
-impl Default for RandomWalkConfig {
+impl Default for RandomWalkerConfig {
     fn default() -> Self {
         Self {
-            bootstrap_mode_probability: 0.02, // 2% chance
+            reset_walk_probability: 0.02, // 2% chance
         }
     }
 }
 
-/// "Random Walk" peer sampling strategy.
+/// Breadth-first "random walk" peer sampling strategy.
 ///
-/// A random next node from the address book is selected to initiate the discovery protocol,
-/// starting from a locally configured set of "bootstrap nodes". After the discovery protocol
-/// finished, this process is repeated again.
+/// Strategy to traverse a network of nodes of possibly unknown size and shape combined with a
+/// discovery protocol to exchange known nodes.
 ///
-/// To prevent attacks where an malicious actor might create "cycles" in the network (pointing a
-/// node A at a node B and vice-versa), we're resetting the random walk based on a configurable
-/// probability and start from the set of bootstrap nodes again.
-pub struct RandomWalk<R, S, T, ID, N> {
+/// A random next node is selected to initiate the discovery protocol, starting from a locally
+/// configured set of "bootstrap nodes" if available. The "walker" continues with another random
+/// node sampled from a set of unvisited nodes - and repeats.
+///
+/// The algorithm resets itself and starts from scratch - based on a configurable probability or
+/// when no new nodes could be found anymore. See `RandomWalkConfig` for details.
+pub struct RandomWalker<R, S, T, ID, N> {
     my_id: ID,
     store: S,
     rng: Mutex<R>,
-    bootstrap_mode: AtomicBool,
-    config: RandomWalkConfig,
-    _marker: PhantomData<(T, ID, N)>,
+    config: RandomWalkerConfig,
+    unvisited: RwLock<HashSet<ID>>,
+    visited: RwLock<HashSet<ID>>,
+    _marker: PhantomData<(T, N)>,
 }
 
-impl<R, S, T, ID, N> RandomWalk<R, S, T, ID, N>
+impl<R, S, T, ID, N> RandomWalker<R, S, T, ID, N>
 where
     R: Rng,
     S: AddressBookStore<T, ID, N>,
+    ID: Clone + Eq + StdHash,
+    N: NodeInfo<ID>,
 {
     pub fn new(my_id: ID, store: S, rng: R) -> Self {
-        Self::from_config(my_id, store, rng, RandomWalkConfig::default())
+        Self::from_config(my_id, store, rng, RandomWalkerConfig::default())
     }
 
-    pub fn from_config(my_id: ID, store: S, rng: R, config: RandomWalkConfig) -> Self {
+    pub fn from_config(my_id: ID, store: S, rng: R, config: RandomWalkerConfig) -> Self {
         Self {
-            my_id,
+            my_id: my_id.clone(),
             store,
             rng: Mutex::new(rng),
-            bootstrap_mode: AtomicBool::new(true),
+            unvisited: RwLock::new(HashSet::new()),
+            visited: RwLock::new(HashSet::new()),
             config,
             _marker: PhantomData,
         }
     }
-}
 
-impl<R, S, T, ID, N> DiscoveryStrategy<N> for RandomWalk<R, S, T, ID, N>
-where
-    R: Rng,
-    S: AddressBookStore<T, ID, N>,
-    ID: Eq,
-    N: NodeInfo<ID>,
-{
-    type Error = RandomWalkError<S, T, ID, N>;
+    /// Load all currently known nodes from address book and mark them as "unvisisted", essentially
+    /// resetting walker to original state.
+    async fn reset(&self) -> Result<(), RandomWalkError<S, T, ID, N>> {
+        // If we're running multiple random walkers parallely we might receive node information
+        // here we haven't found ourselves since the store is shared among all walkers.
+        let all_nodes = self
+            .store
+            .all_node_infos()
+            .await
+            .map_err(RandomWalkError::Store)?
+            .into_iter()
+            .filter_map(|info| {
+                let id = info.id();
+                if id != self.my_id { Some(id) } else { None }
+            });
+        {
+            // Explicitly keep both locks around and drop them at the same time.
+            let mut unvisited = self.unvisited.write().await;
+            let mut visited = self.visited.write().await;
+            unvisited.extend(all_nodes);
+            // Mark ourselves as "visited".
+            *visited = HashSet::from([self.my_id.clone()]);
+        }
+        Ok(())
+    }
 
-    async fn next_node(&self) -> Result<Option<N>, Self::Error> {
-        let bootstrap_mode = {
-            if self.bootstrap_mode.load(Ordering::Relaxed) {
-                true
-            } else {
-                // Flip a coin to see if we're switching into bootstrap mode.
-                let coin = self
-                    .rng
-                    .lock()
-                    .await
-                    .random_bool(self.config.bootstrap_mode_probability);
-                self.bootstrap_mode.store(true, Ordering::Relaxed);
-                coin
-            }
-        };
+    /// Select a random bootstrap node if available, fall back to any random node otherwise.
+    async fn random_bootstrap_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
+        let bootstrap_node = loop {
+            // @TODO(adz): Do we need methods to get random node infos on the address book or have
+            // them only here inside the random walker instead?
+            let node_id = self
+                .store
+                .random_bootstrap_node()
+                .await
+                .map_err(RandomWalkError::Store)?
+                .map(|info| info.id());
 
-        loop {
-            let node_info = if bootstrap_mode {
-                let result = self
-                    .store
-                    .random_bootstrap_node()
-                    .await
-                    .map_err(RandomWalkError::Store)?;
-
-                // No bootstrap nodes available, try to pick any node instead and disable bootstrap
-                // mode directly.
-                if result.is_none() {
-                    self.bootstrap_mode.store(false, Ordering::Relaxed);
-                    self.store
-                        .random_node()
-                        .await
-                        .map_err(RandomWalkError::Store)?
-                } else {
-                    result
-                }
-            } else {
-                self.store
-                    .random_node()
-                    .await
-                    .map_err(RandomWalkError::Store)?
+            let Some(node_id) = node_id else {
+                break None;
             };
 
-            let Some(node_info) = node_info else {
-                return Ok(None);
-            };
-
-            if node_info.id() != self.my_id {
-                return Ok(Some(node_info));
+            if node_id != self.my_id {
+                break Some(node_id);
             }
 
+            // Safeguard: Avoid returning ourselves if we've been accidentially configured as a
+            // "boostrap" node.
+            //
             // Continue finding another random node if we picked ourselves or yield `None` if it is
             // the only item in the database (to not hang in this loop forever).
             let node_infos_len = self
@@ -132,7 +138,94 @@ where
             if node_infos_len == 1 {
                 return Ok(None);
             }
+        };
+
+        // No bootstrap nodes available, try to pick any node instead.
+        if bootstrap_node.is_none() {
+            self.random_unvisited_node().await
+        } else {
+            Ok(bootstrap_node)
         }
+    }
+
+    /// Select next random node for the walk.
+    ///
+    /// Samples a random node from the set of unvisited nodes.
+    async fn random_unvisited_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
+        let unvisited = self.unvisited.read().await;
+        let mut rng = self.rng.lock().await;
+        let sampled = unvisited.iter().choose(&mut rng);
+        Ok(sampled.cloned())
+    }
+
+    /// Merge all unvisited nodes into our set from previous discovery exchange.
+    async fn merge_previous(&self, previous: &DiscoveryResult<T, ID, N>) {
+        let node_ids = previous.node_transport_infos.keys();
+        let visited = self.visited.read().await;
+        let mut unvisited = self.unvisited.write().await;
+        for id in node_ids {
+            if !visited.contains(id) {
+                unvisited.insert(id.clone());
+            }
+        }
+    }
+
+    /// Mark node as visited.
+    async fn mark_visited(&self, id: &ID) {
+        // Explicitly keep both locks around and drop them at the same time.
+        let mut visited = self.visited.write().await;
+        let mut unvisited = self.unvisited.write().await;
+        visited.insert(id.clone());
+        unvisited.remove(id);
+    }
+}
+
+impl<R, S, T, ID, N> DiscoveryStrategy<T, ID, N> for RandomWalker<R, S, T, ID, N>
+where
+    R: Rng,
+    S: AddressBookStore<T, ID, N>,
+    ID: Clone + Eq + StdHash,
+    N: NodeInfo<ID>,
+{
+    type Error = RandomWalkError<S, T, ID, N>;
+
+    async fn next_node(
+        &self,
+        previous: Option<&DiscoveryResult<T, ID, N>>,
+    ) -> Result<Option<ID>, Self::Error> {
+        if let Some(previous) = previous {
+            self.merge_previous(previous).await;
+        }
+
+        let reset = {
+            if previous.is_none() {
+                // Always reset at the beginning to initialise everything and start with
+                // "bootstrap" nodes.
+                true
+            } else if self.unvisited.read().await.is_empty() {
+                // We've visited all nodes, let's reset and start again.
+                true
+            } else {
+                // Flip a coin to see if we should reset.
+                self.rng
+                    .lock()
+                    .await
+                    .random_bool(self.config.reset_walk_probability)
+            }
+        };
+
+        let node_id = if reset {
+            self.reset().await?;
+            self.random_bootstrap_node().await?
+        } else {
+            self.random_unvisited_node().await?
+        };
+
+        if let Some(ref node_id) = node_id {
+            self.mark_visited(node_id).await;
+        }
+
+        Ok(node_id)
     }
 }
 
@@ -147,14 +240,121 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
+
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
     use crate::address_book::AddressBookStore;
-    use crate::test_utils::{TestInfo, TestStore};
-    use crate::traits::DiscoveryStrategy;
+    use crate::test_utils::{TestId, TestInfo, TestStore, TestTopic};
+    use crate::traits::{DiscoveryResult, DiscoveryStrategy};
 
-    use super::RandomWalk;
+    use super::{RandomWalker, RandomWalkerConfig};
+
+    #[tokio::test]
+    async fn explore_full_graph() {
+        // Initially node 0 only knows 1 (bootstrap) and explores the rest of the graph through
+        // it by traversing their (transitive) neighbors.
+        //
+        //    0
+        //    | (bootstrap)
+        //    1
+        //   / \
+        //  2   3
+        //  |   |
+        //  4   5
+        //     /|\
+        //    6 7-8
+        //
+        let graph = HashMap::from([
+            (0, vec![]),
+            (1, vec![2, 3]),
+            (2, vec![4]),
+            (3, vec![5]),
+            (4, vec![]),
+            (5, vec![6, 7, 8]),
+            (6, vec![]),
+            (7, vec![8]),
+            (8, vec![]),
+        ]);
+
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng.clone());
+
+        store.insert_node_info(TestInfo::new(0)).await.unwrap();
+        store
+            .insert_node_info(TestInfo::new_bootstrap(1))
+            .await
+            .unwrap();
+
+        let strategy = RandomWalker::new(0, store, rng);
+
+        let mut visited: HashSet<TestId> = HashSet::new();
+        let mut previous: Option<DiscoveryResult<TestTopic, TestId, TestInfo>> = None;
+
+        for _ in 0..graph.len() - 1 {
+            let id = strategy
+                .next_node(previous.as_ref())
+                .await
+                .unwrap()
+                .expect("should return a Some value");
+
+            visited.insert(id);
+            previous = Some(DiscoveryResult::from_neighbors(id, graph.get(&id).unwrap()));
+        }
+
+        // Traversal visited all nodes in the network.
+        assert_eq!(visited.len(), graph.len() - 1);
+    }
+
+    #[tokio::test]
+    async fn mark_nodes_as_visited() {
+        // This test checks if the random walker is correctly marking nodes as "visited".
+        const NUM_NODES: usize = 32;
+
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng.clone());
+
+        for id in 0..NUM_NODES {
+            store.insert_node_info(TestInfo::new(id)).await.unwrap();
+        }
+
+        let strategy = RandomWalker::from_config(
+            0,
+            store,
+            rng,
+            RandomWalkerConfig {
+                // Never reset in this test.
+                reset_walk_probability: 0.0,
+            },
+        );
+
+        let mut visited: HashSet<TestId> = HashSet::new();
+        let mut previous: Option<DiscoveryResult<TestTopic, TestId, TestInfo>> = None;
+
+        for _ in 0..NUM_NODES - 1 {
+            let id = strategy
+                .next_node(previous.as_ref())
+                .await
+                .unwrap()
+                .expect("should return a Some value");
+
+            if !visited.insert(id) {
+                panic!("should never return duplicates");
+            }
+
+            previous = Some(DiscoveryResult::new(id));
+        }
+
+        // Next iteration we visited all possible nodes, the walker should automatically reset and
+        // start re-visiting nodes again.
+        let id = strategy
+            .next_node(previous.as_ref())
+            .await
+            .unwrap()
+            .expect("should return a Some value");
+        assert!(visited.contains(&id));
+    }
 
     #[tokio::test]
     async fn never_yield_own_node_info() {
@@ -166,10 +366,10 @@ mod tests {
             .await
             .unwrap();
 
-        let strategy = RandomWalk::new(0, store.clone(), rng);
+        let strategy = RandomWalker::new(0, store, rng);
 
         // This should never return a value and also not hang in an infinite loop if the only item
         // is ourselves in the database.
-        assert!(strategy.next_node().await.unwrap().is_none());
+        assert!(strategy.next_node(None).await.unwrap().is_none());
     }
 }
