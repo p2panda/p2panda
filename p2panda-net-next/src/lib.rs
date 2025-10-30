@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// @TODO: Remove this.
+#![allow(unused)]
+use std::time::{SystemTime, UNIX_EPOCH};
+
 mod actors;
 mod addrs;
 mod defaults;
 mod network;
 mod protocols;
 
+pub use addrs::{
+    NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,
+};
 pub use network::NetworkBuilder;
 
 /// Unique 32 byte identifier for an ephemeral messaging topic.
@@ -28,6 +35,14 @@ pub type TopicId = [u8; 32];
 /// protocols, any communication attempts will fail if they are not using the same network
 /// identifier.
 pub type NetworkId = [u8; 32];
+
+/// Returns current UNIX timestamp from local system time.
+fn current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock moved backwards")
+        .as_secs()
+}
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub(crate) fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {
