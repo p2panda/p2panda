@@ -6,6 +6,7 @@ mod defaults;
 mod network;
 mod protocols;
 mod topic_streams;
+mod utils;
 
 pub use network::NetworkBuilder;
 
