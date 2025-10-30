@@ -24,8 +24,7 @@ struct TestNode {
 }
 
 impl TestNode {
-    pub fn new(id: TestId) -> Self {
-        let rng = ChaCha20Rng::from_seed([1; 32]);
+    pub fn new(id: TestId, rng: ChaCha20Rng) -> Self {
         let store = TestStore::new(rng.clone());
 
         let subscription = TestSubscription::default();
@@ -117,6 +116,7 @@ async fn naive_protocol() {
     const NUM_NODES: usize = 10;
     const MAX_RUNS: usize = 10;
 
+    let mut rng = ChaCha20Rng::from_seed([1; 32]);
     let local = LocalSet::new();
 
     let handle = local.run_until(async move {
@@ -124,7 +124,7 @@ async fn naive_protocol() {
         let nodes = {
             let mut result = HashMap::new();
             for id in 0..NUM_NODES {
-                result.insert(id, Arc::new(RwLock::new(TestNode::new(id))));
+                result.insert(id, Arc::new(RwLock::new(TestNode::new(id, rng.clone()))));
             }
             result
         };
@@ -137,14 +137,16 @@ async fn naive_protocol() {
             // Add ourselves to the address book.
             my_node
                 .store
-                .insert_node_info(TestInfo::new(my_id))
+                .insert_node_info(TestInfo::new(my_id).with_random_address(&mut rng))
                 .await
                 .unwrap();
 
             // Add another bootstrap peer to the address book.
             my_node
                 .store
-                .insert_node_info(TestInfo::new_bootstrap(my_id + 1))
+                .insert_node_info({
+                    TestInfo::new_bootstrap(my_id + 1).with_random_address(&mut rng)
+                })
                 .await
                 .unwrap();
         }
