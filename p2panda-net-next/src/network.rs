@@ -108,7 +108,7 @@ impl NetworkBuilder {
     }
 
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build(mut self) -> Result<Network, NetworkError> {
+    pub async fn build(self) -> Result<Network, NetworkError> {
         let private_key = self.private_key.unwrap_or_default();
 
         // Compute the six character public key suffix.
