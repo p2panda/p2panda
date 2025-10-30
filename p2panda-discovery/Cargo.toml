@@ -33,7 +33,7 @@ hickory-proto = { version = "0.25.1", optional = true }
 iroh = { version = "0.34.1", default-features = false }
 iroh-base = "0.34.1"
 netwatch = "0.4.0"
-socket2 = { version = "0.5.9", optional = true }
+socket2 = { version = "0.5.9", optional = true, features = ["all"] }
 tokio = { version = "1.44.2", features = ["net", "sync"] }
 tokio-util = { version = "0.7.14", features = ["codec", "io-util", "io"] }
 tracing = "0.1.41"
