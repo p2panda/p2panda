@@ -187,7 +187,7 @@ pub struct TransportInfo {
     /// This can be used to find out which information is the "latest".
     pub timestamp: u64,
 
-    /// Signature to proof authenticity of this transport information.
+    /// Signature to prove authenticity of this transport information.
     ///
     /// Other nodes can validate the authenticity by checking this signature against the associated
     /// node id and info.
