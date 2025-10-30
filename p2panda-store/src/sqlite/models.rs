@@ -34,6 +34,17 @@ pub struct OperationRow {
     header_bytes: Vec<u8>,
 }
 
+/// Database representation of a single hash.
+#[derive(FromRow, Debug, Clone, PartialEq, Eq)]
+pub struct HashValue(String);
+
+/// Database representation of the sum of all header and body byte size.
+#[derive(FromRow, Debug, Clone, PartialEq, Eq)]
+pub struct ByteCount {
+    pub(crate) total_header_size: String,
+    pub(crate) total_payload_size: String,
+}
+
 impl<E> From<OperationRow> for Header<E>
 where
     E: Extensions,
@@ -66,6 +77,12 @@ where
 impl From<RawOperationRow> for RawOperation {
     fn from(row: RawOperationRow) -> Self {
         (row.header_bytes, row.body)
+    }
+}
+
+impl From<HashValue> for Hash {
+    fn from(value: HashValue) -> Hash {
+        value.0.parse().unwrap()
     }
 }
 

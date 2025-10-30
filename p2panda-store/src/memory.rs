@@ -238,6 +238,70 @@ where
         }
     }
 
+    async fn get_log_size(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<u64>, Self::Error> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut bytes_count = 0;
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, header, _, header_bytes) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            bytes_count += header.payload_size;
+                            bytes_count += header_bytes.len() as u64;
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, header, _, header_bytes) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        bytes_count += header.payload_size;
+                        bytes_count += header_bytes.len() as u64;
+                    });
+                }
+                Ok(Some(bytes_count))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn get_log_hashes(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<Hash>>, Self::Error> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut hashes = Vec::new();
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, header, _, _) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            hashes.push(header.hash());
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, header, _, _) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        hashes.push(header.hash());
+                    });
+                }
+                Ok(Some(hashes))
+            }
+            None => Ok(None),
+        }
+    }
+
     async fn latest_operation(
         &self,
         public_key: &PublicKey,
