@@ -5,12 +5,10 @@
 //! [CBOR]: https://cbor.io/
 use std::marker::PhantomData;
 
-use ciborium::ser::into_writer;
 use futures::{AsyncRead, AsyncWrite, Sink, Stream};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::io::{self, Write};
 use thiserror::Error;
 use tokio_util::bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
@@ -186,33 +184,6 @@ impl From<std::io::Error> for CborCodecError {
             _ => Self::IO(format!("internal i/o stream error {err}")),
         }
     }
-}
-
-/// Writer that only counts bytes written.
-struct CountWriter {
-    total: usize,
-}
-
-impl Write for CountWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.total += buf.len();
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-/// Count total bytes for a series of CBOR-encoded items.
-pub fn count_cbor_bytes<T: Serialize>(items: &[T]) -> usize {
-    let mut counter = CountWriter { total: 0 };
-
-    for item in items {
-        into_writer(item, &mut counter).expect("CBOR serialization failed");
-    }
-
-    counter.total
 }
 
 #[cfg(test)]

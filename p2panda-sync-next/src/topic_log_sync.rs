@@ -12,7 +12,7 @@ use crate::traits::{Protocol, SyncProtocol, TopicQuery};
 use futures::channel::mpsc;
 use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Extensions, Header};
-use p2panda_store::{LogId, LogStore};
+use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -39,7 +39,7 @@ where
     // topic id is one that they are subscribed to. We don't yet have access to the required
     // subscriptions though.
     T: TopicQuery,
-    S: LogStore<L, E> + Clone,
+    S: LogStore<L, E> + OperationStore<L, E> + Clone,
     M: TopicLogMap<T, L> + Clone,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
@@ -67,7 +67,7 @@ where
 impl<T, S, M, L, E> SyncProtocol for TopicLogSync<T, S, M, L, E>
 where
     T: TopicQuery,
-    S: LogStore<L, E> + Clone,
+    S: LogStore<L, E> + OperationStore<L, E> + Clone,
     M: TopicLogMap<T, L> + Clone,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
@@ -188,7 +188,7 @@ pub(crate) fn sync_channels<'a, T, L, E, S>(
 where
     T: Debug,
     E: Debug,
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
 {
     let log_sync_sink = sink
         .sink_map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))
@@ -215,7 +215,7 @@ where
 pub enum TopicLogSyncError<T, S, M, L, E>
 where
     T: TopicQuery,
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
     M: TopicLogMap<T, L>,
 {
     #[error(transparent)]
@@ -574,9 +574,9 @@ mod tests {
         let mut peer_b = TopicLogSyncPeer::new(1, peer_b_stream);
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (_, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
-        let (_, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
-        let (_, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
+        let (header_0, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
+        let (header_1, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
+        let (header_2, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
 
         let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
         peer_a.insert_topic(&topic, &logs);
@@ -652,13 +652,22 @@ mod tests {
                     message,
                     TestMessage::Sync(LogSyncMessage::Have(vec![(peer_a.id(), vec![(0, 2)])]))
                 ),
-                2 => assert_eq!(
-                    message,
-                    TestMessage::Sync(LogSyncMessage::PreSync {
-                        total_operations: 3,
-                        total_bytes: 1027
-                    })
-                ),
+                2 => {
+                    let expected_bytes = header_0.payload_size
+                        + header_bytes_0.len() as u64
+                        + header_1.payload_size
+                        + header_bytes_1.len() as u64
+                        + header_2.payload_size
+                        + header_bytes_2.len() as u64;
+
+                    assert_eq!(
+                        message,
+                        TestMessage::Sync(LogSyncMessage::PreSync {
+                            total_operations: 3,
+                            total_bytes: expected_bytes
+                        })
+                    )
+                }
                 3 => {
                     let (header, body_inner) = assert_matches!(message, TestMessage::Sync(LogSyncMessage::Operation(
                     header,

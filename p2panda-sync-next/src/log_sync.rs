@@ -7,13 +7,12 @@ use std::marker::PhantomData;
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
-use p2panda_core::{Body, Extensions, Header, PublicKey};
-use p2panda_store::{LogId, LogStore};
+use p2panda_core::{Body, Extensions, Hash, Header, PublicKey};
+use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 
-use crate::cbor::count_cbor_bytes;
 use crate::traits::Protocol;
 
 /// A map of author logs.
@@ -34,20 +33,20 @@ pub enum State {
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSyncOrDone {
-        operations: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+        operations: Vec<Hash>,
         metrics: Metrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
-        operations: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+        operations: Vec<Hash>,
         metrics: Metrics,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
-        operations: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+        operations: Vec<Hash>,
         metrics: Metrics,
     },
 
@@ -80,7 +79,7 @@ impl<L, E, S, Evt> Protocol for LogSyncProtocol<L, E, S, Evt>
 where
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
     Evt: From<LogSyncEvent<E>>,
 {
     type Error = LogSyncError<L, E, S>;
@@ -115,7 +114,7 @@ where
                         .await?;
                     self.state = State::ReceiveHave { metrics };
                 }
-                State::ReceiveHave { metrics } => {
+                State::ReceiveHave { mut metrics } => {
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
@@ -127,12 +126,18 @@ where
                     let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
                         remote_log_heights.clone().into_iter().collect();
 
-                    let operations = operations_needed_by_remote(
+                    // We only fetch the hashes of the operations we should send to the remote in
+                    // this step. This avoids keeping all headers and payloads in memory, we can
+                    // fetch one at a time as they are needed within the sync phase later.
+                    let (operations, total_size) = operations_needed_by_remote(
                         &self.store,
                         &self.logs,
                         remote_log_heights_map,
                     )
                     .await?;
+
+                    metrics.total_operations_local = Some(operations.len() as u64);
+                    metrics.total_bytes_local = Some(total_size);
 
                     self.state = State::SendPreSyncOrDone {
                         operations,
@@ -141,24 +146,18 @@ where
                 }
                 State::SendPreSyncOrDone {
                     operations,
-                    mut metrics,
+                    metrics,
                 } => {
-                    let total_operations = operations.len() as u64;
+                    let total_operations = metrics.total_operations_local.unwrap();
+                    let total_bytes = metrics.total_bytes_local.unwrap();
+
                     if total_operations > 0 {
-                        let total_bytes = count_cbor_bytes(&operations) as u64;
-
-                        metrics.total_operations_local = Some(total_operations);
-                        metrics.total_bytes_local = Some(total_bytes);
-
                         sink.send(LogSyncMessage::PreSync {
                             total_bytes,
                             total_operations,
                         })
                         .await?;
                     } else {
-                        metrics.total_operations_local = Some(0);
-                        metrics.total_bytes_local = Some(0);
-
                         sink.send(LogSyncMessage::Done).await?;
                     }
 
@@ -224,12 +223,19 @@ where
                         .total_operations_local
                         .expect("total operations set");
 
+                    // We perform a loop awaiting futures on both the receiving stream and the
+                    // list of operations we have to send. This means that processing of both
+                    // streams is done concurrently. Most importantly, clearing the send stream
+                    // will not block processing of the receive stream, and thus avoiding that the
+                    // receive buffer grows too large.
                     loop {
                         select! {
                             Some(message) = stream.next(), if !sync_done_received => {
                                 let message = message?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
+                                        // TODO: validate that the operations and bytes received matches the total
+                                        // bytes the remote sent in their PreSync message.
                                         let header: Header<E> = decode_cbor(&header[..])?;
                                         let body = body.map(|ref bytes| Body::new(bytes));
                                         // Forward data received from the remote to the app layer.
@@ -243,9 +249,8 @@ where
                                     message => return Err(LogSyncError::UnexpectedMessage(message))
                                 }
                             },
-                            Some((header, body)) = operation_stream.next() => {
-                                // TODO: validate that the operations and bytes received matches the total
-                                // bytes the remote sent in their PreSync message.
+                            Some(hash) = operation_stream.next() => {
+                                let (header, body) = self.store.get_raw_operation(hash).await.map_err(LogSyncError::OperationStore)?.expect("operation to be in store");
                                 sink.send(LogSyncMessage::Operation(header, body)).await?;
                                 sent_operations += 1;
                                 if sent_operations >= total_operations {
@@ -288,7 +293,7 @@ async fn local_log_heights<L, E, S>(
 ) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L, E, S>>
 where
     L: LogId,
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
 {
     let mut local_log_heights = Vec::new();
     for (public_key, log_ids) in logs {
@@ -309,23 +314,24 @@ where
     Ok(local_log_heights)
 }
 
-/// Compare the local log heights with the remote log heights for all given logs and return all
-/// messages needed by the remote peer.
+/// Compare the local log heights with the remote log heights for all given logs and return the
+/// hashes of all operations the remote needs, as well as the total bytes.
 async fn operations_needed_by_remote<L, E, S>(
     store: &S,
     logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>, LogSyncError<L, E, S>>
+) -> Result<(Vec<Hash>, u64), LogSyncError<L, E, S>>
 where
     L: LogId,
     E: Extensions,
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
 {
     // Now that the topic query has been translated into a collection of logs we want to
     // compare our own local log heights with what the remote sent for this topic query.
     //
     // If our logs are more advanced for any log we should collect the entries for sending.
     let mut operations = Vec::new();
+    let mut total_size = 0;
 
     for (public_key, log_ids) in logs {
         for log_id in log_ids {
@@ -359,18 +365,29 @@ where
 
             if remote_needs_from <= log_height {
                 let log = store
-                    .get_raw_log(public_key, log_id, Some(remote_needs_from))
+                    .get_log_hashes(public_key, log_id, Some(remote_needs_from))
                     .await
                     .map_err(LogSyncError::LogStore)?;
 
                 if let Some(log) = log {
                     operations.extend(log);
                 }
+
+                let size = store
+                    .get_log_size(public_key, log_id, Some(remote_needs_from))
+                    .await
+                    .map_err(LogSyncError::LogStore)?;
+
+                println!("{size:?}");
+
+                if let Some(size) = size {
+                    total_size += size;
+                }
             };
         }
     }
 
-    Ok(operations)
+    Ok((operations, total_size))
 }
 
 /// Protocol messages.
@@ -432,13 +449,16 @@ pub struct Operation<E> {
 #[derive(Debug, Error)]
 pub enum LogSyncError<L, E, S>
 where
-    S: LogStore<L, E>,
+    S: LogStore<L, E> + OperationStore<L, E>,
 {
     #[error(transparent)]
     Decode(#[from] DecodeError),
 
     #[error(transparent)]
-    LogStore(S::Error),
+    LogStore(<S as LogStore<L, E>>::Error),
+
+    #[error(transparent)]
+    OperationStore(<S as OperationStore<L, E>>::Error),
 
     #[error(transparent)]
     MpscSend(#[from] mpsc::SendError),
@@ -665,9 +685,9 @@ mod tests {
         let log_id = 0;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (_, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
-        let (_, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
-        let (_, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
+        let (header_0, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
+        let (header_1, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
+        let (header_2, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
 
         let mut logs = Logs::default();
         logs.insert(peer_a.id(), vec![log_id]);
@@ -679,6 +699,13 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
+
+        let expected_bytes = header_0.payload_size
+            + header_bytes_0.len() as u64
+            + header_1.payload_size
+            + header_bytes_1.len() as u64
+            + header_2.payload_size
+            + header_bytes_2.len() as u64;
 
         let mut index = 0;
         while let Some(event) = peer_a.event_rx.next().await {
@@ -694,7 +721,8 @@ mod tests {
                         }) => (total_operations_local, total_bytes_local)
                     );
                     assert_eq!(total_operations, Some(3));
-                    assert_eq!(total_bytes, Some(1027));
+
+                    assert_eq!(total_bytes, Some(expected_bytes));
                 }
                 2 => {
                     let (total_operations, total_bytes) = assert_matches!(
@@ -733,7 +761,7 @@ mod tests {
                     message,
                     TestLogSyncMessage::PreSync {
                         total_operations: 3,
-                        total_bytes: 1027
+                        total_bytes: expected_bytes
                     }
                 ),
                 2 => {
