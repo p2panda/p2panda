@@ -153,11 +153,7 @@ mod tests {
         let store = TestStore::new(rng.clone());
 
         store
-            .insert_node_info(TestInfo {
-                id: 0,
-                bootstrap: true,
-                timestamp: 0,
-            })
+            .insert_node_info(TestInfo::new_bootstrap(0))
             .await
             .unwrap();
 

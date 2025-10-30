@@ -4,7 +4,7 @@ use std::convert::Infallible;
 use std::hash::Hash as StdHash;
 
 use crate::address_book::NodeInfo;
-use crate::address_book::memory::MemoryStore;
+use crate::address_book::memory::{MemoryStore, current_timestamp};
 use crate::traits::SubscriptionInfo;
 
 pub type TestId = usize;
@@ -15,7 +15,22 @@ pub type TestTopic = String;
 pub struct TestInfo {
     pub id: TestId,
     pub bootstrap: bool,
-    pub timestamp: u64,
+    pub transports: Option<TestTransportInfo>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash)]
+pub struct TestTransportInfo {
+    address: String,
+    timestamp: u64,
+}
+
+impl TestTransportInfo {
+    pub fn new(address: &str) -> Self {
+        Self {
+            address: address.to_owned(),
+            timestamp: current_timestamp(),
+        }
+    }
 }
 
 impl TestInfo {
@@ -23,7 +38,7 @@ impl TestInfo {
         Self {
             id,
             bootstrap: false,
-            timestamp: 0,
+            transports: None,
         }
     }
 
@@ -31,12 +46,32 @@ impl TestInfo {
         Self {
             id,
             bootstrap: true,
-            timestamp: 0,
+            transports: None,
         }
+    }
+
+    /// Returns true if the given transport information is newer than what we have already and it
+    /// got updated.
+    pub fn update_transports(&mut self, transports: TestTransportInfo) -> bool {
+        match self.transports {
+            Some(ref current) => {
+                if current.timestamp < transports.timestamp {
+                    self.transports = Some(transports);
+                    return true;
+                }
+            }
+            None => {
+                self.transports = Some(transports);
+                return true;
+            }
+        }
+        false
     }
 }
 
 impl NodeInfo<TestId> for TestInfo {
+    type Transports = TestTransportInfo;
+
     fn id(&self) -> TestId {
         self.id
     }
@@ -45,8 +80,8 @@ impl NodeInfo<TestId> for TestInfo {
         self.bootstrap
     }
 
-    fn timestamp(&self) -> u64 {
-        self.timestamp
+    fn transports(&self) -> Option<Self::Transports> {
+        self.transports.clone()
     }
 }
 

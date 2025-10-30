@@ -4,13 +4,18 @@ use std::collections::{BTreeMap, HashSet};
 
 use tokio::sync::mpsc;
 
+use crate::address_book::NodeInfo;
+
 pub trait DiscoveryStrategy<N> {
     type Error;
 
     fn next_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 }
 
-pub trait DiscoveryProtocol<T, ID, N> {
+pub trait DiscoveryProtocol<T, ID, N>
+where
+    N: NodeInfo<ID>,
+{
     type Error;
 
     type Message;
@@ -29,9 +34,12 @@ pub trait DiscoveryProtocol<T, ID, N> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DiscoveryResult<T, ID, N> {
+pub struct DiscoveryResult<T, ID, N>
+where
+    N: NodeInfo<ID>,
+{
     pub remote_node_id: ID,
-    pub node_infos: BTreeMap<ID, N>,
+    pub node_transport_infos: BTreeMap<ID, N::Transports>,
     pub node_topics: HashSet<T>,
     pub node_topic_ids: HashSet<[u8; 32]>,
 }

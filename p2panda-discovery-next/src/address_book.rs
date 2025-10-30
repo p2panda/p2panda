@@ -2,28 +2,36 @@
 
 use std::time::Duration;
 
+/// Node informations which can be stored in an address book, aiding discovery, sync, peer sampling
+/// or other protocols.
+///
+/// Usually we want to separate node informations into a _local_ and _shareable_ part. Not all
+/// information is meant to be shared with other nodes.
 pub trait NodeInfo<ID> {
+    /// Information which usually holds addresses to establish connections for different transport
+    /// protocols.
+    type Transports;
+
     /// Returns node id for this information.
     fn id(&self) -> ID;
 
     /// Returns `true` if node is marked as a "boostrap".
     fn is_bootstrap(&self) -> bool;
 
-    /// Returns UNIX timestamp of this information.
-    fn timestamp(&self) -> u64;
+    /// Returns attached transport information for this node, if available.
+    fn transports(&self) -> Option<Self::Transports>;
 }
 
 pub trait AddressBookStore<T, ID, N> {
     type Error;
 
-    /// Inserts new information for a node if it is newer than the previous one.
+    /// Inserts information for a node.
     ///
-    /// Returns `true` if entry got inserted or `false` if insertion got ignored since given
-    /// information is too old.
+    /// Returns `true` if entry got inserted or `false` if existing entry was updated.
     ///
     /// **Important:** Node information can be received from different (potentially untrusted)
-    /// sources and can thus be outdated or invalid, this is why implementers of this store should
-    /// check the timestamp and authenticity to only insert latest and valid data.
+    /// sources and can thus be outdated or invalid, this is why users of this store should check
+    /// the timestamp and authenticity to only insert latest and valid data.
     fn insert_node_info(&self, info: N) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does
@@ -37,6 +45,10 @@ pub trait AddressBookStore<T, ID, N> {
     /// "useless" data from the network and not unnecessarily share sensitive information, even
     /// when outdated. This method has a similar function as a TTL (Time-To-Life) record but is
     /// less authoritative.
+    ///
+    /// Please note that a _local_ timestamp is used to determine the age of the information.
+    /// Entries will be removed if they haven't been updated in our _local_ database since the
+    /// given duration, _not_ when they have been created by the original author.
     fn remove_older_than(
         &self,
         duration: Duration,
@@ -50,7 +62,7 @@ pub trait AddressBookStore<T, ID, N> {
     /// Returns a list of all known node informations.
     fn all_node_infos(&self) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
-    /// Returns the number of all known node informations.
+    /// Returns the count of all known node informations.
     fn all_node_infos_len(&self) -> impl Future<Output = Result<usize, Self::Error>>;
 
     /// Returns a list of node informations for a selected set.
@@ -121,6 +133,7 @@ pub mod memory {
     pub struct MemoryStore<R, T, ID, N> {
         rng: Arc<Mutex<R>>,
         node_infos: Arc<RwLock<BTreeMap<ID, N>>>,
+        node_infos_last_changed: Arc<RwLock<BTreeMap<ID, u64>>>,
         node_topics: Arc<RwLock<BTreeMap<ID, HashSet<T>>>>,
         node_topic_ids: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
     }
@@ -130,9 +143,31 @@ pub mod memory {
             Self {
                 rng: Arc::new(Mutex::new(rng)),
                 node_infos: Arc::new(RwLock::new(BTreeMap::new())),
+                node_infos_last_changed: Arc::new(RwLock::new(BTreeMap::new())),
                 node_topics: Arc::new(RwLock::new(BTreeMap::new())),
                 node_topic_ids: Arc::new(RwLock::new(BTreeMap::new())),
             }
+        }
+
+        /// Updates the "last changed" timestamp for a node.
+        ///
+        /// Remember at what time this entry got changed, this helps us later to do garbage
+        /// collection of "old" entries.
+        async fn update_last_changed(&self, id: ID)
+        where
+            ID: Ord,
+        {
+            let mut node_infos_last_changed = self.node_infos_last_changed.write().await;
+            node_infos_last_changed.insert(id, current_timestamp());
+        }
+
+        #[cfg(test)]
+        pub async fn set_last_changed(&self, id: ID, timestamp: u64)
+        where
+            ID: Ord,
+        {
+            let mut node_infos_last_changed = self.node_infos_last_changed.write().await;
+            node_infos_last_changed.insert(id, timestamp);
         }
     }
 
@@ -146,19 +181,9 @@ pub mod memory {
         type Error = Infallible;
 
         async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
-            let is_newer = {
-                match self.node_info(&info.id()).await? {
-                    Some(current) => info.timestamp() > current.timestamp(),
-                    None => true,
-                }
-            };
-            if !is_newer {
-                return Ok(false);
-            }
-
             let mut node_infos = self.node_infos.write().await;
-            node_infos.insert(info.id(), info);
-            Ok(true)
+            self.update_last_changed(info.id()).await;
+            Ok(node_infos.insert(info.id(), info).is_none())
         }
 
         async fn node_info(&self, id: &ID) -> Result<Option<N>, Self::Error> {
@@ -198,8 +223,13 @@ pub mod memory {
         async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
             let mut counter: usize = 0;
             let mut node_infos = self.node_infos.write().await;
-            node_infos.retain(|_, info| {
-                let keep = info.timestamp() > current_timestamp() - duration.as_secs();
+            let infos_last_changed = self.node_infos_last_changed.read().await;
+            node_infos.retain(|id, _| {
+                let last_changed = infos_last_changed
+                    .get(id)
+                    .cloned()
+                    .expect("last_changed is always set when we write to store");
+                let keep = last_changed > current_timestamp() - duration.as_secs();
                 if !keep {
                     counter += 1;
                 }
@@ -214,6 +244,7 @@ pub mod memory {
             topics: impl IntoIterator<Item = T>,
         ) -> Result<(), Self::Error> {
             let mut node_topics = self.node_topics.write().await;
+            self.update_last_changed(id.clone()).await;
             node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
             Ok(())
         }
@@ -224,6 +255,7 @@ pub mod memory {
             topic_ids: impl IntoIterator<Item = [u8; 32]>,
         ) -> Result<(), Self::Error> {
             let mut node_topic_ids = self.node_topic_ids.write().await;
+            self.update_last_changed(id.clone()).await;
             node_topic_ids.insert(id, HashSet::from_iter(topic_ids.into_iter()));
             Ok(())
         }
@@ -300,35 +332,18 @@ mod tests {
     use super::{AddressBookStore, NodeInfo};
 
     #[tokio::test]
-    async fn insert_newer_node_info() {
+    async fn insert_node_info() {
         let rng = ChaCha20Rng::from_seed([1; 32]);
         let store = TestStore::new(rng);
 
-        let node_info_1 = TestInfo {
-            id: 1,
-            bootstrap: false,
-            timestamp: 1234,
-        };
+        let node_info_1 = TestInfo::new(1);
 
-        // Correctly inserts and gets node info.
         let result = store.insert_node_info(node_info_1.clone()).await.unwrap();
 
         assert!(result);
         assert_eq!(
             store.node_info(&node_info_1.id).await.unwrap(),
             Some(node_info_1.clone())
-        );
-
-        // Ignores outdated node infos on insertion.
-        let mut node_info_3 = node_info_1.clone();
-        node_info_3.timestamp -= 1;
-
-        let result = store.insert_node_info(node_info_3.clone()).await.unwrap();
-
-        assert!(!result);
-        assert_eq!(
-            store.node_info(&node_info_3.id).await.unwrap(),
-            Some(node_info_1)
         );
     }
 
@@ -391,23 +406,13 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
         let store = TestStore::new(rng);
 
+        store.insert_node_info(TestInfo::new(1)).await.unwrap();
         store
-            .insert_node_info(TestInfo {
-                id: 1,
-                bootstrap: false,
-                timestamp: current_timestamp() - (60 * 2), // 2 minutes "old"
-            })
-            .await
-            .unwrap();
+            .set_last_changed(1, current_timestamp() - (60 * 2))
+            .await; // 2 minutes "old"
 
-        store
-            .insert_node_info(TestInfo {
-                id: 2,
-                bootstrap: false,
-                timestamp: current_timestamp(),
-            })
-            .await
-            .unwrap();
+        // Timestamp of this entry will be set to "now" automatically.
+        store.insert_node_info(TestInfo::new(2)).await.unwrap();
 
         // Expect removing one item from database.
         let result = store

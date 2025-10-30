@@ -11,7 +11,9 @@ use tokio::task::{JoinSet, LocalSet};
 use crate::address_book::AddressBookStore;
 use crate::naive::NaiveDiscoveryProtocol;
 use crate::random_walk::RandomWalk;
-use crate::test_utils::{TestId, TestInfo, TestStore, TestSubscription, TestTopic};
+use crate::test_utils::{
+    TestId, TestInfo, TestStore, TestSubscription, TestTopic, TestTransportInfo,
+};
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
 
 struct TestNode {
@@ -44,6 +46,20 @@ impl TestNode {
         }
     }
 
+    async fn update_node_info(&self, id: TestId, transports: TestTransportInfo) {
+        // Retrieve existing node info or create a new one.
+        let mut node_info = match self.store.node_info(&id).await.unwrap() {
+            Some(info) => info,
+            None => TestInfo::new(id),
+        };
+
+        // Update the attached transport info. If it is older than what we currently have it will
+        // be simply ignored.
+        if node_info.update_transports(transports) {
+            self.store.insert_node_info(node_info).await.unwrap();
+        }
+    }
+
     pub async fn connect<P>(&self, alice_protocol: P, bob_protocol: P, remote: &TestNode)
     where
         P: DiscoveryProtocol<TestTopic, TestId, TestInfo> + 'static,
@@ -62,8 +78,8 @@ impl TestNode {
             panic!("running alice protocol failed");
         };
 
-        for (_id, info) in alice_result.node_infos {
-            self.store.insert_node_info(info).await.unwrap();
+        for (id, info) in alice_result.node_transport_infos {
+            self.update_node_info(id, info).await;
         }
 
         self.store
@@ -78,8 +94,8 @@ impl TestNode {
 
         let bob_result = bob_handle.await.expect("local task failure");
 
-        for (_id, info) in bob_result.node_infos {
-            remote.store.insert_node_info(info).await.unwrap();
+        for (id, info) in bob_result.node_transport_infos {
+            remote.update_node_info(id, info).await;
         }
 
         remote
@@ -121,22 +137,14 @@ async fn naive_protocol() {
             // Add ourselves to the address book.
             my_node
                 .store
-                .insert_node_info(TestInfo {
-                    id: my_id,
-                    bootstrap: false,
-                    timestamp: 1,
-                })
+                .insert_node_info(TestInfo::new(my_id))
                 .await
                 .unwrap();
 
             // Add another bootstrap peer to the address book.
             my_node
                 .store
-                .insert_node_info(TestInfo {
-                    id: my_id + 1,
-                    bootstrap: true,
-                    timestamp: 1,
-                })
+                .insert_node_info(TestInfo::new_bootstrap(my_id + 1))
                 .await
                 .unwrap();
         }
@@ -191,8 +199,8 @@ async fn naive_protocol() {
         // 4. Did every node discover all the others?
         for my_id in 0..NUM_NODES {
             let my_node = nodes.get(&my_id).unwrap().read().await;
-            let all_infos = my_node.store.all_node_infos().await.unwrap();
-            assert_eq!(all_infos.len(), NUM_NODES);
+            let all_infos_len = my_node.store.all_node_infos_len().await.unwrap();
+            assert_eq!(all_infos_len, NUM_NODES);
         }
     });
 

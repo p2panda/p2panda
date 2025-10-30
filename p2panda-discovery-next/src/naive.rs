@@ -10,13 +10,16 @@ use tokio::sync::mpsc;
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryResult, Receiver, Sender, SubscriptionInfo};
 
-pub enum NaiveDiscoveryMessage<T, ID, N> {
+pub enum NaiveDiscoveryMessage<T, ID, N>
+where
+    N: NodeInfo<ID>,
+{
     Topics {
         topics: HashSet<T>,
         topic_ids: HashSet<[u8; 32]>,
     },
     Nodes {
-        node_infos: BTreeMap<ID, N>,
+        transport_infos: BTreeMap<ID, N::Transports>,
     },
 }
 
@@ -91,13 +94,21 @@ where
             .map_err(NaiveDiscoveryError::Store)?;
 
         tx.send(NaiveDiscoveryMessage::Nodes {
-            node_infos: BTreeMap::from_iter(node_infos.into_iter().map(|info| (info.id(), info))),
+            transport_infos: {
+                let mut map = BTreeMap::new();
+                for node_info in node_infos {
+                    if let Some(transport_info) = node_info.transports() {
+                        map.insert(node_info.id(), transport_info);
+                    }
+                }
+                map
+            },
         })
         .await?;
 
         // 4. Alice receives Bob's node infos.
         let Some(NaiveDiscoveryMessage::Nodes {
-            node_infos: remote_node_infos,
+            transport_infos: remote_transport_infos,
         }) = rx.recv().await
         else {
             return Err(NaiveDiscoveryError::UnexpectedMessage);
@@ -105,7 +116,7 @@ where
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
-            node_infos: remote_node_infos,
+            node_transport_infos: remote_transport_infos,
             node_topics: remote_topics,
             node_topic_ids: remote_topic_ids,
         })
@@ -146,7 +157,7 @@ where
 
         // 3. Bob receives Alice's node infos.
         let Some(NaiveDiscoveryMessage::Nodes {
-            node_infos: remote_node_infos,
+            transport_infos: remote_transport_infos,
         }) = rx.recv().await
         else {
             return Err(NaiveDiscoveryError::UnexpectedMessage);
@@ -160,13 +171,21 @@ where
             .map_err(NaiveDiscoveryError::Store)?;
 
         tx.send(NaiveDiscoveryMessage::Nodes {
-            node_infos: BTreeMap::from_iter(node_infos.into_iter().map(|info| (info.id(), info))),
+            transport_infos: {
+                let mut map = BTreeMap::new();
+                for node_info in node_infos {
+                    if let Some(transport_info) = node_info.transports() {
+                        map.insert(node_info.id(), transport_info);
+                    }
+                }
+                map
+            },
         })
         .await?;
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
-            node_infos: remote_node_infos,
+            node_transport_infos: remote_transport_infos,
             node_topics: remote_topics,
             node_topic_ids: remote_topic_ids,
         })
@@ -178,6 +197,7 @@ pub enum NaiveDiscoveryError<S, P, T, ID, N>
 where
     S: AddressBookStore<T, ID, N>,
     P: SubscriptionInfo<T>,
+    N: NodeInfo<ID>,
 {
     #[error("{0}")]
     Store(S::Error),
