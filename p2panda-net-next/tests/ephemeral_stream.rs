@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use p2panda_net_next::NetworkBuilder;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -8,27 +10,42 @@ use tokio::sync::broadcast::error::TryRecvError;
 async fn two_peer_ephemeral_messaging() {
     let topic_id = [1; 32];
 
-    let node_a_builder = NetworkBuilder::new([7; 32]);
-    //let node_b_builder = NetworkBuilder::new([7; 32])
-    //    .bind_port_v4(2024)
-    //    .bind_port_v6(2025);
+    let join_handle = tokio::spawn(async move {
+        let node_builder = NetworkBuilder::new([7; 32]);
+        let node = node_builder.build().await.unwrap();
 
-    let node_a = node_a_builder.build().await.unwrap();
-    //let node_b = node_b_builder.build().await.unwrap();
+        let stream = node.ephemeral_stream(&topic_id).await.unwrap();
 
-    let stream_a = node_a.ephemeral_stream(&topic_id).await.unwrap();
-    //let stream_b = node_b.ephemeral_stream(&topic_id).await.unwrap();
+        stream
+            .publish(b"I am the nothingness at the centre of creation")
+            .await
+            .unwrap();
 
-    stream_a
-        .publish(b"I am the nothingness at the centre of creation")
-        .await
-        .unwrap();
+        let mut stream_subscription = stream.subscribe().await.unwrap();
 
-    let mut stream_a_subscription = stream_a.subscribe().await.unwrap();
+        let msg = stream_subscription.try_recv();
 
-    let msg = stream_a_subscription.try_recv();
+        assert_eq!(msg, Err(TryRecvError::Empty));
+
+        stream.unsubscribe().unwrap();
+    });
+
+    let node_builder = NetworkBuilder::new([7; 32])
+        .bind_port_v4(2024)
+        .bind_port_v6(2025);
+    let node = node_builder.build().await.unwrap();
+
+    let stream = node.ephemeral_stream(&topic_id).await.unwrap();
+
+    stream.publish(b"((( )))").await.unwrap();
+
+    let mut stream_subscription = stream.subscribe().await.unwrap();
+
+    let msg = stream_subscription.try_recv();
 
     assert_eq!(msg, Err(TryRecvError::Empty));
 
-    stream_a.unsubscribe().unwrap();
+    stream.unsubscribe().unwrap();
+
+    join_handle.await.unwrap();
 }
