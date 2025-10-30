@@ -167,12 +167,9 @@ impl Actor for Subscription {
                 }
             }
             ToSubscription::UnsubscribeEphemeral(topic_id) => {
-                if let Some(to_gossip_tx) = state.ephemeral_senders.remove(&topic_id) {
-                    drop(to_gossip_tx)
-                }
-                if let Some(from_gossip_tx) = state.gossip_senders.remove(&topic_id) {
-                    drop(from_gossip_tx)
-                }
+                // Drop all senders associated with the topic id..
+                let _ = state.ephemeral_senders.remove(&topic_id);
+                let _ = state.gossip_senders.remove(&topic_id);
 
                 // Tell the gossip actor to unsubscribe from this topic id.
                 cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;

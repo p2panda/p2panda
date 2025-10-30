@@ -361,19 +361,10 @@ impl Actor for Gossip {
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
-                    {
-                        drop(gossip_session_actor)
-                    }
-                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
-                        drop(neighbours)
-                    }
-                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
-                        drop(from_gossip_tx)
-                    }
-                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
-                        drop(gossip_joined_tx)
-                    }
+                    let _ = state.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.neighbours_by_topic_id.remove(&topic_id);
+                    let _ = state.from_gossip_senders.remove(&topic_id);
+                    let _ = state.gossip_joined_senders.remove(&actor_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -396,19 +387,10 @@ impl Actor for Gossip {
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
-                    {
-                        drop(gossip_session_actor)
-                    }
-                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
-                        drop(neighbours)
-                    }
-                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
-                        drop(from_gossip_tx)
-                    }
-                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
-                        drop(gossip_joined_tx)
-                    }
+                    let _ = state.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.neighbours_by_topic_id.remove(&topic_id);
+                    let _ = state.from_gossip_senders.remove(&topic_id);
+                    let _ = state.gossip_joined_senders.remove(&actor_id);
                 }
             }
             _ => (),
