@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::{PrivateKey, PublicKey};
+use ractor::errors::SpawnErr;
 use ractor::{Actor, ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -13,6 +14,7 @@ use crate::actors::supervisor::{NetworkConfig, Supervisor};
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralTopicStream;
+use crate::utils::with_suffix;
 use crate::{NetworkId, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
@@ -106,19 +108,27 @@ impl NetworkBuilder {
     }
 
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build(self) -> Result<Network, NetworkError> {
+    pub async fn build(mut self) -> Result<Network, NetworkError> {
         let private_key = self.private_key.unwrap_or_default();
+
+        // Compute the six character public key suffix.
+        //
+        // The suffix is used to create actor names which are unique to the node.
+        let public_key_suffix = &private_key.public_key().to_hex()[..6];
 
         // Spawn the root-level supervisor actor.
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
-            Some("supervisor".to_string()),
+            Some(with_suffix("supervisor", public_key_suffix)),
             Supervisor,
             (private_key, self.network_config),
         )
-        .await
-        .unwrap();
+        .await?;
 
-        let network = Network::new(supervisor_actor, supervisor_actor_handle);
+        let network = Network::new(
+            public_key_suffix.to_string(),
+            supervisor_actor,
+            supervisor_actor_handle,
+        );
 
         Ok(network)
     }
@@ -128,17 +138,26 @@ impl NetworkBuilder {
 pub enum NetworkError {
     #[error("failed to create topic stream")]
     StreamCreation,
+
+    #[error(transparent)]
+    ActorSpawnError(#[from] SpawnErr),
 }
 
 #[derive(Debug)]
 pub struct Network {
+    public_key_suffix: String,
     supervisor_actor: ActorRef<()>,
     supervisor_actor_handle: JoinHandle<()>,
 }
 
 impl Network {
-    fn new(supervisor_actor: ActorRef<()>, supervisor_actor_handle: JoinHandle<()>) -> Self {
+    fn new(
+        public_key_suffix: String,
+        supervisor_actor: ActorRef<()>,
+        supervisor_actor_handle: JoinHandle<()>,
+    ) -> Self {
         Self {
+            public_key_suffix,
             supervisor_actor,
             supervisor_actor_handle,
         }
@@ -161,7 +180,9 @@ impl Network {
         topic_id: &TopicId,
     ) -> Result<EphemeralTopicStream, NetworkError> {
         // Get a reference to the subscription actor.
-        if let Some(subscription_actor) = registry::where_is("subscription".to_string()) {
+        if let Some(subscription_actor) =
+            registry::where_is(with_suffix("subscription", &self.public_key_suffix))
+        {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
             // Ask the subscription actor for an ephemeral stream.

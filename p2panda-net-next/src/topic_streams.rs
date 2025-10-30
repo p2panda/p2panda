@@ -24,6 +24,7 @@ use tokio::sync::mpsc::error::SendError;
 use crate::TopicId;
 use crate::actors::subscription::ToSubscription;
 use crate::network::{FromNetwork, ToNetwork};
+use crate::utils::with_suffix;
 
 #[derive(Debug, Error)]
 pub enum TopicStreamError<T> {
@@ -43,14 +44,20 @@ pub enum TopicStreamError<T> {
 pub struct EphemeralTopicStream {
     topic_id: TopicId,
     to_topic_tx: Sender<ToNetwork>,
+    public_key_suffix: String,
 }
 
 impl EphemeralTopicStream {
     /// Returns a handle to an ephemeral messaging stream.
-    pub(crate) fn new(topic_id: TopicId, to_topic_tx: Sender<ToNetwork>) -> Self {
+    pub(crate) fn new(
+        topic_id: TopicId,
+        to_topic_tx: Sender<ToNetwork>,
+        public_key_suffix: String,
+    ) -> Self {
         Self {
             topic_id,
             to_topic_tx,
+            public_key_suffix,
         }
     }
 
@@ -72,7 +79,9 @@ impl EphemeralTopicStream {
         &self,
     ) -> Result<EphemeralTopicStreamSubscription, TopicStreamError<()>> {
         // Get a reference to the subscription actor.
-        if let Some(subscription_actor) = registry::where_is("subscription".to_string()) {
+        if let Some(subscription_actor) =
+            registry::where_is(with_suffix("subscription", &self.public_key_suffix))
+        {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
             // Ask the subscription actor for an ephemeral stream subscriber.
@@ -96,7 +105,9 @@ impl EphemeralTopicStream {
 
     /// Unsubscribes from the ephemeral messaging stream.
     pub fn unsubscribe(self) -> Result<(), TopicStreamError<()>> {
-        if let Some(subscription_actor) = registry::where_is("subscription".to_string()) {
+        if let Some(subscription_actor) =
+            registry::where_is(with_suffix("subscription", &self.public_key_suffix))
+        {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
             actor
