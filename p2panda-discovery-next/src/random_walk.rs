@@ -50,9 +50,22 @@ pub struct RandomWalker<R, S, T, ID, N> {
     store: S,
     rng: Mutex<R>,
     config: RandomWalkerConfig,
-    unvisited: RwLock<HashSet<ID>>,
-    visited: RwLock<HashSet<ID>>,
+    state: RwLock<RandomWalkerState<ID>>,
     _marker: PhantomData<(T, N)>,
+}
+
+struct RandomWalkerState<ID> {
+    unvisited: HashSet<ID>,
+    visited: HashSet<ID>,
+}
+
+impl<ID> Default for RandomWalkerState<ID> {
+    fn default() -> Self {
+        Self {
+            unvisited: HashSet::new(),
+            visited: HashSet::new(),
+        }
+    }
 }
 
 impl<R, S, T, ID, N> RandomWalker<R, S, T, ID, N>
@@ -71,8 +84,7 @@ where
             my_id: my_id.clone(),
             store,
             rng: Mutex::new(rng),
-            unvisited: RwLock::new(HashSet::new()),
-            visited: RwLock::new(HashSet::new()),
+            state: RwLock::new(RandomWalkerState::default()),
             config,
             _marker: PhantomData,
         }
@@ -94,12 +106,10 @@ where
                 if id != self.my_id { Some(id) } else { None }
             });
         {
-            // Explicitly keep both locks around and drop them at the same time.
-            let mut unvisited = self.unvisited.write().await;
-            let mut visited = self.visited.write().await;
-            unvisited.extend(all_nodes);
+            let mut state = self.state.write().await;
+            state.unvisited.extend(all_nodes);
             // Mark ourselves as "visited".
-            *visited = HashSet::from([self.my_id.clone()]);
+            state.visited = HashSet::from([self.my_id.clone()]);
         }
         Ok(())
     }
@@ -152,31 +162,28 @@ where
     ///
     /// Samples a random node from the set of unvisited nodes.
     async fn random_unvisited_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
-        let unvisited = self.unvisited.read().await;
+        let state = self.state.read().await;
         let mut rng = self.rng.lock().await;
-        let sampled = unvisited.iter().choose(&mut rng);
+        let sampled = state.unvisited.iter().choose(&mut rng);
         Ok(sampled.cloned())
     }
 
     /// Merge all unvisited nodes into our set from previous discovery exchange.
     async fn merge_previous(&self, previous: &DiscoveryResult<T, ID, N>) {
         let node_ids = previous.node_transport_infos.keys();
-        let visited = self.visited.read().await;
-        let mut unvisited = self.unvisited.write().await;
+        let mut state = self.state.write().await;
         for id in node_ids {
-            if !visited.contains(id) {
-                unvisited.insert(id.clone());
+            if !state.visited.contains(id) {
+                state.unvisited.insert(id.clone());
             }
         }
     }
 
     /// Mark node as visited.
     async fn mark_visited(&self, id: &ID) {
-        // Explicitly keep both locks around and drop them at the same time.
-        let mut visited = self.visited.write().await;
-        let mut unvisited = self.unvisited.write().await;
-        visited.insert(id.clone());
-        unvisited.remove(id);
+        let mut state = self.state.write().await;
+        state.visited.insert(id.clone());
+        state.unvisited.remove(id);
     }
 }
 
@@ -202,7 +209,7 @@ where
                 // Always reset at the beginning to initialise everything and start with
                 // "bootstrap" nodes.
                 true
-            } else if self.unvisited.read().await.is_empty() {
+            } else if self.state.read().await.unvisited.is_empty() {
                 // We've visited all nodes, let's reset and start again.
                 true
             } else {
