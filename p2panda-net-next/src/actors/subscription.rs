@@ -8,14 +8,33 @@
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
 //! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
 //! respawned.
+use std::collections::HashMap;
+
 use iroh::Endpoint as IrohEndpoint;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{
+    Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call, cast,
+};
+use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
 use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
+use crate::network::{FromNetwork, ToNetwork};
+use crate::topic_streams::{EphemeralTopicStream, EphemeralTopicStreamSubscription};
+use crate::utils::{with_suffix, without_suffix};
+use crate::{TopicId, to_public_key};
 
-pub enum ToSubscription {}
+pub enum ToSubscription {
+    /// Subscribe to the topic ID and return a publishing handle.
+    CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralTopicStream>),
+
+    /// Return a subscription handle for the given topic ID.
+    ReturnEphemeralSubscription(TopicId, RpcReplyPort<EphemeralTopicStreamSubscription>),
+
+    /// Unsubscribe from an ephemeral stream for the given topic ID.
+    UnsubscribeEphemeral(TopicId),
+}
 
 impl Message for ToSubscription {}
 
@@ -25,6 +44,8 @@ pub struct SubscriptionState {
     gossip_actor_failures: u16,
     sync_actor: ActorRef<ToSync>,
     sync_actor_failures: u16,
+    ephemeral_senders: HashMap<TopicId, Sender<ToNetwork>>,
+    gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
 }
 
 pub struct Subscription;
@@ -39,9 +60,11 @@ impl Actor for Subscription {
         myself: ActorRef<Self::Msg>,
         endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let public_key_suffix = to_public_key(endpoint.node_id()).to_hex()[..6].to_string();
+
         // Spawn the gossip actor.
         let (gossip_actor, _) = Actor::spawn_linked(
-            Some("gossip".to_string()),
+            Some(with_suffix("gossip", &public_key_suffix)),
             Gossip {},
             endpoint.clone(),
             myself.clone().into(),
@@ -49,8 +72,16 @@ impl Actor for Subscription {
         .await?;
 
         // Spawn the sync actor.
-        let (sync_actor, _) =
-            Actor::spawn_linked(Some("sync".to_string()), Sync {}, (), myself.into()).await?;
+        let (sync_actor, _) = Actor::spawn_linked(
+            Some(with_suffix("sync", &public_key_suffix)),
+            Sync {},
+            (),
+            myself.into(),
+        )
+        .await?;
+
+        let ephemeral_senders = HashMap::new();
+        let gossip_senders = HashMap::new();
 
         let state = SubscriptionState {
             endpoint,
@@ -58,6 +89,8 @@ impl Actor for Subscription {
             gossip_actor_failures: 0,
             sync_actor,
             sync_actor_failures: 0,
+            ephemeral_senders,
+            gossip_senders,
         };
 
         Ok(state)
@@ -82,9 +115,67 @@ impl Actor for Subscription {
     async fn handle(
         &self,
         _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
+        message: Self::Msg,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        match message {
+            ToSubscription::CreateEphemeralStream(topic_id, reply) => {
+                let public_key_suffix =
+                    to_public_key(state.endpoint.node_id()).to_hex()[..6].to_string();
+
+                // TODO: Ask address book for all peers interested in this topic id.
+                let peers = Vec::new();
+
+                // Check if we're already subscribed.
+                let stream = if let Some(to_gossip_tx) = state.ephemeral_senders.get(&topic_id) {
+                    // Inform the gossip actor about the latest set of peers for this topic id.
+                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
+
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx.clone(), public_key_suffix)
+                } else {
+                    // Register a new session with the gossip actor.
+                    let (to_gossip_tx, from_gossip_tx) =
+                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+
+                    // Store the ephemeral sender which is used to publish messages into the
+                    // topic.
+                    state
+                        .ephemeral_senders
+                        .insert(topic_id, to_gossip_tx.clone());
+
+                    // Store the gossip sender. This can be used to create a broadcast receiver
+                    // when the user calls `.subscribe()` on `EphemeralTopicStream`.
+                    state.gossip_senders.insert(topic_id, from_gossip_tx);
+
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx, public_key_suffix)
+                };
+
+                if !reply.is_closed() {
+                    let _ = reply.send(stream);
+                }
+            }
+            ToSubscription::ReturnEphemeralSubscription(topic_id, reply) => {
+                if let Some(from_gossip_tx) = state.gossip_senders.get(&topic_id) {
+                    let from_gossip_rx = from_gossip_tx.subscribe();
+
+                    let subscription =
+                        EphemeralTopicStreamSubscription::new(topic_id, from_gossip_rx);
+
+                    if !reply.is_closed() {
+                        let _ = reply.send(subscription);
+                    }
+                }
+            }
+            ToSubscription::UnsubscribeEphemeral(topic_id) => {
+                // Drop all senders associated with the topic id..
+                let _ = state.ephemeral_senders.remove(&topic_id);
+                let _ = state.gossip_senders.remove(&topic_id);
+
+                // Tell the gossip actor to unsubscribe from this topic id.
+                cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
+            }
+        }
+
         Ok(())
     }
 
@@ -97,17 +188,23 @@ impl Actor for Subscription {
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("subscription actor: received ready from {} actor", name);
+                    debug!(
+                        "subscription actor: received ready from {} actor",
+                        without_suffix(&name)
+                    );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                match actor.get_name().as_deref() {
-                    Some("gossip") => {
+                let public_key_suffix =
+                    to_public_key(state.endpoint.node_id()).to_hex()[..6].to_string();
+
+                if let Some(name) = actor.get_name().as_deref() {
+                    if name == with_suffix("gossip", &public_key_suffix) {
                         warn!("subscription actor: gossip actor failed: {}", panic_msg);
 
                         // Respawn the gossip actor.
                         let (gossip_actor, _) = Actor::spawn_linked(
-                            Some("gossip".to_string()),
+                            Some(with_suffix("gossip", &public_key_suffix)),
                             Gossip {},
                             state.endpoint.clone(),
                             myself.clone().into(),
@@ -116,13 +213,12 @@ impl Actor for Subscription {
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
-                    }
-                    Some("sync") => {
+                    } else if name == with_suffix("sync", &public_key_suffix) {
                         warn!("subscription actor: sync actor failed: {}", panic_msg);
 
                         // Respawn the sync actor.
                         let (sync_actor, _) = Actor::spawn_linked(
-                            Some("sync".to_string()),
+                            Some(with_suffix("sync", &public_key_suffix)),
                             Sync {},
                             (),
                             myself.clone().into(),
@@ -132,12 +228,14 @@ impl Actor for Subscription {
                         state.sync_actor_failures += 1;
                         state.sync_actor = sync_actor;
                     }
-                    _ => (),
                 }
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("subscription actor: {} actor terminated", name);
+                    debug!(
+                        "subscription actor: {} actor terminated",
+                        without_suffix(&name)
+                    );
                 }
             }
             _ => (),
