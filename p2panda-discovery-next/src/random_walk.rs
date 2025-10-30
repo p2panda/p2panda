@@ -23,6 +23,15 @@ impl Default for RandomWalkConfig {
     }
 }
 
+/// "Random Walk" peer sampling strategy.
+///
+/// A random next node from the address book is selected to initiate the discovery protocol,
+/// starting from a locally configured set of "bootstrap nodes". After the discovery protocol
+/// finished, this process is repeated again.
+///
+/// To prevent attacks where an malicious actor might create "cycles" in the network (pointing a
+/// node A at a node B and vice-versa), we're resetting the random walk based on a configurable
+/// probability and start from the set of bootstrap nodes again.
 pub struct RandomWalk<R, S, T, ID, N> {
     my_id: ID,
     store: S,

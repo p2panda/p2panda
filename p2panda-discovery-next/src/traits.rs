@@ -6,12 +6,18 @@ use tokio::sync::mpsc;
 
 use crate::address_book::NodeInfo;
 
+/// Peer-Sampling Strategy used for discovery.
 pub trait DiscoveryStrategy<N> {
     type Error;
 
     fn next_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 }
 
+/// Protocol between two parties Alice and Bob to exchange node informations where Alice
+/// "initiated" the protocol and Bob "accepted" it.
+///
+/// Ideally (when nothing went wrong) both parties end up with a `DiscoveryResult` which contains
+/// the information they learned about during this exchange.
 pub trait DiscoveryProtocol<T, ID, N>
 where
     N: NodeInfo<ID>,
@@ -33,6 +39,8 @@ where
     ) -> impl Future<Output = Result<DiscoveryResult<T, ID, N>, Self::Error>>;
 }
 
+/// Result containing node information and topics of a session between Alice and Bob running a
+/// discovery protocol.
 #[derive(Clone, Debug)]
 pub struct DiscoveryResult<T, ID, N>
 where
@@ -48,6 +56,8 @@ pub type Sender<M> = mpsc::Sender<M>;
 
 pub type Receiver<M> = mpsc::Receiver<M>;
 
+/// Interface required by discovery protocols to learn which topics (eventual consistent sync) and
+/// topic ids (ephemeral messaging) the own node is currently interested in.
 pub trait SubscriptionInfo<T> {
     type Error;
 
