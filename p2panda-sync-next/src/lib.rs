@@ -2,6 +2,7 @@
 
 #[cfg(any(test, feature = "cbor"))]
 pub mod cbor;
+pub mod dedup;
 pub mod protocols;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
