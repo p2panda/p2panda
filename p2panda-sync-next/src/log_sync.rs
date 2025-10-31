@@ -240,7 +240,7 @@ where
                                         let body = body.map(|ref bytes| Body::new(bytes));
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
-                                            .send(LogSyncEvent::Data(Operation { hash: header.hash(), header, body }).into())
+                                            .send(LogSyncEvent::Data(Box::new(Operation { hash: header.hash(), header, body })).into())
                                             .await?;
                                     },
                                     LogSyncMessage::Done => {
@@ -391,7 +391,6 @@ where
 }
 
 /// Protocol messages.
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
 pub enum LogSyncMessage<L> {
@@ -408,7 +407,7 @@ pub enum LogSyncMessage<L> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum LogSyncEvent<E> {
     Status(StatusEvent),
-    Data(Operation<E>),
+    Data(Box<Operation<E>>),
 }
 
 /// Sync session metrics emitted in session event messages.
@@ -702,7 +701,7 @@ mod tests {
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation {header, body, ..}) => (header, body)
+                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
                     );
                     assert_eq!(header, header_b0);
                     assert_eq!(body_inner.unwrap(), body_b);
@@ -710,7 +709,7 @@ mod tests {
                 4 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation {header, body, ..}) => (header, body)
+                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
                     );
                     assert_eq!(header, header_b1);
                     assert_eq!(body_inner.unwrap(), body_b);
@@ -733,7 +732,7 @@ mod tests {
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body, .. }) => (header, body)
+                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
                     );
                     assert_eq!(header, header_a0);
                     assert_eq!(body_inner.unwrap(), body_a);
@@ -741,7 +740,7 @@ mod tests {
                 4 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body, .. }) => (header, body)
+                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
                     );
                     assert_eq!(header, header_a1);
                     assert_eq!(body_inner.unwrap(), body_a);

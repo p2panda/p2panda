@@ -123,19 +123,19 @@ where
         }
 
         // Enter live mode.
-        if let Some(mut live_mode_rx) = self.live_mode_rx {
-            if let Ok(message) = live_mode_rx.recv().await {
-                match message {
-                    LiveModeMessage::FromSub { header, body } => {
-                        sink.send(TopicLogSyncMessage::Live(header, body)).await?;
-                    }
-                    LiveModeMessage::FromSync { header, body } => {
-                        // @TODO: deduplicate messages.
-                        // @TODO: check that this message is a part of our topic T set.
-                        sink.send(TopicLogSyncMessage::Live(header, body)).await?;
-                    }
-                    LiveModeMessage::Close => return Ok(()),
+        if let Some(mut live_mode_rx) = self.live_mode_rx
+            && let Ok(message) = live_mode_rx.recv().await
+        {
+            match message {
+                LiveModeMessage::FromSub { header, body } => {
+                    sink.send(TopicLogSyncMessage::Live(header, body)).await?;
                 }
+                LiveModeMessage::FromSync { header, body } => {
+                    // @TODO: deduplicate messages.
+                    // @TODO: check that this message is a part of our topic T set.
+                    sink.send(TopicLogSyncMessage::Live(header, body)).await?;
+                }
+                LiveModeMessage::Close => return Ok(()),
             }
         }
 
@@ -260,7 +260,7 @@ pub enum TopicLogSyncEvent<T, E> {
     Handshake(TopicHandshakeEvent<T>),
     Sync(LogSyncEvent<E>),
     Live {
-        header: Header<E>,
+        header: Box<Header<E>>,
         body: Option<Body>,
     },
 }
@@ -341,7 +341,7 @@ pub mod tests {
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
     use crate::test_utils::{
-        TestTopic, Peer, TestTopicSyncEvent, TestTopicSyncMessage, run_topic_sync,
+        Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_topic_sync,
         run_topic_sync_uni, topic_sync_recv_all,
     };
     use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
@@ -699,12 +699,8 @@ pub mod tests {
                     let (header, body_inner) = assert_matches!(
                     event,
                     TestTopicSyncEvent::Sync (
-                        LogSyncEvent::Data(Operation {
-                            header,
-                            body,
-                            ..
-                        }),
-                    ) => (header, body));
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
                     assert_eq!(header, header_0);
                     assert_eq!(body_inner.unwrap(), body);
                 }
@@ -712,12 +708,8 @@ pub mod tests {
                     let (header, body_inner) = assert_matches!(
                     event,
                     TestTopicSyncEvent::Sync (
-                        LogSyncEvent::Data(Operation {
-                            header,
-                            body,
-                            ..
-                        }),
-                    ) => (header, body));
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
                     assert_eq!(header, header_1);
                     assert_eq!(body_inner.unwrap(), body);
                 }
@@ -725,12 +717,8 @@ pub mod tests {
                     let (header, body_inner) = assert_matches!(
                     event,
                     TestTopicSyncEvent::Sync (
-                        LogSyncEvent::Data(Operation {
-                            header,
-                            body,
-                            ..
-                        }),
-                    ) => (header, body));
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner.unwrap(), body);
                 }
