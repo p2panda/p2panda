@@ -240,8 +240,8 @@ async fn naive_protocol() {
         // 4. Did every node discover all the others?
         for my_id in 0..NUM_NODES {
             let my_node = nodes.get(&my_id).unwrap().read().await;
-            let all_infos_len = my_node.store.all_node_infos_len().await.unwrap();
-            assert_eq!(all_infos_len, NUM_NODES);
+            let all_nodes_len = my_node.store.all_nodes_len().await.unwrap();
+            assert_eq!(all_nodes_len, NUM_NODES);
         }
     });
 

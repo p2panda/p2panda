@@ -81,7 +81,7 @@ where
 
     pub fn from_config(my_id: ID, store: S, rng: R, config: RandomWalkerConfig) -> Self {
         Self {
-            my_id: my_id.clone(),
+            my_id,
             store,
             rng: Mutex::new(rng),
             state: RwLock::new(RandomWalkerState::default()),
@@ -102,6 +102,7 @@ where
             .map_err(RandomWalkError::Store)?
             .into_iter()
             .filter_map(|info| {
+                // Remove ourselves from set.
                 let id = info.id();
                 if id != self.my_id { Some(id) } else { None }
             });
@@ -117,8 +118,6 @@ where
     /// Select a random bootstrap node if available, fall back to any random node otherwise.
     async fn random_bootstrap_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
         let bootstrap_node = loop {
-            // @TODO(adz): Do we need methods to get random node infos on the address book or have
-            // them only here inside the random walker instead?
             let node_id = self
                 .store
                 .random_bootstrap_node()
@@ -139,13 +138,15 @@ where
             //
             // Continue finding another random node if we picked ourselves or yield `None` if it is
             // the only item in the database (to not hang in this loop forever).
-            let node_infos_len = self
+            let bootstrap_nodes_len = self
                 .store
-                .all_node_infos_len()
+                .all_bootstrap_nodes_len()
                 .await
                 .map_err(RandomWalkError::Store)?;
 
-            if node_infos_len == 1 {
+            // The store de-duplicates entries, we can be sure we will only ever be once in the
+            // database.
+            if bootstrap_nodes_len == 1 {
                 return Ok(None);
             }
         };
@@ -210,10 +211,10 @@ where
                 // "bootstrap" nodes.
                 true
             } else if self.state.read().await.unvisited.is_empty() {
-                // We've visited all nodes, let's reset and start again.
+                // We've visited all nodes.
                 true
             } else {
-                // Flip a coin to see if we should reset.
+                // Flip a coin.
                 self.rng
                     .lock()
                     .await
