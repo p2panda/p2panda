@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
-use p2panda_core::{Body, Extensions, Hash, Header, PublicKey};
+use p2panda_core::{Body, Extensions, Hash, Header, Operation, PublicKey};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -240,7 +240,7 @@ where
                                         let body = body.map(|ref bytes| Body::new(bytes));
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
-                                            .send(LogSyncEvent::Data(Operation { header, body }).into())
+                                            .send(LogSyncEvent::Data(Operation { hash: header.hash(), header, body }).into())
                                             .await?;
                                     },
                                     LogSyncMessage::Done => {
@@ -436,13 +436,6 @@ pub enum StatusEvent {
         error_message: String,
         metrics: Metrics,
     },
-}
-
-/// Operations carried on log sync session events.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Operation<E> {
-    pub(crate) header: Header<E>,
-    pub(crate) body: Option<Body>,
 }
 
 /// Protocol error types.
