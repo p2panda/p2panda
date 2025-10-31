@@ -2,8 +2,8 @@
 
 pub mod cbor;
 pub mod log_sync;
-#[cfg(test)]
-mod test_utils;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
 pub mod topic_handshake;
 pub mod topic_log_sync;
 pub mod traits;

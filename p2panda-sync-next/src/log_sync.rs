@@ -472,149 +472,26 @@ where
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use futures::channel::mpsc::{self, channel};
-    use futures::{SinkExt, StreamExt};
-    use p2panda_core::{Body, Header, PrivateKey, PublicKey};
-    use p2panda_store::{LogStore, MemoryStore, OperationStore};
-    use rand::Rng;
-    use rand::rngs::StdRng;
+    use futures::StreamExt;
+    use p2panda_core::Body;
 
-    use crate::log_sync::{
-        LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs, Metrics, Operation,
-        StatusEvent,
-    };
-    use crate::test_utils::create_operation;
-    use crate::traits::Protocol;
-
-    type TestLogSyncMessage = LogSyncMessage<u64>;
-    type TestLogSyncEvent = LogSyncEvent<()>;
-    type TestLogSyncProtocol = LogSyncProtocol<u64, (), MemoryStore<u64>, TestLogSyncEvent>;
-    type TestLogSyncError = LogSyncError<u64, (), MemoryStore<u64>>;
-
-    pub struct LogSyncPeer {
-        pub private_key: PrivateKey,
-        pub store: MemoryStore<u64>,
-        pub event_tx: mpsc::Sender<TestLogSyncEvent>,
-        pub event_rx: mpsc::Receiver<TestLogSyncEvent>,
-    }
-
-    impl LogSyncPeer {
-        pub fn new(peer_id: u64) -> Self {
-            let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(peer_id);
-            let private_key = PrivateKey::from_bytes(&rng.random());
-            let store = MemoryStore::default();
-            let (event_tx, event_rx) = mpsc::channel(128);
-
-            Self {
-                private_key,
-                store,
-                event_tx,
-                event_rx,
-            }
-        }
-
-        pub fn id(&self) -> PublicKey {
-            self.private_key.public_key()
-        }
-
-        pub async fn session(
-            &mut self,
-            logs: &Logs<u64>,
-        ) -> Result<TestLogSyncProtocol, TestLogSyncError> {
-            Ok(LogSyncProtocol::new(
-                self.store.clone(),
-                logs.clone(),
-                self.event_tx.clone(),
-            ))
-        }
-
-        pub async fn create_operation(&mut self, body: &Body, log_id: u64) -> (Header, Vec<u8>) {
-            let (seq_num, backlink) = self
-                .store
-                .latest_operation(&self.id(), &log_id)
-                .await
-                .unwrap()
-                .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-                .unwrap_or((0, None));
-
-            let (header, header_bytes) =
-                create_operation(&self.private_key, body, seq_num, seq_num, backlink);
-
-            self.store
-                .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
-                .await
-                .unwrap();
-            (header, header_bytes)
-        }
-
-        pub async fn run(
-            session_local: TestLogSyncProtocol,
-            session_remote: TestLogSyncProtocol,
-        ) -> (Result<(), TestLogSyncError>, Result<(), TestLogSyncError>) {
-            let (local_message_tx, local_message_rx) = channel(128);
-            let (remote_message_tx, remote_message_rx) = channel(128);
-
-            let mut local_sink = local_message_tx
-                .sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-            let mut remote_stream = remote_message_rx.map(|message| Ok(message));
-
-            let local_task = tokio::spawn(async move {
-                session_local
-                    .run(&mut local_sink, &mut remote_stream)
-                    .await?;
-                Ok(())
-            });
-
-            let mut remote_sink = remote_message_tx
-                .sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-            let mut local_stream = local_message_rx.map(|message| Ok(message));
-
-            let remote_task = tokio::spawn(async move {
-                session_remote
-                    .run(&mut remote_sink, &mut local_stream)
-                    .await?;
-                Ok(())
-            });
-            tokio::try_join!(local_task, remote_task).unwrap()
-        }
-
-        pub async fn run_uni(
-            session_local: TestLogSyncProtocol,
-            messages: &[TestLogSyncMessage],
-        ) -> (
-            Result<(), TestLogSyncError>,
-            mpsc::Receiver<TestLogSyncMessage>,
-        ) {
-            let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
-            let (remote_message_tx, remote_message_rx) = mpsc::channel(128);
-
-            for message in messages {
-                local_message_tx.send(message.clone()).await.unwrap();
-            }
-
-            let mut remote_sink = remote_message_tx
-                .sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-            let mut local_stream = local_message_rx.map(|message| Ok(message));
-
-            let result = session_local.run(&mut remote_sink, &mut local_stream).await;
-            (result, remote_message_rx)
-        }
-    }
+    use crate::log_sync::{LogSyncError, LogSyncEvent, Logs, Metrics, Operation, StatusEvent};
+    use crate::test_utils::{Peer, TestLogSyncMessage, run_log_sync, run_log_sync_uni};
 
     #[tokio::test]
     async fn log_sync_no_operations() {
-        let mut peer_a = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
 
-        let session = peer_a.session(&Logs::default()).await.unwrap();
-        let (result, mut remote_message_rx) = LogSyncPeer::run_uni(
+        let (session, mut event_rx) = peer.log_sync_session(&Logs::default());
+        let mut remote_message_rx = run_log_sync_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
-        .await;
-        assert!(result.is_ok());
+        .await
+        .unwrap();
 
         let mut index = 0;
-        while let Some(event) = peer_a.event_rx.next().await {
+        while let Some(event) = event_rx.next().await {
             match index {
                 0 => {
                     let (total_operations, total_bytes) = assert_matches!(
@@ -674,24 +551,24 @@ mod tests {
 
     #[tokio::test]
     async fn log_sync_some_operations() {
-        let mut peer_a = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
         let log_id = 0;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (header_0, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
-        let (header_1, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
-        let (header_2, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
+        let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
+        let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
+        let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
 
         let mut logs = Logs::default();
-        logs.insert(peer_a.id(), vec![log_id]);
+        logs.insert(peer.id(), vec![log_id]);
 
-        let session = peer_a.session(&logs).await.unwrap();
-        let (result, mut remote_message_rx) = LogSyncPeer::run_uni(
+        let (session, mut event_rx) = peer.log_sync_session(&logs);
+        let mut remote_message_rx = run_log_sync_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
-        .await;
-        assert!(result.is_ok());
+        .await
+        .unwrap();
 
         let expected_bytes = header_0.payload_size
             + header_bytes_0.len() as u64
@@ -701,7 +578,7 @@ mod tests {
             + header_bytes_2.len() as u64;
 
         let mut index = 0;
-        while let Some(event) = peer_a.event_rx.next().await {
+        while let Some(event) = event_rx.next().await {
             match index {
                 0 => {
                     assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. }));
@@ -748,7 +625,7 @@ mod tests {
             match index {
                 0 => assert_eq!(
                     message,
-                    TestLogSyncMessage::Have(vec![(peer_a.id(), vec![(0, 2)])])
+                    TestLogSyncMessage::Have(vec![(peer.id(), vec![(0, 2)])])
                 ),
                 1 => assert_eq!(
                     message,
@@ -795,8 +672,8 @@ mod tests {
     async fn log_sync_bidirectional_exchange() {
         const LOG_ID: u64 = 0;
 
-        let mut peer_a = LogSyncPeer::new(0);
-        let mut peer_b = LogSyncPeer::new(1);
+        let mut peer_a = Peer::new(0);
+        let mut peer_b = Peer::new(1);
 
         let body_a = Body::new("From Alice".as_bytes());
         let body_b = Body::new("From Bob".as_bytes());
@@ -811,15 +688,13 @@ mod tests {
         logs.insert(peer_a.id(), vec![LOG_ID]);
         logs.insert(peer_b.id(), vec![LOG_ID]);
 
-        let a_session = peer_a.session(&logs).await.unwrap();
-        let b_session = peer_b.session(&logs).await.unwrap();
+        let (a_session, mut peer_a_event_rx) = peer_a.log_sync_session(&logs);
+        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_session(&logs);
 
-        let (a_result, b_result) = LogSyncPeer::run(a_session, b_session).await;
-        assert!(a_result.is_ok());
-        assert!(b_result.is_ok());
+        run_log_sync(a_session, b_session).await.unwrap();
 
         let mut index = 0;
-        while let Some(event) = peer_a.event_rx.next().await {
+        while let Some(event) = peer_a_event_rx.next().await {
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
@@ -827,7 +702,7 @@ mod tests {
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body }) => (header, body)
+                        LogSyncEvent::Data(Operation {header, body, ..}) => (header, body)
                     );
                     assert_eq!(header, header_b0);
                     assert_eq!(body_inner.unwrap(), body_b);
@@ -835,7 +710,7 @@ mod tests {
                 4 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body }) => (header, body)
+                        LogSyncEvent::Data(Operation {header, body, ..}) => (header, body)
                     );
                     assert_eq!(header, header_b1);
                     assert_eq!(body_inner.unwrap(), body_b);
@@ -850,7 +725,7 @@ mod tests {
         }
 
         let mut index = 0;
-        while let Some(event) = peer_b.event_rx.next().await {
+        while let Some(event) = peer_b_event_rx.next().await {
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
@@ -858,7 +733,7 @@ mod tests {
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body }) => (header, body)
+                        LogSyncEvent::Data(Operation { header, body, .. }) => (header, body)
                     );
                     assert_eq!(header, header_a0);
                     assert_eq!(body_inner.unwrap(), body_a);
@@ -866,7 +741,7 @@ mod tests {
                 4 => {
                     let (header, body_inner) = assert_matches!(
                         event,
-                        LogSyncEvent::Data(Operation { header, body }) => (header, body)
+                        LogSyncEvent::Data(Operation { header, body, .. }) => (header, body)
                     );
                     assert_eq!(header, header_a1);
                     assert_eq!(body_inner.unwrap(), body_a);
@@ -883,7 +758,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_sync_unexpected_operation_before_presend() {
-        let mut peer = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
         const LOG_ID: u64 = 1;
 
         let body = Body::new(b"unexpected op before presend");
@@ -892,7 +767,7 @@ mod tests {
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
 
-        let session = peer.session(&logs).await.unwrap();
+        let (session, _event_rx) = peer.log_sync_session(&logs);
 
         // Remote sends Operation without PreSync first.
         let messages = vec![
@@ -905,7 +780,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let (result, _) = LogSyncPeer::run_uni(session, &messages).await;
+        let result = run_log_sync_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(
@@ -916,7 +791,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_sync_unexpected_presend_twice() {
-        let mut peer = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
         const LOG_ID: u64 = 1;
 
         let body = Body::new(b"two presends");
@@ -924,7 +799,7 @@ mod tests {
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
-        let session = peer.session(&logs).await.unwrap();
+        let (session, _event_rx) = peer.log_sync_session(&logs);
 
         let messages = vec![
             TestLogSyncMessage::Have(vec![(peer.id(), vec![(LOG_ID, 0)])]),
@@ -939,7 +814,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let (result, _) = LogSyncPeer::run_uni(session, &messages).await;
+        let result = run_log_sync_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(
@@ -950,30 +825,34 @@ mod tests {
 
     #[tokio::test]
     async fn log_sync_unexpected_done_before_anything() {
-        let mut peer = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
         let logs = Logs::default();
 
-        let session = peer.session(&logs).await.unwrap();
+        let (session, _event_rx) = peer.log_sync_session(&logs);
 
         let messages = vec![TestLogSyncMessage::Done];
-        let (result, _) = LogSyncPeer::run_uni(session, &messages).await;
+        let result = run_log_sync_uni(session, &messages).await;
 
-        assert!(matches!(
-            result,
-            Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Done))
-        ));
+        assert!(
+            matches!(
+                result,
+                Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Done))
+            ),
+            "{:?}",
+            result
+        );
     }
 
     #[tokio::test]
     async fn log_sync_unexpected_have_after_presend() {
-        let mut peer = LogSyncPeer::new(0);
+        let mut peer = Peer::new(0);
         const LOG_ID: u64 = 1;
         let body = Body::new(b"bad have order");
         peer.create_operation(&body, LOG_ID).await;
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
-        let session = peer.session(&logs).await.unwrap();
+        let (session, _event_rx) = peer.log_sync_session(&logs);
 
         let messages = vec![
             TestLogSyncMessage::Have(vec![(peer.id(), vec![(LOG_ID, 0)])]),
@@ -985,7 +864,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let (result, _) = LogSyncPeer::run_uni(session, &messages).await;
+        let result = run_log_sync_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Have(_)))

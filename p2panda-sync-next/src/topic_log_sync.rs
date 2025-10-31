@@ -332,176 +332,40 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::collections::HashMap;
-    use std::time::Duration;
 
     use assert_matches::assert_matches;
-    use futures::channel::mpsc;
-    use futures::{AsyncWriteExt, StreamExt};
-    use p2panda_core::cbor::encode_cbor;
-    use p2panda_core::{Body, Header, PrivateKey, PublicKey};
-    use p2panda_store::{LogStore, MemoryStore, OperationStore};
-    use rand::Rng;
-    use rand::rngs::StdRng;
-    use tokio::io::{DuplexStream, ReadHalf, WriteHalf};
-    use tokio::sync::broadcast;
-    use tokio::task::LocalSet;
-    use tokio::time::sleep;
-    use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+    use futures::StreamExt;
+    use p2panda_core::{Body, Operation};
 
-    use crate::cbor::into_cbor_stream;
-    use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, Operation, StatusEvent};
-    use crate::test_utils::{LogHeightTopic, LogHeightTopicMap, create_operation};
-    use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
-    use crate::topic_log_sync::{
-        LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
+    use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
+    use crate::test_utils::{
+        TestTopic, Peer, TestTopicSyncEvent, TestTopicSyncMessage, run_topic_sync,
+        run_topic_sync_uni, topic_sync_recv_all,
     };
-    use crate::traits::SyncProtocol;
-
-    use super::TopicLogSyncMessage;
-
-    type TestMessage = TopicLogSyncMessage<LogHeightTopic, u64, ()>;
-    type TestTopicMap = LogHeightTopicMap<LogHeightTopic>;
-    type TestTopicLogSync = TopicLogSync<LogHeightTopic, MemoryStore<u64>, TestTopicMap, u64, ()>;
-    type TestLogSyncError =
-        TopicLogSyncError<LogHeightTopic, MemoryStore<u64>, TestTopicMap, u64, ()>;
-
-    pub struct TopicLogSyncPeer {
-        pub store: MemoryStore<u64>,
-        pub private_key: PrivateKey,
-        pub read: Option<Compat<ReadHalf<DuplexStream>>>,
-        pub write: Option<Compat<WriteHalf<DuplexStream>>>,
-        pub topic_map: TestTopicMap,
-    }
-
-    impl TopicLogSyncPeer {
-        pub fn new(peer_id: u64, stream: DuplexStream) -> Self {
-            let store = MemoryStore::default();
-            let topic_map = TestTopicMap::new();
-            let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(peer_id);
-            let private_key = PrivateKey::from_bytes(&rng.random());
-            let (read, write) = tokio::io::split(stream);
-            Self {
-                store,
-                private_key,
-                read: Some(read.compat()),
-                write: Some(write.compat_write()),
-                topic_map,
-            }
-        }
-
-        pub fn id(&self) -> PublicKey {
-            self.private_key.public_key()
-        }
-
-        pub async fn send(&mut self, messages: &[TestMessage]) {
-            let mut writer = self.write.take().unwrap();
-            for message in messages {
-                writer
-                    .write(&encode_cbor(message).unwrap()[..])
-                    .await
-                    .unwrap();
-            }
-            self.write.replace(writer);
-        }
-
-        pub async fn recv_all(&mut self) -> Vec<TestMessage> {
-            let idle_timeout = Duration::from_millis(200);
-            let mut messages = vec![];
-            let _ = self.write.take();
-            let mut read = self.read.take().unwrap();
-            let mut stream = into_cbor_stream(&mut read);
-            loop {
-                let timeout = sleep(idle_timeout);
-                tokio::select! {
-                    biased;
-                    Some(Ok(message)) = stream.next() => messages.push(message),
-                    _ = timeout =>  break
-                }
-            }
-            drop(stream);
-            self.read.replace(read);
-            messages
-        }
-
-        pub async fn session(
-            &mut self,
-            role: Role<LogHeightTopic>,
-            live_mode: bool,
-        ) -> (
-            TestTopicLogSync,
-            mpsc::Receiver<TopicLogSyncEvent<LogHeightTopic, ()>>,
-            broadcast::Sender<LiveModeMessage<()>>,
-        ) {
-            let (event_tx, event_rx) = mpsc::channel(128);
-            let (live_tx, live_rx) = broadcast::channel(128);
-            let live_rx = if live_mode { Some(live_rx) } else { None };
-            let session = TopicLogSync::new(
-                self.store.clone(),
-                self.topic_map.clone(),
-                role,
-                live_rx,
-                event_tx,
-            );
-            (session, event_rx, live_tx)
-        }
-
-        pub async fn create_operation(&mut self, body: &Body, log_id: u64) -> (Header, Vec<u8>) {
-            let (seq_num, backlink) = self
-                .store
-                .latest_operation(&self.private_key.public_key(), &log_id)
-                .await
-                .unwrap()
-                .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-                .unwrap_or((0, None));
-
-            let (header, header_bytes) =
-                create_operation(&self.private_key, body, seq_num, seq_num, backlink);
-
-            self.store
-                .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
-                .await
-                .unwrap();
-            (header, header_bytes)
-        }
-
-        pub fn insert_topic(
-            &mut self,
-            topic: &LogHeightTopic,
-            logs: &HashMap<PublicKey, Vec<u64>>,
-        ) {
-            self.topic_map.insert(topic, logs.to_owned());
-        }
-
-        pub async fn run(&mut self, session: TestTopicLogSync) -> Result<(), TestLogSyncError> {
-            let mut read = self.read.take().unwrap();
-            let mut write = self.write.take().unwrap();
-            session.run(&mut write, &mut read).await?;
-            self.read.replace(read);
-            self.write.replace(write);
-            Ok(())
-        }
-    }
+    use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
+    use crate::topic_log_sync::Role;
 
     #[tokio::test]
     async fn sync_session_no_operations() {
-        let topic = LogHeightTopic::new("messages");
-        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
-        let mut peer_a = TopicLogSyncPeer::new(0, peer_a_stream);
-        let mut peer_b = TopicLogSyncPeer::new(1, peer_b_stream);
-
-        peer_b
-            .send(&[
-                TestMessage::Handshake(TopicHandshakeMessage::Done),
-                TestMessage::Sync(LogSyncMessage::Have(vec![])),
-                TestMessage::Sync(LogSyncMessage::Done),
-            ])
-            .await;
+        let topic = TestTopic::new("messages");
+        let mut peer = Peer::new(0);
+        peer.insert_topic(&topic, &HashMap::default());
 
         let (session, mut events_rx, _) =
-            peer_a.session(Role::Initiate(topic.clone()), false).await;
-        peer_a.run(session).await.unwrap();
+            peer.topic_sync_session(Role::Initiate(topic.clone()), false);
+
+        let remote_tx = run_topic_sync_uni(
+            session,
+            &[
+                TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Done),
+            ],
+        )
+        .await
+        .unwrap();
 
         let mut index = 0;
         while let Some(event) = events_rx.next().await {
@@ -509,33 +373,37 @@ mod tests {
                 0 => {
                     assert_eq!(
                         event,
-                        TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Initiate(topic.clone()))
+                        TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Initiate(topic.clone()))
                     )
                 }
                 1 => assert_eq!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
                 ),
                 2 => assert_matches!(
                     event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
+                    TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
                 ),
                 3 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 4 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 5 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync (
+                        TestTopicSyncEvent::Sync (
                             LogSyncEvent::Status(StatusEvent::Completed { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } }),
                         ) => (total_operations_remote, total_bytes_remote)
                     );
@@ -548,17 +416,23 @@ mod tests {
             index += 1;
         }
 
-        let messages = peer_b.recv_all().await;
+        let messages = topic_sync_recv_all(remote_tx).await;
 
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
-                    TestMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone()))
+                    TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone()))
                 ),
-                1 => assert_eq!(message, TestMessage::Handshake(TopicHandshakeMessage::Done)),
-                2 => assert_eq!(message, TestMessage::Sync(LogSyncMessage::Have(vec![]))),
-                3 => assert_eq!(message, TestMessage::Sync(LogSyncMessage::Done)),
+                1 => assert_eq!(
+                    message,
+                    TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done)
+                ),
+                2 => assert_eq!(
+                    message,
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![]))
+                ),
+                3 => assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done)),
                 _ => panic!(),
             };
         }
@@ -567,31 +441,30 @@ mod tests {
     #[tokio::test]
     async fn sync_operations_accept() {
         let log_id = 0;
-        let topic = LogHeightTopic::new("messages");
-
-        let (peer_a_stream, peer_b_stream) = tokio::io::duplex(64 * 1024);
-        let mut peer_a = TopicLogSyncPeer::new(0, peer_a_stream);
-        let mut peer_b = TopicLogSyncPeer::new(1, peer_b_stream);
+        let topic = TestTopic::new("messages");
+        let mut peer = Peer::new(0);
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (header_0, header_bytes_0) = peer_a.create_operation(&body, log_id).await;
-        let (header_1, header_bytes_1) = peer_a.create_operation(&body, log_id).await;
-        let (header_2, header_bytes_2) = peer_a.create_operation(&body, log_id).await;
+        let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
+        let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
+        let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
 
-        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
-        peer_a.insert_topic(&topic, &logs);
+        let logs = HashMap::from([(peer.id(), vec![log_id])]);
+        peer.insert_topic(&topic, &logs);
 
-        peer_b
-            .send(&[
-                TestMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
-                TestMessage::Handshake(TopicHandshakeMessage::Done),
-                TestMessage::Sync(LogSyncMessage::Have(vec![])),
-                TestMessage::Sync(LogSyncMessage::Done),
-            ])
-            .await;
+        let (session, mut events_rx, _) = peer.topic_sync_session(Role::Accept, false);
 
-        let (session, mut events_rx, _) = peer_a.session(Role::Accept, false).await;
-        peer_a.run(session).await.unwrap();
+        let remote_tx = run_topic_sync_uni(
+            session,
+            &[
+                TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
+                TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Done),
+            ],
+        )
+        .await
+        .unwrap();
 
         let mut index = 0;
         while let Some(event) = events_rx.next().await {
@@ -599,39 +472,45 @@ mod tests {
                 0 => {
                     assert_eq!(
                         event,
-                        TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                        TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Accept)
                     )
                 }
                 1 => assert_eq!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(topic.clone()))
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(
+                        topic.clone()
+                    ))
                 ),
                 2 => assert_matches!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
                 ),
                 3 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
                     );
                 }
                 4 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 5 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 6 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync (
+                        TestTopicSyncEvent::Sync (
                             LogSyncEvent::Status(StatusEvent::Completed { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } }),
                         ) => (total_operations_remote, total_bytes_remote)
                     );
@@ -644,13 +523,19 @@ mod tests {
             index += 1;
         }
 
-        let messages = peer_b.recv_all().await;
+        let messages = topic_sync_recv_all(remote_tx).await;
         for (index, message) in messages.into_iter().enumerate() {
             match index {
-                0 => assert_eq!(message, TestMessage::Handshake(TopicHandshakeMessage::Done),),
+                0 => assert_eq!(
+                    message,
+                    TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
+                ),
                 1 => assert_eq!(
                     message,
-                    TestMessage::Sync(LogSyncMessage::Have(vec![(peer_a.id(), vec![(0, 2)])]))
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![(
+                        peer.id(),
+                        vec![(0, 2)]
+                    )]))
                 ),
                 2 => {
                     let expected_bytes = header_0.payload_size
@@ -662,14 +547,14 @@ mod tests {
 
                     assert_eq!(
                         message,
-                        TestMessage::Sync(LogSyncMessage::PreSync {
+                        TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
                             total_operations: 3,
                             total_bytes: expected_bytes
                         })
                     )
                 }
                 3 => {
-                    let (header, body_inner) = assert_matches!(message, TestMessage::Sync(LogSyncMessage::Operation(
+                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                     header,
                     Some(body),
                 )) => (header, body));
@@ -677,7 +562,7 @@ mod tests {
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 4 => {
-                    let (header, body_inner) = assert_matches!(message, TestMessage::Sync(LogSyncMessage::Operation(
+                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                     header,
                     Some(body),
                 )) => (header, body));
@@ -685,14 +570,14 @@ mod tests {
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 5 => {
-                    let (header, body_inner) = assert_matches!(message, TestMessage::Sync(LogSyncMessage::Operation(
+                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                     header,
                     Some(body),
                 )) => (header, body));
                     assert_eq!(header, header_bytes_2);
                     assert_eq!(Body::new(&body_inner), body)
                 }
-                6 => assert_eq!(message, TestMessage::Sync(LogSyncMessage::Done)),
+                6 => assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done)),
                 _ => panic!(),
             };
         }
@@ -700,12 +585,11 @@ mod tests {
 
     #[tokio::test]
     async fn topic_log_sync_full_duplex() {
-        let topic = LogHeightTopic::new("messages");
+        let topic = TestTopic::new("messages");
         let log_id = 0;
 
-        let (a_stream, b_stream) = tokio::io::duplex(64 * 1024);
-        let mut peer_a = TopicLogSyncPeer::new(0, a_stream);
-        let mut peer_b = TopicLogSyncPeer::new(1, b_stream);
+        let mut peer_a = Peer::new(0);
+        let mut peer_b = Peer::new(1);
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (header_0, _) = peer_a.create_operation(&body, 0).await;
@@ -716,59 +600,53 @@ mod tests {
         peer_a.insert_topic(&topic, &logs);
 
         let (peer_a_session, mut peer_a_events_rx, _) =
-            peer_a.session(Role::Initiate(topic.clone()), false).await;
+            peer_a.topic_sync_session(Role::Initiate(topic.clone()), false);
 
-        let (peer_b_session, mut peer_b_events_rx, _) = peer_b.session(Role::Accept, false).await;
+        let (peer_b_session, mut peer_b_events_rx, _) =
+            peer_b.topic_sync_session(Role::Accept, false);
 
-        let local = LocalSet::new();
-        local
-            .run_until(async move {
-                let peer_a_task =
-                    tokio::task::spawn_local(
-                        async move { peer_a.run(peer_a_session).await.unwrap() },
-                    );
-                let peer_b_task =
-                    tokio::task::spawn_local(
-                        async move { peer_b.run(peer_b_session).await.unwrap() },
-                    );
-                tokio::try_join!(peer_a_task, peer_b_task).unwrap()
-            })
-            .await;
+        run_topic_sync(peer_a_session, peer_b_session)
+            .await
+            .unwrap();
 
         let mut index = 0;
         while let Some(event) = peer_a_events_rx.next().await {
             match index {
                 0 => assert_matches!(
                     event,
-                    TopicLogSyncEvent::<LogHeightTopic, ()>::Handshake(TopicHandshakeEvent::Initiate(
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Initiate(
                         sent_topic,
                     ))
                     if sent_topic == topic
                 ),
                 1 => assert_eq!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
                 ),
                 2 => assert_matches!(
                     event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
+                    TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
                 ),
                 3 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 4 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }),)
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
                     );
                 }
                 5 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Completed { .. }
                         ),)
                     );
@@ -784,42 +662,47 @@ mod tests {
             match index {
                 0 => assert_eq!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Accept)
                 ),
                 1 => assert_matches!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(received_topic))
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(received_topic))
                     if received_topic == topic
                 ),
                 2 => assert_eq!(
                     event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
                 ),
                 3 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }))
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }))
                     );
                 }
                 4 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }))
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ))
                     );
                 }
                 5 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }))
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ))
                     );
                 }
                 6 => {
                     let (header, body_inner) = assert_matches!(
                     event,
-                    TopicLogSyncEvent::Sync (
+                    TestTopicSyncEvent::Sync (
                         LogSyncEvent::Data(Operation {
                             header,
                             body,
+                            ..
                         }),
                     ) => (header, body));
                     assert_eq!(header, header_0);
@@ -828,10 +711,11 @@ mod tests {
                 7 => {
                     let (header, body_inner) = assert_matches!(
                     event,
-                    TopicLogSyncEvent::Sync (
+                    TestTopicSyncEvent::Sync (
                         LogSyncEvent::Data(Operation {
                             header,
                             body,
+                            ..
                         }),
                     ) => (header, body));
                     assert_eq!(header, header_1);
@@ -840,10 +724,11 @@ mod tests {
                 8 => {
                     let (header, body_inner) = assert_matches!(
                     event,
-                    TopicLogSyncEvent::Sync (
+                    TestTopicSyncEvent::Sync (
                         LogSyncEvent::Data(Operation {
                             header,
                             body,
+                            ..
                         }),
                     ) => (header, body));
                     assert_eq!(header, header_2);
@@ -852,7 +737,7 @@ mod tests {
                 9 => {
                     assert_matches!(
                         event,
-                        TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Completed { .. }
                         ),)
                     );
