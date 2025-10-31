@@ -7,14 +7,14 @@ use futures::{SinkExt, StreamExt};
 
 use futures::channel::mpsc;
 use p2panda_core::PublicKey;
-use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Body, Extension, Hash, Header, PrivateKey};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncWriteExt, DuplexStream, ReadHalf};
+use tokio::io::{DuplexStream, ReadHalf};
 use tokio::sync::broadcast;
+use tokio::task::LocalSet;
 use tokio::time::sleep;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
@@ -24,6 +24,7 @@ use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
+use crate::topic_log_sync_session::TopicLogSyncSession;
 use crate::traits::TopicQuery;
 use crate::traits::{Protocol, SyncProtocol};
 
@@ -43,6 +44,10 @@ pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 pub type TestTopicSyncError =
     TopicLogSyncError<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+
+// Types used in topic log sync protocol session tests.
+pub type TestTopicSyncSession =
+    TopicLogSyncSession<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 
 /// Peer abstraction used in tests.
 ///
@@ -72,8 +77,8 @@ impl Peer {
         self.private_key.public_key()
     }
 
-    /// Return a topic sync session.
-    pub fn topic_sync_session(
+    /// Return a topic sync protocol.
+    pub fn topic_sync_protocol(
         &mut self,
         role: Role<TestTopic>,
         live_mode: bool,
@@ -95,14 +100,37 @@ impl Peer {
         (session, event_rx, live_tx)
     }
 
-    /// Return a log sync session.
-    pub fn log_sync_session(
+    /// Return a log sync protocol.
+    pub fn log_sync_protocol(
         &mut self,
         logs: &Logs<u64>,
     ) -> (TestLogSync, mpsc::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = mpsc::channel(128);
         let session = LogSyncProtocol::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
+    }
+
+    /// Return a topic sync session.
+    pub fn topic_sync_session(
+        &mut self,
+        role: Role<TestTopic>,
+        live_mode: bool,
+    ) -> (
+        TestTopicSyncSession,
+        mpsc::Receiver<TestTopicSyncEvent>,
+        broadcast::Sender<LiveModeMessage<LogIdExtension>>,
+    ) {
+        let (event_tx, event_rx) = mpsc::channel(128);
+        let (live_tx, live_rx) = broadcast::channel(128);
+        let live_rx = if live_mode { Some(live_rx) } else { None };
+        let session = TopicLogSyncSession::new(
+            self.store.clone(),
+            self.topic_map.clone(),
+            role,
+            live_rx,
+            event_tx,
+        );
+        (session, event_rx, live_tx)
     }
 
     /// Create and insert an operation to the store.
@@ -134,57 +162,45 @@ impl Peer {
     }
 }
 
-/// Run a pair of log sync sessions.
-pub async fn run_log_sync(
-    session_local: TestLogSync,
-    session_remote: TestLogSync,
-) -> Result<(), TestLogSyncError> {
+/// Run a pair of topic sync sessions.
+pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), P::Error>
+where
+    P: Protocol + 'static,
+{
     let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
     let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
     let mut remote_message_rx = remote_message_rx.map(|message| Ok::<_, ()>(message));
 
-    let local_task = tokio::spawn(async move {
-        session_local
-            .run(&mut local_message_tx, &mut remote_message_rx)
-            .await
-    });
+    let local = LocalSet::new();
 
-    let remote_task = tokio::spawn(async move {
-        session_remote
-            .run(&mut remote_message_tx, &mut local_message_rx)
-            .await
-    });
-    let (local_result, remote_result) = tokio::try_join!(local_task, remote_task).unwrap();
-    local_result?;
-    remote_result?;
-    Ok(())
+    local
+        .run_until(async move {
+            let local_task = tokio::task::spawn_local(async move {
+                session_local
+                    .run(&mut local_message_tx, &mut remote_message_rx)
+                    .await?;
+                Ok::<_, P::Error>(())
+            });
+
+            let remote_task = tokio::task::spawn_local(async move {
+                session_remote
+                    .run(&mut remote_message_tx, &mut local_message_rx)
+                    .await?;
+                Ok::<_, P::Error>(())
+            });
+
+            let (local_result, remote_result) = tokio::try_join!(local_task, remote_task).unwrap();
+            local_result?;
+            remote_result?;
+            Ok(())
+        })
+        .await
 }
 
-/// Consume a vector of messages in a single log sync session.
-pub async fn run_log_sync_uni(
-    session: TestLogSync,
-    messages: &[TestLogSyncMessage],
-) -> Result<mpsc::Receiver<TestLogSyncMessage>, TestLogSyncError> {
-    let (mut local_message_tx, remote_message_rx) = mpsc::channel(128);
-    let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
-    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
-
-    for message in messages {
-        remote_message_tx.send(message.to_owned()).await.unwrap();
-    }
-
-    session
-        .run(&mut local_message_tx, &mut local_message_rx)
-        .await?;
-
-    Ok(remote_message_rx)
-}
-
-/// Run a pair of topic sync sessions.
-pub async fn run_topic_sync(
-    session_local: TestTopicSync,
-    session_remote: TestTopicSync,
+pub async fn run_topic_sync_session(
+    session_local: TestTopicSyncSession,
+    session_remote: TestTopicSyncSession,
 ) -> Result<(), TestTopicSyncError> {
     let (local_bi_streams, remote_bi_streams) = tokio::io::duplex(64 * 1024);
     let (local_read, local_write) = tokio::io::split(local_bi_streams);
@@ -208,26 +224,27 @@ pub async fn run_topic_sync(
 }
 
 /// Consume a vector of messages in a single topic sync session.
-pub async fn run_topic_sync_uni(
-    session_local: TestTopicSync,
-    messages: &[TestTopicSyncMessage],
-) -> Result<ReadHalf<DuplexStream>, TestTopicSyncError> {
-    let (local_bi_streams, remote_bi_streams) = tokio::io::duplex(64 * 1024);
-    let (local_read, local_write) = tokio::io::split(local_bi_streams);
-    let (remote_read, mut remote_write) = tokio::io::split(remote_bi_streams);
+pub async fn run_protocol_uni<P>(
+    protocol: P,
+    messages: &[P::Message],
+) -> Result<mpsc::Receiver<P::Message>, P::Error>
+where
+    P: Protocol,
+    P::Message: Clone,
+{
+    let (mut local_message_tx, remote_message_rx) = mpsc::channel(128);
+    let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
+    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
 
     for message in messages {
-        remote_write
-            .write(&encode_cbor(message).unwrap()[..])
-            .await
-            .unwrap();
+        remote_message_tx.send(message.to_owned()).await.unwrap();
     }
 
-    session_local
-        .run(&mut local_write.compat_write(), &mut local_read.compat())
+    protocol
+        .run(&mut local_message_tx, &mut local_message_rx)
         .await?;
 
-    Ok(remote_read)
+    Ok(remote_message_rx)
 }
 
 /// Receive all messages in a topic sync session read stream.
@@ -246,12 +263,6 @@ pub async fn topic_sync_recv_all(read: ReadHalf<DuplexStream>) -> Vec<TestTopicS
     }
     messages
 }
-//
-// impl From<mpsc::SendError> for TestLogSyncError {
-//     fn from(err: mpsc::SendError) -> Self {
-//         TestLogSyncError::MessageSink(format!("{err:?}"))
-//     }
-// }
 
 /// Log id extension.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

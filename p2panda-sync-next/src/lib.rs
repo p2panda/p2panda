@@ -6,4 +6,5 @@ pub mod log_sync;
 pub mod test_utils;
 pub mod topic_handshake;
 pub mod topic_log_sync;
+pub mod topic_log_sync_session;
 pub mod traits;

@@ -483,14 +483,14 @@ mod tests {
     use p2panda_core::Body;
 
     use crate::log_sync::{LogSyncError, LogSyncEvent, Logs, Metrics, Operation, StatusEvent};
-    use crate::test_utils::{Peer, TestLogSyncMessage, run_log_sync, run_log_sync_uni};
+    use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
 
     #[tokio::test]
     async fn log_sync_no_operations() {
-        let mut peer = Peer::new(0);
+        let mut peer: Peer = Peer::new(0);
 
-        let (session, mut event_rx) = peer.log_sync_session(&Logs::default());
-        let mut remote_message_rx = run_log_sync_uni(
+        let (session, mut event_rx) = peer.log_sync_protocol(&Logs::default());
+        let mut remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
@@ -569,8 +569,8 @@ mod tests {
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![log_id]);
 
-        let (session, mut event_rx) = peer.log_sync_session(&logs);
-        let mut remote_message_rx = run_log_sync_uni(
+        let (session, mut event_rx) = peer.log_sync_protocol(&logs);
+        let mut remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
@@ -695,10 +695,10 @@ mod tests {
         logs.insert(peer_a.id(), vec![LOG_ID]);
         logs.insert(peer_b.id(), vec![LOG_ID]);
 
-        let (a_session, mut peer_a_event_rx) = peer_a.log_sync_session(&logs);
-        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_session(&logs);
+        let (a_session, mut peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
+        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
 
-        run_log_sync(a_session, b_session).await.unwrap();
+        run_protocol(a_session, b_session).await.unwrap();
 
         let mut index = 0;
         while let Some(event) = peer_a_event_rx.next().await {
@@ -774,7 +774,7 @@ mod tests {
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
 
-        let (session, _event_rx) = peer.log_sync_session(&logs);
+        let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         // Remote sends Operation without PreSync first.
         let messages = vec![
@@ -787,7 +787,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let result = run_log_sync_uni(session, &messages).await;
+        let result = run_protocol_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(
@@ -806,7 +806,7 @@ mod tests {
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
-        let (session, _event_rx) = peer.log_sync_session(&logs);
+        let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         let messages = vec![
             TestLogSyncMessage::Have(vec![(peer.id(), vec![(LOG_ID, 0)])]),
@@ -821,7 +821,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let result = run_log_sync_uni(session, &messages).await;
+        let result = run_protocol_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(
@@ -835,10 +835,10 @@ mod tests {
         let mut peer = Peer::new(0);
         let logs = Logs::default();
 
-        let (session, _event_rx) = peer.log_sync_session(&logs);
+        let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         let messages = vec![TestLogSyncMessage::Done];
-        let result = run_log_sync_uni(session, &messages).await;
+        let result = run_protocol_uni(session, &messages).await;
 
         assert!(
             matches!(
@@ -859,7 +859,7 @@ mod tests {
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
-        let (session, _event_rx) = peer.log_sync_session(&logs);
+        let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         let messages = vec![
             TestLogSyncMessage::Have(vec![(peer.id(), vec![(LOG_ID, 0)])]),
@@ -871,7 +871,7 @@ mod tests {
             TestLogSyncMessage::Done,
         ];
 
-        let result = run_log_sync_uni(session, &messages).await;
+        let result = run_protocol_uni(session, &messages).await;
         assert!(matches!(
             result,
             Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Have(_)))

@@ -4,20 +4,20 @@ use std::fmt::Debug;
 use std::future::ready;
 use std::marker::PhantomData;
 
-use crate::cbor::{CborCodecError, into_cbor_sink, into_cbor_stream};
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
-use crate::topic_handshake::{
-    TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
-    TopicHandshakeMessage,
-};
-use crate::traits::{Protocol, SyncProtocol, TopicQuery};
 use futures::channel::mpsc;
-use futures::{AsyncRead, AsyncWrite, Sink, SinkExt, Stream, StreamExt};
+use futures::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Extensions, Header};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
+
+use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
+use crate::topic_handshake::{
+    TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
+    TopicHandshakeMessage,
+};
+use crate::traits::{Protocol, TopicQuery};
 
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
@@ -66,7 +66,7 @@ where
     }
 }
 
-impl<T, S, M, L, E> SyncProtocol for TopicLogSync<T, S, M, L, E>
+impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
     T: TopicQuery,
     S: LogStore<L, E> + OperationStore<L, E> + Clone,
@@ -75,17 +75,17 @@ where
     E: Extensions,
 {
     type Error = TopicLogSyncError<T, S, M, L, E>;
-    type Event = TopicLogSyncEvent<T, E>;
+    type Message = TopicLogSyncMessage<T, L, E>;
     type Output = ();
 
     async fn run(
         self,
-        tx: &mut (impl AsyncWrite + Unpin),
-        rx: &mut (impl AsyncRead + Unpin),
-    ) -> Result<(), TopicLogSyncError<T, S, M, L, E>> {
-        // Convert generic read-write channels into framed sink and stream of cbor encoded protocol messages.
-        let mut sink = into_cbor_sink::<TopicLogSyncMessage<T, L, E>>(tx);
-        let mut stream = into_cbor_stream::<TopicLogSyncMessage<T, L, E>>(rx);
+        mut sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        mut stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
+    ) -> Result<Self::Output, Self::Error> {
+        // // Convert generic read-write channels into framed sink and stream of cbor encoded protocol messages.
+        // let mut sink = into_cbor_sink::<TopicLogSyncMessage<T, L, E>>(tx);
+        // let mut stream = into_cbor_stream::<TopicLogSyncMessage<T, L, E>>(rx);
 
         // Run topic handshake protocol to agree on the topic for this sync session.
         let topic = {
@@ -130,12 +130,16 @@ where
         {
             match message {
                 LiveModeMessage::FromSub { header, body } => {
-                    sink.send(TopicLogSyncMessage::Live(header, body)).await?;
+                    sink.send(TopicLogSyncMessage::Live(header, body))
+                        .await
+                        .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
                 }
                 LiveModeMessage::FromSync { header, body } => {
                     // @TODO: deduplicate messages.
                     // @TODO: check that this message is a part of our topic T set.
-                    sink.send(TopicLogSyncMessage::Live(header, body)).await?;
+                    sink.send(TopicLogSyncMessage::Live(header, body))
+                        .await
+                        .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
                 }
                 LiveModeMessage::Close => return Ok(()),
             }
@@ -233,9 +237,6 @@ where
 
     #[error("error receiving from message stream: {0}")]
     MessageStream(String),
-
-    #[error(transparent)]
-    Codec(#[from] CborCodecError),
 }
 
 /// Topic log sync live-mode message types.
@@ -348,8 +349,7 @@ pub mod tests {
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
     use crate::test_utils::{
-        Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_topic_sync,
-        run_topic_sync_uni, topic_sync_recv_all,
+        Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
     use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
     use crate::topic_log_sync::Role;
@@ -361,9 +361,9 @@ pub mod tests {
         peer.insert_topic(&topic, &HashMap::default());
 
         let (session, mut events_rx, _) =
-            peer.topic_sync_session(Role::Initiate(topic.clone()), false);
+            peer.topic_sync_protocol(Role::Initiate(topic.clone()), false);
 
-        let remote_tx = run_topic_sync_uni(
+        let mut remote_rx = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
@@ -423,9 +423,8 @@ pub mod tests {
             index += 1;
         }
 
-        let messages = topic_sync_recv_all(remote_tx).await;
-
-        for (index, message) in messages.into_iter().enumerate() {
+        let mut index = 0;
+        while let Some(message) = remote_rx.next().await {
             match index {
                 0 => assert_eq!(
                     message,
@@ -439,9 +438,13 @@ pub mod tests {
                     message,
                     TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![]))
                 ),
-                3 => assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done)),
+                3 => {
+                    assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done));
+                    break;
+                }
                 _ => panic!(),
             };
+            index += 1;
         }
     }
 
@@ -459,9 +462,9 @@ pub mod tests {
         let logs = HashMap::from([(peer.id(), vec![log_id])]);
         peer.insert_topic(&topic, &logs);
 
-        let (session, mut events_rx, _) = peer.topic_sync_session(Role::Accept, false);
+        let (session, mut events_rx, _) = peer.topic_sync_protocol(Role::Accept, false);
 
-        let remote_tx = run_topic_sync_uni(
+        let mut remote_rx = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
@@ -530,8 +533,8 @@ pub mod tests {
             index += 1;
         }
 
-        let messages = topic_sync_recv_all(remote_tx).await;
-        for (index, message) in messages.into_iter().enumerate() {
+        let mut index = 0;
+        while let Some(message) = remote_rx.next().await {
             match index {
                 0 => assert_eq!(
                     message,
@@ -584,9 +587,13 @@ pub mod tests {
                     assert_eq!(header, header_bytes_2);
                     assert_eq!(Body::new(&body_inner), body)
                 }
-                6 => assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done)),
+                6 => {
+                    assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done));
+                    break;
+                }
                 _ => panic!(),
             };
+            index += 1;
         }
     }
 
@@ -607,14 +614,12 @@ pub mod tests {
         peer_a.insert_topic(&topic, &logs);
 
         let (peer_a_session, mut peer_a_events_rx, _) =
-            peer_a.topic_sync_session(Role::Initiate(topic.clone()), false);
+            peer_a.topic_sync_protocol(Role::Initiate(topic.clone()), false);
 
         let (peer_b_session, mut peer_b_events_rx, _) =
-            peer_b.topic_sync_session(Role::Accept, false);
+            peer_b.topic_sync_protocol(Role::Accept, false);
 
-        run_topic_sync(peer_a_session, peer_b_session)
-            .await
-            .unwrap();
+        run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         let mut index = 0;
         while let Some(event) = peer_a_events_rx.next().await {
