@@ -11,7 +11,7 @@ members = [
     "p2panda-spaces",
     "p2panda-store",
     "p2panda-stream",
-    "p2panda-sync",
+    "p2panda-sync", "p2panda-sync-next",
 ]
 
 [workspace.lints.rust]
