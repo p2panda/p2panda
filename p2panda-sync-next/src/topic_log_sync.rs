@@ -148,30 +148,26 @@ where
 /// Map raw message sink and stream into topic handshake protocol specific channels.
 #[allow(clippy::complexity)]
 pub(crate) fn topic_channels<'a, T, L, E>(
-    sink: &mut (impl Sink<TopicLogSyncMessage<T, L, E>, Error = CborCodecError> + Unpin),
-    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<T, L, E>, CborCodecError>> + Unpin),
+    sink: &mut (impl Sink<TopicLogSyncMessage<T, L, E>, Error = impl Debug> + Unpin),
+    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<T, L, E>, impl Debug>> + Unpin),
 ) -> (
-    impl Sink<TopicHandshakeMessage<T>, Error = TopicHandshakeError<T>> + Unpin,
-    impl Stream<Item = Result<TopicHandshakeMessage<T>, TopicHandshakeError<T>>> + Unpin,
+    impl Sink<TopicHandshakeMessage<T>, Error = TopicSyncChannelError> + Unpin,
+    impl Stream<Item = Result<TopicHandshakeMessage<T>, TopicSyncChannelError>> + Unpin,
 ) {
     let topic_sink = sink
-        .sink_map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))
+        .sink_map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))
         .with(|message| {
-            ready(Ok::<_, TopicHandshakeError<T>>(TopicLogSyncMessage::<
-                T,
-                L,
-                E,
-            >::Handshake(
-                message
-            )))
+            ready(Ok::<_, TopicSyncChannelError>(
+                TopicLogSyncMessage::<T, L, E>::Handshake(message),
+            ))
         });
     let topic_stream = stream.by_ref().map(|message| {
         let message =
-            message.map_err(|err| TopicHandshakeError::MessageStream(format!("{err:?}")))?;
+            message.map_err(|err| TopicSyncChannelError::MessageStream(format!("{err:?}")))?;
         match message {
             TopicLogSyncMessage::Handshake(message) => Ok(message),
             TopicLogSyncMessage::Sync(_) | TopicLogSyncMessage::Live(_, _) => Err(
-                TopicHandshakeError::MessageStream("non-protocol message received".to_string()),
+                TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
             ),
         }
     });
@@ -180,36 +176,39 @@ pub(crate) fn topic_channels<'a, T, L, E>(
 
 /// Map raw message sink and stream into log sync protocol specific channels.
 #[allow(clippy::complexity)]
-pub(crate) fn sync_channels<'a, T, L, E, S>(
-    sink: &mut (impl Sink<TopicLogSyncMessage<T, L, E>, Error = CborCodecError> + Unpin),
-    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<T, L, E>, CborCodecError>> + Unpin),
+pub(crate) fn sync_channels<'a, T, L, E>(
+    sink: &mut (impl Sink<TopicLogSyncMessage<T, L, E>, Error = impl Debug> + Unpin),
+    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<T, L, E>, impl Debug>> + Unpin),
 ) -> (
-    impl Sink<LogSyncMessage<L>, Error = LogSyncError<L, E, S>> + Unpin,
-    impl Stream<Item = Result<LogSyncMessage<L>, LogSyncError<L, E, S>>> + Unpin,
-)
-where
-    T: Debug,
-    E: Debug,
-    S: LogStore<L, E> + OperationStore<L, E>,
-{
+    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError> + Unpin,
+    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError>> + Unpin,
+) {
     let log_sync_sink = sink
-        .sink_map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))
+        .sink_map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))
         .with(|message| {
-            ready(Ok::<_, LogSyncError<L, E, S>>(
+            ready(Ok::<_, TopicSyncChannelError>(
                 TopicLogSyncMessage::<T, L, E>::Sync(message),
             ))
         });
-    let log_sync_stream = stream.by_ref().map(|message| {
-        let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
-        match message {
-            TopicLogSyncMessage::Sync(message) => Ok(message),
-            TopicLogSyncMessage::Handshake(_) | TopicLogSyncMessage::Live(_, _) => Err(
-                LogSyncError::MessageStream("non-protocol message received".to_string()),
-            ),
-        }
+    let log_sync_stream = stream.by_ref().map(|message| match message {
+        Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
+        Ok(TopicLogSyncMessage::Handshake(_)) | Ok(TopicLogSyncMessage::Live(_, _)) => Err(
+            TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
+        ),
+        Err(err) => Err(TopicSyncChannelError::MessageStream(format!("{err:?}"))),
     });
 
     (log_sync_sink, log_sync_stream)
+}
+
+/// Error type occurring in topic log sync protocol.
+#[derive(Debug, Error)]
+pub enum TopicSyncChannelError {
+    #[error("error sending on message sink: {0}")]
+    MessageSink(String),
+
+    #[error("error receiving from message stream: {0}")]
+    MessageStream(String),
 }
 
 /// Error type occurring in topic log sync protocol.
@@ -228,6 +227,12 @@ where
 
     #[error(transparent)]
     TopicMap(M::Error),
+
+    #[error("error sending on message sink: {0}")]
+    MessageSink(String),
+
+    #[error("error receiving from message stream: {0}")]
+    MessageStream(String),
 
     #[error(transparent)]
     Codec(#[from] CborCodecError),

@@ -31,8 +31,8 @@ pub trait Protocol {
 
     fn run(
         self,
-        sink: &mut (impl Sink<Self::Message, Error = Self::Error> + Unpin),
-        stream: &mut (impl Stream<Item = Result<Self::Message, Self::Error>> + Unpin),
+        sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> impl Future<Output = Result<Self::Output, Self::Error>>;
 }
 

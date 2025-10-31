@@ -39,9 +39,9 @@ where
 
     async fn run(
         mut self,
-        sink: &mut (impl Sink<Self::Message, Error = Self::Error> + Unpin),
-        stream: &mut (impl Stream<Item = Result<Self::Message, Self::Error>> + Unpin),
-    ) -> Result<(), Self::Error> {
+        sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
+    ) -> Result<Self::Output, Self::Error> {
         // Announce that the topic handshake session has been initiated.
         self.event_tx
             .send(TopicHandshakeEvent::Initiate(self.topic.clone()).into())
@@ -49,24 +49,30 @@ where
 
         // Send our T topic to the remote peer.
         sink.send(TopicHandshakeMessage::Topic(self.topic.clone()))
-            .await?;
+            .await
+            .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
 
         // Receive their Done message.
         let Some(message) = stream.next().await else {
             return Err(TopicHandshakeError::UnexpectedStreamClosure);
         };
-        let message = message?;
+        let message =
+            message.map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
         let TopicHandshakeMessage::Done = message else {
             return Err(TopicHandshakeError::UnexpectedMessage(message));
         };
 
         // Send our Done message.
-        sink.send(TopicHandshakeMessage::Done).await?;
+        sink.send(TopicHandshakeMessage::Done)
+            .await
+            .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
 
         // Announce that the topic handshake session has completed successfully.
         self.event_tx.send(TopicHandshakeEvent::Done.into()).await?;
 
-        sink.flush().await?;
+        sink.flush()
+            .await
+            .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
         Ok(())
@@ -105,8 +111,8 @@ where
 
     async fn run(
         mut self,
-        sink: &mut (impl Sink<Self::Message, Error = Self::Error> + Unpin),
-        stream: &mut (impl Stream<Item = Result<Self::Message, Self::Error>> + Unpin),
+        sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
         // Announce that the topic handshake session has been accepted.
         self.event_tx
@@ -117,7 +123,8 @@ where
         let Some(message) = stream.next().await else {
             return Err(TopicHandshakeError::UnexpectedStreamClosure);
         };
-        let message = message?;
+        let message =
+            message.map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
         let TopicHandshakeMessage::Topic(topic) = message else {
             return Err(TopicHandshakeError::UnexpectedMessage(message));
         };
@@ -128,13 +135,16 @@ where
             .await?;
 
         // Send our Done message.
-        sink.send(TopicHandshakeMessage::Done).await?;
+        sink.send(TopicHandshakeMessage::Done)
+            .await
+            .map_err(|err| TopicHandshakeError::MessageStream(format!("{err:?}")))?;
 
         // Receive the remote peers Done message.
         let Some(message) = stream.next().await else {
             return Err(TopicHandshakeError::UnexpectedStreamClosure);
         };
-        let message = message?;
+        let message =
+            message.map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
         let TopicHandshakeMessage::Done = message else {
             return Err(TopicHandshakeError::UnexpectedMessage(message));
         };
@@ -142,7 +152,9 @@ where
         // Announce that the topic handshake session completed successfully.
         self.event_tx.send(TopicHandshakeEvent::Done.into()).await?;
 
-        sink.flush().await?;
+        sink.flush()
+            .await
+            .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
         Ok(topic)

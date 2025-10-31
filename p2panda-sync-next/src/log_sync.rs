@@ -88,9 +88,9 @@ where
 
     async fn run(
         mut self,
-        sink: &mut (impl Sink<Self::Message, Error = Self::Error> + Unpin),
-        stream: &mut (impl Stream<Item = Result<Self::Message, Self::Error>> + Unpin),
-    ) -> Result<(), LogSyncError<L, E, S>> {
+        sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
+    ) -> Result<Self::Output, Self::Error> {
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
 
@@ -111,14 +111,16 @@ where
                 State::SendHave { metrics } => {
                     let local_log_heights = local_log_heights(&self.store, &self.logs).await?;
                     sink.send(LogSyncMessage::<L>::Have(local_log_heights.clone()))
-                        .await?;
+                        .await
+                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                     self.state = State::ReceiveHave { metrics };
                 }
                 State::ReceiveHave { mut metrics } => {
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
-                    let message = message?;
+                    let message =
+                        message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                     let LogSyncMessage::Have(remote_log_heights) = message else {
                         return Err(LogSyncError::UnexpectedMessage(message));
                     };
@@ -156,9 +158,12 @@ where
                             total_bytes,
                             total_operations,
                         })
-                        .await?;
+                        .await
+                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                     } else {
-                        sink.send(LogSyncMessage::Done).await?;
+                        sink.send(LogSyncMessage::Done)
+                            .await
+                            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                     }
 
                     self.event_tx
@@ -182,7 +187,8 @@ where
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
-                    let message = message?;
+                    let message =
+                        message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                     metrics.total_bytes_remote = Some(0);
                     metrics.total_operations_remote = Some(0);
@@ -231,7 +237,7 @@ where
                     loop {
                         select! {
                             Some(message) = stream.next(), if !sync_done_received => {
-                                let message = message?;
+                                let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
                                         // TODO: validate that the operations and bytes received matches the total
@@ -251,10 +257,10 @@ where
                             },
                             Some(hash) = operation_stream.next() => {
                                 let (header, body) = self.store.get_raw_operation(hash).await.map_err(LogSyncError::OperationStore)?.expect("operation to be in store");
-                                sink.send(LogSyncMessage::Operation(header, body)).await?;
+                                sink.send(LogSyncMessage::Operation(header, body)).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                 sent_operations += 1;
                                 if sent_operations >= total_operations {
-                                    sink.send(LogSyncMessage::Done).await?;
+                                    sink.send(LogSyncMessage::Done).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                     sync_done_sent = true;
                                 }
                             },
@@ -279,7 +285,9 @@ where
             }
         }
 
-        sink.flush().await?;
+        sink.flush()
+            .await
+            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
         Ok(())

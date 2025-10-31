@@ -139,23 +139,20 @@ pub async fn run_log_sync(
     session_local: TestLogSync,
     session_remote: TestLogSync,
 ) -> Result<(), TestLogSyncError> {
-    let (local_message_tx, local_message_rx) = mpsc::channel(128);
-    let (remote_message_tx, remote_message_rx) = mpsc::channel(128);
+    let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
+    let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
+    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
+    let mut remote_message_rx = remote_message_rx.map(|message| Ok::<_, ()>(message));
 
-    let mut local_sink =
-        local_message_tx.sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-    let mut remote_stream = remote_message_rx.map(|message| Ok(message));
-
-    let local_task =
-        tokio::spawn(async move { session_local.run(&mut local_sink, &mut remote_stream).await });
-
-    let mut remote_sink =
-        remote_message_tx.sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-    let mut local_stream = local_message_rx.map(|message| Ok(message));
+    let local_task = tokio::spawn(async move {
+        session_local
+            .run(&mut local_message_tx, &mut remote_message_rx)
+            .await
+    });
 
     let remote_task = tokio::spawn(async move {
         session_remote
-            .run(&mut remote_sink, &mut local_stream)
+            .run(&mut remote_message_tx, &mut local_message_rx)
             .await
     });
     let (local_result, remote_result) = tokio::try_join!(local_task, remote_task).unwrap();
@@ -169,17 +166,17 @@ pub async fn run_log_sync_uni(
     session: TestLogSync,
     messages: &[TestLogSyncMessage],
 ) -> Result<mpsc::Receiver<TestLogSyncMessage>, TestLogSyncError> {
-    let (local_message_tx, remote_message_rx) = mpsc::channel(128);
+    let (mut local_message_tx, remote_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
-    let mut local_sink =
-        local_message_tx.sink_map_err(|err| TestLogSyncError::MessageSink(format!("{err:?}")));
-    let mut local_stream = local_message_rx.map(|message| Ok(message));
+    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
 
     for message in messages {
         remote_message_tx.send(message.to_owned()).await.unwrap();
     }
 
-    session.run(&mut local_sink, &mut local_stream).await?;
+    session
+        .run(&mut local_message_tx, &mut local_message_rx)
+        .await?;
 
     Ok(remote_message_rx)
 }
@@ -249,6 +246,12 @@ pub async fn topic_sync_recv_all(read: ReadHalf<DuplexStream>) -> Vec<TestTopicS
     }
     messages
 }
+//
+// impl From<mpsc::SendError> for TestLogSyncError {
+//     fn from(err: mpsc::SendError) -> Self {
+//         TestLogSyncError::MessageSink(format!("{err:?}"))
+//     }
+// }
 
 /// Log id extension.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
