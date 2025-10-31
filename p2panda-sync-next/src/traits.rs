@@ -5,7 +5,6 @@ use futures::Sink;
 use futures_util::{AsyncRead, AsyncWrite, Stream};
 use serde::{Deserialize, Serialize};
 
-
 /// Sync protocol which runs over an AsyncWrite and AsyncRead pair.
 pub trait SyncProtocol {
     type Output;
@@ -22,7 +21,7 @@ pub trait SyncProtocol {
 // NOTE(sam): we don't strictly need this trait as it isn't used in the public APIs, but it's nice to
 // encourage uniformity across general re-usable protocol implementations. We can decide if we
 // like it or would rather remove it.
-/// Generic protocol interface which runs over a typed sink and stream pair. 
+/// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;
     type Error;
