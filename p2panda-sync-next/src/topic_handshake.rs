@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use futures::channel::mpsc;
 use futures::{Sink, Stream};
 use futures::{SinkExt, StreamExt};
