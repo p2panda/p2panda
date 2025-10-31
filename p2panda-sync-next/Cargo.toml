@@ -5,7 +5,8 @@ edition = "2024"
 
 [features]
 default = []
-test_utils = ["dep:rand"]
+test_utils = ["dep:rand", "cbor"]
+cbor = []
 
 [dependencies]
 ciborium = "0.2.2"
