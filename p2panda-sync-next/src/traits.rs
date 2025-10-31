@@ -4,25 +4,9 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
 use futures::Sink;
-use futures_util::{AsyncRead, AsyncWrite, Stream};
+use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
-/// Sync protocol which runs over an AsyncWrite and AsyncRead pair.
-pub trait SyncProtocol {
-    type Output;
-    type Error;
-    type Event;
-
-    fn run(
-        self,
-        tx: &mut (impl AsyncWrite + Unpin),
-        rx: &mut (impl AsyncRead + Unpin),
-    ) -> impl Future<Output = Result<Self::Output, Self::Error>>;
-}
-
-// NOTE(sam): we don't strictly need this trait as it isn't used in the public APIs, but it's nice to
-// encourage uniformity across general re-usable protocol implementations. We can decide if we
-// like it or would rather remove it.
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;

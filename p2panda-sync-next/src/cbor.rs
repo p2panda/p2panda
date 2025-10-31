@@ -124,11 +124,12 @@ where
 /// This is a convenience method if you want to use CBOR encoding and serde to handle your wire
 /// protocol message encoding and framing without implementing it yourself. If you're interested in
 /// your own approach you can either implement your own `FramedRead` or `Sink`.
-pub fn into_cbor_stream<M>(
-    rx: &mut (impl AsyncRead + Unpin),
-) -> impl Stream<Item = Result<M, CborCodecError>> + Unpin
+pub fn into_cbor_stream<M, T>(
+    rx: T,
+) -> impl Stream<Item = Result<M, CborCodecError>> + Unpin + use<M, T>
 where
-    M: for<'de> Deserialize<'de> + Serialize,
+    M: for<'de> Deserialize<'de> + Serialize + 'static,
+    T: AsyncRead + Unpin + 'static,
 {
     FramedRead::new(rx.compat(), CborCodec::<M>::new())
 }
@@ -142,11 +143,10 @@ where
 /// This is a convenience method if you want to use CBOR encoding and serde to handle your wire
 /// protocol message encoding and framing without implementing it yourself. If you're interested in
 /// your own approach you can either implement your own `FramedWrite` or `Stream`.
-pub fn into_cbor_sink<'a, M>(
-    tx: &mut (impl AsyncWrite + Unpin),
-) -> impl Sink<M, Error = CborCodecError>
+pub fn into_cbor_sink<M, T>(tx: T) -> impl Sink<M, Error = CborCodecError>
 where
-    M: for<'de> Deserialize<'de> + Serialize,
+    M: for<'de> Deserialize<'de> + Serialize + 'static,
+    T: AsyncWrite + Unpin + 'static,
 {
     FramedWrite::new(tx.compat_write(), CborCodec::<M>::new())
 }
@@ -188,11 +188,22 @@ impl From<std::io::Error> for CborCodecError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use assert_matches::assert_matches;
     use futures::FutureExt;
+    use p2panda_core::{Body, Operation};
     use tokio::io::AsyncWriteExt;
     use tokio_stream::StreamExt;
     use tokio_util::codec::FramedRead;
+    use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+
+    use crate::cbor::{into_cbor_sink, into_cbor_stream};
+    use crate::log_sync::{LogSyncEvent, StatusEvent};
+    use crate::test_utils::{Peer, TestTopic, TestTopicSyncEvent};
+    use crate::topic_handshake::TopicHandshakeEvent;
+    use crate::topic_log_sync::Role;
+    use crate::traits::Protocol;
 
     use super::CborCodec;
 
@@ -258,5 +269,184 @@ mod tests {
 
         let message = stream.next().await;
         assert_matches!(message, Some(Ok(message)) if message == "hello".to_string());
+    }
+
+    #[tokio::test]
+    async fn topic_log_sync_over_byte_streams() {
+        let topic = TestTopic::new("messages");
+        let log_id = 0;
+
+        let mut peer_a = Peer::new(0);
+        let mut peer_b = Peer::new(1);
+
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let (header_0, _) = peer_a.create_operation(&body, 0).await;
+        let (header_1, _) = peer_a.create_operation(&body, 0).await;
+        let (header_2, _) = peer_a.create_operation(&body, 0).await;
+
+        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
+        peer_a.insert_topic(&topic, &logs);
+
+        let (peer_a_session, mut peer_a_events_rx, _) =
+            peer_a.topic_sync_protocol(Role::Initiate(topic.clone()), false);
+
+        let (peer_b_session, mut peer_b_events_rx, _) =
+            peer_b.topic_sync_protocol(Role::Accept, false);
+
+        let (peer_a_bi_streams, peer_b_bi_streams) = tokio::io::duplex(64 * 1024);
+        let (peer_a_read, peer_a_write) = tokio::io::split(peer_a_bi_streams);
+        let peer_a_read = peer_a_read.compat();
+        let peer_a_write = peer_a_write.compat_write();
+        let (peer_b_read, peer_b_write) = tokio::io::split(peer_b_bi_streams);
+        let peer_b_read = peer_b_read.compat();
+        let peer_b_write = peer_b_write.compat_write();
+
+        // Convert generic read-write channels into framed sink and stream of cbor encoded protocol messages.
+        let mut peer_a_sink = into_cbor_sink(peer_a_write);
+        let mut peer_a_stream = into_cbor_stream(peer_a_read);
+        let mut peer_b_sink = into_cbor_sink(peer_b_write);
+        let mut peer_b_stream = into_cbor_stream(peer_b_read);
+
+        let peer_a_task = tokio::spawn(async move {
+            peer_a_session
+                .run(&mut peer_a_sink, &mut peer_a_stream)
+                .await
+        });
+
+        let peer_b_task = tokio::spawn(async move {
+            peer_b_session
+                .run(&mut peer_b_sink, &mut peer_b_stream)
+                .await
+        });
+        let (peer_a_result, peer_b_result) = tokio::try_join!(peer_a_task, peer_b_task).unwrap();
+        assert!(peer_a_result.is_ok());
+        assert!(peer_b_result.is_ok());
+
+        let mut index = 0;
+        while let Some(event) = peer_a_events_rx.next().await {
+            match index {
+                0 => assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Initiate(
+                        sent_topic,
+                    ))
+                    if sent_topic == topic
+                ),
+                1 => assert_eq!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                ),
+                2 => assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
+                ),
+                3 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
+                    );
+                }
+                4 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
+                    );
+                }
+                5 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ),)
+                    );
+                    break;
+                }
+                _ => panic!(),
+            };
+            index += 1;
+        }
+
+        let mut index = 0;
+        while let Some(event) = peer_b_events_rx.next().await {
+            match index {
+                0 => assert_eq!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                ),
+                1 => assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(received_topic))
+                    if received_topic == topic
+                ),
+                2 => assert_eq!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                ),
+                3 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }))
+                    );
+                }
+                4 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ))
+                    );
+                }
+                5 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ))
+                    );
+                }
+                6 => {
+                    let (header, body_inner) = assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Sync (
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
+                    assert_eq!(header, header_0);
+                    assert_eq!(body_inner.unwrap(), body);
+                }
+                7 => {
+                    let (header, body_inner) = assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Sync (
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
+                    assert_eq!(header, header_1);
+                    assert_eq!(body_inner.unwrap(), body);
+                }
+                8 => {
+                    let (header, body_inner) = assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Sync (
+                        LogSyncEvent::Data(operation)
+                    ) => {let Operation {header, body, ..} = *operation; (header, body)});
+                    assert_eq!(header, header_2);
+                    assert_eq!(body_inner.unwrap(), body);
+                }
+                9 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ),)
+                    );
+                    break;
+                }
+                _ => panic!(),
+            };
+            index += 1;
+        }
     }
 }

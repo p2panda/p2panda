@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::Duration;
 use std::{collections::HashMap, convert::Infallible};
 
 use futures::{SinkExt, StreamExt};
@@ -12,21 +11,16 @@ use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
-use tokio::io::{DuplexStream, ReadHalf};
 use tokio::sync::broadcast;
 use tokio::task::LocalSet;
-use tokio::time::sleep;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use crate::cbor::into_cbor_stream;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
-use crate::topic_log_sync_session::TopicLogSyncSession;
+use crate::traits::Protocol;
 use crate::traits::TopicQuery;
-use crate::traits::{Protocol, SyncProtocol};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -44,10 +38,6 @@ pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 pub type TestTopicSyncError =
     TopicLogSyncError<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
-
-// Types used in topic log sync protocol session tests.
-pub type TestTopicSyncSession =
-    TopicLogSyncSession<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 
 /// Peer abstraction used in tests.
 ///
@@ -108,29 +98,6 @@ impl Peer {
         let (event_tx, event_rx) = mpsc::channel(128);
         let session = LogSyncProtocol::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
-    }
-
-    /// Return a topic sync session.
-    pub fn topic_sync_session(
-        &mut self,
-        role: Role<TestTopic>,
-        live_mode: bool,
-    ) -> (
-        TestTopicSyncSession,
-        mpsc::Receiver<TestTopicSyncEvent>,
-        broadcast::Sender<LiveModeMessage<LogIdExtension>>,
-    ) {
-        let (event_tx, event_rx) = mpsc::channel(128);
-        let (live_tx, live_rx) = broadcast::channel(128);
-        let live_rx = if live_mode { Some(live_rx) } else { None };
-        let session = TopicLogSyncSession::new(
-            self.store.clone(),
-            self.topic_map.clone(),
-            role,
-            live_rx,
-            event_tx,
-        );
-        (session, event_rx, live_tx)
     }
 
     /// Create and insert an operation to the store.
@@ -198,31 +165,6 @@ where
         .await
 }
 
-pub async fn run_topic_sync_session(
-    session_local: TestTopicSyncSession,
-    session_remote: TestTopicSyncSession,
-) -> Result<(), TestTopicSyncError> {
-    let (local_bi_streams, remote_bi_streams) = tokio::io::duplex(64 * 1024);
-    let (local_read, local_write) = tokio::io::split(local_bi_streams);
-    let (remote_read, remote_write) = tokio::io::split(remote_bi_streams);
-
-    let local_task = tokio::spawn(async move {
-        session_local
-            .run(&mut local_write.compat_write(), &mut local_read.compat())
-            .await
-    });
-
-    let remote_task = tokio::spawn(async move {
-        session_remote
-            .run(&mut remote_write.compat_write(), &mut remote_read.compat())
-            .await
-    });
-    let (local_result, remote_result) = tokio::try_join!(local_task, remote_task).unwrap();
-    local_result?;
-    remote_result?;
-    Ok(())
-}
-
 /// Consume a vector of messages in a single topic sync session.
 pub async fn run_protocol_uni<P>(
     protocol: P,
@@ -245,23 +187,6 @@ where
         .await?;
 
     Ok(remote_message_rx)
-}
-
-/// Receive all messages in a topic sync session read stream.
-pub async fn topic_sync_recv_all(read: ReadHalf<DuplexStream>) -> Vec<TestTopicSyncMessage> {
-    let idle_timeout = Duration::from_millis(200);
-    let mut messages = vec![];
-    let mut read_compat = read.compat();
-    let mut stream = into_cbor_stream(&mut read_compat);
-    loop {
-        let timeout = sleep(idle_timeout);
-        tokio::select! {
-            biased;
-            Some(Ok(message)) = stream.next() => messages.push(message),
-            _ = timeout =>  break
-        }
-    }
-    messages
 }
 
 /// Log id extension.
