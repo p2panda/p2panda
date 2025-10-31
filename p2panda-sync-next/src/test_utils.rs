@@ -221,11 +221,7 @@ pub struct LogIdExtension {
 
 impl Extension<LogId> for LogIdExtension {
     fn extract(header: &Header<Self>) -> Option<LogId> {
-        let Some(extensions) = header.extensions.as_ref() else {
-            return None;
-        };
-
-        Some(extensions.log_id.clone())
+        Some(header.extensions.log_id.clone())
     }
 }
 
@@ -248,7 +244,7 @@ pub fn create_operation(
         seq_num,
         backlink,
         previous: vec![],
-        extensions: Some(log_id.into()),
+        extensions: log_id.into(),
     };
     header.sign(private_key);
     let header_bytes = header.to_bytes();
