@@ -83,7 +83,7 @@ where
     Evt: From<LogSyncEvent<E>>,
 {
     type Error = LogSyncError<L, E, S>;
-    type Output = ();
+    type Output = Metrics;
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -94,7 +94,7 @@ where
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
 
-        loop {
+        let metrics = loop {
             match self.state {
                 State::Start => {
                     let metrics = Metrics::default();
@@ -277,20 +277,24 @@ where
                 }
                 State::End { metrics } => {
                     self.event_tx
-                        .send(LogSyncEvent::Status(StatusEvent::Completed { metrics }).into())
+                        .send(
+                            LogSyncEvent::Status(StatusEvent::Completed {
+                                metrics: metrics.clone(),
+                            })
+                            .into(),
+                        )
                         .await?;
-                    self.event_tx.flush().await?;
-                    break;
+                    break metrics;
                 }
             }
-        }
+        };
 
         sink.flush()
             .await
             .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
-        Ok(())
+        Ok(metrics)
     }
 }
 
