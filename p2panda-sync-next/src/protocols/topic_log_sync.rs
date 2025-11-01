@@ -79,7 +79,7 @@ where
     type Output = ();
 
     async fn run(
-        self,
+        mut self,
         mut sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         mut stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
@@ -116,31 +116,42 @@ where
             .map_err(TopicLogSyncError::<T, S, M, L, E>::TopicMap)?;
 
         // Run the log sync protocol passing in our local topic logs.
-        {
+        let _metrics = {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
             let protocol = LogSyncProtocol::new(self.store.clone(), logs, self.event_tx.clone());
             protocol
                 .run(&mut log_sync_sink, &mut log_sync_stream)
-                .await?;
-        }
+                .await?
+        };
 
         // Enter live mode.
         if let Some(mut live_mode_rx) = self.live_mode_rx {
-            while let Ok(message) = live_mode_rx.recv().await {
-                match message {
-                    LiveModeMessage::FromSub { header, body } => {
-                        sink.send(TopicLogSyncMessage::Live { header, body })
-                            .await
-                            .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
+            loop {
+                tokio::select! {
+                    Ok(message) = live_mode_rx.recv() => {
+                        match message {
+                            LiveModeMessage::FromSub { header, body } => {
+                                sink.send(TopicLogSyncMessage::Live { header, body })
+                                    .await
+                                    .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+                            }
+                            LiveModeMessage::FromSync { header, body } => {
+                                // @TODO: deduplicate messages.
+                                // @TODO: check that this message is a part of our topic T set.
+                                sink.send(TopicLogSyncMessage::Live { header, body })
+                                    .await
+                                    .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+                            }
+                            LiveModeMessage::Close => return Ok(()),
+                        };
                     }
-                    LiveModeMessage::FromSync { header, body } => {
-                        // @TODO: deduplicate messages.
-                        // @TODO: check that this message is a part of our topic T set.
-                        sink.send(TopicLogSyncMessage::Live { header, body })
-                            .await
-                            .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
+                    Some(message) = stream.next() => {
+                        let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                        let TopicLogSyncMessage::Live{header, body} = message else {
+                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(message));
+                        };
+                        self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
-                    LiveModeMessage::Close => return Ok(()),
                 }
             }
         }
@@ -213,6 +224,9 @@ pub enum TopicSyncChannelError {
 
     #[error("error receiving from message stream: {0}")]
     MessageStream(String),
+
+    #[error(transparent)]
+    EventSend(#[from] mpsc::SendError),
 }
 
 /// Error type occurring in topic log sync protocol.
@@ -232,11 +246,11 @@ where
     #[error(transparent)]
     TopicMap(M::Error),
 
-    #[error("error sending on message sink: {0}")]
-    MessageSink(String),
+    #[error("unexpected protocol message: {0:?}")]
+    UnexpectedProtocolMessage(TopicLogSyncMessage<T, L, E>),
 
-    #[error("error receiving from message stream: {0}")]
-    MessageStream(String),
+    #[error(transparent)]
+    Channel(#[from] TopicSyncChannelError),
 }
 
 /// Topic log sync live-mode message types.
@@ -349,7 +363,6 @@ pub mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use p2panda_core::{Body, Operation};
-    use p2panda_store::OperationStore;
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
     use crate::test_utils::{
@@ -772,7 +785,7 @@ pub mod tests {
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
 
-        let (session, mut events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (session, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
             .send(LiveModeMessage::FromSub {
@@ -808,8 +821,9 @@ pub mod tests {
         .await
         .unwrap();
 
-        let mut index = 0;
-        while let Some(event) = events_rx.next().await {
+        let events = events_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 9);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => {
                     assert_eq!(
@@ -859,14 +873,12 @@ pub mod tests {
                             StatusEvent::Completed { .. }
                         ),)
                     );
-                    break;
                 }
                 8 => {
-                    assert_matches!(event, TestTopicSyncEvent::Live { .. })
+                    assert_matches!(event, TestTopicSyncEvent::Live { .. });
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
         let mut index = 0;
@@ -889,7 +901,6 @@ pub mod tests {
                     assert_eq!(body_inner, body);
                     break;
                 }
-
                 _ => panic!(),
             };
             index += 1;
