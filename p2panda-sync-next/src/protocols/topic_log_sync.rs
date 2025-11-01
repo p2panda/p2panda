@@ -125,23 +125,23 @@ where
         }
 
         // Enter live mode.
-        if let Some(mut live_mode_rx) = self.live_mode_rx
-            && let Ok(message) = live_mode_rx.recv().await
-        {
-            match message {
-                LiveModeMessage::FromSub { header, body } => {
-                    sink.send(TopicLogSyncMessage::Live(header, body))
-                        .await
-                        .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
+        if let Some(mut live_mode_rx) = self.live_mode_rx {
+            while let Ok(message) = live_mode_rx.recv().await {
+                match message {
+                    LiveModeMessage::FromSub { header, body } => {
+                        sink.send(TopicLogSyncMessage::Live { header, body })
+                            .await
+                            .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
+                    }
+                    LiveModeMessage::FromSync { header, body } => {
+                        // @TODO: deduplicate messages.
+                        // @TODO: check that this message is a part of our topic T set.
+                        sink.send(TopicLogSyncMessage::Live { header, body })
+                            .await
+                            .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
+                    }
+                    LiveModeMessage::Close => return Ok(()),
                 }
-                LiveModeMessage::FromSync { header, body } => {
-                    // @TODO: deduplicate messages.
-                    // @TODO: check that this message is a part of our topic T set.
-                    sink.send(TopicLogSyncMessage::Live(header, body))
-                        .await
-                        .map_err(|err| TopicLogSyncError::MessageSink(format!("{err:?}")))?;
-                }
-                LiveModeMessage::Close => return Ok(()),
             }
         }
 
@@ -170,7 +170,7 @@ pub(crate) fn topic_channels<'a, T, L, E>(
             message.map_err(|err| TopicSyncChannelError::MessageStream(format!("{err:?}")))?;
         match message {
             TopicLogSyncMessage::Handshake(message) => Ok(message),
-            TopicLogSyncMessage::Sync(_) | TopicLogSyncMessage::Live(_, _) => Err(
+            TopicLogSyncMessage::Sync(_) | TopicLogSyncMessage::Live { .. } => Err(
                 TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
             ),
         }
@@ -196,7 +196,7 @@ pub(crate) fn sync_channels<'a, T, L, E>(
         });
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
-        Ok(TopicLogSyncMessage::Handshake(_)) | Ok(TopicLogSyncMessage::Live(_, _)) => Err(
+        Ok(TopicLogSyncMessage::Handshake(_)) | Ok(TopicLogSyncMessage::Live { .. }) => Err(
             TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
         ),
         Err(err) => Err(TopicSyncChannelError::MessageStream(format!("{err:?}"))),
@@ -293,7 +293,10 @@ impl<T, E> From<LogSyncEvent<E>> for TopicLogSyncEvent<T, E> {
 pub enum TopicLogSyncMessage<T, L, E> {
     Handshake(TopicHandshakeMessage<T>),
     Sync(LogSyncMessage<L>),
-    Live(Header<E>, Option<Body>),
+    Live {
+        header: Header<E>,
+        body: Option<Body>,
+    },
 }
 
 /// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
@@ -346,13 +349,14 @@ pub mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use p2panda_core::{Body, Operation};
+    use p2panda_store::OperationStore;
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
     use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
-    use crate::topic_log_sync::Role;
+    use crate::topic_log_sync::{LiveModeMessage, Role};
 
     #[tokio::test]
     async fn sync_session_no_operations() {
@@ -743,6 +747,149 @@ pub mod tests {
                     );
                     break;
                 }
+                _ => panic!(),
+            };
+            index += 1;
+        }
+    }
+
+    #[tokio::test]
+    async fn live_mode() {
+        let log_id = 0;
+        let topic = TestTopic::new("messages");
+        let mut peer_a = Peer::new(0);
+        let mut peer_b = Peer::new(1);
+
+        let body = Body::new("Hello, Sloth!".as_bytes());
+        let (_, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
+
+        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
+        peer_a.insert_topic(&topic, &logs);
+
+        let logs = HashMap::default();
+        peer_a.insert_topic(&topic, &logs);
+
+        let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
+        let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
+
+        let (session, mut events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+
+        live_mode_tx
+            .send(LiveModeMessage::FromSub {
+                header: header_2.clone(),
+                body: Some(body.clone()),
+            })
+            .unwrap();
+
+        live_mode_tx.send(LiveModeMessage::Close).unwrap();
+
+        let total_bytes = header_bytes_0.len() + body.to_bytes().len();
+        let mut remote_rx = run_protocol_uni(
+            session,
+            &[
+                TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
+                TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
+                    total_operations: 1,
+                    total_bytes: total_bytes as u64,
+                }),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    header_bytes_0,
+                    Some(body.to_bytes()),
+                )),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Done),
+                TestTopicSyncMessage::Live {
+                    header: header_1.clone(),
+                    body: Some(body.clone()),
+                },
+            ],
+        )
+        .await
+        .unwrap();
+
+        let mut index = 0;
+        while let Some(event) = events_rx.next().await {
+            match index {
+                0 => {
+                    assert_eq!(
+                        event,
+                        TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                    )
+                }
+                1 => assert_eq!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(
+                        topic.clone()
+                    ))
+                ),
+                2 => assert_matches!(
+                    event,
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                ),
+                3 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }),)
+                    );
+                }
+                4 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
+                    );
+                }
+                5 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ),)
+                    );
+                }
+                6 => {
+                    assert_matches!(event, TestTopicSyncEvent::Sync(LogSyncEvent::Data(..)))
+                }
+                7 => {
+                    assert_matches!(
+                        event,
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ),)
+                    );
+                    break;
+                }
+                8 => {
+                    assert_matches!(event, TestTopicSyncEvent::Live { .. })
+                }
+                _ => panic!(),
+            };
+            index += 1;
+        }
+
+        let mut index = 0;
+        while let Some(message) = remote_rx.next().await {
+            match index {
+                0 => assert_eq!(
+                    message,
+                    TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
+                ),
+                1 => assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Have(_))),
+                2 => {
+                    assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
+                }
+                3 => {
+                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Live{
+                    header,
+                    body: Some(body),
+                } => (header, body));
+                    assert_eq!(header, header_2);
+                    assert_eq!(body_inner, body);
+                    break;
+                }
+
                 _ => panic!(),
             };
             index += 1;

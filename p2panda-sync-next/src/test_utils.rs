@@ -124,6 +124,26 @@ impl Peer {
         (header, header_bytes)
     }
 
+    /// Create an operation but don't insert it in the store.
+    pub async fn create_operation_no_insert(
+        &mut self,
+        body: &Body,
+        log_id: u64,
+    ) -> (Header<LogIdExtension>, Vec<u8>) {
+        let (seq_num, backlink) = self
+            .store
+            .latest_operation(&self.private_key.public_key(), &log_id)
+            .await
+            .unwrap()
+            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
+            .unwrap_or((0, None));
+
+        let (header, header_bytes) =
+            create_operation(&self.private_key, body, seq_num, seq_num, backlink, log_id);
+
+        (header, header_bytes)
+    }
+
     pub fn insert_topic(&mut self, topic: &TestTopic, logs: &HashMap<PublicKey, Vec<u64>>) {
         self.topic_map.insert(topic, logs.to_owned());
     }

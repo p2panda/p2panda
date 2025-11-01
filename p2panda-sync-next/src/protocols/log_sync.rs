@@ -407,6 +407,7 @@ pub enum LogSyncMessage<L> {
         total_operations: u64,
         total_bytes: u64,
     },
+    // @TODO: use Header and Body here.
     Operation(Vec<u8>, Option<Vec<u8>>),
     Done,
 }
