@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
 
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
+use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs, Metrics};
 use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
@@ -116,7 +116,7 @@ where
             .map_err(TopicLogSyncError::<T, S, M, L, E>::TopicMap)?;
 
         // Run the log sync protocol passing in our local topic logs.
-        let _metrics = {
+        let metrics = {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
             let protocol = LogSyncProtocol::new(self.store.clone(), logs, self.event_tx.clone());
             protocol
@@ -129,7 +129,7 @@ where
         // In live-mode we process messages sent from the remote peer and received locally from a
         // subscription or other concurrent sync sessions. In both cases we should deduplicate
         // messages and also check they are part of our topic sub-set selection before forwarding
-        // them on the event stream, or to the remote peer.   
+        // them on the event stream, or to the remote peer.
         if let Some(mut live_mode_rx) = self.live_mode_rx {
             loop {
                 tokio::select! {
@@ -158,6 +158,7 @@ where
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                             }
                             LiveModeMessage::Close => {
+                                self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
                                 return Ok(())
                             },
                         };
@@ -296,6 +297,9 @@ pub enum TopicLogSyncEvent<T, E> {
     Live {
         header: Box<Header<E>>,
         body: Option<Body>,
+    },
+    Close {
+        metrics: Metrics,
     },
 }
 
@@ -829,7 +833,7 @@ pub mod tests {
         .unwrap();
 
         let events = events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 9);
+        assert_eq!(events.len(), 10);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => {
@@ -883,6 +887,9 @@ pub mod tests {
                 }
                 8 => {
                     assert_matches!(event, TestTopicSyncEvent::Live { .. });
+                }
+                9 => {
+                    assert_matches!(event, TestTopicSyncEvent::Close { .. });
                 }
                 _ => panic!(),
             };
