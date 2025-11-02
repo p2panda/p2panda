@@ -25,7 +25,7 @@ pub struct TopicLogSync<T, S, M, L, E> {
     pub role: Role<T>,
     pub event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
     pub live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
-    pub _phantom: PhantomData<(T, L, E)>,
+    pub _phantom: PhantomData<L>,
 }
 
 /// Sync protocol combining TopicHandshake and LogSync protocols into one so that peers can sync
