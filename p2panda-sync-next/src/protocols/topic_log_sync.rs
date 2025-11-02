@@ -380,10 +380,10 @@ pub mod tests {
         let mut peer = Peer::new(0);
         peer.insert_topic(&topic, &HashMap::default());
 
-        let (session, mut events_rx, _) =
+        let (session, events_rx, _) =
             peer.topic_sync_protocol(Role::Initiate(topic.clone()), false);
 
-        let mut remote_rx = run_protocol_uni(
+        let remote_rx = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
@@ -394,8 +394,9 @@ pub mod tests {
         .await
         .unwrap();
 
-        let mut index = 0;
-        while let Some(event) = events_rx.next().await {
+        let events = events_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 6);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => {
                     assert_eq!(
@@ -436,15 +437,14 @@ pub mod tests {
                     );
                     assert_eq!(total_operations, Some(0));
                     assert_eq!(total_bytes, Some(0));
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(message) = remote_rx.next().await {
+        let messages = remote_rx.collect::<Vec<_>>().await;
+        assert_eq!(messages.len(), 4);
+        for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
@@ -464,7 +464,6 @@ pub mod tests {
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 
@@ -482,9 +481,9 @@ pub mod tests {
         let logs = HashMap::from([(peer.id(), vec![log_id])]);
         peer.insert_topic(&topic, &logs);
 
-        let (session, mut events_rx, _) = peer.topic_sync_protocol(Role::Accept, false);
+        let (session, events_rx, _) = peer.topic_sync_protocol(Role::Accept, false);
 
-        let mut remote_rx = run_protocol_uni(
+        let remote_rx = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
@@ -496,8 +495,9 @@ pub mod tests {
         .await
         .unwrap();
 
-        let mut index = 0;
-        while let Some(event) = events_rx.next().await {
+        let events = events_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 7);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => {
                     assert_eq!(
@@ -546,15 +546,14 @@ pub mod tests {
                     );
                     assert_eq!(total_operations, Some(0));
                     assert_eq!(total_bytes, Some(0));
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(message) = remote_rx.next().await {
+        let messages = remote_rx.collect::<Vec<_>>().await;
+        assert_eq!(messages.len(), 7);
+        for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
@@ -613,7 +612,6 @@ pub mod tests {
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 
@@ -633,16 +631,16 @@ pub mod tests {
         let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
         peer_a.insert_topic(&topic, &logs);
 
-        let (peer_a_session, mut peer_a_events_rx, _) =
+        let (peer_a_session, peer_a_events_rx, _) =
             peer_a.topic_sync_protocol(Role::Initiate(topic.clone()), false);
 
-        let (peer_b_session, mut peer_b_events_rx, _) =
-            peer_b.topic_sync_protocol(Role::Accept, false);
+        let (peer_b_session, peer_b_events_rx, _) = peer_b.topic_sync_protocol(Role::Accept, false);
 
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
-        let mut index = 0;
-        while let Some(event) = peer_a_events_rx.next().await {
+        let events = peer_a_events_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 6);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
                     event,
@@ -682,15 +680,14 @@ pub mod tests {
                             StatusEvent::Completed { .. }
                         ),)
                     );
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(event) = peer_b_events_rx.next().await {
+        let events = peer_b_events_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 10);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     event,
@@ -761,11 +758,9 @@ pub mod tests {
                             StatusEvent::Completed { .. }
                         ),)
                     );
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 
@@ -788,7 +783,7 @@ pub mod tests {
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
 
-        let (session, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
             .send(LiveModeMessage::FromSub {
@@ -800,8 +795,8 @@ pub mod tests {
         live_mode_tx.send(LiveModeMessage::Close).unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
-        let mut remote_rx = run_protocol_uni(
-            session,
+        let remote_rx = run_protocol_uni(
+            protocol,
             &[
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Topic(topic.clone())),
                 TestTopicSyncMessage::Handshake(TopicHandshakeMessage::Done),
@@ -884,8 +879,9 @@ pub mod tests {
             };
         }
 
-        let mut index = 0;
-        while let Some(message) = remote_rx.next().await {
+        let messages = remote_rx.collect::<Vec<_>>().await;
+        assert_eq!(messages.len(), 4);
+        for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
@@ -902,11 +898,9 @@ pub mod tests {
                 } => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 }

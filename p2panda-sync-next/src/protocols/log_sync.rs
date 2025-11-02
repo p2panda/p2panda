@@ -494,16 +494,17 @@ mod tests {
     async fn log_sync_no_operations() {
         let mut peer: Peer = Peer::new(0);
 
-        let (session, mut event_rx) = peer.log_sync_protocol(&Logs::default());
-        let mut remote_message_rx = run_protocol_uni(
+        let (session, event_rx) = peer.log_sync_protocol(&Logs::default());
+        let remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
         .await
         .unwrap();
 
-        let mut index = 0;
-        while let Some(event) = event_rx.next().await {
+        let events = event_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 4);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => {
                     let (total_operations, total_bytes) = assert_matches!(
@@ -540,15 +541,14 @@ mod tests {
                     );
                     assert_eq!(total_operations, Some(0));
                     assert_eq!(total_bytes, Some(0));
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(message) = remote_message_rx.next().await {
+        let messages = remote_message_rx.collect::<Vec<_>>().await;
+        assert_eq!(messages.len(), 2);
+        for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(message, TestLogSyncMessage::Have(vec![])),
                 1 => {
@@ -557,7 +557,6 @@ mod tests {
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 
@@ -574,8 +573,8 @@ mod tests {
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![log_id]);
 
-        let (session, mut event_rx) = peer.log_sync_protocol(&logs);
-        let mut remote_message_rx = run_protocol_uni(
+        let (session, event_rx) = peer.log_sync_protocol(&logs);
+        let remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
         )
@@ -589,9 +588,10 @@ mod tests {
             + header_2.payload_size
             + header_bytes_2.len() as u64;
 
-        let mut index = 0;
-        while let Some(event) = event_rx.next().await {
-            match index {
+            let events = event_rx.collect::<Vec<_>>().await;
+            assert_eq!(events.len(), 4);
+            for (index, event) in events.into_iter().enumerate() {
+                match index {
                 0 => {
                     assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. }));
                 }
@@ -625,15 +625,14 @@ mod tests {
                     );
                     assert_eq!(total_operations, Some(0));
                     assert_eq!(total_bytes, Some(0));
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(message) = remote_message_rx.next().await {
+        let messages = remote_message_rx.collect::<Vec<_>>().await;
+        assert_eq!(messages.len(), 6);
+        for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
@@ -672,11 +671,9 @@ mod tests {
                 }
                 5 => {
                     assert_eq!(message, TestLogSyncMessage::Done);
-                    break;
                 }
                 _ => panic!(),
             };
-            index += 1;
         }
     }
 
@@ -700,13 +697,14 @@ mod tests {
         logs.insert(peer_a.id(), vec![LOG_ID]);
         logs.insert(peer_b.id(), vec![LOG_ID]);
 
-        let (a_session, mut peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
-        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
+        let (a_session, peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
+        let (b_session, peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
 
         run_protocol(a_session, b_session).await.unwrap();
 
-        let mut index = 0;
-        while let Some(event) = peer_a_event_rx.next().await {
+        let events = peer_a_event_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 6);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
@@ -733,11 +731,11 @@ mod tests {
                 }
                 _ => panic!(),
             }
-            index += 1;
         }
 
-        let mut index = 0;
-        while let Some(event) = peer_b_event_rx.next().await {
+        let events = peer_b_event_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 6);
+        for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
@@ -760,11 +758,9 @@ mod tests {
                 }
                 5 => {
                     assert_matches!(event, LogSyncEvent::Status(StatusEvent::Completed { .. }));
-                    break;
                 }
                 _ => panic!(),
             }
-            index += 1;
         }
     }
 
