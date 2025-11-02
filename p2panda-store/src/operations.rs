@@ -129,7 +129,6 @@ pub trait LocalLogStore<LogId, Extensions> {
         from: Option<u64>,
     ) -> Result<Option<u64>, Self::Error>;
 
-
     /// Get hashes from an authors' log ordered by sequence number.
     ///
     /// The `from` value will be used as the starting index for log retrieval, if supplied,
