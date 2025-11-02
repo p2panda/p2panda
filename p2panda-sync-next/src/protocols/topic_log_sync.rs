@@ -124,12 +124,19 @@ where
                 .await?
         };
 
-        // Enter live mode.
+        // Enter live-mode.
+        //
+        // In live-mode we process messages sent from the remote peer and received locally from a
+        // subscription or other concurrent sync sessions. In both cases we should deduplicate
+        // messages and also check they are part of our topic sub-set selection before forwarding
+        // them on the event stream, or to the remote peer.   
         if let Some(mut live_mode_rx) = self.live_mode_rx {
             loop {
                 tokio::select! {
                     biased;
                     Some(message) = stream.next() => {
+                        // @TODO: deduplicate messages.
+                        // @TODO: check that this message is a part of our topic T set.
                         let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                         let TopicLogSyncMessage::Live{header, body} = message else {
                             return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
@@ -259,10 +266,12 @@ where
 /// Topic log sync live-mode message types.
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
+    /// Message received from a subscription.
     FromSub {
         header: Header<E>,
         body: Option<Body>,
     },
+    /// Message received from a concurrent sync session.
     FromSync {
         header: Header<E>,
         body: Option<Body>,

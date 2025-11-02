@@ -231,9 +231,7 @@ where
 
                     // We perform a loop awaiting futures on both the receiving stream and the
                     // list of operations we have to send. This means that processing of both
-                    // streams is done concurrently. Most importantly, clearing the send stream
-                    // will not block processing of the receive stream, and thus avoiding that the
-                    // receive buffer grows too large.
+                    // streams is done concurrently.
                     loop {
                         select! {
                             Some(message) = stream.next(), if !sync_done_received => {
