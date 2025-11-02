@@ -128,6 +128,14 @@ where
         if let Some(mut live_mode_rx) = self.live_mode_rx {
             loop {
                 tokio::select! {
+                    biased;
+                    Some(message) = stream.next() => {
+                        let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                        let TopicLogSyncMessage::Live{header, body} = message else {
+                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(message));
+                        };
+                        self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
+                    }
                     Ok(message) = live_mode_rx.recv() => {
                         match message {
                             LiveModeMessage::FromSub { header, body } => {
@@ -142,15 +150,10 @@ where
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                             }
-                            LiveModeMessage::Close => return Ok(()),
+                            LiveModeMessage::Close => {
+                                return Ok(())
+                            },
                         };
-                    }
-                    Some(message) = stream.next() => {
-                        let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
-                        let TopicLogSyncMessage::Live{header, body} = message else {
-                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(message));
-                        };
-                        self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
                 }
             }
