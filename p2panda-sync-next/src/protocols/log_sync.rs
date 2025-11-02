@@ -290,7 +290,7 @@ where
                     break;
                 }
             }
-        };
+        }
 
         sink.flush()
             .await
@@ -494,7 +494,9 @@ mod tests {
     use futures::StreamExt;
     use p2panda_core::Body;
 
-    use crate::log_sync::{LogSyncError, LogSyncEvent, Logs, LogSyncMetrics, Operation, StatusEvent};
+    use crate::log_sync::{
+        LogSyncError, LogSyncEvent, LogSyncMetrics, Logs, Operation, StatusEvent,
+    };
     use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
 
     #[tokio::test]
