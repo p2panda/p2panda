@@ -588,10 +588,10 @@ mod tests {
             + header_2.payload_size
             + header_bytes_2.len() as u64;
 
-            let events = event_rx.collect::<Vec<_>>().await;
-            assert_eq!(events.len(), 4);
-            for (index, event) in events.into_iter().enumerate() {
-                match index {
+        let events = event_rx.collect::<Vec<_>>().await;
+        assert_eq!(events.len(), 4);
+        for (index, event) in events.into_iter().enumerate() {
+            match index {
                 0 => {
                     assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. }));
                 }

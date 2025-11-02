@@ -132,7 +132,7 @@ where
                     Some(message) = stream.next() => {
                         let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                         let TopicLogSyncMessage::Live{header, body} = message else {
-                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(message));
+                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
                         };
                         self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
@@ -250,7 +250,7 @@ where
     TopicMap(M::Error),
 
     #[error("unexpected protocol message: {0:?}")]
-    UnexpectedProtocolMessage(TopicLogSyncMessage<T, L, E>),
+    UnexpectedProtocolMessage(Box<TopicLogSyncMessage<T, L, E>>),
 
     #[error(transparent)]
     Channel(#[from] TopicSyncChannelError),
