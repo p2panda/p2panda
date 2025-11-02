@@ -26,32 +26,32 @@ pub enum State {
     Start,
 
     /// Calculate local log heights and send Have message to remote.
-    SendHave { metrics: Metrics },
+    SendHave { metrics: LogSyncMetrics },
 
     /// Receive have message from remote and calculate operation diff.
-    ReceiveHave { metrics: Metrics },
+    ReceiveHave { metrics: LogSyncMetrics },
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSyncOrDone {
         operations: Vec<Hash>,
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
         operations: Vec<Hash>,
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
         operations: Vec<Hash>,
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
 
     /// Announce on the event stream that the sync session successfully completed.
-    End { metrics: Metrics },
+    End { metrics: LogSyncMetrics },
 }
 
 /// Efficient sync protocol for append-only log data types.
@@ -83,7 +83,7 @@ where
     Evt: From<LogSyncEvent<E>>,
 {
     type Error = LogSyncError<L, E, S>;
-    type Output = Metrics;
+    type Output = ();
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -94,10 +94,10 @@ where
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
 
-        let metrics = loop {
+        loop {
             match self.state {
                 State::Start => {
-                    let metrics = Metrics::default();
+                    let metrics = LogSyncMetrics::default();
                     self.event_tx
                         .send(
                             LogSyncEvent::Status(StatusEvent::Started {
@@ -221,7 +221,7 @@ where
                 }
                 State::Sync {
                     operations,
-                    metrics,
+                    mut metrics,
                 } => {
                     let mut operation_stream = stream::iter(operations);
                     let mut sent_operations = 0;
@@ -238,6 +238,9 @@ where
                                 let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
+                                        metrics.total_bytes_received += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
+                                        metrics.total_operations_received += 1;
+
                                         // TODO: validate that the operations and bytes received matches the total
                                         // bytes the remote sent in their PreSync message.
                                         let header: Header<E> = decode_cbor(&header[..])?;
@@ -255,6 +258,8 @@ where
                             },
                             Some(hash) = operation_stream.next() => {
                                 let (header, body) = self.store.get_raw_operation(hash).await.map_err(LogSyncError::OperationStore)?.expect("operation to be in store");
+                                metrics.total_bytes_sent += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
+                                metrics.total_operations_sent += 1;
                                 sink.send(LogSyncMessage::Operation(header, body)).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                 sent_operations += 1;
                                 if sent_operations >= total_operations {
@@ -282,7 +287,7 @@ where
                             .into(),
                         )
                         .await?;
-                    break metrics;
+                    break;
                 }
             }
         };
@@ -292,7 +297,7 @@ where
             .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
-        Ok(metrics)
+        Ok(())
     }
 }
 
@@ -421,30 +426,34 @@ pub enum LogSyncEvent<E> {
     Data(Box<Operation<E>>),
 }
 
-/// Sync session metrics emitted in session event messages.
+/// Sync metrics emitted in event messages.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct Metrics {
+pub struct LogSyncMetrics {
     pub total_operations_local: Option<u64>,
     pub total_operations_remote: Option<u64>,
+    pub total_operations_received: u64,
+    pub total_operations_sent: u64,
     pub total_bytes_local: Option<u64>,
     pub total_bytes_remote: Option<u64>,
+    pub total_bytes_received: u64,
+    pub total_bytes_sent: u64,
 }
 
-/// Sync session status variants carried on log sync session events.
+/// Sync status variants sent on log sync events.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StatusEvent {
     Started {
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
     Progress {
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
     Completed {
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
     Failed {
         error_message: String,
-        metrics: Metrics,
+        metrics: LogSyncMetrics,
     },
 }
 
@@ -485,7 +494,7 @@ mod tests {
     use futures::StreamExt;
     use p2panda_core::Body;
 
-    use crate::log_sync::{LogSyncError, LogSyncEvent, Logs, Metrics, Operation, StatusEvent};
+    use crate::log_sync::{LogSyncError, LogSyncEvent, Logs, LogSyncMetrics, Operation, StatusEvent};
     use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
 
     #[tokio::test]
@@ -507,7 +516,7 @@ mod tests {
                 0 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Started { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(StatusEvent::Started { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, None);
@@ -516,7 +525,7 @@ mod tests {
                 1 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress { metrics: Metrics { total_operations_local, total_bytes_local, .. } })
+                        LogSyncEvent::Status(StatusEvent::Progress { metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. } })
                          => (total_operations_local, total_bytes_local)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -525,7 +534,7 @@ mod tests {
                 2 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(StatusEvent::Progress { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -534,7 +543,7 @@ mod tests {
                 3 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Completed { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(StatusEvent::Completed { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -597,7 +606,7 @@ mod tests {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
                         LogSyncEvent::Status(StatusEvent::Progress {
-                            metrics: Metrics { total_operations_local, total_bytes_local, .. }
+                            metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. }
                         }) => (total_operations_local, total_bytes_local)
                     );
                     assert_eq!(total_operations, Some(3));
@@ -608,7 +617,7 @@ mod tests {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
                         LogSyncEvent::Status(StatusEvent::Progress {
-                            metrics: Metrics { total_operations_remote, total_bytes_remote, .. }
+                            metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
                         }) => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -618,7 +627,7 @@ mod tests {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
                         LogSyncEvent::Status(StatusEvent::Completed {
-                            metrics: Metrics { total_operations_remote, total_bytes_remote, .. }
+                            metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
                         }) => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -755,7 +764,22 @@ mod tests {
                     assert_eq!(body_inner.unwrap(), body_a);
                 }
                 5 => {
-                    assert_matches!(event, LogSyncEvent::Status(StatusEvent::Completed { .. }));
+                    let metrics = assert_matches!(event, LogSyncEvent::Status(StatusEvent::Completed { metrics }) => metrics);
+                    let LogSyncMetrics {
+                        total_operations_local,
+                        total_operations_remote,
+                        total_operations_received,
+                        total_operations_sent,
+                        total_bytes_local,
+                        total_bytes_remote,
+                        total_bytes_received,
+                        total_bytes_sent,
+                    } = metrics;
+
+                    assert_eq!(total_operations_remote.unwrap(), total_operations_received);
+                    assert_eq!(total_bytes_remote.unwrap(), total_bytes_received);
+                    assert_eq!(total_operations_local.unwrap(), total_operations_sent);
+                    assert_eq!(total_bytes_local.unwrap(), total_bytes_sent);
                 }
                 _ => panic!(),
             }

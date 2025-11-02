@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
 
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs, Metrics};
+use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
@@ -116,7 +116,7 @@ where
             .map_err(TopicLogSyncError::<T, S, M, L, E>::TopicMap)?;
 
         // Run the log sync protocol passing in our local topic logs.
-        let metrics = {
+        {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
             let protocol = LogSyncProtocol::new(self.store.clone(), logs, self.event_tx.clone());
             protocol
@@ -130,6 +130,7 @@ where
         // subscription or other concurrent sync sessions. In both cases we should deduplicate
         // messages and also check they are part of our topic sub-set selection before forwarding
         // them on the event stream, or to the remote peer.
+        let mut metrics = LiveModeMetrics::default();
         if let Some(mut live_mode_rx) = self.live_mode_rx {
             loop {
                 tokio::select! {
@@ -141,11 +142,15 @@ where
                         let TopicLogSyncMessage::Live{header, body} = message else {
                             return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
                         };
+                        metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
+                        metrics.operations_received += 1;
                         self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
                     Ok(message) = live_mode_rx.recv() => {
                         match message {
                             LiveModeMessage::FromSub { header, body } => {
+                                metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
+                                metrics.operations_sent += 1;
                                 sink.send(TopicLogSyncMessage::Live { header, body })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
@@ -153,6 +158,8 @@ where
                             LiveModeMessage::FromSync { header, body } => {
                                 // @TODO: deduplicate messages.
                                 // @TODO: check that this message is a part of our topic T set.
+                                metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
+                                metrics.operations_sent += 1;
                                 sink.send(TopicLogSyncMessage::Live { header, body })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
@@ -264,6 +271,15 @@ where
     Channel(#[from] TopicSyncChannelError),
 }
 
+/// Sync metrics emitted in event messages.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct LiveModeMetrics {
+    pub operations_received: u64,
+    pub operations_sent: u64,
+    pub bytes_received: u64,
+    pub bytes_sent: u64,
+}
+
 /// Topic log sync live-mode message types.
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
@@ -299,7 +315,7 @@ pub enum TopicLogSyncEvent<T, E> {
         body: Option<Body>,
     },
     Close {
-        metrics: Metrics,
+        metrics: LiveModeMetrics,
     },
 }
 
@@ -380,12 +396,12 @@ pub mod tests {
     use futures::StreamExt;
     use p2panda_core::{Body, Operation};
 
-    use crate::log_sync::{LogSyncEvent, LogSyncMessage, Metrics, StatusEvent};
+    use crate::log_sync::{LogSyncEvent, LogSyncMessage, StatusEvent};
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
     use crate::topic_handshake::{TopicHandshakeEvent, TopicHandshakeMessage};
-    use crate::topic_log_sync::{LiveModeMessage, Role};
+    use crate::topic_log_sync::{LiveModeMessage, LiveModeMetrics, Role};
 
     #[tokio::test]
     async fn sync_session_no_operations() {
@@ -442,14 +458,12 @@ pub mod tests {
                     );
                 }
                 5 => {
-                    let (total_operations, total_bytes) = assert_matches!(
+                    assert_matches!(
                         event,
-                        TestTopicSyncEvent::Sync (
-                            LogSyncEvent::Status(StatusEvent::Completed { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } }),
-                        ) => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ))
+                    )
                 }
                 _ => panic!(),
             };
@@ -551,14 +565,12 @@ pub mod tests {
                     );
                 }
                 6 => {
-                    let (total_operations, total_bytes) = assert_matches!(
+                    assert_matches!(
                         event,
-                        TestTopicSyncEvent::Sync (
-                            LogSyncEvent::Status(StatusEvent::Completed { metrics: Metrics { total_operations_remote, total_bytes_remote, .. } }),
-                        ) => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
+                        TestTopicSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ))
+                    )
                 }
                 _ => panic!(),
             };
@@ -794,7 +806,11 @@ pub mod tests {
         peer_a.insert_topic(&topic, &logs);
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
+        let expected_live_mode_bytes_received =
+            header_1.payload_size + header_1.to_bytes().len() as u64;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
+        let expected_live_mode_bytes_sent =
+            header_2.payload_size + header_2.to_bytes().len() as u64;
 
         let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
 
@@ -889,7 +905,18 @@ pub mod tests {
                     assert_matches!(event, TestTopicSyncEvent::Live { .. });
                 }
                 9 => {
-                    assert_matches!(event, TestTopicSyncEvent::Close { .. });
+                    let metrics =
+                        assert_matches!(event, TestTopicSyncEvent::Close { metrics } => metrics);
+                    let LiveModeMetrics {
+                        operations_received,
+                        operations_sent,
+                        bytes_received,
+                        bytes_sent,
+                    } = metrics;
+                    assert_eq!(operations_received, 1);
+                    assert_eq!(operations_sent, 1);
+                    assert_eq!(bytes_received, expected_live_mode_bytes_received);
+                    assert_eq!(bytes_sent, expected_live_mode_bytes_sent);
                 }
                 _ => panic!(),
             };
