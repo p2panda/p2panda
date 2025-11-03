@@ -9,3 +9,4 @@ pub mod test_utils;
 pub mod traits;
 
 pub use protocols::{log_sync, topic_handshake, topic_log_sync};
+pub use dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
