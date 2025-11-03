@@ -6,6 +6,7 @@ members = [
     "p2panda-blobs",
     "p2panda-core",
     "p2panda-discovery",
+    "p2panda-discovery-next",
     "p2panda-encryption",
     "p2panda-net",
     "p2panda-spaces",
