@@ -116,6 +116,32 @@ pub trait LocalLogStore<LogId, Extensions> {
         from: Option<u64>,
     ) -> Result<Option<Vec<RawOperation>>, Self::Error>;
 
+    /// Get the sum of header and body bytes from an authors' log.
+    ///
+    /// The `from` value will be used as the starting index for log retrieval, if supplied,
+    /// otherwise the sum of all operation bytes will be returned.
+    ///
+    /// Returns `None` when either the author or a log with the requested id was not found.
+    async fn get_log_size(
+        &self,
+        public_key: &PublicKey,
+        log_id: &LogId,
+        from: Option<u64>,
+    ) -> Result<Option<u64>, Self::Error>;
+
+    /// Get hashes from an authors' log ordered by sequence number.
+    ///
+    /// The `from` value will be used as the starting index for log retrieval, if supplied,
+    /// otherwise hashes for all operations will be returned.
+    ///
+    /// Returns `None` when either the author or a log with the requested id was not found.
+    async fn get_log_hashes(
+        &self,
+        public_key: &PublicKey,
+        log_id: &LogId,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<Hash>>, Self::Error>;
+
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
     async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, Self::Error>;
 
