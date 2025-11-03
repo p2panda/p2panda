@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use ringbuffer::{AllocRingBuffer, RingBuffer};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 
 pub static DEFAULT_BUFFER_CAPACITY: usize = 10000;
@@ -10,14 +9,14 @@ pub static DEFAULT_BUFFER_CAPACITY: usize = 10000;
 /// the buffer.
 #[derive(Debug)]
 pub struct Dedup<T> {
-    buffer: AllocRingBuffer<T>,
+    buffer: VecDeque<T>,
     set: HashSet<T>,
 }
 
 impl<T> Default for Dedup<T> {
     fn default() -> Self {
         Self {
-            buffer: AllocRingBuffer::new(DEFAULT_BUFFER_CAPACITY),
+            buffer: VecDeque::with_capacity(DEFAULT_BUFFER_CAPACITY),
             set: HashSet::with_capacity(DEFAULT_BUFFER_CAPACITY),
         }
     }
@@ -30,7 +29,7 @@ where
     /// Instantiate a new buffer with "capacity" buffer size.
     pub fn new(capacity: usize) -> Self {
         Self {
-            buffer: AllocRingBuffer::new(capacity),
+            buffer: VecDeque::with_capacity(capacity),
             set: HashSet::with_capacity(capacity),
         }
     }
@@ -46,12 +45,17 @@ where
             return false;
         }
 
-        let evicted = self.buffer.enqueue(item.clone());
-
-        if let Some(ref removed) = evicted {
-            self.set.remove(removed);
+        // If the buffer is at max capacity then we first need to pop an item from the front and
+        // remove it from the set.
+        if self.buffer.len() + 1 > self.buffer.capacity() {
+            let evicted = self.buffer.pop_front();
+            if let Some(evicted) = evicted {
+                println!("evicted");
+                self.set.remove(&evicted);
+            }
         }
 
+        self.buffer.push_back(item.clone());
         self.set.insert(item);
         true
     }
