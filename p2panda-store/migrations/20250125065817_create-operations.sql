@@ -14,5 +14,6 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     previous                TEXT            NOT NULL,
     extensions              BLOB            NULL,
     body                    BLOB            NULL,
-    header_bytes            TEXT            NOT NULL
+    header_bytes            TEXT            NOT NULL,
+    header_size             TEXT            NOT NULL
 );
