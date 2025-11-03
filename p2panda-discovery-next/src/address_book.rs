@@ -81,7 +81,7 @@ pub trait AddressBookStore<T, ID, N> {
         topics: impl IntoIterator<Item = T>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
-    /// Sets the list of "topic identifiers" this node is "interested" in in
+    /// Sets the list of "topic identifiers" this node is "interested" in.
     ///
     /// Topic ids for gossip overlays (used for ephemeral messaging) are usually shared privately
     /// and directly with nodes, this is why implementers usually want to simply overwrite the

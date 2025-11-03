@@ -70,7 +70,7 @@
 //! ## Inspiration
 //!
 //! To use Private Equality Testing in this "category" of peer-to-peer protocols was (to our
-//! knowledge) first suggested by the [Willow](https://willowprotocol.org/) and we believe that
+//! knowledge) first suggested by [Willow](https://willowprotocol.org/) and we believe that
 //! this is the only way towards ["more fine"](https://newdesigncongress.org/en/pub/this-is-fine/)
 //! peer-to-peer systems.
 //!
