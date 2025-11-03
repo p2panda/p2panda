@@ -14,7 +14,7 @@ use p2panda_core::cbor::{DecodeError, EncodeError, encode_cbor};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::operations::{LogId, LogStore, OperationStore};
-use crate::sqlite::models::{LogHeightRow, OperationRow, RawOperationRow};
+use crate::sqlite::models::{ByteCount, HashValue, LogHeightRow, OperationRow, RawOperationRow};
 
 #[derive(Debug, Error)]
 pub enum SqliteStoreError {
@@ -136,10 +136,11 @@ where
                     previous,
                     extensions,
                     body,
-                    header_bytes
+                    header_bytes,
+                    header_size
                 )
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(hash.to_string())
@@ -163,6 +164,7 @@ where
         .bind(encode_cbor(&header.extensions).expect("extenions are serializable"))
         .bind(body.map(|body| body.to_bytes()))
         .bind(header_bytes)
+        .bind(header_bytes.len().to_string())
         .execute(&self.pool)
         .await?;
 
@@ -388,6 +390,76 @@ where
             Ok(None)
         } else {
             Ok(Some(log))
+        }
+    }
+
+    async fn get_log_size(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<u64>, Self::Error> {
+        let bytes_count = query_as::<_, ByteCount>(
+            "
+            SELECT
+                CAST(SUM(CAST(header_size AS NUMERIC)) AS TEXT) AS total_header_size,
+                CAST(SUM(CAST(payload_size AS NUMERIC)) AS TEXT) AS total_payload_size
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) >= CAST(? as NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(from.unwrap_or(0).to_string())
+        .fetch_one(&self.pool)
+        .await?;
+
+        let total_bytes = bytes_count.total_header_size.parse::<u64>().unwrap()
+            + bytes_count.total_payload_size.parse::<u64>().unwrap();
+
+        if total_bytes == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(total_bytes))
+        }
+    }
+
+    async fn get_log_hashes(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<Hash>>, Self::Error> {
+        let hashes = query_as::<_, HashValue>(
+            "
+            SELECT
+                hash
+            FROM
+                operations_v1
+            WHERE
+                public_key = ?
+                AND log_id = ?
+                AND CAST(seq_num AS NUMERIC) >= CAST(? as NUMERIC)
+            ORDER BY
+                CAST(seq_num AS NUMERIC)
+            ",
+        )
+        .bind(public_key.to_string())
+        .bind(calculate_hash(log_id).to_string())
+        .bind(from.unwrap_or(0).to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        let hashes: Vec<Hash> = hashes.into_iter().map(Into::<Hash>::into).collect();
+
+        if hashes.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(hashes))
         }
     }
 
@@ -830,6 +902,89 @@ mod tests {
         assert_eq!(log[1].0, header_bytes_2);
         assert_eq!(log[0].1, Some(body_1.to_bytes()));
         assert_eq!(log[1].1, Some(body_2.to_bytes()));
+    }
+
+    #[tokio::test]
+    async fn get_log_hashes_and_size() {
+        let db_pool = initialize_sqlite_db().await;
+        let mut store = SqliteStore::new(db_pool);
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello for a third time!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 0, Some(hash_1));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &0)
+            .await
+            .expect("no errors");
+
+        // Get all log hashes.
+        let hashes = store
+            .get_log_hashes(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(hashes.len(), 3);
+        assert_eq!(hashes[0], hash_0);
+        assert_eq!(hashes[1], hash_1);
+        assert_eq!(hashes[2], hash_2);
+
+        // Get sum of log byte lengths.
+        let size = store
+            .get_log_size(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        let expected_size = header_bytes_0.len() as u64
+            + header_0.payload_size
+            + header_bytes_1.len() as u64
+            + header_1.payload_size
+            + header_bytes_2.len() as u64
+            + header_2.payload_size;
+        assert_eq!(size, expected_size);
+
+        // Get all log hashes starting from sequence number 1.
+        let hashes = store
+            .get_log_hashes(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(hashes.len(), 2);
+        assert_eq!(hashes[0], hash_1);
+        assert_eq!(hashes[1], hash_2);
+
+        // Get sum of log byte lengths from sequence number 1.
+        let size = store
+            .get_log_size(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        let expected_size = header_bytes_1.len() as u64
+            + header_1.payload_size
+            + header_bytes_2.len() as u64
+            + header_2.payload_size;
+        assert_eq!(size, expected_size);
     }
 
     #[tokio::test]

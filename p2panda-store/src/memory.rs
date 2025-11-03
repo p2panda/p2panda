@@ -238,6 +238,70 @@ where
         }
     }
 
+    async fn get_log_size(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<u64>, Self::Error> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut bytes_count = 0;
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, header, _, header_bytes) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            bytes_count += header.payload_size;
+                            bytes_count += header_bytes.len() as u64;
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, header, _, header_bytes) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        bytes_count += header.payload_size;
+                        bytes_count += header_bytes.len() as u64;
+                    });
+                }
+                Ok(Some(bytes_count))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn get_log_hashes(
+        &self,
+        public_key: &PublicKey,
+        log_id: &L,
+        from: Option<u64>,
+    ) -> Result<Option<Vec<Hash>>, Self::Error> {
+        let store = self.read_store();
+        match store.logs.get(&(*public_key, log_id.to_owned())) {
+            Some(log) => {
+                let mut hashes = Vec::new();
+                if let Some(from) = from {
+                    log.iter().for_each(|(seq_num, _, hash)| {
+                        if *seq_num >= from {
+                            let (_, header, _, _) =
+                                store.operations.get(hash).expect("exists in hash map");
+                            hashes.push(header.hash());
+                        }
+                    });
+                } else {
+                    log.iter().for_each(|(_, _, hash)| {
+                        let (_, header, _, _) =
+                            store.operations.get(hash).expect("exists in hash map");
+                        hashes.push(header.hash());
+                    });
+                }
+                Ok(Some(hashes))
+            }
+            None => Ok(None),
+        }
+    }
+
     async fn latest_operation(
         &self,
         public_key: &PublicKey,
@@ -597,6 +661,88 @@ mod tests {
         assert_eq!(log[1].0, header_bytes_2);
         assert_eq!(log[0].1, Some(body_1.to_bytes()));
         assert_eq!(log[1].1, Some(body_2.to_bytes()));
+    }
+
+    #[tokio::test]
+    async fn get_log_hashes_and_size() {
+        let mut store = MemoryStore::default();
+        let private_key = PrivateKey::new();
+        let log_id = 0;
+
+        let body_0 = Body::new("hello!".as_bytes());
+        let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello for a third time!".as_bytes());
+
+        let (hash_0, header_0, header_bytes_0) =
+            create_operation(&private_key, &body_0, 0, 0, None);
+        let (hash_1, header_1, header_bytes_1) =
+            create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 0, Some(hash_1));
+
+        store
+            .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &0)
+            .await
+            .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &0)
+            .await
+            .expect("no errors");
+
+        // Get all log hashes.
+        let hashes = store
+            .get_log_hashes(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(hashes.len(), 3);
+        assert_eq!(hashes[0], hash_0);
+        assert_eq!(hashes[1], hash_1);
+        assert_eq!(hashes[2], hash_2);
+
+        // Get sum of log byte lengths.
+        let size = store
+            .get_log_size(&private_key.public_key(), &log_id, None)
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        let expected_size = header_bytes_0.len() as u64
+            + header_0.payload_size
+            + header_bytes_1.len() as u64
+            + header_1.payload_size
+            + header_bytes_2.len() as u64
+            + header_2.payload_size;
+        assert_eq!(size, expected_size);
+
+        // Get all log hashes starting from sequence number 1.
+        let hashes = store
+            .get_log_hashes(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        assert_eq!(hashes.len(), 2);
+        assert_eq!(hashes[0], hash_1);
+        assert_eq!(hashes[1], hash_2);
+
+        // Get sum of log byte lengths from sequence number 1.
+        let size = store
+            .get_log_size(&private_key.public_key(), &log_id, Some(1))
+            .await
+            .expect("no errors")
+            .expect("log should exist");
+
+        let expected_size = header_bytes_1.len() as u64
+            + header_1.payload_size
+            + header_bytes_2.len() as u64
+            + header_2.payload_size;
+        assert_eq!(size, expected_size);
     }
 
     #[tokio::test]
