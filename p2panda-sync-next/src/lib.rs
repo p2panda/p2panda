@@ -12,6 +12,7 @@ pub mod traits;
 pub use dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 pub use protocols::{log_sync, topic_handshake, topic_log_sync};
 
+/// Configuration object for instantiated sync sessions.
 #[derive(Clone, Debug)]
 pub struct SyncSessionConfig<T> {
     pub topic: Option<T>,
@@ -27,6 +28,7 @@ impl<T> Default for SyncSessionConfig<T> {
     }
 }
 
+/// Message sent to running sync sessions.
 #[derive(Clone, Debug)]
 pub enum ToSync {
     Payload(Vec<u8>),
