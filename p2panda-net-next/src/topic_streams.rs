@@ -14,7 +14,7 @@
 //!
 //! Use the standard topic stream if you wish to receive past state and (optionally) messages
 //! representing the latest updates in an ongoing manner.
-use ractor::{ActorRef, call, registry};
+use ractor::{ActorRef, RactorErr, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
@@ -34,11 +34,14 @@ pub enum StreamError<T> {
     #[error(transparent)]
     Recv(#[from] RecvError),
 
-    #[error("subscription actor is not available to create topic subscription")]
-    SubscriptionNotAvailable,
+    #[error("actor {0} failed to process request")]
+    Actor(String),
+
+    #[error("failed to call {0} actor; it may be in the process of restarting")]
+    ActorNotFound(String),
 
     #[error("no stream exists for the given topic")]
-    StreamDoesNotExist,
+    StreamNotFound,
 }
 
 /// A handle to an ephemeral messaging stream.
@@ -85,14 +88,14 @@ impl EphemeralStream {
             // Ask the subscription actor for an ephemeral stream subscriber.
             if let Some(subscription) =
                 call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
-                    .map_err(|_| StreamError::SubscriptionNotAvailable)?
+                    .map_err(|_| StreamError::Actor("subscription".to_string()))?
             {
                 Ok(subscription)
             } else {
-                Err(StreamError::StreamDoesNotExist)
+                Err(StreamError::StreamNotFound)
             }
         } else {
-            Err(StreamError::SubscriptionNotAvailable)
+            Err(StreamError::ActorNotFound("subscription".to_string()))
         }
     }
 
@@ -110,10 +113,12 @@ impl EphemeralStream {
 
             actor
                 .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
-                .map_err(|_| StreamError::SubscriptionNotAvailable)?;
-        }
+                .map_err(|_| StreamError::Actor("subscription".to_string()))?;
 
-        Ok(())
+            Ok(())
+        } else {
+            Err(StreamError::ActorNotFound("subscription".to_string()))
+        }
     }
 }
 
