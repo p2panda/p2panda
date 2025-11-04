@@ -11,10 +11,10 @@ use tokio::task::JoinHandle;
 
 use crate::actors::subscription::ToSubscription;
 use crate::actors::supervisor::{NetworkConfig, Supervisor};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralTopicStream;
-use crate::utils::with_suffix;
 use crate::{NetworkId, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
@@ -111,24 +111,18 @@ impl NetworkBuilder {
     pub async fn build(self) -> Result<Network, NetworkError> {
         let private_key = self.private_key.unwrap_or_default();
 
-        // Compute the six character public key suffix.
-        //
-        // The suffix is used to create actor names which are unique to the node.
-        let public_key_suffix = &private_key.public_key().to_hex()[..6];
+        // Compute a six character actor namespace using the node's public key.
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
 
         // Spawn the root-level supervisor actor.
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
-            Some(with_suffix("supervisor", public_key_suffix)),
+            Some(with_namespace("supervisor", &actor_namespace)),
             Supervisor,
             (private_key, self.network_config),
         )
         .await?;
 
-        let network = Network::new(
-            public_key_suffix.to_string(),
-            supervisor_actor,
-            supervisor_actor_handle,
-        );
+        let network = Network::new(actor_namespace, supervisor_actor, supervisor_actor_handle);
 
         Ok(network)
     }
@@ -145,19 +139,19 @@ pub enum NetworkError {
 
 #[derive(Debug)]
 pub struct Network {
-    public_key_suffix: String,
+    actor_namespace: ActorNamespace,
     supervisor_actor: ActorRef<()>,
     supervisor_actor_handle: JoinHandle<()>,
 }
 
 impl Network {
     fn new(
-        public_key_suffix: String,
+        actor_namespace: ActorNamespace,
         supervisor_actor: ActorRef<()>,
         supervisor_actor_handle: JoinHandle<()>,
     ) -> Self {
         Self {
-            public_key_suffix,
+            actor_namespace,
             supervisor_actor,
             supervisor_actor_handle,
         }
@@ -181,7 +175,7 @@ impl Network {
     ) -> Result<EphemeralTopicStream, NetworkError> {
         // Get a reference to the subscription actor.
         if let Some(subscription_actor) =
-            registry::where_is(with_suffix("subscription", &self.public_key_suffix))
+            registry::where_is(with_namespace("subscription", &self.actor_namespace))
         {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 

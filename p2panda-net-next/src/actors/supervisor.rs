@@ -12,7 +12,7 @@ use crate::actors::address_book::{AddressBook, ToAddressBook};
 use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::events::{Events, ToEvents};
-use crate::utils::{with_suffix, without_suffix};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 
 // TODO: Rename or move...feels out of place here now.
 // adz has an `Arguments` struct in his code; use that.
@@ -30,7 +30,7 @@ pub struct SupervisorState {
     address_book_actor_failures: u16,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
-    public_key_suffix: String,
+    actor_namespace: ActorNamespace,
 }
 
 pub struct Supervisor;
@@ -47,11 +47,11 @@ impl Actor for Supervisor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (private_key, config) = args;
 
-        let public_key_suffix = private_key.public_key().to_hex()[..6].to_string();
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
 
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("events", &public_key_suffix)),
+            Some(with_namespace("events", &actor_namespace)),
             Events,
             (),
             myself.clone().into(),
@@ -60,7 +60,7 @@ impl Actor for Supervisor {
 
         // Spawn the endpoint actor.
         let (endpoint_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("endpoint", &public_key_suffix)),
+            Some(with_namespace("endpoint", &actor_namespace)),
             Endpoint,
             (private_key, config.endpoint_config),
             myself.clone().into(),
@@ -69,7 +69,7 @@ impl Actor for Supervisor {
 
         // Spawn the address book actor.
         let (address_book_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("address book", &public_key_suffix)),
+            Some(with_namespace("address book", &actor_namespace)),
             AddressBook {},
             (),
             myself.clone().into(),
@@ -78,7 +78,7 @@ impl Actor for Supervisor {
 
         // Spawn the discovery actor.
         let (discovery_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("discovery", &public_key_suffix)),
+            Some(with_namespace("discovery", &actor_namespace)),
             Discovery {},
             (),
             myself.clone().into(),
@@ -93,7 +93,7 @@ impl Actor for Supervisor {
             address_book_actor_failures: 0,
             discovery_actor,
             discovery_actor_failures: 0,
-            public_key_suffix,
+            actor_namespace,
         };
 
         Ok(state)
@@ -143,18 +143,18 @@ impl Actor for Supervisor {
                 if let Some(name) = actor.get_name() {
                     debug!(
                         "supervisor actor: received ready from {} actor",
-                        without_suffix(&name)
+                        without_namespace(&name)
                     );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_suffix("events", &state.public_key_suffix) {
+                    if name == with_namespace("events", &state.actor_namespace) {
                         warn!("supervisor actor: events actor failed: {}", panic_msg);
 
                         // Respawn the events actor.
                         let (events_actor, _) = Actor::spawn_linked(
-                            Some(with_suffix("events", &state.public_key_suffix)),
+                            Some(with_namespace("events", &state.actor_namespace)),
                             Events {},
                             (),
                             myself.clone().into(),
@@ -163,18 +163,18 @@ impl Actor for Supervisor {
 
                         state.events_actor_failures += 1;
                         state.events_actor = events_actor;
-                    } else if name == with_suffix("endpoint", &state.public_key_suffix) {
+                    } else if name == with_namespace("endpoint", &state.actor_namespace) {
                         warn!("supervisor actor: endpoint actor failed: {}", panic_msg);
 
                         // If the endpoint actor fails then the entire system is compromised and we
                         // stop the top-level supervisor actor.
                         myself.stop(Some("endpoint actor failed".to_string()));
-                    } else if name == with_suffix("address book", &state.public_key_suffix) {
+                    } else if name == with_namespace("address book", &state.actor_namespace) {
                         warn!("supervisor actor: address book actor failed: {}", panic_msg);
 
                         // Respawn the address book actor.
                         let (address_book_actor, _) = Actor::spawn_linked(
-                            Some(with_suffix("address book", &state.public_key_suffix)),
+                            Some(with_namespace("address book", &state.actor_namespace)),
                             AddressBook {},
                             (),
                             myself.clone().into(),
@@ -183,12 +183,12 @@ impl Actor for Supervisor {
 
                         state.address_book_actor_failures += 1;
                         state.address_book_actor = address_book_actor;
-                    } else if name == with_suffix("discovery", &state.public_key_suffix) {
+                    } else if name == with_namespace("discovery", &state.actor_namespace) {
                         warn!("supervisor actor: discovery actor failed: {}", panic_msg);
 
                         // Respawn the discovery actor.
                         let (discovery_actor, _) = Actor::spawn_linked(
-                            Some(with_suffix("discovery", &state.public_key_suffix)),
+                            Some(with_namespace("discovery", &state.actor_namespace)),
                             Discovery {},
                             (),
                             myself.clone().into(),
@@ -204,7 +204,7 @@ impl Actor for Supervisor {
                 if let Some(name) = actor.get_name() {
                     debug!(
                         "supervisor actor: {} actor terminated",
-                        without_suffix(&name)
+                        without_namespace(&name)
                     );
                 }
             }
@@ -223,7 +223,7 @@ mod tests {
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
-    use crate::utils::with_suffix;
+    use crate::actors::{generate_actor_namespace, with_namespace};
 
     use super::Supervisor;
 
@@ -232,12 +232,12 @@ mod tests {
     #[serial]
     async fn supervisor_child_actors_are_started() {
         let private_key: PrivateKey = Default::default();
-        let public_key_suffix = &private_key.public_key().to_hex()[..6];
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
 
         let network_config = Default::default();
 
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
-            Some(with_suffix("supervisor", &public_key_suffix)),
+            Some(with_namespace("supervisor", &actor_namespace)),
             Supervisor,
             (private_key, network_config),
         )

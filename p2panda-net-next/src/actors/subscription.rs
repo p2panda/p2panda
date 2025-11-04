@@ -20,9 +20,9 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
+use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralTopicStream, EphemeralTopicStreamSubscription};
-use crate::utils::{with_suffix, without_suffix};
 use crate::{TopicId, to_public_key};
 
 pub enum ToSubscription {
@@ -60,11 +60,11 @@ impl Actor for Subscription {
         myself: ActorRef<Self::Msg>,
         endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let public_key_suffix = to_public_key(endpoint.node_id()).to_hex()[..6].to_string();
+        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.node_id()));
 
         // Spawn the gossip actor.
         let (gossip_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("gossip", &public_key_suffix)),
+            Some(with_namespace("gossip", &actor_namespace)),
             Gossip {},
             endpoint.clone(),
             myself.clone().into(),
@@ -73,7 +73,7 @@ impl Actor for Subscription {
 
         // Spawn the sync actor.
         let (sync_actor, _) = Actor::spawn_linked(
-            Some(with_suffix("sync", &public_key_suffix)),
+            Some(with_namespace("sync", &actor_namespace)),
             Sync {},
             (),
             myself.into(),
@@ -120,8 +120,8 @@ impl Actor for Subscription {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToSubscription::CreateEphemeralStream(topic_id, reply) => {
-                let public_key_suffix =
-                    to_public_key(state.endpoint.node_id()).to_hex()[..6].to_string();
+                let actor_namespace =
+                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
 
                 // TODO: Ask address book for all peers interested in this topic id.
                 let peers = Vec::new();
@@ -131,7 +131,7 @@ impl Actor for Subscription {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
 
-                    EphemeralTopicStream::new(topic_id, to_gossip_tx.clone(), public_key_suffix)
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx.clone(), actor_namespace)
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
@@ -147,7 +147,7 @@ impl Actor for Subscription {
                     // when the user calls `.subscribe()` on `EphemeralTopicStream`.
                     state.gossip_senders.insert(topic_id, from_gossip_tx);
 
-                    EphemeralTopicStream::new(topic_id, to_gossip_tx, public_key_suffix)
+                    EphemeralTopicStream::new(topic_id, to_gossip_tx, actor_namespace)
                 };
 
                 if !reply.is_closed() {
@@ -190,21 +190,21 @@ impl Actor for Subscription {
                 if let Some(name) = actor.get_name() {
                     debug!(
                         "subscription actor: received ready from {} actor",
-                        without_suffix(&name)
+                        without_namespace(&name)
                     );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let public_key_suffix =
-                    to_public_key(state.endpoint.node_id()).to_hex()[..6].to_string();
+                let actor_namespace =
+                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
 
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_suffix("gossip", &public_key_suffix) {
+                    if name == with_namespace("gossip", &actor_namespace) {
                         warn!("subscription actor: gossip actor failed: {}", panic_msg);
 
                         // Respawn the gossip actor.
                         let (gossip_actor, _) = Actor::spawn_linked(
-                            Some(with_suffix("gossip", &public_key_suffix)),
+                            Some(with_namespace("gossip", &actor_namespace)),
                             Gossip {},
                             state.endpoint.clone(),
                             myself.clone().into(),
@@ -213,12 +213,12 @@ impl Actor for Subscription {
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
-                    } else if name == with_suffix("sync", &public_key_suffix) {
+                    } else if name == with_namespace("sync", &actor_namespace) {
                         warn!("subscription actor: sync actor failed: {}", panic_msg);
 
                         // Respawn the sync actor.
                         let (sync_actor, _) = Actor::spawn_linked(
-                            Some(with_suffix("sync", &public_key_suffix)),
+                            Some(with_namespace("sync", &actor_namespace)),
                             Sync {},
                             (),
                             myself.clone().into(),
@@ -234,7 +234,7 @@ impl Actor for Subscription {
                 if let Some(name) = actor.get_name() {
                     debug!(
                         "subscription actor: {} actor terminated",
-                        without_suffix(&name)
+                        without_namespace(&name)
                     );
                 }
             }
