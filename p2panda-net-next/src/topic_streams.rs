@@ -14,7 +14,7 @@
 //!
 //! Use the standard topic stream if you wish to receive past state and (optionally) messages
 //! representing the latest updates in an ongoing manner.
-use ractor::{ActorRef, RactorErr, call, registry};
+use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
@@ -80,11 +80,7 @@ impl EphemeralStream {
     /// the stream.
     pub async fn subscribe(&self) -> Result<EphemeralStreamSubscription, StreamError<()>> {
         // Get a reference to the subscription actor.
-        if let Some(subscription_actor) =
-            registry::where_is(with_namespace("subscription", &self.actor_namespace))
-        {
-            let actor: ActorRef<ToSubscription> = subscription_actor.into();
-
+        if let Some(actor) = self.subscription_actor() {
             // Ask the subscription actor for an ephemeral stream subscriber.
             if let Some(subscription) =
                 call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
@@ -106,11 +102,7 @@ impl EphemeralStream {
 
     /// Closes from the ephemeral messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
-        if let Some(subscription_actor) =
-            registry::where_is(with_namespace("subscription", &self.actor_namespace))
-        {
-            let actor: ActorRef<ToSubscription> = subscription_actor.into();
-
+        if let Some(actor) = self.subscription_actor() {
             actor
                 .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
                 .map_err(|_| StreamError::Actor("subscription".to_string()))?;
@@ -118,6 +110,19 @@ impl EphemeralStream {
             Ok(())
         } else {
             Err(StreamError::ActorNotFound("subscription".to_string()))
+        }
+    }
+
+    /// Internal helper to get a reference to the subscription actor.
+    fn subscription_actor(&self) -> Option<ActorRef<ToSubscription>> {
+        if let Some(subscription_actor) =
+            registry::where_is(with_namespace("subscription", &self.actor_namespace))
+        {
+            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+
+            Some(actor)
+        } else {
+            None
         }
     }
 }
