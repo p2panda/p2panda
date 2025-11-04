@@ -6,8 +6,8 @@
 //! of the spawned actors, restarting them in the event of failure.
 //!
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
-//! `Endpoint` to be passed into the gossip and sync actors in the event that they need to be
-//! respawned.
+//! `Endpoint` to be passed into the gossip actor in the event that it needs to be respawned (since
+//! the `Endpoint` is needed to instantiate iroh `Gossip`).
 use std::collections::HashMap;
 
 use iroh::Endpoint as IrohEndpoint;
