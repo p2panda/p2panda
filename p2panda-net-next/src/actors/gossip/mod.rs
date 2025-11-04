@@ -82,14 +82,20 @@ pub enum ToGossip {
 
 impl Message for ToGossip {}
 
-pub struct GossipState {
-    gossip: IrohGossip,
+#[derive(Default)]
+/// Actor references and channels for gossip sessions.
+struct Sessions {
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
-    neighbours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
     to_gossip_senders: HashMap<TopicId, Sender<Vec<u8>>>,
     from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
+}
+
+pub struct GossipState {
+    gossip: IrohGossip,
+    sessions: Sessions,
+    neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
 
@@ -114,22 +120,14 @@ impl Actor for Gossip {
             .broadcast_config(config.broadcast)
             .spawn(endpoint);
 
-        let sessions_by_actor_id = HashMap::new();
-        let sessions_by_topic_id = HashMap::new();
-        let neighbours_by_topic_id = HashMap::new();
-        let to_gossip_senders = HashMap::new();
-        let from_gossip_senders = HashMap::new();
-        let gossip_joined_senders = HashMap::new();
+        let sessions = Sessions::default();
+        let neighbours = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
 
         let state = GossipState {
             gossip,
-            sessions_by_actor_id,
-            sessions_by_topic_id,
-            neighbours_by_topic_id,
-            to_gossip_senders,
-            from_gossip_senders,
-            gossip_joined_senders,
+            sessions,
+            neighbours,
             topic_delivery_scopes,
         };
 
@@ -208,26 +206,31 @@ impl Actor for Gossip {
                 // Associate the session actor id with the topic.
                 let gossip_session_actor_id = gossip_session_actor.get_id();
                 let _ = state
+                    .sessions
                     .sessions_by_actor_id
                     .insert(gossip_session_actor_id, topic_id);
 
                 // Associate the session actor with the gossip joined sender.
                 let _ = state
+                    .sessions
                     .gossip_joined_senders
                     .insert(gossip_session_actor_id, gossip_joined_tx);
 
                 // Associate the topic id with the session actor.
                 let _ = state
+                    .sessions
                     .sessions_by_topic_id
                     .insert(topic_id, gossip_session_actor);
 
                 // Associate the topic id with the sender from the user to gossip.
                 let _ = state
+                    .sessions
                     .to_gossip_senders
                     .insert(topic_id, to_gossip_tx.clone());
 
                 // Associate the topic id with the sender from gossip to the user.
                 let _ = state
+                    .sessions
                     .from_gossip_senders
                     .insert(topic_id, from_gossip_tx.clone());
 
@@ -240,18 +243,18 @@ impl Actor for Gossip {
             }
             ToGossip::Unsubscribe(topic_id) => {
                 // Stop the session associated with this topic id.
-                if let Some(actor) = state.sessions_by_topic_id.remove(&topic_id) {
+                if let Some(actor) = state.sessions.sessions_by_topic_id.remove(&topic_id) {
                     let actor_id = actor.get_id();
-                    let _ = state.sessions_by_actor_id.remove(&actor_id);
-                    let _ = state.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.sessions.sessions_by_actor_id.remove(&actor_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
 
                     actor.stop(Some("received unsubscribe request".to_string()));
                 }
 
                 // Drop all associated state.
-                let _ = state.neighbours_by_topic_id.remove(&topic_id);
-                let _ = state.to_gossip_senders.remove(&topic_id);
-                let _ = state.from_gossip_senders.remove(&topic_id);
+                let _ = state.sessions.to_gossip_senders.remove(&topic_id);
+                let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                let _ = state.neighbours.remove(&topic_id);
                 let _ = state.topic_delivery_scopes.remove(&topic_id);
 
                 Ok(())
@@ -263,7 +266,7 @@ impl Actor for Gossip {
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
 
-                if let Some(session) = state.sessions_by_topic_id.get(&topic_id) {
+                if let Some(session) = state.sessions.sessions_by_topic_id.get(&topic_id) {
                     let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
                 }
 
@@ -286,7 +289,7 @@ impl Actor for Gossip {
                     .push(delivery_scope);
 
                 // Write the received bytes to all subscribers for the associated topic.
-                if let Some(sender) = state.from_gossip_senders.get(&topic_id) {
+                if let Some(sender) = state.sessions.from_gossip_senders.get(&topic_id) {
                     let _number_of_subscribers = sender.send(msg.clone())?;
                 }
 
@@ -300,7 +303,8 @@ impl Actor for Gossip {
                 debug!("joined topic {:?} with peers: {:?}", topic_id, peers);
 
                 // Inform the gossip sender actor that the overlay has been joined.
-                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id)
+                if let Some(gossip_joined_tx) =
+                    state.sessions.gossip_joined_senders.remove(&session_id)
                     && gossip_joined_tx.send(1).is_err()
                 {
                     warn!("oneshot gossip joined receiver dropped")
@@ -309,14 +313,14 @@ impl Actor for Gossip {
                 let peer_set = HashSet::from_iter(peers);
 
                 // Store the neighbours with whom we have joined the topic.
-                state.neighbours_by_topic_id.insert(topic_id, peer_set);
+                state.neighbours.insert(topic_id, peer_set);
 
                 Ok(())
             }
             ToGossip::NeighborUp { peer, session_id } => {
                 // Insert the peer into the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
                 {
                     peer_set.insert(peer);
                 }
@@ -325,8 +329,8 @@ impl Actor for Gossip {
             }
             ToGossip::NeighborDown { peer, session_id } => {
                 // Remove the peer from the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
                 {
                     peer_set.remove(&peer);
                 }
@@ -345,7 +349,7 @@ impl Actor for Gossip {
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&actor_id) {
                     debug!(
                         "gossip actor: received ready from gossip session actor #{} for topic id {:?}",
                         actor_id, topic_id
@@ -354,17 +358,17 @@ impl Actor for Gossip {
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.remove(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     debug!(
                         "gossip actor: gossip session #{} over topic id {:?} terminated with reason: {:?}",
                         actor_id, topic_id, reason
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    let _ = state.sessions_by_topic_id.remove(&topic_id);
-                    let _ = state.neighbours_by_topic_id.remove(&topic_id);
-                    let _ = state.from_gossip_senders.remove(&topic_id);
-                    let _ = state.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.neighbours.remove(&topic_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -380,17 +384,17 @@ impl Actor for Gossip {
                 // return an error to the user.
 
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.remove(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     warn!(
                         "gossip_actor: gossip session #{} over topic id {:?} failed with reason: {}",
                         actor_id, topic_id, panic_msg
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    let _ = state.sessions_by_topic_id.remove(&topic_id);
-                    let _ = state.neighbours_by_topic_id.remove(&topic_id);
-                    let _ = state.from_gossip_senders.remove(&topic_id);
-                    let _ = state.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.neighbours.remove(&topic_id);
                 }
             }
             _ => (),
@@ -557,9 +561,9 @@ mod tests {
 
         // Ensure state expectations are correct for ant's gossip actor.
         if let Ok(state) = boxed_state.take::<GossipState>() {
-            assert!(state.sessions_by_topic_id.contains_key(&topic_id));
+            assert!(state.sessions.sessions_by_topic_id.contains_key(&topic_id));
 
-            let neighbours = state.neighbours_by_topic_id.get(&topic_id).unwrap();
+            let neighbours = state.neighbours.get(&topic_id).unwrap();
             assert!(neighbours.contains(&bat_public_key));
             assert!(neighbours.contains(&cat_public_key));
         }
