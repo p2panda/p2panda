@@ -1004,7 +1004,7 @@ pub mod tests {
         }
 
         let messages = remote_rx.collect::<Vec<_>>().await;
-        assert_eq!(messages.len(), 4);
+        assert_eq!(messages.len(), 5);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
@@ -1022,6 +1022,9 @@ pub mod tests {
                 } => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
+                }
+                4 => {
+                    assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
@@ -1183,7 +1186,7 @@ pub mod tests {
         }
 
         let messages = remote_rx.collect::<Vec<_>>().await;
-        assert_eq!(messages.len(), 4);
+        assert_eq!(messages.len(), 5);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
@@ -1201,6 +1204,9 @@ pub mod tests {
             } => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
+                }
+                4 => {
+                    assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
