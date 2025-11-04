@@ -71,10 +71,11 @@ where
         self.session_tx_map.insert(session_id, sub_tx.clone());
         let (event_tx, event_rx) = mpsc::channel(128);
 
-        let f: Box<dyn FnMut(TopicLogSyncEvent<T, E>) -> TopicSyncManagerEvent<T, E> + 'static> =
-            Box::new(move |event| TopicSyncManagerEvent { session_id, event });
-
-        self.events_rx_set.push(event_rx.map(f));
+        self.events_rx_set
+            .push(event_rx.map(Box::new(move |event| TopicSyncManagerEvent {
+                session_id,
+                event,
+            })));
 
         TopicLogSync::new(
             self.store.clone(),
