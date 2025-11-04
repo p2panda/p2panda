@@ -50,7 +50,6 @@ where
         if self.buffer.len() + 1 > self.buffer.capacity() {
             let evicted = self.buffer.pop_front();
             if let Some(evicted) = evicted {
-                println!("evicted");
                 self.set.remove(&evicted);
             }
         }
