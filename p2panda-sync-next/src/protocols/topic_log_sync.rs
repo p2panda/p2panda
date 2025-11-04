@@ -10,22 +10,21 @@ use p2panda_core::{Body, Extensions, Header};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::broadcast;
 
-use crate::DEFAULT_BUFFER_CAPACITY;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
 };
-use crate::traits::{Protocol, TopicQuery};
+use crate::traits::{Configurable, Protocol, TopicQuery};
+use crate::{DEFAULT_BUFFER_CAPACITY, SyncSessionConfig};
 
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
     pub topic_map: M,
     pub role: Role<T>,
     pub event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
-    pub live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+    pub live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
 }
@@ -54,7 +53,7 @@ where
         store: S,
         topic_map: M,
         role: Role<T>,
-        live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+        live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
         event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
     ) -> Self {
         Self::new_with_capacity(
@@ -71,7 +70,7 @@ where
         store: S,
         topic_map: M,
         role: Role<T>,
-        live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+        live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
         event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
         buffer_capacity: usize,
     ) -> Self {
@@ -158,11 +157,17 @@ where
                 tokio::select! {
                     biased;
                     Some(message) = stream.next() => {
-                        // @TODO: check that this message is a part of our topic T set.
                         let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                        if let TopicLogSyncMessage::Close = message {
+                            self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
+                            return Ok(());
+                        };
+
+
                         let TopicLogSyncMessage::Live{header, body} = message else {
                             return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
                         };
+                        // @TODO: check that this message is a part of our topic T set.
 
                         // Insert operation hash into deduplication buffer and if it was
                         // previously present do not forward the operation to the application layer.
@@ -174,7 +179,7 @@ where
                         metrics.operations_received += 1;
                         self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
-                    Ok(message) = live_mode_rx.recv() => {
+                    Some(message) = live_mode_rx.next() => {
                         match message {
                             LiveModeMessage::FromSub { header, body } => {
                                 if !dedup.insert(header.hash()) {
@@ -207,6 +212,7 @@ where
                             }
                             LiveModeMessage::Close => {
                                 self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
+                                sink.send(TopicLogSyncMessage::Close).await.map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                                 return Ok(())
                             },
                         };
@@ -240,9 +246,11 @@ pub(crate) fn topic_channels<'a, T, L, E>(
             message.map_err(|err| TopicSyncChannelError::MessageStream(format!("{err:?}")))?;
         match message {
             TopicLogSyncMessage::Handshake(message) => Ok(message),
-            TopicLogSyncMessage::Sync(_) | TopicLogSyncMessage::Live { .. } => Err(
-                TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
-            ),
+            TopicLogSyncMessage::Sync(_)
+            | TopicLogSyncMessage::Live { .. }
+            | TopicLogSyncMessage::Close => Err(TopicSyncChannelError::MessageStream(
+                "non-protocol message received".to_string(),
+            )),
         }
     });
     (topic_sink, topic_stream)
@@ -266,13 +274,42 @@ pub(crate) fn sync_channels<'a, T, L, E>(
         });
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
-        Ok(TopicLogSyncMessage::Handshake(_)) | Ok(TopicLogSyncMessage::Live { .. }) => Err(
-            TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
-        ),
+        Ok(TopicLogSyncMessage::Handshake(_))
+        | Ok(TopicLogSyncMessage::Live { .. })
+        | Ok(TopicLogSyncMessage::Close) => Err(TopicSyncChannelError::MessageStream(
+            "non-protocol message received".to_string(),
+        )),
         Err(err) => Err(TopicSyncChannelError::MessageStream(format!("{err:?}"))),
     });
 
     (log_sync_sink, log_sync_stream)
+}
+
+impl<T, S, M, L, E> Configurable for TopicLogSync<T, S, M, L, E>
+where
+    T: TopicQuery,
+    S: LogStore<L, E> + OperationStore<L, E> + Clone,
+    M: TopicLogMap<T, L> + Clone,
+    L: LogId + for<'de> Deserialize<'de> + Serialize,
+    E: Extensions,
+{
+    type Config = SyncSessionConfig<T>;
+    type Error = TopicLogSyncError<T, S, M, L, E>;
+
+    fn configure(&mut self, config: &Self::Config) -> Result<(), Self::Error> {
+        let SyncSessionConfig { topic, live_mode } = config.clone();
+
+        let role = topic
+            .map(|topic| Role::Initiate(topic))
+            .unwrap_or_else(|| Role::Accept);
+
+        self.role = role;
+        if !live_mode {
+            self.live_mode_rx.take();
+        }
+
+        Ok(())
+    }
 }
 
 /// Error type occurring in topic log sync protocol.
@@ -384,6 +421,7 @@ pub enum TopicLogSyncMessage<T, L, E> {
         header: Header<E>,
         body: Option<Body>,
     },
+    Close,
 }
 
 /// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
@@ -434,7 +472,7 @@ pub mod tests {
     use std::collections::HashMap;
 
     use assert_matches::assert_matches;
-    use futures::StreamExt;
+    use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, StatusEvent};
@@ -853,16 +891,18 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (protocol, events_rx, mut live_mode_tx) =
+            peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
             .send(LiveModeMessage::FromSub {
                 header: header_2.clone(),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
-        live_mode_tx.send(LiveModeMessage::Close).unwrap();
+        live_mode_tx.send(LiveModeMessage::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
         let remote_rx = run_protocol_uni(
@@ -1011,13 +1051,15 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (protocol, events_rx, mut live_mode_tx) =
+            peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
             .send(LiveModeMessage::FromSub {
                 header: header_2.clone(),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
         // Sending subscription message twice.
@@ -1026,9 +1068,10 @@ pub mod tests {
                 header: header_2.clone(),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
-        live_mode_tx.send(LiveModeMessage::Close).unwrap();
+        live_mode_tx.send(LiveModeMessage::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
         let remote_rx = run_protocol_uni(

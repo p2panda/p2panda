@@ -7,6 +7,8 @@ use futures::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
+use crate::{SyncSessionConfig, ToSync};
+
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;
@@ -18,6 +20,30 @@ pub trait Protocol {
         sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> impl Future<Output = Result<Self::Output, Self::Error>>;
+}
+
+/// Interface for managing sync sessions and consuming events they emit.
+pub trait SyncManager<T> {
+    type Protocol: Protocol + Configurable<Config = SyncSessionConfig<T>>;
+    type Event;
+    type Error: Debug;
+
+    /// Instantiate a new sync session.
+    fn session(&mut self, session_id: u64) -> Self::Protocol;
+
+    /// Retrieve a send handle to an already existing sync session.
+    fn session_handle(&self, session_id: u64) -> Option<impl Sink<ToSync, Error = Self::Error> + 'static>;
+
+    /// Drive the manager to process and return events emitted from all running sync sessions.
+    fn next_event(&mut self) -> impl Future<Output = Result<Option<Self::Event>, Self::Error>>;
+}
+
+/// Generic interface for configurable types.
+pub trait Configurable {
+    type Error;
+    type Config;
+
+    fn configure(&mut self, config: &Self::Config) -> Result<(), Self::Error>;
 }
 
 /// Identify the particular dataset a peer is interested in syncing.

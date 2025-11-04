@@ -11,7 +11,6 @@ use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 use tokio::task::LocalSet;
 
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
@@ -75,10 +74,10 @@ impl Peer {
     ) -> (
         TestTopicSync,
         mpsc::Receiver<TestTopicSyncEvent>,
-        broadcast::Sender<LiveModeMessage<LogIdExtension>>,
+        mpsc::Sender<LiveModeMessage<LogIdExtension>>,
     ) {
         let (event_tx, event_rx) = mpsc::channel(128);
-        let (live_tx, live_rx) = broadcast::channel(128);
+        let (live_tx, live_rx) = mpsc::channel(128);
         let live_rx = if live_mode { Some(live_rx) } else { None };
         let session = TopicLogSync::new(
             self.store.clone(),
