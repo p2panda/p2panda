@@ -127,7 +127,7 @@ pub struct EphemeralTopicStreamSubscription {
     from_topic_rx: BroadcastReceiver<FromNetwork>,
 }
 
-// TODO: Implement `BroadcastStream`.
+// TODO: Implement `Stream` for `BroadcastReceiver`.
 
 impl EphemeralTopicStreamSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
