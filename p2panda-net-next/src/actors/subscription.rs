@@ -30,7 +30,7 @@ pub enum ToSubscription {
     CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralTopicStream>),
 
     /// Return a subscription handle for the given topic ID.
-    ReturnEphemeralSubscription(TopicId, RpcReplyPort<EphemeralTopicStreamSubscription>),
+    EphemeralSubscription(TopicId, RpcReplyPort<EphemeralTopicStreamSubscription>),
 
     /// Unsubscribe from an ephemeral stream for the given topic ID.
     UnsubscribeEphemeral(TopicId),
@@ -154,7 +154,7 @@ impl Actor for Subscription {
                     let _ = reply.send(stream);
                 }
             }
-            ToSubscription::ReturnEphemeralSubscription(topic_id, reply) => {
+            ToSubscription::EphemeralSubscription(topic_id, reply) => {
                 if let Some(from_gossip_tx) = state.gossip_senders.get(&topic_id) {
                     let from_gossip_rx = from_gossip_tx.subscribe();
 

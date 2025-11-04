@@ -85,12 +85,8 @@ impl EphemeralTopicStream {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
             // Ask the subscription actor for an ephemeral stream subscriber.
-            let subscription = call!(
-                actor,
-                ToSubscription::ReturnEphemeralSubscription,
-                self.topic_id
-            )
-            .map_err(|_| TopicStreamError::SubscriptionNotAvailable)?;
+            let subscription = call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
+                .map_err(|_| TopicStreamError::SubscriptionNotAvailable)?;
 
             Ok(subscription)
         } else {
