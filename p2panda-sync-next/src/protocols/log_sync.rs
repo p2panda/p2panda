@@ -14,6 +14,7 @@ use thiserror::Error;
 use tokio::select;
 
 use crate::traits::Protocol;
+use crate::{DEFAULT_BUFFER_CAPACITY, Dedup};
 
 /// A map of author logs.
 pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
@@ -60,16 +61,27 @@ pub struct LogSyncProtocol<L, E, S, Evt> {
     logs: Logs<L>,
     store: S,
     event_tx: mpsc::Sender<Evt>,
+    buffer_capacity: usize,
     _marker: PhantomData<E>,
 }
 
 impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
     pub fn new(store: S, logs: Logs<L>, event_tx: mpsc::Sender<Evt>) -> Self {
+        Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
+    }
+
+    pub fn new_with_capacity(
+        store: S,
+        logs: Logs<L>,
+        event_tx: mpsc::Sender<Evt>,
+        buffer_capacity: usize,
+    ) -> Self {
         Self {
             state: Default::default(),
             store,
             event_tx,
             logs,
+            buffer_capacity,
             _marker: PhantomData,
         }
     }
@@ -83,7 +95,7 @@ where
     Evt: From<LogSyncEvent<E>>,
 {
     type Error = LogSyncError<L, E, S>;
-    type Output = ();
+    type Output = Dedup<Hash>;
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -93,6 +105,7 @@ where
     ) -> Result<Self::Output, Self::Error> {
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
+        let mut dedup = Dedup::new(self.buffer_capacity);
 
         loop {
             match self.state {
@@ -245,6 +258,14 @@ where
                                         // bytes the remote sent in their PreSync message.
                                         let header: Header<E> = decode_cbor(&header[..])?;
                                         let body = body.map(|ref bytes| Body::new(bytes));
+
+                                        // Insert message hash into deduplication buffer.
+                                        //
+                                        // NOTE: we don't deduplicate any received messages during
+                                        // sync as for this session they have not been seen
+                                        // before.
+                                        dedup.insert(header.hash());
+
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(LogSyncEvent::Data(Box::new(Operation { hash: header.hash(), header, body })).into())
@@ -257,6 +278,10 @@ where
                                 }
                             },
                             Some(hash) = operation_stream.next() => {
+                                // Insert message hash into deduplication buffer.
+                                dedup.insert(hash);
+
+                                // Fetch raw message bytes and send to remote.
                                 let (header, body) = self.store.get_raw_operation(hash).await.map_err(LogSyncError::OperationStore)?.expect("operation to be in store");
                                 metrics.total_bytes_sent += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
                                 metrics.total_operations_sent += 1;
@@ -297,7 +322,7 @@ where
             .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
-        Ok(())
+        Ok(dedup)
     }
 }
 
