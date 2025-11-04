@@ -27,7 +27,7 @@ async fn two_peer_ephemeral_messaging() {
 
         assert_eq!(msg, Err(TryRecvError::Empty));
 
-        stream.unsubscribe().unwrap();
+        stream.close().unwrap();
     });
 
     let node_builder = NetworkBuilder::new([7; 32])
@@ -45,7 +45,7 @@ async fn two_peer_ephemeral_messaging() {
 
     assert_eq!(msg, Err(TryRecvError::Empty));
 
-    stream.unsubscribe().unwrap();
+    stream.close().unwrap();
 
     join_handle.await.unwrap();
 }

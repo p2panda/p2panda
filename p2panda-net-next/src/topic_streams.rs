@@ -103,8 +103,8 @@ impl EphemeralTopicStream {
         self.topic_id
     }
 
-    /// Unsubscribes from the ephemeral messaging stream.
-    pub fn unsubscribe(self) -> Result<(), TopicStreamError<()>> {
+    /// Closes from the ephemeral messaging stream.
+    pub fn close(self) -> Result<(), TopicStreamError<()>> {
         if let Some(subscription_actor) =
             registry::where_is(with_namespace("subscription", &self.actor_namespace))
         {
