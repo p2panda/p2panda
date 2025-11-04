@@ -44,8 +44,8 @@ pub struct SubscriptionState {
     gossip_actor_failures: u16,
     sync_actor: ActorRef<ToSync>,
     sync_actor_failures: u16,
-    ephemeral_senders: HashMap<TopicId, Sender<ToNetwork>>,
-    gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
+    to_gossip_txs: HashMap<TopicId, Sender<ToNetwork>>,
+    from_gossip_txs: HashMap<TopicId, BroadcastSender<FromNetwork>>,
 }
 
 pub struct Subscription;
@@ -80,8 +80,8 @@ impl Actor for Subscription {
         )
         .await?;
 
-        let ephemeral_senders = HashMap::new();
-        let gossip_senders = HashMap::new();
+        let to_gossip_txs = HashMap::new();
+        let from_gossip_txs = HashMap::new();
 
         let state = SubscriptionState {
             endpoint,
@@ -89,8 +89,8 @@ impl Actor for Subscription {
             gossip_actor_failures: 0,
             sync_actor,
             sync_actor_failures: 0,
-            ephemeral_senders,
-            gossip_senders,
+            to_gossip_txs,
+            from_gossip_txs,
         };
 
         Ok(state)
@@ -127,7 +127,7 @@ impl Actor for Subscription {
                 let peers = Vec::new();
 
                 // Check if we're already subscribed.
-                let stream = if let Some(to_gossip_tx) = state.ephemeral_senders.get(&topic_id) {
+                let stream = if let Some(to_gossip_tx) = state.to_gossip_txs.get(&topic_id) {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
 
@@ -137,15 +137,13 @@ impl Actor for Subscription {
                     let (to_gossip_tx, from_gossip_tx) =
                         call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
 
-                    // Store the ephemeral sender which is used to publish messages into the
+                    // Store the gossip sender which is used to publish messages into the
                     // topic.
-                    state
-                        .ephemeral_senders
-                        .insert(topic_id, to_gossip_tx.clone());
+                    state.to_gossip_txs.insert(topic_id, to_gossip_tx.clone());
 
                     // Store the gossip sender. This can be used to create a broadcast receiver
-                    // when the user calls `.subscribe()` on `EphemeralTopicStream`.
-                    state.gossip_senders.insert(topic_id, from_gossip_tx);
+                    // when the user calls `.subscribe()` on `EphemeralStream`.
+                    state.from_gossip_txs.insert(topic_id, from_gossip_tx);
 
                     EphemeralStream::new(topic_id, to_gossip_tx, actor_namespace)
                 };
@@ -155,7 +153,7 @@ impl Actor for Subscription {
                 }
             }
             ToSubscription::EphemeralSubscription(topic_id, reply) => {
-                if let Some(from_gossip_tx) = state.gossip_senders.get(&topic_id) {
+                if let Some(from_gossip_tx) = state.from_gossip_txs.get(&topic_id) {
                     let from_gossip_rx = from_gossip_tx.subscribe();
 
                     let subscription = EphemeralStreamSubscription::new(topic_id, from_gossip_rx);
@@ -167,8 +165,8 @@ impl Actor for Subscription {
             }
             ToSubscription::UnsubscribeEphemeral(topic_id) => {
                 // Drop all senders associated with the topic id..
-                let _ = state.ephemeral_senders.remove(&topic_id);
-                let _ = state.gossip_senders.remove(&topic_id);
+                let _ = state.to_gossip_txs.remove(&topic_id);
+                let _ = state.from_gossip_txs.remove(&topic_id);
 
                 // Tell the gossip actor to unsubscribe from this topic id.
                 cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
