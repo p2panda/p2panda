@@ -22,15 +22,15 @@ use crate::actors::gossip::{Gossip, ToGossip};
 use crate::actors::sync::{Sync, ToSync};
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
-use crate::topic_streams::{EphemeralTopicStream, EphemeralTopicStreamSubscription};
+use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
 use crate::{TopicId, to_public_key};
 
 pub enum ToSubscription {
     /// Subscribe to the topic ID and return a publishing handle.
-    CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralTopicStream>),
+    CreateEphemeralStream(TopicId, RpcReplyPort<EphemeralStream>),
 
     /// Return a subscription handle for the given topic ID.
-    EphemeralSubscription(TopicId, RpcReplyPort<EphemeralTopicStreamSubscription>),
+    EphemeralSubscription(TopicId, RpcReplyPort<EphemeralStreamSubscription>),
 
     /// Unsubscribe from an ephemeral stream for the given topic ID.
     UnsubscribeEphemeral(TopicId),
@@ -131,7 +131,7 @@ impl Actor for Subscription {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
 
-                    EphemeralTopicStream::new(topic_id, to_gossip_tx.clone(), actor_namespace)
+                    EphemeralStream::new(topic_id, to_gossip_tx.clone(), actor_namespace)
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
@@ -147,7 +147,7 @@ impl Actor for Subscription {
                     // when the user calls `.subscribe()` on `EphemeralTopicStream`.
                     state.gossip_senders.insert(topic_id, from_gossip_tx);
 
-                    EphemeralTopicStream::new(topic_id, to_gossip_tx, actor_namespace)
+                    EphemeralStream::new(topic_id, to_gossip_tx, actor_namespace)
                 };
 
                 if !reply.is_closed() {
@@ -158,8 +158,7 @@ impl Actor for Subscription {
                 if let Some(from_gossip_tx) = state.gossip_senders.get(&topic_id) {
                     let from_gossip_rx = from_gossip_tx.subscribe();
 
-                    let subscription =
-                        EphemeralTopicStreamSubscription::new(topic_id, from_gossip_rx);
+                    let subscription = EphemeralStreamSubscription::new(topic_id, from_gossip_rx);
 
                     if !reply.is_closed() {
                         let _ = reply.send(subscription);

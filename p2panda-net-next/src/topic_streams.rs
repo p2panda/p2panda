@@ -27,7 +27,7 @@ use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 
 #[derive(Debug, Error)]
-pub enum TopicStreamError<T> {
+pub enum StreamError<T> {
     #[error(transparent)]
     Send(#[from] SendError<T>),
 
@@ -41,13 +41,13 @@ pub enum TopicStreamError<T> {
 /// A handle to an ephemeral messaging stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
-pub struct EphemeralTopicStream {
+pub struct EphemeralStream {
     topic_id: TopicId,
     to_topic_tx: Sender<ToNetwork>,
     actor_namespace: ActorNamespace,
 }
 
-impl EphemeralTopicStream {
+impl EphemeralStream {
     /// Returns a handle to an ephemeral messaging stream.
     pub(crate) fn new(
         topic_id: TopicId,
@@ -62,10 +62,7 @@ impl EphemeralTopicStream {
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(
-        &self,
-        bytes: impl Into<Vec<u8>>,
-    ) -> Result<(), TopicStreamError<Vec<u8>>> {
+    pub async fn publish(&self, bytes: impl Into<Vec<u8>>) -> Result<(), StreamError<Vec<u8>>> {
         self.to_topic_tx.send(bytes.into()).await?;
 
         Ok(())
@@ -73,11 +70,9 @@ impl EphemeralTopicStream {
 
     /// Subscribes to the stream.
     ///
-    /// The returned `EphemeralTopicStreamSubscription` provides a means of receiving messages from
+    /// The returned `EphemeralStreamSubscription` provides a means of receiving messages from
     /// the stream.
-    pub async fn subscribe(
-        &self,
-    ) -> Result<EphemeralTopicStreamSubscription, TopicStreamError<()>> {
+    pub async fn subscribe(&self) -> Result<EphemeralStreamSubscription, StreamError<()>> {
         // Get a reference to the subscription actor.
         if let Some(subscription_actor) =
             registry::where_is(with_namespace("subscription", &self.actor_namespace))
@@ -86,11 +81,11 @@ impl EphemeralTopicStream {
 
             // Ask the subscription actor for an ephemeral stream subscriber.
             let subscription = call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
-                .map_err(|_| TopicStreamError::SubscriptionNotAvailable)?;
+                .map_err(|_| StreamError::SubscriptionNotAvailable)?;
 
             Ok(subscription)
         } else {
-            Err(TopicStreamError::SubscriptionNotAvailable)
+            Err(StreamError::SubscriptionNotAvailable)
         }
     }
 
@@ -100,7 +95,7 @@ impl EphemeralTopicStream {
     }
 
     /// Closes from the ephemeral messaging stream.
-    pub fn close(self) -> Result<(), TopicStreamError<()>> {
+    pub fn close(self) -> Result<(), StreamError<()>> {
         if let Some(subscription_actor) =
             registry::where_is(with_namespace("subscription", &self.actor_namespace))
         {
@@ -108,7 +103,7 @@ impl EphemeralTopicStream {
 
             actor
                 .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
-                .map_err(|_| TopicStreamError::SubscriptionNotAvailable)?;
+                .map_err(|_| StreamError::SubscriptionNotAvailable)?;
         }
 
         Ok(())
@@ -118,14 +113,14 @@ impl EphemeralTopicStream {
 /// A handle to an ephemeral messaging stream subscription.
 ///
 /// The stream can be used to receive messages from the stream.
-pub struct EphemeralTopicStreamSubscription {
+pub struct EphemeralStreamSubscription {
     topic_id: TopicId,
     from_topic_rx: BroadcastReceiver<FromNetwork>,
 }
 
 // TODO: Implement `Stream` for `BroadcastReceiver`.
 
-impl EphemeralTopicStreamSubscription {
+impl EphemeralStreamSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
     pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
         Self {
@@ -135,11 +130,8 @@ impl EphemeralTopicStreamSubscription {
     }
 
     /// Receives the next message from the stream.
-    pub async fn recv(&mut self) -> Result<FromNetwork, TopicStreamError<()>> {
-        self.from_topic_rx
-            .recv()
-            .await
-            .map_err(TopicStreamError::Recv)
+    pub async fn recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+        self.from_topic_rx.recv().await.map_err(StreamError::Recv)
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.

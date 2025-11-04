@@ -14,7 +14,7 @@ use crate::actors::supervisor::{NetworkConfig, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
-use crate::topic_streams::EphemeralTopicStream;
+use crate::topic_streams::EphemeralStream;
 use crate::{NetworkId, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
@@ -172,7 +172,7 @@ impl Network {
     pub async fn ephemeral_stream(
         &self,
         topic_id: &TopicId,
-    ) -> Result<EphemeralTopicStream, NetworkError> {
+    ) -> Result<EphemeralStream, NetworkError> {
         // Get a reference to the subscription actor.
         if let Some(subscription_actor) =
             registry::where_is(with_namespace("subscription", &self.actor_namespace))
