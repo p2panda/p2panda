@@ -133,6 +133,9 @@ pub enum NetworkError {
     #[error("failed to create topic stream")]
     StreamCreation,
 
+    #[error("failed to call {0} actor; it may be in the process of restarting")]
+    ActorNotFound(String),
+
     #[error(transparent)]
     ActorSpawnError(#[from] SpawnErr),
 }
@@ -185,7 +188,7 @@ impl Network {
 
             Ok(stream)
         } else {
-            Err(NetworkError::StreamCreation)
+            Err(NetworkError::ActorNotFound("subscription".to_string()))
         }
     }
 }

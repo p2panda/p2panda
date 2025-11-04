@@ -36,6 +36,9 @@ pub enum StreamError<T> {
 
     #[error("subscription actor is not available to create topic subscription")]
     SubscriptionNotAvailable,
+
+    #[error("no stream exists for the given topic")]
+    StreamDoesNotExist,
 }
 
 /// A handle to an ephemeral messaging stream.
@@ -80,10 +83,14 @@ impl EphemeralStream {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
             // Ask the subscription actor for an ephemeral stream subscriber.
-            let subscription = call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
-                .map_err(|_| StreamError::SubscriptionNotAvailable)?;
-
-            Ok(subscription)
+            if let Some(subscription) =
+                call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
+                    .map_err(|_| StreamError::SubscriptionNotAvailable)?
+            {
+                Ok(subscription)
+            } else {
+                Err(StreamError::StreamDoesNotExist)
+            }
         } else {
             Err(StreamError::SubscriptionNotAvailable)
         }
