@@ -12,7 +12,6 @@ use tokio::task::JoinHandle;
 use crate::actors::subscription::ToSubscription;
 use crate::actors::supervisor::{NetworkConfig, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
-use crate::addrs::RelayUrl;
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
 use crate::{NetworkId, TopicId};

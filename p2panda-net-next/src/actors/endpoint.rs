@@ -27,7 +27,6 @@ use tracing::{debug, warn};
 use crate::actors::events::ToEvents;
 use crate::actors::subscription::{Subscription, ToSubscription};
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
-use crate::addrs::RelayUrl;
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::protocols::ProtocolMap;
 use crate::{from_private_key, to_public_key};
