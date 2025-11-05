@@ -89,11 +89,17 @@ where
                 event,
             })));
 
+        let live_rx = if config.live_mode {
+            Some(live_rx)
+        } else {
+            None
+        };
+
         TopicLogSync::new(
             self.store.clone(),
             self.topic_map.clone(),
             role,
-            Some(live_rx),
+            live_rx,
             event_tx,
         )
     }
