@@ -39,7 +39,8 @@ pub type TestTopicSync =
 pub type TestTopicSyncError =
     TopicLogSyncError<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 
-pub type TestTopicSyncManager = TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+pub type TestTopicSyncManager =
+    TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 
 /// Peer abstraction used in tests.
 ///

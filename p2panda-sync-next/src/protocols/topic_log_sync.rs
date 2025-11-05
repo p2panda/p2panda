@@ -11,13 +11,13 @@ use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::DEFAULT_BUFFER_CAPACITY;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
 };
 use crate::traits::{Protocol, TopicQuery};
-use crate::{DEFAULT_BUFFER_CAPACITY};
 
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,

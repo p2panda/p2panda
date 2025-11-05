@@ -101,8 +101,8 @@ mod tests {
 
     use futures::channel::mpsc;
 
-    use crate::{test_utils::TestTopic};
     use crate::session_topic_map::SessionTopicMap;
+    use crate::test_utils::TestTopic;
 
     const SESSION1: u64 = 1;
     const SESSION2: u64 = 2;

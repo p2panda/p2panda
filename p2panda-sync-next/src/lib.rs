@@ -3,9 +3,9 @@
 #[cfg(any(test, feature = "cbor"))]
 pub mod cbor;
 pub mod dedup;
-pub mod session_topic_map;
 pub mod manager;
 pub mod protocols;
+pub mod session_topic_map;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod traits;
