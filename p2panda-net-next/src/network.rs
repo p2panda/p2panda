@@ -102,7 +102,7 @@ impl NetworkBuilder {
     /// (via the Tailscale DERP protocol which is very similar to TURN) if the connection attempt
     /// fails, which will serve to relay the data in that case.
     // TODO: Expose QUIC address discovery address as `Option<u16>` or config struct.
-    pub fn relay(mut self, url: RelayUrl) -> Self {
+    pub fn relay(mut self, url: iroh::RelayUrl) -> Self {
         self.network_config.endpoint_config.relays.push(url);
         self
     }

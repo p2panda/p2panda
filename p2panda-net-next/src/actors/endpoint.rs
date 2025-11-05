@@ -42,7 +42,7 @@ pub(crate) struct EndpointConfig {
     pub(crate) bind_ip_v6: Ipv6Addr,
     pub(crate) bind_port_v6: u16,
     pub(crate) protocols: ProtocolMap,
-    pub(crate) relays: Vec<RelayUrl>,
+    pub(crate) relays: Vec<IrohRelayUrl>,
 }
 
 impl Default for EndpointConfig {
@@ -90,7 +90,7 @@ impl Actor for Endpoint {
             .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
             .max_concurrent_uni_streams(0u32.into());
 
-        let relays: Vec<IrohRelayUrl> = config.relays.into_iter().map(|url| url.into()).collect();
+        let relays: Vec<IrohRelayUrl> = config.relays;
         let relay_provided = !relays.is_empty();
         let relay_map = IrohRelayMap::from_iter(relays);
         let relay_mode = IrohRelayMode::Custom(relay_map);
