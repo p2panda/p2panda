@@ -10,6 +10,9 @@
 //! the `Endpoint` is needed to instantiate iroh `Gossip`).
 use std::collections::HashMap;
 
+/// Subscription actor name.
+pub const SUBSCRIPTION: &str = "net.subscription";
+
 use iroh::Endpoint as IrohEndpoint;
 use ractor::{
     Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call, cast,
@@ -18,8 +21,8 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
-use crate::actors::gossip::{Gossip, ToGossip};
-use crate::actors::sync::{Sync, ToSync};
+use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
+use crate::actors::sync::{SYNC, Sync, ToSync};
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
@@ -64,7 +67,7 @@ impl Actor for Subscription {
 
         // Spawn the gossip actor.
         let (gossip_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("gossip", &actor_namespace)),
+            Some(with_namespace(GOSSIP, &actor_namespace)),
             Gossip {},
             endpoint.clone(),
             myself.clone().into(),
@@ -73,7 +76,7 @@ impl Actor for Subscription {
 
         // Spawn the sync actor.
         let (sync_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("sync", &actor_namespace)),
+            Some(with_namespace(SYNC, &actor_namespace)),
             Sync {},
             (),
             myself.into(),
@@ -190,7 +193,7 @@ impl Actor for Subscription {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
                     debug!(
-                        "subscription actor: received ready from {} actor",
+                        "{SUBSCRIPTION} actor: received ready from {} actor",
                         without_namespace(&name)
                     );
                 }
@@ -200,12 +203,12 @@ impl Actor for Subscription {
                     generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
 
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace("gossip", &actor_namespace) {
-                        warn!("subscription actor: gossip actor failed: {}", panic_msg);
+                    if name == with_namespace(GOSSIP, &actor_namespace) {
+                        warn!("{SUBSCRIPTION} actor: {GOSSIP} actor failed: {}", panic_msg);
 
                         // Respawn the gossip actor.
                         let (gossip_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("gossip", &actor_namespace)),
+                            Some(with_namespace(GOSSIP, &actor_namespace)),
                             Gossip {},
                             state.endpoint.clone(),
                             myself.clone().into(),
@@ -214,12 +217,12 @@ impl Actor for Subscription {
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
-                    } else if name == with_namespace("sync", &actor_namespace) {
-                        warn!("subscription actor: sync actor failed: {}", panic_msg);
+                    } else if name == with_namespace(SYNC, &actor_namespace) {
+                        warn!("{SUBSCRIPTION} actor: {SYNC} actor failed: {}", panic_msg);
 
                         // Respawn the sync actor.
                         let (sync_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("sync", &actor_namespace)),
+                            Some(with_namespace(SYNC, &actor_namespace)),
                             Sync {},
                             (),
                             myself.clone().into(),
@@ -234,7 +237,7 @@ impl Actor for Subscription {
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
                     debug!(
-                        "subscription actor: {} actor terminated",
+                        "{SUBSCRIPTION} actor: {} actor terminated",
                         without_namespace(&name)
                     );
                 }
@@ -254,6 +257,10 @@ mod tests {
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
+    use crate::actors::gossip::GOSSIP;
+    use crate::actors::subscription::SUBSCRIPTION;
+    use crate::actors::sync::SYNC;
+
     use super::Subscription;
 
     #[tokio::test]
@@ -263,7 +270,7 @@ mod tests {
         let endpoint = IrohEndpoint::builder().bind().await.unwrap();
 
         let (subscription_actor, subscription_actor_handle) =
-            Actor::spawn(Some("subscription".to_string()), Subscription {}, endpoint)
+            Actor::spawn(Some(SUBSCRIPTION.to_string()), Subscription {}, endpoint)
                 .await
                 .unwrap();
 
@@ -273,13 +280,12 @@ mod tests {
         subscription_actor.stop(None);
         subscription_actor_handle.await.unwrap();
 
-        assert!(logs_contain(
-            "subscription actor: received ready from gossip actor"
-        ));
-        assert!(logs_contain(
-            "subscription actor: received ready from sync actor"
-        ));
-
+        assert!(logs_contain(&format!(
+            "{SUBSCRIPTION} actor: received ready from {GOSSIP} actor"
+        )));
+        assert!(logs_contain(&format!(
+            "{SUBSCRIPTION} actor: received ready from {SYNC} actor"
+        )));
         assert!(!logs_contain("actor failed"));
     }
 }

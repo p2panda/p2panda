@@ -9,8 +9,8 @@ use ractor::{Actor, ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::actors::subscription::ToSubscription;
-use crate::actors::supervisor::{NetworkConfig, Supervisor};
+use crate::actors::subscription::{SUBSCRIPTION, ToSubscription};
+use crate::actors::supervisor::{NetworkConfig, SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
@@ -115,7 +115,7 @@ impl NetworkBuilder {
 
         // Spawn the root-level supervisor actor.
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
-            Some(with_namespace("supervisor", &actor_namespace)),
+            Some(with_namespace(SUPERVISOR, &actor_namespace)),
             Supervisor,
             (private_key, self.network_config),
         )
@@ -177,7 +177,7 @@ impl Network {
     ) -> Result<EphemeralStream, NetworkError> {
         // Get a reference to the subscription actor.
         if let Some(subscription_actor) =
-            registry::where_is(with_namespace("subscription", &self.actor_namespace))
+            registry::where_is(with_namespace(SUBSCRIPTION, &self.actor_namespace))
         {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 
@@ -187,7 +187,7 @@ impl Network {
 
             Ok(stream)
         } else {
-            Err(NetworkError::ActorNotFound("subscription".to_string()))
+            Err(NetworkError::ActorNotFound(SUBSCRIPTION.to_string()))
         }
     }
 }

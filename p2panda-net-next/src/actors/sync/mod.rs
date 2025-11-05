@@ -8,6 +8,9 @@ mod session;
 
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
+/// Sync actor name.
+pub const SYNC: &str = "net.sync";
+
 pub enum ToSync {}
 
 impl Message for ToSync {}

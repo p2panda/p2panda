@@ -26,6 +26,9 @@ use crate::actors::gossip::session::{GossipSession, ToGossipSession};
 use crate::network::FromNetwork;
 use crate::{TopicId, from_public_key};
 
+/// Gossip actor name.
+pub const GOSSIP: &str = "net.gossip";
+
 // TODO: Remove once used.
 #[allow(dead_code)]
 pub enum ToGossip {

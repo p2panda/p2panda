@@ -22,7 +22,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
-use crate::actors::subscription::ToSubscription;
+use crate::actors::subscription::{SUBSCRIPTION, ToSubscription};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 
@@ -84,14 +84,14 @@ impl EphemeralStream {
             // Ask the subscription actor for an ephemeral stream subscriber.
             if let Some(subscription) =
                 call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
-                    .map_err(|_| StreamError::Actor("subscription".to_string()))?
+                    .map_err(|_| StreamError::Actor(SUBSCRIPTION.to_string()))?
             {
                 Ok(subscription)
             } else {
                 Err(StreamError::StreamNotFound)
             }
         } else {
-            Err(StreamError::ActorNotFound("subscription".to_string()))
+            Err(StreamError::ActorNotFound(SUBSCRIPTION.to_string()))
         }
     }
 
@@ -105,18 +105,18 @@ impl EphemeralStream {
         if let Some(actor) = self.subscription_actor() {
             actor
                 .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
-                .map_err(|_| StreamError::Actor("subscription".to_string()))?;
+                .map_err(|_| StreamError::Actor(SUBSCRIPTION.to_string()))?;
 
             Ok(())
         } else {
-            Err(StreamError::ActorNotFound("subscription".to_string()))
+            Err(StreamError::ActorNotFound(SUBSCRIPTION.to_string()))
         }
     }
 
     /// Internal helper to get a reference to the subscription actor.
     fn subscription_actor(&self) -> Option<ActorRef<ToSubscription>> {
         if let Some(subscription_actor) =
-            registry::where_is(with_namespace("subscription", &self.actor_namespace))
+            registry::where_is(with_namespace(SUBSCRIPTION, &self.actor_namespace))
         {
             let actor: ActorRef<ToSubscription> = subscription_actor.into();
 

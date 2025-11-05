@@ -8,11 +8,14 @@ use p2panda_core::PrivateKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
-use crate::actors::address_book::{AddressBook, ToAddressBook};
-use crate::actors::discovery::{Discovery, ToDiscovery};
-use crate::actors::endpoint::{Endpoint, EndpointConfig, ToEndpoint};
-use crate::actors::events::{Events, ToEvents};
+use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
+use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
+use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig, ToEndpoint};
+use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+
+/// Supervisor actor name.
+pub const SUPERVISOR: &str = "net.supervisor";
 
 // TODO: Rename or move...feels out of place here now.
 // adz has an `Arguments` struct in his code; use that.
@@ -51,7 +54,7 @@ impl Actor for Supervisor {
 
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("events", &actor_namespace)),
+            Some(with_namespace(EVENTS, &actor_namespace)),
             Events,
             (),
             myself.clone().into(),
@@ -60,7 +63,7 @@ impl Actor for Supervisor {
 
         // Spawn the endpoint actor.
         let (endpoint_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("endpoint", &actor_namespace)),
+            Some(with_namespace(ENDPOINT, &actor_namespace)),
             Endpoint,
             (private_key, config.endpoint_config),
             myself.clone().into(),
@@ -69,7 +72,7 @@ impl Actor for Supervisor {
 
         // Spawn the address book actor.
         let (address_book_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("address book", &actor_namespace)),
+            Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
             AddressBook {},
             (),
             myself.clone().into(),
@@ -78,7 +81,7 @@ impl Actor for Supervisor {
 
         // Spawn the discovery actor.
         let (discovery_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("discovery", &actor_namespace)),
+            Some(with_namespace(DISCOVERY, &actor_namespace)),
             Discovery {},
             (),
             myself.clone().into(),
@@ -142,19 +145,19 @@ impl Actor for Supervisor {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
                     debug!(
-                        "supervisor actor: received ready from {} actor",
+                        "{SUPERVISOR} actor: received ready from {} actor",
                         without_namespace(&name)
                     );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace("events", &state.actor_namespace) {
-                        warn!("supervisor actor: events actor failed: {}", panic_msg);
+                    if name == with_namespace(EVENTS, &state.actor_namespace) {
+                        warn!("{SUPERVISOR} actor: {EVENTS} actor failed: {}", panic_msg);
 
                         // Respawn the events actor.
                         let (events_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("events", &state.actor_namespace)),
+                            Some(with_namespace(EVENTS, &state.actor_namespace)),
                             Events {},
                             (),
                             myself.clone().into(),
@@ -163,18 +166,21 @@ impl Actor for Supervisor {
 
                         state.events_actor_failures += 1;
                         state.events_actor = events_actor;
-                    } else if name == with_namespace("endpoint", &state.actor_namespace) {
-                        warn!("supervisor actor: endpoint actor failed: {}", panic_msg);
+                    } else if name == with_namespace(ENDPOINT, &state.actor_namespace) {
+                        warn!("{SUPERVISOR} actor: {ENDPOINT} actor failed: {}", panic_msg);
 
                         // If the endpoint actor fails then the entire system is compromised and we
                         // stop the top-level supervisor actor.
-                        myself.stop(Some("endpoint actor failed".to_string()));
-                    } else if name == with_namespace("address book", &state.actor_namespace) {
-                        warn!("supervisor actor: address book actor failed: {}", panic_msg);
+                        myself.stop(Some("{ENDPOINT} actor failed".to_string()));
+                    } else if name == with_namespace(ADDRESS_BOOK, &state.actor_namespace) {
+                        warn!(
+                            "{SUPERVISOR} actor: {ADDRESS_BOOK} actor failed: {}",
+                            panic_msg
+                        );
 
                         // Respawn the address book actor.
                         let (address_book_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("address book", &state.actor_namespace)),
+                            Some(with_namespace(ADDRESS_BOOK, &state.actor_namespace)),
                             AddressBook {},
                             (),
                             myself.clone().into(),
@@ -183,12 +189,15 @@ impl Actor for Supervisor {
 
                         state.address_book_actor_failures += 1;
                         state.address_book_actor = address_book_actor;
-                    } else if name == with_namespace("discovery", &state.actor_namespace) {
-                        warn!("supervisor actor: discovery actor failed: {}", panic_msg);
+                    } else if name == with_namespace(DISCOVERY, &state.actor_namespace) {
+                        warn!(
+                            "{SUPERVISOR} actor: {DISCOVERY} actor failed: {}",
+                            panic_msg
+                        );
 
                         // Respawn the discovery actor.
                         let (discovery_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("discovery", &state.actor_namespace)),
+                            Some(with_namespace(DISCOVERY, &state.actor_namespace)),
                             Discovery {},
                             (),
                             myself.clone().into(),
@@ -203,7 +212,7 @@ impl Actor for Supervisor {
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
                     debug!(
-                        "supervisor actor: {} actor terminated",
+                        "{SUPERVISOR} actor: {} actor terminated",
                         without_namespace(&name)
                     );
                 }
@@ -223,9 +232,13 @@ mod tests {
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
+    use crate::actors::address_book::ADDRESS_BOOK;
+    use crate::actors::discovery::DISCOVERY;
+    use crate::actors::endpoint::ENDPOINT;
+    use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};
 
-    use super::Supervisor;
+    use super::{SUPERVISOR, Supervisor};
 
     #[tokio::test]
     #[traced_test]
@@ -237,7 +250,7 @@ mod tests {
         let network_config = Default::default();
 
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
-            Some(with_namespace("supervisor", &actor_namespace)),
+            Some(with_namespace(SUPERVISOR, &actor_namespace)),
             Supervisor,
             (private_key, network_config),
         )
@@ -250,18 +263,18 @@ mod tests {
         supervisor_actor.stop(None);
         supervisor_actor_handle.await.unwrap();
 
-        assert!(logs_contain(
-            "supervisor actor: received ready from events actor"
-        ));
-        assert!(logs_contain(
-            "supervisor actor: received ready from endpoint actor"
-        ));
-        assert!(logs_contain(
-            "supervisor actor: received ready from address book actor"
-        ));
-        assert!(logs_contain(
-            "supervisor actor: received ready from discovery actor"
-        ));
+        assert!(logs_contain(&format!(
+            "{SUPERVISOR} actor: received ready from {EVENTS} actor"
+        )));
+        assert!(logs_contain(&format!(
+            "{SUPERVISOR} actor: received ready from {ENDPOINT} actor"
+        )));
+        assert!(logs_contain(&format!(
+            "{SUPERVISOR} actor: received ready from {ADDRESS_BOOK} actor"
+        )));
+        assert!(logs_contain(&format!(
+            "{SUPERVISOR} actor: received ready from {DISCOVERY} actor"
+        )));
 
         assert!(!logs_contain("actor failed"));
     }

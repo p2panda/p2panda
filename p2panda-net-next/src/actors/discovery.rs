@@ -3,6 +3,9 @@
 //! Discovery actor.
 use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
 
+/// Discovery actor name.
+pub const DISCOVERY: &str = "net.discovery";
+
 // TODO: `AddAddr()` and `RemoveAddr()`.
 pub enum ToDiscovery {}
 

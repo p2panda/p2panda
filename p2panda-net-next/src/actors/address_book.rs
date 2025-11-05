@@ -9,6 +9,9 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
 
 use crate::{NodeId, NodeInfo, TopicId};
 
+/// Address book actor name.
+pub const ADDRESS_BOOK: &str = "net.address_book";
+
 // @TODO: Remove once used.
 #[allow(dead_code)]
 pub enum ToAddressBook {
