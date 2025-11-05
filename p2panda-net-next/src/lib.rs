@@ -9,6 +9,7 @@ mod addrs;
 mod defaults;
 mod network;
 mod protocols;
+mod topic_streams;
 
 pub use addrs::{
     NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,

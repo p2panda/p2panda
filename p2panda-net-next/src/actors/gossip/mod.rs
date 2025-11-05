@@ -17,16 +17,14 @@ use p2panda_core::PublicKey;
 use ractor::{
     Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
 };
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::broadcast::{self, Sender as BroadcastSender};
+use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
+use crate::network::FromNetwork;
 use crate::{TopicId, from_public_key};
-
-/// Bytes received from gossip, along with the public key of the peer from whom the message was
-/// received. Note that the delivering peer is not necessarily the author of the bytes.
-pub type MsgBytesAndDeliverer = (Vec<u8>, PublicKey);
 
 // TODO: Remove once used.
 #[allow(dead_code)]
@@ -40,8 +38,11 @@ pub enum ToGossip {
     Subscribe(
         TopicId,
         Vec<PublicKey>,
-        RpcReplyPort<(Sender<Vec<u8>>, Receiver<MsgBytesAndDeliverer>)>,
+        RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>,
     ),
+
+    /// Unsubscribe from the given topic.
+    Unsubscribe(TopicId),
 
     /// Join a set of peers on the given gossip topic.
     ///
@@ -81,13 +82,20 @@ pub enum ToGossip {
 
 impl Message for ToGossip {}
 
+#[derive(Default)]
+/// Actor references and channels for gossip sessions.
+struct Sessions {
+    sessions_by_actor_id: HashMap<ActorId, TopicId>,
+    sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    to_gossip_senders: HashMap<TopicId, Sender<Vec<u8>>>,
+    from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
+    gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
+}
+
 pub struct GossipState {
     gossip: IrohGossip,
-    sessions_by_actor_id: HashMap<ActorId, TopicId>,
-    sessions_by_topic_id: HashMap<TopicId, Vec<ActorRef<ToGossipSession>>>,
-    neighbours_by_topic_id: HashMap<TopicId, HashSet<PublicKey>>,
-    from_gossip_senders: HashMap<TopicId, Vec<Sender<MsgBytesAndDeliverer>>>,
-    gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
+    sessions: Sessions,
+    neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
 }
 
@@ -112,24 +120,14 @@ impl Actor for Gossip {
             .broadcast_config(config.broadcast)
             .spawn(endpoint);
 
-        let sessions_by_actor_id = HashMap::new();
-        let sessions_by_topic_id = HashMap::new();
-        let neighbours_by_topic_id = HashMap::new();
-        let from_gossip_senders = HashMap::new();
-        let gossip_joined_senders = HashMap::new();
+        let sessions = Sessions::default();
+        let neighbours = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
-
-        // TODO: The router needs to be configured to accept gossip protocol.
-        // This needs to be done when the router is built.
-        // Consider how to do this via config.
 
         let state = GossipState {
             gossip,
-            sessions_by_actor_id,
-            sessions_by_topic_id,
-            neighbours_by_topic_id,
-            from_gossip_senders,
-            gossip_joined_senders,
+            sessions,
+            neighbours,
             topic_delivery_scopes,
         };
 
@@ -174,15 +172,14 @@ impl Actor for Gossip {
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
-                // TODO: How do we handle a subscribe for a topic that already has an active
-                // subscription? Either we multiplex over a subscription or we establish an
-                // additional session. Right now I (glyph) am leaning towards establishing
-                // additional sessions.
-
                 // Channel to receive messages from the user (to the gossip overlay).
                 let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
+
                 // Channel to receive messages from the gossip overlay (to the user).
-                let (from_gossip_tx, from_gossip_rx) = mpsc::channel(128);
+                //
+                // NOTE: We ignore `from_gossip_rx` because it will be created in the
+                // subscription actor as required by calling `.subscribe()` on the sender.
+                let (from_gossip_tx, _from_gossip_rx) = broadcast::channel(128);
 
                 // Oneshot channel to notify the session sender(s) that the overlay has been
                 // joined.
@@ -197,10 +194,6 @@ impl Actor for Gossip {
                 // Subscribe to the gossip topic (without waiting for a connection).
                 let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
 
-                // TODO: Store a clone of the `to_gossip_rx` channel to allow for recovery if the session
-                // fails. This will likely be handled in a higher-level `SubscriptionActor`. We'll
-                // need to use an MPMC channel (e.g. from the `async_channel` crate).
-
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = Actor::spawn_linked(
                     None,
@@ -213,33 +206,56 @@ impl Actor for Gossip {
                 // Associate the session actor id with the topic.
                 let gossip_session_actor_id = gossip_session_actor.get_id();
                 let _ = state
+                    .sessions
                     .sessions_by_actor_id
                     .insert(gossip_session_actor_id, topic_id);
 
                 // Associate the session actor with the gossip joined sender.
                 let _ = state
+                    .sessions
                     .gossip_joined_senders
                     .insert(gossip_session_actor_id, gossip_joined_tx);
 
                 // Associate the topic id with the session actor.
-                state
+                let _ = state
+                    .sessions
                     .sessions_by_topic_id
-                    .entry(topic_id)
-                    .or_default()
-                    .push(gossip_session_actor);
+                    .insert(topic_id, gossip_session_actor);
 
-                // Associate the user channel (sender) with the topic.
-                state
+                // Associate the topic id with the sender from the user to gossip.
+                let _ = state
+                    .sessions
+                    .to_gossip_senders
+                    .insert(topic_id, to_gossip_tx.clone());
+
+                // Associate the topic id with the sender from gossip to the user.
+                let _ = state
+                    .sessions
                     .from_gossip_senders
-                    .entry(topic_id)
-                    .or_default()
-                    .push(from_gossip_tx);
+                    .insert(topic_id, from_gossip_tx.clone());
 
                 // Return sender / receiver pair to the user.
                 if !reply.is_closed() {
-                    // TODO: Handle case where receiver channel has been dropped.
-                    let _ = reply.send((to_gossip_tx, from_gossip_rx));
+                    let _ = reply.send((to_gossip_tx, from_gossip_tx));
                 }
+
+                Ok(())
+            }
+            ToGossip::Unsubscribe(topic_id) => {
+                // Stop the session associated with this topic id.
+                if let Some(actor) = state.sessions.sessions_by_topic_id.remove(&topic_id) {
+                    let actor_id = actor.get_id();
+                    let _ = state.sessions.sessions_by_actor_id.remove(&actor_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+
+                    actor.stop(Some("received unsubscribe request".to_string()));
+                }
+
+                // Drop all associated state.
+                let _ = state.sessions.to_gossip_senders.remove(&topic_id);
+                let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                let _ = state.neighbours.remove(&topic_id);
+                let _ = state.topic_delivery_scopes.remove(&topic_id);
 
                 Ok(())
             }
@@ -250,10 +266,8 @@ impl Actor for Gossip {
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
 
-                if let Some(sessions) = state.sessions_by_topic_id.get(&topic_id) {
-                    for session in sessions {
-                        let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
-                    }
+                if let Some(session) = state.sessions.sessions_by_topic_id.get(&topic_id) {
+                    let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
                 }
 
                 Ok(())
@@ -265,7 +279,7 @@ impl Actor for Gossip {
                 topic_id,
                 session_id: _,
             } => {
-                let msg = (bytes, delivered_from);
+                let msg = FromNetwork::ephemeral_message(bytes, delivered_from);
 
                 // Store the delivery scope of the received message.
                 state
@@ -275,11 +289,8 @@ impl Actor for Gossip {
                     .push(delivery_scope);
 
                 // Write the received bytes to all subscribers for the associated topic.
-                if let Some(senders) = state.from_gossip_senders.get(&topic_id) {
-                    for sender in senders {
-                        // TODO: We need to tidy up properly when the receiver is dropped.
-                        sender.send(msg.clone()).await?
-                    }
+                if let Some(sender) = state.sessions.from_gossip_senders.get(&topic_id) {
+                    let _number_of_subscribers = sender.send(msg.clone())?;
                 }
 
                 Ok(())
@@ -292,7 +303,8 @@ impl Actor for Gossip {
                 debug!("joined topic {:?} with peers: {:?}", topic_id, peers);
 
                 // Inform the gossip sender actor that the overlay has been joined.
-                if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&session_id)
+                if let Some(gossip_joined_tx) =
+                    state.sessions.gossip_joined_senders.remove(&session_id)
                     && gossip_joined_tx.send(1).is_err()
                 {
                     warn!("oneshot gossip joined receiver dropped")
@@ -301,14 +313,14 @@ impl Actor for Gossip {
                 let peer_set = HashSet::from_iter(peers);
 
                 // Store the neighbours with whom we have joined the topic.
-                state.neighbours_by_topic_id.insert(topic_id, peer_set);
+                state.neighbours.insert(topic_id, peer_set);
 
                 Ok(())
             }
             ToGossip::NeighborUp { peer, session_id } => {
                 // Insert the peer into the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
                 {
                     peer_set.insert(peer);
                 }
@@ -317,8 +329,8 @@ impl Actor for Gossip {
             }
             ToGossip::NeighborDown { peer, session_id } => {
                 // Remove the peer from the set of neighbours.
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours_by_topic_id.get_mut(topic_id)
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
+                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
                 {
                     peer_set.remove(&peer);
                 }
@@ -337,7 +349,7 @@ impl Actor for Gossip {
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.get(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&actor_id) {
                     debug!(
                         "gossip actor: received ready from gossip session actor #{} for topic id {:?}",
                         actor_id, topic_id
@@ -346,26 +358,17 @@ impl Actor for Gossip {
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.remove(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     debug!(
                         "gossip actor: gossip session #{} over topic id {:?} terminated with reason: {:?}",
                         actor_id, topic_id, reason
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
-                    {
-                        drop(gossip_session_actor)
-                    }
-                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
-                        drop(neighbours)
-                    }
-                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
-                        drop(from_gossip_tx)
-                    }
-                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
-                        drop(gossip_joined_tx)
-                    }
+                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.neighbours.remove(&topic_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -381,26 +384,17 @@ impl Actor for Gossip {
                 // return an error to the user.
 
                 let actor_id = actor.get_id();
-                if let Some(topic_id) = state.sessions_by_actor_id.remove(&actor_id) {
+                if let Some(topic_id) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     warn!(
                         "gossip_actor: gossip session #{} over topic id {:?} failed with reason: {}",
                         actor_id, topic_id, panic_msg
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    if let Some(gossip_session_actor) = state.sessions_by_topic_id.remove(&topic_id)
-                    {
-                        drop(gossip_session_actor)
-                    }
-                    if let Some(neighbours) = state.neighbours_by_topic_id.remove(&topic_id) {
-                        drop(neighbours)
-                    }
-                    if let Some(from_gossip_tx) = state.from_gossip_senders.remove(&topic_id) {
-                        drop(from_gossip_tx)
-                    }
-                    if let Some(gossip_joined_tx) = state.gossip_joined_senders.remove(&actor_id) {
-                        drop(gossip_joined_tx)
-                    }
+                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
+                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    let _ = state.neighbours.remove(&topic_id);
                 }
             }
             _ => (),
@@ -421,11 +415,12 @@ mod tests {
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
-    use tokio::sync::mpsc::error::TryRecvError;
+    use tokio::sync::broadcast::error::TryRecvError;
     use tokio::sync::oneshot;
     use tokio::time::sleep;
 
     use crate::actors::test_utils::{ActorResult, TestSupervisor};
+    use crate::network::FromNetwork;
     use crate::{from_private_key, from_public_key};
 
     use super::{Gossip, GossipState, ToGossip};
@@ -566,9 +561,9 @@ mod tests {
 
         // Ensure state expectations are correct for ant's gossip actor.
         if let Ok(state) = boxed_state.take::<GossipState>() {
-            assert!(state.sessions_by_topic_id.contains_key(&topic_id));
+            assert!(state.sessions.sessions_by_topic_id.contains_key(&topic_id));
 
-            let neighbours = state.neighbours_by_topic_id.get(&topic_id).unwrap();
+            let neighbours = state.neighbours.get(&topic_id).unwrap();
             assert!(neighbours.contains(&bat_public_key));
             assert!(neighbours.contains(&cat_public_key));
         }
@@ -653,32 +648,42 @@ mod tests {
         let ant_peers = Vec::new();
         let bat_peers = vec![ant_public_key];
 
-        let (ant_to_gossip, mut ant_from_gossip) =
+        let (ant_to_gossip, ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (bat_to_gossip, mut bat_from_gossip) =
+        let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
+        let mut ant_from_gossip_rx = ant_from_gossip.subscribe();
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
         ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
+        );
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
         bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
-        let Some(msg) = ant_from_gossip.recv().await else {
+        let Ok(msg) = ant_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
+        );
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -781,8 +786,11 @@ mod tests {
 
         let (ant_to_gossip, _ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (_bat_to_gossip, mut bat_from_gossip) =
+        let (_bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
 
         // Obtain bat's node information including direct addresses.
         let bat_addrs = bat_endpoint.node_addr();
@@ -795,8 +803,10 @@ mod tests {
         let cat_peers = vec![bat_public_key];
 
         // Cat subscribes to topic using bat as bootstrap.
-        let (cat_to_gossip, mut cat_from_gossip) =
+        let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
         // Send message from cat to ant and bat.
         let cat_msg_to_ant_and_bat = b"hi ant and bat!".to_vec();
@@ -806,11 +816,14 @@ mod tests {
             .unwrap();
 
         // Ensure bat receives cat's message.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(msg, (cat_msg_to_ant_and_bat, cat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(cat_msg_to_ant_and_bat, cat_public_key)
+        );
 
         // Send message from ant to bat and cat.
         let ant_msg_to_bat_and_cat = b"hi bat and cat!".to_vec();
@@ -820,12 +833,15 @@ mod tests {
             .unwrap();
 
         // Ensure cat receives ant's message.
-        let Some(msg) = cat_from_gossip.recv().await else {
+        let Ok(msg) = cat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
         // NOTE: In this case the message is delivered by bat; not directly from ant.
-        assert_eq!(msg, (ant_msg_to_bat_and_cat, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat_and_cat, bat_public_key)
+        );
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -934,32 +950,42 @@ mod tests {
         let ant_peers = Vec::new();
         let bat_peers = vec![ant_public_key];
 
-        let (ant_to_gossip, mut ant_from_gossip) =
+        let (ant_to_gossip, ant_from_gossip) =
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
-        let (bat_to_gossip, mut bat_from_gossip) =
+        let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Subscribe to sender to obtain receiver.
+        let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
+        let mut ant_from_gossip_rx = ant_from_gossip.subscribe();
 
         // Send message from ant to bat.
         let ant_msg_to_bat = b"hi bat!".to_vec();
         ant_to_gossip.send(ant_msg_to_bat.clone()).await.unwrap();
 
         // Ensure bat receives the message from ant.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(msg, (ant_msg_to_bat, ant_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
+        );
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
         bat_to_gossip.send(bat_msg_to_ant.clone()).await.unwrap();
 
         // Ensure ant receives the message from bat.
-        let Some(msg) = ant_from_gossip.recv().await else {
+        let Ok(msg) = ant_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_ant, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
+        );
 
         // Stop the gossip actor and router for ant (going offline).
         ant_gossip_actor.stop(None);
@@ -969,8 +995,10 @@ mod tests {
         // Cat joins the gossip topic (using ant as bootstrap).
         let cat_peers = vec![ant_public_key];
 
-        let (cat_to_gossip, mut cat_from_gossip) =
+        let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
         // Send message from cat to bat.
         let cat_msg_to_bat = b"hi bat!".to_vec();
@@ -980,7 +1008,7 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure bat has not received the message from cat.
-        assert_eq!(bat_from_gossip.try_recv(), Err(TryRecvError::Empty));
+        assert_eq!(bat_from_gossip_rx.try_recv(), Err(TryRecvError::Empty));
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"anyone out there?".to_vec();
@@ -990,7 +1018,7 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure cat has not received the message from bat.
-        assert_eq!(cat_from_gossip.try_recv(), Err(TryRecvError::Empty));
+        assert_eq!(cat_from_gossip_rx.try_recv(), Err(TryRecvError::Empty));
 
         // At this point we have proof of partition; bat and cat are subscribed to the same gossip
         // topic but cannot "hear" one another.
@@ -1014,11 +1042,14 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure bat receives the message from cat.
-        let Some(msg) = bat_from_gossip.recv().await else {
+        let Ok(msg) = bat_from_gossip_rx.recv().await else {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(msg, (cat_msg_to_bat, cat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(cat_msg_to_bat, cat_public_key)
+        );
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"yoyo!".to_vec();
@@ -1028,11 +1059,14 @@ mod tests {
         sleep(Duration::from_millis(500)).await;
 
         // Ensure cat receives the message from bat.
-        let Some(msg) = cat_from_gossip.recv().await else {
+        let Ok(msg) = cat_from_gossip_rx.recv().await else {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(msg, (bat_msg_to_cat, bat_public_key));
+        assert_eq!(
+            msg,
+            FromNetwork::ephemeral_message(bat_msg_to_cat, bat_public_key)
+        );
 
         // Stop gossip actors.
         bat_gossip_actor.stop(None);
