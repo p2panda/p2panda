@@ -163,10 +163,8 @@ impl Actor for Subscription {
                     if !reply.is_closed() {
                         let _ = reply.send(Some(subscription));
                     }
-                } else {
-                    if !reply.is_closed() {
-                        let _ = reply.send(None);
-                    }
+                } else if !reply.is_closed() {
+                    let _ = reply.send(None);
                 }
             }
             ToSubscription::UnsubscribeEphemeral(topic_id) => {
