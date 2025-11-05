@@ -1,48 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// @TODO(adz): Not sure currently if we need an address book "actor" or if it just a store being
-// passed around to actors instead, the latter seems currently closer to what this is (reading &
-// writing & persisting values).
 use std::collections::{HashMap, HashSet};
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef, Message};
 
 use crate::{NodeId, NodeInfo, TopicId};
 
 /// Address book actor name.
 pub const ADDRESS_BOOK: &str = "net.address_book";
 
-// @TODO: Remove once used.
-#[allow(dead_code)]
-pub enum ToAddressBook {
-    /// Add a peer address.
-    AddAddress(NodeInfo),
+pub enum ToAddressBook {}
 
-    /// Associate a peer with a topic of interest.
-    AddTopicId(NodeId, TopicId),
+pub struct AddressBookState {}
 
-    /// Return all known addresses for the given peer.
-    PeerAddresses(NodeId, RpcReplyPort<Vec<NodeInfo>>),
-
-    /// Return all known peer addresses.
-    AllPeerAddresses(RpcReplyPort<Vec<NodeInfo>>),
-
-    /// Return a random set of known peers with an interest in the given topic.
-    RandomAddressSet(TopicId, usize, RpcReplyPort<Vec<NodeId>>),
-}
-
-#[allow(dead_code)]
 #[derive(Default)]
-pub struct AddressBookState {
-    node_addresses: HashMap<NodeId, NodeInfo>,
-    node_topic_ids: HashMap<NodeId, HashSet<TopicId>>,
-}
-
-#[allow(dead_code)]
 pub struct AddressBook;
 
-impl Actor for AddressBook {
+impl ThreadLocalActor for AddressBook {
     type State = AddressBookState;
+
     type Msg = ToAddressBook;
 
     // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
@@ -54,7 +31,6 @@ impl Actor for AddressBook {
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let state = AddressBookState::default();
-        Ok(state)
+        Ok(AddressBookState {})
     }
 }

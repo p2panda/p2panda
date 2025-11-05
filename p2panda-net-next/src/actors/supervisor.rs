@@ -9,10 +9,12 @@
 //! supervisor which is responsible for spawning and monitoring the iroh actors and all others
 //! which are reliant on them (e.g. discovery, gossip and sync).
 use p2panda_core::PrivateKey;
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
+use crate::actors::discovery::{Discovery, ToDiscovery};
 use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
@@ -32,6 +34,7 @@ pub struct Config {
 pub struct SupervisorState {
     private_key: PrivateKey,
     actor_namespace: ActorNamespace,
+    thread_pool_1: ThreadLocalActorSpawner,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook>,
@@ -55,6 +58,8 @@ impl Actor for Supervisor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (private_key, config) = args;
 
+        let thread_pool_1 = ThreadLocalActorSpawner::new();
+
         let actor_namespace = generate_actor_namespace(&private_key.public_key());
 
         // Spawn the events actor.
@@ -67,11 +72,11 @@ impl Actor for Supervisor {
         .await?;
 
         // Spawn the address book actor.
-        let (address_book_actor, _) = Actor::spawn_linked(
+        let (address_book_actor, _) = AddressBook::spawn_linked(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            AddressBook {},
             (),
             myself.clone().into(),
+            thread_pool_1.clone(),
         )
         .await?;
 
@@ -87,6 +92,7 @@ impl Actor for Supervisor {
         let state = SupervisorState {
             private_key,
             actor_namespace,
+            thread_pool_1,
             events_actor,
             events_actor_failures: 0,
             address_book_actor,
@@ -154,12 +160,11 @@ impl Actor for Supervisor {
                             panic_msg
                         );
 
-                        // Respawn the address book actor.
-                        let (address_book_actor, _) = Actor::spawn_linked(
+                        let (address_book_actor, _) = AddressBook::spawn_linked(
                             Some(with_namespace(ADDRESS_BOOK, &state.actor_namespace)),
-                            AddressBook,
                             (),
                             myself.clone().into(),
+                            state.thread_pool_1.clone(),
                         )
                         .await?;
 
