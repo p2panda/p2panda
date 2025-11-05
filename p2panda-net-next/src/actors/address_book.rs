@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
+use std::time::Duration;
 
 // @TODO: This will come from `p2panda-store` eventually.
 use p2panda_discovery::address_book::AddressBookStore;
@@ -16,11 +17,29 @@ use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 /// Address book actor name.
 pub const ADDRESS_BOOK: &str = "net.address_book";
 
-pub enum ToAddressBook {
+pub enum ToAddressBook<T> {
     /// Returns information about a node.
     ///
     /// Returns `None` if no information was found for this node.
     NodeInfo(NodeId, RpcReplyPort<Option<NodeInfo>>),
+
+    /// Returns a list of all known node informations.
+    AllNodeInfos(RpcReplyPort<Vec<NodeInfo>>),
+
+    /// Returns a list of node informations for a selected set.
+    SelectedNodeInfos(Vec<NodeId>, RpcReplyPort<Vec<NodeInfo>>),
+
+    /// Returns a list of informations about nodes which are all interested in at least one of the
+    /// given topics in this set.
+    NodeInfosByTopics(Vec<T>, RpcReplyPort<Vec<NodeInfo>>),
+
+    /// Returns a list of informations about nodes which are all interested in at least one of the
+    /// given topic ids in this set.
+    NodeInfosByTopicIds(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
+
+    /// Returns information from a randomly picked node or `None` when no information exists in the
+    /// database.
+    RandomNodeInfo(RpcReplyPort<Option<NodeInfo>>),
 
     /// Inserts or updates node information into address book. Use this method if adding node
     /// information from a local configuration, trusted, external source, etc.
@@ -47,6 +66,36 @@ pub enum ToAddressBook {
         TransportInfo,
         RpcReplyPort<Result<bool, AddressBookError>>,
     ),
+
+    /// Sets the list of "topics" this node is "interested" in.
+    ///
+    /// Topics are usually shared privately and directly with nodes, this is why implementers
+    /// usually want to simply overwrite the previous topic set (_not_ extend it).
+    SetTopics(NodeId, Vec<T>),
+
+    /// Sets the list of "topic identifiers" this node is "interested" in.
+    ///
+    /// Topic ids for gossip overlays (used for ephemeral messaging) are usually shared privately
+    /// and directly with nodes, this is why implementers usually want to simply overwrite the
+    /// previous topic id set (_not_ extend it).
+    SetTopicIds(NodeId, Vec<TopicId>),
+
+    /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
+    /// exist.
+    RemoveNodeInfo(NodeId, RpcReplyPort<bool>),
+
+    /// Remove all node informations which are older than the given duration (from now). Returns
+    /// number of removed entries.
+    ///
+    /// Applications should frequently clean up "old" information about nodes to remove potentially
+    /// "useless" data from the network and not unnecessarily share sensitive information, even
+    /// when outdated. This method has a similar function as a TTL (Time-To-Life) record but is
+    /// less authoritative.
+    ///
+    /// Please note that a _local_ timestamp is used to determine the age of the information.
+    /// Entries will be removed if they haven't been updated in our _local_ database since the
+    /// given duration, _not_ when they have been created by the original author.
+    RemoveOlderThan(Duration, RpcReplyPort<usize>),
 }
 
 pub struct AddressBookState<S> {
@@ -69,11 +118,11 @@ impl<S, T> ThreadLocalActor for AddressBook<S, T>
 where
     S: AddressBookStore<T, NodeId, NodeInfo> + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: 'static,
+    T: Send + 'static,
 {
     type State = AddressBookState<S>;
 
-    type Msg = ToAddressBook;
+    type Msg = ToAddressBook<T>;
 
     // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
     // address subsets in the future.
@@ -96,10 +145,6 @@ where
         // Note that critical storage failures will return an `ActorProcessingErr` and cause this
         // actor to restart when supervised.
         match message {
-            ToAddressBook::NodeInfo(node_id, reply) => {
-                let result = state.store.node_info(&node_id).await?;
-                let _ = reply.send(result);
-            }
             ToAddressBook::InsertNodeInfo(node_info, reply) => {
                 // Check signature of information. Is it authentic?
                 if let Err(err) = node_info
@@ -144,6 +189,46 @@ where
                     Err(err) => Err(AddressBookError::NodeInfo(err)),
                 };
 
+                let _ = reply.send(result);
+            }
+
+            // Mostly a wrapper around the store ..
+            ToAddressBook::NodeInfo(node_id, reply) => {
+                let result = state.store.node_info(&node_id).await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::AllNodeInfos(reply) => {
+                let result = state.store.all_node_infos().await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::SelectedNodeInfos(node_ids, reply) => {
+                let result = state.store.selected_node_infos(&node_ids).await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::NodeInfosByTopics(topics, reply) => {
+                let result = state.store.node_infos_by_topics(&topics).await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::NodeInfosByTopicIds(topic_ids, reply) => {
+                let result = state.store.node_infos_by_topic_ids(&topic_ids).await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::RandomNodeInfo(reply) => {
+                let result = state.store.random_node().await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::SetTopics(node_id, topics) => {
+                state.store.set_topics(node_id, topics).await?;
+            }
+            ToAddressBook::SetTopicIds(node_id, topic_ids) => {
+                state.store.set_topic_ids(node_id, topic_ids).await?;
+            }
+            ToAddressBook::RemoveNodeInfo(node_id, reply) => {
+                let result = state.store.remove_node_info(&node_id).await?;
+                let _ = reply.send(result);
+            }
+            ToAddressBook::RemoveOlderThan(duration, reply) => {
+                let result = state.store.remove_older_than(duration).await?;
                 let _ = reply.send(result);
             }
         }

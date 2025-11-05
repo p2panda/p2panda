@@ -36,14 +36,14 @@ pub struct Config {
     pub(crate) endpoint: EndpointConfig,
 }
 
-pub struct SupervisorState<S> {
+pub struct SupervisorState<S, T> {
     private_key: PrivateKey,
     actor_namespace: ActorNamespace,
     args: ApplicationArguments<S>,
     thread_pool_1: ThreadLocalActorSpawner,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
-    address_book_actor: ActorRef<ToAddressBook>,
+    address_book_actor: ActorRef<ToAddressBook<T>>,
     address_book_actor_failures: u16,
     endpoint_config: EndpointConfig,
     endpoint_supervisor: ActorRef<()>,
@@ -53,8 +53,8 @@ pub struct SupervisorState<S> {
 pub struct Supervisor;
 
 impl Actor for Supervisor {
-    // @TODO(adz): S should be a generic.
-    type State = SupervisorState<MemoryStore<ChaCha20Rng, (), NodeId, NodeInfo>>;
+    // @TODO(adz): S and T should be a generic.
+    type State = SupervisorState<MemoryStore<ChaCha20Rng, (), NodeId, NodeInfo>, ()>;
     type Msg = ();
     type Arguments = (PrivateKey, Config);
 
