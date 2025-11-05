@@ -16,8 +16,8 @@ use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
 };
-use crate::traits::{Configurable, Protocol, TopicQuery};
-use crate::{DEFAULT_BUFFER_CAPACITY, SyncSessionConfig};
+use crate::traits::{Protocol, TopicQuery};
+use crate::{DEFAULT_BUFFER_CAPACITY};
 
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
@@ -265,33 +265,6 @@ pub(crate) fn sync_channels<'a, T, L, E>(
     });
 
     (log_sync_sink, log_sync_stream)
-}
-
-impl<T, S, M, L, E> Configurable for TopicLogSync<T, S, M, L, E>
-where
-    T: TopicQuery,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone,
-    M: TopicLogMap<T, L> + Clone,
-    L: LogId + for<'de> Deserialize<'de> + Serialize,
-    E: Extensions,
-{
-    type Config = SyncSessionConfig<T>;
-    type Error = TopicLogSyncError<T, S, M, L, E>;
-
-    fn configure(&mut self, config: &Self::Config) -> Result<(), Self::Error> {
-        let SyncSessionConfig { topic, live_mode } = config.clone();
-
-        let role = topic
-            .map(|topic| Role::Initiate(topic))
-            .unwrap_or_else(|| Role::Accept);
-
-        self.role = role;
-        if !live_mode {
-            self.live_mode_rx.take();
-        }
-
-        Ok(())
-    }
 }
 
 /// Error type occurring in topic log sync protocol.

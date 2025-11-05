@@ -24,29 +24,21 @@ pub trait Protocol {
 
 /// Interface for managing sync sessions and consuming events they emit.
 pub trait SyncManager<T> {
-    type Protocol: Protocol + Configurable<Config = SyncSessionConfig<T>>;
+    type Protocol: Protocol;
     type Event;
     type Error: Debug;
 
     /// Instantiate a new sync session.
-    fn session(&mut self, session_id: u64) -> Self::Protocol;
+    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol;
 
     /// Retrieve a send handle to an already existing sync session.
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<impl Sink<ToSync, Error = Self::Error> + Unpin  + 'static>;
+    ) -> Option<impl Sink<ToSync, Error = Self::Error> + Unpin + 'static>;
 
     /// Drive the manager to process and return events emitted from all running sync sessions.
     fn next_event(&mut self) -> impl Future<Output = Result<Option<Self::Event>, Self::Error>>;
-}
-
-/// Generic interface for configurable types.
-pub trait Configurable {
-    type Error;
-    type Config;
-
-    fn configure(&mut self, config: &Self::Config) -> Result<(), Self::Error>;
 }
 
 /// Identify the particular dataset a peer is interested in syncing.
