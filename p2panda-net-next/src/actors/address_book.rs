@@ -147,10 +147,7 @@ where
         match message {
             ToAddressBook::InsertNodeInfo(node_info, reply) => {
                 // Check signature of information. Is it authentic?
-                if let Err(err) = node_info
-                    .verify()
-                    .map_err(|err| AddressBookError::NodeInfo(err))
-                {
+                if let Err(err) = node_info.verify().map_err(AddressBookError::NodeInfo) {
                     let _ = reply.send(Err(err));
                     return Ok(());
                 }
@@ -163,7 +160,7 @@ where
                 // Check signature of information. Is it authentic?
                 if let Err(err) = transport_info
                     .verify(&node_id)
-                    .map_err(|err| AddressBookError::NodeInfo(err))
+                    .map_err(AddressBookError::NodeInfo)
                 {
                     let _ = reply.send(Err(err));
                     return Ok(());
