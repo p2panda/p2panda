@@ -41,6 +41,14 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
+    pub fn new(node_id: NodeId) -> Self {
+        Self {
+            node_id,
+            bootstrap: false,
+            transports: None,
+        }
+    }
+
     pub fn update_transports(&mut self, other: TransportInfo) -> Result<(), NodeInfoError> {
         // Make sure the given info matches the node id.
         for address in &other.addresses {
