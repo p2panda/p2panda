@@ -26,9 +26,10 @@ use tracing::{debug, warn};
 
 use crate::actors::events::ToEvents;
 use crate::actors::subscription::{Subscription, ToSubscription};
+use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
-use crate::from_private_key;
 use crate::protocols::ProtocolMap;
+use crate::{from_private_key, to_public_key};
 
 /// Configures the endpoint actor which uses an iroh `Endpoint` internally.
 #[derive(Debug)]
@@ -81,6 +82,8 @@ impl Actor for Endpoint {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (private_key, config) = args;
 
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+
         let mut transport_config = IrohTransportConfig::default();
         transport_config
             .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
@@ -110,7 +113,9 @@ impl Actor for Endpoint {
                 .is_ok()
         {
             // Inform the events actor of the connection.
-            if let Some(events_actor) = registry::where_is("events".to_string()) {
+            if let Some(events_actor) =
+                registry::where_is(with_namespace("events", &actor_namespace))
+            {
                 events_actor.send_message(ToEvents::ConnectedToRelay)?
             }
         } else {
@@ -129,7 +134,7 @@ impl Actor for Endpoint {
 
         // Spawn the subscription actor.
         let (subscription_actor, _) = Actor::spawn_linked(
-            Some("subscription".to_string()),
+            Some(with_namespace("subscription", &actor_namespace)),
             Subscription,
             endpoint.clone(),
             myself.clone().into(),
@@ -187,16 +192,24 @@ impl Actor for Endpoint {
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("endpoint actor: received ready from {} actor", name);
+                    debug!(
+                        "endpoint actor: received ready from {} actor",
+                        without_namespace(&name)
+                    );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                if let Some("subscription") = actor.get_name().as_deref() {
+                let actor_namespace =
+                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
+
+                if let Some(name) = actor.get_name().as_deref()
+                    && name == with_namespace("subscription", &actor_namespace)
+                {
                     warn!("endpoint actor: subscription actor failed: {}", panic_msg);
 
                     // Respawn the subscription actor.
                     let (subscription_actor, _) = Actor::spawn_linked(
-                        Some("subscription".to_string()),
+                        Some(with_namespace("subscription", &actor_namespace)),
                         Subscription,
                         state.endpoint.clone(),
                         myself.clone().into(),
@@ -209,7 +222,10 @@ impl Actor for Endpoint {
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!("endpoint actor: {} actor terminated", name);
+                    debug!(
+                        "endpoint actor: {} actor terminated",
+                        without_namespace(&name)
+                    );
                 }
             }
             _ => (),

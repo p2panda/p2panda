@@ -3,11 +3,18 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use iroh::protocol::DynProtocolHandler as ProtocolHandler;
-use p2panda_core::PrivateKey;
+use p2panda_core::{PrivateKey, PublicKey};
+use ractor::errors::SpawnErr;
+use ractor::{Actor, ActorRef, call, registry};
+use thiserror::Error;
+use tokio::task::JoinHandle;
 
-use crate::NetworkId;
-use crate::actors::network::NetworkConfig;
+use crate::actors::subscription::ToSubscription;
+use crate::actors::supervisor::{NetworkConfig, Supervisor};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::protocols::{self, ProtocolId};
+use crate::topic_streams::EphemeralStream;
+use crate::{NetworkId, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
 ///
@@ -97,5 +104,128 @@ impl NetworkBuilder {
     pub fn relay(mut self, url: iroh::RelayUrl) -> Self {
         self.network_config.endpoint_config.relays.push(url);
         self
+    }
+
+    /// Returns a handle to a newly-spawned instance of `Network`.
+    pub async fn build(self) -> Result<Network, NetworkError> {
+        let private_key = self.private_key.unwrap_or_default();
+
+        // Compute a six character actor namespace using the node's public key.
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+
+        // Spawn the root-level supervisor actor.
+        let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
+            Some(with_namespace("supervisor", &actor_namespace)),
+            Supervisor,
+            (private_key, self.network_config),
+        )
+        .await?;
+
+        let network = Network::new(actor_namespace, supervisor_actor, supervisor_actor_handle);
+
+        Ok(network)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum NetworkError {
+    #[error("failed to create topic stream")]
+    StreamCreation,
+
+    #[error("failed to call {0} actor; it may be in the process of restarting")]
+    ActorNotFound(String),
+
+    #[error(transparent)]
+    ActorSpawnError(#[from] SpawnErr),
+}
+
+#[derive(Debug)]
+pub struct Network {
+    actor_namespace: ActorNamespace,
+    supervisor_actor: ActorRef<()>,
+    supervisor_actor_handle: JoinHandle<()>,
+}
+
+impl Network {
+    fn new(
+        actor_namespace: ActorNamespace,
+        supervisor_actor: ActorRef<()>,
+        supervisor_actor_handle: JoinHandle<()>,
+    ) -> Self {
+        Self {
+            actor_namespace,
+            supervisor_actor,
+            supervisor_actor_handle,
+        }
+    }
+
+    /// Creates an ephemeral messaging stream and returns a handle.
+    ///
+    /// The returned handle can be used to publish ephemeral messages into the stream. These
+    /// messages will be propagated to other nodes which share an interest in the topic ID.
+    ///
+    /// Calling `.subscribe()` on the handle returns an `EphemeralTopicStreamSubscription`; this
+    /// acts as a receiver for messages authored by other nodes for the shared topic ID.
+    ///
+    /// Both the `EphemeralTopicStream` and `EphemeralTopicStreamSubscription` handles can be
+    /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
+    /// the receiver will receive every message. It is also possible to obtain multiple publishing
+    /// handles by calling `ephemeral_stream()` repeatedly.
+    pub async fn ephemeral_stream(
+        &self,
+        topic_id: &TopicId,
+    ) -> Result<EphemeralStream, NetworkError> {
+        // Get a reference to the subscription actor.
+        if let Some(subscription_actor) =
+            registry::where_is(with_namespace("subscription", &self.actor_namespace))
+        {
+            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+
+            // Ask the subscription actor for an ephemeral stream.
+            let stream = call!(actor, ToSubscription::CreateEphemeralStream, *topic_id)
+                .map_err(|_| NetworkError::StreamCreation)?;
+
+            Ok(stream)
+        } else {
+            Err(NetworkError::ActorNotFound("subscription".to_string()))
+        }
+    }
+}
+
+/// Bytes to be sent into the network.
+pub type ToNetwork = Vec<u8>;
+
+/// Message received from the network.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FromNetwork {
+    EphemeralMessage {
+        bytes: Vec<u8>,
+        delivered_from: PublicKey,
+    },
+    Message {
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        delivered_from: PublicKey,
+    },
+}
+
+impl FromNetwork {
+    pub(crate) fn ephemeral_message(bytes: Vec<u8>, delivered_from: PublicKey) -> Self {
+        Self::EphemeralMessage {
+            bytes,
+            delivered_from,
+        }
+    }
+
+    pub(crate) fn message(
+        header: Vec<u8>,
+        payload: Option<Vec<u8>>,
+        delivered_from: PublicKey,
+    ) -> Self {
+        Self::Message {
+            header,
+            payload,
+            delivered_from,
+        }
     }
 }
