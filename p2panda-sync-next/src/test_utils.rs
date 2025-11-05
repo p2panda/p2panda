@@ -12,7 +12,6 @@ use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tokio::join;
-use tokio::task::LocalSet;
 
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::manager::TopicSyncManager;

@@ -163,7 +163,6 @@ where
                             return Ok(());
                         };
 
-
                         let TopicLogSyncMessage::Live{header, body} = message else {
                             return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
                         };
@@ -172,6 +171,7 @@ where
                         // Insert operation hash into deduplication buffer and if it was
                         // previously present do not forward the operation to the application layer.
                         if !dedup.insert(header.hash()) {
+                            println!("ignore from stream duplicate");
                             continue;
                         }
 
@@ -181,46 +181,16 @@ where
                     }
                     Some(message) = live_mode_rx.next() => {
                         match message {
-                            LiveModeMessage::FromSub { header, body } => {
+                            LiveModeMessage::Operation { header, body } => {
                                 if !dedup.insert(header.hash()) {
-                                    // @TODO(sam): I wonder if we should rather error here? Or at
-                                    // the least log a warning. I don't think we ever expect the
-                                    // same message to be sent multiple times on the subscription
-                                    // publish channel.
                                     continue;
                                 }
 
                                 metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
                                 metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header: header.clone(), body: body.clone() })
+                                sink.send(TopicLogSyncMessage::Live { header: *header.clone(), body: body.clone() })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
-
-                                // @TODO: We need to be able to distinguish between messages we published and
-                                // messages received from other sync sessions or the remote peer
-                                // on the event stream receiver in the sync session manager. This
-                                // is so that we can _not_ forward our own published messages
-                                // further up on the event stream, but still forward them to other
-                                // sync sessions. This could be done 
-
-                                // self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
-                            }
-                            LiveModeMessage::FromSync { header, body } => {
-                                // Insert operation hash into deduplication buffer and if it was
-                                // previously present do not forward the operation to the remote peer.
-                                if !dedup.insert(header.hash()) {
-                                    continue;
-                                }
-
-                                // @TODO: check that this message is a part of our topic T set.
-                                metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
-                                metrics.operations_sent += 1;
-
-                                println!("send live operation to remote");
-                                sink.send(TopicLogSyncMessage::Live { header: header.clone(), body: body.clone() })
-                                    .await
-                                    .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
-                                self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                             }
                             LiveModeMessage::Close => {
                                 self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
@@ -373,16 +343,12 @@ pub struct LiveModeMetrics {
 /// Topic log sync live-mode message types.
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
-    /// Message received from a subscription.
-    FromSub {
-        header: Header<E>,
+    /// Operation received from a subscription or a concurrent sync session (via the manager).
+    Operation {
+        header: Box<Header<E>>,
         body: Option<Body>,
     },
-    /// Message received from a concurrent sync session.
-    FromSync {
-        header: Header<E>,
-        body: Option<Body>,
-    },
+    /// Gracefully close the session.
     Close,
 }
 
@@ -907,8 +873,8 @@ pub mod tests {
             peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
             .await
@@ -1070,8 +1036,8 @@ pub mod tests {
             peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
             .await
@@ -1079,8 +1045,8 @@ pub mod tests {
 
         // Sending subscription message twice.
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
             .await

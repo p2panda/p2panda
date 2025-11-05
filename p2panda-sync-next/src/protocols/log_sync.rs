@@ -418,8 +418,6 @@ where
                     .await
                     .map_err(LogSyncError::LogStore)?;
 
-                println!("{size:?}");
-
                 if let Some(size) = size {
                     total_size += size;
                 }

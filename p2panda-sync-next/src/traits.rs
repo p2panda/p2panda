@@ -35,7 +35,7 @@ pub trait SyncManager<T> {
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<impl Sink<ToSync, Error = Self::Error> + 'static>;
+    ) -> Option<impl Sink<ToSync, Error = Self::Error> + Unpin  + 'static>;
 
     /// Drive the manager to process and return events emitted from all running sync sessions.
     fn next_event(&mut self) -> impl Future<Output = Result<Option<Self::Event>, Self::Error>>;
