@@ -192,9 +192,18 @@ where
 
                                 metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
                                 metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header, body })
+                                sink.send(TopicLogSyncMessage::Live { header: header.clone(), body: body.clone() })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+
+                                // @TODO: We need to be able to distinguish between messages we published and
+                                // messages received from other sync sessions or the remote peer
+                                // on the event stream receiver in the sync session manager. This
+                                // is so that we can _not_ forward our own published messages
+                                // further up on the event stream, but still forward them to other
+                                // sync sessions. This could be done 
+
+                                // self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                             }
                             LiveModeMessage::FromSync { header, body } => {
                                 // Insert operation hash into deduplication buffer and if it was
@@ -206,9 +215,12 @@ where
                                 // @TODO: check that this message is a part of our topic T set.
                                 metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
                                 metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header, body })
+
+                                println!("send live operation to remote");
+                                sink.send(TopicLogSyncMessage::Live { header: header.clone(), body: body.clone() })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+                                self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                             }
                             LiveModeMessage::Close => {
                                 self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;

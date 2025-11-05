@@ -11,9 +11,11 @@ use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
+use tokio::join;
 use tokio::task::LocalSet;
 
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
+use crate::manager::TopicSyncManager;
 use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
@@ -37,6 +39,8 @@ pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 pub type TestTopicSyncError =
     TopicLogSyncError<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+
+pub type TestTopicSyncManager = TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 
 /// Peer abstraction used in tests.
 ///
@@ -158,30 +162,14 @@ where
     let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
     let mut remote_message_rx = remote_message_rx.map(|message| Ok::<_, ()>(message));
 
-    let local = LocalSet::new();
+    let (local_result, remote_result) = join!(
+        session_local.run(&mut local_message_tx, &mut remote_message_rx),
+        session_remote.run(&mut remote_message_tx, &mut local_message_rx)
+    );
 
-    local
-        .run_until(async move {
-            let local_task = tokio::task::spawn_local(async move {
-                session_local
-                    .run(&mut local_message_tx, &mut remote_message_rx)
-                    .await?;
-                Ok::<_, P::Error>(())
-            });
-
-            let remote_task = tokio::task::spawn_local(async move {
-                session_remote
-                    .run(&mut remote_message_tx, &mut local_message_rx)
-                    .await?;
-                Ok::<_, P::Error>(())
-            });
-
-            let (local_result, remote_result) = tokio::try_join!(local_task, remote_task).unwrap();
-            local_result?;
-            remote_result?;
-            Ok(())
-        })
-        .await
+    local_result?;
+    remote_result?;
+    Ok(())
 }
 
 /// Consume a vector of messages in a single topic sync session.

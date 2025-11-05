@@ -35,6 +35,7 @@ pub struct TopicSyncManagerEvent<T, E> {
 pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) topic_map: M,
     pub(crate) store: S,
+    // @TODO: need this to be a a map grouped by topic.
     pub(crate) session_tx_map: HashMap<u64, mpsc::Sender<LiveModeMessage<E>>>,
     pub(crate) events_rx_set: SelectAll<SessionEventReceiver<T, E>>,
     _phantom: PhantomData<(T, L, E)>,
@@ -106,6 +107,7 @@ where
                                 // preferable to avoid an extra decoding/encoding round.
                                 let (header, body): (Header<E>, Option<Body>) =
                                     decode_cbor(&bytes[..]).unwrap();
+
                                 Ok::<_, LogManagerError<T, S, M, L, E>>(LiveModeMessage::FromSub {
                                     header,
                                     body,
@@ -140,8 +142,12 @@ where
 
         if let Some((header, body)) = operation {
             let keys: Vec<u64> = self.session_tx_map.keys().cloned().collect();
+            let mut dropped = vec![];
             for id in keys {
-                let mut tx = self.session_tx_map.remove(&id).unwrap();
+                if id == event.session_id {
+                    continue;
+                }
+                let tx = self.session_tx_map.get_mut(&id).unwrap();
                 let result = tx
                     .send(LiveModeMessage::FromSync {
                         header: header.clone(),
@@ -152,9 +158,13 @@ where
                 // If there was an error sending the message on the channel it means the receiver
                 // has been dropped, which signifies that the session has already closed. In this
                 // case we just silently drop the session sender.
-                if result.is_ok() {
-                    self.session_tx_map.insert(id, tx);
+                if result.is_err() {
+                    dropped.push(id);
                 }
+            }
+
+            for id in dropped {
+                self.session_tx_map.remove(&id);
             }
         }
 
@@ -179,18 +189,38 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::Duration;
 
     use assert_matches::assert_matches;
     use futures::SinkExt;
+    use p2panda_core::Header;
     use p2panda_core::{Body, cbor::encode_cbor};
+    use tokio::join;
 
     use crate::log_sync::{LogSyncEvent, StatusEvent};
     use crate::manager::TopicSyncManager;
-    use crate::test_utils::{Peer, TestTopic, run_protocol};
+    use crate::test_utils::{
+        LogIdExtension, Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncManager, run_protocol,
+    };
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::{Configurable, SyncManager};
     use crate::{SyncSessionConfig, ToSync};
+
+    async fn collect_operations(
+        mut manager: TestTopicSyncManager,
+    ) -> Vec<(Header<LogIdExtension>, Option<Body>)> {
+        let mut operations = vec![];
+        while let Some(event) = manager.next_event().await.unwrap() {
+            if let TestTopicSyncEvent::Live { header, body } = &event.event {
+                operations.push((*header.clone(), body.clone()));
+            }
+            if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = &event.event {
+                operations.push((operation.header.clone(), operation.body.clone()));
+            }
+        }
+        operations
+    }
 
     #[tokio::test]
     async fn manager_e2e() {
@@ -324,5 +354,121 @@ mod tests {
                 _ => panic!(),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn live_mode_three_peer_forwarding() {
+        use std::collections::HashMap;
+
+        const TOPIC_NAME: &str = "chat";
+        const LOG_ID: u64 = 0;
+        const SESSION_AB: u64 = 0;
+        const SESSION_AC: u64 = 1;
+        const SESSION_BA: u64 = 2;
+        const SESSION_CA: u64 = 3;
+
+        // Shared topic
+        let topic = TestTopic::new(TOPIC_NAME);
+
+        // === Peer A ===
+        let mut peer_a = Peer::new(0);
+        let body_a = Body::new("Hello from A".as_bytes());
+        let _ = peer_a.create_operation(&body_a, LOG_ID).await;
+        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.insert_topic(&topic, &logs);
+        let mut manager_a = TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+
+        // === Peer B ===
+        let mut peer_b = Peer::new(1);
+        let body_b = Body::new("Hello from B".as_bytes());
+        let _ = peer_b.create_operation(&body_b, LOG_ID).await;
+        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.insert_topic(&topic, &logs);
+        let mut manager_b = TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+
+        // === Peer C ===
+        let mut peer_c = Peer::new(2);
+        let body_c = Body::new("Hello from C".as_bytes());
+        let _ = peer_c.create_operation(&body_c, LOG_ID).await;
+        let logs = HashMap::from([(peer_c.id(), vec![LOG_ID])]);
+        peer_c.insert_topic(&topic, &logs);
+        let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
+
+        // === Session A ↔ B (A initiates) ===
+        let mut session_ab = manager_a.session(SESSION_AB);
+        let session_b = manager_b.session(SESSION_BA);
+
+        let config = SyncSessionConfig {
+            topic: Some(topic.clone()),
+            live_mode: true,
+        };
+        session_ab.configure(&config).unwrap();
+
+        // === Session A ↔ C (A initiates) ===
+        let mut session_ac = manager_a.session(SESSION_AC);
+        let session_c = manager_c.session(SESSION_CA);
+
+        let config = SyncSessionConfig {
+            topic: Some(topic.clone()),
+            live_mode: true,
+        };
+        session_ac.configure(&config).unwrap();
+
+        // === Run both protocols concurrently ===
+        tokio::spawn(async move {
+            run_protocol(session_ab, session_b).await.unwrap();
+        });
+        tokio::spawn(async move {
+            run_protocol(session_ac, session_c).await.unwrap();
+        });
+
+        // === Send live-mode messages from all peers ===
+        let mut handle_ab = manager_a.session_handle(SESSION_AB).unwrap();
+        let mut handle_ac = manager_a.session_handle(SESSION_AC).unwrap();
+        let mut handle_ba = manager_b.session_handle(SESSION_BA).unwrap();
+        let mut handle_ca = manager_c.session_handle(SESSION_CA).unwrap();
+
+        let local = tokio::task::LocalSet::new();
+        let task = local.run_until(async {
+            let task_a = tokio::task::spawn_local(collect_operations(manager_a));
+            let task_b = tokio::task::spawn_local(collect_operations(manager_b));
+            let task_c = tokio::task::spawn_local(collect_operations(manager_c));
+
+            let (result_a, result_b, result_c) = join!(task_a, task_b, task_c,);
+            (result_a.unwrap(), result_b.unwrap(), result_c.unwrap())
+        });
+
+        // Create live messages
+        let body_a = Body::new("Hello again from A".as_bytes());
+        let body_b = Body::new("Hello again from B".as_bytes());
+        let body_c = Body::new("Hello again from C".as_bytes());
+        let (header_a, _) = peer_a.create_operation_no_insert(&body_a, LOG_ID).await;
+        let (header_b, _) = peer_b.create_operation_no_insert(&body_b, LOG_ID).await;
+        let (header_c, _) = peer_c.create_operation_no_insert(&body_c, LOG_ID).await;
+
+        let operation_a = encode_cbor(&(header_a, Some(body_a))).unwrap();
+        let operation_b = encode_cbor(&(header_b, Some(body_b))).unwrap();
+        let operation_c = encode_cbor(&(header_c, Some(body_c))).unwrap();
+
+        // Broadcast them
+        handle_ab
+            .send(ToSync::Payload(operation_a.clone()))
+            .await
+            .unwrap();
+        handle_ac.send(ToSync::Payload(operation_a)).await.unwrap();
+        handle_ba.send(ToSync::Payload(operation_b)).await.unwrap();
+        handle_ca.send(ToSync::Payload(operation_c)).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Close all sessions
+        handle_ab.send(ToSync::Close).await.unwrap();
+        handle_ac.send(ToSync::Close).await.unwrap();
+
+        let (operations_a, operations_b, operations_c) = task.await;
+
+        assert_eq!(operations_a.len(), 4);
+        assert_eq!(operations_b.len(), 2);
+        assert_eq!(operations_c.len(), 4);
     }
 }
