@@ -9,8 +9,11 @@
 //! supervisor which is responsible for spawning and monitoring the iroh actors and all others
 //! which are reliant on them (e.g. discovery, gossip and sync).
 use p2panda_core::PrivateKey;
+use p2panda_discovery::address_book::memory::MemoryStore;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -19,6 +22,8 @@ use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig, ToEndpoint};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::args::ApplicationArguments;
+use crate::{NodeId, NodeInfo};
 
 /// Supervisor actor name.
 pub const SUPERVISOR: &str = "net.supervisor";
@@ -31,9 +36,10 @@ pub struct Config {
     pub(crate) endpoint: EndpointConfig,
 }
 
-pub struct SupervisorState {
+pub struct SupervisorState<S> {
     private_key: PrivateKey,
     actor_namespace: ActorNamespace,
+    args: ApplicationArguments<S>,
     thread_pool_1: ThreadLocalActorSpawner,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
@@ -47,7 +53,8 @@ pub struct SupervisorState {
 pub struct Supervisor;
 
 impl Actor for Supervisor {
-    type State = SupervisorState;
+    // @TODO(adz): S should be a generic.
+    type State = SupervisorState<MemoryStore<ChaCha20Rng, (), NodeId, NodeInfo>>;
     type Msg = ();
     type Arguments = (PrivateKey, Config);
 
@@ -58,9 +65,18 @@ impl Actor for Supervisor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (private_key, config) = args;
 
-        let thread_pool_1 = ThreadLocalActorSpawner::new();
+        // @TODO: Arguments should be passed into supervisor actor instead of us creating them
+        // here.
+        let args = ApplicationArguments {
+            private_key: private_key.clone(),
+            store: MemoryStore::new(ChaCha20Rng::from_os_rng()),
+        };
 
         let actor_namespace = generate_actor_namespace(&private_key.public_key());
+
+        // @TODO: This is more of a placeholder for proper consideration of how we want to pool the
+        // local actors.
+        let thread_pool_1 = ThreadLocalActorSpawner::new();
 
         // Spawn the events actor.
         let (events_actor, _) = Actor::spawn_linked(
@@ -74,7 +90,7 @@ impl Actor for Supervisor {
         // Spawn the address book actor.
         let (address_book_actor, _) = AddressBook::spawn_linked(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (),
+            args.clone(),
             myself.clone().into(),
             thread_pool_1.clone(),
         )
@@ -92,6 +108,7 @@ impl Actor for Supervisor {
         let state = SupervisorState {
             private_key,
             actor_namespace,
+            args,
             thread_pool_1,
             events_actor,
             events_actor_failures: 0,
@@ -162,7 +179,7 @@ impl Actor for Supervisor {
 
                         let (address_book_actor, _) = AddressBook::spawn_linked(
                             Some(with_namespace(ADDRESS_BOOK, &state.actor_namespace)),
-                            (),
+                            state.args.clone(),
                             myself.clone().into(),
                             state.thread_pool_1.clone(),
                         )
