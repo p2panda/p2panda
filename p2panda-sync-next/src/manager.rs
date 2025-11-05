@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -13,12 +12,14 @@ use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::ToSync;
 use crate::log_sync::LogSyncEvent;
+use crate::session_topic_map::SessionTopicMap;
+use crate::topic_handshake::TopicHandshakeEvent;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
 use crate::traits::{SyncManager, TopicQuery};
+use crate::{SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<T, E> = Map<
     mpsc::Receiver<TopicLogSyncEvent<T, E>>,
@@ -34,8 +35,7 @@ pub struct TopicSyncManagerEvent<T, E> {
 pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) topic_map: M,
     pub(crate) store: S,
-    // @TODO: need this to be a a map grouped by topic.
-    pub(crate) session_tx_map: HashMap<u64, mpsc::Sender<LiveModeMessage<E>>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, E>,
     pub(crate) events_rx_set: SelectAll<SessionEventReceiver<T, E>>,
     _phantom: PhantomData<(T, L, E)>,
 }
@@ -49,7 +49,7 @@ where
         Self {
             topic_map,
             store,
-            session_tx_map: Default::default(),
+            session_topic_map: SessionTopicMap::default(),
             events_rx_set: SelectAll::new(),
             _phantom: PhantomData,
         }
@@ -68,9 +68,19 @@ where
     type Event = TopicSyncManagerEvent<T, E>;
     type Error = LogManagerError<T, S, M, L, E>;
 
-    fn session(&mut self, session_id: u64) -> Self::Protocol {
-        let (sub_tx, sub_rx) = mpsc::channel(128);
-        self.session_tx_map.insert(session_id, sub_tx.clone());
+    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
+        let (live_tx, live_rx) = mpsc::channel(128);
+        let role = match &config.topic {
+            Some(topic) => {
+                self.session_topic_map
+                    .insert_with_topic(session_id, topic.clone(), live_tx);
+                Role::Initiate(topic.clone())
+            }
+            None => {
+                self.session_topic_map.insert_accepting(session_id, live_tx);
+                Role::Accept
+            }
+        };
         let (event_tx, event_rx) = mpsc::channel(128);
 
         self.events_rx_set
@@ -82,8 +92,8 @@ where
         TopicLogSync::new(
             self.store.clone(),
             self.topic_map.clone(),
-            Role::Accept,
-            Some(sub_rx),
+            role,
+            Some(live_rx),
             event_tx,
         )
     }
@@ -117,10 +127,9 @@ where
             }
         };
 
-        self.session_tx_map
-            .get(&session_id)
-            .cloned()
-            .map(move |sink: mpsc::Sender<LiveModeMessage<E>>| Box::pin(sink.with(map_fn)))
+        self.session_topic_map
+            .session_channel(session_id)
+            .map(|tx| Box::pin(tx.with(map_fn)))
     }
 
     async fn next_event(&mut self) -> Result<Option<Self::Event>, Self::Error> {
@@ -128,6 +137,8 @@ where
         let Some(event) = event else {
             return Ok(None);
         };
+
+        let session_id = event.session_id;
 
         // If this is a sync or live-mode event containing an operation then get the header and
         // body ready for forwarding to relevant sessions.
@@ -137,21 +148,32 @@ where
                 Some((operation.header, operation.body))
             }
             TopicLogSyncEvent::Live { header, body } => Some((*header.clone(), body.clone())),
-            _ => None,
+            TopicLogSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(topic)) => {
+                self.session_topic_map.accepted(session_id, topic.clone());
+                return Ok(Some(event));
+            }
+            _ => return Ok(Some(event)),
         };
 
         if let Some((header, body)) = operation {
-            let keys: Vec<u64> = self.session_tx_map.keys().cloned().collect();
+            let Some(topic) = self.session_topic_map.topic(session_id) else {
+                panic!();
+                // TODO: Error("received unexpected operation")
+            };
+            let keys = self.session_topic_map.sessions(topic);
             let mut dropped = vec![];
             for id in keys {
                 // Don't forward messages back to the session they came from.
-                if id == event.session_id {
+                if id == session_id {
                     continue;
                 }
 
                 // Forward live operation to all concurrent sessions. If they have indeed seen
                 // this operation before they will deduplicate it themselves.
-                let tx = self.session_tx_map.get_mut(&id).unwrap();
+                let Some(mut tx) = self.session_topic_map.session_channel(id) else {
+                    panic!();
+                    // Error("missing session channel")
+                };
                 let result = tx
                     .send(LiveModeMessage::Operation {
                         header: Box::new(header.clone()),
@@ -168,7 +190,7 @@ where
             }
 
             for id in dropped {
-                self.session_tx_map.remove(&id);
+                self.session_topic_map.drop(id);
             }
         }
 
@@ -205,7 +227,7 @@ mod tests {
     use crate::test_utils::{LogIdExtension, Peer, TestTopic, TestTopicSyncEvent, run_protocol};
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;
-    use crate::traits::{Configurable, SyncManager};
+    use crate::traits::SyncManager;
     use crate::{SyncSessionConfig, ToSync};
 
     #[tokio::test]
@@ -235,17 +257,14 @@ mod tests {
             TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
-        let mut peer_a_session = peer_a_manager.session(SESSION_ID);
-
-        // Configure the sync session for Peer A to be initiator.
         let config = SyncSessionConfig {
             topic: Some(topic),
             live_mode: true,
         };
-        peer_a_session.configure(&config).unwrap();
+        let peer_a_session = peer_a_manager.session(SESSION_ID, &config);
 
         // Instantiate sync session for Peer B.
-        let peer_b_session = peer_b_manager.session(SESSION_ID);
+        let peer_b_session = peer_b_manager.session(SESSION_ID, &SyncSessionConfig::default());
 
         // Get a handle to Peer A sync session.
         let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).unwrap();
@@ -381,24 +400,20 @@ mod tests {
         let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
 
         // Session A -> B (A initiates)
-        let mut session_ab = manager_a.session(SESSION_AB);
-        let session_b = manager_b.session(SESSION_BA);
-
         let config = SyncSessionConfig {
             topic: Some(topic.clone()),
             live_mode: true,
         };
-        session_ab.configure(&config).unwrap();
+        let session_ab = manager_a.session(SESSION_AB, &config);
+        let session_b = manager_b.session(SESSION_BA, &SyncSessionConfig::default());
 
         // Session A -> C (A initiates)
-        let mut session_ac = manager_a.session(SESSION_AC);
-        let session_c = manager_c.session(SESSION_CA);
-
         let config = SyncSessionConfig {
             topic: Some(topic.clone()),
             live_mode: true,
         };
-        session_ac.configure(&config).unwrap();
+        let session_ac = manager_a.session(SESSION_AC, &config);
+        let session_c = manager_c.session(SESSION_CA, &SyncSessionConfig::default());
 
         // Run both protocols concurrently
         tokio::spawn(async move {
@@ -417,9 +432,9 @@ mod tests {
         let body_a = Body::new("Hello again from A".as_bytes());
         let body_b = Body::new("Hello again from B".as_bytes());
         let body_c = Body::new("Hello again from C".as_bytes());
-        let (peer_a_header_1, _) = peer_a.create_operation_no_insert(&body_a, LOG_ID).await;
-        let (peer_b_header_1, _) = peer_b.create_operation_no_insert(&body_b, LOG_ID).await;
-        let (peer_c_header_1, _) = peer_c.create_operation_no_insert(&body_c, LOG_ID).await;
+        let (peer_a_header_1, _) = peer_a.create_operation(&body_a, LOG_ID).await;
+        let (peer_b_header_1, _) = peer_b.create_operation(&body_b, LOG_ID).await;
+        let (peer_c_header_1, _) = peer_c.create_operation(&body_c, LOG_ID).await;
 
         let operation_a = encode_cbor(&(peer_a_header_1.clone(), Some(body_a))).unwrap();
         let operation_b = encode_cbor(&(peer_b_header_1.clone(), Some(body_b))).unwrap();
@@ -490,4 +505,5 @@ mod tests {
                 .is_none()
         );
     }
+
 }
