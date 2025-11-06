@@ -17,6 +17,7 @@
 //! which are reliant on them (e.g. discovery, gossip and sync).
 use std::error::Error as StdError;
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_core::PrivateKey;
@@ -26,6 +27,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -66,7 +68,7 @@ impl<S, T> ThreadLocalActor for Supervisor<S, T>
 where
     S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Debug + Send + 'static,
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
     type State = SupervisorState<S, T>;
 

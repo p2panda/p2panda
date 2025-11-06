@@ -16,11 +16,13 @@
 //! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
 use std::error::Error as StdError;
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
@@ -61,7 +63,7 @@ impl<S, T> ThreadLocalActor for EndpointSupervisor<S, T>
 where
     S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Debug + Send + 'static,
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
     type State = EndpointSupervisorState<S, T>;
 

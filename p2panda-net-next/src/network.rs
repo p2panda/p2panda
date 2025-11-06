@@ -2,6 +2,7 @@
 
 use std::error::Error as StdError;
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
@@ -10,6 +11,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -95,8 +97,9 @@ impl NetworkBuilder {
     pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError>
     where
         S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
-        S::Error: StdError + Send + Sync + 'static,
-        T: Debug + Send + 'static,
+        S::Error: std::error::Error + Send + Sync + 'static,
+        for<'a> T:
+            Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
     {
         // Compute a six character actor namespace using the node's public key.
         let actor_namespace = generate_actor_namespace(&self.args.public_key);

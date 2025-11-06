@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
+use p2panda_discovery::traits::{DiscoveryProtocol as _, SubscriptionInfo as _};
+use p2panda_sync::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::actors::discovery::DISCOVERY_PROTOCOL_ID;
+use crate::actors::discovery::manager::SubscriptionInfo;
 use crate::actors::discovery::walker::ToDiscoveryWalker;
+use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-
-pub struct DiscoverySessionState {}
 
 pub struct DiscoverySession<S, T> {
     _marker: PhantomData<(S, T)>,
@@ -27,59 +33,90 @@ impl<S, T> Default for DiscoverySession<S, T> {
     }
 }
 
-pub enum DiscoverySessionArguments<S, T> {
+pub enum DiscoverySessionArguments<T> {
     Connect {
-        node_id: NodeId,
         walker_ref: ActorRef<ToDiscoveryWalker<T>>,
-        args: ApplicationArguments,
-        store: S,
     },
     Accept {
-        node_id: NodeId,
         connection: iroh::endpoint::Connection,
-        args: ApplicationArguments,
-        store: S,
     },
+}
+
+impl<T> DiscoverySessionArguments<T> {
+    pub fn role(&self) -> DiscoverySessionRole {
+        match self {
+            DiscoverySessionArguments::Connect { .. } => DiscoverySessionRole::Alice,
+            DiscoverySessionArguments::Accept { .. } => DiscoverySessionRole::Bob,
+        }
+    }
+}
+
+pub enum DiscoverySessionRole {
+    Alice,
+    Bob,
 }
 
 impl<S, T> ThreadLocalActor for DiscoverySession<S, T>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Send + 'static,
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Send + 'static,
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
-    type State = DiscoverySessionState;
+    type State = ();
 
     type Msg = ();
 
-    type Arguments = DiscoverySessionArguments<S, T>;
+    type Arguments = (
+        NodeId,
+        S,
+        ActorRef<ToDiscoveryManager<T>>,
+        DiscoverySessionArguments<T>,
+    );
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        match args {
-            DiscoverySessionArguments::Connect {
-                node_id,
-                walker_ref,
-                args,
-                store,
-            } => {
+        let (remote_node_id, store, manager_ref, args) = args;
+        let role = args.role();
+
+        let (connection, walker_ref) = match args {
+            DiscoverySessionArguments::Connect { walker_ref } => {
                 // Try to establish a direct connection with this node.
-                let connection = connect::<T>(node_id, DISCOVERY_PROTOCOL_ID).await?;
-                let (tx, rx) = connection.open_bi().await?;
+                let connection = connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID).await?;
+                (connection, Some(walker_ref))
             }
-            DiscoverySessionArguments::Accept {
-                node_id,
-                connection,
-                args,
-                store,
-            } => {
-                let (tx, rx) = connection.open_bi().await?;
-            }
+            DiscoverySessionArguments::Accept { connection } => (connection, None),
+        };
+
+        // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
+        // encoding for message framing.
+        let (tx, rx) = connection.open_bi().await?;
+        let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(tx);
+        let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(rx);
+
+        // Run the discovery protocol.
+        let protocol = NaiveDiscoveryProtocol::<S, _, T, NodeId, NodeInfo>::new(
+            store,
+            SubscriptionInfo::<T>::new(),
+            remote_node_id,
+        );
+        let result = match role {
+            DiscoverySessionRole::Alice => protocol.alice(&mut tx, &mut rx).await?,
+            DiscoverySessionRole::Bob => protocol.bob(&mut tx, &mut rx).await?,
+        };
+
+        // Inform walker about result of this discovery session if we've initiated it.
+        if let Some(walker_ref) = walker_ref {
+            let _ = walker_ref.send_message(ToDiscoveryWalker::NextNode(Some(result.clone())));
         }
 
-        Ok(DiscoverySessionState {})
+        // Inform manager about results as well.
+        let _ = manager_ref.send_message(ToDiscoveryManager::FinishSession(result));
+
+        // Stop this actor for good.
+        myself.stop(None);
+        Ok(())
     }
 }
