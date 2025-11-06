@@ -25,7 +25,7 @@ use tokio::time::timeout;
 use tracing::{debug, warn};
 
 use crate::actors::events::{EVENTS, ToEvents};
-use crate::actors::subscription::{SUBSCRIPTION, Subscription, ToSubscription};
+use crate::actors::stream::{STREAM, Stream, ToStream};
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::protocols::ProtocolMap;
@@ -65,8 +65,8 @@ pub(crate) enum ToEndpoint {}
 pub(crate) struct EndpointState {
     endpoint: IrohEndpoint,
     router: IrohRouter,
-    subscription_actor: ActorRef<ToSubscription>,
-    subscription_actor_failures: u16,
+    stream_actor: ActorRef<ToStream>,
+    stream_actor_failures: u16,
 }
 
 pub(crate) struct Endpoint;
@@ -132,10 +132,10 @@ impl Actor for Endpoint {
 
         let router = router_builder.spawn();
 
-        // Spawn the subscription actor.
-        let (subscription_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(SUBSCRIPTION, &actor_namespace)),
-            Subscription,
+        // Spawn the stream actor.
+        let (stream_actor, _) = Actor::spawn_linked(
+            Some(with_namespace(STREAM, &actor_namespace)),
+            Stream,
             endpoint.clone(),
             myself.clone().into(),
         )
@@ -144,8 +144,8 @@ impl Actor for Endpoint {
         let state = EndpointState {
             endpoint,
             router,
-            subscription_actor,
-            subscription_actor_failures: 0,
+            stream_actor,
+            stream_actor_failures: 0,
         };
 
         Ok(state)
@@ -168,7 +168,7 @@ impl Actor for Endpoint {
         state.router.shutdown().await?;
 
         state
-            .subscription_actor
+            .stream_actor
             .stop(Some("{ENDPOINT} actor is shutting down".to_string()));
 
         Ok(())
@@ -203,24 +203,21 @@ impl Actor for Endpoint {
                     generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
 
                 if let Some(name) = actor.get_name().as_deref()
-                    && name == with_namespace(SUBSCRIPTION, &actor_namespace)
+                    && name == with_namespace(STREAM, &actor_namespace)
                 {
-                    warn!(
-                        "{ENDPOINT} actor: {SUBSCRIPTION} actor failed: {}",
-                        panic_msg
-                    );
+                    warn!("{ENDPOINT} actor: {STREAM} actor failed: {}", panic_msg);
 
-                    // Respawn the subscription actor.
-                    let (subscription_actor, _) = Actor::spawn_linked(
-                        Some(with_namespace(SUBSCRIPTION, &actor_namespace)),
-                        Subscription,
+                    // Respawn the stream actor.
+                    let (stream_actor, _) = Actor::spawn_linked(
+                        Some(with_namespace(STREAM, &actor_namespace)),
+                        Stream,
                         state.endpoint.clone(),
                         myself.clone().into(),
                     )
                     .await?;
 
-                    state.subscription_actor_failures += 1;
-                    state.subscription_actor = subscription_actor;
+                    state.stream_actor_failures += 1;
+                    state.stream_actor = stream_actor;
                 }
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
@@ -247,7 +244,7 @@ mod tests {
     use tracing_test::traced_test;
 
     use crate::actors::endpoint::ENDPOINT;
-    use crate::actors::subscription::SUBSCRIPTION;
+    use crate::actors::stream::STREAM;
 
     use super::{Endpoint, EndpointConfig};
 
@@ -273,7 +270,7 @@ mod tests {
         endpoint_actor_handle.await.unwrap();
 
         assert!(logs_contain(&format!(
-            "{ENDPOINT} actor: received ready from {SUBSCRIPTION} actor"
+            "{ENDPOINT} actor: received ready from {STREAM} actor"
         )));
         assert!(!logs_contain("actor failed"));
     }

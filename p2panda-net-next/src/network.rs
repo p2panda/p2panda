@@ -9,7 +9,7 @@ use ractor::{Actor, ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::actors::subscription::{SUBSCRIPTION, ToSubscription};
+use crate::actors::stream::{STREAM, ToStream};
 use crate::actors::supervisor::{NetworkConfig, SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::protocols::{self, ProtocolId};
@@ -175,19 +175,19 @@ impl Network {
         &self,
         topic_id: &TopicId,
     ) -> Result<EphemeralStream, NetworkError> {
-        // Get a reference to the subscription actor.
-        if let Some(subscription_actor) =
-            registry::where_is(with_namespace(SUBSCRIPTION, &self.actor_namespace))
+        // Get a reference to the stream actor.
+        if let Some(stream_actor) =
+            registry::where_is(with_namespace(STREAM, &self.actor_namespace))
         {
-            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+            let actor: ActorRef<ToStream> = stream_actor.into();
 
-            // Ask the subscription actor for an ephemeral stream.
-            let stream = call!(actor, ToSubscription::CreateEphemeralStream, *topic_id)
+            // Ask the stream actor for an ephemeral stream.
+            let stream = call!(actor, ToStream::CreateEphemeralStream, *topic_id)
                 .map_err(|_| NetworkError::StreamCreation)?;
 
             Ok(stream)
         } else {
-            Err(NetworkError::ActorNotFound(SUBSCRIPTION.to_string()))
+            Err(NetworkError::ActorNotFound(STREAM.to_string()))
         }
     }
 }

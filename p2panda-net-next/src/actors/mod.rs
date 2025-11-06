@@ -5,7 +5,7 @@ mod discovery;
 mod endpoint;
 mod events;
 mod gossip;
-pub(crate) mod subscription;
+pub(crate) mod stream;
 pub(crate) mod supervisor;
 mod sync;
 #[cfg(test)]

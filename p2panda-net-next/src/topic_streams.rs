@@ -22,7 +22,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
-use crate::actors::subscription::{SUBSCRIPTION, ToSubscription};
+use crate::actors::stream::{STREAM, ToStream};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 
@@ -79,19 +79,18 @@ impl EphemeralStream {
     /// The returned `EphemeralStreamSubscription` provides a means of receiving messages from
     /// the stream.
     pub async fn subscribe(&self) -> Result<EphemeralStreamSubscription, StreamError<()>> {
-        // Get a reference to the subscription actor.
-        if let Some(actor) = self.subscription_actor() {
-            // Ask the subscription actor for an ephemeral stream subscriber.
-            if let Some(subscription) =
-                call!(actor, ToSubscription::EphemeralSubscription, self.topic_id)
-                    .map_err(|_| StreamError::Actor(SUBSCRIPTION.to_string()))?
+        // Get a reference to the stream actor.
+        if let Some(actor) = self.stream_actor() {
+            // Ask the stream actor for an ephemeral stream subscriber.
+            if let Some(stream) = call!(actor, ToStream::EphemeralSubscription, self.topic_id)
+                .map_err(|_| StreamError::Actor(STREAM.to_string()))?
             {
-                Ok(subscription)
+                Ok(stream)
             } else {
                 Err(StreamError::StreamNotFound)
             }
         } else {
-            Err(StreamError::ActorNotFound(SUBSCRIPTION.to_string()))
+            Err(StreamError::ActorNotFound(STREAM.to_string()))
         }
     }
 
@@ -102,23 +101,23 @@ impl EphemeralStream {
 
     /// Closes from the ephemeral messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
-        if let Some(actor) = self.subscription_actor() {
+        if let Some(actor) = self.stream_actor() {
             actor
-                .cast(ToSubscription::UnsubscribeEphemeral(self.topic_id))
-                .map_err(|_| StreamError::Actor(SUBSCRIPTION.to_string()))?;
+                .cast(ToStream::UnsubscribeEphemeral(self.topic_id))
+                .map_err(|_| StreamError::Actor(STREAM.to_string()))?;
 
             Ok(())
         } else {
-            Err(StreamError::ActorNotFound(SUBSCRIPTION.to_string()))
+            Err(StreamError::ActorNotFound(STREAM.to_string()))
         }
     }
 
-    /// Internal helper to get a reference to the subscription actor.
-    fn subscription_actor(&self) -> Option<ActorRef<ToSubscription>> {
-        if let Some(subscription_actor) =
-            registry::where_is(with_namespace(SUBSCRIPTION, &self.actor_namespace))
+    /// Internal helper to get a reference to the stream actor.
+    fn stream_actor(&self) -> Option<ActorRef<ToStream>> {
+        if let Some(stream_actor) =
+            registry::where_is(with_namespace(STREAM, &self.actor_namespace))
         {
-            let actor: ActorRef<ToSubscription> = subscription_actor.into();
+            let actor: ActorRef<ToStream> = stream_actor.into();
 
             Some(actor)
         } else {
