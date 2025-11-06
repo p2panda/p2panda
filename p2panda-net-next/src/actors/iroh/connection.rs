@@ -17,7 +17,7 @@ pub type ConnectionReplyPort =
 pub enum IrohConnectionArgs {
     Connect {
         endpoint: iroh::endpoint::Endpoint,
-        node_addr: iroh::NodeAddr,
+        node_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
         reply: ConnectionReplyPort,
     },
@@ -120,7 +120,7 @@ async fn accept_incoming(
 
     // Establish connection.
     let connection = protocol_handler
-        .on_connecting(connecting)
+        .on_accepting(connecting)
         .await
         .map_err(|err| ConnectionActorError::Iroh(err.into()))?;
     Ok((connection, alpn))
