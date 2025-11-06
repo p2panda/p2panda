@@ -28,7 +28,7 @@ pub(crate) fn generate_actor_namespace(public_key: &PublicKey) -> ActorNamespace
 
 /// Combines an actor's name with a node-unique namespace as suffix.
 pub(crate) fn with_namespace(name: &str, namespace: &ActorNamespace) -> String {
-    format!("{}+{}", name, namespace)
+    format!("{name}+{namespace}")
 }
 
 /// Removes the node-unique namespace suffix from an actor's name.
