@@ -16,7 +16,7 @@ use tokio::time::timeout;
 use tracing::warn;
 
 use crate::actors::events::ToEvents;
-use crate::actors::iroh::connection::{IrohConnection, IrohConnectionArgs};
+use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::args::ApplicationArguments;
 use crate::from_private_key;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
@@ -44,11 +44,7 @@ pub enum ToIrohEndpoint {
     /// The ALPN byte string, or application-level protocol identifier, is also required. The
     /// remote endpoint must support this alpn, otherwise the connection attempt will fail with an
     /// error.
-    Connect(
-        iroh::EndpointAddr,
-        ProtocolId,
-        RpcReplyPort<Result<iroh::endpoint::Connection, iroh::endpoint::ConnectWithOptsError>>,
-    ),
+    Connect(iroh::EndpointAddr, ProtocolId, ConnectionReplyPort),
 
     /// We've received a connection attempt from a remote iroh endpoint.
     Incoming(iroh::endpoint::Incoming),
@@ -112,7 +108,6 @@ impl Actor for IrohEndpoint {
                     let Some(incoming) = endpoint.accept().await else {
                         break; // Endpoint is closed.
                     };
-
                     myself.send_message(ToIrohEndpoint::Incoming(incoming));
                 }
             })
@@ -153,6 +148,11 @@ impl Actor for IrohEndpoint {
             ToIrohEndpoint::Connect(node_addr, alpn, reply) => {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+
+                // This actor will shut down immediately after the connection was established. The
+                // responsibility to handle the connection object is shifted to the caller from
+                // this point on, so using this actor to reason about the state of the connection
+                // is not possible here.
                 IrohConnection::spawn_linked(
                     None,
                     IrohConnectionArgs::Connect {
@@ -167,6 +167,7 @@ impl Actor for IrohEndpoint {
                 .await?;
             }
             ToIrohEndpoint::Incoming(incoming) => {
+                // This actor will run as long as the protocol session.
                 IrohConnection::spawn_linked(
                     None,
                     IrohConnectionArgs::Accept {
@@ -183,16 +184,6 @@ impl Actor for IrohEndpoint {
             }
         }
 
-        Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
-        myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        // @TODO: Observe connection state.
         Ok(())
     }
 }
