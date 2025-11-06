@@ -22,8 +22,8 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
-use crate::actors::endpoint::{ENDPOINT, ToEndpoint};
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
+use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::stream::{STREAM, Stream, ToStream};
 use crate::actors::sync::{SYNC, Sync, ToSync};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
@@ -54,8 +54,8 @@ impl Actor for StreamSupervisor {
         myself: ActorRef<Self::Msg>,
         actor_namespace: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let endpoint_actor: ActorRef<ToEndpoint> =
-            registry::where_is(with_namespace(ENDPOINT, &actor_namespace))
+        let endpoint_actor: ActorRef<ToIrohEndpoint> =
+            registry::where_is(with_namespace(IROH_ENDPOINT, &actor_namespace))
                 // Something went terribly wrong if the endpoint actor is not available.
                 .unwrap()
                 .into();
@@ -65,7 +65,7 @@ impl Actor for StreamSupervisor {
         // is acceptable behaviour; we should fail completely if the stream supervisor fails too
         // many times within a given time-frame - that would indicate that something is critically
         // wrong with the endpoint / endpoint actor.
-        let endpoint = call!(endpoint_actor, ToEndpoint::Endpoint).unwrap();
+        let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
         // Spawn the sync actor.
         let (sync_actor, _) = Actor::spawn_linked(

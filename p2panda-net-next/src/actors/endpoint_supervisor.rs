@@ -12,20 +12,18 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
-use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig, ToEndpoint};
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::args::ApplicationArguments;
 
 /// Endpoint supervisor actor name.
 pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint_supervisor";
 
 pub struct EndpointSupervisorState {
+    args: ApplicationArguments,
     actor_namespace: ActorNamespace,
-    private_key: PrivateKey,
-    // TODO: We need to store the config on the state so the endpoint actor can be restarted. This
-    // will only be possible once we have our own custom router in place.
-    //endpoint_config: EndpointConfig,
-    endpoint_actor: ActorRef<ToEndpoint>,
+    endpoint_actor: ActorRef<ToIrohEndpoint>,
     discovery_actor: ActorRef<ToDiscovery>,
     discovery_actor_failures: u16,
 }
@@ -34,23 +32,23 @@ pub struct EndpointSupervisor;
 
 impl Actor for EndpointSupervisor {
     type State = EndpointSupervisorState;
+
     type Msg = ();
-    type Arguments = (PrivateKey, EndpointConfig);
+
+    type Arguments = ApplicationArguments;
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (private_key, endpoint_config) = args;
-
-        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+        let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the endpoint actor.
         let (endpoint_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(ENDPOINT, &actor_namespace)),
-            Endpoint,
-            (private_key.clone(), endpoint_config),
+            Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
+            IrohEndpoint,
+            args.clone(),
             myself.clone().into(),
         )
         .await?;
@@ -74,8 +72,8 @@ impl Actor for EndpointSupervisor {
         .await?;
 
         let state = EndpointSupervisorState {
+            args,
             actor_namespace,
-            private_key,
             endpoint_actor,
             discovery_actor,
             discovery_actor_failures: 0,
@@ -115,9 +113,9 @@ impl Actor for EndpointSupervisor {
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace(ENDPOINT, &state.actor_namespace) {
+                    if name == with_namespace(IROH_ENDPOINT, &state.actor_namespace) {
                         warn!(
-                            "{ENDPOINT_SUPERVISOR} actor: {ENDPOINT} actor failed: {}",
+                            "{ENDPOINT_SUPERVISOR} actor: {IROH_ENDPOINT} actor failed: {}",
                             panic_msg
                         );
 
@@ -128,7 +126,7 @@ impl Actor for EndpointSupervisor {
                         // 3. Respawn the stream supervisor and discovery actors
                         state
                             .discovery_actor
-                            .stop(Some("{ENDPOINT} actor failed".to_string()));
+                            .stop(Some("{IROH_ENDPOINT} actor failed".to_string()));
 
                         // Respawn the endpoint actor.
                         //let (endpoint_actor, _) = Actor::spawn_linked(

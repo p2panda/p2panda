@@ -3,11 +3,15 @@ name = "p2panda-net-next"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 futures-lite = "2.6.1"
 iroh = { version = "0.95.1", default-features = false }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
+n0-future = "0.3.0"
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 p2panda-discovery = { path = "../p2panda-discovery-next", package = "p2panda-discovery-next", version = "0.4.0", features = ["test_utils"] }
 ractor = "0.15.8"
@@ -22,6 +26,3 @@ tracing = "0.1.41"
 serial_test = { version = "3.2.0", default-features = false, features = ["async"] }
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 tracing-test = "0.2.5"
-
-[lints]
-workspace = true
