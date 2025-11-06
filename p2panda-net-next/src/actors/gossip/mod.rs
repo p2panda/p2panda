@@ -163,10 +163,7 @@ impl Actor for Gossip {
             ToGossip::Handle(reply) => {
                 let gossip = state.gossip.clone();
 
-                // Don't respond if the receiver has been dropped.
-                if !reply.is_closed() {
-                    let _ = reply.send(gossip);
-                }
+                let _ = reply.send(gossip);
 
                 Ok(())
             }
@@ -234,9 +231,7 @@ impl Actor for Gossip {
                     .insert(topic_id, from_gossip_tx.clone());
 
                 // Return sender / receiver pair to the user.
-                if !reply.is_closed() {
-                    let _ = reply.send((to_gossip_tx, from_gossip_tx));
-                }
+                let _ = reply.send((to_gossip_tx, from_gossip_tx));
 
                 Ok(())
             }

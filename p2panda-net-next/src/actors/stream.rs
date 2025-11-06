@@ -149,9 +149,8 @@ impl Actor for Stream {
                     EphemeralStream::new(topic_id, to_gossip_tx, actor_namespace)
                 };
 
-                if !reply.is_closed() {
-                    let _ = reply.send(stream);
-                }
+                // Ignore any potential send error; it's not a concern of this actor.
+                let _ = reply.send(stream);
             }
             ToStream::EphemeralSubscription(topic_id, reply) => {
                 if let Some(from_gossip_tx) = state.from_gossip_senders.get(&topic_id) {
@@ -159,10 +158,8 @@ impl Actor for Stream {
 
                     let subscription = EphemeralStreamSubscription::new(topic_id, from_gossip_rx);
 
-                    if !reply.is_closed() {
-                        let _ = reply.send(Some(subscription));
-                    }
-                } else if !reply.is_closed() {
+                    let _ = reply.send(Some(subscription));
+                } else {
                     let _ = reply.send(None);
                 }
             }
