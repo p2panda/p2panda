@@ -10,7 +10,7 @@ mod session;
 use std::collections::{HashMap, HashSet};
 
 use iroh::Endpoint as IrohEndpoint;
-use iroh::NodeId;
+use iroh::EndpointId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
@@ -181,7 +181,7 @@ impl Actor for Gossip {
                 // joined.
                 let (gossip_joined_tx, gossip_joined_rx) = oneshot::channel();
 
-                // Convert p2panda public keys to iroh node ids.
+                // Convert p2panda public keys to iroh endpoint ids.
                 let peers = peers
                     .iter()
                     .map(|key: &PublicKey| from_public_key(*key))
@@ -254,8 +254,8 @@ impl Actor for Gossip {
                 Ok(())
             }
             ToGossip::JoinPeers(topic_id, peers) => {
-                // Convert p2panda public keys to iroh node ids.
-                let peers: Vec<NodeId> = peers
+                // Convert p2panda public keys to iroh endpoint ids.
+                let peers: Vec<EndpointId> = peers
                     .iter()
                     .map(|key: &PublicKey| from_public_key(*key))
                     .collect();
@@ -402,10 +402,10 @@ impl Actor for Gossip {
 mod tests {
     use std::time::Duration;
 
-    use iroh::Endpoint as IrohEndpoint;
-    use iroh::discovery::NodeInfo;
+    use iroh::discovery::EndpointInfo;
     use iroh::discovery::static_provider::StaticProvider;
     use iroh::protocol::Router as IrohRouter;
+    use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
     use ractor::{Actor, call};
@@ -447,39 +447,37 @@ mod tests {
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
-        let ant_endpoint = IrohEndpoint::builder()
+        let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(ant_private_key))
-            .add_discovery(ant_discovery.clone())
+            .discovery(ant_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let bat_discovery = StaticProvider::new();
-        let bat_endpoint = IrohEndpoint::builder()
+        let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(bat_private_key))
-            .add_discovery(bat_discovery.clone())
+            .discovery(bat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let cat_discovery = StaticProvider::new();
-        let cat_endpoint = IrohEndpoint::builder()
+        let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(cat_private_key))
-            .add_discovery(cat_discovery.clone())
+            .discovery(cat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
-        // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.node_addr();
-        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.direct_addresses);
+        // Obtain ant's endpoint information including direct addresses.
+        let ant_endpoint_info: EndpointInfo = ant_endpoint.addr().into();
 
         // Bat discovers ant through some out-of-band process.
-        bat_discovery.add_node_info(ant_node_info.clone());
+        bat_discovery.add_endpoint_info(ant_endpoint_info.clone());
 
         // Cat discovers ant through some out-of-band process.
-        cat_discovery.add_node_info(ant_node_info);
+        cat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
@@ -593,28 +591,26 @@ mod tests {
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
-        let ant_endpoint = IrohEndpoint::builder()
+        let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(ant_private_key))
-            .add_discovery(ant_discovery.clone())
+            .discovery(ant_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let bat_discovery = StaticProvider::new();
-        let bat_endpoint = IrohEndpoint::builder()
+        let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(bat_private_key))
-            .add_discovery(bat_discovery.clone())
+            .discovery(bat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
-        // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.node_addr();
-        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.direct_addresses);
+        // Obtain ant's endpoint information including direct addresses.
+        let ant_endpoint_info: EndpointInfo = ant_endpoint.addr().into();
 
         // Bat discovers ant through some out-of-band process.
-        bat_discovery.add_node_info(ant_node_info);
+        bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
@@ -713,36 +709,34 @@ mod tests {
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
-        let ant_endpoint = IrohEndpoint::builder()
+        let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(ant_private_key))
-            .add_discovery(ant_discovery.clone())
+            .discovery(ant_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let bat_discovery = StaticProvider::new();
-        let bat_endpoint = IrohEndpoint::builder()
+        let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(bat_private_key))
-            .add_discovery(bat_discovery.clone())
+            .discovery(bat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let cat_discovery = StaticProvider::new();
-        let cat_endpoint = IrohEndpoint::builder()
+        let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(cat_private_key))
-            .add_discovery(cat_discovery.clone())
+            .discovery(cat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
-        // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.node_addr();
-        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.direct_addresses);
+        // Obtain ant's endpoint information including direct addresses.
+        let ant_endpoint_info: EndpointInfo = ant_endpoint.addr().into();
 
         // Bat discovers ant through some out-of-band process.
-        bat_discovery.add_node_info(ant_node_info);
+        bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
@@ -786,13 +780,11 @@ mod tests {
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
 
-        // Obtain bat's node information including direct addresses.
-        let bat_addrs = bat_endpoint.node_addr();
-        let bat_node_info = NodeInfo::new(from_public_key(bat_public_key))
-            .with_direct_addresses(bat_addrs.direct_addresses);
+        // Obtain bat's endpoint information including direct addresses.
+        let bat_endpoint_info: EndpointInfo = bat_endpoint.addr().into();
 
         // Cat discovers bat through some out-of-band process.
-        cat_discovery.add_node_info(bat_node_info);
+        cat_discovery.add_endpoint_info(bat_endpoint_info);
 
         let cat_peers = vec![bat_public_key];
 
@@ -879,36 +871,34 @@ mod tests {
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
-        let ant_endpoint = IrohEndpoint::builder()
+        let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(ant_private_key))
-            .add_discovery(ant_discovery.clone())
+            .discovery(ant_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let bat_discovery = StaticProvider::new();
-        let bat_endpoint = IrohEndpoint::builder()
+        let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(bat_private_key))
-            .add_discovery(bat_discovery.clone())
+            .discovery(bat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
         let cat_discovery = StaticProvider::new();
-        let cat_endpoint = IrohEndpoint::builder()
+        let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
             .secret_key(from_private_key(cat_private_key))
-            .add_discovery(cat_discovery.clone())
+            .discovery(cat_discovery.clone())
             .bind()
             .await
             .unwrap();
 
-        // Obtain ant's node information including direct addresses.
-        let ant_addrs = ant_endpoint.node_addr();
-        let ant_node_info = NodeInfo::new(from_public_key(ant_public_key))
-            .with_direct_addresses(ant_addrs.direct_addresses);
+        // Obtain ant's endpoint information including direct addresses.
+        let ant_endpoint_info: EndpointInfo = ant_endpoint.addr().into();
 
         // Bat discovers ant through some out-of-band process.
-        bat_discovery.add_node_info(ant_node_info);
+        bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
@@ -1017,13 +1007,11 @@ mod tests {
         // At this point we have proof of partition; bat and cat are subscribed to the same gossip
         // topic but cannot "hear" one another.
 
-        // Obtain bat's node information including direct addresses.
-        let bat_addrs = bat_endpoint.node_addr();
-        let bat_node_info = NodeInfo::new(from_public_key(bat_public_key))
-            .with_direct_addresses(bat_addrs.direct_addresses);
+        // Obtain bat's endpoint information including direct addresses.
+        let bat_endpoint_info: EndpointInfo = bat_endpoint.addr().into();
 
         // Cat discovers bat through some out-of-band process.
-        cat_discovery.add_node_info(bat_node_info);
+        cat_discovery.add_endpoint_info(bat_endpoint_info);
 
         // Cat explicitly joins bat on the gossip topic.
         let _ = cat_gossip_actor.cast(ToGossip::JoinPeers(topic_id, vec![bat_public_key]));

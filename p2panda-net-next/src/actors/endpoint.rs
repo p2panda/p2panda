@@ -199,8 +199,7 @@ impl Actor for Endpoint {
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace =
-                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
+                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
 
                 if let Some(name) = actor.get_name().as_deref()
                     && name == with_namespace(STREAM, &actor_namespace)

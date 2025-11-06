@@ -8,7 +8,7 @@
 //! forwards them up the chain to the main gossip orchestration actor.
 use std::time::Duration;
 
-use iroh::NodeId;
+use iroh::EndpointId;
 use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
@@ -28,10 +28,10 @@ pub enum ToGossipSession {
     ProcessEvent(IrohEvent),
 
     /// Joined the gossip overlay with the given peers as direct neighbors.
-    ProcessJoined(Vec<NodeId>),
+    ProcessJoined(Vec<EndpointId>),
 
     /// Join the given set of peers.
-    JoinPeers(Vec<NodeId>),
+    JoinPeers(Vec<EndpointId>),
 }
 
 pub struct GossipSessionState {

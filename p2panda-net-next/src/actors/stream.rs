@@ -59,12 +59,12 @@ impl Actor for Stream {
         myself: ActorRef<Self::Msg>,
         endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.node_id()));
+        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
 
         // Spawn the gossip actor.
         let (gossip_actor, _) = Actor::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
-            Gossip {},
+            Gossip,
             endpoint.clone(),
             myself.clone().into(),
         )
@@ -73,7 +73,7 @@ impl Actor for Stream {
         // Spawn the sync actor.
         let (sync_actor, _) = Actor::spawn_linked(
             Some(with_namespace(SYNC, &actor_namespace)),
-            Sync {},
+            Sync,
             (),
             myself.into(),
         )
@@ -119,8 +119,7 @@ impl Actor for Stream {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToStream::CreateEphemeralStream(topic_id, reply) => {
-                let actor_namespace =
-                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
+                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
 
                 // TODO: Ask address book for all peers interested in this topic id.
                 let peers = Vec::new();
@@ -192,8 +191,7 @@ impl Actor for Stream {
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace =
-                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
+                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
 
                 if let Some(name) = actor.get_name().as_deref() {
                     if name == with_namespace(GOSSIP, &actor_namespace) {
@@ -202,7 +200,7 @@ impl Actor for Stream {
                         // Respawn the gossip actor.
                         let (gossip_actor, _) = Actor::spawn_linked(
                             Some(with_namespace(GOSSIP, &actor_namespace)),
-                            Gossip {},
+                            Gossip,
                             state.endpoint.clone(),
                             myself.clone().into(),
                         )
@@ -216,7 +214,7 @@ impl Actor for Stream {
                         // Respawn the sync actor.
                         let (sync_actor, _) = Actor::spawn_linked(
                             Some(with_namespace(SYNC, &actor_namespace)),
-                            Sync {},
+                            Sync,
                             (),
                             myself.clone().into(),
                         )
