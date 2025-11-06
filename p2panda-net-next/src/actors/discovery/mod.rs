@@ -2,3 +2,6 @@
 
 mod manager;
 mod session;
+mod walker;
+
+pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};

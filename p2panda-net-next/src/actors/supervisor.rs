@@ -87,7 +87,7 @@ impl ThreadLocalActor for Supervisor {
         // Spawn the endpoint supervisor.
         let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
             Some(with_namespace(ENDPOINT_SUPERVISOR, &actor_namespace)),
-            args.clone(),
+            (args.clone(), store.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -175,9 +175,10 @@ impl ThreadLocalActor for Supervisor {
                             panic_msg
                         );
 
+                        // Respawn the endpoint supervisor.
                         let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
                             Some(with_namespace(ENDPOINT_SUPERVISOR, &state.actor_namespace)),
-                            state.args.clone(),
+                            (state.args.clone(), state.store.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
