@@ -172,21 +172,17 @@ where
                 //
                 // If a node info already exists, only update the "transports" aspect of it and
                 // keep any other "local" configuration, otherwise create a new "default" node info.
-                let current = state.store.node_info(&node_id).await?;
-                let node_info = match current {
-                    Some(mut current) => current.update_transports(transport_info).map(|_| current),
-                    None => Ok(NodeInfo::new(node_id)),
+                let mut node_info = match state.store.node_info(&node_id).await? {
+                    Some(current) => current,
+                    None => NodeInfo::new(node_id),
                 };
 
-                let result = match node_info {
-                    Ok(node_info) => {
-                        let result = state.store.insert_node_info(node_info).await?;
-                        Ok(result)
-                    }
-                    Err(err) => Err(AddressBookError::NodeInfo(err)),
-                };
-
-                let _ = reply.send(result);
+                if let Err(err) = node_info.update_transports(transport_info) {
+                    let _ = reply.send(Err(AddressBookError::NodeInfo(err)));
+                } else {
+                    let result = state.store.insert_node_info(node_info).await?;
+                    let _ = reply.send(Ok(result));
+                }
             }
 
             // Mostly a wrapper around the store ..
@@ -243,6 +239,7 @@ pub enum AddressBookError {
 #[cfg(test)]
 mod tests {
     use p2panda_core::PrivateKey;
+    use p2panda_discovery::address_book::NodeInfo as _;
     use p2panda_discovery::address_book::memory::MemoryStore;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
     use ractor::{Actor, call};
@@ -250,9 +247,8 @@ mod tests {
     use rand_chacha::ChaCha20Rng;
 
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::addrs::{NodeId, NodeInfo};
+    use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
     use crate::args::ApplicationArguments;
-    use crate::{TransportAddress, UnsignedTransportInfo};
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
@@ -291,8 +287,11 @@ mod tests {
         assert!(!result.unwrap());
 
         // Bootstrap should be set to "true", as node info was still overwritten.
-        let result = call!(actor, ToAddressBook::NodeInfo, public_key).unwrap();
-        assert!(result.expect("node info exists in store").bootstrap);
+        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+            .unwrap()
+            .expect("node info exists in store");
+        assert!(result.bootstrap);
+        assert!(result.transports().is_none());
 
         // Inserting invalid node info should fail.
         let node_info = {
@@ -341,8 +340,13 @@ mod tests {
         assert!(result.is_ok());
 
         // Even after insertion of new transport info, the "local" bootstrap config is still true.
-        let result = call!(actor, ToAddressBook::NodeInfo, public_key).unwrap();
-        assert!(result.expect("node info exists in store").bootstrap);
+        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+            .unwrap()
+            .expect("node info exists in store");
+        assert!(result.bootstrap);
+
+        // Transport info was set.
+        assert!(result.transports().is_some());
 
         // Inserting invalid transport info should fail.
         let transport_info = {
@@ -365,5 +369,32 @@ mod tests {
         )
         .unwrap();
         assert!(result.is_err());
+
+        // Inserting new transport info just creates a "default" object.
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+        let transport_info = {
+            let mut unsigned = UnsignedTransportInfo::new();
+            unsigned.add_addr(TransportAddress::from_iroh(
+                public_key,
+                Some("https://my.relay.net".parse().unwrap()),
+                [],
+            ));
+            unsigned.sign(&private_key).unwrap()
+        };
+        let result = call!(
+            actor,
+            ToAddressBook::InsertTransportInfo,
+            public_key,
+            transport_info
+        )
+        .unwrap();
+        assert!(result.is_ok());
+
+        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+            .unwrap()
+            .expect("node info exists in store");
+        assert!(!result.bootstrap);
+        assert!(result.transports().is_some());
     }
 }
