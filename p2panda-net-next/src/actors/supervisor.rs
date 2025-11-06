@@ -20,9 +20,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
-use crate::actors::iroh::{
-    IROH_ENDPOINT, IROH_ROUTER, IrohEndpoint, IrohRouter, ToIrohEndpoint, ToIrohRouter,
-};
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
 use crate::{NodeId, NodeInfo};

@@ -2,27 +2,37 @@
 
 //! Actor managing an endpoint to establish direct or relayed connections over the Internet
 //! Protocol using the "iroh" crate.
+use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::sync::Arc;
 use std::time::Duration;
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, registry};
+use iroh::protocol::DynProtocolHandler;
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::warn;
 
 use crate::actors::events::ToEvents;
-use crate::actors::iroh::router::{IROH_ROUTER, ToIrohRouter};
+use crate::actors::iroh::connection::{IrohConnection, IrohConnectionArgs};
 use crate::args::ApplicationArguments;
 use crate::from_private_key;
-use crate::protocols::ProtocolId;
+use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
 /// Maximum number of streams accepted on a QUIC connection.
-pub const DEFAULT_MAX_STREAMS: u32 = 1024;
+const DEFAULT_MAX_STREAMS: u32 = 1024;
 
+#[allow(clippy::large_enum_variant)]
 pub enum ToIrohEndpoint {
+    /// Return the internal iroh endpoint instance (used by iroh-gossip).
     Endpoint(RpcReplyPort<iroh::endpoint::Endpoint>),
+
+    /// Register protocol handler for a given ALPN (protocol identifier).
+    RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
 
     /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
     /// awaited for establishing the final connection.
@@ -37,13 +47,21 @@ pub enum ToIrohEndpoint {
     Connect(
         iroh::EndpointAddr,
         ProtocolId,
-        RpcReplyPort<Result<iroh::endpoint::Connecting, iroh::endpoint::ConnectWithOptsError>>,
+        RpcReplyPort<Result<iroh::endpoint::Connection, iroh::endpoint::ConnectWithOptsError>>,
     ),
+
+    /// We've received a connection attempt from a remote iroh endpoint.
+    Incoming(iroh::endpoint::Incoming),
 }
 
+pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
+
 pub struct IrohState {
+    args: ApplicationArguments,
     endpoint: iroh::Endpoint,
+    protocols: ProtocolMap,
     accept_handle: JoinHandle<()>,
+    worker_pool: ThreadLocalActorSpawner,
 }
 
 pub struct IrohEndpoint;
@@ -57,10 +75,10 @@ impl Actor for IrohEndpoint {
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let config = args.iroh_config;
+        let config = args.iroh_config.clone();
 
         // Configure QUIC transport and sockets to bind to.
         let mut transport_config = iroh::endpoint::TransportConfig::default();
@@ -79,7 +97,7 @@ impl Actor for IrohEndpoint {
         // Create and bind the endpoint to the socket.
         // @TODO: Add static provider to register addresses coming from our discovery mechanism.
         let endpoint = iroh::Endpoint::builder()
-            .secret_key(from_private_key(args.private_key))
+            .secret_key(from_private_key(args.private_key.clone()))
             .transport_config(transport_config)
             .relay_mode(relay_mode)
             .bind_addr_v4(socket_address_v4)
@@ -95,16 +113,17 @@ impl Actor for IrohEndpoint {
                         break; // Endpoint is closed.
                     };
 
-                    if let Some(router_actor) = registry::where_is(IROH_ROUTER.into()) {
-                        let _ = router_actor.send_message(ToIrohRouter::Incoming(incoming));
-                    }
+                    myself.send_message(ToIrohEndpoint::Incoming(incoming));
                 }
             })
         };
 
         Ok(IrohState {
+            args,
             endpoint,
+            protocols: Arc::default(),
             accept_handle,
+            worker_pool: ThreadLocalActorSpawner::new(),
         })
     }
 
@@ -120,26 +139,60 @@ impl Actor for IrohEndpoint {
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
+                let mixed_protocol_id =
+                    hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+                let mut protocols = state.protocols.write().await;
+                protocols.insert(mixed_protocol_id.to_vec(), protocol_handler);
+            }
             ToIrohEndpoint::Connect(node_addr, alpn, reply) => {
-                // Don't block the actor here by waiting for a connection to be established, we
-                // return the "waiting to be connected" future `Connecting` instead and handle this
-                // connection attempt somewhere else.
-                let connecting = state
-                    .endpoint
-                    .connect_with_opts(node_addr, &alpn, Default::default())
-                    .await;
-                let _ = reply.send(connecting);
+                let mixed_protocol_id =
+                    hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+                IrohConnection::spawn_linked(
+                    None,
+                    IrohConnectionArgs::Connect {
+                        endpoint: state.endpoint.clone(),
+                        node_addr,
+                        alpn: mixed_protocol_id.to_vec(),
+                        reply,
+                    },
+                    myself.into(),
+                    state.worker_pool.clone(),
+                )
+                .await?;
+            }
+            ToIrohEndpoint::Incoming(incoming) => {
+                IrohConnection::spawn_linked(
+                    None,
+                    IrohConnectionArgs::Accept {
+                        incoming,
+                        protocols: state.protocols.clone(),
+                    },
+                    myself.into(),
+                    state.worker_pool.clone(),
+                )
+                .await?;
             }
             ToIrohEndpoint::Endpoint(reply) => {
                 let _ = reply.send(state.endpoint.clone());
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_supervisor_evt(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // @TODO: Observe connection state.
         Ok(())
     }
 }
