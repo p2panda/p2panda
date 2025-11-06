@@ -6,14 +6,12 @@ mod receiver;
 mod sender;
 mod session;
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 
 /// Sync actor name.
 pub const SYNC: &str = "net.sync";
 
 pub enum ToSync {}
-
-impl Message for ToSync {}
 
 pub struct SyncState {}
 

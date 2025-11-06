@@ -14,9 +14,7 @@ use std::collections::HashMap;
 pub const SUBSCRIPTION: &str = "net.subscription";
 
 use iroh::Endpoint as IrohEndpoint;
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent, call, cast,
-};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
@@ -38,8 +36,6 @@ pub enum ToSubscription {
     /// Unsubscribe from an ephemeral stream for the given topic ID.
     UnsubscribeEphemeral(TopicId),
 }
-
-impl Message for ToSubscription {}
 
 pub struct SubscriptionState {
     endpoint: IrohEndpoint,

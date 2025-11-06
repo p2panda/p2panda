@@ -3,14 +3,12 @@
 //! Join a set of peers on a gossip topic.
 use iroh::NodeId;
 use iroh_gossip::api::GossipSender as IrohGossipSender;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 
 pub enum ToGossipJoiner {
     /// Join the given set of peers.
     JoinPeers(Vec<NodeId>),
 }
-
-impl Message for ToGossipJoiner {}
 
 pub struct GossipJoinerState {
     sender: Option<IrohGossipSender>,

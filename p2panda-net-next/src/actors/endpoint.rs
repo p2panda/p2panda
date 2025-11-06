@@ -20,7 +20,7 @@ use iroh::RelayUrl as IrohRelayUrl;
 use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use iroh::protocol::Router as IrohRouter;
 use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent, registry};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent, registry};
 use tokio::time::timeout;
 use tracing::{debug, warn};
 
@@ -61,8 +61,6 @@ impl Default for EndpointConfig {
 }
 
 pub(crate) enum ToEndpoint {}
-
-impl Message for ToEndpoint {}
 
 pub(crate) struct EndpointState {
     endpoint: IrohEndpoint,

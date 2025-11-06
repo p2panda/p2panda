@@ -14,9 +14,7 @@ use iroh::NodeId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
-use ractor::{
-    Actor, ActorId, ActorProcessingErr, ActorRef, Message, RpcReplyPort, SupervisionEvent,
-};
+use ractor::{Actor, ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
@@ -82,8 +80,6 @@ pub enum ToGossip {
         session_id: ActorId,
     },
 }
-
-impl Message for ToGossip {}
 
 #[derive(Default)]
 /// Actor references and channels for gossip sessions.

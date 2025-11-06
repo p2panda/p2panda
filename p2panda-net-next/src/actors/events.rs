@@ -4,7 +4,7 @@
 //!
 //! Receives events from other actors, aggregating and enriching them before informing
 //! upstream subscribers.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::debug;
 
 /// Events actor name.
@@ -13,8 +13,6 @@ pub const EVENTS: &str = "net.events";
 pub enum ToEvents {
     ConnectedToRelay,
 }
-
-impl Message for ToEvents {}
 
 pub struct EventsState {}
 

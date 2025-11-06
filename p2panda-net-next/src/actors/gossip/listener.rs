@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Listen for messages from the user and forward them to the gossip sender.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc::Receiver;
 use tracing::warn;
 
@@ -11,8 +11,6 @@ pub enum ToGossipListener {
     /// Wait for a message on the gossip topic channel.
     WaitForMessage,
 }
-
-impl Message for ToGossipListener {}
 
 pub struct GossipListenerState {
     receiver: Option<Receiver<Vec<u8>>>,

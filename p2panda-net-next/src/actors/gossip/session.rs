@@ -11,7 +11,7 @@ use std::time::Duration;
 use iroh::NodeId;
 use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
@@ -33,8 +33,6 @@ pub enum ToGossipSession {
     /// Join the given set of peers.
     JoinPeers(Vec<NodeId>),
 }
-
-impl Message for ToGossipSession {}
 
 pub struct GossipSessionState {
     topic_id: TopicId,
