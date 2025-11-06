@@ -203,8 +203,7 @@ pub enum FromNetwork {
         delivered_from: PublicKey,
     },
     Message {
-        header: Vec<u8>,
-        payload: Option<Vec<u8>>,
+        bytes: Vec<u8>,
         delivered_from: PublicKey,
     },
 }
@@ -217,14 +216,9 @@ impl FromNetwork {
         }
     }
 
-    pub(crate) fn message(
-        header: Vec<u8>,
-        payload: Option<Vec<u8>>,
-        delivered_from: PublicKey,
-    ) -> Self {
+    pub(crate) fn message(bytes: Vec<u8>, delivered_from: PublicKey) -> Self {
         Self::Message {
-            header,
-            payload,
+            bytes,
             delivered_from,
         }
     }
