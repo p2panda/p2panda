@@ -151,14 +151,6 @@ impl Actor for Endpoint {
         Ok(state)
     }
 
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn post_stop(
         &self,
         _myself: ActorRef<Self::Msg>,
@@ -171,15 +163,6 @@ impl Actor for Endpoint {
             .stream_actor
             .stop(Some("{ENDPOINT} actor is shutting down".to_string()));
 
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
         Ok(())
     }
 
