@@ -21,8 +21,8 @@ pub const SUPERVISOR: &str = "net.supervisor";
 // adz has an `Arguments` struct in his code; use that.
 #[allow(dead_code)]
 #[derive(Debug, Default)]
-pub struct NetworkConfig {
-    pub(crate) endpoint_config: EndpointConfig,
+pub struct Config {
+    pub(crate) endpoint: EndpointConfig,
 }
 
 pub struct SupervisorState {
@@ -41,7 +41,7 @@ pub struct Supervisor;
 impl Actor for Supervisor {
     type State = SupervisorState;
     type Msg = ();
-    type Arguments = (PrivateKey, NetworkConfig);
+    type Arguments = (PrivateKey, Config);
 
     async fn pre_start(
         &self,
@@ -65,7 +65,7 @@ impl Actor for Supervisor {
         let (endpoint_actor, _) = Actor::spawn_linked(
             Some(with_namespace(ENDPOINT, &actor_namespace)),
             Endpoint,
-            (private_key, config.endpoint_config),
+            (private_key, config.endpoint),
             myself.clone().into(),
         )
         .await?;

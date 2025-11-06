@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 
 use crate::actors::stream::{STREAM, ToStream};
-use crate::actors::supervisor::{NetworkConfig, SUPERVISOR, Supervisor};
+use crate::actors::supervisor::{Config, SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
@@ -23,17 +23,17 @@ use crate::{NetworkId, TopicId};
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct NetworkBuilder {
-    network_id: NetworkId,
-    network_config: NetworkConfig,
+    id: NetworkId,
+    config: Config,
     private_key: Option<PrivateKey>,
 }
 
 impl NetworkBuilder {
     /// Returns a new instance of `NetworkBuilder` with default values assigned for all fields.
-    pub fn new(network_id: NetworkId) -> Self {
+    pub fn new(id: NetworkId) -> Self {
         Self {
-            network_id,
-            network_config: NetworkConfig::default(),
+            id,
+            config: Config::default(),
             private_key: None,
         }
     }
@@ -42,7 +42,7 @@ impl NetworkBuilder {
     ///
     /// Default is 0.0.0.0 (`UNSPECIFIED`).
     pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
-        self.network_config.endpoint_config.bind_ip_v4 = ip;
+        self.config.endpoint.bind_ip_v4 = ip;
         self
     }
 
@@ -50,7 +50,7 @@ impl NetworkBuilder {
     ///
     /// Default is 2022.
     pub fn bind_port_v4(mut self, port: u16) -> Self {
-        self.network_config.endpoint_config.bind_port_v4 = port;
+        self.config.endpoint.bind_port_v4 = port;
         self
     }
 
@@ -58,7 +58,7 @@ impl NetworkBuilder {
     ///
     /// Default is :: (`UNSPECIFIED`).
     pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
-        self.network_config.endpoint_config.bind_ip_v6 = ip;
+        self.config.endpoint.bind_ip_v6 = ip;
         self
     }
 
@@ -66,7 +66,7 @@ impl NetworkBuilder {
     ///
     /// Default is 2023.
     pub fn bind_port_v6(mut self, port: u16) -> Self {
-        self.network_config.endpoint_config.bind_port_v6 = port;
+        self.config.endpoint.bind_port_v6 = port;
         self
     }
 
@@ -80,14 +80,14 @@ impl NetworkBuilder {
     }
 
     /// Adds a custom protocol for communication between two peers.
-    fn _protocol(mut self, id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
+    fn _protocol(mut self, protocol_id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
         // Hash the protocol ID with the network ID.
         //
         // The hashed ID is what will be registered with the iroh `Endpoint`.
-        let identifier_hash = protocols::hash_protocol_id_with_network_id(id, &self.network_id);
+        let identifier_hash = protocols::hash_protocol_id_with_network_id(protocol_id, &self.id);
 
-        self.network_config
-            .endpoint_config
+        self.config
+            .endpoint
             .protocols
             .insert(identifier_hash, Box::new(handler));
         self
@@ -102,7 +102,7 @@ impl NetworkBuilder {
     /// fails, which will serve to relay the data in that case.
     // TODO: Expose QUIC address discovery address as `Option<u16>` or config struct.
     pub fn relay(mut self, url: iroh::RelayUrl) -> Self {
-        self.network_config.endpoint_config.relays.push(url);
+        self.config.endpoint.relays.push(url);
         self
     }
 
@@ -117,7 +117,7 @@ impl NetworkBuilder {
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
             Supervisor,
-            (private_key, self.network_config),
+            (private_key, self.config),
         )
         .await?;
 
