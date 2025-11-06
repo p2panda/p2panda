@@ -109,7 +109,7 @@ impl Actor for Supervisor {
     ) -> Result<(), ActorProcessingErr> {
         let reason = Some("network system is shutting down".to_string());
 
-        // Stop all the actors which are directly upervised by this actor.
+        // Stop all the actors which are directly supervised by this actor.
         state.events_actor.stop(reason.clone());
         state.endpoint_actor.stop(reason.clone());
         state.address_book_actor.stop(reason.clone());

@@ -38,7 +38,7 @@ pub const ENDPOINT: &str = "net.endpoint";
 #[derive(Debug)]
 // TODO: Remove once used.
 #[allow(dead_code)]
-pub(crate) struct EndpointConfig {
+pub struct EndpointConfig {
     pub(crate) bind_ip_v4: Ipv4Addr,
     pub(crate) bind_port_v4: u16,
     pub(crate) bind_ip_v6: Ipv6Addr,

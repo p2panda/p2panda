@@ -3,6 +3,7 @@
 mod address_book;
 mod discovery;
 mod endpoint;
+mod endpoint_supervisor;
 mod events;
 mod gossip;
 pub(crate) mod stream;
