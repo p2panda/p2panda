@@ -15,6 +15,12 @@
 //! This supervisor spawns the events and address book actors. It also spawns the endpoint
 //! supervisor which is responsible for spawning and monitoring the iroh actors and all others
 //! which are reliant on them (e.g. discovery, gossip and sync).
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::marker::PhantomData;
+
+use p2panda_core::PrivateKey;
+use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
@@ -32,11 +38,10 @@ use crate::{NodeId, NodeInfo};
 /// Supervisor actor name.
 pub const SUPERVISOR: &str = "net.supervisor";
 
-pub struct SupervisorState<T> {
+pub struct SupervisorState<S, T> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
-    // @TODO: Make store generic.
-    store: MemoryStore<ChaCha20Rng, T, NodeId, NodeInfo>,
+    store: S,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook<T>>,
@@ -45,26 +50,37 @@ pub struct SupervisorState<T> {
     endpoint_supervisor_failures: u16,
 }
 
-#[derive(Default)]
-pub struct Supervisor;
+pub struct Supervisor<S, T> {
+    _marker: PhantomData<(S, T)>,
+}
 
-impl ThreadLocalActor for Supervisor {
-    // @TODO(adz): S and T should be a generic.
-    type State = SupervisorState<()>;
+impl<S, T> Default for Supervisor<S, T> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, T> ThreadLocalActor for Supervisor<S, T>
+where
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S::Error: StdError + Send + Sync + 'static,
+    T: Debug + Send + 'static,
+{
+    type State = SupervisorState<S, T>;
 
     type Msg = ();
 
-    type Arguments = ApplicationArguments;
+    type Arguments = (ApplicationArguments, S);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (args, store) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
-
-        // @TODO: Pass generic store via args.
-        let store = MemoryStore::new(ChaCha20Rng::from_os_rng());
 
         // Spawn the events actor.
         let (events_actor, _) = Events::spawn_linked(
@@ -93,7 +109,7 @@ impl ThreadLocalActor for Supervisor {
         )
         .await?;
 
-        let state = SupervisorState {
+        Ok(SupervisorState {
             actor_namespace,
             args,
             store,
@@ -103,9 +119,7 @@ impl ThreadLocalActor for Supervisor {
             address_book_actor_failures: 0,
             endpoint_supervisor,
             endpoint_supervisor_failures: 0,
-        };
-
-        Ok(state)
+        })
     }
 
     async fn post_stop(
@@ -206,6 +220,7 @@ impl ThreadLocalActor for Supervisor {
 
 #[cfg(test)]
 mod tests {
+    use p2panda_core::PrivateKey;
     use ractor::actor::actor_cell::ActorStatus;
     use ractor::registry;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -216,19 +231,21 @@ mod tests {
     use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
+    use crate::args::test_utils::test_args;
 
     use super::{SUPERVISOR, Supervisor};
 
     #[tokio::test]
     async fn child_actors_started() {
-        let args = ArgsBuilder::new([1; 32]).build();
-        let actor_namespace = generate_actor_namespace(&args.public_key);
-        let root_thread_pool = ThreadLocalActorSpawner::new();
+        let private_key: PrivateKey = Default::default();
+        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+
+        let (args, store) = test_args();
 
         let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            args,
-            root_thread_pool,
+            (args.clone(), store),
+            args.root_thread_pool,
         )
         .await
         .unwrap();

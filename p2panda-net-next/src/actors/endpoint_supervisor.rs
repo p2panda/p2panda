@@ -15,6 +15,7 @@
 //! discovery are indirectly reliant on a functioning endpoint actor. If either the stream or
 //! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
 use std::error::Error as StdError;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
@@ -58,9 +59,9 @@ impl<S, T> Default for EndpointSupervisor<S, T> {
 
 impl<S, T> ThreadLocalActor for EndpointSupervisor<S, T>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Send + 'static,
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Send + 'static,
+    T: Debug + Send + 'static,
 {
     type State = EndpointSupervisorState<S, T>;
 

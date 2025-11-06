@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
@@ -10,10 +12,13 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call};
 use rand_chacha::ChaCha20Rng;
 
-use crate::actors::discovery::session::DiscoverySession;
+use crate::actors::discovery::DISCOVERY_PROTOCOL_ID;
+use crate::actors::discovery::session::{DiscoverySession, DiscoverySessionArguments};
 use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker};
+use crate::actors::iroh::register_protocol;
+use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::{NodeId, NodeInfo};
+use crate::utils::to_public_key;
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
@@ -32,6 +37,7 @@ pub struct DiscoveryManagerState<S, T> {
     _marker: PhantomData<(S, T)>,
 }
 
+#[derive(Debug)]
 pub struct DiscoveryManager<S, T> {
     _marker: PhantomData<(S, T)>,
 }
@@ -46,9 +52,9 @@ impl<S, T> Default for DiscoveryManager<S, T> {
 
 impl<S, T> ThreadLocalActor for DiscoveryManager<S, T>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Send + 'static,
-    S::Error: StdError + Send + Sync + 'static,
-    T: Send + 'static,
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S::Error: StdError + Debug + Send + Sync + 'static,
+    T: Debug + Send + 'static,
 {
     type State = DiscoveryManagerState<S, T>;
 
@@ -64,6 +70,18 @@ where
         let (args, store) = args;
         let pool = ThreadLocalActorSpawner::new();
 
+        // Accept incoming "discovery protocol" connection requests.
+        register_protocol(
+            DISCOVERY_PROTOCOL_ID,
+            DiscoveryProtocolHandler {
+                manager_ref: myself.clone(),
+                args: args.clone(),
+                store: store.clone(),
+                pool: pool.clone(),
+            },
+        )?;
+
+        // Spawn random walkers. They start automatically and initiate discovery sessions.
         for _ in 0..args.discovery_config.random_walkers_count {
             DiscoveryWalker::spawn_linked(
                 None,
@@ -92,7 +110,12 @@ where
             ToDiscoveryManager::StartSession(node_id, walker_ref) => {
                 DiscoverySession::spawn_linked(
                     None,
-                    (node_id, walker_ref, state.args.clone(), state.store.clone()),
+                    DiscoverySessionArguments::Connect {
+                        node_id,
+                        walker_ref,
+                        args: state.args.clone(),
+                        store: state.store.clone(),
+                    },
                     myself.clone().into(),
                     state.pool.clone(),
                 )
@@ -109,6 +132,47 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         // @TODO: Manage walkers and sessions.
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct DiscoveryProtocolHandler<S, T> {
+    manager_ref: ActorRef<ToDiscoveryManager<T>>,
+    args: ApplicationArguments,
+    store: S,
+    pool: ThreadLocalActorSpawner,
+}
+
+impl<S, T> ProtocolHandler for DiscoveryProtocolHandler<S, T>
+where
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S::Error: StdError + Send + Sync + 'static,
+    T: Debug + Send + 'static,
+{
+    async fn accept(
+        &self,
+        connection: iroh::endpoint::Connection,
+    ) -> Result<(), iroh::protocol::AcceptError> {
+        let (_, handle) = DiscoverySession::spawn_linked(
+            None,
+            DiscoverySessionArguments::Accept {
+                node_id: to_public_key(connection.remote_id()),
+                connection,
+                args: self.args.clone(),
+                store: self.store.clone(),
+            },
+            self.manager_ref.clone().into(),
+            self.pool.clone(),
+        )
+        .await
+        .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
+
+        // Wait until discovery session ended (failed or successful).
+        handle
+            .await
+            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
+
         Ok(())
     }
 }
