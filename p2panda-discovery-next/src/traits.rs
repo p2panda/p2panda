@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::{BTreeMap, HashSet};
+use std::fmt::Debug;
 
-use tokio::sync::mpsc;
+use futures_util::{Sink, Stream};
 
 use crate::address_book::NodeInfo;
 
@@ -34,14 +35,14 @@ where
 
     fn alice(
         &self,
-        tx: Sender<Self::Message>,
-        rx: Receiver<Self::Message>,
+        tx: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        rx: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> impl Future<Output = Result<DiscoveryResult<T, ID, N>, Self::Error>>;
 
     fn bob(
         &self,
-        tx: Sender<Self::Message>,
-        rx: Receiver<Self::Message>,
+        tx: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
+        rx: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> impl Future<Output = Result<DiscoveryResult<T, ID, N>, Self::Error>>;
 }
 
@@ -71,10 +72,6 @@ where
         }
     }
 }
-
-pub type Sender<M> = mpsc::Sender<M>;
-
-pub type Receiver<M> = mpsc::Receiver<M>;
 
 /// Interface required by discovery protocols to learn which topics (eventual consistent sync) and
 /// topic ids (ephemeral messaging) the own node is currently interested in.

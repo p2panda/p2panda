@@ -92,4 +92,4 @@ pub mod test_utils;
 pub mod tests;
 pub mod traits;
 
-pub use traits::{DiscoveryProtocol, DiscoveryResult, DiscoveryStrategy, Receiver, Sender};
+pub use traits::{DiscoveryProtocol, DiscoveryResult, DiscoveryStrategy};
