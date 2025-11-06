@@ -2,21 +2,9 @@
 
 //! Actor managing an endpoint to establish direct or relayed connections over the Internet
 //! Protocol using the "iroh" crate.
-//!
-//! This actor is responsible for creating an iroh `Endpoint` with an associated `Router`,
-//! registering network protocols with the `Router` and spawning the subscription actor. It also
-//! performs supervision of the spawned actor, restarting it in the event of failure.
-//!
-//! The subscription actor is a child of the endpoint actor. This design decision was made because
-//! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
-//! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
-//! endpoint actor itself fails, the entire network system is shutdown.
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::time::Duration;
 
-use iroh::endpoint::ConnectWithOptsError as IrohConnectWithOptsError;
-use iroh::endpoint::Connecting as IrohConnecting;
-use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, registry};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -49,7 +37,7 @@ pub enum ToIrohEndpoint {
     Connect(
         iroh::EndpointAddr,
         ProtocolId,
-        RpcReplyPort<Result<IrohConnecting, IrohConnectWithOptsError>>,
+        RpcReplyPort<Result<iroh::endpoint::Connecting, iroh::endpoint::ConnectWithOptsError>>,
     ),
 }
 
@@ -75,7 +63,7 @@ impl Actor for IrohEndpoint {
         let config = args.iroh_config;
 
         // Configure QUIC transport and sockets to bind to.
-        let mut transport_config = IrohTransportConfig::default();
+        let mut transport_config = iroh::endpoint::TransportConfig::default();
         transport_config
             .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
             .max_concurrent_uni_streams(0u32.into());
@@ -99,34 +87,8 @@ impl Actor for IrohEndpoint {
             .bind()
             .await?;
 
-        // @TODO(adz): This runs only once and then never again if no connection was established
-        // after 5 seconds. I assume we want something which consistently reports to us if we're
-        // connected with a relay or not (and back).
-        {
-            let endpoint = endpoint.clone();
-
-            tokio::spawn(async move {
-                // Wait for the endpoint to initiate a connection with a relay.
-                if relay_provided
-                    && timeout(Duration::from_secs(5), endpoint.online())
-                        .await
-                        .is_ok()
-                {
-                    // Inform the events actor of the connection.
-                    if let Some(events_actor) = registry::where_is("events".to_string()) {
-                        events_actor
-                            .send_message(ToEvents::ConnectedToRelay)
-                            .unwrap();
-                    }
-                } else {
-                    warn!("endpoint actor: failed to connect to relay")
-                }
-            });
-        }
-
         let accept_handle = {
             let endpoint = endpoint.clone();
-
             tokio::spawn(async move {
                 loop {
                     let Some(incoming) = endpoint.accept().await else {
