@@ -95,6 +95,7 @@ where
     E: Extensions,
 {
     type Error = TopicLogSyncError<T, S, M, L, E>;
+    type Event = TopicLogSyncEvent<T, E>;
     type Message = TopicLogSyncMessage<T, L, E>;
     type Output = ();
 
@@ -465,7 +466,7 @@ pub mod tests {
                 }
                 1 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 2 => assert_matches!(
                     event,
@@ -570,7 +571,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(
@@ -706,7 +707,7 @@ pub mod tests {
                 ),
                 1 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 2 => assert_matches!(
                     event,
@@ -755,7 +756,7 @@ pub mod tests {
                 ),
                 2 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 3 => {
                     assert_matches!(
@@ -898,7 +899,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(
@@ -1080,7 +1081,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(

@@ -2,8 +2,10 @@
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::pin::Pin;
 
 use futures::channel::mpsc;
+use futures::future::ready;
 use futures::stream::{Map, SelectAll};
 use futures::{Sink, SinkExt, StreamExt};
 use p2panda_core::cbor::decode_cbor;
@@ -18,25 +20,18 @@ use crate::topic_handshake::TopicHandshakeEvent;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
-use crate::traits::{SyncManager, TopicQuery};
-use crate::{SyncSessionConfig, ToSync};
+use crate::traits::{Protocol, SyncManager, TopicQuery};
+use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
-type SessionEventReceiver<T, E> = Map<
-    mpsc::Receiver<TopicLogSyncEvent<T, E>>,
-    Box<dyn FnMut(TopicLogSyncEvent<T, E>) -> TopicSyncManagerEvent<T, E>>,
->;
-
-#[derive(Clone, Debug)]
-pub struct TopicSyncManagerEvent<T, E> {
-    pub session_id: u64,
-    pub event: TopicLogSyncEvent<T, E>,
-}
+type SessionEventReceiver<T, M> =
+    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> SyncManagerEvent<T, M>>>;
 
 pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) topic_map: M,
     pub(crate) store: S,
-    pub(crate) session_topic_map: SessionTopicMap<T, E>,
-    pub(crate) events_rx_set: SelectAll<SessionEventReceiver<T, E>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
+    pub(crate) events_rx_set: SelectAll<SessionEventReceiver<T, TopicLogSyncEvent<T, E>>>,
+    pub(crate) manager_output_queue: Vec<SyncManagerEvent<T, TopicLogSyncEvent<T, E>>>,
     _phantom: PhantomData<(T, L, E)>,
 }
 
@@ -51,6 +46,7 @@ where
             store,
             session_topic_map: SessionTopicMap::default(),
             events_rx_set: SelectAll::new(),
+            manager_output_queue: Vec::default(),
             _phantom: PhantomData,
         }
     }
@@ -65,7 +61,6 @@ where
     S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
-    type Event = TopicSyncManagerEvent<T, E>;
     type Error = LogManagerError<T, S, M, L, E>;
 
     fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
@@ -83,11 +78,12 @@ where
         };
         let (event_tx, event_rx) = mpsc::channel(128);
 
-        self.events_rx_set
-            .push(event_rx.map(Box::new(move |event| TopicSyncManagerEvent {
+        self.events_rx_set.push(
+            event_rx.map(Box::new(move |event| SyncManagerEvent::FromSync {
                 session_id,
-                event,
-            })));
+                event: event,
+            })),
+        );
 
         let live_rx = if config.live_mode {
             Some(live_rx)
@@ -107,9 +103,9 @@ where
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<impl Sink<ToSync, Error = Self::Error> + Unpin + 'static> {
-        let map_fn = move |to_sync: ToSync| {
-            async move {
+    ) -> Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
+        let map_fn = |to_sync: ToSync| {
+            ready({
                 match to_sync {
                     ToSync::Payload(bytes) => {
                         // @TODO(sam): not sure what will be happening at this interface
@@ -121,44 +117,57 @@ where
                         let (header, body): (Header<E>, Option<Body>) =
                             decode_cbor(&bytes[..]).unwrap();
 
-                        Ok::<_, LogManagerError<T, S, M, L, E>>(LiveModeMessage::Operation {
+                        Ok::<_, Self::Error>(LiveModeMessage::Operation {
                             header: Box::new(header),
                             body,
                         })
                     }
-                    ToSync::Close => {
-                        Ok::<_, LogManagerError<T, S, M, L, E>>(LiveModeMessage::Close)
-                    }
+                    ToSync::Close => Ok::<_, Self::Error>(LiveModeMessage::Close),
                 }
-            }
+            })
         };
 
-        self.session_topic_map
-            .session_channel(session_id)
-            .map(|tx| Box::pin(tx.with(map_fn)))
+        self.session_topic_map.sender(session_id).map(|tx| {
+            Box::pin(tx.clone().with(map_fn)) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>
+        })
     }
 
-    async fn next_event(&mut self) -> Result<Option<Self::Event>, Self::Error> {
+    async fn next_event(
+        &mut self,
+    ) -> Result<Option<SyncManagerEvent<T, <Self::Protocol as Protocol>::Event>>, Self::Error> {
+        // If the manager has output events queued then these are prioritised.
+        if let Some(manager_event) = self.manager_output_queue.pop() {
+            return Ok(Some(manager_event));
+        }
+
         let event = self.events_rx_set.next().await;
-        let Some(event) = event else {
+        let Some(manager_event) = event else {
             return Ok(None);
         };
 
-        let session_id = event.session_id;
+        let SyncManagerEvent::FromSync { session_id, event } = &manager_event else {
+            panic!("only sync events are emitted from session channels");
+        };
+        let session_id = *session_id;
 
         // If this is a sync or live-mode event containing an operation then get the header and
         // body ready for forwarding to relevant sessions.
-        let operation = match &event.event {
+        let operation = match event {
             TopicLogSyncEvent::Sync(LogSyncEvent::Data(operation)) => {
                 let operation = operation.clone();
                 Some((operation.header, operation.body))
             }
             TopicLogSyncEvent::Live { header, body } => Some((*header.clone(), body.clone())),
-            TopicLogSyncEvent::Handshake(TopicHandshakeEvent::TopicReceived(topic)) => {
+            TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done(topic)) => {
                 self.session_topic_map.accepted(session_id, topic.clone());
-                return Ok(Some(event));
+                self.manager_output_queue
+                    .push(SyncManagerEvent::TopicAgreed {
+                        session_id,
+                        topic: topic.clone(),
+                    });
+                return Ok(Some(manager_event));
             }
-            _ => return Ok(Some(event)),
+            _ => return Ok(Some(manager_event)),
         };
 
         if let Some((header, body)) = operation {
@@ -176,7 +185,7 @@ where
 
                 // Forward live operation to all concurrent sessions. If they have indeed seen
                 // this operation before they will deduplicate it themselves.
-                let Some(mut tx) = self.session_topic_map.session_channel(id) else {
+                let Some(tx) = self.session_topic_map.sender_mut(id) else {
                     panic!();
                     // Error("missing session channel")
                 };
@@ -200,7 +209,7 @@ where
             }
         }
 
-        Ok(Some(event))
+        Ok(Some(manager_event))
     }
 }
 
@@ -234,7 +243,7 @@ mod tests {
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
-    use crate::{SyncSessionConfig, ToSync};
+    use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
     #[tokio::test]
     async fn manager_e2e() {
@@ -289,33 +298,64 @@ mod tests {
         while let Some(event) = peer_a_manager.next_event().await.unwrap() {
             events.push(event);
         }
-        assert_eq!(events.len(), 8);
+        assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {
-            assert_eq!(event.session_id, 0);
+            assert_eq!(event.session_id(), 0);
             match index {
                 0 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Initiate(ref topic))
+                    event,
+                    SyncManagerEvent::FromSync{event: TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Initiate(ref topic)), ..}
                         if topic == &TestTopic::new("messages")
                 ),
                 1 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done(_)),
+                        ..
+                    }
                 ),
-                2 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }))
+                2 => assert_matches!(event, SyncManagerEvent::TopicAgreed { .. }),
+                3 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Started { .. }
+                        )),
+                        ..
+                    }
                 ),
-                3 | 4 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }))
+                4 | 5 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        )),
+                        ..
+                    }
                 ),
-                5 => assert_matches!(event.event, TopicLogSyncEvent::Sync(LogSyncEvent::Data(_))),
                 6 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. }))
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        ..
+                    }
                 ),
-                7 => assert_matches!(event.event, TopicLogSyncEvent::Close { .. }),
+                7 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        )),
+                        ..
+                    }
+                ),
+                8 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        event: TopicLogSyncEvent::Close { .. },
+                        ..
+                    }
+                ),
                 _ => panic!(),
             }
         }
@@ -325,43 +365,81 @@ mod tests {
         while let Some(event) = peer_b_manager.next_event().await.unwrap() {
             events.push(event);
         }
-        assert_eq!(events.len(), 10);
+        assert_eq!(events.len(), 11);
         for (index, event) in events.into_iter().enumerate() {
-            assert_eq!(event.session_id, 0);
             match index {
                 0 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Accept)
+                    }
                 ),
                 1 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Handshake(
-                        TopicHandshakeEvent::TopicReceived(ref topic)
-                    ) if topic == &TestTopic::new("messages")
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Handshake(
+                            TopicHandshakeEvent::TopicReceived(ref topic)
+                        )
+                    } if topic == &TestTopic::new("messages")
                 ),
                 2 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
+                    }
                 ),
-                3 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Started { .. }))
+                3 => assert_matches!(event, SyncManagerEvent::TopicAgreed { .. }),
+                4 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Started { .. }
+                        ))
+                    }
                 ),
-                4 | 5 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. }))
+                5 | 6 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        ))
+                    }
                 ),
-                6 => {
-                    assert_matches!(event.event, TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)))
-                }
                 7 => assert_matches!(
-                    event.event,
-                    TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. }))
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_))
+                    }
                 ),
-                8 => {
-                    assert_matches!(event.event, TopicLogSyncEvent::Live { .. })
-                }
-                9 => assert_matches!(event.event, TopicLogSyncEvent::Close { .. }),
+                8 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        ))
+                    }
+                ),
+                9 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Live { .. }
+                    }
+                ),
+                10 => assert_matches!(
+                    event,
+                    SyncManagerEvent::FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Close { .. }
+                    }
+                ),
                 _ => panic!(),
             }
         }
@@ -458,28 +536,34 @@ mod tests {
         let mut operations_a = vec![];
         let mut operations_b = vec![];
         let mut operations_c = vec![];
-        let push_operation = |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
-                              event: TestTopicSyncEvent| {
-            if let TestTopicSyncEvent::Live { header, body } = &event {
-                operations.push((*header.clone(), body.clone()));
-            }
-            if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = &event {
-                operations.push((operation.header.clone(), operation.body.clone()));
-            }
-        };
+        let push_operation =
+            |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
+             event: SyncManagerEvent<TestTopic, TestTopicSyncEvent>| {
+                let SyncManagerEvent::FromSync { event, .. } = event else {
+                    return;
+                };
+
+                if let TestTopicSyncEvent::Live { header, body } = &event {
+                    operations.push((*header.clone(), body.clone()));
+                }
+
+                if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = &event {
+                    operations.push((operation.header.clone(), operation.body.clone()));
+                }
+            };
 
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
             loop {
                 tokio::select! {
                     Ok(Some(event)) = manager_a.next_event() => {
-                        push_operation(&mut operations_a, event.event)
+                        push_operation(&mut operations_a, event)
                     }
                     Ok(Some(event)) = manager_b.next_event() => {
-                        push_operation(&mut operations_b, event.event)
+                        push_operation(&mut operations_b, event)
 
                     }
                     Ok(Some(event)) = manager_c.next_event() => {
-                        push_operation(&mut operations_c, event.event)
+                        push_operation(&mut operations_c, event)
                     }
                     else => tokio::time::sleep(Duration::from_millis(5)).await
                 }

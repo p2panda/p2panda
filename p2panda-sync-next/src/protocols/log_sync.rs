@@ -96,6 +96,7 @@ where
 {
     type Error = LogSyncError<L, E, S>;
     type Output = Dedup<Hash>;
+    type Event = LogSyncEvent<E>;
     type Message = LogSyncMessage<L>;
 
     async fn run(
