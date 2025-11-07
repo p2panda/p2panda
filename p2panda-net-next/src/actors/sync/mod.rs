@@ -196,11 +196,12 @@ where
                         // The timeout elapsed, move on to handle the next manager event
                     }
                 }
-
-                // In every case we send a message to ourselves to once again "drive" the manager.
-                myself.send_message(Self::Msg::DriveManager)?;
             }
         }
+        
+        // In every case we send a message to ourselves to once again "drive" the manager.
+        myself.send_message(Self::Msg::DriveManager)?;
+
         Ok(())
     }
 
