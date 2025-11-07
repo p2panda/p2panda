@@ -18,8 +18,8 @@ use tracing::warn;
 use crate::actors::events::ToEvents;
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::args::ApplicationArguments;
-use crate::from_private_key;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
+use crate::utils::from_private_key;
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 

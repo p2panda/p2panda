@@ -20,15 +20,15 @@ use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
 use crate::network::FromNetwork;
-use crate::{TopicId, from_public_key};
+use crate::utils::from_private_key;
+use crate::utils::from_public_key;
 
 /// Gossip actor name.
 pub const GOSSIP: &str = "net.gossip";
 
-// TODO: Remove once used.
-#[allow(dead_code)]
 pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
     ///
@@ -75,14 +75,12 @@ pub enum ToGossip {
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
-        // TODO: Remove once used.
-        #[allow(dead_code)]
         session_id: ActorId,
     },
 }
 
-#[derive(Default)]
 /// Actor references and channels for gossip sessions.
+#[derive(Default)]
 struct Sessions {
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
@@ -407,7 +405,7 @@ mod tests {
 
     use crate::actors::test_utils::{ActorResult, TestSupervisor};
     use crate::network::FromNetwork;
-    use crate::{from_private_key, from_public_key};
+    use crate::utils::{from_private_key, from_public_key};
 
     use super::{Gossip, GossipState, ToGossip};
 

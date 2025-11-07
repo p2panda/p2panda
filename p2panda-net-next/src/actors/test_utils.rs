@@ -6,14 +6,12 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::oneshot::Sender;
 
 #[derive(Debug)]
-// TODO: Remove once used.
-pub(crate) enum ActorResult {
+pub enum ActorResult {
     Terminated(Option<BoxedState>, Option<String>),
-    #[allow(dead_code)]
     Failed(ActorProcessingErr),
 }
 
-pub(crate) struct TestSupervisorState {
+pub struct TestSupervisorState {
     result_tx: Option<Sender<ActorResult>>,
 }
 
@@ -47,7 +45,7 @@ pub(crate) struct TestSupervisorState {
 /// // Receive the result on the oneshot channel.
 /// let example_actor_result = supervisor_rx.await;
 /// ```
-pub(crate) struct TestSupervisor;
+pub struct TestSupervisor;
 
 impl Actor for TestSupervisor {
     type Msg = ();
