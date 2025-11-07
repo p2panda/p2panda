@@ -7,6 +7,7 @@ mod endpoint_supervisor;
 mod events;
 mod gossip;
 pub(crate) mod stream;
+mod stream_supervisor;
 pub(crate) mod supervisor;
 mod sync;
 #[cfg(test)]

@@ -2,12 +2,9 @@
 
 //! Stream actor.
 //!
-//! This actor is responsible for spawning the gossip and sync actors. It also performs supervision
-//! of the spawned actors, restarting them in the event of failure.
-//!
-//! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
-//! `Endpoint` to be passed into the gossip actor in the event that it needs to be respawned (since
-//! the `Endpoint` is needed to instantiate iroh `Gossip`).
+//! This actor forms the coordination layer between the external API and the sync and gossip
+//! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
+//! by the stream supervisor actor.
 use std::collections::HashMap;
 
 /// Stream actor name.
@@ -21,7 +18,7 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::sync::{SYNC, Sync, ToSync};
-use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
 use crate::{TopicId, to_public_key};
@@ -38,11 +35,9 @@ pub enum ToStream {
 }
 
 pub struct StreamState {
-    endpoint: IrohEndpoint,
+    actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
-    gossip_actor_failures: u16,
     sync_actor: ActorRef<ToSync>,
-    sync_actor_failures: u16,
     to_gossip_senders: HashMap<TopicId, Sender<ToNetwork>>,
     from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
 }
@@ -52,42 +47,22 @@ pub struct Stream;
 impl Actor for Stream {
     type State = StreamState;
     type Msg = ToStream;
-    type Arguments = IrohEndpoint;
+    type Arguments = (ActorNamespace, ActorRef<ToSync>, ActorRef<ToGossip>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        endpoint: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
-
-        // Spawn the gossip actor.
-        let (gossip_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(GOSSIP, &actor_namespace)),
-            Gossip,
-            endpoint.clone(),
-            myself.clone().into(),
-        )
-        .await?;
-
-        // Spawn the sync actor.
-        let (sync_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(SYNC, &actor_namespace)),
-            Sync,
-            (),
-            myself.into(),
-        )
-        .await?;
+        let (actor_namespace, sync_actor, gossip_actor) = args;
 
         let to_gossip_senders = HashMap::new();
         let from_gossip_senders = HashMap::new();
 
         let state = StreamState {
-            endpoint,
+            actor_namespace,
             gossip_actor,
-            gossip_actor_failures: 0,
             sync_actor,
-            sync_actor_failures: 0,
             to_gossip_senders,
             from_gossip_senders,
         };
@@ -103,8 +78,6 @@ impl Actor for Stream {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToStream::CreateEphemeralStream(topic_id, reply) => {
-                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
-
                 // TODO: Ask address book for all peers interested in this topic id.
                 let peers = Vec::new();
 
@@ -113,7 +86,11 @@ impl Actor for Stream {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
 
-                    EphemeralStream::new(topic_id, to_gossip_tx.clone(), actor_namespace)
+                    EphemeralStream::new(
+                        topic_id,
+                        to_gossip_tx.clone(),
+                        state.actor_namespace.clone(),
+                    )
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
@@ -129,7 +106,7 @@ impl Actor for Stream {
                     // when the user calls `.subscribe()` on `EphemeralStream`.
                     state.from_gossip_senders.insert(topic_id, from_gossip_tx);
 
-                    EphemeralStream::new(topic_id, to_gossip_tx, actor_namespace)
+                    EphemeralStream::new(topic_id, to_gossip_tx, state.actor_namespace.clone())
                 };
 
                 // Ignore any potential send error; it's not a concern of this actor.
@@ -157,109 +134,5 @@ impl Actor for Stream {
         }
 
         Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
-        myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        match message {
-            SupervisionEvent::ActorStarted(actor) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "{STREAM} actor: received ready from {} actor",
-                        without_namespace(&name)
-                    );
-                }
-            }
-            SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
-
-                if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace(GOSSIP, &actor_namespace) {
-                        warn!("{STREAM} actor: {GOSSIP} actor failed: {}", panic_msg);
-
-                        // Respawn the gossip actor.
-                        let (gossip_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace(GOSSIP, &actor_namespace)),
-                            Gossip,
-                            state.endpoint.clone(),
-                            myself.clone().into(),
-                        )
-                        .await?;
-
-                        state.gossip_actor_failures += 1;
-                        state.gossip_actor = gossip_actor;
-                    } else if name == with_namespace(SYNC, &actor_namespace) {
-                        warn!("{STREAM} actor: {SYNC} actor failed: {}", panic_msg);
-
-                        // Respawn the sync actor.
-                        let (sync_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace(SYNC, &actor_namespace)),
-                            Sync,
-                            (),
-                            myself.clone().into(),
-                        )
-                        .await?;
-
-                        state.sync_actor_failures += 1;
-                        state.sync_actor = sync_actor;
-                    }
-                }
-            }
-            SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "{STREAM} actor: {} actor terminated",
-                        without_namespace(&name)
-                    );
-                }
-            }
-            _ => (),
-        }
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use iroh::Endpoint as IrohEndpoint;
-    use ractor::Actor;
-    use serial_test::serial;
-    use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
-
-    use crate::actors::gossip::GOSSIP;
-    use crate::actors::sync::SYNC;
-
-    use super::{STREAM, Stream};
-
-    #[tokio::test]
-    #[traced_test]
-    #[serial]
-    async fn subscription_child_actors_are_started() {
-        let endpoint = IrohEndpoint::builder().bind().await.unwrap();
-
-        let (stream_actor, stream_actor_handle) =
-            Actor::spawn(Some(STREAM.to_string()), Stream, endpoint)
-                .await
-                .unwrap();
-
-        // Sleep briefly to allow time for all actors to be ready.
-        sleep(Duration::from_millis(50)).await;
-
-        stream_actor.stop(None);
-        stream_actor_handle.await.unwrap();
-
-        assert!(logs_contain(&format!(
-            "{STREAM} actor: received ready from {GOSSIP} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{STREAM} actor: received ready from {SYNC} actor"
-        )));
-        assert!(!logs_contain("actor failed"));
     }
 }
