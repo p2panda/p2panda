@@ -22,6 +22,7 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::stream::{STREAM, Stream, ToStream};
@@ -29,7 +30,7 @@ use crate::actors::sync::{SYNC, Sync, ToSync};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
-use crate::{TopicId, to_public_key};
+use crate::utils::to_public_key;
 
 pub struct StreamSupervisorState {
     actor_namespace: ActorNamespace,
@@ -218,7 +219,7 @@ mod tests {
     use crate::actors::sync::SYNC;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
-    use crate::to_public_key;
+    use crate::utils::to_public_key;
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 

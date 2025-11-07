@@ -16,12 +16,12 @@ use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::sync::{SYNC, Sync, ToSync};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
-use crate::{TopicId, to_public_key};
 
 pub enum ToStream {
     /// Create a stream for the topic ID and return a publishing handle.

@@ -11,7 +11,7 @@ use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{current_timestamp, from_public_key, to_public_key};
+use crate::utils::{current_timestamp, from_public_key, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
