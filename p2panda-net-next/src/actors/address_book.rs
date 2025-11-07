@@ -126,14 +126,15 @@ where
 
     // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
     // address subsets in the future.
-    type Arguments = ApplicationArguments<S>;
+    type Arguments = (S,);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(AddressBookState { store: args.store })
+        let (store,) = args;
+        Ok(AddressBookState { store })
     }
 
     async fn handle(
@@ -264,10 +265,7 @@ mod tests {
 
         let (actor, handle) = AddressBook::spawn(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            ApplicationArguments {
-                private_key: private_key.clone(),
-                store: MemoryStore::<ChaCha20Rng, TestTopic, NodeId, NodeInfo>::new(rng),
-            },
+            (MemoryStore::<ChaCha20Rng, TestTopic, NodeId, NodeInfo>::new(rng),),
             spawner,
         )
         .await

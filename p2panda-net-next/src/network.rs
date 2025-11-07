@@ -10,8 +10,9 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 
 use crate::actors::stream::{STREAM, ToStream};
-use crate::actors::supervisor::{Config, SUPERVISOR, Supervisor};
+use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
+use crate::args::{ApplicationArguments, ArgsBuilder};
 use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
 use crate::{NetworkId, TopicId};
@@ -20,21 +21,15 @@ use crate::{NetworkId, TopicId};
 ///
 /// Network separation is achieved using the network identifier (`NetworkId`). Nodes using the same
 /// network identifier will gradually discover one another over the lifetime of the network.
-#[derive(Debug, Default)]
-#[allow(dead_code)]
 pub struct NetworkBuilder {
-    id: NetworkId,
-    config: Config,
-    private_key: Option<PrivateKey>,
+    args: ApplicationArguments,
 }
 
 impl NetworkBuilder {
     /// Returns a new instance of `NetworkBuilder` with default values assigned for all fields.
-    pub fn new(id: NetworkId) -> Self {
+    pub fn new(network_id: NetworkId) -> Self {
         Self {
-            id,
-            config: Config::default(),
-            private_key: None,
+            args: ArgsBuilder::new(network_id).build(),
         }
     }
 
@@ -42,7 +37,7 @@ impl NetworkBuilder {
     ///
     /// Default is 0.0.0.0 (`UNSPECIFIED`).
     pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
-        self.config.endpoint.bind_ip_v4 = ip;
+        self.args.iroh_config.bind_ip_v4 = ip;
         self
     }
 
@@ -50,7 +45,7 @@ impl NetworkBuilder {
     ///
     /// Default is 2022.
     pub fn bind_port_v4(mut self, port: u16) -> Self {
-        self.config.endpoint.bind_port_v4 = port;
+        self.args.iroh_config.bind_port_v4 = port;
         self
     }
 
@@ -58,7 +53,7 @@ impl NetworkBuilder {
     ///
     /// Default is :: (`UNSPECIFIED`).
     pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
-        self.config.endpoint.bind_ip_v6 = ip;
+        self.args.iroh_config.bind_ip_v6 = ip;
         self
     }
 
@@ -66,7 +61,7 @@ impl NetworkBuilder {
     ///
     /// Default is 2023.
     pub fn bind_port_v6(mut self, port: u16) -> Self {
-        self.config.endpoint.bind_port_v6 = port;
+        self.args.iroh_config.bind_port_v6 = port;
         self
     }
 
@@ -75,21 +70,8 @@ impl NetworkBuilder {
     /// If this value is not set, the `NetworkBuilder` will generate a new, random key when
     /// building the network.
     pub fn private_key(mut self, private_key: PrivateKey) -> Self {
-        self.private_key = Some(private_key);
-        self
-    }
-
-    /// Adds a custom protocol for communication between two peers.
-    fn _protocol(mut self, protocol_id: &ProtocolId, handler: impl ProtocolHandler) -> Self {
-        // Hash the protocol ID with the network ID.
-        //
-        // The hashed ID is what will be registered with the iroh `Endpoint`.
-        let identifier_hash = protocols::hash_protocol_id_with_network_id(protocol_id, &self.id);
-
-        self.config
-            .endpoint
-            .protocols
-            .insert(identifier_hash, Box::new(handler));
+        self.args.public_key = private_key.public_key();
+        self.args.private_key = private_key;
         self
     }
 
@@ -102,22 +84,20 @@ impl NetworkBuilder {
     /// fails, which will serve to relay the data in that case.
     // TODO: Expose QUIC address discovery address as `Option<u16>` or config struct.
     pub fn relay(mut self, url: iroh::RelayUrl) -> Self {
-        self.config.endpoint.relays.push(url);
+        self.args.iroh_config.relay_urls.push(url);
         self
     }
 
     /// Returns a handle to a newly-spawned instance of `Network`.
     pub async fn build(self) -> Result<Network, NetworkError> {
-        let private_key = self.private_key.unwrap_or_default();
-
         // Compute a six character actor namespace using the node's public key.
-        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+        let actor_namespace = generate_actor_namespace(&self.args.public_key);
 
         // Spawn the root-level supervisor actor.
         let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
             Supervisor,
-            (private_key, self.config),
+            self.args,
         )
         .await?;
 
