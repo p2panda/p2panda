@@ -70,23 +70,18 @@ impl Actor for GossipSession {
 
         let (sender, receiver) = subscription.split();
 
-        let (gossip_sender_actor, _) = Actor::spawn_linked(
-            None,
-            GossipSender,
-            (sender.clone(), gossip_joined),
-            myself.clone().into(),
-        )
-        .await?;
-
-        // TODO: Consider carefully whether this requires supervision and, if so, what actions to
-        // take on termination and failure.
-        let (gossip_joiner_actor, _) =
-            Actor::spawn_linked(None, GossipJoiner, sender, myself.clone().into()).await?;
-
         let (gossip_receiver_actor, _) = Actor::spawn_linked(
             None,
             GossipReceiver::new(myself.clone()),
             receiver,
+            myself.clone().into(),
+        )
+        .await?;
+
+        let (gossip_sender_actor, _) = Actor::spawn_linked(
+            None,
+            GossipSender,
+            (sender.clone(), gossip_joined),
             myself.clone().into(),
         )
         .await?;
@@ -100,6 +95,9 @@ impl Actor for GossipSession {
             myself.clone().into(),
         )
         .await?;
+
+        let (gossip_joiner_actor, _) =
+            Actor::spawn_linked(None, GossipJoiner, sender, myself.clone().into()).await?;
 
         let state = GossipSessionState {
             topic_id,
