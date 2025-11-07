@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod actors;
 mod addrs;
 mod args;
-mod defaults;
+mod config;
 mod network;
 mod protocols;
 mod topic_streams;

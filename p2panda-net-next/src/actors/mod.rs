@@ -2,11 +2,10 @@
 
 mod address_book;
 mod discovery;
-mod endpoint;
-pub mod endpoint;
 mod endpoint_supervisor;
 mod events;
 mod gossip;
+pub mod iroh;
 pub mod stream;
 mod stream_supervisor;
 pub mod supervisor;

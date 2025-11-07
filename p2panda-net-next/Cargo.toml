@@ -3,6 +3,9 @@ name = "p2panda-net-next"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 futures-lite = "2.6.1"
 iroh = { version = "0.95.1", default-features = false }
@@ -22,6 +25,3 @@ tracing = "0.1.41"
 serial_test = { version = "3.2.0", default-features = false, features = ["async"] }
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 tracing-test = "0.2.5"
-
-[lints]
-workspace = true
