@@ -129,7 +129,7 @@ impl DiscoveryResult<TestTopic, TestId, TestInfo> {
             node_transport_infos: BTreeMap::from_iter(
                 node_ids
                     .iter()
-                    .map(|id| (id.clone(), TestTransportInfo::new("test"))),
+                    .map(|id| (*id, TestTransportInfo::new("test"))),
             ),
             node_topics: HashSet::new(),
             node_topic_ids: HashSet::new(),

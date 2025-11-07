@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use iroh::{EndpointAddr, RelayUrl, TransportAddr};
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
+use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -14,6 +15,7 @@ use crate::{current_timestamp, from_public_key, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
+#[derive(Clone, Debug)]
 pub struct NodeInfo {
     /// Unique identifier (Ed25519 public key) of this node.
     pub node_id: NodeId,
@@ -39,6 +41,14 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
+    pub fn new(node_id: NodeId) -> Self {
+        Self {
+            node_id,
+            bootstrap: false,
+            transports: None,
+        }
+    }
+
     pub fn update_transports(&mut self, other: TransportInfo) -> Result<(), NodeInfoError> {
         // Make sure the given info matches the node id.
         for address in &other.addresses {
@@ -88,6 +98,22 @@ impl TryFrom<NodeInfo> for EndpointAddr {
                 _ => None,
             })
             .ok_or(NodeInfoError::MissingTransportAddresses)
+    }
+}
+
+impl address_book::NodeInfo<NodeId> for NodeInfo {
+    type Transports = TransportInfo;
+
+    fn id(&self) -> NodeId {
+        self.node_id
+    }
+
+    fn is_bootstrap(&self) -> bool {
+        self.bootstrap
+    }
+
+    fn transports(&self) -> Option<Self::Transports> {
+        self.transports.clone()
     }
 }
 
