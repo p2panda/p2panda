@@ -206,18 +206,19 @@ impl Actor for StreamSupervisor {
 
 #[cfg(test)]
 mod tests {
-    use iroh::Endpoint as IrohEndpoint;
     use p2panda_core::PrivateKey;
     use ractor::Actor;
+    use ractor::thread_local::ThreadLocalActor;
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
 
-    use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig};
     use crate::actors::gossip::GOSSIP;
+    use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
     use crate::actors::stream::STREAM;
     use crate::actors::sync::SYNC;
     use crate::actors::{generate_actor_namespace, with_namespace};
+    use crate::args::ArgsBuilder;
     use crate::to_public_key;
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
@@ -228,14 +229,15 @@ mod tests {
     async fn stream_supervisor_child_actors_are_started() {
         let private_key = PrivateKey::new();
         let actor_namespace = generate_actor_namespace(&private_key.public_key());
+        let args = ArgsBuilder::new([1; 32]).build();
 
         // Spawn the endpoint actor.
         //
         // We spawn this here because the stream supervisor depends on it.
         let (endpoint_actor, endpoint_actor_handle) = Actor::spawn(
-            Some(with_namespace(ENDPOINT, &actor_namespace)),
-            Endpoint,
-            (private_key.clone(), EndpointConfig::default()),
+            Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
+            IrohEndpoint,
+            args.clone(),
         )
         .await
         .unwrap();

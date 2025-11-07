@@ -153,7 +153,7 @@ impl Actor for IrohEndpoint {
                 // responsibility to handle the connection object is shifted to the caller from
                 // this point on, so using this actor to reason about the state of the connection
                 // is not possible here.
-                IrohConnection::spawn_linked(
+                IrohConnection::spawn(
                     None,
                     IrohConnectionArgs::Connect {
                         endpoint: state.endpoint.clone(),
@@ -161,20 +161,18 @@ impl Actor for IrohEndpoint {
                         alpn: mixed_protocol_id.to_vec(),
                         reply,
                     },
-                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
             }
             ToIrohEndpoint::Incoming(incoming) => {
                 // This actor will run as long as the protocol session.
-                IrohConnection::spawn_linked(
+                IrohConnection::spawn(
                     None,
                     IrohConnectionArgs::Accept {
                         incoming,
                         protocols: state.protocols.clone(),
                     },
-                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
