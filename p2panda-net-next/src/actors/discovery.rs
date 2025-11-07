@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Discovery actor.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
+
+/// Discovery actor name.
+pub const DISCOVERY: &str = "net.discovery";
 
 // TODO: `AddAddr()` and `RemoveAddr()`.
 pub enum ToDiscovery {}
-
-impl Message for ToDiscovery {}
 
 pub struct DiscoveryState {}
 

@@ -2,14 +2,8 @@
 
 //! Endpoint actor.
 //!
-//! This actor is responsible for creating an iroh `Endpoint` with an associated `Router`,
-//! registering network protocols with the `Router` and spawning the subscription actor. It also
-//! performs supervision of the spawned actor, restarting it in the event of failure.
-//!
-//! The subscription actor is a child of the endpoint actor. This design decision was made because
-//! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
-//! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
-//! endpoint actor itself fails, the entire network system is shutdown.
+//! This actor is responsible for creating an iroh `Endpoint` with an associated `Router` and
+//! registering network protocols with the `Router`.
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::time::Duration;
 
@@ -20,22 +14,25 @@ use iroh::RelayUrl as IrohRelayUrl;
 use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use iroh::protocol::Router as IrohRouter;
 use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent, registry};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
 use tokio::time::timeout;
 use tracing::{debug, warn};
 
-use crate::actors::events::ToEvents;
-use crate::actors::subscription::{Subscription, ToSubscription};
+use crate::actors::events::{EVENTS, ToEvents};
+use crate::actors::stream::{STREAM, Stream, ToStream};
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::defaults::{DEFAULT_BIND_PORT, DEFAULT_MAX_STREAMS};
 use crate::protocols::ProtocolMap;
 use crate::{from_private_key, to_public_key};
 
+/// Endpoint actor name.
+pub const ENDPOINT: &str = "net.endpoint";
+
 /// Configures the endpoint actor which uses an iroh `Endpoint` internally.
 #[derive(Debug)]
 // TODO: Remove once used.
 #[allow(dead_code)]
-pub(crate) struct EndpointConfig {
+pub struct EndpointConfig {
     pub(crate) bind_ip_v4: Ipv4Addr,
     pub(crate) bind_port_v4: u16,
     pub(crate) bind_ip_v6: Ipv6Addr,
@@ -57,15 +54,14 @@ impl Default for EndpointConfig {
     }
 }
 
-pub(crate) enum ToEndpoint {}
-
-impl Message for ToEndpoint {}
+pub(crate) enum ToEndpoint {
+    /// Return a clone of the iroh endpoint.
+    Endpoint(RpcReplyPort<IrohEndpoint>),
+}
 
 pub(crate) struct EndpointState {
     endpoint: IrohEndpoint,
     router: IrohRouter,
-    subscription_actor: ActorRef<ToSubscription>,
-    subscription_actor_failures: u16,
 }
 
 pub(crate) struct Endpoint;
@@ -113,13 +109,12 @@ impl Actor for Endpoint {
                 .is_ok()
         {
             // Inform the events actor of the connection.
-            if let Some(events_actor) =
-                registry::where_is(with_namespace("events", &actor_namespace))
+            if let Some(events_actor) = registry::where_is(with_namespace(EVENTS, &actor_namespace))
             {
                 events_actor.send_message(ToEvents::ConnectedToRelay)?
             }
         } else {
-            warn!("endpoint actor: failed to connect to relay")
+            warn!("{ENDPOINT} actor: failed to connect to relay")
         }
 
         let mut router_builder = IrohRouter::builder(endpoint.clone());
@@ -132,31 +127,9 @@ impl Actor for Endpoint {
 
         let router = router_builder.spawn();
 
-        // Spawn the subscription actor.
-        let (subscription_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("subscription", &actor_namespace)),
-            Subscription,
-            endpoint.clone(),
-            myself.clone().into(),
-        )
-        .await?;
-
-        let state = EndpointState {
-            endpoint,
-            router,
-            subscription_actor,
-            subscription_actor_failures: 0,
-        };
+        let state = EndpointState { endpoint, router };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn post_stop(
@@ -167,109 +140,22 @@ impl Actor for Endpoint {
         // Shutdown all protocol handlers and close the iroh `Endpoint`.
         state.router.shutdown().await?;
 
-        state
-            .subscription_actor
-            .stop(Some("endpoint actor is shutting down".to_string()));
-
         Ok(())
     }
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
         myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
+        message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(actor) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "endpoint actor: received ready from {} actor",
-                        without_namespace(&name)
-                    );
-                }
+            ToEndpoint::Endpoint(reply) => {
+                let endpoint = state.endpoint.clone();
+                let _ = reply.send(endpoint);
             }
-            SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace =
-                    generate_actor_namespace(&to_public_key(state.endpoint.node_id()));
-
-                if let Some(name) = actor.get_name().as_deref()
-                    && name == with_namespace("subscription", &actor_namespace)
-                {
-                    warn!("endpoint actor: subscription actor failed: {}", panic_msg);
-
-                    // Respawn the subscription actor.
-                    let (subscription_actor, _) = Actor::spawn_linked(
-                        Some(with_namespace("subscription", &actor_namespace)),
-                        Subscription,
-                        state.endpoint.clone(),
-                        myself.clone().into(),
-                    )
-                    .await?;
-
-                    state.subscription_actor_failures += 1;
-                    state.subscription_actor = subscription_actor;
-                }
-            }
-            SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "endpoint actor: {} actor terminated",
-                        without_namespace(&name)
-                    );
-                }
-            }
-            _ => (),
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use p2panda_core::PrivateKey;
-    use ractor::Actor;
-    use serial_test::serial;
-    use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
-
-    use super::{Endpoint, EndpointConfig};
-
-    #[tokio::test]
-    #[traced_test]
-    #[serial]
-    async fn endpoint_child_actors_are_started() {
-        let private_key = PrivateKey::new();
-
-        let endpoint_config = EndpointConfig::default();
-        let (endpoint_actor, endpoint_actor_handle) = Actor::spawn(
-            Some("endpoint".to_string()),
-            Endpoint,
-            (private_key, endpoint_config),
-        )
-        .await
-        .unwrap();
-
-        // Sleep briefly to allow time for all actors to be ready.
-        sleep(Duration::from_millis(50)).await;
-
-        endpoint_actor.stop(None);
-        endpoint_actor_handle.await.unwrap();
-
-        assert!(logs_contain(
-            "endpoint actor: received ready from subscription actor"
-        ));
-
-        assert!(!logs_contain("actor failed"));
     }
 }

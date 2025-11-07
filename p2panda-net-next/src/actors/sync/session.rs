@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Sync session actor.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 
 pub enum ToSyncSession {}
-
-impl Message for ToSyncSession {}
 
 pub struct SyncSessionState {}
 

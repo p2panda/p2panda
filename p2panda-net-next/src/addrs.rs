@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::hash::Hash as StdHash;
+use std::mem;
 use std::net::SocketAddr;
 
-use iroh::RelayUrl;
+use iroh::{EndpointAddr, RelayUrl, TransportAddr};
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
 use serde::{Deserialize, Serialize};
@@ -42,8 +43,8 @@ impl NodeInfo {
         // Make sure the given info matches the node id.
         for address in &other.addresses {
             #[allow(irrefutable_let_patterns)]
-            if let TransportAddress::Iroh(node_addr) = address
-                && to_public_key(node_addr.node_id) != self.node_id
+            if let TransportAddress::Iroh(endpoint_addr) = address
+                && to_public_key(endpoint_addr.id) != self.node_id
             {
                 return Err(NodeInfoError::NodeIdMismatch);
             }
@@ -70,7 +71,7 @@ impl NodeInfo {
     }
 }
 
-impl TryFrom<NodeInfo> for iroh::NodeAddr {
+impl TryFrom<NodeInfo> for EndpointAddr {
     type Error = NodeInfoError;
 
     fn try_from(node_info: NodeInfo) -> Result<Self, Self::Error> {
@@ -82,7 +83,7 @@ impl TryFrom<NodeInfo> for iroh::NodeAddr {
             .addresses
             .into_iter()
             .find_map(|address| match address {
-                TransportAddress::Iroh(node_addr) => Some(node_addr),
+                TransportAddress::Iroh(endpoint_addr) => Some(endpoint_addr),
                 #[allow(unreachable_patterns)]
                 _ => None,
             })
@@ -127,7 +128,7 @@ impl UnsignedTransportInfo {
                 .iter()
                 .enumerate()
                 .find_map(|(index, existing_addr)| {
-                    if std::mem::discriminant(&addr) == std::mem::discriminant(existing_addr) {
+                    if mem::discriminant(&addr) == mem::discriminant(existing_addr) {
                         Some(index)
                     } else {
                         None
@@ -174,8 +175,8 @@ impl Default for UnsignedTransportInfo {
     }
 }
 
-impl From<iroh::NodeAddr> for UnsignedTransportInfo {
-    fn from(addr: iroh::NodeAddr) -> Self {
+impl From<EndpointAddr> for UnsignedTransportInfo {
+    fn from(addr: EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
     }
 }
@@ -242,7 +243,7 @@ pub enum TransportAddress {
     /// To connect to another node either their "home relay" URL needs to be known (to coordinate
     /// holepunching or relayed connection fallback) or at least one reachable "direct address"
     /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
-    Iroh(iroh::NodeAddr),
+    Iroh(EndpointAddr),
 }
 
 impl TransportAddress {
@@ -251,19 +252,21 @@ impl TransportAddress {
         relay_url: Option<RelayUrl>,
         direct_addresses: impl IntoIterator<Item = SocketAddr>,
     ) -> Self {
-        let mut node_addr =
-            iroh::NodeAddr::new(from_public_key(node_id)).with_direct_addresses(direct_addresses);
+        let transport_addrs = direct_addresses.into_iter().map(TransportAddr::Ip);
+
+        let mut endpoint_addr =
+            EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
 
         if let Some(url) = relay_url {
-            node_addr = node_addr.with_relay_url(url);
+            endpoint_addr = endpoint_addr.with_relay_url(url);
         }
 
-        Self::Iroh(node_addr)
+        Self::Iroh(endpoint_addr)
     }
 }
 
-impl From<iroh::NodeAddr> for TransportAddress {
-    fn from(addr: iroh::NodeAddr) -> Self {
+impl From<EndpointAddr> for TransportAddress {
+    fn from(addr: EndpointAddr) -> Self {
         Self::Iroh(addr)
     }
 }

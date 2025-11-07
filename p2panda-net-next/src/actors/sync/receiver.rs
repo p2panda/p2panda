@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Sync receiver actor.
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 
 pub enum ToSyncReceiver {}
-
-impl Message for ToSyncReceiver {}
 
 pub struct SyncReceiverState {}
 

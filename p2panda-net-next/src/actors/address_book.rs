@@ -5,9 +5,12 @@
 // writing & persisting values).
 use std::collections::{HashMap, HashSet};
 
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, RpcReplyPort};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 
 use crate::{NodeId, NodeInfo, TopicId};
+
+/// Address book actor name.
+pub const ADDRESS_BOOK: &str = "net.address_book";
 
 // @TODO: Remove once used.
 #[allow(dead_code)]
@@ -27,8 +30,6 @@ pub enum ToAddressBook {
     /// Return a random set of known peers with an interest in the given topic.
     RandomAddressSet(TopicId, usize, RpcReplyPort<Vec<NodeId>>),
 }
-
-impl Message for ToAddressBook {}
 
 #[allow(dead_code)]
 #[derive(Default)]
