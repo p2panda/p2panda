@@ -1,18 +1,15 @@
 use std::collections::{HashMap, HashSet};
-
-use futures::channel::mpsc;
-
-use crate::{topic_log_sync::LiveModeMessage, traits::TopicQuery};
+use std::hash::Hash;
 
 #[derive(Debug)]
-pub struct SessionTopicMap<T, E> {
+pub struct SessionTopicMap<T, TX> {
     pub(crate) accepting_sessions: HashSet<u64>,
-    pub(crate) session_tx_map: HashMap<u64, mpsc::Sender<LiveModeMessage<E>>>,
+    pub(crate) session_tx_map: HashMap<u64, TX>,
     pub(crate) session_topic_map: HashMap<u64, T>,
     pub(crate) topic_session_map: HashMap<T, HashSet<u64>>,
 }
 
-impl<T, E> Default for SessionTopicMap<T, E> {
+impl<T, TX> Default for SessionTopicMap<T, TX> {
     fn default() -> Self {
         Self {
             accepting_sessions: Default::default(),
@@ -23,16 +20,11 @@ impl<T, E> Default for SessionTopicMap<T, E> {
     }
 }
 
-impl<T, E> SessionTopicMap<T, E>
+impl<T, TX> SessionTopicMap<T, TX>
 where
-    T: TopicQuery,
+    T: Clone + Hash + Eq,
 {
-    pub fn insert_with_topic(
-        &mut self,
-        session_id: u64,
-        topic: T,
-        tx: mpsc::Sender<LiveModeMessage<E>>,
-    ) {
+    pub fn insert_with_topic(&mut self, session_id: u64, topic: T, tx: TX) {
         self.session_topic_map.insert(session_id, topic.clone());
         self.topic_session_map
             .entry(topic.clone())
@@ -43,7 +35,7 @@ where
         self.session_tx_map.insert(session_id, tx);
     }
 
-    pub fn insert_accepting(&mut self, session_id: u64, tx: mpsc::Sender<LiveModeMessage<E>>) {
+    pub fn insert_accepting(&mut self, session_id: u64, tx: TX) {
         self.accepting_sessions.insert(session_id);
         self.session_tx_map.insert(session_id, tx);
     }
@@ -90,8 +82,12 @@ where
             .unwrap_or_default()
     }
 
-    pub fn session_channel(&self, session_id: u64) -> Option<mpsc::Sender<LiveModeMessage<E>>> {
-        self.session_tx_map.get(&session_id).cloned()
+    pub fn sender(&self, session_id: u64) -> Option<&TX> {
+        self.session_tx_map.get(&session_id)
+    }
+
+    pub fn sender_mut(&mut self, session_id: u64) -> Option<&mut TX> {
+        self.session_tx_map.get_mut(&session_id)
     }
 }
 
@@ -122,8 +118,8 @@ mod tests {
 
     #[test]
     fn insert_with_topic() {
-        let (tx, _rx) = mpsc::channel(128);
-        let mut map = SessionTopicMap::<_, ()>::default();
+        let (tx, _rx) = mpsc::channel::<()>(128);
+        let mut map = SessionTopicMap::default();
 
         map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx.clone());
 
@@ -137,13 +133,13 @@ mod tests {
         );
 
         // Channel should be retrievable
-        assert!(map.session_channel(SESSION1).is_some());
+        assert!(map.sender(SESSION1).is_some());
     }
 
     #[test]
     fn accept() {
-        let (tx, _rx) = mpsc::channel(128);
-        let mut map = SessionTopicMap::<_, ()>::default();
+        let (tx, _rx) = mpsc::channel::<()>(128);
+        let mut map = SessionTopicMap::default();
 
         map.insert_accepting(SESSION1, tx.clone());
         assert!(map.accepting_sessions.contains(&SESSION1));
@@ -162,8 +158,9 @@ mod tests {
 
     #[test]
     fn drop_accepting() {
-        let (tx, _rx) = mpsc::channel(128);
-        let mut map = SessionTopicMap::<TestTopic, ()>::default();
+        let (tx, _rx) = mpsc::channel::<()>(128);
+
+        let mut map = SessionTopicMap::<TestTopic, _>::default();
 
         map.insert_accepting(SESSION1, tx);
         assert!(map.drop(SESSION1));
@@ -173,8 +170,8 @@ mod tests {
 
     #[test]
     fn drop_session() {
-        let (tx, _rx) = mpsc::channel(128);
-        let mut map = SessionTopicMap::<TestTopic, ()>::default();
+        let (tx, _rx) = mpsc::channel::<()>(128);
+        let mut map = SessionTopicMap::default();
 
         map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx.clone());
         map.insert_with_topic(SESSION2, TestTopic::new(TOPIC_A), tx.clone());
@@ -197,9 +194,9 @@ mod tests {
 
     #[test]
     fn insert_multiple_sessions_same_topic() {
-        let (tx1, _rx1) = mpsc::channel(128);
-        let (tx2, _rx2) = mpsc::channel(128);
-        let mut map = SessionTopicMap::<TestTopic, ()>::default();
+        let (tx1, _rx1) = mpsc::channel::<()>(128);
+        let (tx2, _rx2) = mpsc::channel::<()>(128);
+        let mut map = SessionTopicMap::default();
 
         map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx1);
         map.insert_with_topic(SESSION2, TestTopic::new(TOPIC_A), tx2);

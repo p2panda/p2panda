@@ -12,6 +12,7 @@ pub mod traits;
 
 pub use dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 pub use protocols::{log_sync, topic_handshake, topic_log_sync};
+pub use session_topic_map::SessionTopicMap;
 
 /// Configuration object for instantiated sync sessions.
 #[derive(Clone, Debug)]
