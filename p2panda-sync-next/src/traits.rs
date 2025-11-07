@@ -24,6 +24,7 @@ pub trait Protocol {
 }
 
 /// Interface for managing sync sessions and consuming events they emit.
+#[allow(clippy::type_complexity)]
 pub trait SyncManager<T> {
     type Protocol: Protocol;
     type Error: Debug;

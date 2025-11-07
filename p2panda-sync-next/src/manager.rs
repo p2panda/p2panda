@@ -81,7 +81,7 @@ where
         self.events_rx_set.push(
             event_rx.map(Box::new(move |event| SyncManagerEvent::FromSync {
                 session_id,
-                event: event,
+                event,
             })),
         );
 
