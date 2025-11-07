@@ -208,7 +208,6 @@ impl Actor for StreamSupervisor {
 mod tests {
     use p2panda_core::PrivateKey;
     use ractor::Actor;
-    use ractor::thread_local::ThreadLocalActor;
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
