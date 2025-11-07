@@ -4,7 +4,7 @@
 //! them to the gossip session actor.
 use futures_lite::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 use tracing::error;
 
 use crate::actors::gossip::session::ToGossipSession;
@@ -17,8 +17,6 @@ pub enum ToGossipReceiver {
     /// has been joined.
     WaitForJoin,
 }
-
-impl Message for ToGossipReceiver {}
 
 pub struct GossipReceiverState {
     receiver: Option<IrohGossipReceiver>,
@@ -52,14 +50,6 @@ impl Actor for GossipReceiver {
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn post_stop(
