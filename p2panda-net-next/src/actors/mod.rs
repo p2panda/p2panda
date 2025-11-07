@@ -21,20 +21,20 @@ use p2panda_core::PublicKey;
 /// are run in a single process or on a single machine. We prevent such conflicts by ensuring that
 /// each node has a unique string which is appended to the actor name. For example, the "events"
 /// actor might end up as "events+706C65" (where the namespace is "706C65").
-pub(crate) type ActorNamespace = String;
+pub type ActorNamespace = String;
 
 /// Takes a public key and returns `+` with the last six characters of the associated public key.
-pub(crate) fn generate_actor_namespace(public_key: &PublicKey) -> ActorNamespace {
+pub fn generate_actor_namespace(public_key: &PublicKey) -> ActorNamespace {
     public_key.to_hex()[..6].to_string()
 }
 
 /// Combines an actor's name with a node-unique namespace as suffix.
-pub(crate) fn with_namespace(name: &str, namespace: &ActorNamespace) -> String {
+pub fn with_namespace(name: &str, namespace: &ActorNamespace) -> String {
     format!("{name}+{namespace}")
 }
 
 /// Removes the node-unique namespace suffix from an actor's name.
-pub(crate) fn without_namespace(name: &str) -> &str {
+pub fn without_namespace(name: &str) -> &str {
     &name[..name.len() - 7]
 }
 
