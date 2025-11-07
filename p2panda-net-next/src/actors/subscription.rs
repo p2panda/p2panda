@@ -42,7 +42,7 @@ pub struct SubscriptionState {
     endpoint: IrohEndpoint,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
-    sync_actor: ActorRef<ToSync>,
+    // sync_actor: ActorRef<ToSync>,
     sync_actor_failures: u16,
     to_gossip_senders: HashMap<TopicId, Sender<ToNetwork>>,
     from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
@@ -71,14 +71,15 @@ impl Actor for Subscription {
         )
         .await?;
 
-        // Spawn the sync actor.
-        let (sync_actor, _) = Actor::spawn_linked(
-            Some(with_namespace("sync", &actor_namespace)),
-            Sync {},
-            (),
-            myself.into(),
-        )
-        .await?;
+        // @TODO: spawn the sync actor.
+        // // Spawn the sync actor.
+        // let (sync_actor, _) = Actor::spawn_linked(
+        //     Some(with_namespace("sync", &actor_namespace)),
+        //     Sync {},
+        //     (),
+        //     myself.into(),
+        // )
+        // .await?;
 
         let to_gossip_senders = HashMap::new();
         let from_gossip_senders = HashMap::new();
@@ -87,7 +88,7 @@ impl Actor for Subscription {
             endpoint,
             gossip_actor,
             gossip_actor_failures: 0,
-            sync_actor,
+            // sync_actor,
             sync_actor_failures: 0,
             to_gossip_senders,
             from_gossip_senders,
@@ -218,16 +219,16 @@ impl Actor for Subscription {
                         warn!("subscription actor: sync actor failed: {}", panic_msg);
 
                         // Respawn the sync actor.
-                        let (sync_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace("sync", &actor_namespace)),
-                            Sync {},
-                            (),
-                            myself.clone().into(),
-                        )
-                        .await?;
+                        // let (sync_actor, _) = Actor::spawn_linked(
+                        //     Some(with_namespace("sync", &actor_namespace)),
+                        //     Sync {},
+                        //     (),
+                        //     myself.clone().into(),
+                        // )
+                        // .await?;
 
                         state.sync_actor_failures += 1;
-                        state.sync_actor = sync_actor;
+                        // state.sync_actor = sync_actor;
                     }
                 }
             }
