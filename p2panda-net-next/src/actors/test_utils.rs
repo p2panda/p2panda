@@ -2,6 +2,7 @@
 
 //! Utilities to test actors.
 use ractor::actor::messages::BoxedState;
+use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::oneshot::Sender;
 
@@ -30,7 +31,7 @@ pub struct TestSupervisorState {
 /// // Spawn the test supervisor actor.
 /// let (supervisor_tx, supervisor_rx) = oneshot::channel();
 /// let (supervisor_actor, supervisor_actor_handle) =
-///     Actor::spawn(None, TestSupervisor, supervisor_tx)
+///     TestSupervisor::spawn(None, supervisor_tx, pool)
 ///     .await
 ///     .unwrap();
 ///
@@ -45,9 +46,10 @@ pub struct TestSupervisorState {
 /// // Receive the result on the oneshot channel.
 /// let example_actor_result = supervisor_rx.await;
 /// ```
+#[derive(Default)]
 pub struct TestSupervisor;
 
-impl Actor for TestSupervisor {
+impl ThreadLocalActor for TestSupervisor {
     type Msg = ();
     type State = TestSupervisorState;
     type Arguments = Sender<ActorResult>;
@@ -62,15 +64,6 @@ impl Actor for TestSupervisor {
         })
     }
 
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
     async fn handle_supervisor_evt(
         &self,
         myself: ActorRef<Self::Msg>,
@@ -78,14 +71,15 @@ impl Actor for TestSupervisor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorTerminated(_, boxed_state, reason) => {
+            SupervisionEvent::ActorTerminated(id, boxed_state, reason) => {
                 if let Some(result_tx) = state.result_tx.take() {
                     result_tx
+                        // NOTE: State will always be `None` for local ractor actors.
                         .send(ActorResult::Terminated(boxed_state, reason))
                         .unwrap();
                 }
             }
-            SupervisionEvent::ActorFailed(_, err) => {
+            SupervisionEvent::ActorFailed(id, err) => {
                 if let Some(result_tx) = state.result_tx.take() {
                     result_tx.send(ActorResult::Failed(err)).unwrap();
                 }

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 pub const STREAM: &str = "net.stream";
 
 use iroh::Endpoint as IrohEndpoint;
+use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
@@ -18,7 +19,7 @@ use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
-use crate::actors::sync::{SYNC, Sync, ToSync};
+use crate::actors::sync::SYNC_MANAGER;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
@@ -37,17 +38,18 @@ pub enum ToStream {
 pub struct StreamState {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
-    sync_actor: ActorRef<ToSync>,
+    sync_actor: ActorRef<()>,
     to_gossip_senders: HashMap<TopicId, Sender<ToNetwork>>,
     from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
 }
 
+#[derive(Default)]
 pub struct Stream;
 
-impl Actor for Stream {
+impl ThreadLocalActor for Stream {
     type State = StreamState;
     type Msg = ToStream;
-    type Arguments = (ActorNamespace, ActorRef<ToSync>, ActorRef<ToGossip>);
+    type Arguments = (ActorNamespace, ActorRef<()>, ActorRef<ToGossip>);
 
     async fn pre_start(
         &self,

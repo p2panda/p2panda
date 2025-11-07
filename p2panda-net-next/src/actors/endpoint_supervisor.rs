@@ -2,16 +2,24 @@
 
 //! Endpoint supervisor actor.
 //!
-//! This supervisor monitors the health of the endpoint actor, as well as the stream and discovery
-//! actors. If the endpoint actor fails, all child actors of the endpoint supervisor are respawned
-//! (including the stream and discovery actors); this is necessary because stream and discovery
-//! are indirectly reliant on a functioning endpoint actor. If either the stream or discovery actors
-//! fail in isolation, they are simply respawned in a one-for-one manner.
+//! ```plain
+//! - "Endpoint" Supervisor
+//!     - "Stream" Supervisor
+//!     - "Iroh Endpoint" Actor
+//!     - "Discovery Manager" Actor
+//! ```
+//!
+//! This supervisor monitors the health of the iroh endpoint actor, as well as the stream and
+//! discovery actors. If the endpoint actor fails, all child actors of the endpoint supervisor are
+//! respawned (including the stream and discovery actors); this is necessary because stream and
+//! discovery are indirectly reliant on a functioning endpoint actor. If either the stream or
+//! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
 use p2panda_core::PrivateKey;
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
-use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
+use crate::actors::discovery::{DISCOVERY, Discovery};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
@@ -21,16 +29,20 @@ use crate::args::ApplicationArguments;
 pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint_supervisor";
 
 pub struct EndpointSupervisorState {
-    args: ApplicationArguments,
     actor_namespace: ActorNamespace,
-    endpoint_actor: ActorRef<ToIrohEndpoint>,
-    discovery_actor: ActorRef<ToDiscovery>,
-    discovery_actor_failures: u16,
+    args: ApplicationArguments,
+    iroh_endpoint_actor: ActorRef<ToIrohEndpoint>,
+    iroh_endpoint_actor_failures: u16,
+    discovery_manager_actor: ActorRef<()>,
+    discovery_manager_actor_failures: u16,
+    stream_supervisor: ActorRef<()>,
+    stream_supervisor_failures: u16,
 }
 
+#[derive(Default)]
 pub struct EndpointSupervisor;
 
-impl Actor for EndpointSupervisor {
+impl ThreadLocalActor for EndpointSupervisor {
     type State = EndpointSupervisorState;
 
     type Msg = ();
@@ -45,41 +57,42 @@ impl Actor for EndpointSupervisor {
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the endpoint actor.
-        let (endpoint_actor, _) = Actor::spawn_linked(
+        let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            IrohEndpoint,
             args.clone(),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         // Spawn the discovery actor.
-        let (discovery_actor, _) = Actor::spawn_linked(
+        let (discovery_manager_actor, _) = Discovery::spawn_linked(
             Some(with_namespace(DISCOVERY, &actor_namespace)),
-            Discovery {},
             (),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         // Spawn the stream supervisor.
-        let (stream_supervisor, _) = Actor::spawn_linked(
+        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
             Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
-            StreamSupervisor,
-            actor_namespace.clone(),
+            args.clone(),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
-        let state = EndpointSupervisorState {
-            args,
+        Ok(EndpointSupervisorState {
             actor_namespace,
-            endpoint_actor,
-            discovery_actor,
-            discovery_actor_failures: 0,
-        };
-
-        Ok(state)
+            args,
+            iroh_endpoint_actor,
+            iroh_endpoint_actor_failures: 0,
+            discovery_manager_actor,
+            discovery_manager_actor_failures: 0,
+            stream_supervisor,
+            stream_supervisor_failures: 0,
+        })
     }
 
     async fn post_stop(
@@ -90,8 +103,9 @@ impl Actor for EndpointSupervisor {
         let reason = Some("endpoint supervisor is shutting down".to_string());
 
         // Stop all the actors which are directly supervised by this actor.
-        state.endpoint_actor.stop(reason.clone());
-        state.discovery_actor.stop(reason);
+        state.iroh_endpoint_actor.stop(reason.clone());
+        state.discovery_manager_actor.stop(reason.clone());
+        state.stream_supervisor.stop(reason);
 
         Ok(())
     }
@@ -122,49 +136,79 @@ impl Actor for EndpointSupervisor {
                         // If the endpoint actor fails then we need to:
                         //
                         // 1. Stop the stream supervisor and discovery actors
-                        // 2. Respawn the endpoint actor
+                        // 2. Respawn the iroh endpoint actor
                         // 3. Respawn the stream supervisor and discovery actors
                         state
-                            .discovery_actor
+                            .discovery_manager_actor
                             .stop(Some("{IROH_ENDPOINT} actor failed".to_string()));
 
-                        // Respawn the endpoint actor.
-                        //let (endpoint_actor, _) = Actor::spawn_linked(
-                        //    Some(with_namespace(ENDPOINT, &state.actor_namespace)),
-                        //    Endpoint,
-                        //    (state.private_key, state.config),
-                        //    myself.clone().into(),
-                        //)
-                        //.await?;
-
-                        // Respawn the discovery actor.
-                        let (discovery_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace(DISCOVERY, &state.actor_namespace)),
-                            Discovery {},
-                            (),
+                        // Respawn the iroh endpoint actor.
+                        let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
+                            Some(with_namespace(IROH_ENDPOINT, &state.actor_namespace)),
+                            state.args.clone(),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
-                        state.discovery_actor_failures += 1;
-                        state.discovery_actor = discovery_actor;
+                        state.iroh_endpoint_actor_failures += 1;
+                        state.iroh_endpoint_actor = iroh_endpoint_actor;
+
+                        // Respawn the discovery manager actor.
+                        let (discovery_manager_actor, _) = Discovery::spawn_linked(
+                            Some(with_namespace(DISCOVERY, &state.actor_namespace)),
+                            (),
+                            myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
+                        )
+                        .await?;
+
+                        state.discovery_manager_actor = discovery_manager_actor;
+
+                        // Respawn the stream supervisor.
+                        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
+                            Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
+                            state.args.clone(),
+                            myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
+                        )
+                        .await?;
+
+                        state.stream_supervisor = stream_supervisor;
                     } else if name == with_namespace(DISCOVERY, &state.actor_namespace) {
                         warn!(
                             "{ENDPOINT_SUPERVISOR} actor: {DISCOVERY} actor failed: {}",
                             panic_msg
                         );
 
-                        // Respawn the discovery actor.
-                        let (discovery_actor, _) = Actor::spawn_linked(
+                        // Respawn the discovery manager actor.
+                        let (discovery_manager_actor, _) = Discovery::spawn_linked(
                             Some(with_namespace(DISCOVERY, &state.actor_namespace)),
-                            Discovery {},
                             (),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
-                        state.discovery_actor_failures += 1;
-                        state.discovery_actor = discovery_actor;
+                        state.discovery_manager_actor_failures += 1;
+                        state.discovery_manager_actor = discovery_manager_actor;
+                    } else if name == with_namespace(STREAM_SUPERVISOR, &state.actor_namespace) {
+                        warn!(
+                            "{ENDPOINT_SUPERVISOR} actor: {STREAM_SUPERVISOR} actor failed: {}",
+                            panic_msg
+                        );
+
+                        // Respawn the stream supervisor.
+                        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
+                            Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
+                            state.args.clone(),
+                            myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
+                        )
+                        .await?;
+
+                        state.stream_supervisor_failures += 1;
+                        state.stream_supervisor = stream_supervisor;
                     }
                 }
             }

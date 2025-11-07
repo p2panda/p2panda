@@ -4,19 +4,19 @@
 //!
 //! Receives events from other actors, aggregating and enriching them before informing
 //! upstream subscribers.
+use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::debug;
 
 /// Events actor name.
 pub const EVENTS: &str = "net.events";
 
-pub enum ToEvents {
-    ConnectedToRelay,
-}
+pub enum ToEvents {}
 
+#[derive(Default)]
 pub struct Events;
 
-impl Actor for Events {
+impl ThreadLocalActor for Events {
     type State = ();
     type Msg = ToEvents;
     type Arguments = ();
@@ -26,21 +26,6 @@ impl Actor for Events {
         _myself: ActorRef<Self::Msg>,
         _args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn handle(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        message: Self::Msg,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        match message {
-            // TODO: Eventually we want to enrich and forward events to the subscription actor so
-            // they can be passed to any subscribers.
-            ToEvents::ConnectedToRelay => debug!("endpoint connected to relay"),
-        }
-
         Ok(())
     }
 }

@@ -60,9 +60,10 @@ pub struct IrohState {
     worker_pool: ThreadLocalActorSpawner,
 }
 
+#[derive(Default)]
 pub struct IrohEndpoint;
 
-impl Actor for IrohEndpoint {
+impl ThreadLocalActor for IrohEndpoint {
     type State = IrohState;
 
     type Msg = ToIrohEndpoint;

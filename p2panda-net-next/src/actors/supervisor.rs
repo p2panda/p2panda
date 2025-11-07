@@ -2,8 +2,15 @@
 
 //! Supervision actor.
 //!
-//! The root of the entire system supervision tree; it's only role is to spawn and
-//! supervise other actors.
+//! The root of the entire system supervision tree; it's only role is to spawn and supervise other
+//! actors.
+//!
+//! ```plain
+//! - "Root" Supervisor
+//!     - "Endpoint" Supervisor
+//!     - "Address Book" Actor
+//!     - "Events" Actor
+//! ```
 //!
 //! This supervisor spawns the events and address book actors. It also spawns the endpoint
 //! supervisor which is responsible for spawning and monitoring the iroh actors and all others
@@ -17,7 +24,7 @@ use rand_chacha::ChaCha20Rng;
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
+use crate::actors::discovery::{DISCOVERY, Discovery};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
@@ -31,8 +38,8 @@ pub const SUPERVISOR: &str = "net.supervisor";
 pub struct SupervisorState<T> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
+    // @TODO: Make store generic.
     store: MemoryStore<ChaCha20Rng, T, NodeId, NodeInfo>,
-    thread_pool_1: ThreadLocalActorSpawner,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook<T>>,
@@ -41,12 +48,15 @@ pub struct SupervisorState<T> {
     endpoint_supervisor_failures: u16,
 }
 
+#[derive(Default)]
 pub struct Supervisor;
 
-impl Actor for Supervisor {
+impl ThreadLocalActor for Supervisor {
     // @TODO(adz): S and T should be a generic.
     type State = SupervisorState<()>;
+
     type Msg = ();
+
     type Arguments = ApplicationArguments;
 
     async fn pre_start(
@@ -56,37 +66,33 @@ impl Actor for Supervisor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        // @TODO: This is more of a placeholder for proper consideration of how we want to pool the
-        // local actors.
-        let thread_pool_1 = ThreadLocalActorSpawner::new();
+        // @TODO: Pass generic store via args.
+        let store = MemoryStore::new(ChaCha20Rng::from_os_rng());
 
         // Spawn the events actor.
-        let (events_actor, _) = Actor::spawn_linked(
+        let (events_actor, _) = Events::spawn_linked(
             Some(with_namespace(EVENTS, &actor_namespace)),
-            Events,
             (),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
-
-        // @TODO
-        let store = MemoryStore::new(ChaCha20Rng::from_os_rng());
 
         // Spawn the address book actor.
         let (address_book_actor, _) = AddressBook::spawn_linked(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
             (store.clone(),),
             myself.clone().into(),
-            thread_pool_1.clone(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         // Spawn the endpoint supervisor.
-        let (endpoint_supervisor, _) = Actor::spawn_linked(
+        let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
             Some(with_namespace(ENDPOINT_SUPERVISOR, &actor_namespace)),
-            EndpointSupervisor,
             args.clone(),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
@@ -94,7 +100,6 @@ impl Actor for Supervisor {
             actor_namespace,
             args,
             store,
-            thread_pool_1,
             events_actor,
             events_actor_failures: 0,
             address_book_actor,
@@ -114,10 +119,9 @@ impl Actor for Supervisor {
         let reason = Some("network system is shutting down".to_string());
 
         // Stop all the actors which are directly supervised by this actor.
-        state.endpoint_supervisor.stop(reason.clone());
         state.events_actor.stop(reason.clone());
         state.address_book_actor.stop(reason.clone());
-        state.events_actor.stop(reason.clone());
+        state.endpoint_supervisor.stop(reason.clone());
 
         Ok(())
     }
@@ -142,12 +146,11 @@ impl Actor for Supervisor {
                     if name == with_namespace(EVENTS, &state.actor_namespace) {
                         warn!("{SUPERVISOR} actor: {EVENTS} actor failed: {}", panic_msg);
 
-                        // Respawn the events actor.
-                        let (events_actor, _) = Actor::spawn_linked(
+                        let (events_actor, _) = Events::spawn_linked(
                             Some(with_namespace(EVENTS, &state.actor_namespace)),
-                            Events,
                             (),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
@@ -163,7 +166,7 @@ impl Actor for Supervisor {
                             Some(with_namespace(ADDRESS_BOOK, &state.actor_namespace)),
                             (state.store.clone(),),
                             myself.clone().into(),
-                            state.thread_pool_1.clone(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
@@ -175,12 +178,11 @@ impl Actor for Supervisor {
                             panic_msg
                         );
 
-                        // Respawn the endpoint supervisor.
-                        let (endpoint_supervisor, _) = Actor::spawn_linked(
+                        let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
                             Some(with_namespace(ENDPOINT_SUPERVISOR, &state.actor_namespace)),
-                            EndpointSupervisor,
                             state.args.clone(),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
@@ -208,6 +210,7 @@ impl Actor for Supervisor {
 mod tests {
     use p2panda_core::PrivateKey;
     use ractor::Actor;
+    use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
     use tracing_test::traced_test;
@@ -224,16 +227,15 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     #[serial]
-    async fn supervisor_child_actors_are_started() {
-        let private_key: PrivateKey = Default::default();
-        let actor_namespace = generate_actor_namespace(&private_key.public_key());
-
+    async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
+        let actor_namespace = generate_actor_namespace(&args.public_key);
+        let root_thread_pool = ThreadLocalActorSpawner::new();
 
-        let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            Supervisor,
             args,
+            root_thread_pool,
         )
         .await
         .unwrap();
