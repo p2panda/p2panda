@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Join a set of peers on a gossip topic.
-use iroh::NodeId;
+use iroh::EndpointId;
 use iroh_gossip::api::GossipSender as IrohGossipSender;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 
 pub enum ToGossipJoiner {
     /// Join the given set of peers.
-    JoinPeers(Vec<NodeId>),
+    JoinPeers(Vec<EndpointId>),
 }
-
-impl Message for ToGossipJoiner {}
 
 pub struct GossipJoinerState {
     sender: Option<IrohGossipSender>,
@@ -33,14 +31,6 @@ impl Actor for GossipJoiner {
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn post_stop(
