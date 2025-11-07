@@ -8,10 +8,10 @@
 //! forwards them up the chain to the main gossip orchestration actor.
 use std::time::Duration;
 
-use iroh::NodeId;
+use iroh::EndpointId;
 use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::PublicKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, Message, SupervisionEvent};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
@@ -28,13 +28,11 @@ pub enum ToGossipSession {
     ProcessEvent(IrohEvent),
 
     /// Joined the gossip overlay with the given peers as direct neighbors.
-    ProcessJoined(Vec<NodeId>),
+    ProcessJoined(Vec<EndpointId>),
 
     /// Join the given set of peers.
-    JoinPeers(Vec<NodeId>),
+    JoinPeers(Vec<EndpointId>),
 }
-
-impl Message for ToGossipSession {}
 
 pub struct GossipSessionState {
     topic_id: TopicId,
@@ -72,23 +70,18 @@ impl Actor for GossipSession {
 
         let (sender, receiver) = subscription.split();
 
-        let (gossip_sender_actor, _) = Actor::spawn_linked(
-            None,
-            GossipSender,
-            (sender.clone(), gossip_joined),
-            myself.clone().into(),
-        )
-        .await?;
-
-        // TODO: Consider carefully whether this requires supervision and, if so, what actions to
-        // take on termination and failure.
-        let (gossip_joiner_actor, _) =
-            Actor::spawn_linked(None, GossipJoiner, sender, myself.clone().into()).await?;
-
         let (gossip_receiver_actor, _) = Actor::spawn_linked(
             None,
             GossipReceiver::new(myself.clone()),
             receiver,
+            myself.clone().into(),
+        )
+        .await?;
+
+        let (gossip_sender_actor, _) = Actor::spawn_linked(
+            None,
+            GossipSender,
+            (sender.clone(), gossip_joined),
             myself.clone().into(),
         )
         .await?;
@@ -103,6 +96,9 @@ impl Actor for GossipSession {
         )
         .await?;
 
+        let (gossip_joiner_actor, _) =
+            Actor::spawn_linked(None, GossipJoiner, sender, myself.clone().into()).await?;
+
         let state = GossipSessionState {
             topic_id,
             gossip_joiner_actor,
@@ -111,22 +107,6 @@ impl Actor for GossipSession {
         };
 
         Ok(state)
-    }
-
-    async fn post_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        Ok(())
     }
 
     async fn handle(
