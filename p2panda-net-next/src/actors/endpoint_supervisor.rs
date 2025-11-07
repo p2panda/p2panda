@@ -164,17 +164,6 @@ impl ThreadLocalActor for EndpointSupervisor {
                         .await?;
 
                         state.discovery_manager_actor = discovery_manager_actor;
-
-                        // Respawn the stream supervisor.
-                        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
-                            Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
-                            state.args.clone(),
-                            myself.clone().into(),
-                            state.args.root_thread_pool.clone(),
-                        )
-                        .await?;
-
-                        state.stream_supervisor = stream_supervisor;
                     } else if name == with_namespace(DISCOVERY, &state.actor_namespace) {
                         warn!(
                             "{ENDPOINT_SUPERVISOR} actor: {DISCOVERY} actor failed: {}",
