@@ -3,12 +3,13 @@
 mod address_book;
 mod discovery;
 mod endpoint;
+pub mod endpoint;
 mod endpoint_supervisor;
 mod events;
 mod gossip;
-pub(crate) mod stream;
+pub mod stream;
 mod stream_supervisor;
-pub(crate) mod supervisor;
+pub mod supervisor;
 mod sync;
 #[cfg(test)]
 mod test_utils;
