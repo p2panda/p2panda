@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::Debug;
 use std::hash::Hash as StdHash;
+use std::{fmt::Debug, pin::Pin};
 
 use futures::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::{SyncSessionConfig, ToSync};
+use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;
     type Error;
+    type Event;
     type Message;
 
     fn run(
@@ -25,7 +26,6 @@ pub trait Protocol {
 /// Interface for managing sync sessions and consuming events they emit.
 pub trait SyncManager<T> {
     type Protocol: Protocol;
-    type Event;
     type Error: Debug;
 
     /// Instantiate a new sync session.
@@ -35,10 +35,17 @@ pub trait SyncManager<T> {
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<impl Sink<ToSync, Error = Self::Error> + Unpin + 'static>;
+    ) -> Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>>;
 
     /// Drive the manager to process and return events emitted from all running sync sessions.
-    fn next_event(&mut self) -> impl Future<Output = Result<Option<Self::Event>, Self::Error>>;
+    fn next_event(
+        &mut self,
+    ) -> impl Future<
+        Output = Result<
+            Option<SyncManagerEvent<T, <Self::Protocol as Protocol>::Event>>,
+            Self::Error,
+        >,
+    >;
 }
 
 /// Identify the particular dataset a peer is interested in syncing.
