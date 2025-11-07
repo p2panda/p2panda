@@ -13,6 +13,7 @@ use tracing::{debug, warn};
 
 use crate::actors::discovery::{DISCOVERY, Discovery, ToDiscovery};
 use crate::actors::endpoint::{ENDPOINT, Endpoint, EndpointConfig, ToEndpoint};
+use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 
 /// Endpoint supervisor actor name.
@@ -54,14 +55,20 @@ impl Actor for EndpointSupervisor {
         )
         .await?;
 
-        // TODO: Spawn the stream supervisor actor.
-        // That will be responsible for spawning the stream, gossip and sync actors.
-
         // Spawn the discovery actor.
         let (discovery_actor, _) = Actor::spawn_linked(
             Some(with_namespace(DISCOVERY, &actor_namespace)),
             Discovery {},
             (),
+            myself.clone().into(),
+        )
+        .await?;
+
+        // Spawn the stream supervisor.
+        let (stream_supervisor, _) = Actor::spawn_linked(
+            Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
+            StreamSupervisor,
+            actor_namespace.clone(),
             myself.clone().into(),
         )
         .await?;

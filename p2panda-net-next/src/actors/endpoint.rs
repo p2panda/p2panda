@@ -2,14 +2,8 @@
 
 //! Endpoint actor.
 //!
-//! This actor is responsible for creating an iroh `Endpoint` with an associated `Router`,
-//! registering network protocols with the `Router` and spawning the subscription actor. It also
-//! performs supervision of the spawned actor, restarting it in the event of failure.
-//!
-//! The subscription actor is a child of the endpoint actor. This design decision was made because
-//! it currently relies on an iroh `Endpoint` (for gossip and sync connections). If something goes
-//! wrong with the gossip or sync actors, they can be respawned by the endpoint actor. If the
-//! endpoint actor itself fails, the entire network system is shutdown.
+//! This actor is responsible for creating an iroh `Endpoint` with an associated `Router` and
+//! registering network protocols with the `Router`.
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::time::Duration;
 
@@ -20,7 +14,7 @@ use iroh::RelayUrl as IrohRelayUrl;
 use iroh::endpoint::TransportConfig as IrohTransportConfig;
 use iroh::protocol::Router as IrohRouter;
 use p2panda_core::PrivateKey;
-use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent, registry};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
 use tokio::time::timeout;
 use tracing::{debug, warn};
 
@@ -60,13 +54,14 @@ impl Default for EndpointConfig {
     }
 }
 
-pub(crate) enum ToEndpoint {}
+pub(crate) enum ToEndpoint {
+    /// Return a clone of the iroh endpoint.
+    Endpoint(RpcReplyPort<IrohEndpoint>),
+}
 
 pub(crate) struct EndpointState {
     endpoint: IrohEndpoint,
     router: IrohRouter,
-    stream_actor: ActorRef<ToStream>,
-    stream_actor_failures: u16,
 }
 
 pub(crate) struct Endpoint;
@@ -132,21 +127,7 @@ impl Actor for Endpoint {
 
         let router = router_builder.spawn();
 
-        // Spawn the stream actor.
-        let (stream_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(STREAM, &actor_namespace)),
-            Stream,
-            endpoint.clone(),
-            myself.clone().into(),
-        )
-        .await?;
-
-        let state = EndpointState {
-            endpoint,
-            router,
-            stream_actor,
-            stream_actor_failures: 0,
-        };
+        let state = EndpointState { endpoint, router };
 
         Ok(state)
     }
@@ -159,101 +140,22 @@ impl Actor for Endpoint {
         // Shutdown all protocol handlers and close the iroh `Endpoint`.
         state.router.shutdown().await?;
 
-        state
-            .stream_actor
-            .stop(Some("{ENDPOINT} actor is shutting down".to_string()));
-
         Ok(())
     }
 
-    async fn handle_supervisor_evt(
+    async fn handle(
         &self,
         myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
+        message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(actor) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "{ENDPOINT} actor: received ready from {} actor",
-                        without_namespace(&name)
-                    );
-                }
+            ToEndpoint::Endpoint(reply) => {
+                let endpoint = state.endpoint.clone();
+                let _ = reply.send(endpoint);
             }
-            SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
-
-                if let Some(name) = actor.get_name().as_deref()
-                    && name == with_namespace(STREAM, &actor_namespace)
-                {
-                    warn!("{ENDPOINT} actor: {STREAM} actor failed: {}", panic_msg);
-
-                    // Respawn the stream actor.
-                    let (stream_actor, _) = Actor::spawn_linked(
-                        Some(with_namespace(STREAM, &actor_namespace)),
-                        Stream,
-                        state.endpoint.clone(),
-                        myself.clone().into(),
-                    )
-                    .await?;
-
-                    state.stream_actor_failures += 1;
-                    state.stream_actor = stream_actor;
-                }
-            }
-            SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
-                if let Some(name) = actor.get_name() {
-                    debug!(
-                        "{ENDPOINT} actor: {} actor terminated",
-                        without_namespace(&name)
-                    );
-                }
-            }
-            _ => (),
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use p2panda_core::PrivateKey;
-    use ractor::Actor;
-    use serial_test::serial;
-    use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
-
-    use crate::actors::endpoint::ENDPOINT;
-    use crate::actors::stream::STREAM;
-
-    use super::{Endpoint, EndpointConfig};
-
-    #[tokio::test]
-    #[traced_test]
-    #[serial]
-    async fn endpoint_child_actors_are_started() {
-        let private_key = PrivateKey::new();
-
-        let endpoint_config = EndpointConfig::default();
-        let (endpoint_actor, endpoint_actor_handle) = Actor::spawn(
-            Some(ENDPOINT.to_string()),
-            Endpoint,
-            (private_key, endpoint_config),
-        )
-        .await
-        .unwrap();
-
-        // Sleep briefly to allow time for all actors to be ready.
-        sleep(Duration::from_millis(50)).await;
-
-        endpoint_actor.stop(None);
-        endpoint_actor_handle.await.unwrap();
-
-        assert!(logs_contain(&format!(
-            "{ENDPOINT} actor: received ready from {STREAM} actor"
-        )));
-        assert!(!logs_contain("actor failed"));
     }
 }
