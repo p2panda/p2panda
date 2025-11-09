@@ -96,6 +96,7 @@ where
 {
     type Error = LogSyncError<L, E, S>;
     type Output = Dedup<Hash>;
+    type Event = LogSyncEvent<E>;
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -417,8 +418,6 @@ where
                     .get_log_size(public_key, log_id, Some(remote_needs_from))
                     .await
                     .map_err(LogSyncError::LogStore)?;
-
-                println!("{size:?}");
 
                 if let Some(size) = size {
                     total_size += size;

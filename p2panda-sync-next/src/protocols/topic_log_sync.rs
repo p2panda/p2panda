@@ -10,7 +10,6 @@ use p2panda_core::{Body, Extensions, Header};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::broadcast;
 
 use crate::DEFAULT_BUFFER_CAPACITY;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
@@ -25,7 +24,7 @@ pub struct TopicLogSync<T, S, M, L, E> {
     pub topic_map: M,
     pub role: Role<T>,
     pub event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
-    pub live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+    pub live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
 }
@@ -54,7 +53,7 @@ where
         store: S,
         topic_map: M,
         role: Role<T>,
-        live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+        live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
         event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
     ) -> Self {
         Self::new_with_capacity(
@@ -71,7 +70,7 @@ where
         store: S,
         topic_map: M,
         role: Role<T>,
-        live_mode_rx: Option<broadcast::Receiver<LiveModeMessage<E>>>,
+        live_mode_rx: Option<mpsc::Receiver<LiveModeMessage<E>>>,
         event_tx: mpsc::Sender<TopicLogSyncEvent<T, E>>,
         buffer_capacity: usize,
     ) -> Self {
@@ -96,6 +95,7 @@ where
     E: Extensions,
 {
     type Error = TopicLogSyncError<T, S, M, L, E>;
+    type Event = TopicLogSyncEvent<T, E>;
     type Message = TopicLogSyncMessage<T, L, E>;
     type Output = ();
 
@@ -158,11 +158,16 @@ where
                 tokio::select! {
                     biased;
                     Some(message) = stream.next() => {
-                        // @TODO: check that this message is a part of our topic T set.
                         let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                        if let TopicLogSyncMessage::Close = message {
+                            self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
+                            return Ok(());
+                        };
+
                         let TopicLogSyncMessage::Live{header, body} = message else {
                             return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
                         };
+                        // @TODO: check that this message is a part of our topic T set.
 
                         // Insert operation hash into deduplication buffer and if it was
                         // previously present do not forward the operation to the application layer.
@@ -174,39 +179,22 @@ where
                         metrics.operations_received += 1;
                         self.event_tx.send(TopicLogSyncEvent::Live { header: Box::new(header), body }).await.map_err(TopicSyncChannelError::EventSend)?;
                     }
-                    Ok(message) = live_mode_rx.recv() => {
+                    Some(message) = live_mode_rx.next() => {
                         match message {
-                            LiveModeMessage::FromSub { header, body } => {
+                            LiveModeMessage::Operation { header, body } => {
                                 if !dedup.insert(header.hash()) {
-                                    // @TODO(sam): I wonder if we should rather error here? Or at
-                                    // the least log a warning. I don't think we ever expect the
-                                    // same message to be sent multiple times on the subscription
-                                    // publish channel.
                                     continue;
                                 }
 
                                 metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
                                 metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header, body })
-                                    .await
-                                    .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
-                            }
-                            LiveModeMessage::FromSync { header, body } => {
-                                // Insert operation hash into deduplication buffer and if it was
-                                // previously present do not forward the operation to the remote peer.
-                                if !dedup.insert(header.hash()) {
-                                    continue;
-                                }
-
-                                // @TODO: check that this message is a part of our topic T set.
-                                metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
-                                metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header, body })
+                                sink.send(TopicLogSyncMessage::Live { header: *header.clone(), body: body.clone() })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                             }
                             LiveModeMessage::Close => {
                                 self.event_tx.send(TopicLogSyncEvent::Close{metrics}).await.map_err(TopicSyncChannelError::EventSend)?;
+                                sink.send(TopicLogSyncMessage::Close).await.map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                                 return Ok(())
                             },
                         };
@@ -240,9 +228,11 @@ pub(crate) fn topic_channels<'a, T, L, E>(
             message.map_err(|err| TopicSyncChannelError::MessageStream(format!("{err:?}")))?;
         match message {
             TopicLogSyncMessage::Handshake(message) => Ok(message),
-            TopicLogSyncMessage::Sync(_) | TopicLogSyncMessage::Live { .. } => Err(
-                TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
-            ),
+            TopicLogSyncMessage::Sync(_)
+            | TopicLogSyncMessage::Live { .. }
+            | TopicLogSyncMessage::Close => Err(TopicSyncChannelError::MessageStream(
+                "non-protocol message received".to_string(),
+            )),
         }
     });
     (topic_sink, topic_stream)
@@ -266,9 +256,11 @@ pub(crate) fn sync_channels<'a, T, L, E>(
         });
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
-        Ok(TopicLogSyncMessage::Handshake(_)) | Ok(TopicLogSyncMessage::Live { .. }) => Err(
-            TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
-        ),
+        Ok(TopicLogSyncMessage::Handshake(_))
+        | Ok(TopicLogSyncMessage::Live { .. })
+        | Ok(TopicLogSyncMessage::Close) => Err(TopicSyncChannelError::MessageStream(
+            "non-protocol message received".to_string(),
+        )),
         Err(err) => Err(TopicSyncChannelError::MessageStream(format!("{err:?}"))),
     });
 
@@ -324,16 +316,12 @@ pub struct LiveModeMetrics {
 /// Topic log sync live-mode message types.
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
-    /// Message received from a subscription.
-    FromSub {
-        header: Header<E>,
+    /// Operation received from a subscription or a concurrent sync session (via the manager).
+    Operation {
+        header: Box<Header<E>>,
         body: Option<Body>,
     },
-    /// Message received from a concurrent sync session.
-    FromSync {
-        header: Header<E>,
-        body: Option<Body>,
-    },
+    /// Gracefully close the session.
     Close,
 }
 
@@ -384,6 +372,7 @@ pub enum TopicLogSyncMessage<T, L, E> {
         header: Header<E>,
         body: Option<Body>,
     },
+    Close,
 }
 
 /// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
@@ -434,7 +423,7 @@ pub mod tests {
     use std::collections::HashMap;
 
     use assert_matches::assert_matches;
-    use futures::StreamExt;
+    use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
     use crate::log_sync::{LogSyncEvent, LogSyncMessage, StatusEvent};
@@ -476,7 +465,7 @@ pub mod tests {
                 }
                 1 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 2 => assert_matches!(
                     event,
@@ -581,7 +570,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(
@@ -717,7 +706,7 @@ pub mod tests {
                 ),
                 1 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 2 => assert_matches!(
                     event,
@@ -766,7 +755,7 @@ pub mod tests {
                 ),
                 2 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 3 => {
                     assert_matches!(
@@ -853,16 +842,18 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (protocol, events_rx, mut live_mode_tx) =
+            peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
-        live_mode_tx.send(LiveModeMessage::Close).unwrap();
+        live_mode_tx.send(LiveModeMessage::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
         let remote_rx = run_protocol_uni(
@@ -907,7 +898,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(
@@ -964,7 +955,7 @@ pub mod tests {
         }
 
         let messages = remote_rx.collect::<Vec<_>>().await;
-        assert_eq!(messages.len(), 4);
+        assert_eq!(messages.len(), 5);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
@@ -982,6 +973,9 @@ pub mod tests {
                 } => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
+                }
+                4 => {
+                    assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
@@ -1011,24 +1005,27 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, live_mode_tx) = peer_a.topic_sync_protocol(Role::Accept, true);
+        let (protocol, events_rx, mut live_mode_tx) =
+            peer_a.topic_sync_protocol(Role::Accept, true);
 
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
         // Sending subscription message twice.
         live_mode_tx
-            .send(LiveModeMessage::FromSub {
-                header: header_2.clone(),
+            .send(LiveModeMessage::Operation {
+                header: Box::new(header_2.clone()),
                 body: Some(body.clone()),
             })
+            .await
             .unwrap();
 
-        live_mode_tx.send(LiveModeMessage::Close).unwrap();
+        live_mode_tx.send(LiveModeMessage::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
         let remote_rx = run_protocol_uni(
@@ -1083,7 +1080,7 @@ pub mod tests {
                 ),
                 2 => assert_matches!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(_))
                 ),
                 3 => {
                     assert_matches!(
@@ -1140,7 +1137,7 @@ pub mod tests {
         }
 
         let messages = remote_rx.collect::<Vec<_>>().await;
-        assert_eq!(messages.len(), 4);
+        assert_eq!(messages.len(), 5);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
@@ -1158,6 +1155,9 @@ pub mod tests {
             } => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
+                }
+                4 => {
+                    assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
