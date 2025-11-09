@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+/// Mapping of generic topics to session ids and of session ids to a channel sender.
 #[derive(Debug)]
 pub struct SessionTopicMap<T, TX> {
     pub(crate) accepting_sessions: HashSet<u64>,
@@ -26,6 +27,7 @@ impl<T, TX> SessionTopicMap<T, TX>
 where
     T: Clone + Hash + Eq,
 {
+    /// Insert a session id with their topic and tx channel.
     pub fn insert_with_topic(&mut self, session_id: u64, topic: T, tx: TX) {
         self.session_topic_map.insert(session_id, topic.clone());
         self.topic_session_map
@@ -37,11 +39,13 @@ where
         self.session_tx_map.insert(session_id, tx);
     }
 
+    /// Insert a session id and tx channel when the topic is not yet known.
     pub fn insert_accepting(&mut self, session_id: u64, tx: TX) {
         self.accepting_sessions.insert(session_id);
         self.session_tx_map.insert(session_id, tx);
     }
 
+    /// Upgrade an "accepting" session to a session with known topic.
     pub fn accepted(&mut self, session_id: u64, topic: T) -> bool {
         if self.accepting_sessions.remove(&session_id) {
             self.session_topic_map.insert(session_id, topic.clone());
@@ -56,6 +60,10 @@ where
         true
     }
 
+    /// Drop a session from all mappings.
+    /// 
+    /// Returns true if the session existed and was dropped, otherwise returns false when the
+    /// session was known
     pub fn drop(&mut self, session_id: u64) -> bool {
         if self.accepting_sessions.remove(&session_id) {
             self.session_tx_map.remove(&session_id);
@@ -73,10 +81,14 @@ where
         true
     }
 
+    /// Get the topic for a session id.
+    /// 
+    /// Returns None of the session id was not known.
     pub fn topic(&self, session_id: u64) -> Option<&T> {
         self.session_topic_map.get(&session_id)
     }
 
+    /// Get ids for all sessions associated with the given topic.
     pub fn sessions(&self, topic: &T) -> HashSet<u64> {
         self.topic_session_map
             .get(topic)
@@ -84,10 +96,12 @@ where
             .unwrap_or_default()
     }
 
+    /// Get a reference to a session sender.
     pub fn sender(&self, session_id: u64) -> Option<&TX> {
         self.session_tx_map.get(&session_id)
     }
 
+    /// Get a mutable reference to a session sender.
     pub fn sender_mut(&mut self, session_id: u64) -> Option<&mut TX> {
         self.session_tx_map.get_mut(&session_id)
     }

@@ -26,6 +26,19 @@ use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 type SessionEventReceiver<T, M> =
     Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> SyncManagerEvent<T, M>>>;
 
+/// Create and manage topic log sync sessions.
+/// 
+/// Sync sessions are created via the manager, which instantiates them with access to the shared
+/// topic map and operation store as well as channels for receiving sync events and for sending
+/// newly arriving operations in live mode.
+/// 
+/// The manager method `next_event` must be polled in order to consume events coming from any
+/// running sync sessions, as well as to allow the manager to perform important event forwarding
+/// between sync sessions.
+/// 
+/// A handle can be acquired to a sync session via the session_handle method for sending any live
+/// mode operations to a specific session. It's expected that users map sessions (by their id) to
+/// any topic subscriptions in order to understand the correct mappings.  
 pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) topic_map: M,
     pub(crate) store: S,
