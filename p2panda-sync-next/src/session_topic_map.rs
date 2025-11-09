@@ -61,7 +61,7 @@ where
     }
 
     /// Drop a session from all mappings.
-    /// 
+    ///
     /// Returns true if the session existed and was dropped, otherwise returns false when the
     /// session was known
     pub fn drop(&mut self, session_id: u64) -> bool {
@@ -82,7 +82,7 @@ where
     }
 
     /// Get the topic for a session id.
-    /// 
+    ///
     /// Returns None of the session id was not known.
     pub fn topic(&self, session_id: u64) -> Option<&T> {
         self.session_topic_map.get(&session_id)
