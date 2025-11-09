@@ -61,7 +61,7 @@ where
     S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
-    type Error = LogManagerError<T, S, M, L, E>;
+    type Error = TopicSyncManagerError<T, S, M, L, E>;
 
     fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(128);
@@ -146,6 +146,8 @@ where
         };
 
         let SyncManagerEvent::FromSync { session_id, event } = &manager_event else {
+            // NOTE: events from sync sessions are mapped to FromSync events in the manager so we
+            // can always expect only this event variant.
             panic!("only sync events are emitted from session channels");
         };
         let session_id = *session_id;
@@ -172,8 +174,7 @@ where
 
         if let Some((header, body)) = operation {
             let Some(topic) = self.session_topic_map.topic(session_id) else {
-                panic!();
-                // TODO: Error("received unexpected operation")
+                return Err(TopicSyncManagerError::OperationBeforeTopic);
             };
             let keys = self.session_topic_map.sessions(topic);
             let mut dropped = vec![];
@@ -186,8 +187,7 @@ where
                 // Forward live operation to all concurrent sessions. If they have indeed seen
                 // this operation before they will deduplicate it themselves.
                 let Some(tx) = self.session_topic_map.sender_mut(id) else {
-                    panic!();
-                    // Error("missing session channel")
+                    return Err(TopicSyncManagerError::MissingSessionChannel(id));
                 };
                 let result = tx
                     .send(LiveModeMessage::Operation {
@@ -214,7 +214,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum LogManagerError<T, S, M, L, E>
+pub enum TopicSyncManagerError<T, S, M, L, E>
 where
     T: TopicQuery,
     S: LogStore<L, E> + OperationStore<L, E> + Clone,
@@ -222,6 +222,12 @@ where
 {
     #[error(transparent)]
     TopicLogSync(#[from] TopicLogSyncError<T, S, M, L, E>),
+
+    #[error("received operation before topic agreed")]
+    OperationBeforeTopic,
+
+    #[error("missing tx channel for session: {0}")]
+    MissingSessionChannel(u64),
 
     #[error(transparent)]
     Send(#[from] mpsc::SendError),
