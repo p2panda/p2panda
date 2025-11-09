@@ -172,7 +172,6 @@ where
                         // Insert operation hash into deduplication buffer and if it was
                         // previously present do not forward the operation to the application layer.
                         if !dedup.insert(header.hash()) {
-                            println!("ignore from stream duplicate");
                             continue;
                         }
 
