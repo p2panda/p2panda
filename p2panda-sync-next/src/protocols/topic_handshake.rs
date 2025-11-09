@@ -35,6 +35,7 @@ where
 {
     type Error = TopicHandshakeError<T>;
     type Output = ();
+    type Event = TopicHandshakeEvent<T>;
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(
@@ -68,7 +69,9 @@ where
             .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
 
         // Announce that the topic handshake session has completed successfully.
-        self.event_tx.send(TopicHandshakeEvent::Done.into()).await?;
+        self.event_tx
+            .send(TopicHandshakeEvent::Done(self.topic).into())
+            .await?;
 
         sink.flush()
             .await
@@ -107,6 +110,7 @@ where
 {
     type Error = TopicHandshakeError<T>;
     type Output = T;
+    type Event = TopicHandshakeEvent<T>;
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(
@@ -150,7 +154,9 @@ where
         };
 
         // Announce that the topic handshake session completed successfully.
-        self.event_tx.send(TopicHandshakeEvent::Done.into()).await?;
+        self.event_tx
+            .send(TopicHandshakeEvent::Done(topic.clone()).into())
+            .await?;
 
         sink.flush()
             .await
@@ -169,7 +175,7 @@ pub enum TopicHandshakeMessage<T> {
 }
 
 /// Protocol error types.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum TopicHandshakeError<T> {
     #[error("unexpected protocol message: {0}")]
     UnexpectedMessage(TopicHandshakeMessage<T>),
@@ -193,5 +199,5 @@ pub enum TopicHandshakeEvent<T> {
     Initiate(T),
     Accept,
     TopicReceived(T),
-    Done,
+    Done(T),
 }
