@@ -13,14 +13,13 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tokio::join;
 
+use crate::TopicSyncManager;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
-use crate::manager::TopicSyncManager;
 use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
-use crate::traits::Protocol;
-use crate::traits::TopicQuery;
+use crate::traits::{Protocol, TopicQuery};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;

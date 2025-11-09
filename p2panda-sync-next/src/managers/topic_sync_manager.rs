@@ -256,8 +256,8 @@ mod tests {
     use p2panda_core::Header;
     use p2panda_core::{Body, cbor::encode_cbor};
 
+    use crate::TopicSyncManager;
     use crate::log_sync::{LogSyncEvent, StatusEvent};
-    use crate::manager::TopicSyncManager;
     use crate::test_utils::{LogIdExtension, Peer, TestTopic, TestTopicSyncEvent, run_protocol};
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;

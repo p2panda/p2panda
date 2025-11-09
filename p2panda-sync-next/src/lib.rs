@@ -3,7 +3,7 @@
 #[cfg(any(test, feature = "cbor"))]
 pub mod cbor;
 pub mod dedup;
-pub mod manager;
+pub mod managers;
 pub mod protocols;
 pub mod session_topic_map;
 #[cfg(any(test, feature = "test_utils"))]
@@ -11,6 +11,7 @@ pub mod test_utils;
 pub mod traits;
 
 pub use dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
+pub use managers::topic_sync_manager::TopicSyncManager;
 pub use protocols::{log_sync, topic_handshake, topic_log_sync};
 pub use session_topic_map::SessionTopicMap;
 
