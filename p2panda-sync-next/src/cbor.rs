@@ -334,7 +334,7 @@ mod tests {
                 ),
                 1 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 2 => assert_matches!(
                     event,
@@ -384,7 +384,7 @@ mod tests {
                 ),
                 2 => assert_eq!(
                     event,
-                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done)
+                    TestTopicSyncEvent::Handshake(TopicHandshakeEvent::Done(topic.clone()))
                 ),
                 3 => {
                     assert_matches!(
