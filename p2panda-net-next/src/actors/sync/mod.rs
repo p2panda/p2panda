@@ -5,7 +5,7 @@ use ractor::{
 };
 
 /// Sync manager actor name.
-pub const SYNC_MANAGER: &str = "net.sync.manager";
+pub const SYNC_MANAGER: &str = "net.sync_manager";
 
 #[derive(Default)]
 pub struct SyncManager;
