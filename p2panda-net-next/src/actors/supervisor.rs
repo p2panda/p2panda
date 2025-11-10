@@ -209,11 +209,11 @@ impl ThreadLocalActor for Supervisor {
 #[cfg(test)]
 mod tests {
     use p2panda_core::PrivateKey;
-    use ractor::Actor;
+    use ractor::actor::actor_cell::ActorStatus;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+    use ractor::{Actor, registry};
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
 
     use crate::actors::address_book::ADDRESS_BOOK;
     use crate::actors::discovery::DISCOVERY;
@@ -225,7 +225,6 @@ mod tests {
     use super::{SUPERVISOR, Supervisor};
 
     #[tokio::test]
-    #[traced_test]
     #[serial]
     async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
@@ -243,19 +242,27 @@ mod tests {
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
 
+        // Ensure all actors spawned directly by the supervisor are running.
+        let events_actor = registry::where_is(with_namespace(EVENTS, &actor_namespace));
+        assert!(events_actor.is_some());
+        assert_eq!(events_actor.unwrap().get_status(), ActorStatus::Running);
+
+        let address_book_actor = registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace));
+        assert!(address_book_actor.is_some());
+        assert_eq!(
+            address_book_actor.unwrap().get_status(),
+            ActorStatus::Running
+        );
+
+        let endpoint_supervisor =
+            registry::where_is(with_namespace(ENDPOINT_SUPERVISOR, &actor_namespace));
+        assert!(endpoint_supervisor.is_some());
+        assert_eq!(
+            endpoint_supervisor.unwrap().get_status(),
+            ActorStatus::Running
+        );
+
         supervisor_actor.stop(None);
         supervisor_actor_handle.await.unwrap();
-
-        assert!(logs_contain(&format!(
-            "{SUPERVISOR} actor: received ready from {EVENTS} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{SUPERVISOR} actor: received ready from {ADDRESS_BOOK} actor"
-        ),));
-        assert!(logs_contain(&format!(
-            "{SUPERVISOR} actor: received ready from {ENDPOINT_SUPERVISOR} actor"
-        )));
-
-        assert!(!logs_contain("actor failed"));
     }
 }

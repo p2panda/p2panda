@@ -220,10 +220,11 @@ impl ThreadLocalActor for StreamSupervisor {
 
 #[cfg(test)]
 mod tests {
+    use ractor::actor::actor_cell::ActorStatus;
+    use ractor::registry;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
 
     use crate::actors::gossip::GOSSIP;
     use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
@@ -236,7 +237,6 @@ mod tests {
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
     #[tokio::test]
-    #[traced_test]
     #[serial]
     async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
@@ -255,7 +255,7 @@ mod tests {
 
         // Spawn the stream supervisor.
         let (stream_supervisor, stream_supervisor_handle) = StreamSupervisor::spawn(
-            Some(STREAM_SUPERVISOR.to_string()),
+            Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
             args.clone(),
             args.root_thread_pool.clone(),
         )
@@ -265,20 +265,22 @@ mod tests {
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
 
+        // Ensure all actors spawned by the stream supervisor are running.
+        let sync_manager = registry::where_is(with_namespace(SYNC_MANAGER, &actor_namespace));
+        assert!(sync_manager.is_some());
+        assert_eq!(sync_manager.unwrap().get_status(), ActorStatus::Running);
+
+        let gossip_actor = registry::where_is(with_namespace(GOSSIP, &actor_namespace));
+        assert!(gossip_actor.is_some());
+        assert_eq!(gossip_actor.unwrap().get_status(), ActorStatus::Running);
+
+        let stream_actor = registry::where_is(with_namespace(STREAM, &actor_namespace));
+        assert!(stream_actor.is_some());
+        assert_eq!(stream_actor.unwrap().get_status(), ActorStatus::Running);
+
         stream_supervisor.stop(None);
         stream_supervisor_handle.await.unwrap();
         endpoint_actor.stop(None);
         endpoint_actor_handle.await.unwrap();
-
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {SYNC_MANAGER} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {GOSSIP} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {STREAM} actor"
-        )));
-        assert!(!logs_contain("actor failed"));
     }
 }
