@@ -644,6 +644,9 @@ mod tests {
         let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
 
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
+
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
         let mut ant_from_gossip_rx = ant_from_gossip.subscribe();
@@ -779,6 +782,9 @@ mod tests {
         let (_bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
 
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
+
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
 
@@ -793,6 +799,9 @@ mod tests {
         // Cat subscribes to topic using bat as bootstrap.
         let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
 
         let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
