@@ -20,6 +20,7 @@ use crate::TopicId;
 use crate::actors::discovery::DISCOVERY_PROTOCOL_ID;
 use crate::actors::discovery::session::{DiscoverySession, DiscoverySessionArguments};
 use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker};
+use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::register_protocol;
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
@@ -76,6 +77,7 @@ where
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (args, store) = args;
+        let actor_namespace = generate_actor_namespace(&args.public_key);
         let pool = ThreadLocalActorSpawner::new();
 
         // Accept incoming "discovery protocol" connection requests.
@@ -87,6 +89,7 @@ where
                 store: store.clone(),
                 pool: pool.clone(),
             },
+            actor_namespace,
         )?;
 
         // Spawn random walkers. They start automatically and initiate discovery sessions.
@@ -119,6 +122,7 @@ where
                 DiscoverySession::spawn_linked(
                     None,
                     (
+                        generate_actor_namespace(&state.args.public_key),
                         node_id,
                         state.store.clone(),
                         myself.clone(),
@@ -180,6 +184,7 @@ where
         let (_, handle) = DiscoverySession::spawn_linked(
             None,
             (
+                generate_actor_namespace(&self.args.public_key),
                 to_public_key(connection.remote_id()),
                 self.store.clone(),
                 self.manager_ref.clone(),

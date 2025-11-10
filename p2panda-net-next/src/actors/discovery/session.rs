@@ -13,6 +13,7 @@ use ractor::{Actor, ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use crate::actors::ActorNamespace;
 use crate::actors::discovery::manager::SubscriptionInfo;
 use crate::actors::discovery::walker::ToDiscoveryWalker;
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
@@ -67,6 +68,7 @@ where
     type Msg = ();
 
     type Arguments = (
+        ActorNamespace,
         NodeId,
         S,
         ActorRef<ToDiscoveryManager<T>>,
@@ -78,13 +80,14 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (remote_node_id, store, manager_ref, args) = args;
+        let (actor_namespace, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
         let (connection, walker_ref) = match args {
             DiscoverySessionArguments::Connect { walker_ref } => {
                 // Try to establish a direct connection with this node.
-                let connection = connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID).await?;
+                let connection =
+                    connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
                 (connection, Some(walker_ref))
             }
             DiscoverySessionArguments::Accept { connection } => (connection, None),
