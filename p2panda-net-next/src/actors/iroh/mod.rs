@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
+use crate::actors::{ActorNamespace, with_namespace};
 use crate::addrs::NodeId;
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
@@ -16,11 +17,12 @@ pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 pub fn register_protocol<P>(
     protocol_id: impl AsRef<[u8]>,
     handler: P,
+    actor_namespace: ActorNamespace,
 ) -> Result<(), RegisterProtocolError>
 where
     P: ProtocolHandler,
 {
-    let Some(actor) = registry::where_is(IROH_ENDPOINT.into()) else {
+    let Some(actor) = registry::where_is(with_namespace(IROH_ENDPOINT, &actor_namespace)) else {
         return Err(RegisterProtocolError::ActorNotAvailable);
     };
 
@@ -49,12 +51,14 @@ pub enum RegisterProtocolError {
 pub async fn connect<T>(
     node_id: NodeId,
     protocol_id: impl AsRef<[u8]>,
+    actor_namespace: ActorNamespace,
 ) -> Result<iroh::endpoint::Connection, ConnectError>
 where
     T: Send + 'static,
 {
     // Ask address book for available node information.
-    let Some(address_book) = registry::where_is(ADDRESS_BOOK.into()) else {
+    let Some(address_book) = registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
+    else {
         return Err(ConnectError::ActorNotAvailable(ADDRESS_BOOK.into()));
     };
     let Some(node_info) = call!(
@@ -72,7 +76,7 @@ where
         .map_err(|_| ConnectError::NoAddressInfo(node_id))?;
 
     // Connect with iroh.
-    let Some(actor) = registry::where_is(IROH_ENDPOINT.into()) else {
+    let Some(actor) = registry::where_is(with_namespace(IROH_ENDPOINT, &actor_namespace)) else {
         return Err(ConnectError::ActorNotAvailable(IROH_ENDPOINT.into()));
     };
     let result = call!(
