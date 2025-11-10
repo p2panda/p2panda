@@ -7,9 +7,9 @@
 //!
 //! ```plain
 //! - "Root" Supervisor
-//!     - "Endpoint" Supervisor
-//!     - "Address Book" Actor
 //!     - "Events" Actor
+//!     - "Address Book" Actor
+//!     - "Endpoint" Supervisor
 //! ```
 //!
 //! This supervisor spawns the events and address book actors. It also spawns the endpoint

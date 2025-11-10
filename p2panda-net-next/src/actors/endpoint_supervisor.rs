@@ -4,9 +4,9 @@
 //!
 //! ```plain
 //! - "Endpoint" Supervisor
-//!     - "Stream" Supervisor
 //!     - "Iroh Endpoint" Actor
 //!     - "Discovery Manager" Actor
+//!     - "Stream" Supervisor
 //! ```
 //!
 //! This supervisor monitors the health of the iroh endpoint actor, as well as the stream and
