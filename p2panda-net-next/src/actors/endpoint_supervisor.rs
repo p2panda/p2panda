@@ -78,7 +78,6 @@ where
     ) -> Result<Self::State, ActorProcessingErr> {
         let (args, store) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
-        let pool = ThreadLocalActorSpawner::new();
 
         // Spawn the endpoint actor.
         let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
@@ -89,11 +88,12 @@ where
         )
         .await?;
 
+        // Spawn the discovery manager actor.
         let (discovery_manager_actor, _) = DiscoveryManager::spawn_linked(
             Some(with_namespace(DISCOVERY_MANAGER, &actor_namespace)),
             (args.clone(), store.clone()),
             myself.clone().into(),
-            pool.clone(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 

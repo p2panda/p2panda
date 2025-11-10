@@ -239,10 +239,8 @@ mod tests {
 
     #[tokio::test]
     async fn child_actors_started() {
-        let private_key: PrivateKey = Default::default();
-        let actor_namespace = generate_actor_namespace(&private_key.public_key());
-
         let (args, store) = test_args();
+        let actor_namespace = generate_actor_namespace(&args.public_key);
 
         let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
