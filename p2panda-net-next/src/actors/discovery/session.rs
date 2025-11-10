@@ -8,7 +8,6 @@ use std::marker::PhantomData;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
 use p2panda_discovery::traits::{DiscoveryProtocol as _, SubscriptionInfo as _};
-use p2panda_sync::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
@@ -20,6 +19,7 @@ use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
+use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
 
 pub struct DiscoverySession<S, T> {
     _marker: PhantomData<(S, T)>,
