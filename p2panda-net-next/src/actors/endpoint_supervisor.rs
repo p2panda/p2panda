@@ -14,9 +14,8 @@
 //! respawned (including the stream and discovery actors); this is necessary because stream and
 //! discovery are indirectly reliant on a functioning endpoint actor. If either the stream or
 //! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
-use p2panda_core::PrivateKey;
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
 
 use crate::actors::discovery::{DISCOVERY, Discovery};

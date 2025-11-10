@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, SupervisionEvent, thread_local::ThreadLocalActor,
-};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef};
 
 /// Sync manager actor name.
 pub const SYNC_MANAGER: &str = "net.sync_manager";

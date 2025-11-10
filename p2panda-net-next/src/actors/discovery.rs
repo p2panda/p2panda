@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Discovery actor.
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, SupervisionEvent, thread_local::ThreadLocalActor,
-};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef};
 
 /// Discovery actor name.
 pub const DISCOVERY: &str = "net.discovery";

@@ -15,29 +15,20 @@
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
 //! `Endpoint` to be passed into the gossip actor in the event that it needs to be respawned (since
 //! the `Endpoint` is needed to instantiate iroh `Gossip`).
-use std::collections::HashMap;
-use std::sync::mpsc::sync_channel;
 
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry,
-};
-use tokio::sync::broadcast::Sender as BroadcastSender;
-use tokio::sync::mpsc::Sender;
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{debug, warn};
 
-use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::stream::{STREAM, Stream, ToStream};
 use crate::actors::sync::{SYNC_MANAGER, SyncManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
-use crate::network::{FromNetwork, ToNetwork};
-use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
 use crate::utils::to_public_key;
 
 pub struct StreamSupervisorState {
@@ -222,7 +213,7 @@ impl ThreadLocalActor for StreamSupervisor {
 mod tests {
     use ractor::actor::actor_cell::ActorStatus;
     use ractor::registry;
-    use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+    use ractor::thread_local::ThreadLocalActor;
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
 
@@ -232,7 +223,6 @@ mod tests {
     use crate::actors::sync::SYNC_MANAGER;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
-    use crate::utils::to_public_key;
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 

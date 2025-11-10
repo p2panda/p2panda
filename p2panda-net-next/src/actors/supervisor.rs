@@ -15,19 +15,16 @@
 //! This supervisor spawns the events and address book actors. It also spawns the endpoint
 //! supervisor which is responsible for spawning and monitoring the iroh actors and all others
 //! which are reliant on them (e.g. discovery, gossip and sync).
-use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::discovery::{DISCOVERY, Discovery};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
 use crate::actors::events::{EVENTS, Events, ToEvents};
-use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
 use crate::{NodeId, NodeInfo};
@@ -208,15 +205,13 @@ impl ThreadLocalActor for Supervisor {
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::PrivateKey;
     use ractor::actor::actor_cell::ActorStatus;
+    use ractor::registry;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-    use ractor::{Actor, registry};
     use serial_test::serial;
     use tokio::time::{Duration, sleep};
 
     use crate::actors::address_book::ADDRESS_BOOK;
-    use crate::actors::discovery::DISCOVERY;
     use crate::actors::endpoint_supervisor::ENDPOINT_SUPERVISOR;
     use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};

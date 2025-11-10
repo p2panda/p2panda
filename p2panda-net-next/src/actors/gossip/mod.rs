@@ -25,7 +25,6 @@ use tracing::{debug, warn};
 use crate::TopicId;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
 use crate::network::FromNetwork;
-use crate::utils::from_private_key;
 use crate::utils::from_public_key;
 
 /// Gossip actor name.
@@ -405,7 +404,7 @@ mod tests {
     use iroh::discovery::EndpointInfo;
     use iroh::discovery::static_provider::StaticProvider;
     use iroh::protocol::Router as IrohRouter;
-    use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode};
+    use iroh::{Endpoint as IrohEndpoint, RelayMode};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -416,7 +415,7 @@ mod tests {
 
     use crate::actors::test_utils::{ActorResult, TestSupervisor};
     use crate::network::FromNetwork;
-    use crate::utils::{from_private_key, from_public_key};
+    use crate::utils::from_private_key;
 
     use super::{Gossip, GossipState, ToGossip};
 
@@ -546,7 +545,7 @@ mod tests {
         let Ok(ant_gossip_actor_result) = ant_supervisor_rx.await else {
             panic!("expected result from gossip actor")
         };
-        let ActorResult::Terminated(state, reason) = ant_gossip_actor_result else {
+        let ActorResult::Terminated(state, _reason) = ant_gossip_actor_result else {
             panic!("expected clean termination of gossip actor")
         };
         let Some(mut boxed_state) = state else {

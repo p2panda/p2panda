@@ -5,8 +5,7 @@
 //! Receives events from other actors, aggregating and enriching them before informing
 //! upstream subscribers.
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
-use tracing::debug;
+use ractor::{ActorProcessingErr, ActorRef};
 
 /// Events actor name.
 pub const EVENTS: &str = "net.events";

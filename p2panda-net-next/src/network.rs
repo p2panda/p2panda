@@ -2,11 +2,10 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::{PrivateKey, PublicKey};
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{Actor, ActorRef, call, registry};
+use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -14,7 +13,6 @@ use crate::actors::stream::{STREAM, ToStream};
 use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
-use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
 use crate::{NetworkId, TopicId};
 

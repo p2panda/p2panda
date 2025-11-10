@@ -3,19 +3,15 @@
 //! Actor managing an endpoint to establish direct or relayed connections over the Internet
 //! Protocol using the "iroh" crate.
 use std::collections::BTreeMap;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
-use std::time::Duration;
 
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
-use tracing::warn;
 
-use crate::actors::events::ToEvents;
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
@@ -87,7 +83,6 @@ impl ThreadLocalActor for IrohEndpoint {
         let socket_address_v6 = SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
         // Register list of possible "home relays" for this node.
-        let relay_provided = !config.relay_urls.is_empty();
         let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
         let relay_mode = iroh::RelayMode::Custom(relay_map);
 
@@ -109,7 +104,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     let Some(incoming) = endpoint.accept().await else {
                         break; // Endpoint is closed.
                     };
-                    myself.send_message(ToIrohEndpoint::Incoming(incoming));
+                    let _ = myself.send_message(ToIrohEndpoint::Incoming(incoming));
                 }
             })
         };
@@ -135,7 +130,7 @@ impl ThreadLocalActor for IrohEndpoint {
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {

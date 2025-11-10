@@ -10,17 +10,14 @@ use std::collections::HashMap;
 /// Stream actor name.
 pub const STREAM: &str = "net.stream";
 
-use iroh::Endpoint as IrohEndpoint;
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, warn};
 
 use crate::TopicId;
-use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
-use crate::actors::sync::SYNC_MANAGER;
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::actors::ActorNamespace;
+use crate::actors::gossip::ToGossip;
 use crate::network::{FromNetwork, ToNetwork};
 use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
 
@@ -53,7 +50,7 @@ impl ThreadLocalActor for Stream {
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (actor_namespace, sync_actor, gossip_actor) = args;
