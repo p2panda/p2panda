@@ -10,8 +10,6 @@ pub mod stream;
 mod stream_supervisor;
 pub mod supervisor;
 mod sync;
-#[cfg(test)]
-mod test_utils;
 
 use p2panda_core::PublicKey;
 

@@ -20,7 +20,7 @@
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
+use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{debug, warn};
 
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
