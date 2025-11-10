@@ -81,11 +81,11 @@ impl ThreadLocalActor for StreamSupervisor {
         .await?;
 
         // Spawn the gossip actor.
-        let (gossip_actor, _) = Actor::spawn_linked(
+        let (gossip_actor, _) = Gossip::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
-            Gossip,
             endpoint.clone(),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
@@ -160,11 +160,11 @@ impl ThreadLocalActor for StreamSupervisor {
                         );
 
                         // Respawn the gossip actor.
-                        let (gossip_actor, _) = Actor::spawn_linked(
+                        let (gossip_actor, _) = Gossip::spawn_linked(
                             Some(with_namespace(GOSSIP, &actor_namespace)),
-                            Gossip,
                             state.endpoint.clone(),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 

@@ -16,7 +16,7 @@ use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDelive
 use p2panda_core::PublicKey;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::thread_local::ThreadLocalActorSpawner;
-use ractor::{Actor, ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
@@ -78,6 +78,10 @@ pub enum ToGossip {
         topic_id: TopicId,
         session_id: ActorId,
     },
+
+    /// Returns current actor's state for testing purposes.
+    #[cfg(test)]
+    DebugState(RpcReplyPort<tests::DebugState>),
 }
 
 /// Actor references and channels for gossip sessions.
@@ -101,7 +105,7 @@ pub struct GossipState {
 #[derive(Default)]
 pub struct Gossip;
 
-impl Actor for Gossip {
+impl ThreadLocalActor for Gossip {
     type State = GossipState;
     type Msg = ToGossip;
     type Arguments = IrohEndpoint;
@@ -330,6 +334,11 @@ impl Actor for Gossip {
 
                 Ok(())
             }
+            #[cfg(test)]
+            ToGossip::DebugState(reply) => {
+                let _ = reply.send(state.into());
+                Ok(())
+            }
         }
     }
 
@@ -399,6 +408,7 @@ impl Actor for Gossip {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
     use iroh::discovery::EndpointInfo;
@@ -407,17 +417,33 @@ mod tests {
     use iroh::{Endpoint as IrohEndpoint, RelayMode};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
+    use p2panda_core::PublicKey;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-    use ractor::{Actor, call};
+    use ractor::{ActorRef, call};
     use tokio::sync::broadcast::error::TryRecvError;
-    use tokio::sync::oneshot;
     use tokio::time::sleep;
 
-    use crate::actors::test_utils::{ActorResult, TestSupervisor};
+    use crate::TopicId;
+    use crate::actors::gossip::session::ToGossipSession;
     use crate::network::FromNetwork;
     use crate::utils::from_private_key;
 
     use super::{Gossip, GossipState, ToGossip};
+
+    // Use this internal type to introspect the actor's current state.
+    pub struct DebugState {
+        neighbours: HashMap<TopicId, HashSet<PublicKey>>,
+        sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    }
+
+    impl From<&mut GossipState> for DebugState {
+        fn from(value: &mut GossipState) -> Self {
+            Self {
+                neighbours: value.neighbours.clone(),
+                sessions_by_topic_id: value.sessions.sessions_by_topic_id.clone(),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn correct_termination_state() {
@@ -482,15 +508,15 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -522,52 +548,25 @@ mod tests {
         let (_cat_to_gossip, mut _cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
 
-        // Spawn a test supervisor actor.
-        let (ant_supervisor_tx, ant_supervisor_rx) = oneshot::channel();
-        let (ant_supervisor_actor, ant_supervisor_actor_handle) =
-            TestSupervisor::spawn(None, ant_supervisor_tx, thread_pool.clone())
-                .await
-                .unwrap();
-
-        // Link ant's gossip actor to the test supervisor.
-        ant_gossip_actor.link(ant_supervisor_actor.into());
-
         // Briefly sleep to allow overlay to form.
         sleep(Duration::from_millis(100)).await;
 
-        // Stop ant's actors and router.
-        ant_gossip_actor.stop(None);
-        ant_gossip_actor_handle.await.unwrap();
-
-        ant_router.shutdown().await.unwrap();
-
-        // Get the termination result from ant's supervisor actor.
-        let Ok(ant_gossip_actor_result) = ant_supervisor_rx.await else {
-            panic!("expected result from gossip actor")
-        };
-        let ActorResult::Terminated(state, _reason) = ant_gossip_actor_result else {
-            panic!("expected clean termination of gossip actor")
-        };
-        let Some(mut boxed_state) = state else {
-            panic!("expected state to be returned from terminated gossip actor")
-        };
-
         // Ensure state expectations are correct for ant's gossip actor.
-        if let Ok(state) = boxed_state.take::<GossipState>() {
-            assert!(state.sessions.sessions_by_topic_id.contains_key(&topic_id));
-
-            let neighbours = state.neighbours.get(&topic_id).unwrap();
-            assert!(neighbours.contains(&bat_public_key));
-            assert!(neighbours.contains(&cat_public_key));
-        }
+        let ant_state = call!(ant_gossip_actor, ToGossip::DebugState).unwrap();
+        assert!(ant_state.sessions_by_topic_id.contains_key(&topic_id));
+        let neighbours = ant_state.neighbours.get(&topic_id).unwrap();
+        assert!(neighbours.contains(&bat_public_key));
+        assert!(neighbours.contains(&cat_public_key));
 
         // Stop all other actors and routers.
+        ant_gossip_actor.stop(None);
         bat_gossip_actor.stop(None);
         cat_gossip_actor.stop(None);
+        ant_gossip_actor_handle.await.unwrap();
         bat_gossip_actor_handle.await.unwrap();
         cat_gossip_actor_handle.await.unwrap();
-        ant_supervisor_actor_handle.await.unwrap();
 
+        ant_router.shutdown().await.unwrap();
         bat_router.shutdown().await.unwrap();
         cat_router.shutdown().await.unwrap();
     }
@@ -614,12 +613,13 @@ mod tests {
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -742,15 +742,15 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -903,16 +903,17 @@ mod tests {
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
