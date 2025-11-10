@@ -142,7 +142,7 @@ where
 
                 // @TODO: spawn the sync session. Not clear if this should be an actor yet, if we
                 // can't tap into the lifetime events (see below) then maybe better to spawn a
-                // task on a local set for now. 
+                // task on a local set for now.
             }
             ToSyncManager::Accept {
                 node_id,
@@ -256,7 +256,7 @@ where
             }
             SupervisionEvent::ActorTerminated(actor, state, reason) => {
                 // @TODO: drop related session handle on manager.
-                // @TODO: need the session id to remove the session from manager state mappings. 
+                // @TODO: need the session id to remove the session from manager state mappings.
                 // Self::drop_session(state, session_id);
             }
             SupervisionEvent::ActorFailed(actor, error) => {
@@ -347,25 +347,10 @@ where
                 connection,
             })
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-        //         let (_, handle) = SyncSession::spawn_linked(
-        //             None,
-        //             (
-        //                 to_public_key(connection.remote_id()),
-        //                 self.store.clone(),
-        //                 self.manager_ref.clone(),
-        //                 SyncSessionArguments::Accept { connection },
-        //             ),
-        //             self.manager_ref.clone().into(),
-        //             self.pool.clone(),
-        //         )
-        //         .await
-        //         .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-        //
-        // Wait until discovery session ended (failed or successful).
-        // handle
-        //     .await
-        //     .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-
+        
+        // @TODO: do we need to await the protocol running here as is done in discover protocol
+        // connection handler? 
+        
         Ok(())
     }
 }
