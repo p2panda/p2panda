@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+
+mod manager;
+mod session;
+
+pub use manager::{SYNC_MANAGER, SyncManager, ToSyncManager};
+
+pub const SYNC_PROTOCOL_ID: &[u8] = b"p2panda/sync/v1";
+
+// @TODO: remove all of this when all other actors using sync are updated.
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-
-/// Sync manager actor name.
-pub const SYNC_MANAGER: &str = "net.sync_manager";
-
-pub enum ToSyncManager {}
 
 #[derive(Default)]
 pub struct SyncManager;
