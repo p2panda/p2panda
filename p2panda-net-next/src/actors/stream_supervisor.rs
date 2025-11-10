@@ -214,7 +214,6 @@ mod tests {
     use ractor::actor::actor_cell::ActorStatus;
     use ractor::registry;
     use ractor::thread_local::ThreadLocalActor;
-    use serial_test::serial;
     use tokio::time::{Duration, sleep};
 
     use crate::actors::gossip::GOSSIP;
@@ -227,7 +226,6 @@ mod tests {
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
     #[tokio::test]
-    #[serial]
     async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
         let actor_namespace = generate_actor_namespace(&args.public_key);

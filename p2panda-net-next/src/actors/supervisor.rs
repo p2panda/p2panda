@@ -208,7 +208,6 @@ mod tests {
     use ractor::actor::actor_cell::ActorStatus;
     use ractor::registry;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-    use serial_test::serial;
     use tokio::time::{Duration, sleep};
 
     use crate::actors::address_book::ADDRESS_BOOK;
@@ -220,7 +219,6 @@ mod tests {
     use super::{SUPERVISOR, Supervisor};
 
     #[tokio::test]
-    #[serial]
     async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
         let actor_namespace = generate_actor_namespace(&args.public_key);
