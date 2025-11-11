@@ -43,6 +43,9 @@ pub enum ToDiscoveryManager<T> {
 
     /// Received result from a successful discovery session.
     FinishSession(DiscoverySessionId, DiscoveryResult<T, NodeId, NodeInfo>),
+
+    /// Handle failed discovery session.
+    FinishFailedSession(DiscoverySessionId),
 }
 
 pub struct DiscoveryManagerState<S, T> {
@@ -52,8 +55,8 @@ pub struct DiscoveryManagerState<S, T> {
     pool: ThreadLocalActorSpawner,
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
+    walkers: HashMap<usize, WalkerInfo<T>>,
     metrics: DiscoveryMetrics,
-    _marker: PhantomData<T>,
 }
 
 impl<S, T> DiscoveryManagerState<S, T> {
@@ -71,7 +74,7 @@ pub struct DiscoveryMetrics {
     newly_learned_transport_infos: usize,
 }
 
-#[allow(unused, reason = "use when exposing metrics to the high-level api")]
+#[allow(unused)]
 pub enum DiscoverySessionInfo {
     Initiated {
         remote_node_id: NodeId,
@@ -86,6 +89,15 @@ pub enum DiscoverySessionInfo {
         started_at: Instant,
         handle: JoinHandle<()>,
     },
+}
+
+pub struct WalkerInfo<T> {
+    #[allow(unused)]
+    walker_id: usize,
+    last_result: Option<DiscoveryResult<T, NodeId, NodeInfo>>,
+    walker_ref: ActorRef<ToDiscoveryWalker<T>>,
+    #[allow(unused)]
+    handle: JoinHandle<()>,
 }
 
 #[derive(Debug)]
@@ -132,14 +144,25 @@ where
         )?;
 
         // Spawn random walkers. They start automatically and initiate discovery sessions.
+        let mut walkers = HashMap::new();
         for walker_id in 0..args.discovery_config.random_walkers_count {
-            DiscoveryWalker::spawn_linked(
+            let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
                 Some(DiscoveryActorName::new_walker(walker_id).to_string(&actor_namespace)),
                 (args.clone(), store.clone(), myself.clone()),
                 myself.clone().into(),
                 pool.clone(),
             )
             .await?;
+
+            walkers.insert(
+                walker_id,
+                WalkerInfo {
+                    walker_id,
+                    last_result: None,
+                    walker_ref,
+                    handle,
+                },
+            );
         }
 
         Ok(DiscoveryManagerState {
@@ -149,8 +172,8 @@ where
             pool,
             next_session_id: 0,
             sessions: HashMap::new(),
+            walkers,
             metrics: DiscoveryMetrics::default(),
-            _marker: PhantomData,
         })
     }
 
@@ -178,7 +201,7 @@ where
                         node_id,
                         state.store.clone(),
                         myself.clone(),
-                        DiscoverySessionArguments::Connect { walker_ref },
+                        DiscoverySessionArguments::Connect,
                     ),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -230,7 +253,32 @@ where
             }
             ToDiscoveryManager::FinishSession(session_id, discovery_result) => {
                 state.metrics.successful_discovery_sessions += 1;
-                state.sessions.remove(&session_id);
+                let session_info = state
+                    .sessions
+                    .remove(&session_id)
+                    .expect("session info to exist when it successfully ended");
+
+                match session_info {
+                    DiscoverySessionInfo::Initiated { walker_id, .. } => {
+                        // Continue random walk.
+                        let info = state
+                            .walkers
+                            .get_mut(&walker_id)
+                            .expect("walker with this id must exist");
+                        let _ = info
+                            .walker_ref
+                            .send_message(ToDiscoveryWalker::NextNode(Some(
+                                discovery_result.clone(),
+                            )));
+
+                        // Keep the result around in case the next session fails.
+                        info.last_result = Some(discovery_result.clone());
+                    }
+                    DiscoverySessionInfo::Accepted { .. } => {
+                        // Do nothing here if this was an accepted session.
+                        // @TODO: We could do something fancy around metrics though.
+                    }
+                }
 
                 // Ignore missing address book actor or receive errors. This means the system is
                 // shutting down.
@@ -292,6 +340,32 @@ where
                     )
                 );
             }
+            ToDiscoveryManager::FinishFailedSession(session_id) => {
+                state.metrics.failed_discovery_sessions += 1;
+                let session_info = state
+                    .sessions
+                    .remove(&session_id)
+                    .expect("session info to exist when session failed");
+
+                match session_info {
+                    DiscoverySessionInfo::Initiated { walker_id, .. } => {
+                        // Continue random walk by re-using the previous result which hopefully
+                        // came from a successful session. The walker will then attempt continuing
+                        // with other nodes. If there is none left it will automatically start from
+                        // scratch.
+                        let info = state
+                            .walkers
+                            .get_mut(&walker_id)
+                            .expect("walker with this id must exist");
+                        let _ = info
+                            .walker_ref
+                            .send_message(ToDiscoveryWalker::NextNode(info.last_result.clone()));
+                    }
+                    DiscoverySessionInfo::Accepted { .. } => {
+                        // Do nothing here if this was an accepted session.
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -300,7 +374,7 @@ where
         &self,
         myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
-        state: &mut Self::State,
+        _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
             SupervisionEvent::ActorTerminated(actor, _, _) => {
@@ -321,18 +395,15 @@ where
                 match DiscoveryActorName::from_actor_cell(&actor) {
                     DiscoveryActorName::Walker { walker_id } => {
                         // If an walker actor failed, we're expecting a bug in our system and
-                        // escalate the error to a parent instance.
+                        // escalate the error to a parent supervisor which will probably restart
+                        // the whole thing.
                         return Err(ActorProcessingErr::from(format!(
                             "walker actor {walker_id} failed with error: {error}"
                         )));
                     }
                     DiscoveryActorName::Session { session_id }
                     | DiscoveryActorName::AcceptedSession { session_id } => {
-                        state.metrics.failed_discovery_sessions += 1;
-
-                        // Clean up failed actors as they likely did not send a "FinishSession"
-                        // message to us.
-                        state.sessions.remove(&session_id);
+                        myself.send_message(ToDiscoveryManager::FinishFailedSession(session_id))?;
                     }
                 }
             }

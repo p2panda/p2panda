@@ -36,16 +36,14 @@ impl<S, T> Default for DiscoverySession<S, T> {
     }
 }
 
-pub enum DiscoverySessionArguments<T> {
-    Connect {
-        walker_ref: ActorRef<ToDiscoveryWalker<T>>,
-    },
+pub enum DiscoverySessionArguments {
+    Connect,
     Accept {
         connection: iroh::endpoint::Connection,
     },
 }
 
-impl<T> DiscoverySessionArguments<T> {
+impl DiscoverySessionArguments {
     pub fn role(&self) -> DiscoverySessionRole {
         match self {
             DiscoverySessionArguments::Connect { .. } => DiscoverySessionRole::Alice,
@@ -75,7 +73,7 @@ where
         NodeId,
         S,
         ActorRef<ToDiscoveryManager<T>>,
-        DiscoverySessionArguments<T>,
+        DiscoverySessionArguments,
     );
 
     async fn pre_start(
@@ -86,17 +84,17 @@ where
         let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
-        let (tx, rx, walker_ref) = match args {
-            DiscoverySessionArguments::Connect { walker_ref } => {
+        let (tx, rx) = match args {
+            DiscoverySessionArguments::Connect => {
                 // Try to establish a direct connection with this node.
                 let connection =
                     connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
                 let (tx, rx) = connection.open_bi().await?;
-                (tx, rx, Some(walker_ref))
+                (tx, rx)
             }
             DiscoverySessionArguments::Accept { connection } => {
                 let (tx, rx) = connection.accept_bi().await?;
-                (tx, rx, None)
+                (tx, rx)
             }
         };
 
@@ -116,11 +114,6 @@ where
             DiscoverySessionRole::Alice => protocol.alice(&mut tx, &mut rx).await?,
             DiscoverySessionRole::Bob => protocol.bob(&mut tx, &mut rx).await?,
         };
-
-        // Inform walker about result of this discovery session if we've initiated it.
-        if let Some(walker_ref) = walker_ref {
-            let _ = walker_ref.send_message(ToDiscoveryWalker::NextNode(Some(result.clone())));
-        }
 
         // Inform manager about results as well.
         let _ = manager_ref.send_message(ToDiscoveryManager::FinishSession(session_id, result));
