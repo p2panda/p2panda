@@ -7,20 +7,17 @@ use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
-use p2panda_discovery::traits::{DiscoveryProtocol as _, SubscriptionInfo as _};
+use p2panda_discovery::traits::DiscoveryProtocol as _;
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::actors::ActorNamespace;
-use crate::actors::discovery::manager::SubscriptionInfo;
 use crate::actors::discovery::walker::ToDiscoveryWalker;
-use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
+use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, SubscriptionInfo, ToDiscoveryManager};
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
-use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
+use crate::cbor::{into_cbor_sink, into_cbor_stream};
 
 /// Actor name prefix for a session.
 pub const DISCOVERY_SESSION: &str = "net.discovery.session";

@@ -8,9 +8,8 @@ use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
+use ractor::{ActorProcessingErr, ActorRef, cast};
 use rand_chacha::ChaCha20Rng;
-use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::trace;
 
@@ -59,7 +58,7 @@ where
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (args, store, manager_ref) = args;
