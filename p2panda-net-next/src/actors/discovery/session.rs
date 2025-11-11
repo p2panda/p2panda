@@ -109,6 +109,7 @@ where
         let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
+        // @TODO: Have a timeout to cancel session if it's running overtime.
         let protocol = NaiveDiscoveryProtocol::<S, _, T, NodeId, NodeInfo>::new(
             store,
             SubscriptionInfo::<T>::new(),

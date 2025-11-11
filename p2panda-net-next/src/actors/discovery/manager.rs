@@ -15,13 +15,15 @@ use p2panda_discovery::{DiscoveryResult, traits};
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{
-    Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call,
+    Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast,
+    registry,
 };
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::TopicId;
+use crate::actors::address_book::{ADDRESS_BOOK, AddressBookError, ToAddressBook};
 use crate::actors::discovery::DISCOVERY_PROTOCOL_ID;
 use crate::actors::discovery::session::{
     DISCOVERY_SESSION, DiscoverySession, DiscoverySessionArguments, DiscoverySessionId,
@@ -56,6 +58,7 @@ pub struct DiscoveryManagerState<S, T> {
     pool: ThreadLocalActorSpawner,
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
+    metrics: DiscoveryMetrics,
     _marker: PhantomData<T>,
 }
 
@@ -65,6 +68,13 @@ impl<S, T> DiscoveryManagerState<S, T> {
         self.next_session_id += 1;
         session_id
     }
+}
+
+#[derive(Default)]
+pub struct DiscoveryMetrics {
+    failed_discovery_sessions: usize,
+    successful_discovery_sessions: usize,
+    newly_learned_transport_infos: usize,
 }
 
 pub enum DiscoverySessionInfo {
@@ -144,6 +154,7 @@ where
             pool,
             next_session_id: 0,
             sessions: HashMap::new(),
+            metrics: DiscoveryMetrics::default(),
             _marker: PhantomData,
         })
     }
@@ -223,7 +234,68 @@ where
                 );
             }
             ToDiscoveryManager::FinishSession(session_id, discovery_result) => {
-                // @TODO: Insert result in address book.
+                state.metrics.successful_discovery_sessions += 1;
+                state.sessions.remove(&session_id);
+
+                // Ignore missing address book actor or receive errors. This means the system is
+                // shutting down.
+                let address_book_ref = {
+                    let Some(actor) =
+                        registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
+                    else {
+                        return Ok(());
+                    };
+                    ActorRef::<ToAddressBook<T>>::from(actor)
+                };
+
+                // Populate address book with hopefully new transport info.
+                for (node_id, transport_info) in &discovery_result.node_transport_infos {
+                    let Ok(result) = call!(
+                        address_book_ref,
+                        ToAddressBook::InsertTransportInfo,
+                        *node_id,
+                        transport_info.clone()
+                    ) else {
+                        return Ok(()); // Ignore actor send failure
+                    };
+
+                    match result {
+                        Ok(is_new_info) => {
+                            if is_new_info {
+                                state.metrics.newly_learned_transport_infos += 1;
+                            }
+                        }
+                        Err(_) => {
+                            // If this insertion fails we know that some of the given information
+                            // was invalid (eg. wrong signature) and we stop here as we can't trust
+                            // this node anymore.
+                            //
+                            // @TODO: Later we want to "rate" this node as misbehaving.
+                            return Ok(());
+                        }
+                    }
+                }
+
+                // Set stream topics into address book for this node.
+                let _ = cast!(
+                    address_book_ref,
+                    ToAddressBook::SetTopics(
+                        discovery_result.remote_node_id,
+                        discovery_result.node_topics.into_iter().collect::<Vec<T>>()
+                    )
+                );
+
+                // Set ephemeral stream topics into address book for this node.
+                let _ = cast!(
+                    address_book_ref,
+                    ToAddressBook::SetTopicIds(
+                        discovery_result.remote_node_id,
+                        discovery_result
+                            .node_topic_ids
+                            .into_iter()
+                            .collect::<Vec<TopicId>>()
+                    )
+                );
             }
         }
         Ok(())
@@ -236,17 +308,38 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(actor) => {
-                let actor = DiscoveryActorName::from_actor_cell(&actor);
-                // @TODO
-            }
             SupervisionEvent::ActorTerminated(actor, _, _) => {
-                let actor = DiscoveryActorName::from_actor_cell(&actor);
-                // @TODO
+                match DiscoveryActorName::from_actor_cell(&actor) {
+                    DiscoveryActorName::Walker { walker_id } => {
+                        // Shutting down a walker means we're shutting down the discovery system,
+                        // including this manager.
+                        myself.stop(Some("walker shutting down".into()));
+                    }
+                    DiscoveryActorName::Session { .. }
+                    | DiscoveryActorName::AcceptedSession { .. } => {
+                        // When a discovery session terminates successfully we will deal with it in
+                        // "FinishSession" instead.
+                    }
+                }
             }
             SupervisionEvent::ActorFailed(actor, error) => {
-                let actor = DiscoveryActorName::from_actor_cell(&actor);
-                // @TODO
+                match DiscoveryActorName::from_actor_cell(&actor) {
+                    DiscoveryActorName::Walker { walker_id } => {
+                        // If an walker actor failed, we're expecting a bug in our system and
+                        // escalate the error to a parent instance.
+                        return Err(ActorProcessingErr::from(format!(
+                            "walker actor {walker_id} failed with error: {error}"
+                        )));
+                    }
+                    DiscoveryActorName::Session { session_id }
+                    | DiscoveryActorName::AcceptedSession { session_id } => {
+                        state.metrics.failed_discovery_sessions += 1;
+
+                        // Clean up failed actors as they likely did not send a "FinishSession"
+                        // message to us.
+                        state.sessions.remove(&session_id);
+                    }
+                }
             }
             _ => (),
         }
@@ -273,8 +366,7 @@ where
                 to_public_key(connection.remote_id()),
                 connection,
             ))
-            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-        Ok(())
+            .map_err(|err| iroh::protocol::AcceptError::from_err(err))
     }
 }
 
