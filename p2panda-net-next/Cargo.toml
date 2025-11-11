@@ -7,7 +7,8 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-futures-lite = "2.6.1"
+ciborium = "0.2.2"
+futures-util = "0.3.31"
 iroh = { version = "0.95.1", default-features = false }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
@@ -19,6 +20,8 @@ rand_chacha = "0.9.0"
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["rt", "sync"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-util = { version = "0.7.16", features = ["codec", "compat"] }
 tracing = "0.1.41"
 
 [dev-dependencies]

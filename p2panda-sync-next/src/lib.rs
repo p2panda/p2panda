@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(any(test, feature = "cbor"))]
-pub mod cbor;
 pub mod dedup;
 pub mod managers;
 pub mod protocols;
