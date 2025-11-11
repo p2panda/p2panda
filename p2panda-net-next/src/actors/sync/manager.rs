@@ -44,11 +44,11 @@ pub enum ToSyncManager<T> {
         connection: Connection,
     },
 
-    /// Forward subscription data to all sync sessions running over the given topic.
-    SubscriptionData { topic: T, data: Vec<u8> },
+    /// Send newly published data to all sync sessions running over the given topic.
+    Publish { topic: T, data: Vec<u8> },
 
-    /// Close all active sync sessions running over the now unsubscribed topic.
-    Unsubscribe { topic: T },
+    /// Close all active sync sessions running over the given topic.
+    CloseAll { topic: T },
 
     /// Close all active sync sessions running with the given node id and topic.
     Close { node_id: NodeId, topic: T },
@@ -66,7 +66,7 @@ where
     store: S,
     manager: M,
     session_topic_map: SessionTopicMap<T, SessionSink<M, T>>,
-    peer_session_map: HashMap<NodeId, HashSet<u64>>,
+    node_session_map: HashMap<NodeId, HashSet<u64>>,
     next_session_id: u64,
     pool: ThreadLocalActorSpawner,
     _marker: PhantomData<S>,
@@ -121,7 +121,7 @@ where
             store,
             manager,
             session_topic_map: SessionTopicMap::default(),
-            peer_session_map: HashMap::default(),
+            node_session_map: HashMap::default(),
             next_session_id: 0,
             pool,
             _marker: PhantomData,
@@ -136,6 +136,7 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToSyncManager::Initiate { node_id, topic } => {
+                // @TODO: how do we inject live-mode config here?
                 let mut config = SyncSessionConfig::default();
                 config.topic = Some(topic.clone());
                 let session = Self::new_session(state, node_id, config);
@@ -152,12 +153,15 @@ where
                 // sent during sync is one they are actually subscribed to. Currently they just
                 // accept all sync sessions. We need a way to inject some shared subscription
                 // state into each sync session so they can check this during protocol execution.
+
+                // @NOTE: This can be something like the SubscriptionInfo trait (in
+                // p2panda-discovery), may need to define our own version in p2panda-sync.
                 let config = SyncSessionConfig::default();
                 let session = Self::new_session(state, node_id, config);
 
                 // @TODO: spawn the sync session.
             }
-            ToSyncManager::SubscriptionData { topic, data } => {
+            ToSyncManager::Publish { topic, data } => {
                 // Get a handle onto any sync sessions running over the subscription topic and
                 // forward on the data.
                 let session_ids = state.session_topic_map.sessions(&topic);
@@ -169,7 +173,7 @@ where
                     handle.send(ToSync::Payload(data.clone())).await?;
                 }
             }
-            ToSyncManager::Unsubscribe { topic } => {
+            ToSyncManager::CloseAll { topic } => {
                 // Get a handle onto any sync sessions running over the subscription topic and
                 // send a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
@@ -187,6 +191,7 @@ where
             }
             ToSyncManager::Close { node_id, topic } => {
                 /// Close a sync session with a specific remote and topic.
+                // @TODO: get all sessions for just this node.
                 let session_ids = state.session_topic_map.sessions(&topic);
                 for id in session_ids {
                     let session_topic = state.session_topic_map.topic(id).expect("topic to exist");
@@ -207,14 +212,8 @@ where
                 // ultimately we want to forward any events which are returned up to relevant
                 // subscribers.
 
-                // @TODO(sam): I'm not convinced this is the right approach yet. The tricky thing
-                // is that next_event() is doing "manager work" internally on each call before
-                // returning the event. It's not just a simple channel. An alternative approach
-                // would be to return a handle from the manager which would be Clone and could be
-                // run in it's own task. This would still need to do some "work" (forwarding
-                // events between sync sessions), which is where I feel it gets a little strange,
-                // as I wouldn't expect that from a "simple" handler.
-
+                // @TODO: split this out into a new actor/task which only pops events off the
+                // queue (as a result driving the manager).
                 let event_fut = state.manager.next_event();
                 match tokio::time::timeout(Duration::from_millis(50), event_fut).await {
                     Ok(Ok(Some(event))) => {
@@ -223,7 +222,8 @@ where
                             state.session_topic_map.accepted(*session_id, topic.clone());
                         }
 
-                        // @TODO: Send the event on to the subscription actor.
+                        // @TODO: Send the event on to the subscription actor. These events
+                        // contain the operations themselves.
                     }
                     Ok(Ok(None)) => {
                         // No events on the stream right now
@@ -257,10 +257,12 @@ where
             SupervisionEvent::ActorTerminated(actor, state, reason) => {
                 // @TODO: drop related session handle on manager.
                 // @TODO: need the session id to remove the session from manager state mappings.
+                // @TODO: have the session id as the actor suffix and parse it out here.
                 // Self::drop_session(state, session_id);
             }
             SupervisionEvent::ActorFailed(actor, error) => {
-                // @TODO
+                // @TODO: have the session id as the actor suffix and parse it out here.
+                // Self::drop_session(state, session_id);
             }
             _ => (),
         }
@@ -312,7 +314,7 @@ where
 
         // Associate the session with the given node id on manager state.
         state
-            .peer_session_map
+            .node_session_map
             .entry(node_id)
             .or_default()
             .insert(session_id);
@@ -347,10 +349,10 @@ where
                 connection,
             })
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-        
+
         // @TODO: do we need to await the protocol running here as is done in discover protocol
-        // connection handler? 
-        
+        // connection handler?
+
         Ok(())
     }
 }
