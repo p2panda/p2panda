@@ -5,6 +5,7 @@
 mod actors;
 mod addrs;
 mod args;
+mod cbor;
 mod config;
 mod network;
 mod protocols;
