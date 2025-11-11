@@ -22,6 +22,11 @@ use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
 
+/// Actor name prefix for a session.
+pub const DISCOVERY_SESSION: &str = "net.discovery.session";
+
+pub type DiscoverySessionId = u64;
+
 pub struct DiscoverySession<S, T> {
     _marker: PhantomData<(S, T)>,
 }
@@ -69,6 +74,7 @@ where
 
     type Arguments = (
         ActorNamespace,
+        DiscoverySessionId,
         NodeId,
         S,
         ActorRef<ToDiscoveryManager<T>>,
@@ -80,7 +86,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, remote_node_id, store, manager_ref, args) = args;
+        let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
         let (tx, rx, walker_ref) = match args {
@@ -119,7 +125,7 @@ where
         }
 
         // Inform manager about results as well.
-        let _ = manager_ref.send_message(ToDiscoveryManager::FinishSession(result));
+        let _ = manager_ref.send_message(ToDiscoveryManager::FinishSession(session_id, result));
 
         // Stop this actor for good.
         myself.stop(None);

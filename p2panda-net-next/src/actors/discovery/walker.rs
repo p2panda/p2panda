@@ -18,6 +18,9 @@ use crate::actors::discovery::{DISCOVERY_MANAGER, ToDiscoveryManager};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 
+/// Actor name prefix for a walker.
+pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
+
 /// Delay next step when no result was previously given.
 const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 
