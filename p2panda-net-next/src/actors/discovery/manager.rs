@@ -30,22 +30,21 @@ use crate::utils::to_public_key;
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
-#[allow(clippy::enum_variant_names)]
 pub enum ToDiscoveryManager<T> {
     /// Initiate a discovery session with the given node.
     ///
     /// A reference to the walker actor which initiated this session is kept, so the result of the
     /// session can be reported back to it.
-    StartSession(NodeId, ActorRef<ToDiscoveryWalker<T>>),
+    InitiateSession(NodeId, ActorRef<ToDiscoveryWalker<T>>),
 
-    /// Accept a discovery session with the given node.
+    /// Accept a discovery session coming in from a remote node.
     AcceptSession(NodeId, iroh::endpoint::Connection),
 
     /// Received result from a successful discovery session.
-    FinishSession(DiscoverySessionId, DiscoveryResult<T, NodeId, NodeInfo>),
+    OnSuccess(DiscoverySessionId, DiscoveryResult<T, NodeId, NodeInfo>),
 
     /// Handle failed discovery session.
-    FinishFailedSession(DiscoverySessionId),
+    OnFailure(DiscoverySessionId),
 }
 
 pub struct DiscoveryManagerState<S, T> {
@@ -59,18 +58,58 @@ pub struct DiscoveryManagerState<S, T> {
     metrics: DiscoveryMetrics,
 }
 
-impl<S, T> DiscoveryManagerState<S, T> {
+impl<S, T> DiscoveryManagerState<S, T>
+where
+    T: Clone + Send + 'static,
+{
+    /// Return next id for a discovery session.
     pub fn next_session_id(&mut self) -> DiscoverySessionId {
         let session_id = self.next_session_id;
         self.next_session_id += 1;
         session_id
     }
+
+    /// Continue random walk using the result of the last successful session.
+    pub fn next_walk_step(
+        &mut self,
+        walker_id: usize,
+        result: Option<DiscoveryResult<T, NodeId, NodeInfo>>,
+    ) {
+        let info = self
+            .walkers
+            .get_mut(&walker_id)
+            .expect("walker with this id must exist");
+        let _ = info
+            .walker_ref
+            .send_message(ToDiscoveryWalker::NextNode(result.clone()));
+        info.last_result = result;
+    }
+
+    /// Continue random walk by re-using the previous result which hopefully came from a successful
+    /// session.
+    ///
+    /// The walker will then attempt continuing with other nodes. If there is none left it will
+    /// automatically start from scratch.
+    pub fn repeat_last_walk_step(&self, walker_id: usize) {
+        let info = self
+            .walkers
+            .get(&walker_id)
+            .expect("walker with this id must exist");
+        let _ = info
+            .walker_ref
+            .send_message(ToDiscoveryWalker::NextNode(info.last_result.clone()));
+    }
 }
 
 #[derive(Default)]
 pub struct DiscoveryMetrics {
+    /// Failed discovery sessions.
     failed_discovery_sessions: usize,
+
+    /// Successful discovery sessions.
     successful_discovery_sessions: usize,
+
+    /// Number of discovered transport infos which we're actually new for us.
     newly_learned_transport_infos: usize,
 }
 
@@ -184,7 +223,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryManager::StartSession(node_id, walker_ref) => {
+            ToDiscoveryManager::InitiateSession(node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();
@@ -251,119 +290,29 @@ where
                     },
                 );
             }
-            ToDiscoveryManager::FinishSession(session_id, discovery_result) => {
+            ToDiscoveryManager::OnSuccess(session_id, discovery_result) => {
                 state.metrics.successful_discovery_sessions += 1;
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
 
-                match session_info {
-                    DiscoverySessionInfo::Initiated { walker_id, .. } => {
-                        // Continue random walk.
-                        let info = state
-                            .walkers
-                            .get_mut(&walker_id)
-                            .expect("walker with this id must exist");
-                        let _ = info
-                            .walker_ref
-                            .send_message(ToDiscoveryWalker::NextNode(Some(
-                                discovery_result.clone(),
-                            )));
-
-                        // Keep the result around in case the next session fails.
-                        info.last_result = Some(discovery_result.clone());
-                    }
-                    DiscoverySessionInfo::Accepted { .. } => {
-                        // Do nothing here if this was an accepted session.
-                        // @TODO: We could do something fancy around metrics though.
-                    }
+                if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
+                    // Continue random walk.
+                    state.next_walk_step(walker_id, Some(discovery_result.clone()));
                 }
 
-                // Ignore missing address book actor or receive errors. This means the system is
-                // shutting down.
-                let address_book_ref = {
-                    let Some(actor) =
-                        registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
-                    else {
-                        return Ok(());
-                    };
-                    ActorRef::<ToAddressBook<T>>::from(actor)
-                };
-
-                // Populate address book with hopefully new transport info.
-                for (node_id, transport_info) in &discovery_result.node_transport_infos {
-                    let Ok(result) = call!(
-                        address_book_ref,
-                        ToAddressBook::InsertTransportInfo,
-                        *node_id,
-                        transport_info.clone()
-                    ) else {
-                        return Ok(()); // Ignore actor send failure
-                    };
-
-                    match result {
-                        Ok(is_new_info) => {
-                            if is_new_info {
-                                state.metrics.newly_learned_transport_infos += 1;
-                            }
-                        }
-                        Err(_) => {
-                            // If this insertion fails we know that some of the given information
-                            // was invalid (eg. wrong signature) and we stop here as we can't trust
-                            // this node anymore.
-                            //
-                            // @TODO: Later we want to "rate" this node as misbehaving.
-                            return Ok(());
-                        }
-                    }
-                }
-
-                // Set stream topics into address book for this node.
-                let _ = cast!(
-                    address_book_ref,
-                    ToAddressBook::SetTopics(
-                        discovery_result.remote_node_id,
-                        discovery_result.node_topics.into_iter().collect::<Vec<T>>()
-                    )
-                );
-
-                // Set ephemeral stream topics into address book for this node.
-                let _ = cast!(
-                    address_book_ref,
-                    ToAddressBook::SetTopicIds(
-                        discovery_result.remote_node_id,
-                        discovery_result
-                            .node_topic_ids
-                            .into_iter()
-                            .collect::<Vec<TopicId>>()
-                    )
-                );
+                Self::insert_address_book(state, discovery_result).await;
             }
-            ToDiscoveryManager::FinishFailedSession(session_id) => {
+            ToDiscoveryManager::OnFailure(session_id) => {
                 state.metrics.failed_discovery_sessions += 1;
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when session failed");
 
-                match session_info {
-                    DiscoverySessionInfo::Initiated { walker_id, .. } => {
-                        // Continue random walk by re-using the previous result which hopefully
-                        // came from a successful session. The walker will then attempt continuing
-                        // with other nodes. If there is none left it will automatically start from
-                        // scratch.
-                        let info = state
-                            .walkers
-                            .get_mut(&walker_id)
-                            .expect("walker with this id must exist");
-                        let _ = info
-                            .walker_ref
-                            .send_message(ToDiscoveryWalker::NextNode(info.last_result.clone()));
-                    }
-                    DiscoverySessionInfo::Accepted { .. } => {
-                        // Do nothing here if this was an accepted session.
-                    }
+                if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
+                    state.repeat_last_walk_step(walker_id);
                 }
             }
         }
@@ -403,7 +352,7 @@ where
                     }
                     DiscoveryActorName::Session { session_id }
                     | DiscoveryActorName::AcceptedSession { session_id } => {
-                        myself.send_message(ToDiscoveryManager::FinishFailedSession(session_id))?;
+                        myself.send_message(ToDiscoveryManager::OnFailure(session_id))?;
                     }
                 }
             }
@@ -414,6 +363,75 @@ where
     }
 }
 
+impl<S, T> DiscoveryManager<S, T>
+where
+    T: Send + 'static,
+{
+    async fn insert_address_book(
+        state: &mut DiscoveryManagerState<S, T>,
+        discovery_result: DiscoveryResult<T, NodeId, NodeInfo>,
+    ) {
+        // Ignore missing address book actor or receive errors. This means the system is shutting
+        // down.
+        let address_book_ref = {
+            let Some(actor) =
+                registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
+            else {
+                return;
+            };
+            ActorRef::<ToAddressBook<T>>::from(actor)
+        };
+
+        // Populate address book with hopefully new transport info.
+        for (node_id, transport_info) in &discovery_result.node_transport_infos {
+            let Ok(result) = call!(
+                address_book_ref,
+                ToAddressBook::InsertTransportInfo,
+                *node_id,
+                transport_info.clone()
+            ) else {
+                return;
+            };
+
+            match result {
+                Ok(is_new_info) => {
+                    if is_new_info {
+                        state.metrics.newly_learned_transport_infos += 1;
+                    }
+                }
+                Err(_) => {
+                    // If this insertion fails we know that some of the given information was
+                    // invalid (eg. wrong signature) and we stop here as we can't trust this node.
+                    //
+                    // @TODO: Later we want to "rate" this node as misbehaving.
+                    return;
+                }
+            }
+        }
+
+        // Set stream topics into address book for this node.
+        let _ = cast!(
+            address_book_ref,
+            ToAddressBook::SetTopics(
+                discovery_result.remote_node_id,
+                discovery_result.node_topics.into_iter().collect::<Vec<T>>()
+            )
+        );
+
+        // Set ephemeral stream topics into address book for this node.
+        let _ = cast!(
+            address_book_ref,
+            ToAddressBook::SetTopicIds(
+                discovery_result.remote_node_id,
+                discovery_result
+                    .node_topic_ids
+                    .into_iter()
+                    .collect::<Vec<TopicId>>()
+            )
+        );
+    }
+}
+
 #[derive(Debug)]
 struct DiscoveryProtocolHandler<T> {
     manager_ref: ActorRef<ToDiscoveryManager<T>>,
@@ -421,14 +439,14 @@ struct DiscoveryProtocolHandler<T> {
 
 impl<T> ProtocolHandler for DiscoveryProtocolHandler<T>
 where
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    T: Debug + Send + 'static,
 {
     async fn accept(
         &self,
         connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
         self.manager_ref
-            .send_message(ToDiscoveryManager::AcceptSession(
+            .send_message(ToDiscoveryManager::<T>::AcceptSession(
                 to_public_key(connection.remote_id()),
                 connection,
             ))

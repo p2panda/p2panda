@@ -97,7 +97,7 @@ where
                     Some(node_id) => {
                         if cast!(
                             state.manager_ref,
-                            ToDiscoveryManager::StartSession(node_id, myself)
+                            ToDiscoveryManager::InitiateSession(node_id, myself)
                         )
                         .is_err()
                         {

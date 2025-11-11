@@ -46,7 +46,7 @@ pub enum DiscoverySessionArguments {
 impl DiscoverySessionArguments {
     pub fn role(&self) -> DiscoverySessionRole {
         match self {
-            DiscoverySessionArguments::Connect { .. } => DiscoverySessionRole::Alice,
+            DiscoverySessionArguments::Connect => DiscoverySessionRole::Alice,
             DiscoverySessionArguments::Accept { .. } => DiscoverySessionRole::Bob,
         }
     }
@@ -89,13 +89,9 @@ where
                 // Try to establish a direct connection with this node.
                 let connection =
                     connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
-                let (tx, rx) = connection.open_bi().await?;
-                (tx, rx)
+                connection.open_bi().await?
             }
-            DiscoverySessionArguments::Accept { connection } => {
-                let (tx, rx) = connection.accept_bi().await?;
-                (tx, rx)
-            }
+            DiscoverySessionArguments::Accept { connection } => connection.accept_bi().await?,
         };
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
@@ -115,8 +111,8 @@ where
             DiscoverySessionRole::Bob => protocol.bob(&mut tx, &mut rx).await?,
         };
 
-        // Inform manager about results as well.
-        let _ = manager_ref.send_message(ToDiscoveryManager::FinishSession(session_id, result));
+        // Inform manager about our results.
+        let _ = manager_ref.send_message(ToDiscoveryManager::OnSuccess(session_id, result));
 
         // Stop this actor for good.
         myself.stop(None);
