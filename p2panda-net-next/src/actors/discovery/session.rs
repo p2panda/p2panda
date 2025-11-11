@@ -83,19 +83,22 @@ where
         let (actor_namespace, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
-        let (connection, walker_ref) = match args {
+        let (tx, rx, walker_ref) = match args {
             DiscoverySessionArguments::Connect { walker_ref } => {
                 // Try to establish a direct connection with this node.
                 let connection =
                     connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
-                (connection, Some(walker_ref))
+                let (tx, rx) = connection.open_bi().await?;
+                (tx, rx, Some(walker_ref))
             }
-            DiscoverySessionArguments::Accept { connection } => (connection, None),
+            DiscoverySessionArguments::Accept { connection } => {
+                let (tx, rx) = connection.accept_bi().await?;
+                (tx, rx, None)
+            }
         };
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let (tx, rx) = connection.open_bi().await?;
         let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(tx);
         let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(rx);
 
@@ -120,6 +123,7 @@ where
 
         // Stop this actor for good.
         myself.stop(None);
+
         Ok(())
     }
 }
