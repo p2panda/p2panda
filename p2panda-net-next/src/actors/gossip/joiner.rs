@@ -3,7 +3,8 @@
 //! Join a set of peers on a gossip topic.
 use iroh::EndpointId;
 use iroh_gossip::api::GossipSender as IrohGossipSender;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef};
 
 pub enum ToGossipJoiner {
     /// Join the given set of peers.
@@ -14,9 +15,10 @@ pub struct GossipJoinerState {
     sender: Option<IrohGossipSender>,
 }
 
+#[derive(Default)]
 pub struct GossipJoiner;
 
-impl Actor for GossipJoiner {
+impl ThreadLocalActor for GossipJoiner {
     type State = GossipJoinerState;
     type Msg = ToGossipJoiner;
     type Arguments = IrohGossipSender;
@@ -26,11 +28,9 @@ impl Actor for GossipJoiner {
         _myself: ActorRef<Self::Msg>,
         sender: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let state = GossipJoinerState {
+        Ok(GossipJoinerState {
             sender: Some(sender),
-        };
-
-        Ok(state)
+        })
     }
 
     async fn post_stop(
@@ -39,7 +39,6 @@ impl Actor for GossipJoiner {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         drop(state.sender.take());
-
         Ok(())
     }
 
@@ -54,9 +53,8 @@ impl Actor for GossipJoiner {
                 if let Some(sender) = &mut state.sender {
                     sender.join_peers(peers).await?;
                 }
-
-                Ok(())
             }
         }
+        Ok(())
     }
 }

@@ -14,7 +14,9 @@ use iroh::EndpointId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
-use ractor::{Actor, ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::thread_local::ThreadLocalActorSpawner;
+use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
@@ -23,7 +25,6 @@ use tracing::{debug, warn};
 use crate::TopicId;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
 use crate::network::FromNetwork;
-use crate::utils::from_private_key;
 use crate::utils::from_public_key;
 
 /// Gossip actor name.
@@ -77,6 +78,10 @@ pub enum ToGossip {
         topic_id: TopicId,
         session_id: ActorId,
     },
+
+    /// Returns current actor's state for testing purposes.
+    #[cfg(test)]
+    DebugState(RpcReplyPort<tests::DebugState>),
 }
 
 /// Actor references and channels for gossip sessions.
@@ -94,14 +99,15 @@ pub struct GossipState {
     sessions: Sessions,
     neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
+    gossip_thread_pool: ThreadLocalActorSpawner,
 }
 
+#[derive(Default)]
 pub struct Gossip;
 
-impl Actor for Gossip {
+impl ThreadLocalActor for Gossip {
     type State = GossipState;
     type Msg = ToGossip;
-    // TODO: Pass in any required config.
     type Arguments = IrohEndpoint;
 
     async fn pre_start(
@@ -121,14 +127,16 @@ impl Actor for Gossip {
         let neighbours = HashMap::new();
         let topic_delivery_scopes = HashMap::new();
 
-        let state = GossipState {
+        // Gossip "worker" actors are all spawned in a dedicated thread.
+        let gossip_thread_pool = ThreadLocalActorSpawner::new();
+
+        Ok(GossipState {
             gossip,
             sessions,
             neighbours,
             topic_delivery_scopes,
-        };
-
-        Ok(state)
+            gossip_thread_pool,
+        })
     }
 
     async fn post_stop(
@@ -136,8 +144,8 @@ impl Actor for Gossip {
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state
-        // and connections.
+        // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state and
+        // connections.
         state.gossip.shutdown().await?;
 
         Ok(())
@@ -152,9 +160,7 @@ impl Actor for Gossip {
         match message {
             ToGossip::Handle(reply) => {
                 let gossip = state.gossip.clone();
-
                 let _ = reply.send(gossip);
-
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
@@ -181,41 +187,48 @@ impl Actor for Gossip {
                 let subscription = state.gossip.subscribe(topic_id.into(), peers).await?;
 
                 // Spawn the session actor with the gossip topic subscription.
-                let (gossip_session_actor, _) = Actor::spawn_linked(
+                let (gossip_session_actor, _) = GossipSession::spawn_linked(
                     None,
-                    GossipSession::new(myself.clone()),
-                    (topic_id, subscription, to_gossip_rx, gossip_joined_rx),
+                    (
+                        topic_id,
+                        subscription,
+                        to_gossip_rx,
+                        gossip_joined_rx,
+                        myself.clone(),
+                        state.gossip_thread_pool.clone(),
+                    ),
                     myself.clone().into(),
+                    state.gossip_thread_pool.clone(),
                 )
                 .await?;
 
                 // Associate the session actor id with the topic.
                 let gossip_session_actor_id = gossip_session_actor.get_id();
-                let _ = state
+                state
                     .sessions
                     .sessions_by_actor_id
                     .insert(gossip_session_actor_id, topic_id);
 
                 // Associate the session actor with the gossip joined sender.
-                let _ = state
+                state
                     .sessions
                     .gossip_joined_senders
                     .insert(gossip_session_actor_id, gossip_joined_tx);
 
                 // Associate the topic id with the session actor.
-                let _ = state
+                state
                     .sessions
                     .sessions_by_topic_id
                     .insert(topic_id, gossip_session_actor);
 
                 // Associate the topic id with the sender from the user to gossip.
-                let _ = state
+                state
                     .sessions
                     .to_gossip_senders
                     .insert(topic_id, to_gossip_tx.clone());
 
                 // Associate the topic id with the sender from gossip to the user.
-                let _ = state
+                state
                     .sessions
                     .from_gossip_senders
                     .insert(topic_id, from_gossip_tx.clone());
@@ -236,10 +249,10 @@ impl Actor for Gossip {
                 }
 
                 // Drop all associated state.
-                let _ = state.sessions.to_gossip_senders.remove(&topic_id);
-                let _ = state.sessions.from_gossip_senders.remove(&topic_id);
-                let _ = state.neighbours.remove(&topic_id);
-                let _ = state.topic_delivery_scopes.remove(&topic_id);
+                state.sessions.to_gossip_senders.remove(&topic_id);
+                state.sessions.from_gossip_senders.remove(&topic_id);
+                state.neighbours.remove(&topic_id);
+                state.topic_delivery_scopes.remove(&topic_id);
 
                 Ok(())
             }
@@ -321,6 +334,11 @@ impl Actor for Gossip {
 
                 Ok(())
             }
+            #[cfg(test)]
+            ToGossip::DebugState(reply) => {
+                let _ = reply.send(state.into());
+                Ok(())
+            }
         }
     }
 
@@ -349,10 +367,10 @@ impl Actor for Gossip {
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
-                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
-                    let _ = state.neighbours.remove(&topic_id);
+                    state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    state.sessions.from_gossip_senders.remove(&topic_id);
+                    state.sessions.gossip_joined_senders.remove(&actor_id);
+                    state.neighbours.remove(&topic_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -375,10 +393,10 @@ impl Actor for Gossip {
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    let _ = state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    let _ = state.sessions.from_gossip_senders.remove(&topic_id);
-                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
-                    let _ = state.neighbours.remove(&topic_id);
+                    state.sessions.sessions_by_topic_id.remove(&topic_id);
+                    state.sessions.from_gossip_senders.remove(&topic_id);
+                    state.sessions.gossip_joined_senders.remove(&actor_id);
+                    state.neighbours.remove(&topic_id);
                 }
             }
             _ => (),
@@ -390,24 +408,42 @@ impl Actor for Gossip {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
     use iroh::discovery::EndpointInfo;
     use iroh::discovery::static_provider::StaticProvider;
     use iroh::protocol::Router as IrohRouter;
-    use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode};
+    use iroh::{Endpoint as IrohEndpoint, RelayMode};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
     use p2panda_core::PrivateKey;
-    use ractor::{Actor, call};
+    use p2panda_core::PublicKey;
+    use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+    use ractor::{ActorRef, call};
     use tokio::sync::broadcast::error::TryRecvError;
-    use tokio::sync::oneshot;
     use tokio::time::sleep;
 
-    use crate::actors::test_utils::{ActorResult, TestSupervisor};
+    use crate::TopicId;
+    use crate::actors::gossip::session::ToGossipSession;
     use crate::network::FromNetwork;
-    use crate::utils::{from_private_key, from_public_key};
+    use crate::utils::from_private_key;
 
     use super::{Gossip, GossipState, ToGossip};
+
+    // Use this internal type to introspect the actor's current state.
+    pub struct DebugState {
+        neighbours: HashMap<TopicId, HashSet<PublicKey>>,
+        sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    }
+
+    impl From<&mut GossipState> for DebugState {
+        fn from(value: &mut GossipState) -> Self {
+            Self {
+                neighbours: value.neighbours.clone(),
+                sessions_by_topic_id: value.sessions.sessions_by_topic_id.clone(),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn correct_termination_state() {
@@ -470,16 +506,17 @@ mod tests {
         cat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -511,52 +548,25 @@ mod tests {
         let (_cat_to_gossip, mut _cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
 
-        // Spawn a test supervisor actor.
-        let (ant_supervisor_tx, ant_supervisor_rx) = oneshot::channel();
-        let (ant_supervisor_actor, ant_supervisor_actor_handle) =
-            Actor::spawn(None, TestSupervisor, ant_supervisor_tx)
-                .await
-                .unwrap();
-
-        // Link ant's gossip actor to the test supervisor.
-        ant_gossip_actor.link(ant_supervisor_actor.into());
-
         // Briefly sleep to allow overlay to form.
         sleep(Duration::from_millis(100)).await;
 
-        // Stop ant's actors and router.
-        ant_gossip_actor.stop(None);
-        ant_gossip_actor_handle.await.unwrap();
-
-        ant_router.shutdown().await.unwrap();
-
-        // Get the termination result from ant's supervisor actor.
-        let Ok(ant_gossip_actor_result) = ant_supervisor_rx.await else {
-            panic!("expected result from gossip actor")
-        };
-        let ActorResult::Terminated(state, _reason) = ant_gossip_actor_result else {
-            panic!("expected clean termination of gossip actor")
-        };
-        let Some(mut boxed_state) = state else {
-            panic!("expected state to be returned from terminated gossip actor")
-        };
-
         // Ensure state expectations are correct for ant's gossip actor.
-        if let Ok(state) = boxed_state.take::<GossipState>() {
-            assert!(state.sessions.sessions_by_topic_id.contains_key(&topic_id));
-
-            let neighbours = state.neighbours.get(&topic_id).unwrap();
-            assert!(neighbours.contains(&bat_public_key));
-            assert!(neighbours.contains(&cat_public_key));
-        }
+        let ant_state = call!(ant_gossip_actor, ToGossip::DebugState).unwrap();
+        assert!(ant_state.sessions_by_topic_id.contains_key(&topic_id));
+        let neighbours = ant_state.neighbours.get(&topic_id).unwrap();
+        assert!(neighbours.contains(&bat_public_key));
+        assert!(neighbours.contains(&cat_public_key));
 
         // Stop all other actors and routers.
+        ant_gossip_actor.stop(None);
         bat_gossip_actor.stop(None);
         cat_gossip_actor.stop(None);
+        ant_gossip_actor_handle.await.unwrap();
         bat_gossip_actor_handle.await.unwrap();
         cat_gossip_actor_handle.await.unwrap();
-        ant_supervisor_actor_handle.await.unwrap();
 
+        ant_router.shutdown().await.unwrap();
         bat_router.shutdown().await.unwrap();
         cat_router.shutdown().await.unwrap();
     }
@@ -603,12 +613,13 @@ mod tests {
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -632,6 +643,9 @@ mod tests {
             call!(ant_gossip_actor, ToGossip::Subscribe, topic_id, ant_peers).unwrap();
         let (bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
+
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
 
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
@@ -729,16 +743,17 @@ mod tests {
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -767,6 +782,9 @@ mod tests {
         let (_bat_to_gossip, bat_from_gossip) =
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
 
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
+
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
 
@@ -781,6 +799,9 @@ mod tests {
         // Cat subscribes to topic using bat as bootstrap.
         let (cat_to_gossip, cat_from_gossip) =
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
+
+        // Briefly sleep to allow overlay to form.
+        sleep(Duration::from_millis(100)).await;
 
         let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
@@ -891,16 +912,17 @@ mod tests {
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
         // Spawn gossip actors.
+        let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, ant_endpoint.clone())
+            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, bat_endpoint.clone())
+            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Actor::spawn(None, Gossip, cat_endpoint.clone())
+            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 

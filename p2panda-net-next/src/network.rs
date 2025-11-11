@@ -2,10 +2,10 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use iroh::protocol::DynProtocolHandler as ProtocolHandler;
 use p2panda_core::{PrivateKey, PublicKey};
 use ractor::errors::SpawnErr;
-use ractor::{Actor, ActorRef, call, registry};
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -13,7 +13,6 @@ use crate::actors::stream::{STREAM, ToStream};
 use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
-use crate::protocols::{self, ProtocolId};
 use crate::topic_streams::EphemeralStream;
 use crate::{NetworkId, TopicId};
 
@@ -94,16 +93,20 @@ impl NetworkBuilder {
         let actor_namespace = generate_actor_namespace(&self.args.public_key);
 
         // Spawn the root-level supervisor actor.
-        let (supervisor_actor, supervisor_actor_handle) = Actor::spawn(
+        let root_thread_pool = self.args.root_thread_pool.clone();
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            Supervisor,
             self.args,
+            root_thread_pool.clone(),
         )
         .await?;
 
-        let network = Network::new(actor_namespace, supervisor_actor, supervisor_actor_handle);
-
-        Ok(network)
+        Ok(Network {
+            actor_namespace,
+            supervisor_actor,
+            supervisor_actor_handle,
+            root_thread_pool,
+        })
     }
 }
 
@@ -124,21 +127,10 @@ pub struct Network {
     actor_namespace: ActorNamespace,
     supervisor_actor: ActorRef<()>,
     supervisor_actor_handle: JoinHandle<()>,
+    root_thread_pool: ThreadLocalActorSpawner,
 }
 
 impl Network {
-    fn new(
-        actor_namespace: ActorNamespace,
-        supervisor_actor: ActorRef<()>,
-        supervisor_actor_handle: JoinHandle<()>,
-    ) -> Self {
-        Self {
-            actor_namespace,
-            supervisor_actor,
-            supervisor_actor_handle,
-        }
-    }
-
     /// Creates an ephemeral messaging stream and returns a handle.
     ///
     /// The returned handle can be used to publish ephemeral messages into the stream. These
