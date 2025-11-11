@@ -138,6 +138,9 @@ impl ThreadLocalActor for EndpointSupervisor {
                         // 2. Respawn the iroh endpoint actor
                         // 3. Respawn the stream supervisor and discovery actors
                         state
+                            .stream_supervisor
+                            .stop(Some("{IROH_ENDPOINT} actor failed".to_string()));
+                        state
                             .discovery_manager_actor
                             .stop(Some("{IROH_ENDPOINT} actor failed".to_string()));
 
@@ -153,17 +156,6 @@ impl ThreadLocalActor for EndpointSupervisor {
                         state.iroh_endpoint_actor_failures += 1;
                         state.iroh_endpoint_actor = iroh_endpoint_actor;
 
-                        // Respawn the stream supervisor.
-                        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
-                            Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
-                            state.args.clone(),
-                            myself.clone().into(),
-                            state.args.root_thread_pool.clone(),
-                        )
-                        .await?;
-
-                        state.stream_supervisor = stream_supervisor;
-
                         // Respawn the discovery manager actor.
                         let (discovery_manager_actor, _) = Discovery::spawn_linked(
                             Some(with_namespace(DISCOVERY, &state.actor_namespace)),
@@ -174,6 +166,16 @@ impl ThreadLocalActor for EndpointSupervisor {
                         .await?;
 
                         state.discovery_manager_actor = discovery_manager_actor;
+                        // Respawn the stream supervisor.
+                        let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
+                            Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
+                            state.args.clone(),
+                            myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
+                        )
+                        .await?;
+
+                        state.stream_supervisor = stream_supervisor;
                     } else if name == with_namespace(DISCOVERY, &state.actor_namespace) {
                         warn!(
                             "{ENDPOINT_SUPERVISOR} actor: {DISCOVERY} actor failed: {}",
