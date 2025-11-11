@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
@@ -10,20 +9,15 @@ use std::time::Instant;
 
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
 use p2panda_discovery::{DiscoveryResult, traits};
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{
-    Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast,
-    registry,
-};
-use rand_chacha::ChaCha20Rng;
+use ractor::{ActorCell, ActorProcessingErr, ActorRef, SupervisionEvent, call, cast, registry};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::TopicId;
-use crate::actors::address_book::{ADDRESS_BOOK, AddressBookError, ToAddressBook};
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::DISCOVERY_PROTOCOL_ID;
 use crate::actors::discovery::session::{
     DISCOVERY_SESSION, DiscoverySession, DiscoverySessionArguments, DiscoverySessionId,
@@ -37,6 +31,7 @@ use crate::utils::to_public_key;
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
+#[allow(clippy::enum_variant_names)]
 pub enum ToDiscoveryManager<T> {
     /// Initiate a discovery session with the given node.
     ///
@@ -77,6 +72,7 @@ pub struct DiscoveryMetrics {
     newly_learned_transport_infos: usize,
 }
 
+#[allow(unused, reason = "use when exposing metrics to the high-level api")]
 pub enum DiscoverySessionInfo {
     Initiated {
         remote_node_id: NodeId,
@@ -313,7 +309,7 @@ where
                     DiscoveryActorName::Walker { walker_id } => {
                         // Shutting down a walker means we're shutting down the discovery system,
                         // including this manager.
-                        myself.stop(Some("walker shutting down".into()));
+                        myself.stop(Some(format!("walker {walker_id} shutting down")));
                     }
                     DiscoveryActorName::Session { .. }
                     | DiscoveryActorName::AcceptedSession { .. } => {
@@ -428,6 +424,7 @@ impl DiscoveryActorName {
     }
 
     fn from_string(name: &str) -> Self {
+        let name = without_namespace(name);
         if name.contains(DISCOVERY_WALKER) {
             Self::Walker {
                 walker_id: Self::extract_id(name) as usize,
@@ -442,30 +439,18 @@ impl DiscoveryActorName {
     }
 
     pub fn from_actor_cell(actor_cell: &ActorCell) -> Self {
-        Self::from_string(without_namespace(
-            &actor_cell.get_name().expect("actor needs to have a name"),
-        ))
+        Self::from_string(&actor_cell.get_name().expect("actor needs to have a name"))
     }
 
     pub fn from_actor_ref<T>(actor_ref: &ActorRef<T>) -> Self {
-        Self::from_string(without_namespace(
-            &actor_ref.get_name().expect("actor needs to have a name"),
-        ))
+        Self::from_string(&actor_ref.get_name().expect("actor needs to have a name"))
     }
 
     fn extract_id(actor_name: &str) -> u64 {
         let Some((_, suffix)) = actor_name.rsplit_once('.') else {
             unreachable!("actors have all the same name pattern")
         };
-        u64::from_str_radix(suffix, 10).expect("suffix is a number")
-    }
-
-    pub fn session_id(&self) -> DiscoverySessionId {
-        match self {
-            DiscoveryActorName::Session { session_id } => *session_id,
-            DiscoveryActorName::AcceptedSession { session_id } => *session_id,
-            _ => unreachable!("should only be called on session actors"),
-        }
+        suffix.parse::<u64>().expect("suffix is a number")
     }
 
     pub fn walker_id(&self) -> usize {
@@ -478,12 +463,12 @@ impl DiscoveryActorName {
     pub fn to_string(&self, actor_namespace: &ActorNamespace) -> String {
         match self {
             DiscoveryActorName::Walker { walker_id } => {
-                with_namespace(&format!("{DISCOVERY_WALKER}.{walker_id}"), &actor_namespace)
+                with_namespace(&format!("{DISCOVERY_WALKER}.{walker_id}"), actor_namespace)
             }
             DiscoveryActorName::Session { session_id }
             | DiscoveryActorName::AcceptedSession { session_id } => with_namespace(
                 &format!("{DISCOVERY_SESSION}.{session_id}"),
-                &actor_namespace,
+                actor_namespace,
             ),
         }
     }
