@@ -4,7 +4,8 @@
 //! them to the gossip session actor.
 use futures_lite::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef};
 use tracing::error;
 
 use crate::actors::gossip::session::ToGossipSession;
@@ -20,36 +21,31 @@ pub enum ToGossipReceiver {
 
 pub struct GossipReceiverState {
     receiver: Option<IrohGossipReceiver>,
+    session_ref: ActorRef<ToGossipSession>,
 }
 
-pub struct GossipReceiver {
-    session: ActorRef<ToGossipSession>,
-}
+#[derive(Default)]
+pub struct GossipReceiver;
 
-impl GossipReceiver {
-    pub fn new(session: ActorRef<ToGossipSession>) -> Self {
-        Self { session }
-    }
-}
-
-impl Actor for GossipReceiver {
+impl ThreadLocalActor for GossipReceiver {
     type State = GossipReceiverState;
     type Msg = ToGossipReceiver;
-    type Arguments = IrohGossipReceiver;
+    type Arguments = (IrohGossipReceiver, ActorRef<ToGossipSession>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        receiver: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (receiver, session_ref) = args;
+
         // Invoke the handler to wait for the next event on the receiver.
         let _ = myself.cast(ToGossipReceiver::WaitForJoin);
 
-        let state = GossipReceiverState {
+        Ok(GossipReceiverState {
             receiver: Some(receiver),
-        };
-
-        Ok(state)
+            session_ref,
+        })
     }
 
     async fn post_stop(
@@ -58,7 +54,6 @@ impl Actor for GossipReceiver {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         drop(state.receiver.take());
-
         Ok(())
     }
 
@@ -80,7 +75,9 @@ impl Actor for GossipReceiver {
 
                     // Inform the session actor about our direct neighbors.
                     let peers = receiver.neighbors().collect();
-                    let _ = self.session.cast(ToGossipSession::ProcessJoined(peers));
+                    let _ = state
+                        .session_ref
+                        .cast(ToGossipSession::ProcessJoined(peers));
                 }
 
                 // Invoke the handler to wait for the next event on the receiver.
@@ -93,12 +90,11 @@ impl Actor for GossipReceiver {
                     match received {
                         Ok(event) => {
                             // Send the event up the chain for processing.
-                            let _ = self.session.cast(ToGossipSession::ProcessEvent(event));
+                            let _ = state.session_ref.cast(ToGossipSession::ProcessEvent(event));
                         }
                         Err(err) => {
                             error!("gossip receiver actor: {}", err);
                             myself.stop(Some("channel closed".to_string()));
-
                             return Ok(());
                         }
                     }

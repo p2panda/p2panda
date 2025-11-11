@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -8,10 +7,9 @@ use std::time::Duration;
 // @TODO: This will come from `p2panda-store` eventually.
 use p2panda_discovery::address_book::AddressBookStore;
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, Message, RpcReplyPort};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 
-use crate::args::ApplicationArguments;
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 /// Address book actor name.
@@ -139,7 +137,7 @@ where
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -242,14 +240,13 @@ mod tests {
     use p2panda_core::PrivateKey;
     use p2panda_discovery::address_book::NodeInfo as _;
     use p2panda_discovery::address_book::memory::MemoryStore;
+    use ractor::call;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-    use ractor::{Actor, call};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
-    use crate::args::ApplicationArguments;
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
@@ -263,7 +260,7 @@ mod tests {
         let spawner = ThreadLocalActorSpawner::new();
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
-        let (actor, handle) = AddressBook::spawn(
+        let (actor, _handle) = AddressBook::spawn(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
             (MemoryStore::<ChaCha20Rng, TestTopic, NodeId, NodeInfo>::new(rng),),
             spawner,

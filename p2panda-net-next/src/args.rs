@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::{PrivateKey, PublicKey};
+use ractor::thread_local::ThreadLocalActorSpawner;
 
 use crate::NetworkId;
 use crate::config::IrohConfig;
@@ -11,6 +12,7 @@ pub struct ApplicationArguments {
     pub private_key: PrivateKey,
     pub public_key: PublicKey,
     pub iroh_config: IrohConfig,
+    pub root_thread_pool: ThreadLocalActorSpawner,
 }
 
 pub struct ArgsBuilder {
@@ -50,6 +52,7 @@ impl ArgsBuilder {
             public_key: private_key.public_key(),
             private_key,
             iroh_config: self.iroh_config.unwrap_or_default(),
+            root_thread_pool: ThreadLocalActorSpawner::new(),
         }
     }
 }
