@@ -5,56 +5,59 @@
 //! This actor is responsible for spawning the sync, gossip and stream actors. It also performs
 //! supervision of the spawned actors, restarting them in the event of failure.
 //!
+//! ```plain
+//! - "Stream" Supervisor
+//!     - "Sync Manager" Actor
+//!     - "Gossip" Actor
+//!     - "Stream" Actor
+//! ```
+//!
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
 //! `Endpoint` to be passed into the gossip actor in the event that it needs to be respawned (since
 //! the `Endpoint` is needed to instantiate iroh `Gossip`).
-use std::collections::HashMap;
-use std::sync::mpsc::sync_channel;
 
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
-use iroh::Endpoint as IrohEndpoint;
-use ractor::{
-    Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry,
-};
-use tokio::sync::broadcast::Sender as BroadcastSender;
-use tokio::sync::mpsc::Sender;
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{debug, warn};
 
-use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::stream::{STREAM, Stream, ToStream};
-use crate::actors::sync::{SYNC, Sync, ToSync};
+use crate::actors::sync::{SYNC_MANAGER, SyncManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
-use crate::network::{FromNetwork, ToNetwork};
-use crate::topic_streams::{EphemeralStream, EphemeralStreamSubscription};
+use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
 
 pub struct StreamSupervisorState {
     actor_namespace: ActorNamespace,
-    endpoint: IrohEndpoint,
-    sync_actor: ActorRef<ToSync>,
-    sync_actor_failures: u16,
+    args: ApplicationArguments,
+    endpoint: iroh::Endpoint,
+    sync_manager_actor: ActorRef<()>,
+    sync_manager_actor_failures: u16,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
     stream_actor: ActorRef<ToStream>,
     stream_actor_failures: u16,
 }
 
+#[derive(Default)]
 pub struct StreamSupervisor;
 
-impl Actor for StreamSupervisor {
+impl ThreadLocalActor for StreamSupervisor {
     type State = StreamSupervisorState;
     type Msg = ();
-    type Arguments = ActorNamespace;
+    type Arguments = ApplicationArguments;
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        actor_namespace: Self::Arguments,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let actor_namespace = generate_actor_namespace(&args.public_key);
+
         let endpoint_actor: ActorRef<ToIrohEndpoint> =
             registry::where_is(with_namespace(IROH_ENDPOINT, &actor_namespace))
                 // Something went terribly wrong if the endpoint actor is not available.
@@ -69,41 +72,42 @@ impl Actor for StreamSupervisor {
         let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
         // Spawn the sync actor.
-        let (sync_actor, _) = Actor::spawn_linked(
-            Some(with_namespace(SYNC, &actor_namespace)),
-            Sync,
+        let (sync_manager_actor, _) = SyncManager::spawn_linked(
+            Some(with_namespace(SYNC_MANAGER, &actor_namespace)),
             (),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         // Spawn the gossip actor.
-        let (gossip_actor, _) = Actor::spawn_linked(
+        let (gossip_actor, _) = Gossip::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
-            Gossip,
             endpoint.clone(),
             myself.clone().into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         // Spawn the stream actor.
-        let (stream_actor, _) = Actor::spawn_linked(
+        let (stream_actor, _) = Stream::spawn_linked(
             Some(with_namespace(STREAM, &actor_namespace)),
-            Stream,
             (
                 actor_namespace.clone(),
-                sync_actor.clone(),
+                sync_manager_actor.clone(),
                 gossip_actor.clone(),
             ),
             myself.into(),
+            args.root_thread_pool.clone(),
         )
         .await?;
 
         let state = StreamSupervisorState {
             actor_namespace,
+            args,
             endpoint,
-            sync_actor,
-            sync_actor_failures: 0,
+            sync_manager_actor,
+            sync_manager_actor_failures: 0,
             gossip_actor,
             gossip_actor_failures: 0,
             stream_actor,
@@ -132,23 +136,23 @@ impl Actor for StreamSupervisor {
                 let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
 
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace(SYNC, &actor_namespace) {
+                    if name == with_namespace(SYNC_MANAGER, &actor_namespace) {
                         warn!(
-                            "{STREAM_SUPERVISOR} actor: {SYNC} actor failed: {}",
+                            "{STREAM_SUPERVISOR} actor: {SYNC_MANAGER} actor failed: {}",
                             panic_msg
                         );
 
                         // Respawn the sync actor.
-                        let (sync_actor, _) = Actor::spawn_linked(
-                            Some(with_namespace(SYNC, &actor_namespace)),
-                            Sync,
+                        let (sync_manager_actor, _) = SyncManager::spawn_linked(
+                            Some(with_namespace(SYNC_MANAGER, &actor_namespace)),
                             (),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
-                        state.sync_actor_failures += 1;
-                        state.sync_actor = sync_actor;
+                        state.sync_manager_actor_failures += 1;
+                        state.sync_manager_actor = sync_manager_actor;
                     } else if name == with_namespace(GOSSIP, &actor_namespace) {
                         warn!(
                             "{STREAM_SUPERVISOR} actor: {GOSSIP} actor failed: {}",
@@ -156,11 +160,11 @@ impl Actor for StreamSupervisor {
                         );
 
                         // Respawn the gossip actor.
-                        let (gossip_actor, _) = Actor::spawn_linked(
+                        let (gossip_actor, _) = Gossip::spawn_linked(
                             Some(with_namespace(GOSSIP, &actor_namespace)),
-                            Gossip,
                             state.endpoint.clone(),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
@@ -173,15 +177,15 @@ impl Actor for StreamSupervisor {
                         );
 
                         // Respawn the stream actor.
-                        let (stream_actor, _) = Actor::spawn_linked(
+                        let (stream_actor, _) = Stream::spawn_linked(
                             Some(with_namespace(STREAM, &actor_namespace)),
-                            Stream,
                             (
                                 state.actor_namespace.clone(),
-                                state.sync_actor.clone(),
+                                state.sync_manager_actor.clone(),
                                 state.gossip_actor.clone(),
                             ),
                             myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
@@ -207,46 +211,41 @@ impl Actor for StreamSupervisor {
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::PrivateKey;
-    use ractor::Actor;
-    use serial_test::serial;
+    use ractor::actor::actor_cell::ActorStatus;
+    use ractor::registry;
+    use ractor::thread_local::ThreadLocalActor;
     use tokio::time::{Duration, sleep};
-    use tracing_test::traced_test;
 
     use crate::actors::gossip::GOSSIP;
     use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
     use crate::actors::stream::STREAM;
-    use crate::actors::sync::SYNC;
+    use crate::actors::sync::SYNC_MANAGER;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
-    use crate::utils::to_public_key;
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
     #[tokio::test]
-    #[traced_test]
-    #[serial]
-    async fn stream_supervisor_child_actors_are_started() {
-        let private_key = PrivateKey::new();
-        let actor_namespace = generate_actor_namespace(&private_key.public_key());
+    async fn child_actors_started() {
         let args = ArgsBuilder::new([1; 32]).build();
+        let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        // Spawn the endpoint actor.
+        // Spawn the iroh endpoint actor.
         //
         // We spawn this here because the stream supervisor depends on it.
-        let (endpoint_actor, endpoint_actor_handle) = Actor::spawn(
+        let (endpoint_actor, endpoint_actor_handle) = IrohEndpoint::spawn(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            IrohEndpoint,
             args.clone(),
+            args.root_thread_pool.clone(),
         )
         .await
         .unwrap();
 
         // Spawn the stream supervisor.
-        let (stream_supervisor, stream_supervisor_handle) = Actor::spawn(
-            Some(STREAM_SUPERVISOR.to_string()),
-            StreamSupervisor,
-            actor_namespace,
+        let (stream_supervisor, stream_supervisor_handle) = StreamSupervisor::spawn(
+            Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
+            args.clone(),
+            args.root_thread_pool.clone(),
         )
         .await
         .unwrap();
@@ -254,20 +253,22 @@ mod tests {
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
 
-        endpoint_actor.stop(None);
-        endpoint_actor_handle.await.unwrap();
+        // Ensure all actors spawned by the stream supervisor are running.
+        let sync_manager = registry::where_is(with_namespace(SYNC_MANAGER, &actor_namespace));
+        assert!(sync_manager.is_some());
+        assert_eq!(sync_manager.unwrap().get_status(), ActorStatus::Running);
+
+        let gossip_actor = registry::where_is(with_namespace(GOSSIP, &actor_namespace));
+        assert!(gossip_actor.is_some());
+        assert_eq!(gossip_actor.unwrap().get_status(), ActorStatus::Running);
+
+        let stream_actor = registry::where_is(with_namespace(STREAM, &actor_namespace));
+        assert!(stream_actor.is_some());
+        assert_eq!(stream_actor.unwrap().get_status(), ActorStatus::Running);
+
         stream_supervisor.stop(None);
         stream_supervisor_handle.await.unwrap();
-
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {SYNC} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {GOSSIP} actor"
-        )));
-        assert!(logs_contain(&format!(
-            "{STREAM_SUPERVISOR} actor: received ready from {STREAM} actor"
-        )));
-        assert!(!logs_contain("actor failed"));
+        endpoint_actor.stop(None);
+        endpoint_actor_handle.await.unwrap();
     }
 }

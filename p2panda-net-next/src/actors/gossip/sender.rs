@@ -7,7 +7,8 @@
 //! broadcast messages received before the join signal are queued internally (by the actor) and are
 //! then processed after the signal has been received.
 use iroh_gossip::api::GossipSender as IrohGossipSender;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
 
 pub enum ToGossipSender {
@@ -22,9 +23,10 @@ pub struct GossipSenderState {
     sender: Option<IrohGossipSender>,
 }
 
+#[derive(Default)]
 pub struct GossipSender;
 
-impl Actor for GossipSender {
+impl ThreadLocalActor for GossipSender {
     type State = GossipSenderState;
     type Msg = ToGossipSender;
     type Arguments = (IrohGossipSender, OneshotReceiver<u8>);
@@ -39,11 +41,9 @@ impl Actor for GossipSender {
         // Invoke the handler to wait for the gossip overlay to be joined.
         let _ = myself.cast(ToGossipSender::WaitUntilJoined(joined));
 
-        let state = GossipSenderState {
+        Ok(GossipSenderState {
             sender: Some(sender),
-        };
-
-        Ok(state)
+        })
     }
 
     async fn post_stop(
@@ -52,7 +52,6 @@ impl Actor for GossipSender {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         drop(state.sender.take());
-
         Ok(())
     }
 
@@ -71,16 +70,13 @@ impl Actor for GossipSender {
                 // Any messages sent to this actor in the meantime are queued and processed once
                 // the join signal is received.
                 let _ = joined.await;
-
-                Ok(())
             }
             ToGossipSender::Broadcast(bytes) => {
                 if let Some(sender) = &mut state.sender {
                     sender.broadcast(bytes.into()).await?;
                 }
-
-                Ok(())
             }
         }
+        Ok(())
     }
 }
