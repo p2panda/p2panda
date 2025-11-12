@@ -2,7 +2,6 @@
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
@@ -15,9 +14,6 @@ use futures::channel::mpsc;
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
 use iroh::protocol::ProtocolHandler;
-use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
-use p2panda_discovery::{DiscoveryResult, traits};
 use p2panda_sync::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
 };
@@ -33,7 +29,7 @@ use crate::TopicId;
 use crate::actors::iroh::{connect, register_protocol};
 use crate::actors::sync::SYNC_PROTOCOL_ID;
 use crate::actors::sync::session::{SyncSession, SyncSessionMessage};
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::NodeId;
 use crate::args::ApplicationArguments;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::utils::to_public_key;
@@ -423,40 +419,4 @@ where
 
         Ok(())
     }
-}
-
-#[derive(Debug)]
-pub struct SubscriptionInfo<T> {
-    _marker: PhantomData<T>,
-}
-
-impl<T> SubscriptionInfo<T> {
-    pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
-    type Error = SubscriptionInfoError;
-
-    async fn subscribed_topics(&self) -> Result<Vec<T>, Self::Error> {
-        // @TODO: Call actor which can respond with the currently subscribed topics.
-        Ok(vec![])
-    }
-
-    async fn subscribed_topic_ids(&self) -> Result<Vec<TopicId>, Self::Error> {
-        // @TODO: Call actor which can respond with the currently subscribed topic ids.
-        Ok(vec![])
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum SubscriptionInfoError {
-    #[error("actor '{0}' is not available")]
-    ActorNotAvailable(String),
-
-    #[error("actor '{0}' is not responding to call")]
-    ActorNotResponsive(String),
 }

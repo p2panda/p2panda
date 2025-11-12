@@ -36,11 +36,6 @@ impl<T, P> Default for SyncSession<T, P> {
     }
 }
 
-pub enum SyncSessionRole {
-    Initiate,
-    Accept,
-}
-
 impl<T, P> ThreadLocalActor for SyncSession<T, P>
 where
     for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
