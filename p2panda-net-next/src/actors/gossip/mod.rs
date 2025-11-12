@@ -84,13 +84,16 @@ pub enum ToGossip {
     DebugState(RpcReplyPort<tests::DebugState>),
 }
 
+/// Mapping of topic ID to the associated sender channels for getting messages into and out of the
+/// gossip overlay.
+type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>;
+
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
 struct Sessions {
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
-    to_gossip_senders: HashMap<TopicId, Sender<Vec<u8>>>,
-    from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
+    gossip_senders: GossipSenders,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
 }
 
@@ -161,6 +164,7 @@ impl ThreadLocalActor for Gossip {
             ToGossip::Handle(reply) => {
                 let gossip = state.gossip.clone();
                 let _ = reply.send(gossip);
+
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
@@ -209,29 +213,23 @@ impl ThreadLocalActor for Gossip {
                     .sessions_by_actor_id
                     .insert(gossip_session_actor_id, topic_id);
 
-                // Associate the session actor with the gossip joined sender.
-                state
-                    .sessions
-                    .gossip_joined_senders
-                    .insert(gossip_session_actor_id, gossip_joined_tx);
-
                 // Associate the topic id with the session actor.
                 state
                     .sessions
                     .sessions_by_topic_id
                     .insert(topic_id, gossip_session_actor);
 
-                // Associate the topic id with the sender from the user to gossip.
+                // Associate the session actor with the gossip joined sender.
                 state
                     .sessions
-                    .to_gossip_senders
-                    .insert(topic_id, to_gossip_tx.clone());
+                    .gossip_joined_senders
+                    .insert(gossip_session_actor_id, gossip_joined_tx);
 
-                // Associate the topic id with the sender from gossip to the user.
+                // Associate the topic id with the senders to and from gossip.
                 state
                     .sessions
-                    .from_gossip_senders
-                    .insert(topic_id, from_gossip_tx.clone());
+                    .gossip_senders
+                    .insert(topic_id, (to_gossip_tx.clone(), from_gossip_tx.clone()));
 
                 // Return sender / receiver pair to the user.
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
@@ -242,15 +240,14 @@ impl ThreadLocalActor for Gossip {
                 // Stop the session associated with this topic id.
                 if let Some(actor) = state.sessions.sessions_by_topic_id.remove(&topic_id) {
                     let actor_id = actor.get_id();
-                    let _ = state.sessions.sessions_by_actor_id.remove(&actor_id);
-                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    state.sessions.sessions_by_actor_id.remove(&actor_id);
+                    state.sessions.gossip_joined_senders.remove(&actor_id);
 
                     actor.stop(Some("received unsubscribe request".to_string()));
                 }
 
                 // Drop all associated state.
-                state.sessions.to_gossip_senders.remove(&topic_id);
-                state.sessions.from_gossip_senders.remove(&topic_id);
+                state.sessions.gossip_senders.remove(&topic_id);
                 state.neighbours.remove(&topic_id);
                 state.topic_delivery_scopes.remove(&topic_id);
 
@@ -286,8 +283,8 @@ impl ThreadLocalActor for Gossip {
                     .push(delivery_scope);
 
                 // Write the received bytes to all subscribers for the associated topic.
-                if let Some(sender) = state.sessions.from_gossip_senders.get(&topic_id) {
-                    let _number_of_subscribers = sender.send(msg.clone())?;
+                if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic_id) {
+                    let _number_of_subscribers = from_gossip_tx.send(msg.clone())?;
                 }
 
                 Ok(())
@@ -368,7 +365,7 @@ impl ThreadLocalActor for Gossip {
 
                     // Drop all state associated with the terminated gossip session.
                     state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.from_gossip_senders.remove(&topic_id);
+                    state.sessions.gossip_senders.remove(&topic_id);
                     state.sessions.gossip_joined_senders.remove(&actor_id);
                     state.neighbours.remove(&topic_id);
                 }
@@ -394,7 +391,7 @@ impl ThreadLocalActor for Gossip {
 
                     // Drop all state associated with the failed gossip session.
                     state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.from_gossip_senders.remove(&topic_id);
+                    state.sessions.gossip_senders.remove(&topic_id);
                     state.sessions.gossip_joined_senders.remove(&actor_id);
                     state.neighbours.remove(&topic_id);
                 }
