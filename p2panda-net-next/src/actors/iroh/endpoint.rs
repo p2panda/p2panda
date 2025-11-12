@@ -24,6 +24,11 @@ const DEFAULT_MAX_STREAMS: u32 = 1024;
 
 #[allow(clippy::large_enum_variant)]
 pub enum ToIrohEndpoint {
+    /// Bind the iroh endpoint.
+    ///
+    /// This takes place automatically after the actor started.
+    Bind,
+
     /// Return the internal iroh endpoint instance (used by iroh-gossip).
     Endpoint(RpcReplyPort<iroh::endpoint::Endpoint>),
 
@@ -50,9 +55,9 @@ pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandle
 
 pub struct IrohState {
     args: ApplicationArguments,
-    endpoint: iroh::Endpoint,
+    endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
-    accept_handle: JoinHandle<()>,
+    accept_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
 }
 
@@ -71,49 +76,14 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let config = args.iroh_config.clone();
-
-        // Configure QUIC transport and sockets to bind to.
-        let mut transport_config = iroh::endpoint::TransportConfig::default();
-        transport_config
-            .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
-            .max_concurrent_uni_streams(0u32.into());
-
-        let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
-        let socket_address_v6 = SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
-
-        // Register list of possible "home relays" for this node.
-        let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
-        let relay_mode = iroh::RelayMode::Custom(relay_map);
-
-        // Create and bind the endpoint to the socket.
-        // @TODO: Add static provider to register addresses coming from our discovery mechanism.
-        let endpoint = iroh::Endpoint::builder()
-            .secret_key(from_private_key(args.private_key.clone()))
-            .transport_config(transport_config)
-            .relay_mode(relay_mode)
-            .bind_addr_v4(socket_address_v4)
-            .bind_addr_v6(socket_address_v6)
-            .bind()
-            .await?;
-
-        let accept_handle = {
-            let endpoint = endpoint.clone();
-            tokio::spawn(async move {
-                loop {
-                    let Some(incoming) = endpoint.accept().await else {
-                        break; // Endpoint is closed.
-                    };
-                    let _ = myself.send_message(ToIrohEndpoint::Incoming(incoming));
-                }
-            })
-        };
+        // Automatically bind iroh endpoint after actor start.
+        myself.send_message(ToIrohEndpoint::Bind)?;
 
         Ok(IrohState {
             args,
-            endpoint,
+            endpoint: None,
             protocols: Arc::default(),
-            accept_handle,
+            accept_handle: None,
             worker_pool: ThreadLocalActorSpawner::new(),
         })
     }
@@ -123,18 +93,68 @@ impl ThreadLocalActor for IrohEndpoint {
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        state.endpoint.close().await;
-        state.accept_handle.abort();
+        if let Some(endpoint) = &state.endpoint {
+            endpoint.close().await;
+        }
+
+        if let Some(accept_handle) = &state.accept_handle {
+            accept_handle.abort();
+        }
+
         Ok(())
     }
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            ToIrohEndpoint::Bind => {
+                let config = state.args.iroh_config.clone();
+
+                // Configure QUIC transport and sockets to bind to.
+                let mut transport_config = iroh::endpoint::TransportConfig::default();
+                transport_config
+                    .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
+                    .max_concurrent_uni_streams(0u32.into());
+
+                let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
+                let socket_address_v6 =
+                    SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
+
+                // Register list of possible "home relays" for this node.
+                let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
+                let relay_mode = iroh::RelayMode::Custom(relay_map);
+
+                // Create and bind the endpoint to the socket.
+                // @TODO: Add static provider to register addresses coming from our discovery
+                // mechanism.
+                let endpoint = iroh::Endpoint::builder()
+                    .secret_key(from_private_key(state.args.private_key.clone()))
+                    .transport_config(transport_config)
+                    .relay_mode(relay_mode)
+                    .bind_addr_v4(socket_address_v4)
+                    .bind_addr_v6(socket_address_v6)
+                    .bind()
+                    .await?;
+
+                let accept_handle = {
+                    let endpoint = endpoint.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            let Some(incoming) = endpoint.accept().await else {
+                                break; // Endpoint is closed.
+                            };
+                            let _ = myself.send_message(ToIrohEndpoint::Incoming(incoming));
+                        }
+                    })
+                };
+
+                state.endpoint = Some(endpoint);
+                state.accept_handle = Some(accept_handle);
+            }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
@@ -152,7 +172,11 @@ impl ThreadLocalActor for IrohEndpoint {
                 IrohConnection::spawn(
                     None,
                     IrohConnectionArgs::Connect {
-                        endpoint: state.endpoint.clone(),
+                        endpoint: state.endpoint
+                            .clone()
+                            .expect(
+                                "bind always takes place first, an endpoint must exist after this point"
+                            ),
                         node_addr,
                         alpn: mixed_protocol_id.to_vec(),
                         reply,
@@ -174,7 +198,9 @@ impl ThreadLocalActor for IrohEndpoint {
                 .await?;
             }
             ToIrohEndpoint::Endpoint(reply) => {
-                let _ = reply.send(state.endpoint.clone());
+                let _ = reply.send(state.endpoint.clone().expect(
+                    "bind always takes place first, an endpoint must exist after this point",
+                ));
             }
         }
 

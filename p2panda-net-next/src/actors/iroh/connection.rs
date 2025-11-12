@@ -25,17 +25,17 @@ pub enum IrohConnectionArgs {
     },
 }
 
-pub struct IrohConnectionState {
-    handle: Option<JoinHandle<()>>,
+pub enum ToIrohConnection {
+    EstablishConnection(IrohConnectionArgs),
 }
 
 #[derive(Default)]
 pub struct IrohConnection;
 
 impl ThreadLocalActor for IrohConnection {
-    type State = IrohConnectionState;
+    type State = ();
 
-    type Msg = ();
+    type Msg = ToIrohConnection;
 
     type Arguments = IrohConnectionArgs;
 
@@ -44,57 +44,78 @@ impl ThreadLocalActor for IrohConnection {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let handle = match args {
-            IrohConnectionArgs::Connect {
-                endpoint,
-                node_addr,
-                alpn,
-                reply,
-            } => match endpoint
-                .connect(node_addr, &alpn)
-                .await
-                .map_err(|err| ConnectionActorError::Iroh(err.into()))
-            {
-                Ok(connection) => {
-                    // Give connection object to the caller and stop actor, we're done here.
-                    let _ = reply.send(Ok(connection));
-                    myself.stop(None);
-                    None
-                }
-                Err(err) => {
-                    // Inform caller about what went wrong and shut down actor with a failure.
-                    // Since the error types do not implement `Clone` we're helping ourselves with
-                    // an own type holding the string representation.
-                    let reason = err.to_string();
-                    let _ = reply.send(Err(err));
-                    return Err(ConnectionActorError::ConnectionAttemptFailed(reason).into());
-                }
-            },
-            IrohConnectionArgs::Accept {
-                incoming,
-                protocols,
-            } => {
-                // Check incoming request and establish connection when valid ALPN.
-                let (connection, alpn) = accept_incoming(incoming, &protocols).await?;
-
-                // Spawn a task which executes the actual protocol. As soon as this has finished
-                // we're telling the actor to finally shut down.
-                let handle = tokio::spawn(async move {
-                    let protocols = protocols.read().await;
-                    let Some(protocol_handler) = protocols.get(&alpn) else {
-                        unreachable!("already checked in accept_incoming if this alpn exists");
-                    };
-
-                    let _ = protocol_handler.accept(connection).await;
-                    myself.stop(None);
-                });
-
-                Some(handle)
-            }
-        };
-
-        Ok(IrohConnectionState { handle })
+        // Kick-off connection establishment directly after start.
+        myself.send_message(ToIrohConnection::EstablishConnection(args))?;
+        Ok(())
     }
+
+    async fn handle(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: Self::Msg,
+        _state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            ToIrohConnection::EstablishConnection(args) => {
+                // This blocks for a while but that's okay since we're inside an independent actor.
+                establish_connection(args).await?;
+
+                // If something failed this actor already terminated, propagating the error to the
+                // parent actor, if we're done here after a successful connection attempt, we stop
+                // ourselves.
+                myself.stop(None);
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn establish_connection(args: IrohConnectionArgs) -> Result<(), ConnectionActorError> {
+    match args {
+        IrohConnectionArgs::Connect {
+            endpoint,
+            node_addr,
+            alpn,
+            reply,
+        } => match endpoint
+            .connect(node_addr, &alpn)
+            .await
+            .map_err(|err| ConnectionActorError::Iroh(err.into()))
+        {
+            Ok(connection) => {
+                // Give connection object to the caller and stop actor, we're done here.
+                let _ = reply.send(Ok(connection));
+            }
+            Err(err) => {
+                // Inform caller about what went wrong and shut down actor with a failure.
+                // Since the error types do not implement `Clone` we're helping ourselves with
+                // an own type holding the string representation.
+                let reason = err.to_string();
+                let _ = reply.send(Err(err));
+                return Err(ConnectionActorError::ConnectionAttemptFailed(reason).into());
+            }
+        },
+        IrohConnectionArgs::Accept {
+            incoming,
+            protocols,
+        } => {
+            // Check incoming request and establish connection when valid ALPN.
+            let (connection, alpn) = accept_incoming(incoming, &protocols).await?;
+
+            // Spawn a task which executes the actual protocol. As soon as this has finished
+            // we're telling the actor to finally shut down.
+            let handle = tokio::spawn(async move {
+                let protocols = protocols.read().await;
+                let Some(protocol_handler) = protocols.get(&alpn) else {
+                    unreachable!("already checked in accept_incoming if this alpn exists");
+                };
+
+                let _ = protocol_handler.accept(connection).await;
+            });
+        }
+    }
+
+    Ok(())
 }
 
 async fn accept_incoming(
