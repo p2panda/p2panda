@@ -14,7 +14,7 @@ use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use tracing::{debug, trace, warn};
 
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
@@ -45,7 +45,10 @@ pub enum ToDiscoveryManager<T> {
     OnSuccess(DiscoverySessionId, DiscoveryResult<T, NodeId, NodeInfo>),
 
     /// Handle failed discovery session.
-    OnFailure(DiscoverySessionId),
+    OnFailure(
+        DiscoverySessionId,
+        Box<dyn StdError + Send + Sync + 'static>,
+    ),
 
     /// Returns current metrics.
     Metrics(RpcReplyPort<DiscoveryMetrics>),
@@ -309,6 +312,7 @@ where
                 );
             }
             ToDiscoveryManager::OnSuccess(session_id, discovery_result) => {
+                debug!(session_id = %session_id, "discovery session succeeded");
                 state.metrics.successful_discovery_sessions += 1;
                 let session_info = state
                     .sessions
@@ -322,8 +326,8 @@ where
 
                 Self::insert_address_book(state, discovery_result).await;
             }
-            ToDiscoveryManager::OnFailure(session_id) => {
-                trace!(session_id = %session_id, "discovery session failed");
+            ToDiscoveryManager::OnFailure(session_id, err) => {
+                warn!(session_id = %session_id, "discovery session failed: {err:#}");
                 state.metrics.failed_discovery_sessions += 1;
                 let session_info = state
                     .sessions
@@ -362,19 +366,19 @@ where
                     }
                 }
             }
-            SupervisionEvent::ActorFailed(actor, error) => {
+            SupervisionEvent::ActorFailed(actor, err) => {
                 match DiscoveryActorName::from_actor_cell(&actor) {
                     DiscoveryActorName::Walker { walker_id } => {
                         // If an walker actor failed, we're expecting a bug in our system and
                         // escalate the error to a parent supervisor which will probably restart
                         // the whole thing.
                         return Err(ActorProcessingErr::from(format!(
-                            "walker actor {walker_id} failed with error: {error}"
+                            "walker actor {walker_id} failed with error: {err}"
                         )));
                     }
                     DiscoveryActorName::Session { session_id }
                     | DiscoveryActorName::AcceptedSession { session_id } => {
-                        myself.send_message(ToDiscoveryManager::OnFailure(session_id))?;
+                        myself.send_message(ToDiscoveryManager::OnFailure(session_id, err))?;
                     }
                 }
             }
