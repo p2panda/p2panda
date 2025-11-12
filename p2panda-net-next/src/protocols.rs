@@ -19,6 +19,23 @@ pub type ProtocolId = Vec<u8>;
 pub fn hash_protocol_id_with_network_id(
     protocol_id: impl AsRef<[u8]>,
     network_id: &NetworkId,
-) -> [u8; 32] {
-    Hash::new([protocol_id.as_ref(), network_id].concat()).into()
+) -> Vec<u8> {
+    Hash::new([protocol_id.as_ref(), network_id].concat())
+        .as_bytes()
+        .to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hash_protocol_id_with_network_id;
+
+    #[test]
+    fn protect_protocol_id() {
+        let protocol_id = b"test/protocol/v1";
+        let network_id = [1; 32];
+        assert_ne!(
+            protocol_id.to_vec(),
+            hash_protocol_id_with_network_id(protocol_id, &network_id),
+        );
+    }
 }
