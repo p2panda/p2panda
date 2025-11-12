@@ -3,9 +3,8 @@
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
-use tokio::task::JoinHandle;
 use tracing::field::Empty;
-use tracing::{Instrument, Span, debug, info_span, instrument, warn};
+use tracing::{Instrument, debug, info_span, warn};
 
 use crate::NodeId;
 use crate::actors::iroh::endpoint::ProtocolMap;
@@ -87,18 +86,14 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             alpn,
             reply,
         } => {
-            tracing::Span::current().record(
-                "remote",
-                tracing::field::display(endpoint_addr.id.fmt_short()),
-            );
             tracing::Span::current().record("alpn", alpn.fmt_short());
-            debug!("try to connect");
             match endpoint
                 .connect(endpoint_addr, &alpn)
                 .await
                 .map_err(|err| ConnectionActorError::Iroh(err.into()))
             {
                 Ok(connection) => {
+                    debug!("successfully initiated connection");
                     // Give connection object to the caller and stop actor, we're done here.
                     let _ = reply.send(Ok(connection));
                 }
@@ -127,7 +122,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             };
 
             // Check if we're supporting this ALPN.
-            let mut alpn = match accepting.alpn().await {
+            let alpn = match accepting.alpn().await {
                 Ok(alpn) => alpn,
                 Err(err) => {
                     warn!("ignoring connection: invalid handshake: {err:#}");
@@ -142,7 +137,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             };
 
             // Establish connection.
-            let mut connection = match protocol_handler.on_accepting(accepting).await {
+            let connection = match protocol_handler.on_accepting(accepting).await {
                 Ok(connection) => connection,
                 Err(err) => {
                     warn!("accepting incoming connection ended with error: {err}");
@@ -153,6 +148,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
                 "remote",
                 tracing::field::display(connection.remote_id().fmt_short()),
             );
+            debug!("successfully accepted connection");
 
             // Pass over connection to handler, ignore any errors here as this is nothing we need
             // to be aware of anymore, this is the end of this actor.

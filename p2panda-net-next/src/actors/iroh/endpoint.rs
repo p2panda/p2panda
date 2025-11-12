@@ -160,8 +160,19 @@ impl ThreadLocalActor for IrohEndpoint {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
                 debug!(alpn = %mixed_protocol_id.fmt_short(), "register protocol");
+
+                // Register protocol in our own map to accept it in the future.
                 let mut protocols = state.protocols.write().await;
                 protocols.insert(mixed_protocol_id, protocol_handler);
+
+                // Inform iroh endpoint about the new protocol as well.
+                state
+                    .endpoint
+                    .as_ref()
+                    .expect(
+                        "bind always takes place first, an endpoint must exist after this point",
+                    )
+                    .set_alpns(protocols.keys().cloned().collect());
             }
             ToIrohEndpoint::Connect(endpoint_addr, alpn, reply) => {
                 let mixed_protocol_id =

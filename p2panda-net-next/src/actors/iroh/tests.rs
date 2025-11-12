@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::time::Duration;
+
 use iroh::protocol::ProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{call, cast};
+use tokio::time::sleep;
 
 use crate::actors::iroh::{IrohEndpoint, ToIrohEndpoint};
 use crate::test_utils::{setup_logging, test_args_from_seed};
@@ -47,6 +50,9 @@ async fn establish_connection() {
         .await
         .expect("actor spawns successfully");
 
+    // Wait for endpoints to bind.
+    sleep(Duration::from_millis(50)).await;
+
     // Alice registers the "echo" protocol to accept incoming connections for it.
     cast!(
         alice_ref,
@@ -54,7 +60,7 @@ async fn establish_connection() {
     )
     .expect("calling actor should not fail");
 
-    // Create an iroh endpoint address of Alice, so Bob can connect to them.
+    // Create an iroh endpoint address of Alice, so Bob can connect.
     let alice_addr = iroh::EndpointAddr::new(from_public_key(args_alice.public_key)).with_ip_addr(
         (
             args_alice.iroh_config.bind_ip_v4,
@@ -72,4 +78,18 @@ async fn establish_connection() {
     )
     .expect("calling actor should not fail")
     .expect("connection establishment should not fail");
+
+    // Send something to Alice.
+    let (mut tx, mut rx) = connection.open_bi().await.expect("establish bi-di stream");
+    tx.write_all(b"i feel so").await.unwrap();
+    tx.finish().unwrap();
+
+    // Receive the echo.
+    let response = rx.read_to_end(1000).await.unwrap();
+    assert_eq!(&response, b"i feel so");
+
+    // Shut down connection and actors.
+    connection.close(0u32.into(), b"bye!");
+    bob_ref.stop(None);
+    alice_ref.stop(None);
 }
