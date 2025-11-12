@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::net::{Ipv4Addr, Ipv6Addr};
+
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use tracing::Level;
 
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::{ApplicationArguments, ArgsBuilder};
@@ -32,7 +35,9 @@ pub fn test_args_from_seed(
         ArgsBuilder::new(TEST_NETWORK_ID)
             .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
             .with_iroh_config(IrohConfig {
+                bind_ip_v4: Ipv4Addr::LOCALHOST,
                 bind_port_v4: rng.random_range(49152..65535),
+                bind_ip_v6: Ipv6Addr::LOCALHOST,
                 bind_port_v6: rng.random_range(49152..65535),
                 ..Default::default()
             })
@@ -43,9 +48,11 @@ pub fn test_args_from_seed(
 }
 
 pub fn setup_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    if std::env::var("RUST_LOG").is_ok() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
 }
 
 #[test]
