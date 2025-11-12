@@ -15,16 +15,10 @@ use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryM
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
-use crate::args::test_utils::{test_args, test_args_from_seed};
+use crate::test_utils::{setup_logging, test_args_from_seed};
 use crate::{NodeId, NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::DiscoveryActorName;
-
-fn setup_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-}
 
 #[test]
 fn actor_name_helper() {
@@ -111,8 +105,8 @@ impl TestNode {
 async fn smoke_test() {
     setup_logging();
 
-    let mut alice = TestNode::spawn([1; 32]).await;
-    let mut bob = TestNode::spawn([2; 32]).await;
+    let mut alice = TestNode::spawn([10; 32]).await;
+    let mut bob = TestNode::spawn([11; 32]).await;
 
     // Alice inserts Bob's info in address book and marks it as a bootstrap node.
     call!(alice.address_book_ref, ToAddressBook::InsertNodeInfo, {

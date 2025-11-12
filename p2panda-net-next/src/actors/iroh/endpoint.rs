@@ -220,8 +220,6 @@ impl ThreadLocalActor for IrohEndpoint {
                     state.worker_pool.clone(),
                 )
                 .await;
-
-                println!("{:?}", lala);
             }
             ToIrohEndpoint::Endpoint(reply) => {
                 let _ = reply.send(state.endpoint.clone().expect(
