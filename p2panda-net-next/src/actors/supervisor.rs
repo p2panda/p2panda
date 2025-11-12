@@ -233,7 +233,7 @@ mod tests {
     use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
-    use crate::args::test_utils::test_args;
+    use crate::test_utils::test_args;
 
     use super::{SUPERVISOR, Supervisor};
 
