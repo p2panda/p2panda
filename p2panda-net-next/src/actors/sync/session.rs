@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
+
+use iroh::endpoint::Connection;
+use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
+use p2panda_discovery::traits::{DiscoveryProtocol as _, SubscriptionInfo as _};
+use p2panda_sync::traits::Protocol;
+use ractor::thread_local::ThreadLocalActor;
+use ractor::{Actor, ActorProcessingErr, ActorRef};
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncWrite};
+
+use crate::actors::ActorNamespace;
+use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
+use crate::actors::iroh::connect;
+use crate::actors::sync::SYNC_PROTOCOL_ID;
+use crate::addrs::{NodeId, NodeInfo};
+use crate::args::ApplicationArguments;
+use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
+
+pub enum SyncSessionMessage<P> {
+    Initiate { node_id: NodeId, protocol: P },
+    Accept { connection: Connection, protocol: P },
+}
+
+pub struct SyncSession<T, P> {
+    _marker: PhantomData<(T, P)>,
+}
+
+impl<T, P> Default for SyncSession<T, P> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub enum SyncSessionRole {
+    Initiate,
+    Accept,
+}
+
+impl<T, P> ThreadLocalActor for SyncSession<T, P>
+where
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    P: Protocol + Send + 'static,
+    P::Error: StdError + Send + Sync + 'static,
+    for<'a> P::Message: Serialize + Deserialize<'a>,
+{
+    type State = ActorNamespace;
+
+    type Msg = SyncSessionMessage<P>;
+
+    type Arguments = ActorNamespace;
+
+    async fn pre_start(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        args: Self::Arguments,
+    ) -> Result<Self::State, ActorProcessingErr> {
+        Ok(args)
+    }
+
+    async fn handle(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: Self::Msg,
+        actor_namespace: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SyncSessionMessage::Initiate { node_id, protocol } => {
+                let connection =
+                    connect::<T>(node_id, SYNC_PROTOCOL_ID, actor_namespace.to_string()).await?;
+                let (tx, rx) = connection.open_bi().await?;
+                let mut tx = into_cbor_sink::<P::Message, _>(tx);
+                let mut rx = into_cbor_stream::<P::Message, _>(rx);
+                protocol.run(&mut tx, &mut rx).await?;
+            }
+            SyncSessionMessage::Accept {
+                connection,
+                protocol,
+            } => {
+                let (tx, rx) = connection.accept_bi().await?;
+                let mut tx = into_cbor_sink::<P::Message, _>(tx);
+                let mut rx = into_cbor_stream::<P::Message, _>(rx);
+                protocol.run(&mut tx, &mut rx).await?;
+            }
+        }
+        Ok(())
+    }
+}
