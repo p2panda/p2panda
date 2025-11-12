@@ -13,6 +13,8 @@ mod streams;
 #[cfg(test)]
 mod test_utils;
 mod utils;
+// @TODO: put behind test_utils feature flag.
+pub mod test_utils;
 
 pub use addrs::{
     NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,
