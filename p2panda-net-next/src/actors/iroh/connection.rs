@@ -4,18 +4,23 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 use tokio::task::JoinHandle;
+use tracing::field::Empty;
+use tracing::{Instrument, Span, debug, info_span, instrument, warn};
 
+use crate::NodeId;
 use crate::actors::iroh::endpoint::ProtocolMap;
 use crate::protocols::ProtocolId;
+use crate::utils::ShortFormat;
 
 pub type ConnectionReplyPort =
     RpcReplyPort<Result<iroh::endpoint::Connection, ConnectionActorError>>;
 
+#[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum IrohConnectionArgs {
     Connect {
         endpoint: iroh::endpoint::Endpoint,
-        node_addr: iroh::EndpointAddr,
+        endpoint_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
         reply: ConnectionReplyPort,
     },
@@ -26,7 +31,7 @@ pub enum IrohConnectionArgs {
 }
 
 pub enum ToIrohConnection {
-    EstablishConnection(IrohConnectionArgs),
+    EstablishConnection(NodeId, IrohConnectionArgs),
 }
 
 #[derive(Default)]
@@ -37,7 +42,7 @@ impl ThreadLocalActor for IrohConnection {
 
     type Msg = ToIrohConnection;
 
-    type Arguments = IrohConnectionArgs;
+    type Arguments = (NodeId, IrohConnectionArgs);
 
     async fn pre_start(
         &self,
@@ -45,7 +50,8 @@ impl ThreadLocalActor for IrohConnection {
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // Kick-off connection establishment directly after start.
-        myself.send_message(ToIrohConnection::EstablishConnection(args))?;
+        let (node_id, args) = args;
+        myself.send_message(ToIrohConnection::EstablishConnection(node_id, args))?;
         Ok(())
     }
 
@@ -56,9 +62,12 @@ impl ThreadLocalActor for IrohConnection {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToIrohConnection::EstablishConnection(args) => {
+            ToIrohConnection::EstablishConnection(node_id, args) => {
+                let span =
+                    info_span!("connection", me=%node_id.fmt_short(), remote=Empty, alpn=Empty);
+
                 // This blocks for a while but that's okay since we're inside an independent actor.
-                establish_connection(args).await?;
+                establish_connection(args).instrument(span).await?;
 
                 // If something failed this actor already terminated, propagating the error to the
                 // parent actor, if we're done here after a successful connection attempt, we stop
@@ -74,75 +83,84 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
     match args {
         IrohConnectionArgs::Connect {
             endpoint,
-            node_addr,
+            endpoint_addr,
             alpn,
             reply,
-        } => match endpoint
-            .connect(node_addr, &alpn)
-            .await
-            .map_err(|err| ConnectionActorError::Iroh(err.into()))
-        {
-            Ok(connection) => {
-                // Give connection object to the caller and stop actor, we're done here.
-                let _ = reply.send(Ok(connection));
+        } => {
+            tracing::Span::current().record(
+                "remote",
+                tracing::field::display(endpoint_addr.id.fmt_short()),
+            );
+            tracing::Span::current().record("alpn", alpn.fmt_short());
+            debug!("try to connect");
+            match endpoint
+                .connect(endpoint_addr, &alpn)
+                .await
+                .map_err(|err| ConnectionActorError::Iroh(err.into()))
+            {
+                Ok(connection) => {
+                    // Give connection object to the caller and stop actor, we're done here.
+                    let _ = reply.send(Ok(connection));
+                }
+                Err(err) => {
+                    warn!("connection establishment failed: {err:#}");
+                    // Inform caller about what went wrong and shut down actor with a failure.
+                    // Since the error types do not implement `Clone` we're helping ourselves with
+                    // an own type holding the string representation.
+                    let reason = err.to_string();
+                    let _ = reply.send(Err(err));
+                    return Err(ConnectionActorError::ConnectionAttemptFailed(reason));
+                }
             }
-            Err(err) => {
-                // Inform caller about what went wrong and shut down actor with a failure.
-                // Since the error types do not implement `Clone` we're helping ourselves with
-                // an own type holding the string representation.
-                let reason = err.to_string();
-                let _ = reply.send(Err(err));
-                return Err(ConnectionActorError::ConnectionAttemptFailed(reason));
-            }
-        },
+        }
         IrohConnectionArgs::Accept {
             incoming,
             protocols,
         } => {
-            // Check incoming request and establish connection when valid ALPN.
-            let (connection, alpn) = accept_incoming(incoming, &protocols).await?;
+            // Accept incoming request.
+            let mut accepting = match incoming.accept() {
+                Ok(accepting) => accepting,
+                Err(err) => {
+                    warn!("ignoring connection: accepting failed: {err:#}");
+                    return Err(ConnectionActorError::Iroh(err.into()));
+                }
+            };
 
-            // Spawn a task which executes the actual protocol. As soon as this has finished
-            // we're telling the actor to finally shut down.
-            let handle = tokio::spawn(async move {
-                let protocols = protocols.read().await;
-                let Some(protocol_handler) = protocols.get(&alpn) else {
-                    unreachable!("already checked in accept_incoming if this alpn exists");
-                };
+            // Check if we're supporting this ALPN.
+            let mut alpn = match accepting.alpn().await {
+                Ok(alpn) => alpn,
+                Err(err) => {
+                    warn!("ignoring connection: invalid handshake: {err:#}");
+                    return Err(ConnectionActorError::Iroh(err.into()));
+                }
+            };
+            tracing::Span::current().record("alpn", alpn.fmt_short());
+            let protocols = protocols.read().await;
+            let Some(protocol_handler) = protocols.get(&alpn) else {
+                warn!("ignoring connection: unsupported alpn protocol");
+                return Err(ConnectionActorError::InvalidAlpnHandshake(alpn));
+            };
 
-                let _ = protocol_handler.accept(connection).await;
-            });
+            // Establish connection.
+            let mut connection = match protocol_handler.on_accepting(accepting).await {
+                Ok(connection) => connection,
+                Err(err) => {
+                    warn!("accepting incoming connection ended with error: {err}");
+                    return Err(ConnectionActorError::Iroh(err.into()));
+                }
+            };
+            tracing::Span::current().record(
+                "remote",
+                tracing::field::display(connection.remote_id().fmt_short()),
+            );
+
+            // Pass over connection to handler, ignore any errors here as this is nothing we need
+            // to be aware of anymore, this is the end of this actor.
+            let _ = protocol_handler.accept(connection).await;
         }
     }
 
     Ok(())
-}
-
-async fn accept_incoming(
-    incoming: iroh::endpoint::Incoming,
-    protocols: &ProtocolMap,
-) -> Result<(iroh::endpoint::Connection, ProtocolId), ConnectionActorError> {
-    // Accept incoming request.
-    let mut connecting = incoming
-        .accept()
-        .map_err(|err| ConnectionActorError::Iroh(err.into()))?;
-
-    // Check if we're supporting this ALPN.
-    let alpn = connecting
-        .alpn()
-        .await
-        .map_err(|err| ConnectionActorError::Iroh(err.into()))?;
-    let protocols = protocols.read().await;
-    let Some(protocol_handler) = protocols.get(&alpn) else {
-        return Err(ConnectionActorError::InvalidAlpnHandshake(alpn));
-    };
-
-    // Establish connection.
-    let connection = protocol_handler
-        .on_accepting(connecting)
-        .await
-        .map_err(|err| ConnectionActorError::Iroh(err.into()))?;
-    Ok((connection, alpn))
 }
 
 #[derive(Debug, Error)]

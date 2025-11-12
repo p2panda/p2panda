@@ -11,11 +11,12 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tracing::debug;
 
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
-use crate::utils::from_private_key;
+use crate::utils::{ShortFormat, from_private_key};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -158,10 +159,11 @@ impl ThreadLocalActor for IrohEndpoint {
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+                debug!(alpn = %mixed_protocol_id.fmt_short(), "register protocol");
                 let mut protocols = state.protocols.write().await;
-                protocols.insert(mixed_protocol_id.to_vec(), protocol_handler);
+                protocols.insert(mixed_protocol_id, protocol_handler);
             }
-            ToIrohEndpoint::Connect(node_addr, alpn, reply) => {
+            ToIrohEndpoint::Connect(endpoint_addr, alpn, reply) => {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
 
@@ -171,28 +173,39 @@ impl ThreadLocalActor for IrohEndpoint {
                 // is not possible here.
                 IrohConnection::spawn(
                     None,
-                    IrohConnectionArgs::Connect {
-                        endpoint: state.endpoint
-                            .clone()
-                            .expect(
-                                "bind always takes place first, an endpoint must exist after this point"
-                            ),
-                        node_addr,
-                        alpn: mixed_protocol_id.to_vec(),
-                        reply,
-                    },
+                    (
+                        state.args.public_key,
+                        IrohConnectionArgs::Connect {
+                            endpoint: state.endpoint
+                                .clone()
+                                .expect(
+                                    "bind always takes place first, an endpoint must exist after this point"
+                                ),
+                            endpoint_addr,
+                            alpn: mixed_protocol_id,
+                            reply,
+                        },
+                    ),
                     state.worker_pool.clone(),
                 )
                 .await?;
             }
             ToIrohEndpoint::Incoming(incoming) => {
-                // This actor will run as long as the protocol session.
+                // This actor runs as long as the protocol session holds the "accept" method. If
+                // the implementation decides to move the `Connection` object out of it, this actor
+                // will terminate, but the connection will persist.
+                //
+                // This means: The lifetime of this actor does _not_ indicate the lifetime of the
+                // connection itself.
                 IrohConnection::spawn(
                     None,
-                    IrohConnectionArgs::Accept {
-                        incoming,
-                        protocols: state.protocols.clone(),
-                    },
+                    (
+                        state.args.public_key,
+                        IrohConnectionArgs::Accept {
+                            incoming,
+                            protocols: state.protocols.clone(),
+                        },
+                    ),
                     state.worker_pool.clone(),
                 )
                 .await?;

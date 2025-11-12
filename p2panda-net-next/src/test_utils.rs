@@ -42,6 +42,12 @@ pub fn test_args_from_seed(
     )
 }
 
+pub fn setup_logging() {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+}
+
 #[test]
 fn deterministic_args() {
     let (args_1, _) = test_args();
