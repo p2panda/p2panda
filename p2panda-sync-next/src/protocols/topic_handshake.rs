@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::{Sink, Stream};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -191,6 +191,12 @@ pub enum TopicHandshakeError<T> {
 
     #[error(transparent)]
     MpscSend(#[from] mpsc::SendError),
+}
+
+impl<T: std::fmt::Debug> Display for TopicHandshakeError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Events emitted from topic handshake protocol sessions.
