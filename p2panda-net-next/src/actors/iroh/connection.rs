@@ -92,7 +92,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
                 // an own type holding the string representation.
                 let reason = err.to_string();
                 let _ = reply.send(Err(err));
-                return Err(ConnectionActorError::ConnectionAttemptFailed(reason).into());
+                return Err(ConnectionActorError::ConnectionAttemptFailed(reason));
             }
         },
         IrohConnectionArgs::Accept {
