@@ -25,6 +25,7 @@ pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 pub fn test_args() -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, TopicId, NodeId, NodeInfo>,
+    NoSyncConfig,
 ) {
     test_args_from_seed([1; 32])
 }
@@ -34,6 +35,7 @@ pub fn test_args_from_seed(
 ) -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, TopicId, NodeId, NodeInfo>,
+    NoSyncConfig,
 ) {
     let mut rng = ChaCha20Rng::from_seed(seed);
     let store = MemoryStore::<ChaCha20Rng, TopicId, NodeId, NodeInfo>::new(rng.clone());
@@ -51,6 +53,7 @@ pub fn test_args_from_seed(
             .with_rng(rng)
             .build(),
         store,
+        NoSyncConfig,
     )
 }
 
@@ -64,8 +67,8 @@ pub fn setup_logging() {
 
 #[test]
 fn deterministic_args() {
-    let (args_1, _) = test_args();
-    let (args_2, _) = test_args();
+    let (args_1, _, _) = test_args();
+    let (args_2, _, _) = test_args();
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
