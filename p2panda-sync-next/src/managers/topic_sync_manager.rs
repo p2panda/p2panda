@@ -74,7 +74,12 @@ where
     S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
+    type Config = TopicSyncManagerConfig<S, M>;
     type Error = TopicSyncManagerError<T, S, M, L, E>;
+
+    fn from_config(config: Self::Config) -> Self {
+        Self::new(config.topic_map, config.store)
+    }
 
     fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(128);
@@ -226,6 +231,11 @@ where
     }
 }
 
+pub struct TopicSyncManagerConfig<S, M> {
+    pub(crate) store: S,
+    pub(crate) topic_map: M,
+}
+
 #[derive(Debug, Error)]
 pub enum TopicSyncManagerError<T, S, M, L, E>
 where
@@ -258,11 +268,20 @@ mod tests {
 
     use crate::TopicSyncManager;
     use crate::log_sync::{LogSyncEvent, StatusEvent};
-    use crate::test_utils::{LogIdExtension, Peer, TestTopic, TestTopicSyncEvent, run_protocol};
+    use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
+    use crate::test_utils::{LogIdExtension, Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager, run_protocol};
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
     use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
+
+    #[test]
+    fn from_config() {
+        let store = TestMemoryStore::new();
+        let topic_map = TestTopicMap::new();
+        let config = TopicSyncManagerConfig { store, topic_map };
+        let _: TestTopicSyncManager = SyncManager::from_config(config);
+    }
 
     #[tokio::test]
     async fn manager_e2e() {

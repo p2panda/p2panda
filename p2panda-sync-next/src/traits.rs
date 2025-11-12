@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::{fmt::Debug, pin::Pin};
 
@@ -27,7 +28,10 @@ pub trait Protocol {
 #[allow(clippy::type_complexity)]
 pub trait SyncManager<T> {
     type Protocol: Protocol;
+    type Config;
     type Error: Debug;
+
+    fn from_config(config: Self::Config) -> Self;
 
     /// Instantiate a new sync session.
     fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol;
