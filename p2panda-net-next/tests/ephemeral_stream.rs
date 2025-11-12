@@ -2,6 +2,7 @@
 
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_net_next::{NetworkBuilder, NodeId, NodeInfo, TopicId};
+use p2panda_net_next::test_utils::{NoSyncConfig, NoSyncManager};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::broadcast::error::TryRecvError;
@@ -19,7 +20,10 @@ async fn two_peer_ephemeral_messaging() {
         let store =
             MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([1; 32]));
         let node_builder = NetworkBuilder::new([7; 32]);
-        let node = node_builder.build(store).await.unwrap();
+        let node = node_builder
+            .build::<_, _, NoSyncManager>(store, NoSyncConfig)
+            .await
+            .unwrap();
 
         let stream = node.ephemeral_stream(&topic_id).await.unwrap();
 
@@ -43,7 +47,7 @@ async fn two_peer_ephemeral_messaging() {
     // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
     // changeover.
     let store = MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([2; 32]));
-    let node = node_builder.build(store).await.unwrap();
+    let node = node_builder.build::<_, _, NoSyncManager>(store, NoSyncConfig).await.unwrap();
 
     let stream = node.ephemeral_stream(&topic_id).await.unwrap();
 

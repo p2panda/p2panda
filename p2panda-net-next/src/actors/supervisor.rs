@@ -20,9 +20,9 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore;
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use rand::SeedableRng;
@@ -40,10 +40,11 @@ use crate::{NodeId, NodeInfo};
 /// Supervisor actor name.
 pub const SUPERVISOR: &str = "net.supervisor";
 
-pub struct SupervisorState<S, T> {
+pub struct SupervisorState<S, T, C> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     store: S,
+    sync_config: C,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook<T>>,
@@ -52,11 +53,11 @@ pub struct SupervisorState<S, T> {
     endpoint_supervisor_failures: u16,
 }
 
-pub struct Supervisor<S, T> {
-    _marker: PhantomData<(S, T)>,
+pub struct Supervisor<S, T, M> {
+    _marker: PhantomData<(S, T, M)>,
 }
 
-impl<S, T> Default for Supervisor<S, T> {
+impl<S, T, M> Default for Supervisor<S, T, M> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -64,24 +65,26 @@ impl<S, T> Default for Supervisor<S, T> {
     }
 }
 
-impl<S, T> ThreadLocalActor for Supervisor<S, T>
+impl<S, T, M> ThreadLocalActor for Supervisor<S, T, M>
 where
     S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
     for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    M: SyncManager<T> + Send + 'static,
+    M::Config: Clone + Send + Sync + 'static,
 {
-    type State = SupervisorState<S, T>;
+    type State = SupervisorState<S, T, M::Config>;
 
     type Msg = ();
 
-    type Arguments = (ApplicationArguments, S);
+    type Arguments = (ApplicationArguments, S, M::Config);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, store) = args;
+        let (args, store, sync_config) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the events actor.
@@ -115,6 +118,7 @@ where
             actor_namespace,
             args,
             store,
+            sync_config,
             events_actor,
             events_actor_failures: 0,
             address_book_actor,
@@ -234,17 +238,18 @@ mod tests {
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
     use crate::test_utils::test_args;
+    use crate::test_utils::NoSyncManager;
 
     use super::{SUPERVISOR, Supervisor};
 
     #[tokio::test]
     async fn child_actors_started() {
-        let (args, store) = test_args();
+        let (args, store, sync_config) = test_args();
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, _, NoSyncManager>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            (args.clone(), store),
+            (args.clone(), store, sync_config),
             args.root_thread_pool,
         )
         .await

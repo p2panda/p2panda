@@ -8,6 +8,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_sync::traits::SyncManager;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
@@ -98,11 +99,19 @@ impl NetworkBuilder {
         self
     }
 
+    // @TODO: might be nicer to have the generic parameters on the builder struct itself, we don't
+    // need to call build() multiple times with different store/sync/topics I don't think.
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError<T>>
+    pub async fn build<S, T, M>(
+        self,
+        store: S,
+        sync_config: M::Config,
+    ) -> Result<Network, NetworkError>
     where
         S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
+        M: SyncManager<T> + Send + 'static,
+        M::Config: Clone + Send + Sync + 'static,
         for<'a> T:
             Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
     {
@@ -111,12 +120,11 @@ impl NetworkBuilder {
 
         // Spawn the root-level supervisor actor.
         let root_thread_pool = self.args.root_thread_pool.clone();
-        let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, _, M>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            (self.args, store),
+            (self.args, store, sync_config),
             root_thread_pool.clone(),
-        )
-        .await?;
+        );
 
         Ok(Network {
             actor_namespace,

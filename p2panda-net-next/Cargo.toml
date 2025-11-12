@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 ciborium = "0.2.2"
+futures = "0.3.31"
 futures-util = "0.3.31"
 hex = "0.4.3"
 iroh = { version = "0.95.1", default-features = false }
