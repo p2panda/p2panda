@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_discovery::address_book::memory::MemoryStore;
+use p2panda_net_next::test_utils::{NoSyncConfig, NoSyncManager, test_args};
 use p2panda_net_next::{NetworkBuilder, NodeId, NodeInfo, TopicId};
-use p2panda_net_next::test_utils::{NoSyncConfig, NoSyncManager};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::broadcast::error::TryRecvError;
@@ -10,9 +10,11 @@ use tokio::sync::broadcast::error::TryRecvError;
 // NOTE(glyph): This test will only be meaningful once the address book is fully implemented.
 //
 // I've included it already to give a demonstration of the external API we're working towards.
+#[cfg(test)]
 #[tokio::test]
 async fn two_peer_ephemeral_messaging() {
     let topic_id = [1; 32];
+    let (args, store, _) = test_args();
 
     let join_handle = tokio::spawn(async move {
         // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
@@ -47,7 +49,10 @@ async fn two_peer_ephemeral_messaging() {
     // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
     // changeover.
     let store = MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([2; 32]));
-    let node = node_builder.build::<_, _, NoSyncManager>(store, NoSyncConfig).await.unwrap();
+    let node = node_builder
+        .build::<_, _, NoSyncManager>(store, NoSyncConfig)
+        .await
+        .unwrap();
 
     let stream = node.ephemeral_stream(&topic_id).await.unwrap();
 

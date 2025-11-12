@@ -5,6 +5,8 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::hash::Hash as StdHash;
+use std::fmt::Debug;
 
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::address_book::AddressBookStore;
