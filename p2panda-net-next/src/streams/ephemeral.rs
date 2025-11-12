@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Topic stream types and associated methods.
+//! Ephemeral stream types and associated methods.
 //!
-//! Topic streams provide an interface for publishing messages into the network and receiving
+//! Ephemeral streams provide an interface for publishing messages into the network and receiving
 //! messages from the network.
 //!
 //! Ephemeral streams are intended to be used for relatively short-lived messages without
@@ -12,37 +12,18 @@
 //! the message is received, even though the publication time was strictly before that of the local
 //! subscription event.
 //!
-//! Use the standard topic stream if you wish to receive past state and (optionally) messages
-//! representing the latest updates in an ongoing manner.
+//! Use the eventually consistent stream if you wish to receive past state and (optionally)
+//! messages representing the latest updates in an ongoing manner.
 use ractor::{ActorRef, call, registry};
-use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
-
-#[derive(Debug, Error)]
-pub enum StreamError<T> {
-    #[error(transparent)]
-    Send(#[from] SendError<T>),
-
-    #[error(transparent)]
-    Recv(#[from] RecvError),
-
-    #[error("actor {0} failed to process request")]
-    Actor(String),
-
-    #[error("failed to call {0} actor; it may be in the process of restarting")]
-    ActorNotFound(String),
-
-    #[error("no stream exists for the given topic")]
-    StreamNotFound,
-}
+use crate::streams::StreamError;
 
 /// A handle to an ephemeral messaging stream.
 ///
