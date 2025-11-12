@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 /// Ephemeral streams actor name.
-pub const EPHEMERAL_STREAMS: &str = "net.stream.ephemeral";
+pub const EPHEMERAL_STREAMS: &str = "net.streams.ephemeral";
 
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
@@ -37,7 +37,7 @@ pub enum ToEphemeralStreams {
 /// gossip overlay.
 type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNetwork>)>;
 
-pub struct StreamState {
+pub struct EphemeralStreamsState {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
     sync_actor: ActorRef<()>,
@@ -49,7 +49,7 @@ pub struct StreamState {
 pub struct EphemeralStreams;
 
 impl ThreadLocalActor for EphemeralStreams {
-    type State = StreamState;
+    type State = EphemeralStreamsState;
     type Msg = ToEphemeralStreams;
     type Arguments = (ActorNamespace, ActorRef<()>, ActorRef<ToGossip>);
 
@@ -65,7 +65,7 @@ impl ThreadLocalActor for EphemeralStreams {
         // Sync manager actors are all spawned in a dedicated thread.
         let stream_thread_pool = ThreadLocalActorSpawner::new();
 
-        let state = StreamState {
+        let state = EphemeralStreamsState {
             actor_namespace,
             gossip_actor,
             sync_actor,
