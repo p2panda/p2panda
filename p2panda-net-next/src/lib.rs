@@ -9,9 +9,9 @@ mod cbor;
 mod config;
 mod network;
 mod protocols;
+mod streams;
 #[cfg(test)]
 mod test_utils;
-mod topic_streams;
 mod utils;
 
 pub use addrs::{
