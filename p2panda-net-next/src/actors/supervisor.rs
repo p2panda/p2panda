@@ -67,9 +67,9 @@ impl<S, T, M> Default for Supervisor<S, T, M> {
 
 impl<S, T, M> ThreadLocalActor for Supervisor<S, T, M>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Serialize + Deserialize<'a> + 'static,
     M: SyncManager<T> + Send + 'static,
     M::Config: Clone + Send + Sync + 'static,
 {
