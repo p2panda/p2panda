@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
+use futures_util::SinkExt;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
 use p2panda_discovery::traits::DiscoveryProtocol as _;
@@ -104,19 +105,19 @@ where
         let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
-        let (tx, rx) = match args {
+        let (connection, tx, rx) = match args {
             DiscoverySessionRole::Connect => {
-                trace!("try to connect");
                 // Try to establish a direct connection with this node.
                 let connection =
                     connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
-                trace!("lala");
-                connection.open_bi().await?
+                let (tx, rx) = connection.open_bi().await?;
+                (connection, tx, rx)
             }
-            DiscoverySessionRole::Accept { connection } => connection.accept_bi().await?,
+            DiscoverySessionRole::Accept { connection } => {
+                let (tx, rx) = connection.accept_bi().await?;
+                (connection, tx, rx)
+            }
         };
-
-        trace!("connect established");
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
@@ -131,8 +132,16 @@ where
             remote_node_id,
         );
         let result = match role {
-            Role::Alice => protocol.alice(&mut tx, &mut rx).await?,
-            Role::Bob => protocol.bob(&mut tx, &mut rx).await?,
+            Role::Alice => {
+                let result = protocol.alice(&mut tx, &mut rx).await?;
+                connection.close(0u32.into(), b"done");
+                result
+            }
+            Role::Bob => {
+                let result = protocol.bob(&mut tx, &mut rx).await?;
+                connection.closed().await;
+                result
+            }
         };
 
         // Inform manager about our results.
