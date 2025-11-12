@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 ciborium = "0.2.2"
 futures-util = "0.3.31"
+hex = "0.4.3"
 iroh = { version = "0.95.1", default-features = false }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
@@ -26,3 +27,4 @@ tracing = "0.1.41"
 
 [dev-dependencies]
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
