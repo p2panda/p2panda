@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 /// Default port of a node socket.
 pub const DEFAULT_BIND_PORT: u16 = 2022;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IrohConfig {
     pub bind_ip_v4: Ipv4Addr,
     pub bind_port_v4: u16,

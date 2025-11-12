@@ -2,6 +2,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::NodeId;
+
 /// Returns current UNIX timestamp from local system time.
 pub fn current_timestamp() -> u64 {
     SystemTime::now()
@@ -23,4 +25,28 @@ pub fn from_public_key(key: p2panda_core::PublicKey) -> iroh_base::PublicKey {
 /// Converts a `p2panda-core` private key to the "iroh" type.
 pub fn from_private_key(key: p2panda_core::PrivateKey) -> iroh_base::SecretKey {
     iroh_base::SecretKey::from_bytes(key.as_bytes())
+}
+
+/// Returns a displayable string representing the underlying value in a short format, easy to read
+/// during debugging and logging.
+pub trait ShortFormat {
+    fn fmt_short(&self) -> String;
+}
+
+impl ShortFormat for NodeId {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..10].to_string()
+    }
+}
+
+impl ShortFormat for [u8; 32] {
+    fn fmt_short(&self) -> String {
+        hex::encode(&self[0..5]).to_string()
+    }
+}
+
+impl ShortFormat for Vec<u8> {
+    fn fmt_short(&self) -> String {
+        hex::encode(&self[0..5]).to_string()
+    }
 }
