@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
 
 use p2panda_core::PrivateKey;
+use p2panda_discovery::address_book::AddressBookStore as _;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
 use rand::Rng;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -39,8 +38,14 @@ struct TestNode {
 }
 
 impl TestNode {
-    pub async fn spawn(seed: [u8; 32]) -> Self {
+    pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
         let (args, store) = test_args_from_seed(seed);
+
+        // Pre-populate the address book with known addresses.
+        for info in node_infos {
+            store.insert_node_info(info).await.unwrap();
+        }
+
         let actor_namespace = generate_actor_namespace(&args.public_key);
         let thread_pool = ThreadLocalActorSpawner::new();
 
@@ -60,7 +65,7 @@ impl TestNode {
         .await
         .unwrap();
 
-        let (discovery_manager_ref, discovery_manager_handle) = DiscoveryManager::spawn(
+        let (discovery_manager_ref, _) = DiscoveryManager::spawn(
             Some(with_namespace(DISCOVERY_MANAGER, &actor_namespace)),
             (args.clone(), store.clone()),
             thread_pool.clone(),
@@ -105,19 +110,27 @@ impl TestNode {
 async fn smoke_test() {
     setup_logging();
 
-    let mut alice = TestNode::spawn([10; 32]).await;
-    let mut bob = TestNode::spawn([11; 32]).await;
+    // Bob's address book is empty;
+    let mut bob = TestNode::spawn([11; 32], vec![]).await;
 
     // Alice inserts Bob's info in address book and marks it as a bootstrap node.
-    call!(alice.address_book_ref, ToAddressBook::InsertNodeInfo, {
-        let mut info = bob.node_info();
-        info.bootstrap = true;
-        info
-    })
-    .unwrap();
+    let alice = TestNode::spawn(
+        [10; 32],
+        vec![{
+            let mut info = bob.node_info();
+            info.bootstrap = true;
+            info
+        }],
+    )
+    .await;
 
-    sleep(Duration::from_secs(5)).await;
+    sleep(Duration::from_millis(100)).await;
 
-    let metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
-    println!("{:?}", metrics);
+    // Alice didn't learn anything new.
+    let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
+    assert_eq!(alice_metrics.newly_learned_transport_infos, 0);
+
+    // Bob learned of Alice.
+    let bob_metrics = call!(bob.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
+    assert_eq!(bob_metrics.newly_learned_transport_infos, 1);
 }

@@ -5,17 +5,14 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use futures_util::SinkExt;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
 use p2panda_discovery::traits::DiscoveryProtocol as _;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, trace};
 
 use crate::actors::ActorNamespace;
-use crate::actors::discovery::walker::ToDiscoveryWalker;
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, SubscriptionInfo, ToDiscoveryManager};
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
@@ -99,7 +96,7 @@ where
         &self,
         myself: ActorRef<Self::Msg>,
         message: Self::Msg,
-        state: &mut Self::State,
+        _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         let ToDiscoverySession::Initiate(args) = message;
         let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;

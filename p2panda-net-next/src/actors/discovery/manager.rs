@@ -14,7 +14,7 @@ use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, trace, warn};
+use tracing::debug;
 
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
@@ -27,7 +27,7 @@ use crate::actors::iroh::register_protocol;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::utils::to_public_key;
+use crate::utils::{ShortFormat, to_public_key};
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
@@ -111,13 +111,13 @@ where
 #[derive(Clone, Debug, Default)]
 pub struct DiscoveryMetrics {
     /// Failed discovery sessions.
-    failed_discovery_sessions: usize,
+    pub failed_discovery_sessions: usize,
 
     /// Successful discovery sessions.
-    successful_discovery_sessions: usize,
+    pub successful_discovery_sessions: usize,
 
     /// Number of discovered transport infos which we're actually new for us.
-    newly_learned_transport_infos: usize,
+    pub newly_learned_transport_infos: usize,
 }
 
 #[allow(unused)]
@@ -135,6 +135,29 @@ pub enum DiscoverySessionInfo {
         started_at: Instant,
         handle: JoinHandle<()>,
     },
+}
+
+impl DiscoverySessionInfo {
+    pub fn remote_node_id(&self) -> NodeId {
+        match self {
+            DiscoverySessionInfo::Initiated { remote_node_id, .. } => *remote_node_id,
+            DiscoverySessionInfo::Accepted { remote_node_id, .. } => *remote_node_id,
+        }
+    }
+
+    pub fn session_id(&self) -> DiscoverySessionId {
+        match self {
+            DiscoverySessionInfo::Initiated { session_id, .. } => *session_id,
+            DiscoverySessionInfo::Accepted { session_id, .. } => *session_id,
+        }
+    }
+
+    pub fn started_at(&self) -> &Instant {
+        match self {
+            DiscoverySessionInfo::Initiated { started_at, .. } => started_at,
+            DiscoverySessionInfo::Accepted { started_at, .. } => started_at,
+        }
+    }
 }
 
 pub struct WalkerInfo<T> {
@@ -238,12 +261,6 @@ where
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
-                trace!(
-                    session_id = %session_id,
-                    walker_id = %walker_id,
-                    node_id = %node_id,
-                    "discovery session initiated"
-                );
 
                 let (_, handle) = DiscoverySession::spawn_linked(
                     Some(
@@ -277,11 +294,6 @@ where
             ToDiscoveryManager::AcceptSession(node_id, connection) => {
                 // @TODO: Have a max. of concurrently running discovery sessions.
                 let session_id = state.next_session_id();
-                trace!(
-                    session_id = %session_id,
-                    node_id = %node_id,
-                    "discovery session accepted"
-                );
 
                 let (_, handle) = DiscoverySession::spawn_linked(
                     Some(
@@ -312,12 +324,20 @@ where
                 );
             }
             ToDiscoveryManager::OnSuccess(session_id, discovery_result) => {
-                debug!(session_id = %session_id, "discovery session succeeded");
                 state.metrics.successful_discovery_sessions += 1;
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
+                debug!(
+                    %session_id,
+                    node_id = session_info.remote_node_id().fmt_short(),
+                    duration_ms = session_info.started_at().elapsed().as_millis(),
+                    transport_infos = %discovery_result.node_transport_infos.len(),
+                    stream_topics = %discovery_result.node_topics.len(),
+                    ephemeral_stream_topics = %discovery_result.node_topic_ids.len(),
+                    "successful discovery session"
+                );
 
                 if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
                     // Continue random walk.
@@ -327,14 +347,20 @@ where
                 Self::insert_address_book(state, discovery_result).await;
             }
             ToDiscoveryManager::OnFailure(session_id, err) => {
-                warn!(session_id = %session_id, "discovery session failed: {err:#}");
                 state.metrics.failed_discovery_sessions += 1;
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when session failed");
+                debug!(
+                    %session_id,
+                    node_id = session_info.remote_node_id().fmt_short(),
+                    duration_ms = session_info.started_at().elapsed().as_millis(),
+                    "failed discovery session: {err:#}"
+                );
 
                 if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
+                    // Continue random walk.
                     state.repeat_last_walk_step(walker_id);
                 }
             }
