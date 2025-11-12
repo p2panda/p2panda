@@ -11,6 +11,7 @@ use p2panda_discovery::traits::DiscoveryProtocol as _;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
+use tracing::{instrument, trace};
 
 use crate::actors::ActorNamespace;
 use crate::actors::discovery::walker::ToDiscoveryWalker;
@@ -24,6 +25,7 @@ pub const DISCOVERY_SESSION: &str = "net.discovery.session";
 
 pub type DiscoverySessionId = u64;
 
+#[derive(Debug)]
 pub struct DiscoverySession<S, T> {
     _marker: PhantomData<(S, T)>,
 }
@@ -36,6 +38,7 @@ impl<S, T> Default for DiscoverySession<S, T> {
     }
 }
 
+#[derive(Debug)]
 pub enum DiscoverySessionArguments {
     Connect,
     Accept {
@@ -76,6 +79,7 @@ where
         DiscoverySessionArguments,
     );
 
+    #[instrument]
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
@@ -86,13 +90,17 @@ where
 
         let (tx, rx) = match args {
             DiscoverySessionArguments::Connect => {
+                trace!("try to connect");
                 // Try to establish a direct connection with this node.
                 let connection =
                     connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
+                trace!("lala");
                 connection.open_bi().await?
             }
             DiscoverySessionArguments::Accept { connection } => connection.accept_bi().await?,
         };
+
+        trace!("connect established");
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.

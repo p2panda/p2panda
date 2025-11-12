@@ -2,6 +2,8 @@
 
 mod manager;
 mod session;
+#[cfg(test)]
+mod tests;
 mod walker;
 
 use std::marker::PhantomData;
@@ -125,25 +127,5 @@ impl DiscoveryActorName {
                 actor_namespace,
             ),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use p2panda_core::PrivateKey;
-
-    use crate::actors::generate_actor_namespace;
-
-    use super::DiscoveryActorName;
-
-    #[test]
-    fn discovery_actor_name() {
-        let public_key = PrivateKey::new().public_key();
-        let actor_namespace = &generate_actor_namespace(&public_key);
-        let value = DiscoveryActorName::new_walker(6).to_string(actor_namespace);
-        assert_eq!(
-            DiscoveryActorName::from_string(&value),
-            DiscoveryActorName::Walker { walker_id: 6 }
-        );
     }
 }

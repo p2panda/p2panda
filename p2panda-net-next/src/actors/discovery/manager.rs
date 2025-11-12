@@ -12,8 +12,9 @@ use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, cast, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
 use serde::{Deserialize, Serialize};
+use tracing::trace;
 
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
@@ -45,6 +46,9 @@ pub enum ToDiscoveryManager<T> {
 
     /// Handle failed discovery session.
     OnFailure(DiscoverySessionId),
+
+    /// Returns current metrics.
+    Metrics(RpcReplyPort<DiscoveryMetrics>),
 }
 
 pub struct DiscoveryManagerState<S, T> {
@@ -101,7 +105,7 @@ where
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DiscoveryMetrics {
     /// Failed discovery sessions.
     failed_discovery_sessions: usize,
@@ -182,7 +186,7 @@ where
             actor_namespace.clone(),
         )?;
 
-        // Spawn random walkers. They start automatically and initiate discovery sessions.
+        // Spawn random walkers. They automatically initiate discovery sessions.
         let mut walkers = HashMap::new();
         for walker_id in 0..args.discovery_config.random_walkers_count {
             let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
@@ -192,6 +196,9 @@ where
                 pool.clone(),
             )
             .await?;
+
+            // Start random walk, from now on it will run forever.
+            walker_ref.send_message(ToDiscoveryWalker::NextNode(None))?;
 
             walkers.insert(
                 walker_id,
@@ -228,6 +235,12 @@ where
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
+                trace!(
+                    session_id = %session_id,
+                    walker_id = %walker_id,
+                    node_id = %node_id,
+                    "discovery session initiated"
+                );
 
                 let (_, handle) = DiscoverySession::spawn_linked(
                     Some(
@@ -261,6 +274,11 @@ where
             ToDiscoveryManager::AcceptSession(node_id, connection) => {
                 // @TODO: Have a max. of concurrently running discovery sessions.
                 let session_id = state.next_session_id();
+                trace!(
+                    session_id = %session_id,
+                    node_id = %node_id,
+                    "discovery session accepted"
+                );
 
                 let (_, handle) = DiscoverySession::spawn_linked(
                     Some(
@@ -305,6 +323,7 @@ where
                 Self::insert_address_book(state, discovery_result).await;
             }
             ToDiscoveryManager::OnFailure(session_id) => {
+                trace!(session_id = %session_id, "discovery session failed");
                 state.metrics.failed_discovery_sessions += 1;
                 let session_info = state
                     .sessions
@@ -314,6 +333,9 @@ where
                 if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
                     state.repeat_last_walk_step(walker_id);
                 }
+            }
+            ToDiscoveryManager::Metrics(reply) => {
+                let _ = reply.send(state.metrics.clone());
             }
         }
         Ok(())

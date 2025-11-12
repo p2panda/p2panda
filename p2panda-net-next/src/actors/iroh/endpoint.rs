@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::debug;
@@ -219,7 +219,9 @@ impl ThreadLocalActor for IrohEndpoint {
                     ),
                     state.worker_pool.clone(),
                 )
-                .await?;
+                .await;
+
+                println!("{:?}", lala);
             }
             ToIrohEndpoint::Endpoint(reply) => {
                 let _ = reply.send(state.endpoint.clone().expect(
