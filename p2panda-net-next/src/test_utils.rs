@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::pin::Pin;
 
+use futures::SinkExt;
+use futures::channel::mpsc::{self, SendError};
+use futures_util::Sink;
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
+use p2panda_sync::ToSync;
+use p2panda_sync::traits::{Protocol, SyncManager};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tracing::Level;
@@ -61,4 +68,61 @@ fn deterministic_args() {
     let (args_2, _) = test_args();
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
+}
+
+pub struct NoProtocol;
+impl Protocol for NoProtocol {
+    type Output = ();
+    type Error = Infallible;
+    type Event = ();
+    type Message = ();
+
+    async fn run(
+        self,
+        sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
+        stream: &mut (
+                 impl futures_util::Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin
+             ),
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct NoSyncManager;
+
+#[derive(Clone, Debug, Default)]
+pub struct NoSyncConfig;
+
+impl<T> SyncManager<T> for NoSyncManager {
+    type Protocol = NoProtocol;
+    type Config = NoSyncConfig;
+    type Error = SendError;
+
+    fn from_config(config: Self::Config) -> Self {
+        NoSyncManager
+    }
+
+    fn session(
+        &mut self,
+        session_id: u64,
+        config: &p2panda_sync::SyncSessionConfig<T>,
+    ) -> Self::Protocol {
+        NoProtocol
+    }
+
+    fn session_handle(
+        &self,
+        session_id: u64,
+    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
+        let (tx, rx) = mpsc::channel::<ToSync>(128);
+        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>;
+        Some(sink)
+    }
+
+    async fn next_event(
+        &mut self,
+    ) -> Result<Option<p2panda_sync::SyncManagerEvent<T, ()>>, Self::Error> {
+        Ok(None)
+    }
 }
