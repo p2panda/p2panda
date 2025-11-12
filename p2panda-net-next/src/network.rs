@@ -10,16 +10,16 @@ use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::address_book::AddressBookStore;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorRef, call, registry};
+use ractor::{call, registry, ActorRef};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::actors::stream::{STREAM, ToStream};
-use crate::actors::supervisor::{SUPERVISOR, Supervisor};
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
+use crate::actors::streams::ephemeral::{ToEphemeralStreams, EPHEMERAL_STREAMS};
+use crate::actors::supervisor::{Supervisor, SUPERVISOR};
+use crate::actors::{generate_actor_namespace, with_namespace, ActorNamespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
-use crate::topic_streams::EphemeralStream;
+use crate::streams::ephemeral::EphemeralStream;
 use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
@@ -159,19 +159,19 @@ impl Network {
         &self,
         topic_id: &TopicId,
     ) -> Result<EphemeralStream, NetworkError> {
-        // Get a reference to the stream actor.
-        if let Some(stream_actor) =
-            registry::where_is(with_namespace(STREAM, &self.actor_namespace))
+        // Get a reference to the ephemeral streams actor.
+        if let Some(ephemeral_streams_actor) =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
         {
-            let actor: ActorRef<ToStream> = stream_actor.into();
+            let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
 
-            // Ask the stream actor for an ephemeral stream.
-            let stream = call!(actor, ToStream::CreateEphemeralStream, *topic_id)
+            // Ask the ephemeral streams actor for an ephemeral stream.
+            let stream = call!(actor, ToEphemeralStreams::Create, *topic_id)
                 .map_err(|_| NetworkError::StreamCreation)?;
 
             Ok(stream)
         } else {
-            Err(NetworkError::ActorNotFound(STREAM.to_string()))
+            Err(NetworkError::ActorNotFound(EPHEMERAL_STREAMS.to_string()))
         }
     }
 }

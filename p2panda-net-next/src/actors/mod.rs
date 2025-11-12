@@ -6,8 +6,8 @@ mod endpoint_supervisor;
 mod events;
 mod gossip;
 pub mod iroh;
-pub mod stream;
 mod stream_supervisor;
+pub mod streams;
 pub mod supervisor;
 mod sync;
 
