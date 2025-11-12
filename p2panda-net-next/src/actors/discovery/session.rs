@@ -38,24 +38,37 @@ impl<S, T> Default for DiscoverySession<S, T> {
     }
 }
 
+pub enum ToDiscoverySession<S, T> {
+    Initiate(DiscoverySessionArguments<S, T>),
+}
+
+pub type DiscoverySessionArguments<S, T> = (
+    ActorNamespace,
+    DiscoverySessionId,
+    NodeId,
+    S,
+    ActorRef<ToDiscoveryManager<T>>,
+    DiscoverySessionRole,
+);
+
 #[derive(Debug)]
-pub enum DiscoverySessionArguments {
+pub enum DiscoverySessionRole {
     Connect,
     Accept {
         connection: iroh::endpoint::Connection,
     },
 }
 
-impl DiscoverySessionArguments {
-    pub fn role(&self) -> DiscoverySessionRole {
+impl DiscoverySessionRole {
+    fn role(&self) -> Role {
         match self {
-            DiscoverySessionArguments::Connect => DiscoverySessionRole::Alice,
-            DiscoverySessionArguments::Accept { .. } => DiscoverySessionRole::Bob,
+            DiscoverySessionRole::Connect => Role::Alice,
+            DiscoverySessionRole::Accept { .. } => Role::Bob,
         }
     }
 }
 
-pub enum DiscoverySessionRole {
+enum Role {
     Alice,
     Bob,
 }
@@ -68,28 +81,31 @@ where
 {
     type State = ();
 
-    type Msg = ();
+    type Msg = ToDiscoverySession<S, T>;
 
-    type Arguments = (
-        ActorNamespace,
-        DiscoverySessionId,
-        NodeId,
-        S,
-        ActorRef<ToDiscoveryManager<T>>,
-        DiscoverySessionArguments,
-    );
+    type Arguments = DiscoverySessionArguments<S, T>;
 
-    #[instrument]
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        myself.send_message(ToDiscoverySession::Initiate(args))?;
+        Ok(())
+    }
+
+    async fn handle(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: Self::Msg,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        let ToDiscoverySession::Initiate(args) = message;
         let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;
         let role = args.role();
 
         let (tx, rx) = match args {
-            DiscoverySessionArguments::Connect => {
+            DiscoverySessionRole::Connect => {
                 trace!("try to connect");
                 // Try to establish a direct connection with this node.
                 let connection =
@@ -97,7 +113,7 @@ where
                 trace!("lala");
                 connection.open_bi().await?
             }
-            DiscoverySessionArguments::Accept { connection } => connection.accept_bi().await?,
+            DiscoverySessionRole::Accept { connection } => connection.accept_bi().await?,
         };
 
         trace!("connect established");
@@ -115,8 +131,8 @@ where
             remote_node_id,
         );
         let result = match role {
-            DiscoverySessionRole::Alice => protocol.alice(&mut tx, &mut rx).await?,
-            DiscoverySessionRole::Bob => protocol.bob(&mut tx, &mut rx).await?,
+            Role::Alice => protocol.alice(&mut tx, &mut rx).await?,
+            Role::Bob => protocol.bob(&mut tx, &mut rx).await?,
         };
 
         // Inform manager about our results.

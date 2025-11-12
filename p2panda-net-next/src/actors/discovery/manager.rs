@@ -19,7 +19,7 @@ use tracing::trace;
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
-    DiscoverySession, DiscoverySessionArguments, DiscoverySessionId,
+    DiscoverySession, DiscoverySessionId, DiscoverySessionRole,
 };
 use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker};
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, DiscoveryActorName};
@@ -253,7 +253,7 @@ where
                         node_id,
                         state.store.clone(),
                         myself.clone(),
-                        DiscoverySessionArguments::Connect,
+                        DiscoverySessionRole::Connect,
                     ),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -291,7 +291,7 @@ where
                         node_id,
                         state.store.clone(),
                         myself.clone(),
-                        DiscoverySessionArguments::Accept { connection },
+                        DiscoverySessionRole::Accept { connection },
                     ),
                     myself.into(),
                     state.pool.clone(),
