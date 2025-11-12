@@ -9,6 +9,8 @@ mod cbor;
 mod config;
 mod network;
 mod protocols;
+#[cfg(test)]
+mod test_utils;
 mod topic_streams;
 mod utils;
 

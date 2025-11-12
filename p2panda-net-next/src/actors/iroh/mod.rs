@@ -2,6 +2,8 @@
 
 mod connection;
 mod endpoint;
+#[cfg(test)]
+mod tests;
 
 use iroh::protocol::{DynProtocolHandler, ProtocolHandler};
 use ractor::{ActorRef, call, registry};
