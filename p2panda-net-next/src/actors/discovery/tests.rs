@@ -9,13 +9,14 @@ use ractor::{ActorRef, call};
 use rand::Rng;
 use tokio::time::sleep;
 
+use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
+use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
 use crate::args::ApplicationArguments;
 use crate::test_utils::{setup_logging, test_args_from_seed};
-use crate::{NodeId, NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::DiscoveryActorName;
 
@@ -49,17 +50,17 @@ impl TestNode {
         let actor_namespace = generate_actor_namespace(&args.public_key);
         let thread_pool = ThreadLocalActorSpawner::new();
 
-        IrohEndpoint::spawn(
-            Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            args.clone(),
+        let (address_book_ref, _) = AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
+            (store.clone(),),
             thread_pool.clone(),
         )
         .await
         .unwrap();
 
-        let (address_book_ref, _) = AddressBook::spawn(
-            Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (store.clone(),),
+        IrohEndpoint::spawn(
+            Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
+            args.clone(),
             thread_pool.clone(),
         )
         .await
@@ -97,7 +98,6 @@ impl TestNode {
         )]);
         transport_info.timestamp = self.args.rng.random::<u32>() as u64;
         let transport_info = transport_info.sign(&self.args.private_key).unwrap();
-
         NodeInfo {
             node_id: self.args.public_key,
             bootstrap: false,
@@ -113,24 +113,25 @@ async fn smoke_test() {
     // Bob's address book is empty;
     let mut bob = TestNode::spawn([11; 32], vec![]).await;
 
-    // Alice inserts Bob's info in address book and marks it as a bootstrap node.
-    let alice = TestNode::spawn(
-        [10; 32],
-        vec![{
-            let mut info = bob.node_info();
-            info.bootstrap = true;
-            info
-        }],
-    )
-    .await;
+    // Alice inserts Bob's info in address book.
+    let alice = TestNode::spawn([10; 32], vec![bob.node_info()]).await;
 
     sleep(Duration::from_millis(100)).await;
 
-    // Alice didn't learn anything new.
+    // Alice didn't learn about new transport info of Bob.
     let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
     assert_eq!(alice_metrics.newly_learned_transport_infos, 0);
 
     // Bob learned of Alice.
     let bob_metrics = call!(bob.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
     assert_eq!(bob_metrics.newly_learned_transport_infos, 1);
+
+    // Alice should now be in the address book of Bob.
+    let result = call!(
+        bob.address_book_ref,
+        ToAddressBook::NodeInfo,
+        alice.node_id()
+    )
+    .unwrap();
+    assert!(result.is_some());
 }
