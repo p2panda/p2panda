@@ -118,6 +118,10 @@ where
         let (topic_id, config) = args;
         let pool = ThreadLocalActorSpawner::new();
 
+        // @TODO: move registering the sync protocol to the stream actor as this is who will be
+        // responsible for routing accepted sync requests to the correct manager based on the
+        // resolved topic.
+
         // Accept incoming "sync protocol" connection requests.
         register_protocol(
             SYNC_PROTOCOL_ID,
@@ -224,8 +228,8 @@ where
                         .session_topic_map
                         .sender_mut(id)
                         .expect("session handle exists");
-
                     handle.send(ToSync::Close).await?;
+                    Self::drop_session(state, id);
                 }
             }
             ToSyncManager::Close { node_id, topic } => {
@@ -246,13 +250,7 @@ where
                             .expect("session handle exists");
 
                         handle.send(ToSync::Close).await?;
-                        state
-                            .node_session_map
-                            .entry(node_id)
-                            .and_modify(|sessions| {
-                                sessions.remove(id);
-                            });
-                        state.session_topic_map.drop(*id);
+                        Self::drop_session(state, *id);
                     }
                 };
             }
@@ -362,8 +360,11 @@ where
     }
 
     /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut SyncManagerState<M, T>, session_id: u64) {
-        // @TODO: drop the session from all mappings.
+    fn drop_session(state: &mut SyncManagerState<M, T>, id: u64) {
+        state.session_topic_map.drop(id);
+        state.node_session_map.iter_mut().for_each(|(_, sessions)| {
+            sessions.remove(&id);
+        });
     }
 }
 
