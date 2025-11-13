@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO: Correct logic; this is simply a copy-paste of the ephemeral stream types for the moment.
-
 //! Eventually consistent stream types and associated methods.
 //!
 //! Eventually consistent streams provide an interface for publishing messages into the network and
-//! receiving messages from the network.
-//!
-//! Ephemeral streams are intended to be used for relatively short-lived messages without
-//! persistence and catch-up of past state. In most cases, messages will only be received if they
-//! were published after the subscription was created. The exception to this is if the message was
-//! still propagating through the network at the time of the subscription; then it's possible that
-//! the message is received, even though the publication time was strictly before that of the local
-//! subscription event.
+//! receiving messages from the network. They are intended to be used for catching up on past state
+//! and then optionally receiving the latest updates for the given topic.
 //!
 //! Use the ephemeral stream if you simply want to send and receive messages without first
 //! synchronising past state with others nodes.
@@ -27,6 +19,7 @@ use crate::TopicId;
 use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
 };
+use crate::actors::sync::{SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::StreamError;
@@ -35,28 +28,33 @@ use crate::streams::StreamError;
 ///
 /// The stream can be used to publish messages or to request a subscription.
 pub struct EventuallyConsistentStream {
-    topic_id: TopicId,
-    to_topic_tx: Sender<ToNetwork>,
     actor_namespace: ActorNamespace,
+    topic_id: TopicId,
+    sync_manager: ActorRef<ToSyncManager>,
 }
 
 impl EventuallyConsistentStream {
     /// Returns a handle to an eventually consistent messaging stream.
     pub(crate) fn new(
-        topic_id: TopicId,
-        to_topic_tx: Sender<ToNetwork>,
         actor_namespace: ActorNamespace,
+        topic_id: TopicId,
+        sync_manager: ActorRef<ToSyncManager>,
     ) -> Self {
         Self {
-            topic_id,
-            to_topic_tx,
             actor_namespace,
+            topic_id,
+            sync_manager,
         }
     }
 
     /// Publishes a message to the stream.
     pub async fn publish(&self, bytes: impl Into<Vec<u8>>) -> Result<(), StreamError<Vec<u8>>> {
-        self.to_topic_tx.send(bytes.into()).await?;
+        // TODO: Error handling; we need an appropriate variant on `StreamError`.
+        //
+        // This would likely be a critical failure for this stream handle, since we are unable to
+        // send messages to the sync manager.
+        self.sync_manager
+            .send_message(ToSyncManager::Publish(self.topic_id, bytes))?;
 
         Ok(())
     }
@@ -94,17 +92,19 @@ impl EventuallyConsistentStream {
 
     /// Closes the eventually consistent messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
+        // TODO: Do we really want to throw an error on close if the actor can't be found?
         if let Some(actor) = self.eventually_consistent_streams_actor() {
             actor
                 .cast(ToEventuallyConsistentStreams::Unsubscribe(self.topic_id))
                 .map_err(|_| StreamError::Actor(EVENTUALLY_CONSISTENT_STREAMS.to_string()))?;
-
-            Ok(())
-        } else {
-            Err(StreamError::ActorNotFound(
-                EVENTUALLY_CONSISTENT_STREAMS.to_string(),
-            ))
         }
+
+        // Since we have a handle to the sync manager actor we can stop it directly.
+        //
+        // Finish processing all messages in the manager's queue and then kill it.
+        self.sync_manager.drain()?;
+
+        Ok(())
     }
 
     /// Internal helper to get a reference to the eventually consistent streams actor.
@@ -130,28 +130,29 @@ impl EventuallyConsistentStream {
 /// The stream can be used to receive messages from the stream.
 pub struct EventuallyConsistentSubscription {
     topic_id: TopicId,
-    from_topic_rx: BroadcastReceiver<FromNetwork>,
+    // Messages sent directly from the sync manager.
+    from_sync_rx: BroadcastReceiver<FromNetwork>,
 }
 
 // TODO: Implement `Stream` for `BroadcastReceiver`.
 
 impl EventuallyConsistentSubscription {
     /// Returns a handle to an eventually consistent messaging stream subscriber.
-    pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
+    pub(crate) fn new(topic_id: TopicId, from_sync_rx: BroadcastReceiver<FromNetwork>) -> Self {
         Self {
             topic_id,
-            from_topic_rx,
+            from_sync_rx,
         }
     }
 
     /// Receives the next message from the stream.
     pub async fn recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
-        self.from_topic_rx.recv().await.map_err(StreamError::Recv)
+        self.from_sync_rx.recv().await.map_err(StreamError::Recv)
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
     pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
-        self.from_topic_rx.try_recv()
+        self.from_sync_rx.try_recv()
     }
 
     /// Returns the topic ID of the stream.
