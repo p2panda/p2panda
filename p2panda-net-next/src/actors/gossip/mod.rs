@@ -15,16 +15,21 @@ use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::TopicId;
+use crate::actors::ActorNamespace;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
+use crate::actors::streams::eventually_consistent::{
+    EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
+};
+use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::network::FromNetwork;
-use crate::utils::from_public_key;
+use crate::utils::{from_public_key, to_public_key};
 
 /// Gossip actor name.
 pub const GOSSIP: &str = "net.gossip";
@@ -59,13 +64,13 @@ pub enum ToGossip {
 
     /// Gained a new, direct neighbor in the gossip overlay.
     NeighborUp {
-        peer: PublicKey,
+        node_id: PublicKey,
         session_id: ActorId,
     },
 
     /// Lost a direct neighbor in the gossip overlay.
     NeighborDown {
-        peer: PublicKey,
+        node_id: PublicKey,
         session_id: ActorId,
     },
 
@@ -102,6 +107,7 @@ pub struct GossipState {
     neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
     gossip_thread_pool: ThreadLocalActorSpawner,
+    actor_namespace: ActorNamespace,
 }
 
 #[derive(Default)]
@@ -118,6 +124,8 @@ impl ThreadLocalActor for Gossip {
         endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let config = IrohGossipConfig::default();
+
+        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
 
         let gossip = IrohGossip::builder()
             .max_message_size(config.max_message_size)
@@ -138,6 +146,7 @@ impl ThreadLocalActor for Gossip {
             neighbours,
             topic_delivery_scopes,
             gossip_thread_pool,
+            actor_namespace,
         })
     }
 
@@ -310,22 +319,54 @@ impl ThreadLocalActor for Gossip {
 
                 Ok(())
             }
-            ToGossip::NeighborUp { peer, session_id } => {
-                // Insert the peer into the set of neighbours.
+            ToGossip::NeighborUp {
+                node_id,
+                session_id,
+            } => {
+                // Insert the node into the set of neighbours.
                 if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
+                    && let Some(neighbours) = state.neighbours.get_mut(topic_id)
                 {
-                    peer_set.insert(peer);
+                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
+                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
+                    ) {
+                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                            eventually_consistent_streams_actor.into();
+
+                        // Ask the eventually consistent streams actor to initiate a sync session
+                        // for this topic.
+                        actor.send_message(ToEventuallyConsistentStreams::InitiateSync(
+                            *topic_id, node_id,
+                        ))?;
+                    }
+
+                    neighbours.insert(node_id);
                 }
 
                 Ok(())
             }
-            ToGossip::NeighborDown { peer, session_id } => {
+            ToGossip::NeighborDown {
+                node_id,
+                session_id,
+            } => {
                 // Remove the peer from the set of neighbours.
                 if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
+                    && let Some(neighbours) = state.neighbours.get_mut(topic_id)
                 {
-                    peer_set.remove(&peer);
+                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
+                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
+                    ) {
+                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                            eventually_consistent_streams_actor.into();
+
+                        // Ask the eventually consistent streams actor to end any sync sessions
+                        // for this topic.
+                        actor.send_message(ToEventuallyConsistentStreams::EndSync(
+                            *topic_id, node_id,
+                        ))?;
+                    }
+
+                    neighbours.remove(&node_id);
                 }
 
                 Ok(())

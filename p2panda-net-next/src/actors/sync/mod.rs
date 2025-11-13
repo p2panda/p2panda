@@ -13,7 +13,7 @@ pub struct SyncManager;
 
 impl ThreadLocalActor for SyncManager {
     type State = ();
-    type Msg = ();
+    type Msg = ToSyncManager;
     type Arguments = ();
 
     async fn pre_start(

@@ -10,6 +10,7 @@ use std::collections::HashMap;
 /// Eventually consistent streams actor name.
 pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
 
+use p2panda_core::PublicKey;
 use ractor::concurrency::broadcast;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
@@ -43,6 +44,12 @@ pub enum ToEventuallyConsistentStreams {
 
     /// Unsubscribe from an eventually consistent stream for the given topic ID.
     Unsubscribe(TopicId),
+
+    /// Initiate a sync session.
+    InitiateSync(TopicId, PublicKey),
+
+    /// End a sync session.
+    EndSync(TopicId, PublicKey),
 }
 
 /// Mapping of topic ID to the sender channels of the associated gossip overlay.
@@ -52,7 +59,7 @@ type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNe
 // TODO: Receiver message type may be incorrect (`FromSync` maybe).
 type SyncReceivers = HashMap<TopicId, BroadcastReceiver<FromNetwork>>;
 
-type SyncManagers = HashMap<TopicId, ActorRef<ToSyncManager>>;
+type SyncManagers = HashMap<TopicId, (ActorRef<ToSyncManager>, IsLiveModeEnabled)>;
 
 pub struct EventuallyConsistentStreamsState {
     actor_namespace: ActorNamespace,
@@ -109,7 +116,9 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                 let peers = Vec::new();
 
                 // Check if we're already subscribed.
-                let stream = if let Some(sync_manager_actor) = state.sync_managers.get(&topic_id) {
+                let stream = if let Some((sync_manager_actor, live_mode)) =
+                    state.sync_managers.get(&topic_id)
+                {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
                         cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
@@ -155,7 +164,7 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
 
                     state
                         .sync_managers
-                        .insert(topic_id, sync_manager_actor.clone());
+                        .insert(topic_id, (sync_manager_actor.clone(), live_mode));
 
                     EventuallyConsistentStream::new(
                         state.actor_namespace.clone(),
@@ -184,6 +193,17 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                 // Drop all senders and receivers associated with the topic id.
                 state.gossip_senders.remove(&topic_id);
                 state.sync_receivers.remove(&topic_id);
+            }
+            ToEventuallyConsistentStreams::InitiateSync(topic_id, node_id) => {
+                if let Some((sync_manager_actor, live_mode)) = state.sync_managers.get(&topic_id) {
+                    sync_manager_actor
+                        .send_message(ToSyncManager::Initiate(node_id, topic_id, live_mode))?;
+                }
+            }
+            ToEventuallyConsistentStreams::EndSync(topic_id, node_id) => {
+                if let Some((sync_manager_actor, _)) = state.sync_managers.get(&topic_id) {
+                    sync_manager_actor.send_message(ToSyncManager::Close(node_id, topic_id))?;
+                }
             }
         }
 
