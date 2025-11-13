@@ -110,6 +110,15 @@ pub struct GossipState {
     actor_namespace: ActorNamespace,
 }
 
+impl GossipState {
+    fn drop_topic_state(&mut self, actor_id: &ActorId, topic_id: &TopicId) {
+        self.sessions.sessions_by_topic_id.remove(topic_id);
+        self.sessions.gossip_senders.remove(topic_id);
+        self.sessions.gossip_joined_senders.remove(actor_id);
+        self.neighbours.remove(topic_id);
+    }
+}
+
 #[derive(Default)]
 pub struct Gossip;
 
@@ -404,10 +413,7 @@ impl ThreadLocalActor for Gossip {
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.gossip_senders.remove(&topic_id);
-                    state.sessions.gossip_joined_senders.remove(&actor_id);
-                    state.neighbours.remove(&topic_id);
+                    state.drop_topic_state(&actor_id, &topic_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -430,10 +436,7 @@ impl ThreadLocalActor for Gossip {
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.gossip_senders.remove(&topic_id);
-                    state.sessions.gossip_joined_senders.remove(&actor_id);
-                    state.neighbours.remove(&topic_id);
+                    state.drop_topic_state(&actor_id, &topic_id);
                 }
             }
             _ => (),
