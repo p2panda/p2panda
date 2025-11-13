@@ -2,12 +2,11 @@ pub mod ephemeral;
 pub mod eventually_consistent;
 
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::error::SendError;
 
-// TODO: Since these error variants are returned to the user, we need to consider what we are
-// communicating. For example, they do not need to know about actors failing; this is an internal
-// detail. What do we communicate instead?
+use crate::TopicId;
+
 #[derive(Debug, Error)]
 pub enum StreamError<T> {
     #[error(transparent)]
@@ -16,11 +15,14 @@ pub enum StreamError<T> {
     #[error(transparent)]
     Recv(#[from] RecvError),
 
-    #[error("actor {0} failed to process request")]
-    Actor(String),
+    #[error(transparent)]
+    TryRecv(#[from] TryRecvError),
 
-    #[error("failed to call {0} actor; it may be in the process of restarting")]
-    ActorNotFound(String),
+    #[error("failed to subscribe to topic {0:?} due to system error")]
+    Subscribe(TopicId),
+
+    #[error("failed to close stream for topic {0:?}")]
+    Close(TopicId),
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,

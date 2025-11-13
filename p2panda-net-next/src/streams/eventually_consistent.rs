@@ -65,23 +65,21 @@ impl EventuallyConsistentStream {
     /// the stream.
     pub async fn subscribe(&self) -> Result<EventuallyConsistentSubscription, StreamError<()>> {
         // Get a reference to the eventually consistent streams actor.
-        if let Some(actor) = self.eventually_consistent_streams_actor() {
-            // Ask the eventually consistent streams actor for a subscription.
-            if let Some(stream) = call!(
-                actor,
-                ToEventuallyConsistentStreams::Subscribe,
-                self.topic_id
-            )
-            .map_err(|_| StreamError::Actor(EVENTUALLY_CONSISTENT_STREAMS.to_string()))?
-            {
-                Ok(stream)
-            } else {
-                Err(StreamError::StreamNotFound)
-            }
+        let actor = self
+            .eventually_consistent_streams_actor()
+            .ok_or(StreamError::Subscribe(self.topic_id))?;
+
+        // Ask the eventually consistent streams actor for a subscription.
+        if let Some(stream) = call!(
+            actor,
+            ToEventuallyConsistentStreams::Subscribe,
+            self.topic_id
+        )
+        .map_err(|_| StreamError::Subscribe(self.topic_id))?
+        {
+            Ok(stream)
         } else {
-            Err(StreamError::ActorNotFound(
-                EVENTUALLY_CONSISTENT_STREAMS.to_string(),
-            ))
+            Err(StreamError::StreamNotFound)
         }
     }
 
@@ -92,17 +90,14 @@ impl EventuallyConsistentStream {
 
     /// Closes the eventually consistent messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
-        // TODO: Do we really want to throw an error on close if the actor can't be found?
-        if let Some(actor) = self.eventually_consistent_streams_actor() {
-            actor
-                .cast(ToEventuallyConsistentStreams::Unsubscribe(self.topic_id))
-                .map_err(|_| StreamError::Actor(EVENTUALLY_CONSISTENT_STREAMS.to_string()))?;
-        }
+        // Get a reference to the ephemeral streams actor.
+        let actor = self
+            .eventually_consistent_streams_actor()
+            .ok_or(StreamError::Close(self.topic_id))?;
 
-        // Since we have a handle to the sync manager actor we can stop it directly.
-        //
-        // Finish processing all messages in the manager's queue and then kill it.
-        self.sync_manager.drain()?;
+        actor
+            .cast(ToEventuallyConsistentStreams::Close(self.topic_id))
+            .map_err(|_| StreamError::Close(self.topic_id))?;
 
         Ok(())
     }
@@ -151,8 +146,8 @@ impl EventuallyConsistentSubscription {
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
-        self.from_sync_rx.try_recv()
+    pub fn try_recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+        self.from_sync_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
     /// Returns the topic ID of the stream.
