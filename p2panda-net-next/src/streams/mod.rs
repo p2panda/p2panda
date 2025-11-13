@@ -5,6 +5,9 @@ use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::error::SendError;
 
+// TODO: Since these error variants are returned to the user, we need to consider what we are
+// communicating. For example, they do not need to know about actors failing; this is an internal
+// detail. What do we communicate instead?
 #[derive(Debug, Error)]
 pub enum StreamError<T> {
     #[error(transparent)]
