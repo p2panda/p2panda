@@ -13,12 +13,16 @@ pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consiste
 use p2panda_core::PublicKey;
 use ractor::concurrency::broadcast;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
+use ractor::{
+    ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry,
+};
 use tokio::sync::broadcast::{self, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 use tokio::sync::mpsc::Sender;
+use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::gossip::ToGossip;
+use crate::actors::streams::ephemeral::{self, EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::sync::{SYNC_MANAGER, SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
@@ -42,8 +46,8 @@ pub enum ToEventuallyConsistentStreams {
         RpcReplyPort<Option<EventuallyConsistentSubscription>>,
     ),
 
-    /// Unsubscribe from an eventually consistent stream for the given topic ID.
-    Unsubscribe(TopicId),
+    /// Close all eventually consistent streams for the given topic ID.
+    Close(TopicId),
 
     /// Initiate a sync session.
     InitiateSync(TopicId, PublicKey),
@@ -59,7 +63,11 @@ type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNe
 // TODO: Receiver message type may be incorrect (`FromSync` maybe).
 type SyncReceivers = HashMap<TopicId, BroadcastReceiver<FromNetwork>>;
 
-type SyncManagers = HashMap<TopicId, (ActorRef<ToSyncManager>, IsLiveModeEnabled)>;
+#[derive(Default)]
+struct SyncManagers {
+    topic_manager_map: HashMap<TopicId, (ActorRef<ToSyncManager>, IsLiveModeEnabled)>,
+    actor_topic_map: HashMap<ActorId, TopicId>,
+}
 
 pub struct EventuallyConsistentStreamsState {
     actor_namespace: ActorNamespace,
@@ -68,6 +76,38 @@ pub struct EventuallyConsistentStreamsState {
     sync_managers: SyncManagers,
     sync_receivers: SyncReceivers,
     stream_thread_pool: ThreadLocalActorSpawner,
+}
+
+impl EventuallyConsistentStreamsState {
+    /// Drop all internal state associated with the given topic ID.
+    fn drop_topic_state(&mut self, topic_id: &TopicId) {
+        self.sync_managers.topic_manager_map.remove(topic_id);
+        self.gossip_senders.remove(topic_id);
+        self.sync_receivers.remove(topic_id);
+    }
+
+    /// Unsubscribe from this gossip topic if there aren't any active ephemeral streams for the
+    /// given topic ID.
+    async fn unsubscribe_from_gossip(
+        &mut self,
+        topic_id: TopicId,
+    ) -> Result<(), ActorProcessingErr> {
+        if let Some(ephemeral_streams_actor) =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
+        {
+            let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
+
+            // Ask the ephemeral streams actor if there are any active streams for this topic id.
+            let active_ephemeral_stream = call!(actor, ToEphemeralStreams::IsActive, topic_id)?;
+
+            // If there aren't any active streams, tell the gossip actor to unsubscribe.
+            if !active_ephemeral_stream {
+                cast!(self.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -87,7 +127,7 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
 
         let gossip_senders = HashMap::new();
         let sync_receivers = HashMap::new();
-        let sync_managers = HashMap::new();
+        let sync_managers = Default::default();
 
         // Sync manager actors are all spawned in a dedicated thread.
         let stream_thread_pool = ThreadLocalActorSpawner::new();
@@ -104,6 +144,19 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
         Ok(state)
     }
 
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Close all active sync sessions.
+        for (topic_id, (actor, _)) in state.sync_managers.topic_manager_map {
+            actor.send_message(ToSyncManager::CloseAll(topic_id))?;
+        }
+
+        Ok(())
+    }
+
     async fn handle(
         &self,
         myself: ActorRef<Self::Msg>,
@@ -117,7 +170,7 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
 
                 // Check if we're already subscribed.
                 let stream = if let Some((sync_manager_actor, live_mode)) =
-                    state.sync_managers.get(&topic_id)
+                    state.sync_managers.topic_manager_map.get(&topic_id)
                 {
                     // Inform the gossip actor about the latest set of peers for this topic id.
                     if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
@@ -155,7 +208,8 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                     //
                     // Spawn a sync manager for this topic_id.
                     let (sync_manager_actor, _) = SyncManager::spawn_linked(
-                        Some(with_namespace(SYNC_MANAGER, &state.actor_namespace)),
+                        // TODO: Consider naming each actor (they will need a unique ID).
+                        None,
                         (),
                         myself.clone().into(),
                         state.stream_thread_pool.clone(),
@@ -164,7 +218,13 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
 
                     state
                         .sync_managers
+                        .topic_manager_map
                         .insert(topic_id, (sync_manager_actor.clone(), live_mode));
+
+                    state
+                        .sync_managers
+                        .actor_topic_map
+                        .insert(sync_manager_actor.get_id(), topic_id);
 
                     EventuallyConsistentStream::new(
                         state.actor_namespace.clone(),
@@ -186,22 +246,39 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                     let _ = reply.send(None);
                 }
             }
-            ToEventuallyConsistentStreams::Unsubscribe(topic_id) => {
+            ToEventuallyConsistentStreams::Close(topic_id) => {
                 // Tell the gossip actor to unsubscribe from this topic id.
-                cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
+                state.unsubscribe_from_gossip(topic_id).await?;
 
                 // Drop all senders and receivers associated with the topic id.
                 state.gossip_senders.remove(&topic_id);
                 state.sync_receivers.remove(&topic_id);
+
+                // Drop the sync manager state for this topic id.
+                if let Some((sync_manager, _)) =
+                    state.sync_managers.topic_manager_map.remove(&topic_id)
+                {
+                    state
+                        .sync_managers
+                        .actor_topic_map
+                        .remove(&sync_manager.get_id());
+
+                    // Finish processing all messages in the manager's queue and then kill it.
+                    sync_manager.drain()?;
+                }
             }
             ToEventuallyConsistentStreams::InitiateSync(topic_id, node_id) => {
-                if let Some((sync_manager_actor, live_mode)) = state.sync_managers.get(&topic_id) {
+                if let Some((sync_manager_actor, live_mode)) =
+                    state.sync_managers.topic_manager_map.get(&topic_id)
+                {
                     sync_manager_actor
                         .send_message(ToSyncManager::Initiate(node_id, topic_id, live_mode))?;
                 }
             }
             ToEventuallyConsistentStreams::EndSync(topic_id, node_id) => {
-                if let Some((sync_manager_actor, _)) = state.sync_managers.get(&topic_id) {
+                if let Some((sync_manager_actor, _)) =
+                    state.sync_managers.topic_manager_map.get(&topic_id)
+                {
                     sync_manager_actor.send_message(ToSyncManager::Close(node_id, topic_id))?;
                 }
             }
@@ -209,6 +286,57 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
 
         Ok(())
     }
-}
 
-// TODO: Supervision for failed and terminated sync manager instances.
+    async fn handle_supervisor_evt(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        message: SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SupervisionEvent::ActorStarted(actor) => {
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sync_managers.actor_topic_map.get(&actor_id) {
+                    debug!(
+                        "eventually consistent streams actor: received ready from sync manager #{} for topic id {:?}",
+                        actor_id, topic_id
+                    );
+                }
+            }
+            SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sync_managers.actor_topic_map.remove(&actor_id) {
+                    debug!(
+                        "eventually consistent streams actor: sync manager #{} over topic id {:?} terminated with reason: {:?}",
+                        actor_id, topic_id, reason
+                    );
+
+                    // Drop all state associated with the terminated sync manager.
+                    state.drop_topic_state(&topic_id);
+                }
+            }
+            SupervisionEvent::ActorFailed(actor, panic_msg) => {
+                // NOTE: We do not respawn the sync manager if it fails. Instead, we simply drop
+                // all state. This means that the user will receive an error if they try to
+                // interact with a handle for the associated stream.
+
+                let actor_id = actor.get_id();
+                if let Some(topic_id) = state.sync_managers.actor_topic_map.remove(&actor_id) {
+                    warn!(
+                        "eventually consistent streams actor: sync manager #{} over topic id {:?} failed with reason: {:?}",
+                        actor_id, topic_id, panic_msg
+                    );
+
+                    // Tell the gossip actor to unsubscribe from this topic id.
+                    state.unsubscribe_from_gossip(topic_id).await?;
+
+                    // Drop all state associated with the terminated sync manager.
+                    state.drop_topic_state(&topic_id);
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
+}
