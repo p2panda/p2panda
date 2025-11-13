@@ -2,9 +2,10 @@
 
 //! Ephemeral streams actor.
 //!
-//! This actor forms the coordination layer between the external API and the sync and gossip
-//! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
-//! by the stream supervisor actor.
+//! This actor forms a coordination layer between the external API and the gossip sub-systems.
+//!
+//! No actors are spawned or respawned by the ephemeral streams actor, that role is carried out
+//! by the stream supervisor.
 use std::collections::HashMap;
 
 /// Ephemeral streams actor name.
@@ -40,9 +41,7 @@ type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNe
 pub struct EphemeralStreamsState {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
-    sync_actor: ActorRef<()>,
     gossip_senders: GossipSenders,
-    stream_thread_pool: ThreadLocalActorSpawner,
 }
 
 #[derive(Default)]
@@ -51,26 +50,21 @@ pub struct EphemeralStreams;
 impl ThreadLocalActor for EphemeralStreams {
     type State = EphemeralStreamsState;
     type Msg = ToEphemeralStreams;
-    type Arguments = (ActorNamespace, ActorRef<()>, ActorRef<ToGossip>);
+    type Arguments = (ActorNamespace, ActorRef<ToGossip>);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, sync_actor, gossip_actor) = args;
+        let (actor_namespace, gossip_actor) = args;
 
         let gossip_senders = HashMap::new();
-
-        // Sync manager actors are all spawned in a dedicated thread.
-        let stream_thread_pool = ThreadLocalActorSpawner::new();
 
         let state = EphemeralStreamsState {
             actor_namespace,
             gossip_actor,
-            sync_actor,
             gossip_senders,
-            stream_thread_pool,
         };
 
         Ok(state)
@@ -104,8 +98,8 @@ impl ThreadLocalActor for EphemeralStreams {
 
                     // Store the gossip senders.
                     //
-                    // `from_gossip_tx` can be used to create a broadcast receiver when the user
-                    // calls `subscribe()` on `EphemeralStream`.
+                    // `from_gossip_tx` is used to create a broadcast receiver when the user calls
+                    // `subscribe()` on `EphemeralStream`.
                     state
                         .gossip_senders
                         .insert(topic_id, (to_gossip_tx.clone(), from_gossip_tx));
@@ -128,11 +122,11 @@ impl ThreadLocalActor for EphemeralStreams {
                 }
             }
             ToEphemeralStreams::Unsubscribe(topic_id) => {
-                // Drop all senders associated with the topic id..
-                let _ = state.gossip_senders.remove(&topic_id);
-
                 // Tell the gossip actor to unsubscribe from this topic id.
                 cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
+
+                // Drop all senders associated with the topic id.
+                state.gossip_senders.remove(&topic_id);
             }
         }
 
