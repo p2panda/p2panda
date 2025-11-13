@@ -61,17 +61,17 @@ impl EphemeralStream {
     /// stream.
     pub async fn subscribe(&self) -> Result<EphemeralSubscription, StreamError<()>> {
         // Get a reference to the ephemeral streams actor.
-        if let Some(actor) = self.ephemeral_streams_actor() {
-            // Ask the ephemeral streams actor for a subscription.
-            if let Some(stream) = call!(actor, ToEphemeralStreams::Subscribe, self.topic_id)
-                .map_err(|_| StreamError::Actor(EPHEMERAL_STREAMS.to_string()))?
-            {
-                Ok(stream)
-            } else {
-                Err(StreamError::StreamNotFound)
-            }
+        let actor = self
+            .ephemeral_streams_actor()
+            .ok_or(StreamError::Subscribe(self.topic_id))?;
+
+        // Ask the ephemeral streams actor for a subscription.
+        if let Some(stream) = call!(actor, ToEphemeralStreams::Subscribe, self.topic_id)
+            .map_err(|_| StreamError::Subscribe(self.topic_id))?
+        {
+            Ok(stream)
         } else {
-            Err(StreamError::ActorNotFound(EPHEMERAL_STREAMS.to_string()))
+            Err(StreamError::StreamNotFound)
         }
     }
 
@@ -82,15 +82,16 @@ impl EphemeralStream {
 
     /// Closes the ephemeral messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
-        if let Some(actor) = self.ephemeral_streams_actor() {
-            actor
-                .cast(ToEphemeralStreams::Unsubscribe(self.topic_id))
-                .map_err(|_| StreamError::Actor(EPHEMERAL_STREAMS.to_string()))?;
+        // Get a reference to the ephemeral streams actor.
+        let actor = self
+            .ephemeral_streams_actor()
+            .ok_or(StreamError::Close(self.topic_id))?;
 
-            Ok(())
-        } else {
-            Err(StreamError::ActorNotFound(EPHEMERAL_STREAMS.to_string()))
-        }
+        actor
+            .cast(ToEphemeralStreams::Close(self.topic_id))
+            .map_err(|_| StreamError::Close(self.topic_id))?;
+
+        Ok(())
     }
 
     /// Internal helper to get a reference to the ephemeral streams actor.
@@ -132,8 +133,8 @@ impl EphemeralSubscription {
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
-        self.from_topic_rx.try_recv()
+    pub fn try_recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+        self.from_topic_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
     /// Returns the topic ID of the stream.
