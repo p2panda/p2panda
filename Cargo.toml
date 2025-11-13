@@ -9,11 +9,12 @@ members = [
     "p2panda-discovery-next",
     "p2panda-encryption",
     "p2panda-net",
-    "p2panda-spaces",
     "p2panda-net-next",
+    "p2panda-spaces",
     "p2panda-store",
     "p2panda-stream",
-    "p2panda-sync", "p2panda-sync-next",
+    "p2panda-sync",
+    "p2panda-sync-next",
 ]
 
 [workspace.lints.rust]
