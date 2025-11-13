@@ -71,8 +71,9 @@ pub struct SyncManagerState<M, T>
 where
     M: SyncManagerTrait<T>,
 {
-    // manager: Rc<RefCell<M>>,
     topic_id: TopicId,
+    // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid locking
+    // access to the whole manager on every read/write.
     manager: Arc<Mutex<M>>,
     session_topic_map: SessionTopicMap<T, SessionSink<M, T>>,
     node_session_map: HashMap<NodeId, HashSet<u64>>,
