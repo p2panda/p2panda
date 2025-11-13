@@ -30,8 +30,11 @@ pub enum ToEphemeralStreams {
     /// Return an ephemeral subscription handle for the given topic ID.
     Subscribe(TopicId, RpcReplyPort<Option<EphemeralSubscription>>),
 
-    /// Unsubscribe from an ephemeral stream for the given topic ID.
-    Unsubscribe(TopicId),
+    /// Close all ephemeral streams for the given topic ID.
+    Close(TopicId),
+
+    /// Return `true` if there are any active ephemeral streams for the given topic ID.
+    IsActive(TopicId, RpcReplyPort<bool>),
 }
 
 /// Mapping of topic ID to the associated sender channels for getting messages into and out of the
@@ -121,12 +124,16 @@ impl ThreadLocalActor for EphemeralStreams {
                     let _ = reply.send(None);
                 }
             }
-            ToEphemeralStreams::Unsubscribe(topic_id) => {
+            ToEphemeralStreams::Close(topic_id) => {
                 // Tell the gossip actor to unsubscribe from this topic id.
                 cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
 
                 // Drop all senders associated with the topic id.
                 state.gossip_senders.remove(&topic_id);
+            }
+            ToEphemeralStreams::IsActive(topic_id, reply) => {
+                let is_active = state.gossip_senders.contains_key(&topic_id);
+                let _ = reply.send(is_active);
             }
         }
 
