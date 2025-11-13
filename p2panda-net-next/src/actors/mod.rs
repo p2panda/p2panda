@@ -9,7 +9,7 @@ pub mod iroh;
 mod stream_supervisor;
 pub mod streams;
 pub mod supervisor;
-mod sync;
+pub mod sync;
 
 use p2panda_core::PublicKey;
 
