@@ -2,6 +2,7 @@
 
 mod manager;
 mod session;
+mod poller;
 
 // @TODO: uncomment when we plyg in the actual sync actor.
 // pub use manager::{SYNC_MANAGER, SyncManager, ToSyncManager};
