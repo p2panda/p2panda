@@ -20,6 +20,9 @@ pub enum StreamError<T> {
     #[error(transparent)]
     TryRecv(#[from] TryRecvError),
 
+    #[error("failed to create stream for topic {0:?} due to system error")]
+    Create(TopicId),
+
     #[error("failed to subscribe to topic {0:?} due to system error")]
     Subscribe(TopicId),
 
