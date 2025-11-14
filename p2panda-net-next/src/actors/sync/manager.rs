@@ -28,13 +28,12 @@ use thiserror::Error;
 use tokio::sync::{Mutex, broadcast};
 
 use crate::TopicId;
-use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::{connect, register_protocol};
 use crate::actors::sync::SYNC_PROTOCOL_ID;
 use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
 use crate::actors::sync::session::{SyncSession, SyncSessionMessage};
+use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::addrs::NodeId;
-use crate::args::ApplicationArguments;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::utils::to_public_key;
 
@@ -72,7 +71,7 @@ pub struct SyncManagerState<M, T>
 where
     M: SyncManagerTrait<T>,
 {
-    args: ApplicationArguments,
+    actor_namespace: ActorNamespace,
     topic_id: TopicId,
     // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid locking
     // access to the whole manager on every read/write.
@@ -112,7 +111,7 @@ where
     type Msg = ToSyncManager<T>;
 
     type Arguments = (
-        ApplicationArguments,
+        ActorNamespace,
         TopicId,
         M::Config,
         broadcast::Sender<SyncManagerEvent<T, <M::Protocol as Protocol>::Event>>,
@@ -123,7 +122,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, topic_id, config, sender) = args;
+        let (actor_namespace, topic_id, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
         // @TODO: move registering the sync protocol to the stream actor as this is who will be
@@ -141,17 +140,16 @@ where
 
         let manager = Arc::new(Mutex::new(M::from_config(config)));
 
-        let actor_namespace = generate_actor_namespace(&args.public_key);
         let (_, _) = SyncPoller::<T, M>::spawn_linked(
             None,
-            (actor_namespace, manager.clone(), sender),
+            (actor_namespace.clone(), manager.clone(), sender),
             myself.clone().into(),
             pool.clone(),
         )
         .await?;
 
         Ok(SyncManagerState {
-            args,
+            actor_namespace,
             topic_id,
             manager,
             session_topic_map: SessionTopicMap::default(),
@@ -179,10 +177,9 @@ where
                 };
                 let (session, id) = Self::new_session(state, node_id, topic.clone(), config).await;
 
-                let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
-                    actor_namespace,
+                    state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
                 )
@@ -209,10 +206,9 @@ where
                 };
                 let (session, id) = Self::new_session(state, node_id, topic, config).await;
 
-                let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
-                    actor_namespace,
+                    state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
                 )

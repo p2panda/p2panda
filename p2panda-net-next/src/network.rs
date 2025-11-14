@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::hash::Hash as StdHash;
 
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::address_book::AddressBookStore;
@@ -107,7 +106,7 @@ impl NetworkBuilder {
         self,
         store: S,
         sync_config: M::Config,
-    ) -> Result<Network, NetworkError>
+    ) -> Result<Network, NetworkError<T>>
     where
         S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
@@ -125,7 +124,7 @@ impl NetworkBuilder {
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
             (self.args, store, sync_config),
             root_thread_pool.clone(),
-        );
+        ).await?;
 
         Ok(Network {
             actor_namespace,
