@@ -116,7 +116,7 @@ pub struct DiscoveryMetrics {
     /// Successful discovery sessions.
     pub successful_discovery_sessions: usize,
 
-    /// Number of discovered transport infos which we're actually new for us.
+    /// Number of discovered transport infos which were actually new for us.
     pub newly_learned_transport_infos: usize,
 }
 
