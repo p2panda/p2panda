@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Topic stream types and associated methods.
+//! Ephemeral stream types and associated methods.
 //!
-//! Topic streams provide an interface for publishing messages into the network and receiving
+//! Ephemeral streams provide an interface for publishing messages into the network and receiving
 //! messages from the network.
 //!
 //! Ephemeral streams are intended to be used for relatively short-lived messages without
@@ -12,37 +12,18 @@
 //! the message is received, even though the publication time was strictly before that of the local
 //! subscription event.
 //!
-//! Use the standard topic stream if you wish to receive past state and (optionally) messages
-//! representing the latest updates in an ongoing manner.
+//! Use the eventually consistent stream if you wish to receive past state and (optionally)
+//! messages representing the latest updates in an ongoing manner.
 use ractor::{ActorRef, call, registry};
-use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
-use crate::actors::stream::{STREAM, ToStream};
+use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
-
-#[derive(Debug, Error)]
-pub enum StreamError<T> {
-    #[error(transparent)]
-    Send(#[from] SendError<T>),
-
-    #[error(transparent)]
-    Recv(#[from] RecvError),
-
-    #[error("actor {0} failed to process request")]
-    Actor(String),
-
-    #[error("failed to call {0} actor; it may be in the process of restarting")]
-    ActorNotFound(String),
-
-    #[error("no stream exists for the given topic")]
-    StreamNotFound,
-}
+use crate::streams::StreamError;
 
 /// A handle to an ephemeral messaging stream.
 ///
@@ -76,21 +57,21 @@ impl EphemeralStream {
 
     /// Subscribes to the stream.
     ///
-    /// The returned `EphemeralStreamSubscription` provides a means of receiving messages from
-    /// the stream.
-    pub async fn subscribe(&self) -> Result<EphemeralStreamSubscription, StreamError<()>> {
-        // Get a reference to the stream actor.
-        if let Some(actor) = self.stream_actor() {
-            // Ask the stream actor for an ephemeral stream subscriber.
-            if let Some(stream) = call!(actor, ToStream::EphemeralSubscription, self.topic_id)
-                .map_err(|_| StreamError::Actor(STREAM.to_string()))?
-            {
-                Ok(stream)
-            } else {
-                Err(StreamError::StreamNotFound)
-            }
+    /// The returned `EphemeralSubscription` provides a means of receiving messages from the
+    /// stream.
+    pub async fn subscribe(&self) -> Result<EphemeralSubscription, StreamError<()>> {
+        // Get a reference to the ephemeral streams actor.
+        let actor = self
+            .ephemeral_streams_actor()
+            .ok_or(StreamError::Subscribe(self.topic_id))?;
+
+        // Ask the ephemeral streams actor for a subscription.
+        if let Some(stream) = call!(actor, ToEphemeralStreams::Subscribe, self.topic_id)
+            .map_err(|_| StreamError::Subscribe(self.topic_id))?
+        {
+            Ok(stream)
         } else {
-            Err(StreamError::ActorNotFound(STREAM.to_string()))
+            Err(StreamError::StreamNotFound)
         }
     }
 
@@ -99,25 +80,26 @@ impl EphemeralStream {
         self.topic_id
     }
 
-    /// Closes from the ephemeral messaging stream.
+    /// Closes the ephemeral messaging stream.
     pub fn close(self) -> Result<(), StreamError<()>> {
-        if let Some(actor) = self.stream_actor() {
-            actor
-                .cast(ToStream::UnsubscribeEphemeral(self.topic_id))
-                .map_err(|_| StreamError::Actor(STREAM.to_string()))?;
+        // Get a reference to the ephemeral streams actor.
+        let actor = self
+            .ephemeral_streams_actor()
+            .ok_or(StreamError::Close(self.topic_id))?;
 
-            Ok(())
-        } else {
-            Err(StreamError::ActorNotFound(STREAM.to_string()))
-        }
+        actor
+            .cast(ToEphemeralStreams::Close(self.topic_id))
+            .map_err(|_| StreamError::Close(self.topic_id))?;
+
+        Ok(())
     }
 
-    /// Internal helper to get a reference to the stream actor.
-    fn stream_actor(&self) -> Option<ActorRef<ToStream>> {
-        if let Some(stream_actor) =
-            registry::where_is(with_namespace(STREAM, &self.actor_namespace))
+    /// Internal helper to get a reference to the ephemeral streams actor.
+    fn ephemeral_streams_actor(&self) -> Option<ActorRef<ToEphemeralStreams>> {
+        if let Some(ephemeral_streams_actor) =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
         {
-            let actor: ActorRef<ToStream> = stream_actor.into();
+            let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
 
             Some(actor)
         } else {
@@ -129,14 +111,14 @@ impl EphemeralStream {
 /// A handle to an ephemeral messaging stream subscription.
 ///
 /// The stream can be used to receive messages from the stream.
-pub struct EphemeralStreamSubscription {
+pub struct EphemeralSubscription {
     topic_id: TopicId,
     from_topic_rx: BroadcastReceiver<FromNetwork>,
 }
 
 // TODO: Implement `Stream` for `BroadcastReceiver`.
 
-impl EphemeralStreamSubscription {
+impl EphemeralSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
     pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
         Self {
@@ -151,8 +133,8 @@ impl EphemeralStreamSubscription {
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<FromNetwork, TryRecvError> {
-        self.from_topic_rx.try_recv()
+    pub fn try_recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+        self.from_topic_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
     /// Returns the topic ID of the stream.
