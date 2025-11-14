@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use iroh::Watcher;
+#[cfg(feature = "iroh_mdns")]
+use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
@@ -19,6 +21,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
+use crate::config::MdnsDiscoveryMode;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
 use crate::{NodeInfo, TopicId, UnsignedTransportInfo};
@@ -58,6 +61,14 @@ pub enum ToIrohEndpoint {
 
     /// Our own endpoint address has changed.
     AddressChanged(Option<iroh::EndpointAddr>),
+
+    /// Iroh service discovered an endpoint info.
+    ///
+    /// This can come from iroh's mDNS implementation if enabled.
+    DiscoveredEndpointInfo {
+        endpoint_addr: iroh::EndpointAddr,
+        last_updated: Option<u64>,
+    },
 }
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
@@ -69,6 +80,7 @@ pub struct IrohState {
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
+    mdns_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
 }
 
@@ -99,6 +111,7 @@ impl ThreadLocalActor for IrohEndpoint {
             protocols: Arc::default(),
             accept_handle: None,
             watch_addr_handle: None,
+            mdns_handle: None,
             worker_pool: ThreadLocalActorSpawner::new(),
         })
     }
@@ -118,6 +131,10 @@ impl ThreadLocalActor for IrohEndpoint {
 
         if let Some(accept_handle) = &state.accept_handle {
             accept_handle.abort();
+        }
+
+        if let Some(mdns_handle) = &state.mdns_handle {
+            mdns_handle.abort();
         }
 
         Ok(())
@@ -158,6 +175,46 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind_addr_v6(socket_address_v6)
                     .bind()
                     .await?;
+
+                // Register mDNS discovery with the endpoint if enabled.
+                if cfg!(feature = "iroh_mdns") {
+                    if config.mdns_discovery_mode.is_active() {
+                        let mdns = MdnsDiscovery::builder()
+                            // Do not advertise our own endpoint address if in "passive" mode.
+                            .advertise(config.mdns_discovery_mode.is_active())
+                            .build(endpoint.id())?;
+                        endpoint.discovery().add(mdns.clone());
+
+                        // Watch for discovered addresses via mDNS and inform actor about them.
+                        let mdns_handle = {
+                            let myself = myself.clone();
+                            tokio::spawn(async move {
+                                let mut mdns_stream = mdns.subscribe().await;
+                                loop {
+                                    match mdns_stream.next().await {
+                                        Some(DiscoveryEvent::Discovered {
+                                            endpoint_info,
+                                            last_updated,
+                                        }) => {
+                                            let _ = myself.send_message(
+                                                ToIrohEndpoint::DiscoveredEndpointInfo {
+                                                    endpoint_addr: endpoint_info.into(),
+                                                    last_updated,
+                                                },
+                                            );
+                                        }
+                                        Some(DiscoveryEvent::Expired { .. }) => {
+                                            // Do nothing ..
+                                        }
+                                        // The stream has seized, close task.
+                                        None => break,
+                                    }
+                                }
+                            })
+                        };
+                        state.mdns_handle = Some(mdns_handle);
+                    }
+                }
 
                 // Watch for changes of our own endpoint address.
                 let watch_addr_handle = {
@@ -291,6 +348,12 @@ impl ThreadLocalActor for IrohEndpoint {
                 };
                 node_info.update_transports(transport_info)?;
                 call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
+            }
+            ToIrohEndpoint::DiscoveredEndpointInfo {
+                endpoint_addr,
+                last_updated,
+            } => {
+                debug!(?endpoint_addr, "discovered iroh endpoint address via mDNS");
             }
         }
 
