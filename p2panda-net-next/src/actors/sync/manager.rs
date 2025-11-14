@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::channel::mpsc;
+use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
 use iroh::protocol::ProtocolHandler;

@@ -4,9 +4,8 @@ use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 
-use futures::SinkExt;
-use futures::channel::mpsc::{self, SendError};
-use futures_util::Sink;
+use futures_channel::mpsc::{self, SendError};
+use futures_util::{Sink, SinkExt};
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_sync::ToSync;

@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use futures::channel::mpsc;
+use futures_channel::mpsc;
 use iroh::endpoint::Connection;
 use p2panda_sync::topic_handshake::{
     TopicHandshakeEvent, TopicHandshakeInitiator, TopicHandshakeMessage,
