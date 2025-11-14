@@ -14,45 +14,69 @@
 //! respawned (including the stream and discovery actors); this is necessary because stream and
 //! discovery are indirectly reliant on a functioning endpoint actor. If either the stream or
 //! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
-use ractor::thread_local::ThreadLocalActor;
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
+
+use p2panda_discovery::address_book::AddressBookStore;
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::actors::discovery::{DISCOVERY, Discovery};
+use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 
 /// Endpoint supervisor actor name.
 pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint_supervisor";
 
-pub struct EndpointSupervisorState {
+pub struct EndpointSupervisorState<S, T> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
+    store: S,
     iroh_endpoint_actor: ActorRef<ToIrohEndpoint>,
     iroh_endpoint_actor_failures: u16,
-    discovery_manager_actor: ActorRef<()>,
+    discovery_manager_actor: ActorRef<ToDiscoveryManager<T>>,
     discovery_manager_actor_failures: u16,
     stream_supervisor: ActorRef<()>,
     stream_supervisor_failures: u16,
 }
 
-#[derive(Default)]
-pub struct EndpointSupervisor;
+pub struct EndpointSupervisor<S, T> {
+    _marker: PhantomData<(S, T)>,
+}
 
-impl ThreadLocalActor for EndpointSupervisor {
-    type State = EndpointSupervisorState;
+impl<S, T> Default for EndpointSupervisor<S, T> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, T> ThreadLocalActor for EndpointSupervisor<S, T>
+where
+    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S::Error: StdError + Send + Sync + 'static,
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+{
+    type State = EndpointSupervisorState<S, T>;
 
     type Msg = ();
 
-    type Arguments = ApplicationArguments;
+    type Arguments = (ApplicationArguments, S);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (args, store) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the endpoint actor.
@@ -64,10 +88,10 @@ impl ThreadLocalActor for EndpointSupervisor {
         )
         .await?;
 
-        // Spawn the discovery actor.
-        let (discovery_manager_actor, _) = Discovery::spawn_linked(
-            Some(with_namespace(DISCOVERY, &actor_namespace)),
-            (),
+        // Spawn the discovery manager actor.
+        let (discovery_manager_actor, _) = DiscoveryManager::spawn_linked(
+            Some(with_namespace(DISCOVERY_MANAGER, &actor_namespace)),
+            (args.clone(), store.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -85,6 +109,7 @@ impl ThreadLocalActor for EndpointSupervisor {
         Ok(EndpointSupervisorState {
             actor_namespace,
             args,
+            store,
             iroh_endpoint_actor,
             iroh_endpoint_actor_failures: 0,
             discovery_manager_actor,
@@ -157,15 +182,16 @@ impl ThreadLocalActor for EndpointSupervisor {
                         state.iroh_endpoint_actor = iroh_endpoint_actor;
 
                         // Respawn the discovery manager actor.
-                        let (discovery_manager_actor, _) = Discovery::spawn_linked(
-                            Some(with_namespace(DISCOVERY, &state.actor_namespace)),
-                            (),
+                        let (discovery_manager_actor, _) = DiscoveryManager::spawn_linked(
+                            Some(with_namespace(DISCOVERY_MANAGER, &state.actor_namespace)),
+                            (state.args.clone(), state.store.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
                         state.discovery_manager_actor = discovery_manager_actor;
+
                         // Respawn the stream supervisor.
                         let (stream_supervisor, _) = StreamSupervisor::spawn_linked(
                             Some(with_namespace(STREAM_SUPERVISOR, &state.actor_namespace)),
@@ -176,16 +202,16 @@ impl ThreadLocalActor for EndpointSupervisor {
                         .await?;
 
                         state.stream_supervisor = stream_supervisor;
-                    } else if name == with_namespace(DISCOVERY, &state.actor_namespace) {
+                    } else if name == with_namespace(DISCOVERY_MANAGER, &state.actor_namespace) {
                         warn!(
-                            "{ENDPOINT_SUPERVISOR} actor: {DISCOVERY} actor failed: {}",
+                            "{ENDPOINT_SUPERVISOR} actor: {DISCOVERY_MANAGER} actor failed: {}",
                             panic_msg
                         );
 
-                        // Respawn the discovery manager actor.
-                        let (discovery_manager_actor, _) = Discovery::spawn_linked(
-                            Some(with_namespace(DISCOVERY, &state.actor_namespace)),
-                            (),
+                        // Respawn the discovery actor.
+                        let (discovery_manager_actor, _) = DiscoveryManager::spawn_linked(
+                            Some(with_namespace(DISCOVERY_MANAGER, &state.actor_namespace)),
+                            (state.args.clone(), state.store.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )

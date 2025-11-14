@@ -3,9 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use futures_channel::mpsc;
+use futures_util::StreamExt;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
@@ -89,18 +91,20 @@ impl TestNode {
     where
         P: DiscoveryProtocol<TestTopic, TestId, TestInfo> + 'static,
     {
-        let (alice_tx, alice_rx) = mpsc::channel(16);
-        let (bob_tx, bob_rx) = mpsc::channel(16);
+        let (mut alice_tx, alice_rx) = mpsc::channel(16);
+        let (mut bob_tx, bob_rx) = mpsc::channel(16);
 
         let bob_handle = tokio::task::spawn_local(async move {
-            let Ok(result) = bob_protocol.bob(bob_tx, alice_rx).await else {
+            let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
+            let Ok(result) = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await else {
                 panic!("running bob protocol failed");
             };
             result
         });
 
         // Wait until Alice has finished and store their results
-        let Ok(alice_result) = alice_protocol.alice(alice_tx, bob_rx).await else {
+        let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
+        let Ok(alice_result) = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await else {
             panic!("running alice protocol failed");
         };
 
