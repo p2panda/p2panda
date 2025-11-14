@@ -15,11 +15,16 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::actors::stream::{STREAM, ToStream};
+use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
+use crate::actors::streams::eventually_consistent::{
+    EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
+};
 use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
-use crate::topic_streams::EphemeralStream;
+use crate::streams::StreamError;
+use crate::streams::ephemeral::EphemeralStream;
+use crate::streams::eventually_consistent::EventuallyConsistentStream;
 use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
@@ -94,7 +99,7 @@ impl NetworkBuilder {
     }
 
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError>
+    pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError<T>>
     where
         S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
@@ -123,15 +128,12 @@ impl NetworkBuilder {
 }
 
 #[derive(Debug, Error)]
-pub enum NetworkError {
-    #[error("failed to create topic stream")]
-    StreamCreation,
-
-    #[error("failed to call {0} actor; it may be in the process of restarting")]
-    ActorNotFound(String),
-
+pub enum NetworkError<T> {
     #[error(transparent)]
-    ActorSpawnError(#[from] SpawnErr),
+    StreamError(#[from] StreamError<T>),
+
+    #[error("a critical error occurred in a network subsystem: {0}")]
+    Critical(#[from] SpawnErr),
 }
 
 #[derive(Debug)]
@@ -148,30 +150,72 @@ impl Network {
     /// The returned handle can be used to publish ephemeral messages into the stream. These
     /// messages will be propagated to other nodes which share an interest in the topic ID.
     ///
-    /// Calling `.subscribe()` on the handle returns an `EphemeralTopicStreamSubscription`; this
+    /// Calling `.subscribe()` on the handle returns an `EphemeralSubscription`; this
     /// acts as a receiver for messages authored by other nodes for the shared topic ID.
     ///
-    /// Both the `EphemeralTopicStream` and `EphemeralTopicStreamSubscription` handles can be
+    /// Both the `EphemeralStream` and `EphemeralSubscription` handles can be
     /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
     /// the receiver will receive every message. It is also possible to obtain multiple publishing
     /// handles by calling `ephemeral_stream()` repeatedly.
-    pub async fn ephemeral_stream(
+    pub async fn ephemeral_stream<T>(
         &self,
         topic_id: &TopicId,
-    ) -> Result<EphemeralStream, NetworkError> {
-        // Get a reference to the stream actor.
-        if let Some(stream_actor) =
-            registry::where_is(with_namespace(STREAM, &self.actor_namespace))
+    ) -> Result<EphemeralStream, NetworkError<T>> {
+        // Get a reference to the ephemeral streams actor.
+        if let Some(ephemeral_streams_actor) =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
         {
-            let actor: ActorRef<ToStream> = stream_actor.into();
+            let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
 
-            // Ask the stream actor for an ephemeral stream.
-            let stream = call!(actor, ToStream::CreateEphemeralStream, *topic_id)
-                .map_err(|_| NetworkError::StreamCreation)?;
+            // Ask the ephemeral streams actor for a stream.
+            let stream = call!(actor, ToEphemeralStreams::Create, *topic_id)
+                .map_err(|_| StreamError::Create(*topic_id))?;
 
             Ok(stream)
         } else {
-            Err(NetworkError::ActorNotFound(STREAM.to_string()))
+            Err(StreamError::Create(*topic_id))?
+        }
+    }
+
+    /// Creates an eventually consistent messaging stream and returns a handle.
+    ///
+    /// Eventually consistent streams catch up on past state and allow "live" messaging.
+    ///
+    /// The returned handle can be used to publish messages into the stream. These messages will
+    /// be propagated to other nodes which share an interest in the topic ID.
+    ///
+    /// Calling `.subscribe()` on the handle returns an `EventuallyConsistentSubscription`; this
+    /// acts as a receiver for messages authored by other nodes for the shared topic ID.
+    ///
+    /// Both the `EventuallyConsistentStream` and `EventuallyConsistentSubscription` handles can be
+    /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
+    /// the receiver will receive every message. It is also possible to obtain multiple publishing
+    /// handles by calling `eventually_consistent_stream()` repeatedly.
+    pub async fn eventually_consistent_stream<T>(
+        &self,
+        topic_id: &TopicId,
+        live_mode: bool,
+    ) -> Result<EventuallyConsistentStream, NetworkError<T>> {
+        // Get a reference to the eventually consistent streams actor.
+        if let Some(eventually_consistent_streams_actor) = registry::where_is(with_namespace(
+            EVENTUALLY_CONSISTENT_STREAMS,
+            &self.actor_namespace,
+        )) {
+            let actor: ActorRef<ToEventuallyConsistentStreams> =
+                eventually_consistent_streams_actor.into();
+
+            // Ask the eventually consistent streams actor for a stream.
+            let stream = call!(
+                actor,
+                ToEventuallyConsistentStreams::Create,
+                *topic_id,
+                live_mode
+            )
+            .map_err(|_| StreamError::Create(*topic_id))?;
+
+            Ok(stream)
+        } else {
+            Err(StreamError::Create(*topic_id))?
         }
     }
 }
