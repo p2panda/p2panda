@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_discovery::address_book::AddressBookStore;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -14,7 +20,7 @@ use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 use crate::topic_streams::EphemeralStream;
-use crate::{NetworkId, TopicId};
+use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
 /// Builds an overlay network for eventually-consistent pub/sub.
 ///
@@ -88,7 +94,13 @@ impl NetworkBuilder {
     }
 
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build(self) -> Result<Network, NetworkError> {
+    pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError>
+    where
+        S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+        S::Error: std::error::Error + Send + Sync + 'static,
+        for<'a> T:
+            Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    {
         // Compute a six character actor namespace using the node's public key.
         let actor_namespace = generate_actor_namespace(&self.args.public_key);
 
@@ -96,7 +108,7 @@ impl NetworkBuilder {
         let root_thread_pool = self.args.root_thread_pool.clone();
         let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            self.args,
+            (self.args, store),
             root_thread_pool.clone(),
         )
         .await?;

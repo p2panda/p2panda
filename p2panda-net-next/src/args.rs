@@ -6,7 +6,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 use crate::NetworkId;
-use crate::config::IrohConfig;
+use crate::config::{DiscoveryConfig, IrohConfig};
 
 #[derive(Clone, Debug)]
 pub struct ApplicationArguments {
@@ -15,6 +15,7 @@ pub struct ApplicationArguments {
     pub private_key: PrivateKey,
     pub public_key: PublicKey,
     pub iroh_config: IrohConfig,
+    pub discovery_config: DiscoveryConfig,
     pub root_thread_pool: ThreadLocalActorSpawner,
 }
 
@@ -23,6 +24,7 @@ pub struct ArgsBuilder {
     rng: Option<ChaCha20Rng>,
     private_key: Option<PrivateKey>,
     iroh_config: Option<IrohConfig>,
+    discovery_config: Option<DiscoveryConfig>,
 }
 
 impl ArgsBuilder {
@@ -32,6 +34,7 @@ impl ArgsBuilder {
             rng: None,
             private_key: None,
             iroh_config: None,
+            discovery_config: None,
         }
     }
 
@@ -50,6 +53,11 @@ impl ArgsBuilder {
         self
     }
 
+    pub fn with_discovery_config(mut self, config: DiscoveryConfig) -> Self {
+        self.discovery_config = Some(config);
+        self
+    }
+
     pub fn with_private_key(mut self, private_key: PrivateKey) -> Self {
         self.private_key = Some(private_key);
         self
@@ -63,6 +71,7 @@ impl ArgsBuilder {
             public_key: private_key.public_key(),
             private_key,
             iroh_config: self.iroh_config.unwrap_or_default(),
+            discovery_config: self.discovery_config.unwrap_or_default(),
             root_thread_pool: ThreadLocalActorSpawner::new(),
         }
     }
