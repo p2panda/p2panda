@@ -37,8 +37,8 @@ impl ProtocolHandler for EchoProtocol {
 async fn establish_connection() {
     setup_logging();
 
-    let (args_alice, _) = test_args_from_seed([1; 32]);
-    let (args_bob, _) = test_args_from_seed([2; 32]);
+    let (args_alice, _, _) = test_args_from_seed([1; 32]);
+    let (args_bob, _, _) = test_args_from_seed([2; 32]);
 
     let thread_pool = ThreadLocalActorSpawner::new();
 

@@ -19,10 +19,18 @@
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
+
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{debug, warn};
+use serde::{Deserialize, Serialize};
+use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 
+use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, EphemeralStreams, ToEphemeralStreams};
@@ -33,23 +41,39 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, wi
 use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
 
-pub struct StreamSupervisorState {
+pub struct StreamSupervisorState<E> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: iroh::Endpoint,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
-    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams>,
+    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams<E>>,
     eventually_consistent_streams_actor_failures: u16,
     ephemeral_streams_actor: ActorRef<ToEphemeralStreams>,
     ephemeral_streams_actor_failures: u16,
 }
 
-#[derive(Default)]
-pub struct StreamSupervisor;
+pub struct StreamSupervisor<M> {
+    _phantom: PhantomData<M>
+};
 
-impl ThreadLocalActor for StreamSupervisor {
-    type State = StreamSupervisorState;
+impl<M> Default for StreamSupervisor<M> {
+    fn default() -> Self {
+        Self { _phantom: Default::default() }
+    }
+}
+
+impl<M> ThreadLocalActor for StreamSupervisor<M> 
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M::Config: Clone + Send + Sync + 'static,
+    M::Error: StdError + Send + Sync + 'static,
+    M::Protocol: Send + Sync + 'static,
+    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+    for<'a> <M::Protocol as Protocol>::Message: Serialize + Deserialize<'a>,
+    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+{
+    type State = StreamSupervisorState<<M::Protocol as Protocol>::Event>;
     type Msg = ();
     type Arguments = ApplicationArguments;
 

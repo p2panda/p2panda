@@ -31,4 +31,7 @@ pub enum StreamError<T> {
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,
+
+    #[error("failed to publish to topic {0:?} due to system error")]
+    Publish(TopicId),
 }
