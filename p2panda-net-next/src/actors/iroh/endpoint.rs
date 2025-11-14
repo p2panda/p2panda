@@ -6,17 +6,22 @@ use std::collections::BTreeMap;
 use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 
+use futures_util::StreamExt;
+use iroh::Watcher;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
+use crate::{NodeInfo, TopicId, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -50,15 +55,20 @@ pub enum ToIrohEndpoint {
 
     /// We've received a connection attempt from a remote iroh endpoint.
     Incoming(iroh::endpoint::Incoming),
+
+    /// Our own endpoint address has changed.
+    AddressChanged(Option<iroh::EndpointAddr>),
 }
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
 pub struct IrohState {
+    actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
+    watch_addr_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
 }
 
@@ -77,14 +87,18 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let actor_namespace = generate_actor_namespace(&args.public_key);
+
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
 
         Ok(IrohState {
+            actor_namespace,
             args,
             endpoint: None,
             protocols: Arc::default(),
             accept_handle: None,
+            watch_addr_handle: None,
             worker_pool: ThreadLocalActorSpawner::new(),
         })
     }
@@ -96,6 +110,10 @@ impl ThreadLocalActor for IrohEndpoint {
     ) -> Result<(), ActorProcessingErr> {
         if let Some(endpoint) = &state.endpoint {
             endpoint.close().await;
+        }
+
+        if let Some(watch_addr_handle) = &state.watch_addr_handle {
+            watch_addr_handle.abort();
         }
 
         if let Some(accept_handle) = &state.accept_handle {
@@ -141,6 +159,19 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind()
                     .await?;
 
+                // Watch for changes of our own endpoint address.
+                let watch_addr_handle = {
+                    let mut watcher = endpoint.watch_addr().stream();
+                    let myself = myself.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            let addr = watcher.next().await;
+                            let _ = myself.send_message(ToIrohEndpoint::AddressChanged(addr));
+                        }
+                    })
+                };
+
+                // Handle incoming connection requests from other nodes.
                 let accept_handle = {
                     let endpoint = endpoint.clone();
                     tokio::spawn(async move {
@@ -155,6 +186,7 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 state.endpoint = Some(endpoint);
                 state.accept_handle = Some(accept_handle);
+                state.watch_addr_handle = Some(watch_addr_handle);
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
@@ -225,6 +257,40 @@ impl ThreadLocalActor for IrohEndpoint {
                 let _ = reply.send(state.endpoint.clone().expect(
                     "bind always takes place first, an endpoint must exist after this point",
                 ));
+            }
+            ToIrohEndpoint::AddressChanged(addr) => {
+                debug!(?addr, "updated iroh endpoint address");
+
+                // Create a new transport info with iroh addresses if given. If no iroh address
+                // exists (because we are not reachable) we're explicitly making the address array
+                // empty to inform other nodes about this.
+                let transport_info = match addr {
+                    Some(addr) => UnsignedTransportInfo::from_addrs([addr.into()]),
+                    None => UnsignedTransportInfo::new(),
+                }
+                .sign(&state.args.private_key)?;
+
+                let Some(actor) =
+                    registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
+                else {
+                    // Address book is not reachable, so we're probably shutting down.
+                    return Ok(());
+                };
+                // @TODO: T is TopicId here. This needs to be refactored as part of the general
+                // topic changeover.
+                let address_book_ref = ActorRef::<ToAddressBook<TopicId>>::from(actor);
+
+                // Update existing node info about us if available or create a new one.
+                let mut node_info = match call!(
+                    address_book_ref,
+                    ToAddressBook::NodeInfo,
+                    state.args.public_key
+                )? {
+                    Some(node_info) => node_info,
+                    None => NodeInfo::new(state.args.public_key),
+                };
+                node_info.update_transports(transport_info)?;
+                call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
             }
         }
 
