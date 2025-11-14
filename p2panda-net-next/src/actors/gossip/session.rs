@@ -163,20 +163,22 @@ impl ThreadLocalActor for GossipSession {
                     });
                 }
                 IrohEvent::NeighborUp(peer) => {
-                    let peer = to_public_key(peer);
+                    let node_id = to_public_key(peer);
                     let session_id = myself.get_id();
 
-                    let _ = state
-                        .gossip_actor
-                        .cast(ToGossip::NeighborUp { peer, session_id });
+                    let _ = state.gossip_actor.cast(ToGossip::NeighborUp {
+                        node_id,
+                        session_id,
+                    });
                 }
                 IrohEvent::NeighborDown(peer) => {
-                    let peer = to_public_key(peer);
+                    let node_id = to_public_key(peer);
                     let session_id = myself.get_id();
 
-                    let _ = state
-                        .gossip_actor
-                        .cast(ToGossip::NeighborDown { peer, session_id });
+                    let _ = state.gossip_actor.cast(ToGossip::NeighborDown {
+                        node_id,
+                        session_id,
+                    });
                 }
             },
             ToGossipSession::JoinPeers(peers) => {
