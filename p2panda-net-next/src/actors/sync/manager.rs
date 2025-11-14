@@ -28,6 +28,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, broadcast};
 
 use crate::TopicId;
+use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::{connect, register_protocol};
 use crate::actors::sync::SYNC_PROTOCOL_ID;
 use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
@@ -71,6 +72,7 @@ pub struct SyncManagerState<M, T>
 where
     M: SyncManagerTrait<T>,
 {
+    args: ApplicationArguments,
     topic_id: TopicId,
     // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid locking
     // access to the whole manager on every read/write.
@@ -110,6 +112,7 @@ where
     type Msg = ToSyncManager<T>;
 
     type Arguments = (
+        ApplicationArguments,
         TopicId,
         M::Config,
         broadcast::Sender<SyncManagerEvent<T, <M::Protocol as Protocol>::Event>>,
@@ -120,7 +123,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (topic_id, config, sender) = args;
+        let (args, topic_id, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
         // @TODO: move registering the sync protocol to the stream actor as this is who will be
@@ -138,8 +141,7 @@ where
 
         let manager = Arc::new(Mutex::new(M::from_config(config)));
 
-        // @TODO: get the actual node public key here.
-        let actor_namespace = "my_public_key".to_string();
+        let actor_namespace = generate_actor_namespace(&args.public_key);
         let (_, _) = SyncPoller::<T, M>::spawn_linked(
             None,
             (actor_namespace, manager.clone(), sender),
@@ -149,6 +151,7 @@ where
         .await?;
 
         Ok(SyncManagerState {
+            args,
             topic_id,
             manager,
             session_topic_map: SessionTopicMap::default(),
@@ -175,9 +178,7 @@ where
                 config.live_mode = live_mode;
                 let (session, id) = Self::new_session(state, node_id, topic, config).await;
 
-                // @TODO: get the actual node public key here.
-                let actor_namespace = "my_public_key".to_string();
-
+                let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
                     actor_namespace,
@@ -204,9 +205,7 @@ where
                 config.live_mode = live_mode;
                 let (session, id) = Self::new_session(state, node_id, topic, config).await;
 
-                // @TODO: get the actual node public key here.
-                let actor_namespace = "my_public_key".to_string();
-
+                let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
                     actor_namespace,
