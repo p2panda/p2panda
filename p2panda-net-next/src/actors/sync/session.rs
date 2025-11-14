@@ -5,7 +5,11 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
+use futures::channel::mpsc;
 use iroh::endpoint::Connection;
+use p2panda_sync::topic_handshake::{
+    TopicHandshakeEvent, TopicHandshakeInitiator, TopicHandshakeMessage,
+};
 use p2panda_sync::traits::Protocol;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
@@ -19,9 +23,16 @@ use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
 
-pub enum SyncSessionMessage<P> {
-    Initiate { node_id: NodeId, protocol: P },
-    Accept { connection: Connection, protocol: P },
+pub enum SyncSessionMessage<T, P> {
+    Initiate {
+        node_id: NodeId,
+        topic: T,
+        protocol: P,
+    },
+    Accept {
+        connection: Connection,
+        protocol: P,
+    },
 }
 
 pub struct SyncSession<T, P> {
@@ -45,7 +56,7 @@ where
 {
     type State = ActorNamespace;
 
-    type Msg = SyncSessionMessage<P>;
+    type Msg = SyncSessionMessage<T, P>;
 
     type Arguments = ActorNamespace;
 
@@ -64,9 +75,27 @@ where
         actor_namespace: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SyncSessionMessage::Initiate { node_id, protocol } => {
+            SyncSessionMessage::Initiate {
+                node_id,
+                topic,
+                protocol,
+            } => {
                 let connection =
                     connect::<T>(node_id, SYNC_PROTOCOL_ID, actor_namespace.to_string()).await?;
+
+                // First we run the TopicHandshake protocol.
+                let (tx, rx) = connection.open_bi().await?;
+                let mut tx = into_cbor_sink::<TopicHandshakeMessage<T>, _>(tx);
+                let mut rx = into_cbor_stream::<TopicHandshakeMessage<T>, _>(rx);
+
+                // @NOTE: We don't need to observe these events here as the topic is returned as output
+                // when the protocol completes, so these channels are actually only just to satisfy the
+                // API.
+                let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<T>>(128);
+                let topic_handshake = TopicHandshakeInitiator::new(topic, event_tx);
+                topic_handshake.run(&mut tx, &mut rx).await?;
+
+                // Then we run the actual sync protocol.
                 let (tx, rx) = connection.open_bi().await?;
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);
@@ -76,6 +105,8 @@ where
                 connection,
                 protocol,
             } => {
+                // @NOTE: the TopicHandshake protocol has already been run by the accepting party
+                // which is why we don't perform that additional step here.
                 let (tx, rx) = connection.accept_bi().await?;
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);

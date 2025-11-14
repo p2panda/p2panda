@@ -176,7 +176,7 @@ where
                 let mut config = SyncSessionConfig::default();
                 config.topic = Some(topic.clone());
                 config.live_mode = live_mode;
-                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, id) = Self::new_session(state, node_id, topic.clone(), config).await;
 
                 let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
@@ -189,6 +189,7 @@ where
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
                     node_id,
+                    topic,
                     protocol: session,
                 })?;
             }
@@ -248,7 +249,6 @@ where
             }
             ToSyncManager::Close { node_id, topic } => {
                 /// Close a sync session with a specific remote and topic.
-                // @TODO: get all sessions for just this node.
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
                 if let Some(node_sessions) = node_sessions {
                     let mut topic_sessions = state.session_topic_map.sessions(&topic);
