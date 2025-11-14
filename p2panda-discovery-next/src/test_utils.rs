@@ -6,6 +6,7 @@ use std::hash::Hash as StdHash;
 
 use rand::Rng;
 use rand_chacha::ChaCha20Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::DiscoveryResult;
 use crate::address_book::NodeInfo;
@@ -23,7 +24,7 @@ pub struct TestInfo {
     pub transports: Option<TestTransportInfo>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
 pub struct TestTransportInfo {
     address: String,
     timestamp: u64,
