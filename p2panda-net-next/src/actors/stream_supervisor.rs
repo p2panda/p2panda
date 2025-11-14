@@ -2,14 +2,14 @@
 
 //! Stream supervisor actor.
 //!
-//! This actor is responsible for spawning the sync, gossip and stream actors. It also performs
+//! This actor is responsible for spawning the gossip and streams actors. It also performs
 //! supervision of the spawned actors, restarting them in the event of failure.
 //!
 //! ```plain
 //! - "Stream" Supervisor
-//!     - "Sync Manager" Actor
 //!     - "Gossip" Actor
-//!     - "Stream" Actor
+//!     - "Eventually Consistent Streams" Actor
+//!     - "Ephemeral Streams" Actor
 //! ```
 //!
 //! An iroh `Endpoint` is held as part of the internal state of this actor. This allows an
@@ -25,8 +25,10 @@ use tracing::{debug, warn};
 
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
-use crate::actors::stream::{STREAM, Stream, ToStream};
-use crate::actors::sync::{SYNC_MANAGER, SyncManager};
+use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, EphemeralStreams, ToEphemeralStreams};
+use crate::actors::streams::eventually_consistent::{
+    EVENTUALLY_CONSISTENT_STREAMS, EventuallyConsistentStreams, ToEventuallyConsistentStreams,
+};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
@@ -35,12 +37,12 @@ pub struct StreamSupervisorState {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: iroh::Endpoint,
-    sync_manager_actor: ActorRef<()>,
-    sync_manager_actor_failures: u16,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
-    stream_actor: ActorRef<ToStream>,
-    stream_actor_failures: u16,
+    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams>,
+    eventually_consistent_streams_actor_failures: u16,
+    ephemeral_streams_actor: ActorRef<ToEphemeralStreams>,
+    ephemeral_streams_actor_failures: u16,
 }
 
 #[derive(Default)]
@@ -71,15 +73,6 @@ impl ThreadLocalActor for StreamSupervisor {
         // wrong with the endpoint / endpoint actor.
         let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
-        // Spawn the sync actor.
-        let (sync_manager_actor, _) = SyncManager::spawn_linked(
-            Some(with_namespace(SYNC_MANAGER, &actor_namespace)),
-            (),
-            myself.clone().into(),
-            args.root_thread_pool.clone(),
-        )
-        .await?;
-
         // Spawn the gossip actor.
         let (gossip_actor, _) = Gossip::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
@@ -89,14 +82,22 @@ impl ThreadLocalActor for StreamSupervisor {
         )
         .await?;
 
-        // Spawn the stream actor.
-        let (stream_actor, _) = Stream::spawn_linked(
-            Some(with_namespace(STREAM, &actor_namespace)),
-            (
-                actor_namespace.clone(),
-                sync_manager_actor.clone(),
-                gossip_actor.clone(),
-            ),
+        // Spawn the eventually consistent streams actor.
+        let (eventually_consistent_streams_actor, _) = EventuallyConsistentStreams::spawn_linked(
+            Some(with_namespace(
+                EVENTUALLY_CONSISTENT_STREAMS,
+                &actor_namespace,
+            )),
+            (actor_namespace.clone(), gossip_actor.clone()),
+            myself.clone().into(),
+            args.root_thread_pool.clone(),
+        )
+        .await?;
+
+        // Spawn the ephemeral streams actor.
+        let (ephemeral_streams_actor, _) = EphemeralStreams::spawn_linked(
+            Some(with_namespace(EPHEMERAL_STREAMS, &actor_namespace)),
+            (actor_namespace.clone(), gossip_actor.clone()),
             myself.into(),
             args.root_thread_pool.clone(),
         )
@@ -106,12 +107,12 @@ impl ThreadLocalActor for StreamSupervisor {
             actor_namespace,
             args,
             endpoint,
-            sync_manager_actor,
-            sync_manager_actor_failures: 0,
             gossip_actor,
             gossip_actor_failures: 0,
-            stream_actor,
-            stream_actor_failures: 0,
+            eventually_consistent_streams_actor,
+            eventually_consistent_streams_actor_failures: 0,
+            ephemeral_streams_actor,
+            ephemeral_streams_actor_failures: 0,
         };
 
         Ok(state)
@@ -136,24 +137,7 @@ impl ThreadLocalActor for StreamSupervisor {
                 let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
 
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace(SYNC_MANAGER, &actor_namespace) {
-                        warn!(
-                            "{STREAM_SUPERVISOR} actor: {SYNC_MANAGER} actor failed: {}",
-                            panic_msg
-                        );
-
-                        // Respawn the sync actor.
-                        let (sync_manager_actor, _) = SyncManager::spawn_linked(
-                            Some(with_namespace(SYNC_MANAGER, &actor_namespace)),
-                            (),
-                            myself.clone().into(),
-                            state.args.root_thread_pool.clone(),
-                        )
-                        .await?;
-
-                        state.sync_manager_actor_failures += 1;
-                        state.sync_manager_actor = sync_manager_actor;
-                    } else if name == with_namespace(GOSSIP, &actor_namespace) {
+                    if name == with_namespace(GOSSIP, &actor_namespace) {
                         warn!(
                             "{STREAM_SUPERVISOR} actor: {GOSSIP} actor failed: {}",
                             panic_msg
@@ -170,27 +154,47 @@ impl ThreadLocalActor for StreamSupervisor {
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
-                    } else if name == with_namespace(STREAM, &actor_namespace) {
+                    } else if name
+                        == with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &actor_namespace)
+                    {
                         warn!(
-                            "{STREAM_SUPERVISOR} actor: {STREAM} actor failed: {}",
+                            "{STREAM_SUPERVISOR} actor: {EVENTUALLY_CONSISTENT_STREAMS} actor failed: {}",
                             panic_msg
                         );
 
-                        // Respawn the stream actor.
-                        let (stream_actor, _) = Stream::spawn_linked(
-                            Some(with_namespace(STREAM, &actor_namespace)),
-                            (
-                                state.actor_namespace.clone(),
-                                state.sync_manager_actor.clone(),
-                                state.gossip_actor.clone(),
-                            ),
+                        // Respawn the eventually consistent streams actor.
+                        let (eventually_consistent_streams_actor, _) =
+                            EventuallyConsistentStreams::spawn_linked(
+                                Some(with_namespace(
+                                    EVENTUALLY_CONSISTENT_STREAMS,
+                                    &actor_namespace,
+                                )),
+                                (state.actor_namespace.clone(), state.gossip_actor.clone()),
+                                myself.clone().into(),
+                                state.args.root_thread_pool.clone(),
+                            )
+                            .await?;
+
+                        state.eventually_consistent_streams_actor_failures += 1;
+                        state.eventually_consistent_streams_actor =
+                            eventually_consistent_streams_actor;
+                    } else if name == with_namespace(EPHEMERAL_STREAMS, &actor_namespace) {
+                        warn!(
+                            "{STREAM_SUPERVISOR} actor: {EPHEMERAL_STREAMS} actor failed: {}",
+                            panic_msg
+                        );
+
+                        // Respawn the ephemeral streams actor.
+                        let (ephemeral_streams_actor, _) = EphemeralStreams::spawn_linked(
+                            Some(with_namespace(EPHEMERAL_STREAMS, &actor_namespace)),
+                            (state.actor_namespace.clone(), state.gossip_actor.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
                         .await?;
 
-                        state.stream_actor_failures += 1;
-                        state.stream_actor = stream_actor;
+                        state.ephemeral_streams_actor_failures += 1;
+                        state.ephemeral_streams_actor = ephemeral_streams_actor;
                     }
                 }
             }
@@ -218,7 +222,8 @@ mod tests {
 
     use crate::actors::gossip::GOSSIP;
     use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
-    use crate::actors::stream::STREAM;
+    use crate::actors::streams::ephemeral::EPHEMERAL_STREAMS;
+    use crate::actors::streams::eventually_consistent::EVENTUALLY_CONSISTENT_STREAMS;
     use crate::actors::sync::SYNC_MANAGER;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
@@ -254,17 +259,27 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Ensure all actors spawned by the stream supervisor are running.
-        let sync_manager = registry::where_is(with_namespace(SYNC_MANAGER, &actor_namespace));
-        assert!(sync_manager.is_some());
-        assert_eq!(sync_manager.unwrap().get_status(), ActorStatus::Running);
-
         let gossip_actor = registry::where_is(with_namespace(GOSSIP, &actor_namespace));
         assert!(gossip_actor.is_some());
         assert_eq!(gossip_actor.unwrap().get_status(), ActorStatus::Running);
 
-        let stream_actor = registry::where_is(with_namespace(STREAM, &actor_namespace));
-        assert!(stream_actor.is_some());
-        assert_eq!(stream_actor.unwrap().get_status(), ActorStatus::Running);
+        let eventually_consistent_streams_actor = registry::where_is(with_namespace(
+            EVENTUALLY_CONSISTENT_STREAMS,
+            &actor_namespace,
+        ));
+        assert!(eventually_consistent_streams_actor.is_some());
+        assert_eq!(
+            eventually_consistent_streams_actor.unwrap().get_status(),
+            ActorStatus::Running
+        );
+
+        let ephemeral_streams_actor =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &actor_namespace));
+        assert!(ephemeral_streams_actor.is_some());
+        assert_eq!(
+            ephemeral_streams_actor.unwrap().get_status(),
+            ActorStatus::Running
+        );
 
         stream_supervisor.stop(None);
         stream_supervisor_handle.await.unwrap();

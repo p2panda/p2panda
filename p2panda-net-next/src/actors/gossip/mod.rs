@@ -14,18 +14,22 @@ use iroh::EndpointId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
-use ractor::thread_local::ThreadLocalActor;
-use ractor::thread_local::ThreadLocalActorSpawner;
-use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
 use crate::TopicId;
+use crate::actors::ActorNamespace;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
+use crate::actors::streams::eventually_consistent::{
+    EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
+};
+use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::network::FromNetwork;
-use crate::utils::from_public_key;
+use crate::utils::{from_public_key, to_public_key};
 
 /// Gossip actor name.
 pub const GOSSIP: &str = "net.gossip";
@@ -60,13 +64,13 @@ pub enum ToGossip {
 
     /// Gained a new, direct neighbor in the gossip overlay.
     NeighborUp {
-        peer: PublicKey,
+        node_id: PublicKey,
         session_id: ActorId,
     },
 
     /// Lost a direct neighbor in the gossip overlay.
     NeighborDown {
-        peer: PublicKey,
+        node_id: PublicKey,
         session_id: ActorId,
     },
 
@@ -84,13 +88,16 @@ pub enum ToGossip {
     DebugState(RpcReplyPort<tests::DebugState>),
 }
 
+/// Mapping of topic ID to the associated sender channels for getting messages into and out of the
+/// gossip overlay.
+type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>;
+
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
 struct Sessions {
     sessions_by_actor_id: HashMap<ActorId, TopicId>,
     sessions_by_topic_id: HashMap<TopicId, ActorRef<ToGossipSession>>,
-    to_gossip_senders: HashMap<TopicId, Sender<Vec<u8>>>,
-    from_gossip_senders: HashMap<TopicId, BroadcastSender<FromNetwork>>,
+    gossip_senders: GossipSenders,
     gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
 }
 
@@ -100,6 +107,16 @@ pub struct GossipState {
     neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
     gossip_thread_pool: ThreadLocalActorSpawner,
+    actor_namespace: ActorNamespace,
+}
+
+impl GossipState {
+    fn drop_topic_state(&mut self, actor_id: &ActorId, topic_id: &TopicId) {
+        self.sessions.sessions_by_topic_id.remove(topic_id);
+        self.sessions.gossip_senders.remove(topic_id);
+        self.sessions.gossip_joined_senders.remove(actor_id);
+        self.neighbours.remove(topic_id);
+    }
 }
 
 #[derive(Default)]
@@ -116,6 +133,8 @@ impl ThreadLocalActor for Gossip {
         endpoint: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let config = IrohGossipConfig::default();
+
+        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
 
         let gossip = IrohGossip::builder()
             .max_message_size(config.max_message_size)
@@ -136,6 +155,7 @@ impl ThreadLocalActor for Gossip {
             neighbours,
             topic_delivery_scopes,
             gossip_thread_pool,
+            actor_namespace,
         })
     }
 
@@ -161,6 +181,7 @@ impl ThreadLocalActor for Gossip {
             ToGossip::Handle(reply) => {
                 let gossip = state.gossip.clone();
                 let _ = reply.send(gossip);
+
                 Ok(())
             }
             ToGossip::Subscribe(topic_id, peers, reply) => {
@@ -209,29 +230,23 @@ impl ThreadLocalActor for Gossip {
                     .sessions_by_actor_id
                     .insert(gossip_session_actor_id, topic_id);
 
-                // Associate the session actor with the gossip joined sender.
-                state
-                    .sessions
-                    .gossip_joined_senders
-                    .insert(gossip_session_actor_id, gossip_joined_tx);
-
                 // Associate the topic id with the session actor.
                 state
                     .sessions
                     .sessions_by_topic_id
                     .insert(topic_id, gossip_session_actor);
 
-                // Associate the topic id with the sender from the user to gossip.
+                // Associate the session actor with the gossip joined sender.
                 state
                     .sessions
-                    .to_gossip_senders
-                    .insert(topic_id, to_gossip_tx.clone());
+                    .gossip_joined_senders
+                    .insert(gossip_session_actor_id, gossip_joined_tx);
 
-                // Associate the topic id with the sender from gossip to the user.
+                // Associate the topic id with the senders to and from gossip.
                 state
                     .sessions
-                    .from_gossip_senders
-                    .insert(topic_id, from_gossip_tx.clone());
+                    .gossip_senders
+                    .insert(topic_id, (to_gossip_tx.clone(), from_gossip_tx.clone()));
 
                 // Return sender / receiver pair to the user.
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
@@ -242,15 +257,14 @@ impl ThreadLocalActor for Gossip {
                 // Stop the session associated with this topic id.
                 if let Some(actor) = state.sessions.sessions_by_topic_id.remove(&topic_id) {
                     let actor_id = actor.get_id();
-                    let _ = state.sessions.sessions_by_actor_id.remove(&actor_id);
-                    let _ = state.sessions.gossip_joined_senders.remove(&actor_id);
+                    state.sessions.sessions_by_actor_id.remove(&actor_id);
+                    state.sessions.gossip_joined_senders.remove(&actor_id);
 
                     actor.stop(Some("received unsubscribe request".to_string()));
                 }
 
                 // Drop all associated state.
-                state.sessions.to_gossip_senders.remove(&topic_id);
-                state.sessions.from_gossip_senders.remove(&topic_id);
+                state.sessions.gossip_senders.remove(&topic_id);
                 state.neighbours.remove(&topic_id);
                 state.topic_delivery_scopes.remove(&topic_id);
 
@@ -286,8 +300,8 @@ impl ThreadLocalActor for Gossip {
                     .push(delivery_scope);
 
                 // Write the received bytes to all subscribers for the associated topic.
-                if let Some(sender) = state.sessions.from_gossip_senders.get(&topic_id) {
-                    let _number_of_subscribers = sender.send(msg.clone())?;
+                if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic_id) {
+                    let _number_of_subscribers = from_gossip_tx.send(msg.clone())?;
                 }
 
                 Ok(())
@@ -314,22 +328,54 @@ impl ThreadLocalActor for Gossip {
 
                 Ok(())
             }
-            ToGossip::NeighborUp { peer, session_id } => {
-                // Insert the peer into the set of neighbours.
+            ToGossip::NeighborUp {
+                node_id,
+                session_id,
+            } => {
+                // Insert the node into the set of neighbours.
                 if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
+                    && let Some(neighbours) = state.neighbours.get_mut(topic_id)
                 {
-                    peer_set.insert(peer);
+                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
+                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
+                    ) {
+                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                            eventually_consistent_streams_actor.into();
+
+                        // Ask the eventually consistent streams actor to initiate a sync session
+                        // for this topic.
+                        actor.send_message(ToEventuallyConsistentStreams::InitiateSync(
+                            *topic_id, node_id,
+                        ))?;
+                    }
+
+                    neighbours.insert(node_id);
                 }
 
                 Ok(())
             }
-            ToGossip::NeighborDown { peer, session_id } => {
+            ToGossip::NeighborDown {
+                node_id,
+                session_id,
+            } => {
                 // Remove the peer from the set of neighbours.
                 if let Some(topic_id) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(peer_set) = state.neighbours.get_mut(topic_id)
+                    && let Some(neighbours) = state.neighbours.get_mut(topic_id)
                 {
-                    peer_set.remove(&peer);
+                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
+                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
+                    ) {
+                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                            eventually_consistent_streams_actor.into();
+
+                        // Ask the eventually consistent streams actor to end any sync sessions
+                        // for this topic.
+                        actor.send_message(ToEventuallyConsistentStreams::EndSync(
+                            *topic_id, node_id,
+                        ))?;
+                    }
+
+                    neighbours.remove(&node_id);
                 }
 
                 Ok(())
@@ -367,10 +413,7 @@ impl ThreadLocalActor for Gossip {
                     );
 
                     // Drop all state associated with the terminated gossip session.
-                    state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.from_gossip_senders.remove(&topic_id);
-                    state.sessions.gossip_joined_senders.remove(&actor_id);
-                    state.neighbours.remove(&topic_id);
+                    state.drop_topic_state(&actor_id, &topic_id);
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -393,10 +436,7 @@ impl ThreadLocalActor for Gossip {
                     );
 
                     // Drop all state associated with the failed gossip session.
-                    state.sessions.sessions_by_topic_id.remove(&topic_id);
-                    state.sessions.from_gossip_senders.remove(&topic_id);
-                    state.sessions.gossip_joined_senders.remove(&actor_id);
-                    state.neighbours.remove(&topic_id);
+                    state.drop_topic_state(&actor_id, &topic_id);
                 }
             }
             _ => (),
