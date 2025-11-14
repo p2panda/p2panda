@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod manager;
-mod session;
 mod poller;
+mod session;
 
 // @TODO: uncomment when we plyg in the actual sync actor.
 // pub use manager::{SYNC_MANAGER, SyncManager, ToSyncManager};

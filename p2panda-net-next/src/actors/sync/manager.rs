@@ -173,9 +173,10 @@ where
                 topic,
                 live_mode,
             } => {
-                let mut config = SyncSessionConfig::default();
-                config.topic = Some(topic.clone());
-                config.live_mode = live_mode;
+                let mut config = SyncSessionConfig {
+                    live_mode,
+                    topic: Some(topic.clone()),
+                };
                 let (session, id) = Self::new_session(state, node_id, topic.clone(), config).await;
 
                 let actor_namespace = generate_actor_namespace(&state.args.public_key);
@@ -202,8 +203,10 @@ where
                 // @TODO: once topic handshake has been removed from the managers' protocol
                 // implementation then we will also set the topic here. For now a redundant round
                 // of topic handshake occurs.
-                let mut config = SyncSessionConfig::default();
-                config.live_mode = live_mode;
+                let mut config = SyncSessionConfig {
+                    live_mode,
+                    topic: None,
+                };
                 let (session, id) = Self::new_session(state, node_id, topic, config).await;
 
                 let actor_namespace = generate_actor_namespace(&state.args.public_key);
