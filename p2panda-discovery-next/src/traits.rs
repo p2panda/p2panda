@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
-use futures::{Sink, Stream};
+use futures_util::{Sink, Stream};
 
 use crate::address_book::NodeInfo;
 
