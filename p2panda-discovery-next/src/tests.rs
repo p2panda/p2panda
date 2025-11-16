@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use futures::StreamExt;
-use futures::channel::mpsc;
+use futures_channel::mpsc;
+use futures_util::StreamExt;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
