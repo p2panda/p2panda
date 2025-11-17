@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::hash::Hash as StdHash;
 use std::{fmt::Debug, pin::Pin};
 
 use futures::Sink;
@@ -40,7 +39,7 @@ pub trait SyncManager<T> {
     fn from_config(config: Self::Config) -> Self;
 
     /// Instantiate a new sync session.
-    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol;
+    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> impl Future<Output = Self::Protocol>;
 
     /// Retrieve a send handle to an already existing sync session.
     fn session_handle(
