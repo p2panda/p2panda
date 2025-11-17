@@ -66,7 +66,10 @@ impl NodeInfo {
         // Choose "latest" info by checking timestamp if given.
         let mut is_newer = false;
         match self.transports.as_ref() {
-            None => self.transports = Some(other),
+            None => {
+                is_newer = true;
+                self.transports = Some(other)
+            }
             Some(current) => {
                 if other.timestamp > current.timestamp {
                     self.transports = Some(other);
