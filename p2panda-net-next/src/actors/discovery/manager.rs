@@ -16,7 +16,7 @@ use tracing::debug;
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
-    DiscoverySession, DiscoverySessionId, DiscoverySessionRole,
+    DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
 };
 use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker};
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, DiscoveryActorName};
@@ -243,7 +243,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryManager::InitiateSession(node_id, walker_ref) => {
+            ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();
@@ -254,14 +254,14 @@ where
                         DiscoveryActorName::new_session(session_id)
                             .to_string(&state.actor_namespace),
                     ),
-                    (
-                        generate_actor_namespace(&state.args.public_key),
+                    DiscoverySessionArguments {
+                        my_node_id: state.args.public_key,
                         session_id,
-                        node_id,
-                        state.store.clone(),
-                        myself.clone(),
-                        DiscoverySessionRole::Connect,
-                    ),
+                        remote_node_id,
+                        store: state.store.clone(),
+                        manager_ref: myself.clone(),
+                        args: DiscoverySessionRole::Connect,
+                    },
                     myself.clone().into(),
                     state.pool.clone(),
                 )
@@ -270,7 +270,7 @@ where
                 state.sessions.insert(
                     session_id,
                     DiscoverySessionInfo::Initiated {
-                        remote_node_id: node_id,
+                        remote_node_id,
                         session_id,
                         walker_id,
                         started_at: Instant::now(),
@@ -278,7 +278,7 @@ where
                     },
                 );
             }
-            ToDiscoveryManager::AcceptSession(node_id, connection) => {
+            ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
                 // @TODO: Have a max. of concurrently running discovery sessions.
                 let session_id = state.next_session_id();
 
@@ -287,14 +287,14 @@ where
                         DiscoveryActorName::new_accept_session(session_id)
                             .to_string(&state.actor_namespace),
                     ),
-                    (
-                        generate_actor_namespace(&state.args.public_key),
+                    DiscoverySessionArguments {
+                        my_node_id: state.args.public_key,
                         session_id,
-                        node_id,
-                        state.store.clone(),
-                        myself.clone(),
-                        DiscoverySessionRole::Accept { connection },
-                    ),
+                        remote_node_id,
+                        store: state.store.clone(),
+                        manager_ref: myself.clone(),
+                        args: DiscoverySessionRole::Accept { connection },
+                    },
                     myself.into(),
                     state.pool.clone(),
                 )
@@ -303,7 +303,7 @@ where
                 state.sessions.insert(
                     session_id,
                     DiscoverySessionInfo::Accepted {
-                        remote_node_id: node_id,
+                        remote_node_id,
                         session_id,
                         started_at: Instant::now(),
                         handle,

@@ -18,8 +18,6 @@ async fn two_peer_ephemeral_messaging() {
     let (args, store, _) = test_args();
 
     let join_handle = tokio::spawn(async move {
-        // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
-        // changeover.
         let store =
             MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([1; 32]));
         let node_builder = NetworkBuilder::new([7; 32]);
@@ -47,8 +45,6 @@ async fn two_peer_ephemeral_messaging() {
     let node_builder = NetworkBuilder::new([7; 32])
         .bind_port_v4(2024)
         .bind_port_v6(2025);
-    // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
-    // changeover.
     let store = MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([2; 32]));
     let node = node_builder
         .build::<_, _, NoSyncManager>(store, NoSyncConfig)

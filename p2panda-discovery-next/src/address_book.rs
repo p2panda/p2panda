@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 /// Node informations which can be stored in an address book, aiding discovery, sync, peer sampling
@@ -59,6 +60,18 @@ pub trait AddressBookStore<ID, N> {
     /// Returns `None` if no information was found for this node.
     fn node_info(&self, id: &ID) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 
+    /// Returns sync topics of a node.
+    fn node_sync_topics(
+        &self,
+        id: &ID,
+    ) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
+
+    /// Returns ephemeral messaging topics of a node.
+    fn node_ephemeral_messaging_topics(
+        &self,
+        id: &ID,
+    ) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
+
     /// Returns a list of all known node informations.
     fn all_node_infos(&self) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
@@ -83,9 +96,9 @@ pub trait AddressBookStore<ID, N> {
 
     /// Sets the list of "topics" for ephemeral messaging this node is "interested" in.
     ///
-    /// Topic ids for gossip overlays (used for ephemeral messaging) are usually shared privately
-    /// and directly with nodes, this is why implementers usually want to simply overwrite the
-    /// previous topic id set (_not_ extend it).
+    /// Topics for gossip overlays (used for ephemeral messaging) are usually shared privately and
+    /// directly with nodes, this is why implementers usually want to simply overwrite the previous
+    /// topics set (_not_ extend it).
     fn set_ephemeral_messaging_topics(
         &self,
         id: ID,
@@ -103,7 +116,7 @@ pub trait AddressBookStore<ID, N> {
     /// given topic ids in this set.
     fn node_infos_by_ephemeral_messaging_topics(
         &self,
-        topic_ids: &[[u8; 32]],
+        topics: &[[u8; 32]],
     ) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
     /// Returns information from a randomly picked node or `None` when no information exists in the
@@ -261,11 +274,11 @@ pub mod memory {
         async fn set_ephemeral_messaging_topics(
             &self,
             id: ID,
-            topic_ids: impl IntoIterator<Item = [u8; 32]>,
+            topics: impl IntoIterator<Item = [u8; 32]>,
         ) -> Result<(), Self::Error> {
             let mut node_topics = self.ephemeral_messaging_topics.write().await;
             self.update_last_changed(id.clone()).await;
-            node_topics.insert(id, HashSet::from_iter(topic_ids.into_iter()));
+            node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
             Ok(())
         }
 
@@ -289,13 +302,13 @@ pub mod memory {
 
         async fn node_infos_by_ephemeral_messaging_topics(
             &self,
-            topic_ids: &[[u8; 32]],
+            topics: &[[u8; 32]],
         ) -> Result<Vec<N>, Self::Error> {
-            let node_topic_ids = self.ephemeral_messaging_topics.read().await;
-            let ids: Vec<ID> = node_topic_ids
+            let node_topics = self.ephemeral_messaging_topics.read().await;
+            let ids: Vec<ID> = node_topics
                 .iter()
-                .filter_map(|(node_id, node_topic_ids)| {
-                    if node_topic_ids.iter().any(|t| topic_ids.contains(t)) {
+                .filter_map(|(node_id, node_topics)| {
+                    if node_topics.iter().any(|t| topics.contains(t)) {
                         Some(node_id.clone())
                     } else {
                         None
@@ -320,6 +333,21 @@ pub mod memory {
                 .filter(|info| info.is_bootstrap())
                 .choose(&mut *rng);
             Ok(result.cloned())
+        }
+
+        async fn node_sync_topics(&self, id: &ID) -> Result<HashSet<[u8; 32]>, Self::Error> {
+            let topics = self.sync_topics.read().await;
+            let result = topics.get(id).cloned().unwrap_or(HashSet::new());
+            Ok(result)
+        }
+
+        async fn node_ephemeral_messaging_topics(
+            &self,
+            id: &ID,
+        ) -> Result<HashSet<[u8; 32]>, Self::Error> {
+            let topics = self.ephemeral_messaging_topics.read().await;
+            let result = topics.get(id).cloned().unwrap_or(HashSet::new());
+            Ok(result)
         }
     }
 

@@ -6,72 +6,15 @@ mod session;
 mod tests;
 mod walker;
 
-use std::collections::HashSet;
+use ractor::{ActorCell, ActorRef};
 
-use p2panda_discovery::traits;
-use ractor::{ActorCell, ActorRef, call, registry};
-use thiserror::Error;
-
-use crate::TopicId;
 use crate::actors::discovery::session::{DISCOVERY_SESSION, DiscoverySessionId};
 use crate::actors::discovery::walker::DISCOVERY_WALKER;
-use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace, without_namespace};
 
 pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 
 pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
-
-// @TODO: Move this to "stream actor" when it is ready.
-#[derive(Debug)]
-pub struct LocalTopicsProvider {
-    actor_namespace: ActorNamespace,
-}
-
-impl LocalTopicsProvider {
-    pub fn new(actor_namespace: ActorNamespace) -> Self {
-        Self { actor_namespace }
-    }
-}
-
-// @TODO: This returns an empty array for now when the streams actor is not available. This is nice
-// for test setups where we don't have any stream actors available.
-//
-// Ideally we want to come up with a different approach though: Discovery should not need to know
-// about streams at all.
-impl traits::LocalTopics for LocalTopicsProvider {
-    type Error = SubscriptionInfoError;
-
-    async fn sync_topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
-        // @TODO: Call actor which can respond with the currently subscribed topics.
-        Ok(HashSet::new())
-    }
-
-    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
-        if let Some(address_book_actor) =
-            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
-        {
-            let actor_ref: ActorRef<ToEphemeralStreams> = address_book_actor.into();
-            let Ok(topics) = call!(actor_ref, ToEphemeralStreams::ActiveTopics) else {
-                return Ok(HashSet::new());
-            };
-
-            Ok(topics)
-        } else {
-            Ok(HashSet::new())
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-#[allow(unused)]
-pub enum SubscriptionInfoError {
-    #[error("actor '{0}' is not available")]
-    ActorNotAvailable(String),
-
-    #[error("actor '{0}' is not responding to call")]
-    ActorNotResponsive(String),
-}
 
 /// Helper to extract information about an actor given it's name (just a string).
 #[derive(Debug, PartialEq)]

@@ -10,9 +10,6 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-/// Eventually consistent streams actor name.
-pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
-
 use p2panda_core::PublicKey;
 use p2panda_discovery::address_book::NodeInfo;
 use p2panda_sync::SyncManagerEvent;
@@ -30,10 +27,14 @@ use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::sync::{SyncManager, ToSyncManager};
-use crate::actors::{ActorNamespace, with_namespace};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
+use crate::args::ApplicationArguments;
 use crate::streams::eventually_consistent::{
     EventuallyConsistentStream, EventuallyConsistentSubscription,
 };
+
+/// Eventually consistent streams actor name.
+pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
 
 type IsLiveModeEnabled = bool;
 
@@ -59,10 +60,6 @@ pub enum ToEventuallyConsistentStreams<E> {
 
     /// End a sync session.
     EndSync(TopicId, PublicKey),
-
-    /// Returns a list of all topics of currently subscribed streams.
-    #[allow(unused)]
-    ActiveTopics(RpcReplyPort<HashSet<TopicId>>),
 }
 
 /// Mapping of topic to the sender channels of the associated gossip overlay.
@@ -79,6 +76,7 @@ struct SyncManagers {
 
 pub struct EventuallyConsistentStreamsState<C, E> {
     actor_namespace: ActorNamespace,
+    args: ApplicationArguments,
     gossip_actor: ActorRef<ToGossip>,
     gossip_senders: GossipSenders,
     sync_managers: SyncManagers,
@@ -127,6 +125,19 @@ impl<M, E> EventuallyConsistentStreamsState<M, E> {
             None
         }
     }
+
+    /// Inform address book about our current topics by updating our own entry.
+    fn update_address_book(&self) {
+        if let Some(address_book_ref) = self.address_book_actor()
+            && let Err(err) =
+                address_book_ref.send_message(ToAddressBook::SetEphemeralMessagingTopics(
+                    self.args.public_key,
+                    HashSet::from_iter(self.sync_receivers.keys().cloned()),
+                ))
+        {
+            warn!("failed updating local topics in address book: {err:#?}")
+        }
+    }
 }
 
 pub struct EventuallyConsistentStreams<M> {
@@ -150,15 +161,18 @@ where
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
 {
     type State = EventuallyConsistentStreamsState<M::Config, <M::Protocol as Protocol>::Event>;
+
     type Msg = ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>;
-    type Arguments = (ActorNamespace, ActorRef<ToGossip>, M::Config);
+
+    type Arguments = (ApplicationArguments, ActorRef<ToGossip>, M::Config);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, gossip_actor, sync_config) = args;
+        let (args, gossip_actor, sync_config) = args;
+        let actor_namespace = generate_actor_namespace(&args.public_key);
 
         let gossip_senders = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -167,17 +181,16 @@ where
         // Sync manager actors are all spawned in a dedicated thread.
         let stream_thread_pool = ThreadLocalActorSpawner::new();
 
-        let state = EventuallyConsistentStreamsState {
+        Ok(EventuallyConsistentStreamsState {
             actor_namespace,
+            args,
             gossip_actor,
             gossip_senders,
             sync_managers,
             sync_receivers,
             sync_config,
             stream_thread_pool,
-        };
-
-        Ok(state)
+        })
     }
 
     async fn post_stop(
@@ -286,6 +299,9 @@ where
                     )
                 };
 
+                // Inform address book about newly added topic.
+                state.update_address_book();
+
                 // Ignore any potential send error; it's not a concern of this actor.
                 let _ = reply.send(stream);
             }
@@ -306,6 +322,9 @@ where
                 // Drop all senders and receivers associated with the topic.
                 state.gossip_senders.remove(&topic);
                 state.sync_receivers.remove(&topic);
+
+                // Inform address book about removed topic.
+                state.update_address_book();
 
                 // Drop the sync manager state for this topic.
                 if let Some((sync_manager, _)) =
@@ -335,14 +354,8 @@ where
                 if let Some((sync_manager_actor, _)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
-                    sync_manager_actor.send_message(ToSyncManager::Close {
-                        node_id,
-                        topic,
-                    })?;
+                    sync_manager_actor.send_message(ToSyncManager::Close { node_id, topic })?;
                 }
-            }
-            ToEventuallyConsistentStreams::ActiveTopics(reply) => {
-                let _ = reply.send(HashSet::from_iter(state.sync_receivers.keys().cloned()));
             }
         }
 

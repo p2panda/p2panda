@@ -138,13 +138,36 @@ impl<S> AddressBookState<S> {
         }
     }
 
-    /// Inform all subscribers about a topic change;
-    async fn call_topic_subscribers(&mut self, actor_ref: ActorRef<ToAddressBook>, topic: TopicId) {
+    async fn call_sync_topic_subscribers(
+        &mut self,
+        actor_ref: ActorRef<ToAddressBook>,
+        topic: TopicId,
+    ) {
         let Some(tx) = self.topic_subscribers.get(&topic) else {
             return;
         };
 
-        // @TODO: Make sure that this is also works for eventually consistent streams.
+        let Ok(node_infos) = call!(actor_ref, ToAddressBook::NodeInfosBySyncTopics, vec![topic])
+        else {
+            return;
+        };
+
+        if tx.send(TopicEvent { topic, node_infos }).is_err() {
+            // On an error we know that all receivers have been dropped, so we can remove this
+            // subscription as well and clean up after ourselves.
+            self.topic_subscribers.remove(&topic);
+        }
+    }
+
+    async fn call_ephemeral_topic_subscribers(
+        &mut self,
+        actor_ref: ActorRef<ToAddressBook>,
+        topic: TopicId,
+    ) {
+        let Some(tx) = self.topic_subscribers.get(&topic) else {
+            return;
+        };
+
         let Ok(node_infos) = call!(
             actor_ref,
             ToAddressBook::NodeInfosByEphemeralMessagingTopics,
@@ -310,16 +333,19 @@ where
                 let _ = reply.send(result);
             }
             ToAddressBook::SetSyncTopics(node_id, topics) => {
-                state.store.set_sync_topics(node_id, topics).await?;
+                for topic in &topics {
+                    state
+                        .call_sync_topic_subscribers(myself.clone(), *topic)
+                        .await;
+                }
 
-                // @TODO: Finalize this after topic refactoring.
-                // for topic in topics {
-                //     state.call_topic_subscribers();
-                // }
+                state.store.set_sync_topics(node_id, topics).await?;
             }
             ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
                 for topic in &topics {
-                    state.call_topic_subscribers(myself.clone(), *topic).await;
+                    state
+                        .call_ephemeral_topic_subscribers(myself.clone(), *topic)
+                        .await;
                 }
 
                 state
