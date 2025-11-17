@@ -6,7 +6,7 @@
 //!
 //! No actors are spawned or respawned by the ephemeral streams actor, that role is carried out
 //! by the stream supervisor.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Ephemeral streams actor name.
 pub const EPHEMERAL_STREAMS: &str = "net.streams.ephemeral";
@@ -37,6 +37,9 @@ pub enum ToEphemeralStreams {
 
     /// Return `true` if there are any active ephemeral streams for the given topic ID.
     IsActive(TopicId, RpcReplyPort<bool>),
+
+    /// Returns a list of all topic ids of currently subscribed ephemeral streams.
+    ActiveTopics(RpcReplyPort<HashSet<TopicId>>),
 }
 
 /// Mapping of topic ID to the associated sender channels for getting messages into and out of the
@@ -47,6 +50,7 @@ pub struct EphemeralStreamsState {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
     gossip_senders: GossipSenders,
+    active_topics: HashSet<TopicId>,
 }
 
 impl EphemeralStreamsState {
@@ -79,15 +83,12 @@ impl ThreadLocalActor for EphemeralStreams {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (actor_namespace, gossip_actor) = args;
 
-        let gossip_senders = HashMap::new();
-
-        let state = EphemeralStreamsState {
+        Ok(EphemeralStreamsState {
             actor_namespace,
             gossip_actor,
-            gossip_senders,
-        };
-
-        Ok(state)
+            gossip_senders: HashMap::new(),
+            active_topics: HashSet::new(),
+        })
     }
 
     async fn handle(
@@ -135,6 +136,7 @@ impl ThreadLocalActor for EphemeralStreams {
                     state
                         .gossip_senders
                         .insert(topic_id, (to_gossip_tx.clone(), from_gossip_tx));
+                    state.active_topics.insert(topic_id);
 
                     EphemeralStream::new(topic_id, to_gossip_tx, state.actor_namespace.clone())
                 };
@@ -145,9 +147,7 @@ impl ThreadLocalActor for EphemeralStreams {
             ToEphemeralStreams::Subscribe(topic_id, reply) => {
                 if let Some((_, from_gossip_tx)) = state.gossip_senders.get(&topic_id) {
                     let from_gossip_rx = from_gossip_tx.subscribe();
-
                     let subscription = EphemeralSubscription::new(topic_id, from_gossip_rx);
-
                     let _ = reply.send(Some(subscription));
                 } else {
                     let _ = reply.send(None);
@@ -159,10 +159,14 @@ impl ThreadLocalActor for EphemeralStreams {
 
                 // Drop all senders associated with the topic id.
                 state.gossip_senders.remove(&topic_id);
+                state.active_topics.remove(&topic_id);
             }
             ToEphemeralStreams::IsActive(topic_id, reply) => {
                 let is_active = state.gossip_senders.contains_key(&topic_id);
                 let _ = reply.send(is_active);
+            }
+            ToEphemeralStreams::ActiveTopics(reply) => {
+                let _ = reply.send(state.active_topics.clone());
             }
         }
 
