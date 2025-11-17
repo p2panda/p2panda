@@ -21,7 +21,6 @@ use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
 use crate::actors::{ActorNamespace, with_namespace};
-use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::ephemeral::{EphemeralStream, EphemeralSubscription};
 
 pub enum ToEphemeralStreams {
@@ -43,7 +42,7 @@ pub enum ToEphemeralStreams {
 
 /// Mapping of topic ID to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
-type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNetwork>)>;
+type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
 pub struct EphemeralStreamsState {
     actor_namespace: ActorNamespace,

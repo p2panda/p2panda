@@ -31,7 +31,6 @@ use crate::actors::gossip::ToGossip;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::sync::{SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, with_namespace};
-use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::eventually_consistent::{
     EventuallyConsistentStream, EventuallyConsistentSubscription,
 };
@@ -67,7 +66,7 @@ pub enum ToEventuallyConsistentStreams<E> {
 }
 
 /// Mapping of topic ID to the sender channels of the associated gossip overlay.
-type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNetwork>)>;
+type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
 /// Mapping of topic ID to the receiver channel from the associated sync manager.
 type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<SyncManagerEvent<TopicId, E>>>;
