@@ -6,7 +6,7 @@ use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::errors::SpawnErr;
@@ -28,10 +28,10 @@ use crate::streams::ephemeral::EphemeralStream;
 use crate::streams::eventually_consistent::EventuallyConsistentStream;
 use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
-/// Builds an overlay network for eventually-consistent pub/sub.
+/// Builds an overlay peer-to-peer network for ephemeral and eventually-consistent pub/sub.
 ///
 /// Network separation is achieved using the network identifier (`NetworkId`). Nodes using the same
-/// network identifier will gradually discover one another over the lifetime of the network.
+/// network identifier will be able to connect to each other.
 pub struct NetworkBuilder {
     args: ApplicationArguments,
 }
@@ -99,8 +99,6 @@ impl NetworkBuilder {
         self
     }
 
-    // @TODO: might be nicer to have the generic parameters on the builder struct itself, we don't
-    // need to call build() multiple times with different store/sync/topics I don't think.
     /// Returns a handle to a newly-spawned instance of `Network`.
     pub async fn build<S, M>(
         self,
@@ -214,7 +212,6 @@ where
     /// handles by calling `eventually_consistent_stream()` repeatedly.
     pub async fn eventually_consistent_stream(
         &self,
-        // @TODO: not sure if we want T right now still in the high level API?
         topic_id: &TopicId,
         live_mode: bool,
     ) -> Result<EventuallyConsistentStream<<M::Protocol as Protocol>::Event>, NetworkError<TopicId>>
@@ -239,31 +236,6 @@ where
             Ok(stream)
         } else {
             Err(StreamError::Create(*topic_id))?
-        }
-    }
-}
-
-/// Bytes to be sent into the network.
-pub type ToNetwork = Vec<u8>;
-
-/// Message received from the network.
-#[derive(Debug, Clone, PartialEq)]
-pub enum FromNetwork {
-    EphemeralMessage {
-        bytes: Vec<u8>,
-        delivered_from: PublicKey,
-    },
-    Message {
-        bytes: Vec<u8>,
-        delivered_from: PublicKey,
-    },
-}
-
-impl FromNetwork {
-    pub(crate) fn ephemeral_message(bytes: Vec<u8>, delivered_from: PublicKey) -> Self {
-        Self::EphemeralMessage {
-            bytes,
-            delivered_from,
         }
     }
 }
