@@ -9,12 +9,13 @@ mod walker;
 use std::marker::PhantomData;
 
 use p2panda_discovery::traits;
-use ractor::{ActorCell, ActorRef};
+use ractor::{ActorCell, ActorRef, call, registry};
 use thiserror::Error;
 
 use crate::TopicId;
 use crate::actors::discovery::session::{DISCOVERY_SESSION, DiscoverySessionId};
 use crate::actors::discovery::walker::DISCOVERY_WALKER;
+use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace, without_namespace};
 
 pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
@@ -24,12 +25,14 @@ pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
 // @TODO: Move this to "stream actor" when it is ready.
 #[derive(Debug)]
 pub struct SubscriptionInfo<T> {
+    actor_namespace: ActorNamespace,
     _marker: PhantomData<T>,
 }
 
 impl<T> SubscriptionInfo<T> {
-    pub fn new() -> Self {
+    pub fn new(actor_namespace: ActorNamespace) -> Self {
         Self {
+            actor_namespace,
             _marker: PhantomData,
         }
     }
@@ -44,8 +47,18 @@ impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
     }
 
     async fn subscribed_topic_ids(&self) -> Result<Vec<TopicId>, Self::Error> {
-        // @TODO: Call actor which can respond with the currently subscribed topic ids.
-        Ok(vec![])
+        if let Some(address_book_actor) =
+            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
+        {
+            let actor_ref: ActorRef<ToEphemeralStreams> = address_book_actor.into();
+            let topic_ids = call!(actor_ref, ToEphemeralStreams::ActiveTopics)
+                .map_err(|_| SubscriptionInfoError::ActorNotResponsive(EPHEMERAL_STREAMS.into()))?;
+            Ok(Vec::from_iter(topic_ids.into_iter()))
+        } else {
+            Err(SubscriptionInfoError::ActorNotAvailable(
+                EPHEMERAL_STREAMS.into(),
+            ))
+        }
     }
 }
 

@@ -105,8 +105,12 @@ where
         let (connection, tx, rx) = match args {
             DiscoverySessionRole::Connect => {
                 // Try to establish a direct connection with this node.
-                let connection =
-                    connect::<T>(remote_node_id, DISCOVERY_PROTOCOL_ID, actor_namespace).await?;
+                let connection = connect::<T>(
+                    remote_node_id,
+                    DISCOVERY_PROTOCOL_ID,
+                    actor_namespace.clone(),
+                )
+                .await?;
                 let (tx, rx) = connection.open_bi().await?;
                 (connection, tx, rx)
             }
@@ -125,7 +129,7 @@ where
         // @TODO: Have a timeout to cancel session if it's running overtime.
         let protocol = NaiveDiscoveryProtocol::<S, _, T, NodeId, NodeInfo>::new(
             store,
-            SubscriptionInfo::<T>::new(),
+            SubscriptionInfo::<T>::new(actor_namespace),
             remote_node_id,
         );
         let result = match role {
