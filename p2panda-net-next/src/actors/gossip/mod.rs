@@ -480,9 +480,12 @@ mod tests {
     use tokio::time::sleep;
 
     use crate::TopicId;
+    use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
     use crate::actors::gossip::session::ToGossipSession;
+    use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::network::FromNetwork;
-    use crate::utils::from_private_key;
+    use crate::test_utils::{test_args, test_args_from_seed};
+    use crate::utils::{from_private_key, to_public_key};
 
     use super::{Gossip, GossipState, ToGossip};
 
@@ -517,13 +520,17 @@ mod tests {
         // - Assert: Ant's gossip actor state maps the subscribed topic id to the public keys of
         //           bat and cat (neighbours)
 
+        let (ant_args, ant_store, _) = test_args();
+        let (bat_args, bat_store, _) = test_args();
+        let (cat_args, cat_store, _) = test_args();
+
         // Create topic id.
         let topic_id = [3; 32];
 
         // Create keypairs.
-        let ant_private_key = PrivateKey::new();
-        let bat_private_key = PrivateKey::new();
-        let cat_private_key = PrivateKey::new();
+        let ant_private_key = ant_args.private_key.clone();
+        let bat_private_key = bat_args.private_key.clone();
+        let cat_private_key = cat_args.private_key.clone();
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
@@ -563,8 +570,36 @@ mod tests {
         // Cat discovers ant through some out-of-band process.
         cat_discovery.add_endpoint_info(ant_endpoint_info);
 
-        // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
+
+        // Spawn one address book for each peer.
+        let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
+        let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
+        let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
+
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
+            (ant_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
+            (bat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
+            (cat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
             TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
@@ -637,12 +672,15 @@ mod tests {
         // - Bat joins the gossip topic using ant as bootstrap peer
         // - Assert: Ant and bat can exchange messages
 
+        let (ant_args, ant_store, _) = test_args();
+        let (bat_args, bat_store, _) = test_args();
+
         // Create topic id.
         let topic_id = [7; 32];
 
         // Create keypairs.
-        let ant_private_key = PrivateKey::new();
-        let bat_private_key = PrivateKey::new();
+        let ant_private_key = ant_args.private_key.clone();
+        let bat_private_key = bat_args.private_key.clone();
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
@@ -670,8 +708,28 @@ mod tests {
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
-        // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
+
+        // Spawn one address book for each peer.
+        let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
+        let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
+
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
+            (ant_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
+            (bat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
             TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
@@ -757,13 +815,17 @@ mod tests {
         // - Cat joins the gossip topic using bat as bootstrap peer
         // - Assert: Ant, bat and cat can exchange messages
 
+        let (ant_args, ant_store, _) = test_args();
+        let (bat_args, bat_store, _) = test_args();
+        let (cat_args, cat_store, _) = test_args();
+
         // Create topic id.
         let topic_id = [11; 32];
 
         // Create keypairs.
-        let ant_private_key = PrivateKey::new();
-        let bat_private_key = PrivateKey::new();
-        let cat_private_key = PrivateKey::new();
+        let ant_private_key = ant_args.private_key.clone();
+        let bat_private_key = bat_args.private_key.clone();
+        let cat_private_key = cat_args.private_key.clone();
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
@@ -800,8 +862,35 @@ mod tests {
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
-        // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
+
+        let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
+        let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
+        let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
+
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
+            (ant_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
+            (bat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
+            (cat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
             TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
@@ -926,13 +1015,17 @@ mod tests {
         // - Cat joins bat on established gossip topic
         // - Assert: Bat and cat can now exchange messages (proof of healed partition)
 
+        let (ant_args, ant_store, _) = test_args();
+        let (bat_args, bat_store, _) = test_args();
+        let (cat_args, cat_store, _) = test_args();
+
         // Create topic id.
         let topic_id = [9; 32];
 
         // Create keypairs.
-        let ant_private_key = PrivateKey::new();
-        let bat_private_key = PrivateKey::new();
-        let cat_private_key = PrivateKey::new();
+        let ant_private_key = ant_args.private_key.clone();
+        let bat_private_key = bat_args.private_key.clone();
+        let cat_private_key = cat_args.private_key.clone();
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
@@ -969,8 +1062,36 @@ mod tests {
         // Bat discovers ant through some out-of-band process.
         bat_discovery.add_endpoint_info(ant_endpoint_info);
 
-        // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
+
+        // Spawn one address book for each peer.
+        let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
+        let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
+        let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
+
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
+            (ant_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
+            (bat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+        AddressBook::spawn(
+            Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
+            (cat_store.clone(),),
+            thread_pool.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
             TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
