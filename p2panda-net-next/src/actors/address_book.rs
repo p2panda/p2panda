@@ -323,7 +323,7 @@ where
             ToAddressBook::SetTopicIds(node_id, topic_ids) => {
                 for topic_id in &topic_ids {
                     state
-                        .call_topic_subscribers(myself.clone(), topic_id.clone())
+                        .call_topic_subscribers(myself.clone(), *topic_id)
                         .await;
                 }
 

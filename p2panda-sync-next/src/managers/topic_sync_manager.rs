@@ -43,14 +43,14 @@ type SessionEventReceiver<T, M> =
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
 /// any topic subscriptions in order to understand the correct mappings.  
 #[derive(Clone, Debug)]
+#[allow(clippy::type_complexity)]
 pub struct TopicSyncManager<T, S, M, L, E> {
-    pub(crate) topic_map: M,
-    pub(crate) store: S,
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
-    pub(crate) events_rx_set:
-        Arc<Mutex<SelectAll<SessionEventReceiver<T, TopicLogSyncEvent<T, E>>>>>,
-    pub(crate) manager_output_queue: Vec<SyncManagerEvent<T, TopicLogSyncEvent<T, E>>>,
-    _phantom: PhantomData<(T, L, E)>,
+    pub topic_map: M,
+    pub store: S,
+    pub session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
+    pub events_rx_set: Arc<Mutex<SelectAll<SessionEventReceiver<T, TopicLogSyncEvent<T, E>>>>>,
+    pub manager_output_queue: Vec<SyncManagerEvent<T, TopicLogSyncEvent<T, E>>>,
+    _phantom: PhantomData<L>,
 }
 
 impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
@@ -102,9 +102,12 @@ where
 
         {
             let mut events_rx_set = self.events_rx_set.lock().await;
-            events_rx_set.push(event_rx.map(Box::new(move |event| {
-                SyncManagerEvent::FromSync { session_id, event }
-            })));
+            events_rx_set.push(
+                event_rx.map(Box::new(move |event| SyncManagerEvent::FromSync {
+                    session_id,
+                    event,
+                })),
+            );
         }
 
         let live_rx = if config.live_mode {
@@ -328,7 +331,9 @@ mod tests {
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
         // Instantiate sync session for Peer B.
-        let peer_b_session = peer_b_manager.session(SESSION_ID, &SyncSessionConfig::default()).await;
+        let peer_b_session = peer_b_manager
+            .session(SESSION_ID, &SyncSessionConfig::default())
+            .await;
 
         // Get a handle to Peer A sync session.
         let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).unwrap();
@@ -538,7 +543,9 @@ mod tests {
             live_mode: true,
         };
         let session_ab = manager_a.session(SESSION_AB, &config).await;
-        let session_b = manager_b.session(SESSION_BA, &SyncSessionConfig::default()).await;
+        let session_b = manager_b
+            .session(SESSION_BA, &SyncSessionConfig::default())
+            .await;
 
         // Session A -> C (A initiates)
         let config = SyncSessionConfig {
@@ -546,7 +553,9 @@ mod tests {
             live_mode: true,
         };
         let session_ac = manager_a.session(SESSION_AC, &config).await;
-        let session_c = manager_c.session(SESSION_CA, &SyncSessionConfig::default()).await;
+        let session_c = manager_c
+            .session(SESSION_CA, &SyncSessionConfig::default())
+            .await;
 
         // Run both protocols concurrently
         tokio::spawn(async move {
