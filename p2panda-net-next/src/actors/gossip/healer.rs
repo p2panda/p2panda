@@ -73,10 +73,13 @@ impl ThreadLocalActor for GossipHealer {
                 {
                     let actor: ActorRef<ToAddressBook<()>> = address_book_actor.into();
 
+                    // TODO: Uncomment this once merged with the latest address book PR.
+                    /*
                     let receiver = call!(actor, ToAddressBook::SubscribeTopicChanges, topic_id)
                         .expect("address book actor should handle call");
 
                     state.receiver = Some(receiver);
+                    */
 
                     // Invoke the handler to wait for the first event on the receiver.
                     let _ = myself.cast(ToGossipHealer::WaitForEvent);
@@ -88,13 +91,19 @@ impl ThreadLocalActor for GossipHealer {
                 if let Some(receiver) = &mut state.receiver {
                     match receiver.recv().await {
                         Some(event) => {
+                            // TODO: Replace this with the code below once merged with address book
+                            // PR.
+                            let node_ids = vec![];
+
                             // TODO: `NodeId` might need to be mapped to `PublicKey` (expected by
                             // JoinPeers).
+                            /*
                             let node_ids = event
                                 .node_infos
                                 .iter()
                                 .map(|node_info| node_info.id())
                                 .collect();
+                            */
 
                             // Send the join signal to the gossip session actor.
                             state
