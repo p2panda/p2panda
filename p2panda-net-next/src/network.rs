@@ -112,7 +112,7 @@ impl NetworkBuilder {
         S::Error: std::error::Error + Send + Sync + 'static,
         M: SyncManager<TopicId> + Send + 'static,
         M::Error: StdError + Send + Sync + 'static,
-        M::Protocol: Send + Sync + 'static,
+        M::Protocol: Send + 'static,
         <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
         <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
     {
@@ -161,7 +161,7 @@ where
     for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
     M: SyncManager<T> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + Sync + 'static,
+    M::Protocol: Send + 'static,
     <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
 {
@@ -271,5 +271,65 @@ impl FromNetwork {
             bytes,
             delivered_from,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::convert::Infallible;
+
+    use p2panda_core::Extensions;
+    use p2panda_discovery::address_book::memory::MemoryStore as AddressBookStore;
+    use p2panda_store::MemoryStore as P2pandaStore;
+    use p2panda_sync::TopicSyncManager;
+    use p2panda_sync::log_sync::Logs;
+    use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
+    use p2panda_sync::topic_log_sync::TopicLogMap;
+    use serde::{Deserialize, Serialize};
+
+    use crate::TopicId;
+    use crate::test_utils::test_args;
+
+    use super::*;
+
+    const NETWORK_ID: TopicId = [0; 32];
+
+    type LogId = u64;
+
+    #[derive(Clone, Debug, Deserialize, Serialize)]
+    pub struct TestExtensions;
+
+    #[derive(Clone, Default, Debug)]
+    pub struct TestTopicMap(HashMap<TopicId, Logs<LogId>>);
+
+    impl TestTopicMap {
+        pub fn insert(&mut self, topic_query: &TopicId, logs: Logs<LogId>) -> Option<Logs<LogId>> {
+            self.0.insert(topic_query.clone(), logs)
+        }
+    }
+
+    impl TopicLogMap<TopicId, LogId> for TestTopicMap {
+        type Error = Infallible;
+
+        async fn get(&self, topic_query: &TopicId) -> Result<Logs<LogId>, Self::Error> {
+            Ok(self.0.get(topic_query).cloned().unwrap_or_default())
+        }
+    }
+
+    type TestStore = P2pandaStore<LogId, TestExtensions>;
+    type TestTopicSyncManager =
+        TopicSyncManager<TopicId, TestStore, TestTopicMap, LogId, TestExtensions>;
+
+    #[tokio::test]
+    async fn build_topic_log_sync_network() {
+        let (args, address_book, _) = test_args();
+        let store = TestStore::new();
+        let topic_map = TestTopicMap::default();
+        let sync_config = TopicSyncManagerConfig { topic_map, store };
+
+        let builder = NetworkBuilder::new(NETWORK_ID);
+        let network: Network<_, TestTopicSyncManager> =
+            builder.build(address_book, sync_config).await.unwrap();
     }
 }
