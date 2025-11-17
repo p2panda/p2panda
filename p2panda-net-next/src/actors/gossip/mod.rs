@@ -8,6 +8,8 @@ mod sender;
 mod session;
 
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::marker::PhantomData;
 
 use iroh::Endpoint as IrohEndpoint;
 use iroh::EndpointId;
@@ -119,10 +121,22 @@ impl GossipState {
     }
 }
 
-#[derive(Default)]
-pub struct Gossip;
+pub struct Gossip<E> {
+    _phantom: PhantomData<E>,
+}
 
-impl ThreadLocalActor for Gossip {
+impl<E> Default for Gossip<E> {
+    fn default() -> Self {
+        Self {
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<E> ThreadLocalActor for Gossip<E>
+where
+    E: Clone + Debug + Send + Sync + 'static,
+{
     type State = GossipState;
     type Msg = ToGossip;
     type Arguments = IrohEndpoint;
@@ -339,7 +353,7 @@ impl ThreadLocalActor for Gossip {
                     if let Some(eventually_consistent_streams_actor) = registry::where_is(
                         with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
                     ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                        let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
                             eventually_consistent_streams_actor.into();
 
                         // Ask the eventually consistent streams actor to initiate a sync session
@@ -365,7 +379,7 @@ impl ThreadLocalActor for Gossip {
                     if let Some(eventually_consistent_streams_actor) = registry::where_is(
                         with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
                     ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams> =
+                        let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
                             eventually_consistent_streams_actor.into();
 
                         // Ask the eventually consistent streams actor to end any sync sessions
@@ -470,6 +484,8 @@ mod tests {
 
     use super::{Gossip, GossipState, ToGossip};
 
+    type TestGossip = Gossip<()>;
+
     // Use this internal type to introspect the actor's current state.
     pub struct DebugState {
         neighbours: HashMap<TopicId, HashSet<PublicKey>>,
@@ -548,15 +564,15 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -655,11 +671,11 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -785,15 +801,15 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -954,15 +970,15 @@ mod tests {
         // Spawn gossip actors.
         let thread_pool = ThreadLocalActorSpawner::new();
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            Gossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            Gossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            Gossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
                 .await
                 .unwrap();
 
