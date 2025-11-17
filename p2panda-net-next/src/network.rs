@@ -8,6 +8,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
@@ -98,22 +99,31 @@ impl NetworkBuilder {
         self
     }
 
+    // @TODO: might be nicer to have the generic parameters on the builder struct itself, we don't
+    // need to call build() multiple times with different store/sync/topics I don't think.
     /// Returns a handle to a newly-spawned instance of `Network`.
-    pub async fn build<S, T>(self, store: S) -> Result<Network, NetworkError<T>>
+    pub async fn build<S, M>(
+        self,
+        store: S,
+        sync_config: M::Config,
+    ) -> Result<Network<TopicId, M>, NetworkError<TopicId>>
     where
-        S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+        S: AddressBookStore<TopicId, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
-        for<'a> T:
-            Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+        M: SyncManager<TopicId> + Send + 'static,
+        M::Error: StdError + Send + Sync + 'static,
+        M::Protocol: Send + Sync + 'static,
+        <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+        <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
     {
         // Compute a six character actor namespace using the node's public key.
         let actor_namespace = generate_actor_namespace(&self.args.public_key);
 
         // Spawn the root-level supervisor actor.
         let root_thread_pool = self.args.root_thread_pool.clone();
-        let (supervisor_actor, supervisor_actor_handle) = Supervisor::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<S, M>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            (self.args, store),
+            (self.args, store, sync_config),
             root_thread_pool.clone(),
         )
         .await?;
@@ -123,6 +133,7 @@ impl NetworkBuilder {
             supervisor_actor,
             supervisor_actor_handle,
             root_thread_pool,
+            _phantom: PhantomData,
         })
     }
 }
@@ -137,14 +148,23 @@ pub enum NetworkError<T> {
 }
 
 #[derive(Debug)]
-pub struct Network {
+pub struct Network<T, M> {
     actor_namespace: ActorNamespace,
     supervisor_actor: ActorRef<()>,
     supervisor_actor_handle: JoinHandle<()>,
     root_thread_pool: ThreadLocalActorSpawner,
+    _phantom: PhantomData<(T, M)>,
 }
 
-impl Network {
+impl<T, M> Network<T, M>
+where
+    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    M: SyncManager<T> + Send + 'static,
+    M::Error: StdError + Send + Sync + 'static,
+    M::Protocol: Send + Sync + 'static,
+    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+{
     /// Creates an ephemeral messaging stream and returns a handle.
     ///
     /// The returned handle can be used to publish ephemeral messages into the stream. These
@@ -157,7 +177,7 @@ impl Network {
     /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
     /// the receiver will receive every message. It is also possible to obtain multiple publishing
     /// handles by calling `ephemeral_stream()` repeatedly.
-    pub async fn ephemeral_stream<T>(
+    pub async fn ephemeral_stream(
         &self,
         topic_id: &TopicId,
     ) -> Result<EphemeralStream, NetworkError<T>> {
@@ -191,17 +211,19 @@ impl Network {
     /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
     /// the receiver will receive every message. It is also possible to obtain multiple publishing
     /// handles by calling `eventually_consistent_stream()` repeatedly.
-    pub async fn eventually_consistent_stream<T>(
+    pub async fn eventually_consistent_stream(
         &self,
+        // @TODO: not sure if we want T right now still in the high level API?
         topic_id: &TopicId,
         live_mode: bool,
-    ) -> Result<EventuallyConsistentStream, NetworkError<T>> {
+    ) -> Result<EventuallyConsistentStream<<M::Protocol as Protocol>::Event>, NetworkError<TopicId>>
+    {
         // Get a reference to the eventually consistent streams actor.
         if let Some(eventually_consistent_streams_actor) = registry::where_is(with_namespace(
             EVENTUALLY_CONSISTENT_STREAMS,
             &self.actor_namespace,
         )) {
-            let actor: ActorRef<ToEventuallyConsistentStreams> =
+            let actor: ActorRef<ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>> =
                 eventually_consistent_streams_actor.into();
 
             // Ask the eventually consistent streams actor for a stream.
