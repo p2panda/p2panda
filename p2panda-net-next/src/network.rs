@@ -2,7 +2,6 @@
 
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
@@ -12,7 +11,6 @@ use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -104,7 +102,7 @@ impl NetworkBuilder {
         self,
         store: S,
         sync_config: M::Config,
-    ) -> Result<Network<TopicId, M>, NetworkError<TopicId>>
+    ) -> Result<Network<M>, NetworkError<<M::Protocol as Protocol>::Event>>
     where
         S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
@@ -131,7 +129,7 @@ impl NetworkBuilder {
             supervisor_actor,
             supervisor_actor_handle,
             root_thread_pool,
-            _phantom: PhantomData,
+            _marker: PhantomData,
         })
     }
 }
@@ -147,18 +145,17 @@ pub enum NetworkError<T> {
 
 #[derive(Debug)]
 #[allow(unused)]
-pub struct Network<T, M> {
+pub struct Network<M> {
     actor_namespace: ActorNamespace,
     supervisor_actor: ActorRef<()>,
     supervisor_actor_handle: JoinHandle<()>,
     root_thread_pool: ThreadLocalActorSpawner,
-    _phantom: PhantomData<(T, M)>,
+    _marker: PhantomData<M>,
 }
 
-impl<T, M> Network<T, M>
+impl<M> Network<M>
 where
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
-    M: SyncManager<T> + Send + 'static,
+    M: SyncManager<TopicId> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,
     M::Protocol: Send + 'static,
     <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
@@ -179,7 +176,7 @@ where
     pub async fn ephemeral_stream(
         &self,
         topic: TopicId,
-    ) -> Result<EphemeralStream, NetworkError<T>> {
+    ) -> Result<EphemeralStream, NetworkError<Vec<u8>>> {
         // Get a reference to the ephemeral streams actor.
         if let Some(ephemeral_streams_actor) =
             registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
@@ -288,7 +285,7 @@ mod tests {
         let sync_config = TopicSyncManagerConfig { topic_map, store };
 
         let builder = NetworkBuilder::new(NETWORK_ID);
-        let _network: Network<_, TestTopicSyncManager> =
+        let _network: Network<TestTopicSyncManager> =
             builder.build(address_book, sync_config).await.unwrap();
     }
 }
