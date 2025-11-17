@@ -119,11 +119,7 @@ impl ThreadLocalActor for GossipSession {
 
         let (gossip_healer_actor, _) = GossipHealer::spawn_linked(
             None,
-            (
-                actor_namespace.clone(),
-                topic_id,
-                myself.clone(),
-            ),
+            (actor_namespace.clone(), topic_id, myself.clone()),
             myself.clone().into(),
             gossip_thread_pool.clone(),
         )

@@ -930,7 +930,7 @@ mod tests {
             call!(bat_gossip_actor, ToGossip::Subscribe, topic_id, bat_peers).unwrap();
 
         // Briefly sleep to allow overlay to form.
-        sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(250)).await;
 
         // Subscribe to sender to obtain receiver.
         let mut bat_from_gossip_rx = bat_from_gossip.subscribe();
@@ -948,7 +948,7 @@ mod tests {
             call!(cat_gossip_actor, ToGossip::Subscribe, topic_id, cat_peers).unwrap();
 
         // Briefly sleep to allow overlay to form.
-        sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(250)).await;
 
         let mut cat_from_gossip_rx = cat_from_gossip.subscribe();
 
