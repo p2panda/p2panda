@@ -6,16 +6,23 @@
 //! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
 //! by the stream supervisor actor.
 use std::collections::HashMap;
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
 
 /// Eventually consistent streams actor name.
 pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
 
 use p2panda_core::PublicKey;
+use p2panda_sync::SyncManagerEvent;
+use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::concurrency::broadcast;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{
     ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry,
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::{self, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
@@ -32,18 +39,18 @@ use crate::streams::eventually_consistent::{
 
 type IsLiveModeEnabled = bool;
 
-pub enum ToEventuallyConsistentStreams {
+pub enum ToEventuallyConsistentStreams<E> {
     /// Create an eventually consistent stream for the topic ID and return a publishing handle.
     Create(
         TopicId,
         IsLiveModeEnabled,
-        RpcReplyPort<EventuallyConsistentStream>,
+        RpcReplyPort<EventuallyConsistentStream<E>>,
     ),
 
     /// Return an eventually consistent subscription handle for the given topic ID.
     Subscribe(
         TopicId,
-        RpcReplyPort<Option<EventuallyConsistentSubscription>>,
+        RpcReplyPort<Option<EventuallyConsistentSubscription<E>>>,
     ),
 
     /// Close all eventually consistent streams for the given topic ID.
@@ -59,26 +66,26 @@ pub enum ToEventuallyConsistentStreams {
 /// Mapping of topic ID to the sender channels of the associated gossip overlay.
 type GossipSenders = HashMap<TopicId, (Sender<ToNetwork>, BroadcastSender<FromNetwork>)>;
 
-/// Mapping of topic ID to the receiver channel from the associated sync mananger.
-// TODO: Receiver message type may be incorrect (`FromSync` maybe).
-type SyncReceivers = HashMap<TopicId, BroadcastReceiver<FromNetwork>>;
+/// Mapping of topic ID to the receiver channel from the associated sync manager.
+type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<SyncManagerEvent<TopicId, E>>>;
 
 #[derive(Default)]
 struct SyncManagers {
-    topic_manager_map: HashMap<TopicId, (ActorRef<ToSyncManager>, IsLiveModeEnabled)>,
+    topic_manager_map: HashMap<TopicId, (ActorRef<ToSyncManager<TopicId>>, IsLiveModeEnabled)>,
     actor_topic_map: HashMap<ActorId, TopicId>,
 }
 
-pub struct EventuallyConsistentStreamsState {
+pub struct EventuallyConsistentStreamsState<C, E> {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
     gossip_senders: GossipSenders,
     sync_managers: SyncManagers,
-    sync_receivers: SyncReceivers,
+    sync_receivers: SyncReceivers<E>,
+    sync_config: C,
     stream_thread_pool: ThreadLocalActorSpawner,
 }
 
-impl EventuallyConsistentStreamsState {
+impl<M, E> EventuallyConsistentStreamsState<M, E> {
     /// Drop all internal state associated with the given topic ID.
     fn drop_topic_state(&mut self, topic_id: &TopicId) {
         self.sync_managers.topic_manager_map.remove(topic_id);
@@ -110,20 +117,36 @@ impl EventuallyConsistentStreamsState {
     }
 }
 
-#[derive(Default)]
-pub struct EventuallyConsistentStreams;
+pub struct EventuallyConsistentStreams<M> {
+    _phantom: PhantomData<M>,
+}
 
-impl ThreadLocalActor for EventuallyConsistentStreams {
-    type State = EventuallyConsistentStreamsState;
-    type Msg = ToEventuallyConsistentStreams;
-    type Arguments = (ActorNamespace, ActorRef<ToGossip>);
+impl<M> Default for EventuallyConsistentStreams<M> {
+    fn default() -> Self {
+        Self {
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<M> ThreadLocalActor for EventuallyConsistentStreams<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M::Error: StdError + Send + Sync + 'static,
+    M::Protocol: Send + Sync + 'static,
+    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+{
+    type State = EventuallyConsistentStreamsState<M::Config, <M::Protocol as Protocol>::Event>;
+    type Msg = ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>;
+    type Arguments = (ActorNamespace, ActorRef<ToGossip>, M::Config);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, gossip_actor) = args;
+        let (actor_namespace, gossip_actor, sync_config) = args;
 
         let gossip_senders = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -138,6 +161,7 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
             gossip_senders,
             sync_managers,
             sync_receivers,
+            sync_config,
             stream_thread_pool,
         };
 
@@ -150,8 +174,8 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         // Close all active sync sessions.
-        for (topic_id, (actor, _)) in state.sync_managers.topic_manager_map {
-            actor.send_message(ToSyncManager::CloseAll(topic_id))?;
+        for (topic_id, (actor, _)) in state.sync_managers.topic_manager_map.drain() {
+            actor.send_message(ToSyncManager::CloseAll { topic: topic_id })?;
         }
 
         Ok(())
@@ -207,10 +231,15 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                     // TODO: Pass the from_sync_tx sender into the sync manager actor.
                     //
                     // Spawn a sync manager for this topic_id.
-                    let (sync_manager_actor, _) = SyncManager::spawn_linked(
+                    let (sync_manager_actor, _) = SyncManager::<M, TopicId>::spawn_linked(
                         // TODO: Consider naming each actor (they will need a unique ID).
                         None,
-                        (),
+                        (
+                            state.actor_namespace.clone(),
+                            topic_id,
+                            state.sync_config.clone(),
+                            from_sync_tx,
+                        ),
                         myself.clone().into(),
                         state.stream_thread_pool.clone(),
                     )
@@ -271,15 +300,21 @@ impl ThreadLocalActor for EventuallyConsistentStreams {
                 if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic_id)
                 {
-                    sync_manager_actor
-                        .send_message(ToSyncManager::Initiate(node_id, topic_id, live_mode))?;
+                    sync_manager_actor.send_message(ToSyncManager::Initiate {
+                        node_id,
+                        topic: topic_id,
+                        live_mode: *live_mode,
+                    })?;
                 }
             }
             ToEventuallyConsistentStreams::EndSync(topic_id, node_id) => {
                 if let Some((sync_manager_actor, _)) =
                     state.sync_managers.topic_manager_map.get(&topic_id)
                 {
-                    sync_manager_actor.send_message(ToSyncManager::Close(node_id, topic_id))?;
+                    sync_manager_actor.send_message(ToSyncManager::Close {
+                        node_id,
+                        topic: topic_id,
+                    })?;
                 }
             }
         }

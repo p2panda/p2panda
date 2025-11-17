@@ -1,26 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef};
+mod manager;
+mod poller;
+mod session;
 
-/// Sync manager actor name.
-pub const SYNC_MANAGER: &str = "net.sync_manager";
+pub use manager::{SYNC_MANAGER, SyncManager, ToSyncManager};
 
-pub enum ToSyncManager {}
-
-#[derive(Default)]
-pub struct SyncManager;
-
-impl ThreadLocalActor for SyncManager {
-    type State = ();
-    type Msg = ToSyncManager;
-    type Arguments = ();
-
-    async fn pre_start(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        _args: Self::Arguments,
-    ) -> Result<Self::State, ActorProcessingErr> {
-        Ok(())
-    }
-}
+pub const SYNC_PROTOCOL_ID: &[u8] = b"p2panda/sync/v1";

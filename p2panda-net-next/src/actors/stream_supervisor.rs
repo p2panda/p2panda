@@ -19,10 +19,18 @@
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::hash::Hash as StdHash;
+use std::marker::PhantomData;
+
+use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
+use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
 use crate::actors::iroh::{IROH_ENDPOINT, ToIrohEndpoint};
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, EphemeralStreams, ToEphemeralStreams};
@@ -33,31 +41,49 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, wi
 use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
 
-pub struct StreamSupervisorState {
+pub struct StreamSupervisorState<C, E> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
+    sync_config: C,
     endpoint: iroh::Endpoint,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
-    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams>,
+    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams<E>>,
     eventually_consistent_streams_actor_failures: u16,
     ephemeral_streams_actor: ActorRef<ToEphemeralStreams>,
     ephemeral_streams_actor_failures: u16,
 }
 
-#[derive(Default)]
-pub struct StreamSupervisor;
+pub struct StreamSupervisor<M> {
+    _phantom: PhantomData<(M)>,
+}
 
-impl ThreadLocalActor for StreamSupervisor {
-    type State = StreamSupervisorState;
+impl<M> Default for StreamSupervisor<M> {
+    fn default() -> Self {
+        Self {
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<M> ThreadLocalActor for StreamSupervisor<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M::Error: StdError + Send + Sync + 'static,
+    M::Protocol: Send + Sync + 'static,
+    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+{
+    type State = StreamSupervisorState<M::Config, <M::Protocol as Protocol>::Event>;
     type Msg = ();
-    type Arguments = ApplicationArguments;
+    type Arguments = (ApplicationArguments, M::Config);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (args, sync_config) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         let endpoint_actor: ActorRef<ToIrohEndpoint> =
@@ -74,7 +100,7 @@ impl ThreadLocalActor for StreamSupervisor {
         let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
         // Spawn the gossip actor.
-        let (gossip_actor, _) = Gossip::spawn_linked(
+        let (gossip_actor, _) = Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
             endpoint.clone(),
             myself.clone().into(),
@@ -83,16 +109,21 @@ impl ThreadLocalActor for StreamSupervisor {
         .await?;
 
         // Spawn the eventually consistent streams actor.
-        let (eventually_consistent_streams_actor, _) = EventuallyConsistentStreams::spawn_linked(
-            Some(with_namespace(
-                EVENTUALLY_CONSISTENT_STREAMS,
-                &actor_namespace,
-            )),
-            (actor_namespace.clone(), gossip_actor.clone()),
-            myself.clone().into(),
-            args.root_thread_pool.clone(),
-        )
-        .await?;
+        let (eventually_consistent_streams_actor, _) =
+            EventuallyConsistentStreams::<M>::spawn_linked(
+                Some(with_namespace(
+                    EVENTUALLY_CONSISTENT_STREAMS,
+                    &actor_namespace,
+                )),
+                (
+                    actor_namespace.clone(),
+                    gossip_actor.clone(),
+                    sync_config.clone(),
+                ),
+                myself.clone().into(),
+                args.root_thread_pool.clone(),
+            )
+            .await?;
 
         // Spawn the ephemeral streams actor.
         let (ephemeral_streams_actor, _) = EphemeralStreams::spawn_linked(
@@ -106,6 +137,7 @@ impl ThreadLocalActor for StreamSupervisor {
         let state = StreamSupervisorState {
             actor_namespace,
             args,
+            sync_config,
             endpoint,
             gossip_actor,
             gossip_actor_failures: 0,
@@ -144,13 +176,14 @@ impl ThreadLocalActor for StreamSupervisor {
                         );
 
                         // Respawn the gossip actor.
-                        let (gossip_actor, _) = Gossip::spawn_linked(
-                            Some(with_namespace(GOSSIP, &actor_namespace)),
-                            state.endpoint.clone(),
-                            myself.clone().into(),
-                            state.args.root_thread_pool.clone(),
-                        )
-                        .await?;
+                        let (gossip_actor, _) =
+                            Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
+                                Some(with_namespace(GOSSIP, &actor_namespace)),
+                                state.endpoint.clone(),
+                                myself.clone().into(),
+                                state.args.root_thread_pool.clone(),
+                            )
+                            .await?;
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
@@ -164,12 +197,16 @@ impl ThreadLocalActor for StreamSupervisor {
 
                         // Respawn the eventually consistent streams actor.
                         let (eventually_consistent_streams_actor, _) =
-                            EventuallyConsistentStreams::spawn_linked(
+                            EventuallyConsistentStreams::<M>::spawn_linked(
                                 Some(with_namespace(
                                     EVENTUALLY_CONSISTENT_STREAMS,
                                     &actor_namespace,
                                 )),
-                                (state.actor_namespace.clone(), state.gossip_actor.clone()),
+                                (
+                                    state.actor_namespace.clone(),
+                                    state.gossip_actor.clone(),
+                                    state.sync_config.clone(),
+                                ),
                                 myself.clone().into(),
                                 state.args.root_thread_pool.clone(),
                             )
@@ -227,12 +264,13 @@ mod tests {
     use crate::actors::sync::SYNC_MANAGER;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::args::ArgsBuilder;
+    use crate::test_utils::{NoSyncManager, test_args};
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
     #[tokio::test]
     async fn child_actors_started() {
-        let args = ArgsBuilder::new([1; 32]).build();
+        let (args, store, sync_config) = test_args();
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the iroh endpoint actor.
@@ -247,9 +285,9 @@ mod tests {
         .unwrap();
 
         // Spawn the stream supervisor.
-        let (stream_supervisor, stream_supervisor_handle) = StreamSupervisor::spawn(
+        let (stream_supervisor, stream_supervisor_handle) = StreamSupervisor::<NoSyncManager>::spawn(
             Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
-            args.clone(),
+            (args.clone(), sync_config),
             args.root_thread_pool.clone(),
         )
         .await
