@@ -22,7 +22,7 @@ pub trait NodeInfo<ID> {
     fn transports(&self) -> Option<Self::Transports>;
 }
 
-pub trait AddressBookStore<T, ID, N> {
+pub trait AddressBookStore<ID, N> {
     type Error;
 
     /// Inserts information for a node.
@@ -71,37 +71,37 @@ pub trait AddressBookStore<T, ID, N> {
     /// Returns a list of node informations for a selected set.
     fn selected_node_infos(&self, ids: &[ID]) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
-    /// Sets the list of "topics" this node is "interested" in.
+    /// Sets the list of "topics" for eventually consistent sync this node is "interested" in.
     ///
     /// Topics are usually shared privately and directly with nodes, this is why implementers
     /// usually want to simply overwrite the previous topic set (_not_ extend it).
-    fn set_topics(
+    fn set_sync_topics(
         &self,
         id: ID,
-        topics: impl IntoIterator<Item = T>,
+        topics: impl IntoIterator<Item = [u8; 32]>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
-    /// Sets the list of "topic identifiers" this node is "interested" in.
+    /// Sets the list of "topics" for ephemeral messaging this node is "interested" in.
     ///
     /// Topic ids for gossip overlays (used for ephemeral messaging) are usually shared privately
     /// and directly with nodes, this is why implementers usually want to simply overwrite the
     /// previous topic id set (_not_ extend it).
-    fn set_topic_ids(
+    fn set_ephemeral_messaging_topics(
         &self,
         id: ID,
-        topic_ids: impl IntoIterator<Item = [u8; 32]>,
+        topics: impl IntoIterator<Item = [u8; 32]>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
-    fn node_infos_by_topics(
+    fn node_infos_by_sync_topics(
         &self,
-        topics: &[T],
+        topics: &[[u8; 32]],
     ) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topic ids in this set.
-    fn node_infos_by_topic_ids(
+    fn node_infos_by_ephemeral_messaging_topics(
         &self,
         topic_ids: &[[u8; 32]],
     ) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
@@ -122,7 +122,6 @@ pub trait AddressBookStore<T, ID, N> {
 pub mod memory {
     use std::collections::{BTreeMap, HashSet};
     use std::convert::Infallible;
-    use std::hash::Hash as StdHash;
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -133,22 +132,22 @@ pub mod memory {
     use super::{AddressBookStore, NodeInfo};
 
     #[derive(Clone, Debug)]
-    pub struct MemoryStore<R, T, ID, N> {
+    pub struct MemoryStore<R, ID, N> {
         rng: Arc<Mutex<R>>,
         node_infos: Arc<RwLock<BTreeMap<ID, N>>>,
         node_infos_last_changed: Arc<RwLock<BTreeMap<ID, u64>>>,
-        node_topics: Arc<RwLock<BTreeMap<ID, HashSet<T>>>>,
-        node_topic_ids: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
+        sync_topics: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
+        ephemeral_messaging_topics: Arc<RwLock<BTreeMap<ID, HashSet<[u8; 32]>>>>,
     }
 
-    impl<R, T, ID, N> MemoryStore<R, T, ID, N> {
+    impl<R, ID, N> MemoryStore<R, ID, N> {
         pub fn new(rng: R) -> Self {
             Self {
                 rng: Arc::new(Mutex::new(rng)),
                 node_infos: Arc::new(RwLock::new(BTreeMap::new())),
                 node_infos_last_changed: Arc::new(RwLock::new(BTreeMap::new())),
-                node_topics: Arc::new(RwLock::new(BTreeMap::new())),
-                node_topic_ids: Arc::new(RwLock::new(BTreeMap::new())),
+                sync_topics: Arc::new(RwLock::new(BTreeMap::new())),
+                ephemeral_messaging_topics: Arc::new(RwLock::new(BTreeMap::new())),
             }
         }
 
@@ -174,10 +173,9 @@ pub mod memory {
         }
     }
 
-    impl<R, T, ID, N> AddressBookStore<T, ID, N> for MemoryStore<R, T, ID, N>
+    impl<R, ID, N> AddressBookStore<ID, N> for MemoryStore<R, ID, N>
     where
         R: Rng,
-        T: Eq + StdHash,
         ID: Clone + Ord,
         N: Clone + NodeInfo<ID>,
     {
@@ -249,30 +247,33 @@ pub mod memory {
             Ok(counter)
         }
 
-        async fn set_topics(
+        async fn set_sync_topics(
             &self,
             id: ID,
-            topics: impl IntoIterator<Item = T>,
+            topics: impl IntoIterator<Item = [u8; 32]>,
         ) -> Result<(), Self::Error> {
-            let mut node_topics = self.node_topics.write().await;
+            let mut node_topics = self.sync_topics.write().await;
             self.update_last_changed(id.clone()).await;
             node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
             Ok(())
         }
 
-        async fn set_topic_ids(
+        async fn set_ephemeral_messaging_topics(
             &self,
             id: ID,
             topic_ids: impl IntoIterator<Item = [u8; 32]>,
         ) -> Result<(), Self::Error> {
-            let mut node_topic_ids = self.node_topic_ids.write().await;
+            let mut node_topics = self.ephemeral_messaging_topics.write().await;
             self.update_last_changed(id.clone()).await;
-            node_topic_ids.insert(id, HashSet::from_iter(topic_ids.into_iter()));
+            node_topics.insert(id, HashSet::from_iter(topic_ids.into_iter()));
             Ok(())
         }
 
-        async fn node_infos_by_topics(&self, topics: &[T]) -> Result<Vec<N>, Self::Error> {
-            let node_topics = self.node_topics.read().await;
+        async fn node_infos_by_sync_topics(
+            &self,
+            topics: &[[u8; 32]],
+        ) -> Result<Vec<N>, Self::Error> {
+            let node_topics = self.sync_topics.read().await;
             let ids: Vec<ID> = node_topics
                 .iter()
                 .filter_map(|(node_id, node_topics)| {
@@ -286,11 +287,11 @@ pub mod memory {
             self.selected_node_infos(ids.as_slice()).await
         }
 
-        async fn node_infos_by_topic_ids(
+        async fn node_infos_by_ephemeral_messaging_topics(
             &self,
             topic_ids: &[[u8; 32]],
         ) -> Result<Vec<N>, Self::Error> {
-            let node_topic_ids = self.node_topic_ids.read().await;
+            let node_topic_ids = self.ephemeral_messaging_topics.read().await;
             let ids: Vec<ID> = node_topic_ids
                 .iter()
                 .filter_map(|(node_id, node_topic_ids)| {
@@ -363,24 +364,24 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
         let store = TestStore::new(rng);
 
+        let cats = [100; 32];
+        let dogs = [102; 32];
+        let rain = [104; 32];
+        let frogs = [106; 32];
+        let trains = [200; 32];
+
         store.insert_node_info(TestInfo::new(1)).await.unwrap();
-        store
-            .set_topics(1, ["cats".into(), "dogs".into(), "rain".into()])
-            .await
-            .unwrap();
+        store.set_sync_topics(1, [cats, dogs, rain]).await.unwrap();
 
         store.insert_node_info(TestInfo::new(2)).await.unwrap();
-        store.set_topics(2, ["rain".into()]).await.unwrap();
+        store.set_sync_topics(2, [rain]).await.unwrap();
 
         store.insert_node_info(TestInfo::new(3)).await.unwrap();
-        store
-            .set_topics(3, ["dogs".into(), "frogs".into()])
-            .await
-            .unwrap();
+        store.set_sync_topics(3, [dogs, frogs]).await.unwrap();
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["dogs".into()])
+                .node_infos_by_sync_topics(&[dogs])
                 .await
                 .unwrap()
                 .into_iter()
@@ -391,7 +392,7 @@ mod tests {
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["frogs".into(), "rain".into()])
+                .node_infos_by_sync_topics(&[frogs, rain])
                 .await
                 .unwrap()
                 .into_iter()
@@ -402,7 +403,7 @@ mod tests {
 
         assert_eq!(
             store
-                .node_infos_by_topics(&["trains".into()])
+                .node_infos_by_sync_topics(&[trains])
                 .await
                 .unwrap()
                 .into_iter()

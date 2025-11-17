@@ -2,7 +2,6 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -10,33 +9,32 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::address_book::{AddressBookStore, NodeInfo};
-use crate::traits::{DiscoveryProtocol, DiscoveryResult, SubscriptionInfo};
+use crate::traits::{DiscoveryProtocol, DiscoveryResult, LocalTopics};
 
 #[derive(Serialize, Deserialize)]
-pub enum NaiveDiscoveryMessage<T, ID, N>
+pub enum NaiveDiscoveryMessage<ID, N>
 where
     N: NodeInfo<ID>,
     for<'a> N::Transports: Serialize + Deserialize<'a>,
-    T: Eq + StdHash,
     ID: Ord,
 {
     Topics {
-        topics: HashSet<T>,
-        topic_ids: HashSet<[u8; 32]>,
+        sync_topics: HashSet<[u8; 32]>,
+        ephemeral_messaging_topics: HashSet<[u8; 32]>,
     },
     Nodes {
         transport_infos: BTreeMap<ID, N::Transports>,
     },
 }
 
-pub struct NaiveDiscoveryProtocol<S, P, T, ID, N> {
+pub struct NaiveDiscoveryProtocol<S, P, ID, N> {
     store: S,
     subscription: P,
     remote_node_id: ID,
-    _marker: PhantomData<(T, N)>,
+    _marker: PhantomData<N>,
 }
 
-impl<S, P, T, ID, N> NaiveDiscoveryProtocol<S, P, T, ID, N> {
+impl<S, P, ID, N> NaiveDiscoveryProtocol<S, P, ID, N> {
     pub fn new(store: S, subscription: P, remote_node_id: ID) -> Self {
         Self {
             store,
@@ -47,40 +45,39 @@ impl<S, P, T, ID, N> NaiveDiscoveryProtocol<S, P, T, ID, N> {
     }
 }
 
-impl<S, P, T, ID, N> DiscoveryProtocol<T, ID, N> for NaiveDiscoveryProtocol<S, P, T, ID, N>
+impl<S, P, ID, N> DiscoveryProtocol<ID, N> for NaiveDiscoveryProtocol<S, P, ID, N>
 where
-    S: AddressBookStore<T, ID, N>,
-    P: SubscriptionInfo<T>,
-    T: Eq + StdHash,
+    S: AddressBookStore<ID, N>,
+    P: LocalTopics,
     ID: Clone + Ord,
     N: NodeInfo<ID>,
     for<'a> N::Transports: Serialize + Deserialize<'a>,
 {
-    type Error = NaiveDiscoveryError<S, P, T, ID, N>;
+    type Error = NaiveDiscoveryError<S, P, ID, N>;
 
-    type Message = NaiveDiscoveryMessage<T, ID, N>;
+    type Message = NaiveDiscoveryMessage<ID, N>;
 
     async fn alice(
         &self,
         tx: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         rx: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
-    ) -> Result<DiscoveryResult<T, ID, N>, Self::Error> {
+    ) -> Result<DiscoveryResult<ID, N>, Self::Error> {
         // 1. Alice sends Bob all their topics and topic ids.
-        let my_topics = self
+        let my_sync_topics = self
             .subscription
-            .subscribed_topics()
+            .sync_topics()
             .await
             .map_err(NaiveDiscoveryError::Subscription)?;
 
-        let my_topic_ids = self
+        let my_ephemeral_topics = self
             .subscription
-            .subscribed_topic_ids()
+            .ephemeral_messaging_topics()
             .await
             .map_err(NaiveDiscoveryError::Subscription)?;
 
         tx.send(NaiveDiscoveryMessage::Topics {
-            topics: HashSet::from_iter(my_topics.into_iter()),
-            topic_ids: HashSet::from_iter(my_topic_ids.into_iter()),
+            sync_topics: my_sync_topics,
+            ephemeral_messaging_topics: my_ephemeral_topics,
         })
         .await
         .map_err(|_| NaiveDiscoveryError::Sink)?;
@@ -90,8 +87,8 @@ where
             return Err(NaiveDiscoveryError::Stream);
         };
         let NaiveDiscoveryMessage::Topics {
-            topics: remote_topics,
-            topic_ids: remote_topic_ids,
+            sync_topics: remote_topics,
+            ephemeral_messaging_topics: remote_topic_ids,
         } = message
         else {
             return Err(NaiveDiscoveryError::UnexpectedMessage);
@@ -132,8 +129,8 @@ where
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: remote_transport_infos,
-            node_topics: remote_topics,
-            node_topic_ids: remote_topic_ids,
+            sync_topics: remote_topics,
+            ephemeral_messaging_topics: remote_topic_ids,
         })
     }
 
@@ -141,35 +138,35 @@ where
         &self,
         tx: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         rx: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
-    ) -> Result<DiscoveryResult<T, ID, N>, Self::Error> {
+    ) -> Result<DiscoveryResult<ID, N>, Self::Error> {
         // 1. Bob receives Alice's topics and topic ids.
         let Some(Ok(message)) = rx.next().await else {
             return Err(NaiveDiscoveryError::Stream);
         };
         let NaiveDiscoveryMessage::Topics {
-            topics: remote_topics,
-            topic_ids: remote_topic_ids,
+            sync_topics: remote_topics,
+            ephemeral_messaging_topics: remote_ephemeral_topics,
         } = message
         else {
             return Err(NaiveDiscoveryError::UnexpectedMessage);
         };
 
         // 2. Bob sends Alice all their topics and topic ids.
-        let my_topics = self
+        let my_sync_topics = self
             .subscription
-            .subscribed_topics()
+            .sync_topics()
             .await
             .map_err(NaiveDiscoveryError::Subscription)?;
 
-        let my_topic_ids = self
+        let my_ephemeral_topics = self
             .subscription
-            .subscribed_topic_ids()
+            .ephemeral_messaging_topics()
             .await
             .map_err(NaiveDiscoveryError::Subscription)?;
 
         tx.send(NaiveDiscoveryMessage::Topics {
-            topics: HashSet::from_iter(my_topics.into_iter()),
-            topic_ids: HashSet::from_iter(my_topic_ids.into_iter()),
+            sync_topics: my_sync_topics,
+            ephemeral_messaging_topics: my_ephemeral_topics,
         })
         .await
         .map_err(|_| NaiveDiscoveryError::Sink)?;
@@ -209,18 +206,17 @@ where
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: remote_transport_infos,
-            node_topics: remote_topics,
-            node_topic_ids: remote_topic_ids,
+            sync_topics: remote_topics,
+            ephemeral_messaging_topics: remote_ephemeral_topics,
         })
     }
 }
 
 #[derive(Debug, Error)]
-pub enum NaiveDiscoveryError<S, P, T, ID, N>
+pub enum NaiveDiscoveryError<S, P, ID, N>
 where
-    S: AddressBookStore<T, ID, N>,
-    P: SubscriptionInfo<T>,
-    T: Eq + StdHash,
+    S: AddressBookStore<ID, N>,
+    P: LocalTopics,
     ID: Clone + Ord,
     N: NodeInfo<ID>,
     for<'a> N::Transports: Serialize + Deserialize<'a>,

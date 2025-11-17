@@ -45,13 +45,13 @@ impl Default for RandomWalkerConfig {
 ///
 /// The algorithm resets itself and starts from scratch - based on a configurable probability or
 /// when no new nodes could be found anymore. See `RandomWalkConfig` for details.
-pub struct RandomWalker<R, S, T, ID, N> {
+pub struct RandomWalker<R, S, ID, N> {
     my_id: ID,
     store: S,
     rng: Mutex<R>,
     config: RandomWalkerConfig,
     state: RwLock<RandomWalkerState<ID>>,
-    _marker: PhantomData<(T, N)>,
+    _marker: PhantomData<N>,
 }
 
 struct RandomWalkerState<ID> {
@@ -68,10 +68,10 @@ impl<ID> Default for RandomWalkerState<ID> {
     }
 }
 
-impl<R, S, T, ID, N> RandomWalker<R, S, T, ID, N>
+impl<R, S, ID, N> RandomWalker<R, S, ID, N>
 where
     R: Rng,
-    S: AddressBookStore<T, ID, N>,
+    S: AddressBookStore<ID, N>,
     ID: Clone + Eq + StdHash,
     N: NodeInfo<ID>,
 {
@@ -92,7 +92,7 @@ where
 
     /// Load all currently known nodes from address book and mark them as "unvisisted", essentially
     /// resetting walker to original state.
-    async fn reset(&self) -> Result<(), RandomWalkError<S, T, ID, N>> {
+    async fn reset(&self) -> Result<(), RandomWalkError<S, ID, N>> {
         // If we're running multiple random walkers parallely we might receive node information
         // here we haven't found ourselves since the store is shared among all walkers.
         let all_nodes = self
@@ -116,7 +116,7 @@ where
     }
 
     /// Select a random bootstrap node if available, fall back to any random node otherwise.
-    async fn random_bootstrap_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
+    async fn random_bootstrap_node(&self) -> Result<Option<ID>, RandomWalkError<S, ID, N>> {
         let bootstrap_node = loop {
             let node_id = self
                 .store
@@ -162,7 +162,7 @@ where
     /// Select next random node for the walk.
     ///
     /// Samples a random node from the set of unvisited nodes.
-    async fn random_unvisited_node(&self) -> Result<Option<ID>, RandomWalkError<S, T, ID, N>> {
+    async fn random_unvisited_node(&self) -> Result<Option<ID>, RandomWalkError<S, ID, N>> {
         let state = self.state.read().await;
         let mut rng = self.rng.lock().await;
         let sampled = state.unvisited.iter().choose(&mut rng);
@@ -170,7 +170,7 @@ where
     }
 
     /// Merge all unvisited nodes into our set from previous discovery exchange.
-    async fn merge_previous(&self, previous: &DiscoveryResult<T, ID, N>) {
+    async fn merge_previous(&self, previous: &DiscoveryResult<ID, N>) {
         let node_ids = previous.node_transport_infos.keys();
         let mut state = self.state.write().await;
         for id in node_ids {
@@ -188,18 +188,18 @@ where
     }
 }
 
-impl<R, S, T, ID, N> DiscoveryStrategy<T, ID, N> for RandomWalker<R, S, T, ID, N>
+impl<R, S, ID, N> DiscoveryStrategy<ID, N> for RandomWalker<R, S, ID, N>
 where
     R: Rng,
-    S: AddressBookStore<T, ID, N>,
+    S: AddressBookStore<ID, N>,
     ID: Clone + Eq + StdHash,
     N: NodeInfo<ID>,
 {
-    type Error = RandomWalkError<S, T, ID, N>;
+    type Error = RandomWalkError<S, ID, N>;
 
     async fn next_node(
         &self,
-        previous: Option<&DiscoveryResult<T, ID, N>>,
+        previous: Option<&DiscoveryResult<ID, N>>,
     ) -> Result<Option<ID>, Self::Error> {
         if let Some(previous) = previous {
             self.merge_previous(previous).await;
@@ -238,9 +238,9 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum RandomWalkError<S, T, ID, N>
+pub enum RandomWalkError<S, ID, N>
 where
-    S: AddressBookStore<T, ID, N>,
+    S: AddressBookStore<ID, N>,
 {
     #[error("{0}")]
     Store(S::Error),
@@ -254,7 +254,7 @@ mod tests {
     use rand_chacha::ChaCha20Rng;
 
     use crate::address_book::AddressBookStore;
-    use crate::test_utils::{TestId, TestInfo, TestStore, TestTopic};
+    use crate::test_utils::{TestId, TestInfo, TestStore};
     use crate::traits::{DiscoveryResult, DiscoveryStrategy};
 
     use super::{RandomWalker, RandomWalkerConfig};
@@ -298,7 +298,7 @@ mod tests {
         let strategy = RandomWalker::new(0, store, rng);
 
         let mut visited: HashSet<TestId> = HashSet::new();
-        let mut previous: Option<DiscoveryResult<TestTopic, TestId, TestInfo>> = None;
+        let mut previous: Option<DiscoveryResult<TestId, TestInfo>> = None;
 
         for _ in 0..graph.len() - 1 {
             let id = strategy
@@ -338,7 +338,7 @@ mod tests {
         );
 
         let mut visited: HashSet<TestId> = HashSet::new();
-        let mut previous: Option<DiscoveryResult<TestTopic, TestId, TestInfo>> = None;
+        let mut previous: Option<DiscoveryResult<TestId, TestInfo>> = None;
 
         for _ in 0..NUM_NODES - 1 {
             let id = strategy
