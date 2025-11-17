@@ -121,8 +121,8 @@ impl ThreadLocalActor for GossipSession {
             None,
             (
                 actor_namespace.clone(),
-                topic_id.clone(),
-                myself.clone().into(),
+                topic_id,
+                myself.clone(),
             ),
             myself.clone().into(),
             gossip_thread_pool.clone(),
