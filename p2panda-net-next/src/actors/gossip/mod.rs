@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! An `iroh`-specific gossip actor for message broadcast.
+mod healer;
 mod joiner;
 mod listener;
 mod receiver;
@@ -225,6 +226,7 @@ where
                 let (gossip_session_actor, _) = GossipSession::spawn_linked(
                     None,
                     (
+                        state.actor_namespace.clone(),
                         topic_id,
                         subscription,
                         to_gossip_rx,
