@@ -12,16 +12,14 @@ use p2panda_sync::topic_handshake::{
 };
 use p2panda_sync::traits::Protocol;
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::actors::ActorNamespace;
 use crate::actors::iroh::connect;
 use crate::actors::sync::SYNC_PROTOCOL_ID;
-use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
-use crate::cbor::{CborCodec, into_cbor_sink, into_cbor_stream};
+use crate::addrs::NodeId;
+use crate::cbor::{into_cbor_sink, into_cbor_stream};
 
 pub enum SyncSessionMessage<T, P> {
     Initiate {
@@ -62,7 +60,7 @@ where
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         Ok(args)
@@ -70,7 +68,7 @@ where
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         actor_namespace: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {

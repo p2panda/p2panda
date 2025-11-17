@@ -16,7 +16,6 @@
 //! messages representing the latest updates in an ongoing manner.
 use ractor::{ActorRef, call, registry};
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
-use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::Sender;
 
 use crate::TopicId;

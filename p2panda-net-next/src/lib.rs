@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// @TODO: Remove this.
-#![allow(unused)]
 mod actors;
 mod addrs;
 mod args;

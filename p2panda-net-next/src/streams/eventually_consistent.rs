@@ -12,19 +12,14 @@ use std::marker::PhantomData;
 
 use p2panda_sync::SyncManagerEvent;
 use ractor::{ActorRef, call, registry};
-use thiserror::Error;
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
-use tokio::sync::broadcast::error::{RecvError, TryRecvError};
-use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
 use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
 };
-use crate::actors::sync::{SyncManager, ToSyncManager};
+use crate::actors::sync::ToSyncManager;
 use crate::actors::{ActorNamespace, with_namespace};
-use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::StreamError;
 
 /// A handle to an eventually consistent messaging stream.
@@ -65,7 +60,7 @@ where
                 data: bytes.into(),
             })
             // @TODO: change this when we decide on error propagation strategy.
-            .map_err(|err| StreamError::Publish(self.topic_id))?;
+            .map_err(|_| StreamError::Publish(self.topic_id))?;
 
         Ok(())
     }

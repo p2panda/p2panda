@@ -51,6 +51,7 @@ pub enum ToDiscoveryManager<T> {
     ),
 
     /// Returns current metrics.
+    #[allow(unused)]
     Metrics(RpcReplyPort<DiscoveryMetrics>),
 }
 
@@ -142,13 +143,6 @@ impl DiscoverySessionInfo {
         match self {
             DiscoverySessionInfo::Initiated { remote_node_id, .. } => *remote_node_id,
             DiscoverySessionInfo::Accepted { remote_node_id, .. } => *remote_node_id,
-        }
-    }
-
-    pub fn session_id(&self) -> DiscoverySessionId {
-        match self {
-            DiscoverySessionInfo::Initiated { session_id, .. } => *session_id,
-            DiscoverySessionInfo::Accepted { session_id, .. } => *session_id,
         }
     }
 

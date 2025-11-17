@@ -16,14 +16,12 @@
 //! discovery actors fail in isolation, they are simply respawned in a one-for-one manner.
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_sync::traits::{Protocol, SyncManager};
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
-use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::TopicId;

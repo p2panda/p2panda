@@ -98,7 +98,7 @@ impl ThreadLocalActor for GossipHealer {
                             // Send the join signal to the gossip session actor.
                             state
                                 .gossip_session_ref
-                                .send_message(ToGossipSession::JoinPeers(node_ids));
+                                .send_message(ToGossipSession::JoinPeers(node_ids))?;
 
                             // Invoke the handler to wait for the next event on the receiver.
                             let _ = myself.cast(ToGossipHealer::WaitForEvent);
