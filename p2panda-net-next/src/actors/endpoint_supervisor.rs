@@ -42,7 +42,7 @@ pub struct EndpointSupervisorState<S, C> {
     sync_config: C,
     iroh_endpoint_actor: ActorRef<ToIrohEndpoint>,
     iroh_endpoint_actor_failures: u16,
-    discovery_manager_actor: ActorRef<ToDiscoveryManager<TopicId>>,
+    discovery_manager_actor: ActorRef<ToDiscoveryManager>,
     discovery_manager_actor_failures: u16,
     stream_supervisor: ActorRef<()>,
     stream_supervisor_failures: u16,
@@ -62,7 +62,7 @@ impl<S, M> Default for EndpointSupervisor<S, M> {
 
 impl<S, M> ThreadLocalActor for EndpointSupervisor<S, M>
 where
-    S: AddressBookStore<TopicId, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
     M: SyncManager<TopicId> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,

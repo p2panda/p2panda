@@ -41,7 +41,7 @@ pub enum ToGossipSession {
 pub struct GossipSessionState {
     #[allow(unused)]
     actor_namespace: ActorNamespace,
-    topic_id: TopicId,
+    topic: TopicId,
     #[allow(unused)]
     gossip_healer_actor: ActorRef<ToGossipHealer>,
     gossip_joiner_actor: ActorRef<ToGossipJoiner>,
@@ -75,7 +75,7 @@ impl ThreadLocalActor for GossipSession {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (
             actor_namespace,
-            topic_id,
+            topic,
             subscription,
             receiver_from_user,
             gossip_joined,
@@ -121,7 +121,7 @@ impl ThreadLocalActor for GossipSession {
 
         let (gossip_healer_actor, _) = GossipHealer::spawn_linked(
             None,
-            (actor_namespace.clone(), topic_id, myself.clone()),
+            (actor_namespace.clone(), topic, myself.clone()),
             myself.clone().into(),
             gossip_thread_pool.clone(),
         )
@@ -129,7 +129,7 @@ impl ThreadLocalActor for GossipSession {
 
         let state = GossipSessionState {
             actor_namespace,
-            topic_id,
+            topic,
             gossip_healer_actor,
             gossip_joiner_actor,
             gossip_sender_actor,
@@ -151,12 +151,12 @@ impl ThreadLocalActor for GossipSession {
         // We perform type conversion here to reduce the workload of the gossip actor.
         match message {
             ToGossipSession::ProcessJoined(peers) => {
-                let topic_id = state.topic_id;
+                let topic = state.topic;
                 let peers: Vec<PublicKey> = peers.into_iter().map(to_public_key).collect();
                 let session_id = myself.get_id();
 
                 let _ = state.gossip_actor.cast(ToGossip::Joined {
-                    topic_id,
+                    topic,
                     peers,
                     session_id,
                 });
@@ -169,14 +169,14 @@ impl ThreadLocalActor for GossipSession {
                     let bytes = msg.content.into();
                     let delivered_from = to_public_key(msg.delivered_from);
                     let delivery_scope = msg.scope;
-                    let topic_id = state.topic_id;
+                    let topic = state.topic;
                     let session_id = myself.get_id();
 
                     let _ = state.gossip_actor.cast(ToGossip::ReceivedMessage {
                         bytes,
                         delivered_from,
                         delivery_scope,
-                        topic_id,
+                        topic,
                         session_id,
                     });
                 }

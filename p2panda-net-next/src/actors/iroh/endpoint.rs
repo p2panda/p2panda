@@ -21,7 +21,7 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
-use crate::{NodeInfo, TopicId, UnsignedTransportInfo};
+use crate::{NodeInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -276,9 +276,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     // Address book is not reachable, so we're probably shutting down.
                     return Ok(());
                 };
-                // @TODO: T is TopicId here. This needs to be refactored as part of the general
-                // topic changeover.
-                let address_book_ref = ActorRef::<ToAddressBook<TopicId>>::from(actor);
+                let address_book_ref = ActorRef::<ToAddressBook>::from(actor);
 
                 // Update existing node info about us if available or create a new one.
                 let mut node_info = match call!(

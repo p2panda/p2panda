@@ -17,9 +17,9 @@ pub use addrs::{
 };
 pub use network::NetworkBuilder;
 
-/// Unique 32 byte identifier for an ephemeral messaging topic.
+/// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///
-/// A topic identifier is required when subscribing or publishing to an ephemeral message stream.
+/// A topic identifier is required when subscribing or publishing to a stream.
 pub type TopicId = [u8; 32];
 
 /// Unique 32 byte identifier for a network.

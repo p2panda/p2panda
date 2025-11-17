@@ -24,23 +24,23 @@ use crate::actors::{ActorNamespace, with_namespace};
 use crate::streams::ephemeral::{EphemeralStream, EphemeralSubscription};
 
 pub enum ToEphemeralStreams {
-    /// Create an ephemeral stream for the topic ID and return a publishing handle.
+    /// Create an ephemeral stream for the topic and return a publishing handle.
     Create(TopicId, RpcReplyPort<EphemeralStream>),
 
-    /// Return an ephemeral subscription handle for the given topic ID.
+    /// Return an ephemeral subscription handle for the given topic.
     Subscribe(TopicId, RpcReplyPort<Option<EphemeralSubscription>>),
 
-    /// Close all ephemeral streams for the given topic ID.
+    /// Close all ephemeral streams for the given topic.
     Close(TopicId),
 
-    /// Return `true` if there are any active ephemeral streams for the given topic ID.
+    /// Return `true` if there are any active ephemeral streams for the given topic.
     IsActive(TopicId, RpcReplyPort<bool>),
 
-    /// Returns a list of all topic ids of currently subscribed ephemeral streams.
+    /// Returns a list of all topics of currently subscribed ephemeral streams.
     ActiveTopics(RpcReplyPort<HashSet<TopicId>>),
 }
 
-/// Mapping of topic ID to the associated sender channels for getting messages into and out of the
+/// Mapping of topic to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
 type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
@@ -53,12 +53,11 @@ pub struct EphemeralStreamsState {
 
 impl EphemeralStreamsState {
     /// Internal helper to get a reference to the address book actor.
-    fn address_book_actor(&self) -> Option<ActorRef<ToAddressBook<()>>> {
+    fn address_book_actor(&self) -> Option<ActorRef<ToAddressBook>> {
         if let Some(address_book_actor) =
             registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
         {
-            let actor: ActorRef<ToAddressBook<()>> = address_book_actor.into();
-
+            let actor: ActorRef<ToAddressBook> = address_book_actor.into();
             Some(actor)
         } else {
             None
@@ -96,16 +95,16 @@ impl ThreadLocalActor for EphemeralStreams {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToEphemeralStreams::Create(topic_id, reply) => {
+            ToEphemeralStreams::Create(topic, reply) => {
                 let address_book_actor = state
                     .address_book_actor()
                     .expect("address book actor should be available");
 
-                // Retrieve all known nodes for the given topic id.
+                // Retrieve all known nodes for the given topic.
                 let node_infos = call!(
                     address_book_actor,
-                    ToAddressBook::NodeInfosByTopicIds,
-                    vec![topic_id]
+                    ToAddressBook::NodeInfosByEphemeralMessagingTopics,
+                    vec![topic]
                 )
                 .expect("address book actor should handle call");
 
@@ -113,19 +112,15 @@ impl ThreadLocalActor for EphemeralStreams {
                 let node_ids = node_infos.iter().map(|node_info| node_info.id()).collect();
 
                 // Check if we're already subscribed.
-                let stream = if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
-                    // Inform the gossip actor about the latest set of nodes for this topic id.
-                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, node_ids))?;
+                let stream = if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic) {
+                    // Inform the gossip actor about the latest set of nodes for this topic.
+                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic, node_ids))?;
 
-                    EphemeralStream::new(
-                        topic_id,
-                        to_gossip_tx.clone(),
-                        state.actor_namespace.clone(),
-                    )
+                    EphemeralStream::new(topic, to_gossip_tx.clone(), state.actor_namespace.clone())
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
-                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, node_ids)?;
+                        call!(state.gossip_actor, ToGossip::Subscribe, topic, node_ids)?;
 
                     // Store the gossip senders.
                     //
@@ -133,34 +128,34 @@ impl ThreadLocalActor for EphemeralStreams {
                     // `subscribe()` on `EphemeralStream`.
                     state
                         .gossip_senders
-                        .insert(topic_id, (to_gossip_tx.clone(), from_gossip_tx));
-                    state.active_topics.insert(topic_id);
+                        .insert(topic, (to_gossip_tx.clone(), from_gossip_tx));
+                    state.active_topics.insert(topic);
 
-                    EphemeralStream::new(topic_id, to_gossip_tx, state.actor_namespace.clone())
+                    EphemeralStream::new(topic, to_gossip_tx, state.actor_namespace.clone())
                 };
 
                 // Ignore any potential send error; it's not a concern of this actor.
                 let _ = reply.send(stream);
             }
-            ToEphemeralStreams::Subscribe(topic_id, reply) => {
-                if let Some((_, from_gossip_tx)) = state.gossip_senders.get(&topic_id) {
+            ToEphemeralStreams::Subscribe(topic, reply) => {
+                if let Some((_, from_gossip_tx)) = state.gossip_senders.get(&topic) {
                     let from_gossip_rx = from_gossip_tx.subscribe();
-                    let subscription = EphemeralSubscription::new(topic_id, from_gossip_rx);
+                    let subscription = EphemeralSubscription::new(topic, from_gossip_rx);
                     let _ = reply.send(Some(subscription));
                 } else {
                     let _ = reply.send(None);
                 }
             }
-            ToEphemeralStreams::Close(topic_id) => {
-                // Tell the gossip actor to unsubscribe from this topic id.
-                cast!(state.gossip_actor, ToGossip::Unsubscribe(topic_id))?;
+            ToEphemeralStreams::Close(topic) => {
+                // Tell the gossip actor to unsubscribe from this topic.
+                cast!(state.gossip_actor, ToGossip::Unsubscribe(topic))?;
 
-                // Drop all senders associated with the topic id.
-                state.gossip_senders.remove(&topic_id);
-                state.active_topics.remove(&topic_id);
+                // Drop all senders associated with the topic.
+                state.gossip_senders.remove(&topic);
+                state.active_topics.remove(&topic);
             }
-            ToEphemeralStreams::IsActive(topic_id, reply) => {
-                let is_active = state.gossip_senders.contains_key(&topic_id);
+            ToEphemeralStreams::IsActive(topic, reply) => {
+                let is_active = state.gossip_senders.contains_key(&topic);
                 let _ = reply.send(is_active);
             }
             ToEphemeralStreams::ActiveTopics(reply) => {

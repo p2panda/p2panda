@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::time::Instant;
 
@@ -13,10 +12,8 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
-use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionId, DiscoverySessionRole,
@@ -31,18 +28,18 @@ use crate::utils::{ShortFormat, to_public_key};
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
-pub enum ToDiscoveryManager<T> {
+pub enum ToDiscoveryManager {
     /// Initiate a discovery session with the given node.
     ///
     /// A reference to the walker actor which initiated this session is kept, so the result of the
     /// session can be reported back to it.
-    InitiateSession(NodeId, ActorRef<ToDiscoveryWalker<T>>),
+    InitiateSession(NodeId, ActorRef<ToDiscoveryWalker>),
 
     /// Accept a discovery session coming in from a remote node.
     AcceptSession(NodeId, iroh::endpoint::Connection),
 
     /// Received result from a successful discovery session.
-    OnSuccess(DiscoverySessionId, DiscoveryResult<T, NodeId, NodeInfo>),
+    OnSuccess(DiscoverySessionId, DiscoveryResult<NodeId, NodeInfo>),
 
     /// Handle failed discovery session.
     OnFailure(
@@ -55,21 +52,18 @@ pub enum ToDiscoveryManager<T> {
     Metrics(RpcReplyPort<DiscoveryMetrics>),
 }
 
-pub struct DiscoveryManagerState<S, T> {
+pub struct DiscoveryManagerState<S> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     store: S,
     pool: ThreadLocalActorSpawner,
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
-    walkers: HashMap<usize, WalkerInfo<T>>,
+    walkers: HashMap<usize, WalkerInfo>,
     metrics: DiscoveryMetrics,
 }
 
-impl<S, T> DiscoveryManagerState<S, T>
-where
-    T: Clone + Send + 'static,
-{
+impl<S> DiscoveryManagerState<S> {
     /// Return next id for a discovery session.
     pub fn next_session_id(&mut self) -> DiscoverySessionId {
         let session_id = self.next_session_id;
@@ -81,7 +75,7 @@ where
     pub fn next_walk_step(
         &mut self,
         walker_id: usize,
-        result: Option<DiscoveryResult<T, NodeId, NodeInfo>>,
+        result: Option<DiscoveryResult<NodeId, NodeInfo>>,
     ) {
         let info = self
             .walkers
@@ -154,21 +148,21 @@ impl DiscoverySessionInfo {
     }
 }
 
-pub struct WalkerInfo<T> {
+pub struct WalkerInfo {
     #[allow(unused)]
     walker_id: usize,
-    last_result: Option<DiscoveryResult<T, NodeId, NodeInfo>>,
-    walker_ref: ActorRef<ToDiscoveryWalker<T>>,
+    last_result: Option<DiscoveryResult<NodeId, NodeInfo>>,
+    walker_ref: ActorRef<ToDiscoveryWalker>,
     #[allow(unused)]
     handle: JoinHandle<()>,
 }
 
 #[derive(Debug)]
-pub struct DiscoveryManager<S, T> {
-    _marker: PhantomData<(S, T)>,
+pub struct DiscoveryManager<S> {
+    _marker: PhantomData<S>,
 }
 
-impl<S, T> Default for DiscoveryManager<S, T> {
+impl<S> Default for DiscoveryManager<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -176,15 +170,14 @@ impl<S, T> Default for DiscoveryManager<S, T> {
     }
 }
 
-impl<S, T> ThreadLocalActor for DiscoveryManager<S, T>
+impl<S> ThreadLocalActor for DiscoveryManager<S>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Debug + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
-    type State = DiscoveryManagerState<S, T>;
+    type State = DiscoveryManagerState<S>;
 
-    type Msg = ToDiscoveryManager<T>;
+    type Msg = ToDiscoveryManager;
 
     type Arguments = (ApplicationArguments, S);
 
@@ -328,8 +321,8 @@ where
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
                     transport_infos = %discovery_result.node_transport_infos.len(),
-                    stream_topics = %discovery_result.node_topics.len(),
-                    ephemeral_stream_topics = %discovery_result.node_topic_ids.len(),
+                    sync_topics = %discovery_result.sync_topics.len(),
+                    ephemeral_messaging_topics = %discovery_result.ephemeral_messaging_topics.len(),
                     "successful discovery session"
                 );
 
@@ -409,13 +402,10 @@ where
     }
 }
 
-impl<S, T> DiscoveryManager<S, T>
-where
-    T: Send + 'static,
-{
+impl<S> DiscoveryManager<S> {
     async fn insert_address_book(
-        state: &mut DiscoveryManagerState<S, T>,
-        discovery_result: DiscoveryResult<T, NodeId, NodeInfo>,
+        state: &mut DiscoveryManagerState<S>,
+        discovery_result: DiscoveryResult<NodeId, NodeInfo>,
     ) {
         // Ignore missing address book actor or receive errors. This means the system is shutting
         // down.
@@ -425,7 +415,7 @@ where
             else {
                 return;
             };
-            ActorRef::<ToAddressBook<T>>::from(actor)
+            ActorRef::<ToAddressBook>::from(actor)
         };
 
         // Populate address book with hopefully new transport info.
@@ -458,41 +448,35 @@ where
         // Set stream topics into address book for this node.
         let _ = cast!(
             address_book_ref,
-            ToAddressBook::SetTopics(
+            ToAddressBook::SetSyncTopics(
                 discovery_result.remote_node_id,
-                discovery_result.node_topics.into_iter().collect::<Vec<T>>()
+                discovery_result.sync_topics,
             )
         );
 
         // Set ephemeral stream topics into address book for this node.
         let _ = cast!(
             address_book_ref,
-            ToAddressBook::SetTopicIds(
+            ToAddressBook::SetEphemeralMessagingTopics(
                 discovery_result.remote_node_id,
-                discovery_result
-                    .node_topic_ids
-                    .into_iter()
-                    .collect::<Vec<TopicId>>()
+                discovery_result.ephemeral_messaging_topics
             )
         );
     }
 }
 
 #[derive(Debug)]
-struct DiscoveryProtocolHandler<T> {
-    manager_ref: ActorRef<ToDiscoveryManager<T>>,
+struct DiscoveryProtocolHandler {
+    manager_ref: ActorRef<ToDiscoveryManager>,
 }
 
-impl<T> ProtocolHandler for DiscoveryProtocolHandler<T>
-where
-    T: Debug + Send + 'static,
-{
+impl ProtocolHandler for DiscoveryProtocolHandler {
     async fn accept(
         &self,
         connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
         self.manager_ref
-            .send_message(ToDiscoveryManager::<T>::AcceptSession(
+            .send_message(ToDiscoveryManager::AcceptSession(
                 to_public_key(connection.remote_id()),
                 connection,
             ))

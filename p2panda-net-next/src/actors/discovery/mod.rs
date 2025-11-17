@@ -6,7 +6,7 @@ mod session;
 mod tests;
 mod walker;
 
-use std::marker::PhantomData;
+use std::collections::HashSet;
 
 use p2panda_discovery::traits;
 use ractor::{ActorCell, ActorRef, call, registry};
@@ -24,17 +24,13 @@ pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
 
 // @TODO: Move this to "stream actor" when it is ready.
 #[derive(Debug)]
-pub struct SubscriptionInfo<T> {
+pub struct LocalTopicsProvider {
     actor_namespace: ActorNamespace,
-    _marker: PhantomData<T>,
 }
 
-impl<T> SubscriptionInfo<T> {
+impl LocalTopicsProvider {
     pub fn new(actor_namespace: ActorNamespace) -> Self {
-        Self {
-            actor_namespace,
-            _marker: PhantomData,
-        }
+        Self { actor_namespace }
     }
 }
 
@@ -43,26 +39,26 @@ impl<T> SubscriptionInfo<T> {
 //
 // Ideally we want to come up with a different approach though: Discovery should not need to know
 // about streams at all.
-impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
+impl traits::LocalTopics for LocalTopicsProvider {
     type Error = SubscriptionInfoError;
 
-    async fn subscribed_topics(&self) -> Result<Vec<T>, Self::Error> {
+    async fn sync_topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
         // @TODO: Call actor which can respond with the currently subscribed topics.
-        Ok(vec![])
+        Ok(HashSet::new())
     }
 
-    async fn subscribed_topic_ids(&self) -> Result<Vec<TopicId>, Self::Error> {
+    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
         if let Some(address_book_actor) =
             registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
         {
             let actor_ref: ActorRef<ToEphemeralStreams> = address_book_actor.into();
-            let Ok(topic_ids) = call!(actor_ref, ToEphemeralStreams::ActiveTopics) else {
-                return Ok(vec![]);
+            let Ok(topics) = call!(actor_ref, ToEphemeralStreams::ActiveTopics) else {
+                return Ok(HashSet::new());
             };
 
-            Ok(Vec::from_iter(topic_ids.into_iter()))
+            Ok(topics)
         } else {
-            Ok(vec![])
+            Ok(HashSet::new())
         }
     }
 }

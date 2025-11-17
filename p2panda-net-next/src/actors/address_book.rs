@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -17,7 +17,7 @@ use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 /// Address book actor name.
 pub const ADDRESS_BOOK: &str = "net.address_book";
 
-pub enum ToAddressBook<T> {
+pub enum ToAddressBook {
     /// Returns information about a node.
     ///
     /// Returns `None` if no information was found for this node.
@@ -34,11 +34,11 @@ pub enum ToAddressBook<T> {
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
     #[allow(unused)]
-    NodeInfosByTopics(Vec<T>, RpcReplyPort<Vec<NodeInfo>>),
+    NodeInfosBySyncTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
-    /// given topic ids in this set.
-    NodeInfosByTopicIds(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
+    /// given topics in this set.
+    NodeInfosByEphemeralMessagingTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns information from a randomly picked node or `None` when no information exists in the
     /// database.
@@ -71,18 +71,18 @@ pub enum ToAddressBook<T> {
         RpcReplyPort<Result<bool, AddressBookError>>,
     ),
 
-    /// Sets the list of "topics" this node is "interested" in.
+    /// Sets the list of "topics" for eventually consistent sync this node is "interested" in.
     ///
     /// Topics are usually shared privately and directly with nodes, this is why implementers
     /// usually want to simply overwrite the previous topic set (_not_ extend it).
-    SetTopics(NodeId, Vec<T>),
+    SetSyncTopics(NodeId, HashSet<TopicId>),
 
-    /// Sets the list of "topic identifiers" this node is "interested" in.
+    /// Sets the list of "topics" for ephemeral messaging this node is "interested" in.
     ///
-    /// Topic ids for gossip overlays (used for ephemeral messaging) are usually shared privately
-    /// and directly with nodes, this is why implementers usually want to simply overwrite the
-    /// previous topic id set (_not_ extend it).
-    SetTopicIds(NodeId, Vec<TopicId>),
+    /// Topics for gossip overlays (used for ephemeral messaging) are usually shared privately and
+    /// directly with nodes, this is why implementers usually want to simply overwrite the previous
+    /// topic set (_not_ extend it).
+    SetEphemeralMessagingTopics(NodeId, HashSet<TopicId>),
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
     /// exist.
@@ -139,45 +139,33 @@ impl<S> AddressBookState<S> {
     }
 
     /// Inform all subscribers about a topic change;
-    async fn call_topic_subscribers<T>(
-        &mut self,
-        actor_ref: ActorRef<ToAddressBook<T>>,
-        topic_id: TopicId,
-    ) where
-        T: Send + 'static,
-    {
-        let Some(tx) = self.topic_subscribers.get(&topic_id) else {
+    async fn call_topic_subscribers(&mut self, actor_ref: ActorRef<ToAddressBook>, topic: TopicId) {
+        let Some(tx) = self.topic_subscribers.get(&topic) else {
             return;
         };
 
         // @TODO: Make sure that this is also works for eventually consistent streams.
         let Ok(node_infos) = call!(
             actor_ref,
-            ToAddressBook::NodeInfosByTopicIds,
-            vec![topic_id]
+            ToAddressBook::NodeInfosByEphemeralMessagingTopics,
+            vec![topic]
         ) else {
             return;
         };
 
-        if tx
-            .send(TopicEvent {
-                topic_id,
-                node_infos,
-            })
-            .is_err()
-        {
+        if tx.send(TopicEvent { topic, node_infos }).is_err() {
             // On an error we know that all receivers have been dropped, so we can remove this
             // subscription as well and clean up after ourselves.
-            self.topic_subscribers.remove(&topic_id);
+            self.topic_subscribers.remove(&topic);
         }
     }
 }
 
-pub struct AddressBook<S, T> {
-    _marker: PhantomData<(S, T)>,
+pub struct AddressBook<S> {
+    _marker: PhantomData<S>,
 }
 
-impl<S, T> Default for AddressBook<S, T> {
+impl<S> Default for AddressBook<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -185,15 +173,14 @@ impl<S, T> Default for AddressBook<S, T> {
     }
 }
 
-impl<S, T> ThreadLocalActor for AddressBook<S, T>
+impl<S> ThreadLocalActor for AddressBook<S>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Send + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Send + 'static,
 {
     type State = AddressBookState<S>;
 
-    type Msg = ToAddressBook<T>;
+    type Msg = ToAddressBook;
 
     // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
     // address subsets in the future.
@@ -282,12 +269,12 @@ where
                 };
                 let _ = reply.send(rx);
             }
-            ToAddressBook::SubscribeTopicChanges(topic_id, reply) => {
-                let rx = match state.topic_subscribers.get_mut(&topic_id) {
+            ToAddressBook::SubscribeTopicChanges(topic, reply) => {
+                let rx = match state.topic_subscribers.get_mut(&topic) {
                     Some(tx) => tx.subscribe(),
                     None => {
                         let (tx, rx) = broadcast::channel(32);
-                        state.topic_subscribers.insert(topic_id, tx);
+                        state.topic_subscribers.insert(topic, tx);
                         rx
                     }
                 };
@@ -307,34 +294,38 @@ where
                 let result = state.store.selected_node_infos(&node_ids).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::NodeInfosByTopics(topics, reply) => {
-                let result = state.store.node_infos_by_topics(&topics).await?;
+            ToAddressBook::NodeInfosBySyncTopics(topics, reply) => {
+                let result = state.store.node_infos_by_sync_topics(&topics).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::NodeInfosByTopicIds(topic_ids, reply) => {
-                let result = state.store.node_infos_by_topic_ids(&topic_ids).await?;
+            ToAddressBook::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
+                let result = state
+                    .store
+                    .node_infos_by_ephemeral_messaging_topics(&topics)
+                    .await?;
                 let _ = reply.send(result);
             }
             ToAddressBook::RandomNodeInfo(reply) => {
                 let result = state.store.random_node().await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::SetTopics(node_id, topics) => {
-                state.store.set_topics(node_id, topics).await?;
+            ToAddressBook::SetSyncTopics(node_id, topics) => {
+                state.store.set_sync_topics(node_id, topics).await?;
 
                 // @TODO: Finalize this after topic refactoring.
                 // for topic in topics {
                 //     state.call_topic_subscribers();
                 // }
             }
-            ToAddressBook::SetTopicIds(node_id, topic_ids) => {
-                for topic_id in &topic_ids {
-                    state
-                        .call_topic_subscribers(myself.clone(), *topic_id)
-                        .await;
+            ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
+                for topic in &topics {
+                    state.call_topic_subscribers(myself.clone(), *topic).await;
                 }
 
-                state.store.set_topic_ids(node_id, topic_ids).await?;
+                state
+                    .store
+                    .set_ephemeral_messaging_topics(node_id, topics)
+                    .await?;
             }
             ToAddressBook::RemoveNodeInfo(node_id, reply) => {
                 let result = state.store.remove_node_info(&node_id).await?;
@@ -353,7 +344,7 @@ where
 #[derive(Debug, Clone)]
 pub struct TopicEvent {
     #[allow(unused)]
-    pub topic_id: TopicId,
+    pub topic: TopicId,
     pub node_infos: Vec<NodeInfo>,
 }
 
@@ -385,8 +376,6 @@ mod tests {
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
-    type TestTopic = ();
-
     #[tokio::test]
     async fn insert_node_and_transport_info() {
         let private_key = PrivateKey::new();
@@ -397,7 +386,7 @@ mod tests {
 
         let (actor, _handle) = AddressBook::spawn(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (MemoryStore::<ChaCha20Rng, TestTopic, NodeId, NodeInfo>::new(rng),),
+            (MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng),),
             spawner,
         )
         .await

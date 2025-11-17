@@ -106,7 +106,7 @@ impl NetworkBuilder {
         sync_config: M::Config,
     ) -> Result<Network<TopicId, M>, NetworkError<TopicId>>
     where
-        S: AddressBookStore<TopicId, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+        S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
         M: SyncManager<TopicId> + Send + 'static,
         M::Error: StdError + Send + Sync + 'static,
@@ -167,18 +167,18 @@ where
     /// Creates an ephemeral messaging stream and returns a handle.
     ///
     /// The returned handle can be used to publish ephemeral messages into the stream. These
-    /// messages will be propagated to other nodes which share an interest in the topic ID.
+    /// messages will be propagated to other nodes which share an interest in the same topic.
     ///
-    /// Calling `.subscribe()` on the handle returns an `EphemeralSubscription`; this
-    /// acts as a receiver for messages authored by other nodes for the shared topic ID.
+    /// Calling `.subscribe()` on the handle returns an `EphemeralSubscription`; this acts as a
+    /// receiver for messages authored by other nodes for the shared topic.
     ///
-    /// Both the `EphemeralStream` and `EphemeralSubscription` handles can be
-    /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
-    /// the receiver will receive every message. It is also possible to obtain multiple publishing
-    /// handles by calling `ephemeral_stream()` repeatedly.
+    /// Both the `EphemeralStream` and `EphemeralSubscription` handles can be cloned. The
+    /// subscription handle acts as a broadcast receiver, meaning that each clones of the receiver
+    /// will receive every message. It is also possible to obtain multiple publishing handles by
+    /// calling `ephemeral_stream()` repeatedly.
     pub async fn ephemeral_stream(
         &self,
-        topic_id: TopicId,
+        topic: TopicId,
     ) -> Result<EphemeralStream, NetworkError<T>> {
         // Get a reference to the ephemeral streams actor.
         if let Some(ephemeral_streams_actor) =
@@ -187,12 +187,12 @@ where
             let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
 
             // Ask the ephemeral streams actor for a stream.
-            let stream = call!(actor, ToEphemeralStreams::Create, topic_id)
-                .map_err(|_| StreamError::Create(topic_id))?;
+            let stream = call!(actor, ToEphemeralStreams::Create, topic)
+                .map_err(|_| StreamError::Create(topic))?;
 
             Ok(stream)
         } else {
-            Err(StreamError::Create(topic_id))?
+            Err(StreamError::Create(topic))?
         }
     }
 
@@ -201,18 +201,18 @@ where
     /// Eventually consistent streams catch up on past state and allow "live" messaging.
     ///
     /// The returned handle can be used to publish messages into the stream. These messages will
-    /// be propagated to other nodes which share an interest in the topic ID.
+    /// be propagated to other nodes which share an interest in the topic.
     ///
     /// Calling `.subscribe()` on the handle returns an `EventuallyConsistentSubscription`; this
-    /// acts as a receiver for messages authored by other nodes for the shared topic ID.
+    /// acts as a receiver for messages authored by other nodes for the shared topic.
     ///
     /// Both the `EventuallyConsistentStream` and `EventuallyConsistentSubscription` handles can be
     /// cloned. The subscription handle acts as a broadcast receiver, meaning that each clones of
     /// the receiver will receive every message. It is also possible to obtain multiple publishing
     /// handles by calling `eventually_consistent_stream()` repeatedly.
-    pub async fn eventually_consistent_stream(
+    pub async fn stream(
         &self,
-        topic_id: TopicId,
+        topic: TopicId,
         live_mode: bool,
     ) -> Result<EventuallyConsistentStream<<M::Protocol as Protocol>::Event>, NetworkError<TopicId>>
     {
@@ -228,14 +228,14 @@ where
             let stream = call!(
                 actor,
                 ToEventuallyConsistentStreams::Create,
-                topic_id,
+                topic,
                 live_mode
             )
-            .map_err(|_| StreamError::Create(topic_id))?;
+            .map_err(|_| StreamError::Create(topic))?;
 
             Ok(stream)
         } else {
-            Err(StreamError::Create(topic_id))?
+            Err(StreamError::Create(topic))?
         }
     }
 }
