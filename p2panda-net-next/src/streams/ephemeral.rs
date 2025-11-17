@@ -21,7 +21,6 @@ use tokio::sync::mpsc::Sender;
 use crate::TopicId;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace};
-use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::StreamError;
 
 /// A handle to an ephemeral messaging stream.
@@ -29,7 +28,7 @@ use crate::streams::StreamError;
 /// The stream can be used to publish messages or to request a subscription.
 pub struct EphemeralStream {
     topic_id: TopicId,
-    to_topic_tx: Sender<ToNetwork>,
+    to_topic_tx: Sender<Vec<u8>>,
     actor_namespace: ActorNamespace,
 }
 
@@ -37,7 +36,7 @@ impl EphemeralStream {
     /// Returns a handle to an ephemeral messaging stream.
     pub(crate) fn new(
         topic_id: TopicId,
-        to_topic_tx: Sender<ToNetwork>,
+        to_topic_tx: Sender<Vec<u8>>,
         actor_namespace: ActorNamespace,
     ) -> Self {
         Self {
@@ -112,14 +111,14 @@ impl EphemeralStream {
 /// The stream can be used to receive messages from the stream.
 pub struct EphemeralSubscription {
     topic_id: TopicId,
-    from_topic_rx: BroadcastReceiver<FromNetwork>,
+    from_topic_rx: BroadcastReceiver<Vec<u8>>,
 }
 
 // TODO: Implement `Stream` for `BroadcastReceiver`.
 
 impl EphemeralSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
-    pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<FromNetwork>) -> Self {
+    pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<Vec<u8>>) -> Self {
         Self {
             topic_id,
             from_topic_rx,
@@ -127,12 +126,12 @@ impl EphemeralSubscription {
     }
 
     /// Receives the next message from the stream.
-    pub async fn recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+    pub async fn recv(&mut self) -> Result<Vec<u8>, StreamError<()>> {
         self.from_topic_rx.recv().await.map_err(StreamError::Recv)
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<FromNetwork, StreamError<()>> {
+    pub fn try_recv(&mut self) -> Result<Vec<u8>, StreamError<()>> {
         self.from_topic_rx.try_recv().map_err(StreamError::TryRecv)
     }
 

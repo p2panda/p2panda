@@ -31,7 +31,6 @@ use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
 };
 use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::network::FromNetwork;
 use crate::utils::{from_public_key, to_public_key};
 
 /// Gossip actor name.
@@ -48,7 +47,7 @@ pub enum ToGossip {
     Subscribe(
         TopicId,
         Vec<PublicKey>,
-        RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>,
+        #[allow(clippy::type_complexity)] RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>,
     ),
 
     /// Unsubscribe from the given topic.
@@ -81,6 +80,7 @@ pub enum ToGossip {
     /// Received a message from the gossip overlay.
     ReceivedMessage {
         bytes: Vec<u8>,
+        #[allow(unused)]
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
@@ -95,7 +95,7 @@ pub enum ToGossip {
 
 /// Mapping of topic ID to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
-type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<FromNetwork>)>;
+type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
@@ -303,13 +303,11 @@ where
             }
             ToGossip::ReceivedMessage {
                 bytes,
-                delivered_from,
+                delivered_from: _,
                 delivery_scope,
                 topic_id,
                 session_id: _,
             } => {
-                let msg = FromNetwork::ephemeral_message(bytes, delivered_from);
-
                 // Store the delivery scope of the received message.
                 state
                     .topic_delivery_scopes
@@ -319,7 +317,7 @@ where
 
                 // Write the received bytes to all subscribers for the associated topic.
                 if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic_id) {
-                    let _number_of_subscribers = from_gossip_tx.send(msg.clone())?;
+                    let _number_of_subscribers = from_gossip_tx.send(bytes)?;
                 }
 
                 Ok(())
@@ -484,7 +482,6 @@ mod tests {
     use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
     use crate::actors::gossip::session::ToGossipSession;
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::network::FromNetwork;
     use crate::test_utils::test_args;
     use crate::utils::from_private_key;
 
@@ -689,7 +686,6 @@ mod tests {
         let bat_private_key = bat_args.private_key.clone();
 
         let ant_public_key = ant_private_key.public_key();
-        let bat_public_key = bat_private_key.public_key();
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
@@ -782,10 +778,7 @@ mod tests {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
-        );
+        assert_eq!(msg, ant_msg_to_bat);
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
@@ -796,10 +789,7 @@ mod tests {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
-        );
+        assert_eq!(msg, bat_msg_to_ant);
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -841,7 +831,6 @@ mod tests {
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
-        let cat_public_key = cat_private_key.public_key();
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
@@ -976,10 +965,7 @@ mod tests {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(cat_msg_to_ant_and_bat, cat_public_key)
-        );
+        assert_eq!(msg, cat_msg_to_ant_and_bat);
 
         // Send message from ant to bat and cat.
         let ant_msg_to_bat_and_cat = b"hi bat and cat!".to_vec();
@@ -994,10 +980,7 @@ mod tests {
         };
 
         // NOTE: In this case the message is delivered by bat; not directly from ant.
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(ant_msg_to_bat_and_cat, bat_public_key)
-        );
+        assert_eq!(msg, ant_msg_to_bat_and_cat);
 
         // Stop gossip actors.
         ant_gossip_actor.stop(None);
@@ -1046,7 +1029,6 @@ mod tests {
 
         let ant_public_key = ant_private_key.public_key();
         let bat_public_key = bat_private_key.public_key();
-        let cat_public_key = cat_private_key.public_key();
 
         // Create endpoints.
         let ant_discovery = StaticProvider::new();
@@ -1160,10 +1142,7 @@ mod tests {
             panic!("expected msg from ant")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(ant_msg_to_bat, ant_public_key)
-        );
+        assert_eq!(msg, ant_msg_to_bat);
 
         // Send message from bat to ant.
         let bat_msg_to_ant = b"oh hey ant!".to_vec();
@@ -1174,10 +1153,7 @@ mod tests {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(bat_msg_to_ant, bat_public_key)
-        );
+        assert_eq!(msg, bat_msg_to_ant);
 
         // Stop the gossip actor and router for ant (going offline).
         ant_gossip_actor.stop(None);
@@ -1236,10 +1212,7 @@ mod tests {
             panic!("expected msg from cat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(cat_msg_to_bat, cat_public_key)
-        );
+        assert_eq!(msg, cat_msg_to_bat);
 
         // Send message from bat to cat.
         let bat_msg_to_cat = b"yoyo!".to_vec();
@@ -1253,10 +1226,7 @@ mod tests {
             panic!("expected msg from bat")
         };
 
-        assert_eq!(
-            msg,
-            FromNetwork::ephemeral_message(bat_msg_to_cat, bat_public_key)
-        );
+        assert_eq!(msg, bat_msg_to_cat);
 
         // Stop gossip actors.
         bat_gossip_actor.stop(None);
