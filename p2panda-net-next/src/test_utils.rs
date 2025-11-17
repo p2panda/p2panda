@@ -22,7 +22,7 @@ pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 
 pub fn test_args() -> (
     ApplicationArguments,
-    MemoryStore<ChaCha20Rng, TopicId, NodeId, NodeInfo>,
+    MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
     NoSyncConfig,
 ) {
     test_args_from_seed(rand::random())
@@ -32,11 +32,11 @@ pub fn test_args_from_seed(
     seed: [u8; 32],
 ) -> (
     ApplicationArguments,
-    MemoryStore<ChaCha20Rng, TopicId, NodeId, NodeInfo>,
+    MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
     NoSyncConfig,
 ) {
     let mut rng = ChaCha20Rng::from_seed(seed);
-    let store = MemoryStore::<ChaCha20Rng, TopicId, NodeId, NodeInfo>::new(rng.clone());
+    let store = MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
     let private_key_bytes: [u8; 32] = rng.random();
     (
         ArgsBuilder::new(TEST_NETWORK_ID)

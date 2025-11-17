@@ -50,21 +50,18 @@ pub enum RegisterProtocolError {
     RegistrationFailed,
 }
 
-pub async fn connect<T>(
+pub async fn connect(
     node_id: NodeId,
     protocol_id: impl AsRef<[u8]>,
     actor_namespace: ActorNamespace,
-) -> Result<iroh::endpoint::Connection, ConnectError>
-where
-    T: Send + 'static,
-{
+) -> Result<iroh::endpoint::Connection, ConnectError> {
     // Ask address book for available node information.
     let Some(address_book) = registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
     else {
         return Err(ConnectError::ActorNotAvailable(ADDRESS_BOOK.into()));
     };
     let Some(node_info) = call!(
-        ActorRef::<ToAddressBook<T>>::from(address_book),
+        ActorRef::<ToAddressBook>::from(address_book),
         ToAddressBook::NodeInfo,
         node_id
     )

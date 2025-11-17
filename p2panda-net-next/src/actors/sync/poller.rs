@@ -3,7 +3,6 @@
 //! Listen for messages from the user and forward them to the gossip sender.
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -11,9 +10,9 @@ use p2panda_sync::SyncManagerEvent;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast};
 
+use crate::TopicId;
 use crate::actors::ActorNamespace;
 
 pub enum ToSyncPoller {
@@ -21,19 +20,19 @@ pub enum ToSyncPoller {
     WaitForMessage,
 }
 
-pub struct SyncPollerState<T, M>
+pub struct SyncPollerState<M>
 where
-    M: SyncManagerTrait<T> + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     manager: Arc<Mutex<M>>,
-    sender: broadcast::Sender<SyncManagerEvent<T, <M::Protocol as Protocol>::Event>>,
+    sender: broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
 }
 
-pub struct SyncPoller<T, M> {
-    _phantom: PhantomData<(T, M)>,
+pub struct SyncPoller<M> {
+    _phantom: PhantomData<M>,
 }
 
-impl<T, M> Default for SyncPoller<T, M> {
+impl<M> Default for SyncPoller<M> {
     fn default() -> Self {
         Self {
             _phantom: Default::default(),
@@ -41,20 +40,21 @@ impl<T, M> Default for SyncPoller<T, M> {
     }
 }
 
-impl<T, M> ThreadLocalActor for SyncPoller<T, M>
+impl<M> ThreadLocalActor for SyncPoller<M>
 where
-    M: SyncManagerTrait<T> + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
     M::Config: Clone + Send + Sync + 'static,
     M::Error: StdError + Send + Sync + 'static,
     <M::Protocol as Protocol>::Event: Debug + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
-    type State = SyncPollerState<T, M>;
+    type State = SyncPollerState<M>;
+
     type Msg = ToSyncPoller;
+
     type Arguments = (
         ActorNamespace,
         Arc<Mutex<M>>,
-        broadcast::Sender<SyncManagerEvent<T, <M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(

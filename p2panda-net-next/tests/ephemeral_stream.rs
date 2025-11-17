@@ -1,6 +1,6 @@
-/*
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+/*
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_net_next::test_utils::{test_args, NoSyncConfig, NoSyncManager};
 use p2panda_net_next::{NetworkBuilder, NodeId, NodeInfo, TopicId};
@@ -14,12 +14,10 @@ use tokio::sync::broadcast::error::TryRecvError;
 #[cfg(test)]
 #[tokio::test]
 async fn two_peer_ephemeral_messaging() {
-    let topic_id = [1; 32];
+    let topic = [1; 32];
     let (args, store, _) = test_args();
 
     let join_handle = tokio::spawn(async move {
-        // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
-        // changeover.
         let store =
             MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([1; 32]));
         let node_builder = NetworkBuilder::new([7; 32]);
@@ -28,7 +26,7 @@ async fn two_peer_ephemeral_messaging() {
             .await
             .unwrap();
 
-        let stream = node.ephemeral_stream(&topic_id).await.unwrap();
+        let stream = node.ephemeral_stream(&topic).await.unwrap();
 
         stream
             .publish(b"I am the nothingness at the centre of creation")
@@ -47,15 +45,13 @@ async fn two_peer_ephemeral_messaging() {
     let node_builder = NetworkBuilder::new([7; 32])
         .bind_port_v4(2024)
         .bind_port_v6(2025);
-    // @TODO: T is TopicId here. This needs to be refactored as part of the general topic
-    // changeover.
     let store = MemoryStore::<_, TopicId, NodeId, NodeInfo>::new(ChaCha20Rng::from_seed([2; 32]));
     let node = node_builder
         .build::<_, _, NoSyncManager>(store, NoSyncConfig)
         .await
         .unwrap();
 
-    let stream = node.ephemeral_stream(&topic_id).await.unwrap();
+    let stream = node.ephemeral_stream(&topic).await.unwrap();
 
     stream.publish(b"((( )))").await.unwrap();
 

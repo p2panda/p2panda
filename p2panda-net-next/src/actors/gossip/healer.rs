@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Subscribe to address book updates and rejoin the gossip with the given nodes if we're actively
-//! interested in the associated topic IDs.
+//! interested in the associated topics.
 use p2panda_discovery::address_book::NodeInfo as _;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, call, registry};
@@ -15,7 +15,7 @@ use crate::actors::{ActorNamespace, with_namespace};
 use crate::utils::from_public_key;
 
 pub enum ToGossipHealer {
-    /// Subscribe to changes regarding nodes for our topic ID of interest.
+    /// Subscribe to changes regarding nodes for our topics of interest.
     SubscribeToAddressBook(TopicId),
 
     /// Wait for an event on the address book subscription channel.
@@ -41,10 +41,10 @@ impl ThreadLocalActor for GossipHealer {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, topic_id, gossip_session_ref) = args;
+        let (actor_namespace, topic, gossip_session_ref) = args;
 
         // Invoke the handler to subscribe to address book events.
-        let _ = myself.cast(ToGossipHealer::SubscribeToAddressBook(topic_id));
+        let _ = myself.cast(ToGossipHealer::SubscribeToAddressBook(topic));
 
         Ok(GossipHealerState {
             actor_namespace,
@@ -69,13 +69,13 @@ impl ThreadLocalActor for GossipHealer {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToGossipHealer::SubscribeToAddressBook(topic_id) => {
+            ToGossipHealer::SubscribeToAddressBook(topic) => {
                 if let Some(address_book_actor) =
                     registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
                 {
-                    let actor: ActorRef<ToAddressBook<TopicId>> = address_book_actor.into();
+                    let actor: ActorRef<ToAddressBook> = address_book_actor.into();
 
-                    let receiver = call!(actor, ToAddressBook::SubscribeTopicChanges, topic_id)
+                    let receiver = call!(actor, ToAddressBook::SubscribeTopicChanges, topic)
                         .expect("address book actor should handle call");
                     state.receiver = Some(receiver);
 

@@ -35,12 +35,11 @@ use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, EphemeralStreams, ToE
 use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, EventuallyConsistentStreams, ToEventuallyConsistentStreams,
 };
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
 
 pub struct StreamSupervisorState<C, E> {
-    actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     sync_config: C,
     endpoint: iroh::Endpoint,
@@ -113,11 +112,7 @@ where
                     EVENTUALLY_CONSISTENT_STREAMS,
                     &actor_namespace,
                 )),
-                (
-                    actor_namespace.clone(),
-                    gossip_actor.clone(),
-                    sync_config.clone(),
-                ),
+                (args.clone(), gossip_actor.clone(), sync_config.clone()),
                 myself.clone().into(),
                 args.root_thread_pool.clone(),
             )
@@ -126,14 +121,13 @@ where
         // Spawn the ephemeral streams actor.
         let (ephemeral_streams_actor, _) = EphemeralStreams::spawn_linked(
             Some(with_namespace(EPHEMERAL_STREAMS, &actor_namespace)),
-            (actor_namespace.clone(), gossip_actor.clone()),
+            (args.clone(), gossip_actor.clone()),
             myself.into(),
             args.root_thread_pool.clone(),
         )
         .await?;
 
         let state = StreamSupervisorState {
-            actor_namespace,
             args,
             sync_config,
             endpoint,
@@ -201,7 +195,7 @@ where
                                     &actor_namespace,
                                 )),
                                 (
-                                    state.actor_namespace.clone(),
+                                    state.args.clone(),
                                     state.gossip_actor.clone(),
                                     state.sync_config.clone(),
                                 ),
@@ -222,7 +216,7 @@ where
                         // Respawn the ephemeral streams actor.
                         let (ephemeral_streams_actor, _) = EphemeralStreams::spawn_linked(
                             Some(with_namespace(EPHEMERAL_STREAMS, &actor_namespace)),
-                            (state.actor_namespace.clone(), state.gossip_actor.clone()),
+                            (state.args.clone(), state.gossip_actor.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
