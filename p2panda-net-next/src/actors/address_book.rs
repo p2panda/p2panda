@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 // @TODO: This will come from `p2panda-store` eventually.
-use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call};
 use thiserror::Error;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
@@ -94,10 +96,74 @@ pub enum ToAddressBook<T> {
     /// Entries will be removed if they haven't been updated in our _local_ database since the
     /// given duration, _not_ when they have been created by the original author.
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
+
+    /// Subscribes to channel informing us about changes on node infos for a specific node.
+    SubscribeNodeChanges(NodeId, RpcReplyPort<broadcast::Receiver<NodeEvent>>),
+
+    /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
+    /// id for eventually consistent and ephemeral streams.
+    SubscribeTopicChanges(TopicId, RpcReplyPort<broadcast::Receiver<TopicEvent>>),
 }
 
 pub struct AddressBookState<S> {
     store: S,
+    node_subscribers: HashMap<NodeId, broadcast::Sender<NodeEvent>>,
+    topic_subscribers: HashMap<TopicId, broadcast::Sender<TopicEvent>>,
+}
+
+impl<S> AddressBookState<S> {
+    /// Inform all subscribers about a node info change;
+    fn call_node_subscribers(&mut self, node_id: NodeId, node_info: &NodeInfo) {
+        let Some(tx) = self.node_subscribers.get(&node_id) else {
+            return;
+        };
+
+        if tx
+            .send(NodeEvent {
+                node_id,
+                node_info: node_info.clone(),
+            })
+            .is_err()
+        {
+            // On an error we know that all receivers have been dropped, so we can remove this
+            // subscription as well and clean up after ourselves.
+            self.node_subscribers.remove(&node_id);
+        }
+    }
+
+    /// Inform all subscribers about a topic change;
+    async fn call_topic_subscribers<T>(
+        &mut self,
+        actor_ref: ActorRef<ToAddressBook<T>>,
+        topic_id: TopicId,
+    ) where
+        T: Send + 'static,
+    {
+        let Some(tx) = self.topic_subscribers.get(&topic_id) else {
+            return;
+        };
+
+        // @TODO: Make sure that this is also works for eventually consistent streams.
+        let Ok(node_infos) = call!(
+            actor_ref,
+            ToAddressBook::NodeInfosByTopicIds,
+            vec![topic_id]
+        ) else {
+            return;
+        };
+
+        if tx
+            .send(TopicEvent {
+                topic_id,
+                node_infos,
+            })
+            .is_err()
+        {
+            // On an error we know that all receivers have been dropped, so we can remove this
+            // subscription as well and clean up after ourselves.
+            self.topic_subscribers.remove(&topic_id);
+        }
+    }
 }
 
 pub struct AddressBook<S, T> {
@@ -132,12 +198,16 @@ where
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (store,) = args;
-        Ok(AddressBookState { store })
+        Ok(AddressBookState {
+            store,
+            node_subscribers: HashMap::new(),
+            topic_subscribers: HashMap::new(),
+        })
     }
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -151,8 +221,11 @@ where
                     return Ok(());
                 }
 
+                state.call_node_subscribers(node_info.id(), &node_info);
+
                 // Overwrite any previously given information if it existed.
                 let result = state.store.insert_node_info(node_info).await?;
+
                 let _ = reply.send(Ok(result));
             }
             ToAddressBook::InsertTransportInfo(node_id, transport_info, reply) => {
@@ -176,12 +249,42 @@ where
                     None => NodeInfo::new(node_id),
                 };
 
-                if let Err(err) = node_info.update_transports(transport_info) {
-                    let _ = reply.send(Err(AddressBookError::NodeInfo(err)));
-                } else {
-                    let result = state.store.insert_node_info(node_info).await?;
-                    let _ = reply.send(Ok(result));
+                match node_info.update_transports(transport_info) {
+                    Ok(is_newer) => {
+                        if is_newer {
+                            state.call_node_subscribers(node_info.id(), &node_info);
+                        }
+
+                        state.store.insert_node_info(node_info).await?;
+
+                        let _ = reply.send(Ok(is_newer));
+                    }
+                    Err(err) => {
+                        let _ = reply.send(Err(AddressBookError::NodeInfo(err)));
+                    }
                 }
+            }
+            ToAddressBook::SubscribeNodeChanges(node_id, reply) => {
+                let rx = match state.node_subscribers.get_mut(&node_id) {
+                    Some(tx) => tx.subscribe(),
+                    None => {
+                        let (tx, rx) = broadcast::channel(32);
+                        state.node_subscribers.insert(node_id, tx);
+                        rx
+                    }
+                };
+                let _ = reply.send(rx);
+            }
+            ToAddressBook::SubscribeTopicChanges(topic_id, reply) => {
+                let rx = match state.topic_subscribers.get_mut(&topic_id) {
+                    Some(tx) => tx.subscribe(),
+                    None => {
+                        let (tx, rx) = broadcast::channel(32);
+                        state.topic_subscribers.insert(topic_id, tx);
+                        rx
+                    }
+                };
+                let _ = reply.send(rx);
             }
 
             // Mostly a wrapper around the store ..
@@ -211,8 +314,19 @@ where
             }
             ToAddressBook::SetTopics(node_id, topics) => {
                 state.store.set_topics(node_id, topics).await?;
+
+                // @TODO: Finalize this after topic refactoring.
+                // for topic in topics {
+                //     state.call_topic_subscribers();
+                // }
             }
             ToAddressBook::SetTopicIds(node_id, topic_ids) => {
+                for topic_id in &topic_ids {
+                    state
+                        .call_topic_subscribers(myself.clone(), topic_id.clone())
+                        .await;
+                }
+
                 state.store.set_topic_ids(node_id, topic_ids).await?;
             }
             ToAddressBook::RemoveNodeInfo(node_id, reply) => {
@@ -227,6 +341,18 @@ where
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TopicEvent {
+    pub topic_id: TopicId,
+    pub node_infos: Vec<NodeInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeEvent {
+    pub node_id: NodeId,
+    pub node_info: NodeInfo,
 }
 
 #[derive(Debug, Error)]

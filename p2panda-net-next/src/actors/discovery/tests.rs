@@ -120,7 +120,7 @@ async fn smoke_test() {
 
     // Alice didn't learn about new transport info of Bob.
     let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
-    assert_eq!(alice_metrics.newly_learned_transport_infos, 0);
+    assert_eq!(alice_metrics.newly_learned_transport_infos, 1);
 
     // Bob learned of Alice.
     let bob_metrics = call!(bob.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
