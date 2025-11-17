@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 /// Mapping of generic topics to session ids and of session ids to a channel sender.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SessionTopicMap<T, TX> {
     pub(crate) accepting_sessions: HashSet<u64>,
     pub(crate) session_tx_map: HashMap<u64, TX>,

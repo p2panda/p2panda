@@ -68,7 +68,7 @@ where
     S::Error: StdError + Send + Sync + 'static,
     M: SyncManager<TopicId> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + Sync + 'static,
+    M::Protocol: Send + 'static,
     <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
 {

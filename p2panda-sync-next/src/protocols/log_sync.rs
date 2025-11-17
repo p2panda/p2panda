@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 use futures::channel::mpsc;
@@ -441,6 +441,16 @@ pub enum LogSyncMessage<L> {
     // @TODO: use Header and Body here.
     Operation(Vec<u8>, Option<Vec<u8>>),
     Done,
+}
+
+impl<L> Display for LogSyncMessage<L>
+where
+    L: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)?;
+        Ok(())
+    }
 }
 
 /// Events emitted from log sync sessions.
