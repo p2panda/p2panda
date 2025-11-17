@@ -285,13 +285,14 @@ mod tests {
         .unwrap();
 
         // Spawn the stream supervisor.
-        let (stream_supervisor, stream_supervisor_handle) = StreamSupervisor::<NoSyncManager>::spawn(
-            Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
-            (args.clone(), sync_config),
-            args.root_thread_pool.clone(),
-        )
-        .await
-        .unwrap();
+        let (stream_supervisor, stream_supervisor_handle) =
+            StreamSupervisor::<NoSyncManager>::spawn(
+                Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
+                (args.clone(), sync_config),
+                args.root_thread_pool.clone(),
+            )
+            .await
+            .unwrap();
 
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
