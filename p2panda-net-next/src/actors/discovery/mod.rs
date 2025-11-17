@@ -38,6 +38,11 @@ impl<T> SubscriptionInfo<T> {
     }
 }
 
+// @TODO: This returns an empty array for now when the streams actor is not available. This is nice
+// for test setups where we don't have any stream actors available.
+//
+// Ideally we want to come up with a different approach though: Discovery should not need to know
+// about streams at all.
 impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
     type Error = SubscriptionInfoError;
 
@@ -51,13 +56,13 @@ impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
             registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
         {
             let actor_ref: ActorRef<ToEphemeralStreams> = address_book_actor.into();
-            let topic_ids = call!(actor_ref, ToEphemeralStreams::ActiveTopics)
-                .map_err(|_| SubscriptionInfoError::ActorNotResponsive(EPHEMERAL_STREAMS.into()))?;
+            let Ok(topic_ids) = call!(actor_ref, ToEphemeralStreams::ActiveTopics) else {
+                return Ok(vec![]);
+            };
+
             Ok(Vec::from_iter(topic_ids.into_iter()))
         } else {
-            Err(SubscriptionInfoError::ActorNotAvailable(
-                EPHEMERAL_STREAMS.into(),
-            ))
+            Ok(vec![])
         }
     }
 }
