@@ -49,7 +49,10 @@ impl NodeInfo {
         }
     }
 
-    pub fn update_transports(&mut self, other: TransportInfo) -> Result<(), NodeInfoError> {
+    /// Updates transport info for a node if it is newer ("last-write wins" principle).
+    ///
+    /// Returns true if given transport info is newer than the current one.
+    pub fn update_transports(&mut self, other: TransportInfo) -> Result<bool, NodeInfoError> {
         // Make sure the given info matches the node id.
         for address in &other.addresses {
             #[allow(irrefutable_let_patterns)]
@@ -61,16 +64,21 @@ impl NodeInfo {
         }
 
         // Choose "latest" info by checking timestamp if given.
+        let mut is_newer = false;
         match self.transports.as_ref() {
-            None => self.transports = Some(other),
+            None => {
+                is_newer = true;
+                self.transports = Some(other)
+            }
             Some(current) => {
                 if other.timestamp > current.timestamp {
                     self.transports = Some(other);
+                    is_newer = true;
                 }
             }
         }
 
-        Ok(())
+        Ok(is_newer)
     }
 
     pub fn verify(&self) -> Result<(), NodeInfoError> {
