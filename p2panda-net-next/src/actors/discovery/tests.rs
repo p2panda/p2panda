@@ -9,7 +9,6 @@ use ractor::{ActorRef, call};
 use rand::Rng;
 use tokio::time::sleep;
 
-use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
@@ -33,8 +32,8 @@ fn actor_name_helper() {
 
 struct TestNode {
     args: ApplicationArguments,
-    address_book_ref: ActorRef<ToAddressBook<TopicId>>,
-    discovery_manager_ref: ActorRef<ToDiscoveryManager<TopicId>>,
+    address_book_ref: ActorRef<ToAddressBook>,
+    discovery_manager_ref: ActorRef<ToDiscoveryManager>,
     #[allow(unused)]
     thread_pool: ThreadLocalActorSpawner,
 }
