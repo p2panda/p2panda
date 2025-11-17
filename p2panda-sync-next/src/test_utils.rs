@@ -19,7 +19,7 @@ use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
-use crate::traits::{Protocol, TopicQuery};
+use crate::traits::Protocol;
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -266,8 +266,6 @@ impl TestTopic {
         Self(name.to_owned())
     }
 }
-
-impl TopicQuery for TestTopic {}
 
 /// Test topic map.
 #[derive(Clone, Debug)]

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::hash::Hash as StdHash;
 use std::{fmt::Debug, pin::Pin};
 
 use futures::Sink;
@@ -40,7 +39,7 @@ pub trait SyncManager<T> {
     fn from_config(config: Self::Config) -> Self;
 
     /// Instantiate a new sync session.
-    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol;
+    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> impl Future<Output = Self::Protocol>;
 
     /// Retrieve a send handle to an already existing sync session.
     fn session_handle(
@@ -57,28 +56,4 @@ pub trait SyncManager<T> {
             Self::Error,
         >,
     >;
-}
-
-/// Identify the particular dataset a peer is interested in syncing.
-///
-/// Exactly how this is expressed is left up to the user to decide. During sync the "initiator"
-/// sends their topic query to a remote peer where it is be mapped to their local dataset.
-/// Additional access-control checks can be performed. Once this "handshake" is complete both
-/// peers will proceed with the designated sync protocol.
-///
-/// ## `TopicId` vs `TopicQuery`
-///
-/// While `TopicId` is merely a 32-byte identifier which can't hold much information other than
-/// being a distinct identifier of a single data item or collection of them, we can use `TopicQuery` to
-/// implement custom data types representing "queries" for very specific data items. Peers can for
-/// example announce that they'd like "all events from the 27th of September 23 until today" with
-/// `TopicQuery`.
-///
-/// Consult the `TopicId` documentation in `p2panda-net` for more information.
-pub trait TopicQuery:
-    // Data types implementing `TopicQuery` also need to implement `Eq` and `Hash` in order to allow 
-    // backends to organise sync sessions per topic query and peer, along with `Serialize` and 
-    // `Deserialize` to allow sending topics over the wire.
-    Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>
-{
 }

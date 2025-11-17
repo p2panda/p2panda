@@ -98,11 +98,9 @@ impl<M, T> Default for SyncManager<M, T> {
 impl<M, T> ThreadLocalActor for SyncManager<M, T>
 where
     M: SyncManagerTrait<T> + Send + 'static,
-    M::Config: Clone + Send + Sync + 'static,
     M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + Sync + 'static,
+    M::Protocol: Send + 'static,
     <M::Protocol as Protocol>::Event: Debug + Send + Sync + 'static,
-    for<'a> <M::Protocol as Protocol>::Message: Serialize + Deserialize<'a>,
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
     for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
@@ -317,7 +315,7 @@ where
 
         // Instantiate the session.
         let mut manager = state.manager.lock().await;
-        let session = manager.session(session_id, &config);
+        let session = manager.session(session_id, &config).await;
 
         // Get a tx sender handle to the session.
         let session_handle = manager

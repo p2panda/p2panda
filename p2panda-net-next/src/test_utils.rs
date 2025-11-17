@@ -105,7 +105,7 @@ impl SyncManager<TopicId> for NoSyncManager {
         NoSyncManager
     }
 
-    fn session(
+    async fn session(
         &mut self,
         session_id: u64,
         config: &p2panda_sync::SyncSessionConfig<TopicId>,
