@@ -104,6 +104,11 @@ impl TestNode {
             transports: Some(transport_info),
         }
     }
+
+    pub fn shutdown(&self) {
+        self.address_book_ref.stop(None);
+        self.discovery_manager_ref.stop(None);
+    }
 }
 
 #[tokio::test]
@@ -134,4 +139,7 @@ async fn smoke_test() {
     )
     .unwrap();
     assert!(result.is_some());
+
+    alice.shutdown();
+    bob.shutdown();
 }
