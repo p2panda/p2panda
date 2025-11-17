@@ -5,7 +5,7 @@
 //! This actor forms the coordination layer between the external API and the sync and gossip
 //! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
 //! by the stream supervisor actor.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
@@ -63,6 +63,9 @@ pub enum ToEventuallyConsistentStreams<E> {
 
     /// End a sync session.
     EndSync(TopicId, PublicKey),
+
+    /// Returns a list of all topic ids of currently subscribed streams.
+    ActiveTopics(RpcReplyPort<HashSet<TopicId>>),
 }
 
 /// Mapping of topic ID to the sender channels of the associated gossip overlay.
@@ -343,6 +346,9 @@ where
                         topic: topic_id,
                     })?;
                 }
+            }
+            ToEventuallyConsistentStreams::ActiveTopics(reply) => {
+                let _ = reply.send(HashSet::from_iter(state.sync_receivers.keys().cloned()));
             }
         }
 
