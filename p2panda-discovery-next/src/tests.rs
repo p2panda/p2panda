@@ -14,16 +14,14 @@ use crate::DiscoveryResult;
 use crate::address_book::AddressBookStore;
 use crate::naive::NaiveDiscoveryProtocol;
 use crate::random_walk::RandomWalker;
-use crate::test_utils::{
-    TestId, TestInfo, TestStore, TestSubscription, TestTopic, TestTransportInfo,
-};
+use crate::test_utils::{TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
 
 struct TestWalker {
     #[allow(unused)]
     id: usize,
-    strategy: RandomWalker<ChaCha20Rng, TestStore<ChaCha20Rng>, TestTopic, TestId, TestInfo>,
-    previous_result: Option<DiscoveryResult<TestTopic, TestId, TestInfo>>,
+    strategy: RandomWalker<ChaCha20Rng, TestStore<ChaCha20Rng>, TestId, TestInfo>,
+    previous_result: Option<DiscoveryResult<TestId, TestInfo>>,
 }
 
 impl TestWalker {
@@ -87,9 +85,9 @@ impl TestNode {
         alice_protocol: P,
         bob_protocol: P,
         remote: &TestNode,
-    ) -> DiscoveryResult<TestTopic, TestId, TestInfo>
+    ) -> DiscoveryResult<TestId, TestInfo>
     where
-        P: DiscoveryProtocol<TestTopic, TestId, TestInfo> + 'static,
+        P: DiscoveryProtocol<TestId, TestInfo> + 'static,
     {
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -113,12 +111,12 @@ impl TestNode {
         }
 
         self.store
-            .set_topics(remote.id, alice_result.node_topics)
+            .set_sync_topics(remote.id, alice_result.sync_topics)
             .await
             .expect("store failure");
 
         self.store
-            .set_topic_ids(remote.id, alice_result.node_topic_ids)
+            .set_ephemeral_messaging_topics(remote.id, alice_result.ephemeral_messaging_topics)
             .await
             .expect("store failure");
 
@@ -131,13 +129,13 @@ impl TestNode {
 
         remote
             .store
-            .set_topics(self.id, bob_result.node_topics.clone())
+            .set_sync_topics(self.id, bob_result.sync_topics.clone())
             .await
             .expect("store failure");
 
         remote
             .store
-            .set_topic_ids(self.id, bob_result.node_topic_ids.clone())
+            .set_ephemeral_messaging_topics(self.id, bob_result.ephemeral_messaging_topics.clone())
             .await
             .expect("store failure");
 

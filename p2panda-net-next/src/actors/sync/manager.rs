@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -19,7 +18,6 @@ use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use p2panda_sync::{SessionTopicMap, SyncManagerEvent, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
-use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast};
 
 use crate::TopicId;
@@ -34,56 +32,56 @@ use crate::utils::to_public_key;
 
 pub const SYNC_MANAGER: &str = "net.sync.manager";
 
-type SessionSink<M, T> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<T>>::Error>>>;
+type SessionSink<M> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<TopicId>>::Error>>>;
 
-pub enum ToSyncManager<T> {
+pub enum ToSyncManager {
     /// Initiate a sync session with this peer over the given topic.
     Initiate {
         node_id: NodeId,
-        topic: T,
+        topic: TopicId,
         live_mode: bool,
     },
 
     /// Accept a sync session on this connection.
     Accept {
         node_id: NodeId,
-        topic: T,
+        topic: TopicId,
         live_mode: bool,
         connection: Connection,
     },
 
     /// Send newly published data to all sync sessions running over the given topic.
-    Publish { topic: T, data: Vec<u8> },
+    Publish { topic: TopicId, data: Vec<u8> },
 
     /// Close all active sync sessions running over the given topic.
-    CloseAll { topic: T },
+    CloseAll { topic: TopicId },
 
     /// Close all active sync sessions running with the given node id and topic.
-    Close { node_id: NodeId, topic: T },
+    Close { node_id: NodeId, topic: TopicId },
 }
 
-pub struct SyncManagerState<M, T>
+pub struct SyncManagerState<M>
 where
-    M: SyncManagerTrait<T>,
+    M: SyncManagerTrait<TopicId>,
 {
     actor_namespace: ActorNamespace,
     #[allow(unused)]
-    topic_id: TopicId,
+    topic: TopicId,
     // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid
     // locking access to the whole manager on every read/write.
     manager: Arc<Mutex<M>>,
-    session_topic_map: SessionTopicMap<T, SessionSink<M, T>>,
+    session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<u64>>,
     next_session_id: u64,
     pool: ThreadLocalActorSpawner,
 }
 
 #[derive(Debug)]
-pub struct SyncManager<M, T> {
-    _marker: PhantomData<(M, T)>,
+pub struct SyncManager<M> {
+    _marker: PhantomData<M>,
 }
 
-impl<M, T> Default for SyncManager<M, T> {
+impl<M> Default for SyncManager<M> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -91,24 +89,23 @@ impl<M, T> Default for SyncManager<M, T> {
     }
 }
 
-impl<M, T> ThreadLocalActor for SyncManager<M, T>
+impl<M> ThreadLocalActor for SyncManager<M>
 where
-    M: SyncManagerTrait<T> + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,
     M::Protocol: Send + 'static,
     <M::Protocol as Protocol>::Event: Debug + Send + Sync + 'static,
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
-    type State = SyncManagerState<M, T>;
+    type State = SyncManagerState<M>;
 
-    type Msg = ToSyncManager<T>;
+    type Msg = ToSyncManager;
 
     type Arguments = (
         ActorNamespace,
         TopicId,
         M::Config,
-        broadcast::Sender<SyncManagerEvent<T, <M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(
@@ -116,7 +113,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, topic_id, config, sender) = args;
+        let (actor_namespace, topic, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
         // @TODO: move registering the sync protocol to the stream actor as this is who will be
@@ -134,7 +131,7 @@ where
 
         let manager = Arc::new(Mutex::new(M::from_config(config)));
 
-        let (_, _) = SyncPoller::<T, M>::spawn_linked(
+        let (_, _) = SyncPoller::<M>::spawn_linked(
             None,
             (actor_namespace.clone(), manager.clone(), sender),
             myself.clone().into(),
@@ -144,7 +141,7 @@ where
 
         Ok(SyncManagerState {
             actor_namespace,
-            topic_id,
+            topic,
             manager,
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
@@ -167,11 +164,11 @@ where
             } => {
                 let config = SyncSessionConfig {
                     live_mode,
-                    topic: Some(topic.clone()),
+                    topic: Some(topic),
                 };
-                let (session, _) = Self::new_session(state, node_id, topic.clone(), config).await;
+                let (session, _) = Self::new_session(state, node_id, topic, config).await;
 
-                let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
+                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
                     None,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
@@ -200,7 +197,7 @@ where
                 };
                 let (session, _) = Self::new_session(state, node_id, topic, config).await;
 
-                let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
+                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
                     None,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
@@ -291,19 +288,18 @@ where
     }
 }
 
-impl<M, T> SyncManager<M, T>
+impl<M> SyncManager<M>
 where
-    M: SyncManagerTrait<T> + Send + 'static,
-    <M as SyncManagerTrait<T>>::Error: StdError + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+    <M as SyncManagerTrait<TopicId>>::Error: StdError + Send + Sync + 'static,
 {
     /// Initiate a session and update related manager state mappings.
     async fn new_session(
-        state: &mut SyncManagerState<M, T>,
+        state: &mut SyncManagerState<M>,
         node_id: NodeId,
-        topic: T,
-        config: SyncSessionConfig<T>,
-    ) -> (<M as SyncManagerTrait<T>>::Protocol, u64) {
+        topic: TopicId,
+        config: SyncSessionConfig<TopicId>,
+    ) -> (<M as SyncManagerTrait<TopicId>>::Protocol, u64) {
         // Get next session id.
         let session_id: u64 = state.next_session_id;
         state.next_session_id += 1;
@@ -337,7 +333,7 @@ where
     }
 
     /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut SyncManagerState<M, T>, id: u64) {
+    fn drop_session(state: &mut SyncManagerState<M>, id: u64) {
         state.session_topic_map.drop(id);
         state.node_session_map.iter_mut().for_each(|(_, sessions)| {
             sessions.remove(&id);
@@ -346,14 +342,11 @@ where
 }
 
 #[derive(Debug)]
-struct SyncProtocolHandler<T> {
-    manager_ref: ActorRef<ToSyncManager<T>>,
+struct SyncProtocolHandler {
+    manager_ref: ActorRef<ToSyncManager>,
 }
 
-impl<T> ProtocolHandler for SyncProtocolHandler<T>
-where
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
-{
+impl ProtocolHandler for SyncProtocolHandler {
     async fn accept(
         &self,
         connection: iroh::endpoint::Connection,
@@ -368,15 +361,15 @@ where
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<TopicHandshakeMessage<T>, _>(tx);
-        let mut rx = into_cbor_stream::<TopicHandshakeMessage<T>, _>(rx);
+        let mut tx = into_cbor_sink::<TopicHandshakeMessage<TopicId>, _>(tx);
+        let mut rx = into_cbor_stream::<TopicHandshakeMessage<TopicId>, _>(rx);
 
         // Channels for sending and receiving protocol events.
         //
         // @NOTE: We don't need to observe these events here as the topic is returned as output
         // when the protocol completes, so these channels are actually only just to satisfy the
         // API.
-        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<T>>(128);
+        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<TopicId>>(128);
         let protocol = TopicHandshakeAcceptor::new(event_tx);
         let topic = protocol
             .run(&mut tx, &mut rx)
