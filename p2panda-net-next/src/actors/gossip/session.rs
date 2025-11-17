@@ -39,8 +39,10 @@ pub enum ToGossipSession {
 }
 
 pub struct GossipSessionState {
+    #[allow(unused)]
     actor_namespace: ActorNamespace,
     topic_id: TopicId,
+    #[allow(unused)]
     gossip_healer_actor: ActorRef<ToGossipHealer>,
     gossip_joiner_actor: ActorRef<ToGossipJoiner>,
     gossip_sender_actor: ActorRef<ToGossipSender>,

@@ -16,7 +16,7 @@ use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
 use crate::args::ApplicationArguments;
-use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
+use crate::test_utils::{setup_logging, test_args_from_seed};
 
 use super::DiscoveryActorName;
 
@@ -35,6 +35,7 @@ struct TestNode {
     args: ApplicationArguments,
     address_book_ref: ActorRef<ToAddressBook<TopicId>>,
     discovery_manager_ref: ActorRef<ToDiscoveryManager<TopicId>>,
+    #[allow(unused)]
     thread_pool: ThreadLocalActorSpawner,
 }
 

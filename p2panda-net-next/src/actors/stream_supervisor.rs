@@ -21,13 +21,11 @@ pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
-use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::TopicId;
@@ -55,7 +53,7 @@ pub struct StreamSupervisorState<C, E> {
 }
 
 pub struct StreamSupervisor<M> {
-    _phantom: PhantomData<(M)>,
+    _phantom: PhantomData<M>,
 }
 
 impl<M> Default for StreamSupervisor<M> {
@@ -261,16 +259,14 @@ mod tests {
     use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
     use crate::actors::streams::ephemeral::EPHEMERAL_STREAMS;
     use crate::actors::streams::eventually_consistent::EVENTUALLY_CONSISTENT_STREAMS;
-    use crate::actors::sync::SYNC_MANAGER;
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::args::ArgsBuilder;
     use crate::test_utils::{NoSyncManager, test_args};
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
     #[tokio::test]
     async fn child_actors_started() {
-        let (args, store, sync_config) = test_args();
+        let (args, _, sync_config) = test_args();
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Spawn the iroh endpoint actor.

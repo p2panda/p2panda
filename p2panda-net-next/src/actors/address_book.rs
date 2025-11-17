@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -10,7 +10,7 @@ use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call};
 use thiserror::Error;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
@@ -24,13 +24,16 @@ pub enum ToAddressBook<T> {
     NodeInfo(NodeId, RpcReplyPort<Option<NodeInfo>>),
 
     /// Returns a list of all known node informations.
+    #[allow(unused)]
     AllNodeInfos(RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of node informations for a selected set.
+    #[allow(unused)]
     SelectedNodeInfos(Vec<NodeId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
+    #[allow(unused)]
     NodeInfosByTopics(Vec<T>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
@@ -39,6 +42,7 @@ pub enum ToAddressBook<T> {
 
     /// Returns information from a randomly picked node or `None` when no information exists in the
     /// database.
+    #[allow(unused)]
     RandomNodeInfo(RpcReplyPort<Option<NodeInfo>>),
 
     /// Inserts or updates node information into address book. Use this method if adding node
@@ -82,6 +86,7 @@ pub enum ToAddressBook<T> {
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
     /// exist.
+    #[allow(unused)]
     RemoveNodeInfo(NodeId, RpcReplyPort<bool>),
 
     /// Remove all node informations which are older than the given duration (from now). Returns
@@ -95,9 +100,11 @@ pub enum ToAddressBook<T> {
     /// Please note that a _local_ timestamp is used to determine the age of the information.
     /// Entries will be removed if they haven't been updated in our _local_ database since the
     /// given duration, _not_ when they have been created by the original author.
+    #[allow(unused)]
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
 
     /// Subscribes to channel informing us about changes on node infos for a specific node.
+    #[allow(unused)]
     SubscribeNodeChanges(NodeId, RpcReplyPort<broadcast::Receiver<NodeEvent>>),
 
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
@@ -345,11 +352,13 @@ where
 
 #[derive(Debug, Clone)]
 pub struct TopicEvent {
+    #[allow(unused)]
     pub topic_id: TopicId,
     pub node_infos: Vec<NodeInfo>,
 }
 
 #[derive(Debug, Clone)]
+#[allow(unused)]
 pub struct NodeEvent {
     pub node_id: NodeId,
     pub node_info: NodeInfo,

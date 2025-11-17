@@ -5,14 +5,13 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 
 use futures_channel::mpsc::{self, SendError};
-use futures_util::{Sink, SinkExt};
+use futures_util::Sink;
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_sync::ToSync;
 use p2panda_sync::traits::{Protocol, SyncManager};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use tracing::Level;
 
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::{ApplicationArguments, ArgsBuilder};
@@ -73,6 +72,7 @@ fn deterministic_args() {
 }
 
 pub struct NoProtocol;
+
 impl Protocol for NoProtocol {
     type Output = ();
     type Error = Infallible;
@@ -81,8 +81,8 @@ impl Protocol for NoProtocol {
 
     async fn run(
         self,
-        sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
-        stream: &mut (
+        _sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
+        _stream: &mut (
                  impl futures_util::Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin
              ),
     ) -> Result<Self::Output, Self::Error> {
@@ -101,23 +101,23 @@ impl SyncManager<TopicId> for NoSyncManager {
     type Config = NoSyncConfig;
     type Error = SendError;
 
-    fn from_config(config: Self::Config) -> Self {
+    fn from_config(_config: Self::Config) -> Self {
         NoSyncManager
     }
 
     async fn session(
         &mut self,
-        session_id: u64,
-        config: &p2panda_sync::SyncSessionConfig<TopicId>,
+        _session_id: u64,
+        _config: &p2panda_sync::SyncSessionConfig<TopicId>,
     ) -> Self::Protocol {
         NoProtocol
     }
 
     fn session_handle(
         &self,
-        session_id: u64,
+        _session_id: u64,
     ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
-        let (tx, rx) = mpsc::channel::<ToSync>(128);
+        let (tx, _) = mpsc::channel::<ToSync>(128);
         let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>;
         Some(sink)
     }

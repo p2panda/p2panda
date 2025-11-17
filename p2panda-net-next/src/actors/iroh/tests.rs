@@ -24,7 +24,7 @@ impl ProtocolHandler for EchoProtocol {
         let (mut tx, mut rx) = connection.accept_bi().await?;
 
         // Echo any bytes received back directly.
-        let bytes_sent = tokio::io::copy(&mut rx, &mut tx).await?;
+        let _bytes_sent = tokio::io::copy(&mut rx, &mut tx).await?;
 
         tx.finish()?;
         connection.closed().await;

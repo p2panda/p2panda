@@ -8,7 +8,6 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 /// Eventually consistent streams actor name.
@@ -18,12 +17,10 @@ use p2panda_core::PublicKey;
 use p2panda_discovery::address_book::NodeInfo;
 use p2panda_sync::SyncManagerEvent;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
-use ractor::concurrency::broadcast;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{
     ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry,
 };
-use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::{self, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
@@ -31,8 +28,8 @@ use tracing::{debug, warn};
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
-use crate::actors::streams::ephemeral::{self, EPHEMERAL_STREAMS, ToEphemeralStreams};
-use crate::actors::sync::{SYNC_MANAGER, SyncManager, ToSyncManager};
+use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
+use crate::actors::sync::{SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::eventually_consistent::{
@@ -65,6 +62,7 @@ pub enum ToEventuallyConsistentStreams<E> {
     EndSync(TopicId, PublicKey),
 
     /// Returns a list of all topic ids of currently subscribed streams.
+    #[allow(unused)]
     ActiveTopics(RpcReplyPort<HashSet<TopicId>>),
 }
 
@@ -223,11 +221,11 @@ where
                 let node_ids = node_infos.iter().map(|node_info| node_info.id()).collect();
 
                 // Check if we're already subscribed.
-                let stream = if let Some((sync_manager_actor, live_mode)) =
+                let stream = if let Some((sync_manager_actor, _)) =
                     state.sync_managers.topic_manager_map.get(&topic_id)
                 {
                     // Inform the gossip actor about the latest set of nodes for this topic id.
-                    if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
+                    if state.gossip_senders.contains_key(&topic_id) {
                         cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, node_ids))?;
                     }
 
