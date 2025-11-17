@@ -68,6 +68,7 @@ impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
 }
 
 #[derive(Debug, Error)]
+#[allow(unused)]
 pub enum SubscriptionInfoError {
     #[error("actor '{0}' is not available")]
     ActorNotAvailable(String),

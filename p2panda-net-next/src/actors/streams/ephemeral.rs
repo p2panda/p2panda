@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 pub const EPHEMERAL_STREAMS: &str = "net.streams.ephemeral";
 
 use p2panda_discovery::address_book::NodeInfo;
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast, registry};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
@@ -20,7 +20,6 @@ use tokio::sync::mpsc::Sender;
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
-use crate::actors::sync::SyncManager;
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::ephemeral::{EphemeralStream, EphemeralSubscription};
@@ -93,7 +92,7 @@ impl ThreadLocalActor for EphemeralStreams {
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {

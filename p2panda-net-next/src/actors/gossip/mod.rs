@@ -41,6 +41,7 @@ pub enum ToGossip {
     /// Return a handle to the iroh gossip actor.
     ///
     /// This is required when registering the gossip ALPN with the router.
+    #[allow(unused)]
     Handle(RpcReplyPort<IrohGossip>),
 
     /// Subscribe to the given topic, using the given peers as gossip bootstrap nodes.
@@ -83,6 +84,7 @@ pub enum ToGossip {
         delivered_from: PublicKey,
         delivery_scope: IrohDeliveryScope,
         topic_id: TopicId,
+        #[allow(unused)]
         session_id: ActorId,
     },
 
@@ -472,7 +474,6 @@ mod tests {
     use iroh::protocol::Router as IrohRouter;
     use iroh::{Endpoint as IrohEndpoint, RelayMode};
     use iroh_gossip::ALPN as GOSSIP_ALPN;
-    use p2panda_core::PrivateKey;
     use p2panda_core::PublicKey;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
     use ractor::{ActorRef, call};
@@ -484,8 +485,8 @@ mod tests {
     use crate::actors::gossip::session::ToGossipSession;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::network::FromNetwork;
-    use crate::test_utils::{test_args, test_args_from_seed};
-    use crate::utils::{from_private_key, to_public_key};
+    use crate::test_utils::test_args;
+    use crate::utils::from_private_key;
 
     use super::{Gossip, GossipState, ToGossip};
 

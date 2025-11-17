@@ -27,6 +27,7 @@ pub struct ArgsBuilder {
     discovery_config: Option<DiscoveryConfig>,
 }
 
+#[allow(unused)]
 impl ArgsBuilder {
     pub fn new(network_id: NetworkId) -> Self {
         Self {

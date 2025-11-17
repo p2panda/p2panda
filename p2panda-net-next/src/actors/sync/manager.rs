@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt};
@@ -21,18 +18,16 @@ use p2panda_sync::topic_handshake::{
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use p2panda_sync::{SessionTopicMap, SyncManagerEvent, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call};
-use rand_chacha::ChaCha20Rng;
+use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tokio::sync::{Mutex, broadcast};
 
 use crate::TopicId;
-use crate::actors::iroh::{connect, register_protocol};
+use crate::actors::ActorNamespace;
+use crate::actors::iroh::register_protocol;
 use crate::actors::sync::SYNC_PROTOCOL_ID;
-use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
+use crate::actors::sync::poller::SyncPoller;
 use crate::actors::sync::session::{SyncSession, SyncSessionMessage};
-use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::addrs::NodeId;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::utils::to_public_key;
@@ -72,9 +67,10 @@ where
     M: SyncManagerTrait<T>,
 {
     actor_namespace: ActorNamespace,
+    #[allow(unused)]
     topic_id: TopicId,
-    // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid locking
-    // access to the whole manager on every read/write.
+    // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid
+    // locking access to the whole manager on every read/write.
     manager: Arc<Mutex<M>>,
     session_topic_map: SessionTopicMap<T, SessionSink<M, T>>,
     node_session_map: HashMap<NodeId, HashSet<u64>>,
@@ -169,11 +165,11 @@ where
                 topic,
                 live_mode,
             } => {
-                let mut config = SyncSessionConfig {
+                let config = SyncSessionConfig {
                     live_mode,
                     topic: Some(topic.clone()),
                 };
-                let (session, id) = Self::new_session(state, node_id, topic.clone(), config).await;
+                let (session, _) = Self::new_session(state, node_id, topic.clone(), config).await;
 
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
@@ -198,11 +194,11 @@ where
                 // @TODO: once topic handshake has been removed from the managers' protocol
                 // implementation then we will also set the topic here. For now a redundant round
                 // of topic handshake occurs.
-                let mut config = SyncSessionConfig {
+                let config = SyncSessionConfig {
                     live_mode,
                     topic: None,
                 };
-                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, _) = Self::new_session(state, node_id, topic, config).await;
 
                 let (actor_ref, _) = SyncSession::<T, M::Protocol>::spawn_linked(
                     None,
@@ -233,7 +229,6 @@ where
                 // Get a handle onto any sync sessions running over the subscription topic and
                 // send a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
-
                 let session_ids = state.session_topic_map.sessions(&topic);
                 for id in session_ids {
                     let handle = state
@@ -245,10 +240,10 @@ where
                 }
             }
             ToSyncManager::Close { node_id, topic } => {
-                /// Close a sync session with a specific remote and topic.
+                // Close a sync session with a specific remote and topic.
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
                 if let Some(node_sessions) = node_sessions {
-                    let mut topic_sessions = state.session_topic_map.sessions(&topic);
+                    let topic_sessions = state.session_topic_map.sessions(&topic);
                     for id in topic_sessions.intersection(&node_sessions) {
                         let session_topic =
                             state.session_topic_map.topic(*id).expect("topic to exist");
@@ -271,21 +266,21 @@ where
 
     async fn handle_supervisor_evt(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
-        state: &mut Self::State,
+        _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(actor) => {
+            SupervisionEvent::ActorStarted(_actor) => {
                 // @TODO
             }
-            SupervisionEvent::ActorTerminated(actor, state, reason) => {
+            SupervisionEvent::ActorTerminated(_actor, _state, _reason) => {
                 // @TODO: drop related session handle on manager.
                 // @TODO: need the session id to remove the session from manager state mappings.
                 // @TODO: have the session id as the actor suffix and parse it out here.
                 // Self::drop_session(state, session_id);
             }
-            SupervisionEvent::ActorFailed(actor, error) => {
+            SupervisionEvent::ActorFailed(_actor, _error) => {
                 // @TODO: have the session id as the actor suffix and parse it out here.
                 // Self::drop_session(state, session_id);
             }
