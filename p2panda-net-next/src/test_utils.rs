@@ -26,7 +26,7 @@ pub fn test_args() -> (
     MemoryStore<ChaCha20Rng, TopicId, NodeId, NodeInfo>,
     NoSyncConfig,
 ) {
-    test_args_from_seed([1; 32])
+    test_args_from_seed(rand::random())
 }
 
 pub fn test_args_from_seed(
@@ -66,8 +66,8 @@ pub fn setup_logging() {
 
 #[test]
 fn deterministic_args() {
-    let (args_1, _, _) = test_args();
-    let (args_2, _, _) = test_args();
+    let (args_1, _, _) = test_args_from_seed([0; 32]);
+    let (args_2, _, _) = test_args_from_seed([0; 32]);
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
