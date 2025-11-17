@@ -96,7 +96,7 @@ pub struct NoSyncManager;
 #[derive(Clone, Debug, Default)]
 pub struct NoSyncConfig;
 
-impl<T> SyncManager<T> for NoSyncManager {
+impl SyncManager<TopicId> for NoSyncManager {
     type Protocol = NoProtocol;
     type Config = NoSyncConfig;
     type Error = SendError;
@@ -108,7 +108,7 @@ impl<T> SyncManager<T> for NoSyncManager {
     fn session(
         &mut self,
         session_id: u64,
-        config: &p2panda_sync::SyncSessionConfig<T>,
+        config: &p2panda_sync::SyncSessionConfig<TopicId>,
     ) -> Self::Protocol {
         NoProtocol
     }
@@ -124,7 +124,7 @@ impl<T> SyncManager<T> for NoSyncManager {
 
     async fn next_event(
         &mut self,
-    ) -> Result<Option<p2panda_sync::SyncManagerEvent<T, ()>>, Self::Error> {
+    ) -> Result<Option<p2panda_sync::SyncManagerEvent<TopicId, ()>>, Self::Error> {
         Ok(None)
     }
 }

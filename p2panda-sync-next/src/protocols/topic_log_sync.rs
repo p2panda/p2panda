@@ -364,6 +364,7 @@ impl<T, E> From<LogSyncEvent<E>> for TopicLogSyncEvent<T, E> {
 
 /// Protocol message types.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "type", content = "value")]
 #[allow(clippy::large_enum_variant)]
 pub enum TopicLogSyncMessage<T, L, E> {
     Handshake(TopicHandshakeMessage<T>),

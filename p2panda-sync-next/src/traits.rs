@@ -9,12 +9,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
+// @TODO: remove or clarify purpose and use when p2panda-net API is more stable.
+//
+/// Trait for satisfying requirements coming from the p2panda-net network api.
+pub trait NetworkRequirements: Clone + Debug + Send + Sync + 'static {}
+
+impl<T> NetworkRequirements for T where T: Clone + Debug + Send + Sync + 'static {}
+
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;
     type Error;
     type Event;
-    type Message;
+    type Message: Serialize + for<'a> Deserialize<'a>;
 
     fn run(
         self,
@@ -27,7 +34,7 @@ pub trait Protocol {
 #[allow(clippy::type_complexity)]
 pub trait SyncManager<T> {
     type Protocol: Protocol;
-    type Config;
+    type Config: NetworkRequirements;
     type Error: Debug;
 
     fn from_config(config: Self::Config) -> Self;

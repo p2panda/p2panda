@@ -20,7 +20,7 @@ use crate::topic_handshake::TopicHandshakeEvent;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
-use crate::traits::{Protocol, SyncManager, TopicQuery};
+use crate::traits::{NetworkRequirements, Protocol, SyncManager, TopicQuery};
 use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<T, M> =
@@ -68,10 +68,10 @@ where
 impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
     T: TopicQuery + 'static,
-    M: TopicLogMap<T, L> + Clone + Debug + 'static,
+    M: TopicLogMap<T, L> + NetworkRequirements,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'static,
     E: Extensions + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + NetworkRequirements,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
     type Config = TopicSyncManagerConfig<S, M>;
@@ -231,6 +231,7 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct TopicSyncManagerConfig<S, M> {
     pub(crate) store: S,
     pub(crate) topic_map: M,

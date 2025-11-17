@@ -40,7 +40,7 @@ struct TestNode {
 
 impl TestNode {
     pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
-        let (args, store) = test_args_from_seed(seed);
+        let (args, store, sync_config) = test_args_from_seed(seed);
 
         // Pre-populate the address book with known addresses.
         for info in node_infos {

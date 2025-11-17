@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore;
-use p2panda_sync::traits::SyncManager;
+use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use rand::SeedableRng;
@@ -35,29 +35,29 @@ use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor
 use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
-use crate::{NodeId, NodeInfo};
+use crate::{NodeId, NodeInfo, TopicId};
 
 /// Supervisor actor name.
 pub const SUPERVISOR: &str = "net.supervisor";
 
-pub struct SupervisorState<S, T, C> {
+pub struct SupervisorState<S, C> {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     store: S,
     sync_config: C,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
-    address_book_actor: ActorRef<ToAddressBook<T>>,
+    address_book_actor: ActorRef<ToAddressBook<TopicId>>,
     address_book_actor_failures: u16,
     endpoint_supervisor: ActorRef<()>,
     endpoint_supervisor_failures: u16,
 }
 
-pub struct Supervisor<S, T, M> {
-    _marker: PhantomData<(S, T, M)>,
+pub struct Supervisor<S, M> {
+    _marker: PhantomData<(S, M)>,
 }
 
-impl<S, T, M> Default for Supervisor<S, T, M> {
+impl<S, M> Default for Supervisor<S, M> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -65,15 +65,17 @@ impl<S, T, M> Default for Supervisor<S, T, M> {
     }
 }
 
-impl<S, T, M> ThreadLocalActor for Supervisor<S, T, M>
+impl<S, M> ThreadLocalActor for Supervisor<S, M>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + 'static,
+    S: AddressBookStore<TopicId, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Serialize + Deserialize<'a> + 'static,
-    M: SyncManager<T> + Send + 'static,
-    M::Config: Clone + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Send + 'static,
+    M::Error: StdError + Send + Sync + 'static,
+    M::Protocol: Send + Sync + 'static,
+    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
+    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
 {
-    type State = SupervisorState<S, T, M::Config>;
+    type State = SupervisorState<S, M::Config>;
 
     type Msg = ();
 
@@ -106,9 +108,9 @@ where
         .await?;
 
         // Spawn the endpoint supervisor.
-        let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
+        let (endpoint_supervisor, _) = EndpointSupervisor::<S, M>::spawn_linked(
             Some(with_namespace(ENDPOINT_SUPERVISOR, &actor_namespace)),
-            (args.clone(), store.clone()),
+            (args.clone(), store.clone(), sync_config.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -196,9 +198,13 @@ where
                         );
 
                         // Respawn the endpoint supervisor.
-                        let (endpoint_supervisor, _) = EndpointSupervisor::spawn_linked(
+                        let (endpoint_supervisor, _) = EndpointSupervisor::<S, M>::spawn_linked(
                             Some(with_namespace(ENDPOINT_SUPERVISOR, &state.actor_namespace)),
-                            (state.args.clone(), state.store.clone()),
+                            (
+                                state.args.clone(),
+                                state.store.clone(),
+                                state.sync_config.clone(),
+                            ),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
@@ -247,7 +253,7 @@ mod tests {
         let (args, store, sync_config) = test_args();
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, _, NoSyncManager>::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, NoSyncManager>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
             (args.clone(), store, sync_config),
             args.root_thread_pool,

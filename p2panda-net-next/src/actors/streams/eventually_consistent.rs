@@ -132,11 +132,9 @@ impl<M> Default for EventuallyConsistentStreams<M> {
 impl<M> ThreadLocalActor for EventuallyConsistentStreams<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
-    M::Config: Clone + Send + Sync + 'static,
     M::Error: StdError + Send + Sync + 'static,
     M::Protocol: Send + Sync + 'static,
     <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    for<'a> <M::Protocol as Protocol>::Message: Serialize + Deserialize<'a>,
     <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
 {
     type State = EventuallyConsistentStreamsState<M::Config, <M::Protocol as Protocol>::Event>;
