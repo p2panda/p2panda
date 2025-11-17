@@ -39,7 +39,11 @@ pub trait SyncManager<T> {
     fn from_config(config: Self::Config) -> Self;
 
     /// Instantiate a new sync session.
-    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> impl Future<Output = Self::Protocol>;
+    fn session(
+        &mut self,
+        session_id: u64,
+        config: &SyncSessionConfig<T>,
+    ) -> impl Future<Output = Self::Protocol>;
 
     /// Retrieve a send handle to an already existing sync session.
     fn session_handle(
