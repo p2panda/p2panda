@@ -11,15 +11,17 @@ use std::collections::HashMap;
 /// Ephemeral streams actor name.
 pub const EPHEMERAL_STREAMS: &str = "net.streams.ephemeral";
 
+use p2panda_discovery::address_book::NodeInfo;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast, registry};
 use tokio::sync::broadcast::Sender as BroadcastSender;
 use tokio::sync::mpsc::Sender;
 
 use crate::TopicId;
-use crate::actors::ActorNamespace;
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
 use crate::actors::sync::SyncManager;
+use crate::actors::{ActorNamespace, with_namespace};
 use crate::network::{FromNetwork, ToNetwork};
 use crate::streams::ephemeral::{EphemeralStream, EphemeralSubscription};
 
@@ -45,6 +47,21 @@ pub struct EphemeralStreamsState {
     actor_namespace: ActorNamespace,
     gossip_actor: ActorRef<ToGossip>,
     gossip_senders: GossipSenders,
+}
+
+impl EphemeralStreamsState {
+    /// Internal helper to get a reference to the address book actor.
+    fn address_book_actor(&self) -> Option<ActorRef<ToAddressBook<()>>> {
+        if let Some(address_book_actor) =
+            registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
+        {
+            let actor: ActorRef<ToAddressBook<()>> = address_book_actor.into();
+
+            Some(actor)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Default)]
@@ -81,13 +98,25 @@ impl ThreadLocalActor for EphemeralStreams {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToEphemeralStreams::Create(topic_id, reply) => {
-                // TODO: Ask address book for all peers interested in this topic id.
-                let peers = Vec::new();
+                let address_book_actor = state
+                    .address_book_actor()
+                    .expect("address book actor should be available");
+
+                // Retrieve all known nodes for the given topic id.
+                let node_infos = call!(
+                    address_book_actor,
+                    ToAddressBook::NodeInfosByTopicIds,
+                    vec![topic_id]
+                )
+                .expect("address book actor should handle call");
+
+                // We are only interested in the id for each node.
+                let node_ids = node_infos.iter().map(|node_info| node_info.id()).collect();
 
                 // Check if we're already subscribed.
                 let stream = if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
-                    // Inform the gossip actor about the latest set of peers for this topic id.
-                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
+                    // Inform the gossip actor about the latest set of nodes for this topic id.
+                    cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, node_ids))?;
 
                     EphemeralStream::new(
                         topic_id,
@@ -97,7 +126,7 @@ impl ThreadLocalActor for EphemeralStreams {
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
-                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, node_ids)?;
 
                     // Store the gossip senders.
                     //

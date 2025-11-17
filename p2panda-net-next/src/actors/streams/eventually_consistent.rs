@@ -15,6 +15,7 @@ use std::marker::PhantomData;
 pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
 
 use p2panda_core::PublicKey;
+use p2panda_discovery::address_book::NodeInfo;
 use p2panda_sync::SyncManagerEvent;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::concurrency::broadcast;
@@ -28,6 +29,7 @@ use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
 use crate::TopicId;
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
 use crate::actors::streams::ephemeral::{self, EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::sync::{SYNC_MANAGER, SyncManager, ToSyncManager};
@@ -115,6 +117,19 @@ impl<M, E> EventuallyConsistentStreamsState<M, E> {
 
         Ok(())
     }
+
+    /// Internal helper to get a reference to the address book actor.
+    fn address_book_actor(&self) -> Option<ActorRef<ToAddressBook<()>>> {
+        if let Some(address_book_actor) =
+            registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
+        {
+            let actor: ActorRef<ToAddressBook<()>> = address_book_actor.into();
+
+            Some(actor)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct EventuallyConsistentStreams<M> {
@@ -189,16 +204,28 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToEventuallyConsistentStreams::Create(topic_id, live_mode, reply) => {
-                // TODO: Ask address book for all peers interested in this topic id.
-                let peers = Vec::new();
+                let address_book_actor = state
+                    .address_book_actor()
+                    .expect("address book actor should be available");
+
+                // Retrieve all known nodes for the given topic id.
+                let node_infos = call!(
+                    address_book_actor,
+                    ToAddressBook::NodeInfosByTopicIds,
+                    vec![topic_id]
+                )
+                .expect("address book actor should handle call");
+
+                // We are only interested in the id for each node.
+                let node_ids = node_infos.iter().map(|node_info| node_info.id()).collect();
 
                 // Check if we're already subscribed.
                 let stream = if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic_id)
                 {
-                    // Inform the gossip actor about the latest set of peers for this topic id.
+                    // Inform the gossip actor about the latest set of nodes for this topic id.
                     if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic_id) {
-                        cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, peers))?;
+                        cast!(state.gossip_actor, ToGossip::JoinPeers(topic_id, node_ids))?;
                     }
 
                     EventuallyConsistentStream::new(
@@ -209,7 +236,7 @@ where
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
-                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, peers)?;
+                        call!(state.gossip_actor, ToGossip::Subscribe, topic_id, node_ids)?;
 
                     // Store the gossip senders.
                     //
