@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use futures::channel::mpsc;
 use futures::future::ready;
@@ -13,6 +15,7 @@ use p2panda_core::{Body, Extensions, Header};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::log_sync::LogSyncEvent;
 use crate::session_topic_map::SessionTopicMap;
@@ -20,11 +23,11 @@ use crate::topic_handshake::TopicHandshakeEvent;
 use crate::topic_log_sync::{
     LiveModeMessage, Role, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
-use crate::traits::{NetworkRequirements, Protocol, SyncManager, TopicQuery};
+use crate::traits::{NetworkRequirements, Protocol, SyncManager};
 use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<T, M> =
-    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> SyncManagerEvent<T, M>>>;
+    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> SyncManagerEvent<T, M> + Send + 'static>>;
 
 /// Create and manage topic log sync sessions.
 ///
@@ -39,18 +42,19 @@ type SessionEventReceiver<T, M> =
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
 /// any topic subscriptions in order to understand the correct mappings.  
+#[derive(Clone, Debug)]
 pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) topic_map: M,
     pub(crate) store: S,
     pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
-    pub(crate) events_rx_set: SelectAll<SessionEventReceiver<T, TopicLogSyncEvent<T, E>>>,
+    pub(crate) events_rx_set:
+        Arc<Mutex<SelectAll<SessionEventReceiver<T, TopicLogSyncEvent<T, E>>>>>,
     pub(crate) manager_output_queue: Vec<SyncManagerEvent<T, TopicLogSyncEvent<T, E>>>,
     _phantom: PhantomData<(T, L, E)>,
 }
 
 impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
 where
-    T: TopicQuery,
     E: Clone,
 {
     pub fn new(topic_map: M, store: S) -> Self {
@@ -58,7 +62,7 @@ where
             topic_map,
             store,
             session_topic_map: SessionTopicMap::default(),
-            events_rx_set: SelectAll::new(),
+            events_rx_set: Arc::new(Mutex::new(SelectAll::new())),
             manager_output_queue: Vec::default(),
             _phantom: PhantomData,
         }
@@ -67,7 +71,7 @@ where
 
 impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
-    T: TopicQuery + 'static,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + 'static,
     M: TopicLogMap<T, L> + NetworkRequirements,
     L: LogId + for<'de> Deserialize<'de> + Serialize + 'static,
     E: Extensions + 'static,
@@ -81,7 +85,7 @@ where
         Self::new(config.topic_map, config.store)
     }
 
-    fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
+    async fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(128);
         let role = match &config.topic {
             Some(topic) => {
@@ -96,12 +100,12 @@ where
         };
         let (event_tx, event_rx) = mpsc::channel(128);
 
-        self.events_rx_set.push(
-            event_rx.map(Box::new(move |event| SyncManagerEvent::FromSync {
-                session_id,
-                event,
-            })),
-        );
+        {
+            let mut events_rx_set = self.events_rx_set.lock().await;
+            events_rx_set.push(event_rx.map(Box::new(move |event| {
+                SyncManagerEvent::FromSync { session_id, event }
+            })));
+        }
 
         let live_rx = if config.live_mode {
             Some(live_rx)
@@ -158,9 +162,12 @@ where
             return Ok(Some(manager_event));
         }
 
-        let event = self.events_rx_set.next().await;
-        let Some(manager_event) = event else {
-            return Ok(None);
+        let manager_event = {
+            let mut events_rx_set = self.events_rx_set.lock().await;
+            match events_rx_set.next().await {
+                Some(event) => event,
+                None => return Ok(None),
+            }
         };
 
         let SyncManagerEvent::FromSync { session_id, event } = &manager_event else {
@@ -233,14 +240,14 @@ where
 
 #[derive(Clone, Debug)]
 pub struct TopicSyncManagerConfig<S, M> {
-    pub(crate) store: S,
-    pub(crate) topic_map: M,
+    pub store: S,
+    pub topic_map: M,
 }
 
 #[derive(Debug, Error)]
 pub enum TopicSyncManagerError<T, S, M, L, E>
 where
-    T: TopicQuery,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E> + Clone,
     M: TopicLogMap<T, L>,
 {
@@ -270,7 +277,10 @@ mod tests {
     use crate::TopicSyncManager;
     use crate::log_sync::{LogSyncEvent, StatusEvent};
     use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
-    use crate::test_utils::{LogIdExtension, Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager, run_protocol};
+    use crate::test_utils::{
+        LogIdExtension, Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent,
+        TestTopicSyncManager, run_protocol,
+    };
     use crate::topic_handshake::TopicHandshakeEvent;
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
@@ -315,10 +325,10 @@ mod tests {
             topic: Some(topic),
             live_mode: true,
         };
-        let peer_a_session = peer_a_manager.session(SESSION_ID, &config);
+        let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
         // Instantiate sync session for Peer B.
-        let peer_b_session = peer_b_manager.session(SESSION_ID, &SyncSessionConfig::default());
+        let peer_b_session = peer_b_manager.session(SESSION_ID, &SyncSessionConfig::default()).await;
 
         // Get a handle to Peer A sync session.
         let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).unwrap();
@@ -527,16 +537,16 @@ mod tests {
             topic: Some(topic.clone()),
             live_mode: true,
         };
-        let session_ab = manager_a.session(SESSION_AB, &config);
-        let session_b = manager_b.session(SESSION_BA, &SyncSessionConfig::default());
+        let session_ab = manager_a.session(SESSION_AB, &config).await;
+        let session_b = manager_b.session(SESSION_BA, &SyncSessionConfig::default()).await;
 
         // Session A -> C (A initiates)
         let config = SyncSessionConfig {
             topic: Some(topic.clone()),
             live_mode: true,
         };
-        let session_ac = manager_a.session(SESSION_AC, &config);
-        let session_c = manager_c.session(SESSION_CA, &SyncSessionConfig::default());
+        let session_ac = manager_a.session(SESSION_AC, &config).await;
+        let session_c = manager_c.session(SESSION_CA, &SyncSessionConfig::default()).await;
 
         // Run both protocols concurrently
         tokio::spawn(async move {

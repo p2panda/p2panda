@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 use std::future::ready;
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use futures::channel::mpsc;
@@ -17,8 +18,9 @@ use crate::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeError, TopicHandshakeEvent, TopicHandshakeInitiator,
     TopicHandshakeMessage,
 };
-use crate::traits::{Protocol, TopicQuery};
+use crate::traits::Protocol;
 
+#[derive(Debug)]
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
     pub topic_map: M,
@@ -38,10 +40,7 @@ pub struct TopicLogSync<T, S, M, L, E> {
 /// order to avoid flooding the network with redundant data.
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
-    // @TODO: We can require TopicId here as well so that the receiving peer can check that the
-    // topic id is one that they are subscribed to. We don't yet have access to the required
-    // subscriptions though.
-    T: TopicQuery,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E> + Clone,
     M: TopicLogMap<T, L> + Clone,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
@@ -88,7 +87,7 @@ where
 
 impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
-    T: TopicQuery,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E> + Clone,
     M: TopicLogMap<T, L> + Clone,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
@@ -284,7 +283,7 @@ pub enum TopicSyncChannelError {
 #[derive(Debug, Error)]
 pub enum TopicLogSyncError<T, S, M, L, E>
 where
-    T: TopicQuery,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E>,
     M: TopicLogMap<T, L>,
 {
@@ -410,10 +409,7 @@ pub enum TopicLogSyncMessage<T, L, E> {
 /// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
 /// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
 /// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
-pub trait TopicLogMap<T, L>
-where
-    T: TopicQuery,
-{
+pub trait TopicLogMap<T, L> {
     type Error: Debug;
 
     fn get(&self, topic: &T) -> impl Future<Output = Result<Logs<L>, Self::Error>>;
