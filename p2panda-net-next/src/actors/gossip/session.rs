@@ -18,7 +18,9 @@ use tokio::sync::oneshot::Receiver as OneshotReceiver;
 use tracing::{debug, warn};
 
 use crate::TopicId;
+use crate::actors::ActorNamespace;
 use crate::actors::gossip::ToGossip;
+use crate::actors::gossip::healer::{GossipHealer, ToGossipHealer};
 use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
@@ -37,7 +39,9 @@ pub enum ToGossipSession {
 }
 
 pub struct GossipSessionState {
+    actor_namespace: ActorNamespace,
     topic_id: TopicId,
+    gossip_healer_actor: ActorRef<ToGossipHealer>,
     gossip_joiner_actor: ActorRef<ToGossipJoiner>,
     gossip_sender_actor: ActorRef<ToGossipSender>,
     gossip_receiver_actor: ActorRef<ToGossipReceiver>,
@@ -53,6 +57,7 @@ impl ThreadLocalActor for GossipSession {
     type Msg = ToGossipSession;
 
     type Arguments = (
+        ActorNamespace,
         TopicId,
         IrohGossipTopic,
         Receiver<Vec<u8>>,
@@ -67,6 +72,7 @@ impl ThreadLocalActor for GossipSession {
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (
+            actor_namespace,
             topic_id,
             subscription,
             receiver_from_user,
@@ -111,8 +117,22 @@ impl ThreadLocalActor for GossipSession {
         )
         .await?;
 
+        let (gossip_healer_actor, _) = GossipHealer::spawn_linked(
+            None,
+            (
+                actor_namespace.clone(),
+                topic_id.clone(),
+                myself.clone().into(),
+            ),
+            myself.clone().into(),
+            gossip_thread_pool.clone(),
+        )
+        .await?;
+
         let state = GossipSessionState {
+            actor_namespace,
             topic_id,
+            gossip_healer_actor,
             gossip_joiner_actor,
             gossip_sender_actor,
             gossip_receiver_actor,
