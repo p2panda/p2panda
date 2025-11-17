@@ -16,7 +16,7 @@ use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
 use crate::args::ApplicationArguments;
-use crate::test_utils::{setup_logging, test_args_from_seed};
+use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
 
 use super::DiscoveryActorName;
 
@@ -40,7 +40,7 @@ struct TestNode {
 
 impl TestNode {
     pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
-        let (args, store, sync_config) = test_args_from_seed(seed);
+        let (args, store, _) = test_args();
 
         // Pre-populate the address book with known addresses.
         for info in node_infos {

@@ -73,7 +73,7 @@ impl ThreadLocalActor for GossipHealer {
                 if let Some(address_book_actor) =
                     registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
                 {
-                    let actor: ActorRef<ToAddressBook<()>> = address_book_actor.into();
+                    let actor: ActorRef<ToAddressBook<TopicId>> = address_book_actor.into();
 
                     let receiver = call!(actor, ToAddressBook::SubscribeTopicChanges, topic_id)
                         .expect("address book actor should handle call");
