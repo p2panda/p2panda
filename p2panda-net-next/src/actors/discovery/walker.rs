@@ -23,20 +23,20 @@ pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
 /// Delay next step when no result was previously given.
 const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 
-pub enum ToDiscoveryWalker<T> {
-    NextNode(Option<DiscoveryResult<T, NodeId, NodeInfo>>),
+pub enum ToDiscoveryWalker {
+    NextNode(Option<DiscoveryResult<NodeId, NodeInfo>>),
 }
 
-pub struct DiscoveryWalkerState<S, T> {
-    manager_ref: ActorRef<ToDiscoveryManager<T>>,
-    walker: RandomWalker<ChaCha20Rng, S, T, NodeId, NodeInfo>,
+pub struct DiscoveryWalkerState<S> {
+    manager_ref: ActorRef<ToDiscoveryManager>,
+    walker: RandomWalker<ChaCha20Rng, S, NodeId, NodeInfo>,
 }
 
-pub struct DiscoveryWalker<S, T> {
-    _marker: PhantomData<(S, T)>,
+pub struct DiscoveryWalker<S> {
+    _marker: PhantomData<S>,
 }
 
-impl<S, T> Default for DiscoveryWalker<S, T> {
+impl<S> Default for DiscoveryWalker<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -44,17 +44,16 @@ impl<S, T> Default for DiscoveryWalker<S, T> {
     }
 }
 
-impl<S, T> ThreadLocalActor for DiscoveryWalker<S, T>
+impl<S> ThreadLocalActor for DiscoveryWalker<S>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Send + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Clone + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    T: Send + 'static,
 {
-    type State = DiscoveryWalkerState<S, T>;
+    type State = DiscoveryWalkerState<S>;
 
-    type Msg = ToDiscoveryWalker<T>;
+    type Msg = ToDiscoveryWalker;
 
-    type Arguments = (ApplicationArguments, S, ActorRef<ToDiscoveryManager<T>>);
+    type Arguments = (ApplicationArguments, S, ActorRef<ToDiscoveryManager>);
 
     async fn pre_start(
         &self,

@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
-use p2panda_discovery::traits::DiscoveryProtocol as _;
+use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use serde::{Deserialize, Serialize};
 
-use crate::actors::ActorNamespace;
-use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, SubscriptionInfo, ToDiscoveryManager};
+use crate::TopicId;
+use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
+use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
@@ -24,11 +24,11 @@ pub const DISCOVERY_SESSION: &str = "net.discovery.session";
 pub type DiscoverySessionId = u64;
 
 #[derive(Debug)]
-pub struct DiscoverySession<S, T> {
-    _marker: PhantomData<(S, T)>,
+pub struct DiscoverySession<S> {
+    _marker: PhantomData<S>,
 }
 
-impl<S, T> Default for DiscoverySession<S, T> {
+impl<S> Default for DiscoverySession<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -36,18 +36,18 @@ impl<S, T> Default for DiscoverySession<S, T> {
     }
 }
 
-pub enum ToDiscoverySession<S, T> {
-    Initiate(DiscoverySessionArguments<S, T>),
+pub enum ToDiscoverySession<S> {
+    Initiate(DiscoverySessionArguments<S>),
 }
 
-pub type DiscoverySessionArguments<S, T> = (
-    ActorNamespace,
-    DiscoverySessionId,
-    NodeId,
-    S,
-    ActorRef<ToDiscoveryManager<T>>,
-    DiscoverySessionRole,
-);
+pub struct DiscoverySessionArguments<S> {
+    pub my_node_id: NodeId,
+    pub remote_node_id: NodeId,
+    pub session_id: DiscoverySessionId,
+    pub store: S,
+    pub manager_ref: ActorRef<ToDiscoveryManager>,
+    pub args: DiscoverySessionRole,
+}
 
 #[derive(Debug)]
 pub enum DiscoverySessionRole {
@@ -71,17 +71,16 @@ enum Role {
     Bob,
 }
 
-impl<S, T> ThreadLocalActor for DiscoverySession<S, T>
+impl<S> ThreadLocalActor for DiscoverySession<S>
 where
-    S: AddressBookStore<T, NodeId, NodeInfo> + Clone + Debug + Send + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    for<'a> T: Clone + Debug + StdHash + Eq + Send + Sync + Serialize + Deserialize<'a> + 'static,
 {
     type State = ();
 
-    type Msg = ToDiscoverySession<S, T>;
+    type Msg = ToDiscoverySession<S>;
 
-    type Arguments = DiscoverySessionArguments<S, T>;
+    type Arguments = DiscoverySessionArguments<S>;
 
     async fn pre_start(
         &self,
@@ -99,13 +98,21 @@ where
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         let ToDiscoverySession::Initiate(args) = message;
-        let (actor_namespace, session_id, remote_node_id, store, manager_ref, args) = args;
+        let DiscoverySessionArguments {
+            my_node_id,
+            remote_node_id,
+            session_id,
+            store,
+            manager_ref,
+            args,
+        } = args;
+        let actor_namespace = generate_actor_namespace(&my_node_id);
         let role = args.role();
 
         let (connection, tx, rx) = match args {
             DiscoverySessionRole::Connect => {
                 // Try to establish a direct connection with this node.
-                let connection = connect::<T>(
+                let connection = connect(
                     remote_node_id,
                     DISCOVERY_PROTOCOL_ID,
                     actor_namespace.clone(),
@@ -122,14 +129,14 @@ where
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(tx);
-        let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<T, NodeId, NodeInfo>, _>(rx);
+        let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<NodeId, NodeInfo>, _>(tx);
+        let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
         // @TODO: Have a timeout to cancel session if it's running overtime.
-        let protocol = NaiveDiscoveryProtocol::<S, _, T, NodeId, NodeInfo>::new(
-            store,
-            SubscriptionInfo::<T>::new(actor_namespace),
+        let protocol = NaiveDiscoveryProtocol::<S, _, NodeId, NodeInfo>::new(
+            store.clone(),
+            LocalTopicsProvider { store, my_node_id },
             remote_node_id,
         );
         let result = match role {
@@ -152,5 +159,28 @@ where
         myself.stop(None);
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct LocalTopicsProvider<S> {
+    store: S,
+    my_node_id: NodeId,
+}
+
+impl<S> traits::LocalTopics for LocalTopicsProvider<S>
+where
+    S: AddressBookStore<NodeId, NodeInfo>,
+{
+    type Error = <S as AddressBookStore<NodeId, NodeInfo>>::Error;
+
+    async fn sync_topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
+        self.store.node_sync_topics(&self.my_node_id).await
+    }
+
+    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        self.store
+            .node_ephemeral_messaging_topics(&self.my_node_id)
+            .await
     }
 }

@@ -11,11 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::DiscoveryResult;
 use crate::address_book::NodeInfo;
 use crate::address_book::memory::{MemoryStore, current_timestamp};
-use crate::traits::SubscriptionInfo;
+use crate::traits::LocalTopics;
 
 pub type TestId = usize;
-
-pub type TestTopic = String;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash)]
 pub struct TestInfo {
@@ -103,27 +101,27 @@ impl NodeInfo<TestId> for TestInfo {
     }
 }
 
-pub type TestStore<R> = MemoryStore<R, TestTopic, TestId, TestInfo>;
+pub type TestStore<R> = MemoryStore<R, TestId, TestInfo>;
 
 #[derive(Clone, Default, Debug)]
 pub struct TestSubscription {
-    pub topics: Vec<TestTopic>,
-    pub topic_ids: Vec<[u8; 32]>,
+    pub sync_topics: HashSet<[u8; 32]>,
+    pub ephemeral_messaging_topics: HashSet<[u8; 32]>,
 }
 
-impl SubscriptionInfo<TestTopic> for TestSubscription {
+impl LocalTopics for TestSubscription {
     type Error = Infallible;
 
-    async fn subscribed_topics(&self) -> Result<Vec<TestTopic>, Self::Error> {
-        Ok(self.topics.clone())
+    async fn sync_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        Ok(self.sync_topics.clone())
     }
 
-    async fn subscribed_topic_ids(&self) -> Result<Vec<[u8; 32]>, Self::Error> {
-        Ok(self.topic_ids.clone())
+    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        Ok(self.ephemeral_messaging_topics.clone())
     }
 }
 
-impl DiscoveryResult<TestTopic, TestId, TestInfo> {
+impl DiscoveryResult<TestId, TestInfo> {
     pub fn from_neighbors(remote_node_id: TestId, node_ids: &[TestId]) -> Self {
         Self {
             remote_node_id,
@@ -132,8 +130,8 @@ impl DiscoveryResult<TestTopic, TestId, TestInfo> {
                     .iter()
                     .map(|id| (*id, TestTransportInfo::new("test"))),
             ),
-            node_topics: HashSet::new(),
-            node_topic_ids: HashSet::new(),
+            sync_topics: HashSet::new(),
+            ephemeral_messaging_topics: HashSet::new(),
         }
     }
 }

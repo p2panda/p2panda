@@ -27,8 +27,8 @@ use crate::streams::StreamError;
 /// The stream can be used to publish messages or to request a subscription.
 pub struct EventuallyConsistentStream<E> {
     actor_namespace: ActorNamespace,
-    topic_id: TopicId,
-    sync_manager: ActorRef<ToSyncManager<TopicId>>,
+    topic: TopicId,
+    sync_manager: ActorRef<ToSyncManager>,
     _phantom: PhantomData<E>,
 }
 
@@ -39,12 +39,12 @@ where
     /// Returns a handle to an eventually consistent messaging stream.
     pub(crate) fn new(
         actor_namespace: ActorNamespace,
-        topic_id: TopicId,
-        sync_manager: ActorRef<ToSyncManager<TopicId>>,
+        topic: TopicId,
+        sync_manager: ActorRef<ToSyncManager>,
     ) -> Self {
         Self {
             actor_namespace,
-            topic_id,
+            topic,
             sync_manager,
             _phantom: PhantomData,
         }
@@ -56,11 +56,11 @@ where
         // send messages to the sync manager.
         self.sync_manager
             .send_message(ToSyncManager::Publish {
-                topic: self.topic_id,
+                topic: self.topic,
                 data: bytes.into(),
             })
             // @TODO: change this when we decide on error propagation strategy.
-            .map_err(|_| StreamError::Publish(self.topic_id))?;
+            .map_err(|_| StreamError::Publish(self.topic))?;
 
         Ok(())
     }
@@ -73,15 +73,11 @@ where
         // Get a reference to the eventually consistent streams actor.
         let actor = self
             .eventually_consistent_streams_actor()
-            .ok_or(StreamError::Subscribe(self.topic_id))?;
+            .ok_or(StreamError::Subscribe(self.topic))?;
 
         // Ask the eventually consistent streams actor for a subscription.
-        if let Some(stream) = call!(
-            actor,
-            ToEventuallyConsistentStreams::Subscribe,
-            self.topic_id
-        )
-        .map_err(|_| StreamError::Subscribe(self.topic_id))?
+        if let Some(stream) = call!(actor, ToEventuallyConsistentStreams::Subscribe, self.topic)
+            .map_err(|_| StreamError::Subscribe(self.topic))?
         {
             Ok(stream)
         } else {
@@ -89,9 +85,9 @@ where
         }
     }
 
-    /// Returns the topic ID of the stream.
-    pub fn topic_id(&self) -> TopicId {
-        self.topic_id
+    /// Returns the topic of the stream.
+    pub fn topic(&self) -> TopicId {
+        self.topic
     }
 
     /// Closes the eventually consistent messaging stream.
@@ -99,11 +95,11 @@ where
         // Get a reference to the ephemeral streams actor.
         let actor = self
             .eventually_consistent_streams_actor()
-            .ok_or(StreamError::Close(self.topic_id))?;
+            .ok_or(StreamError::Close(self.topic))?;
 
         actor
-            .cast(ToEventuallyConsistentStreams::Close(self.topic_id))
-            .map_err(|_| StreamError::Close(self.topic_id))?;
+            .cast(ToEventuallyConsistentStreams::Close(self.topic))
+            .map_err(|_| StreamError::Close(self.topic))?;
 
         Ok(())
     }
@@ -130,7 +126,7 @@ where
 ///
 /// The stream can be used to receive messages from the stream.
 pub struct EventuallyConsistentSubscription<E> {
-    topic_id: TopicId,
+    topic: TopicId,
     // Messages sent directly from the sync manager.
     from_sync_rx: BroadcastReceiver<SyncManagerEvent<TopicId, E>>,
 }
@@ -143,11 +139,11 @@ where
 {
     /// Returns a handle to an eventually consistent messaging stream subscriber.
     pub(crate) fn new(
-        topic_id: TopicId,
+        topic: TopicId,
         from_sync_rx: BroadcastReceiver<SyncManagerEvent<TopicId, E>>,
     ) -> Self {
         Self {
-            topic_id,
+            topic,
             from_sync_rx,
         }
     }
@@ -162,8 +158,8 @@ where
         self.from_sync_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
-    /// Returns the topic ID of the stream.
-    pub fn topic_id(&self) -> TopicId {
-        self.topic_id
+    /// Returns the topic of the stream.
+    pub fn topic(&self) -> TopicId {
+        self.topic
     }
 }

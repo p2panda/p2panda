@@ -27,7 +27,7 @@ use crate::streams::StreamError;
 ///
 /// The stream can be used to publish messages or to request a subscription.
 pub struct EphemeralStream {
-    topic_id: TopicId,
+    topic: TopicId,
     to_topic_tx: Sender<Vec<u8>>,
     actor_namespace: ActorNamespace,
 }
@@ -35,12 +35,12 @@ pub struct EphemeralStream {
 impl EphemeralStream {
     /// Returns a handle to an ephemeral messaging stream.
     pub(crate) fn new(
-        topic_id: TopicId,
+        topic: TopicId,
         to_topic_tx: Sender<Vec<u8>>,
         actor_namespace: ActorNamespace,
     ) -> Self {
         Self {
-            topic_id,
+            topic,
             to_topic_tx,
             actor_namespace,
         }
@@ -61,11 +61,11 @@ impl EphemeralStream {
         // Get a reference to the ephemeral streams actor.
         let actor = self
             .ephemeral_streams_actor()
-            .ok_or(StreamError::Subscribe(self.topic_id))?;
+            .ok_or(StreamError::Subscribe(self.topic))?;
 
         // Ask the ephemeral streams actor for a subscription.
-        if let Some(stream) = call!(actor, ToEphemeralStreams::Subscribe, self.topic_id)
-            .map_err(|_| StreamError::Subscribe(self.topic_id))?
+        if let Some(stream) = call!(actor, ToEphemeralStreams::Subscribe, self.topic)
+            .map_err(|_| StreamError::Subscribe(self.topic))?
         {
             Ok(stream)
         } else {
@@ -73,9 +73,9 @@ impl EphemeralStream {
         }
     }
 
-    /// Returns the topic ID of the stream.
-    pub fn topic_id(&self) -> TopicId {
-        self.topic_id
+    /// Returns the topic of the stream.
+    pub fn topic(&self) -> TopicId {
+        self.topic
     }
 
     /// Closes the ephemeral messaging stream.
@@ -83,11 +83,11 @@ impl EphemeralStream {
         // Get a reference to the ephemeral streams actor.
         let actor = self
             .ephemeral_streams_actor()
-            .ok_or(StreamError::Close(self.topic_id))?;
+            .ok_or(StreamError::Close(self.topic))?;
 
         actor
-            .cast(ToEphemeralStreams::Close(self.topic_id))
-            .map_err(|_| StreamError::Close(self.topic_id))?;
+            .cast(ToEphemeralStreams::Close(self.topic))
+            .map_err(|_| StreamError::Close(self.topic))?;
 
         Ok(())
     }
@@ -110,7 +110,7 @@ impl EphemeralStream {
 ///
 /// The stream can be used to receive messages from the stream.
 pub struct EphemeralSubscription {
-    topic_id: TopicId,
+    topic: TopicId,
     from_topic_rx: BroadcastReceiver<Vec<u8>>,
 }
 
@@ -118,9 +118,9 @@ pub struct EphemeralSubscription {
 
 impl EphemeralSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
-    pub(crate) fn new(topic_id: TopicId, from_topic_rx: BroadcastReceiver<Vec<u8>>) -> Self {
+    pub(crate) fn new(topic: TopicId, from_topic_rx: BroadcastReceiver<Vec<u8>>) -> Self {
         Self {
-            topic_id,
+            topic,
             from_topic_rx,
         }
     }
@@ -135,8 +135,8 @@ impl EphemeralSubscription {
         self.from_topic_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
-    /// Returns the topic ID of the stream.
-    pub fn topic_id(&self) -> TopicId {
-        self.topic_id
+    /// Returns the topic of the stream.
+    pub fn topic(&self) -> TopicId {
+        self.topic
     }
 }

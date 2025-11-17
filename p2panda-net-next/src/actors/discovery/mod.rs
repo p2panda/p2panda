@@ -6,76 +6,15 @@ mod session;
 mod tests;
 mod walker;
 
-use std::marker::PhantomData;
+use ractor::{ActorCell, ActorRef};
 
-use p2panda_discovery::traits;
-use ractor::{ActorCell, ActorRef, call, registry};
-use thiserror::Error;
-
-use crate::TopicId;
 use crate::actors::discovery::session::{DISCOVERY_SESSION, DiscoverySessionId};
 use crate::actors::discovery::walker::DISCOVERY_WALKER;
-use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::{ActorNamespace, with_namespace, without_namespace};
 
 pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 
 pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
-
-// @TODO: Move this to "stream actor" when it is ready.
-#[derive(Debug)]
-pub struct SubscriptionInfo<T> {
-    actor_namespace: ActorNamespace,
-    _marker: PhantomData<T>,
-}
-
-impl<T> SubscriptionInfo<T> {
-    pub fn new(actor_namespace: ActorNamespace) -> Self {
-        Self {
-            actor_namespace,
-            _marker: PhantomData,
-        }
-    }
-}
-
-// @TODO: This returns an empty array for now when the streams actor is not available. This is nice
-// for test setups where we don't have any stream actors available.
-//
-// Ideally we want to come up with a different approach though: Discovery should not need to know
-// about streams at all.
-impl<T> traits::SubscriptionInfo<T> for SubscriptionInfo<T> {
-    type Error = SubscriptionInfoError;
-
-    async fn subscribed_topics(&self) -> Result<Vec<T>, Self::Error> {
-        // @TODO: Call actor which can respond with the currently subscribed topics.
-        Ok(vec![])
-    }
-
-    async fn subscribed_topic_ids(&self) -> Result<Vec<TopicId>, Self::Error> {
-        if let Some(address_book_actor) =
-            registry::where_is(with_namespace(EPHEMERAL_STREAMS, &self.actor_namespace))
-        {
-            let actor_ref: ActorRef<ToEphemeralStreams> = address_book_actor.into();
-            let Ok(topic_ids) = call!(actor_ref, ToEphemeralStreams::ActiveTopics) else {
-                return Ok(vec![]);
-            };
-
-            Ok(Vec::from_iter(topic_ids.into_iter()))
-        } else {
-            Ok(vec![])
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-#[allow(unused)]
-pub enum SubscriptionInfoError {
-    #[error("actor '{0}' is not available")]
-    ActorNotAvailable(String),
-
-    #[error("actor '{0}' is not responding to call")]
-    ActorNotResponsive(String),
-}
 
 /// Helper to extract information about an actor given it's name (just a string).
 #[derive(Debug, PartialEq)]

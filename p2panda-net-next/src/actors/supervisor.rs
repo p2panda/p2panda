@@ -42,7 +42,7 @@ pub struct SupervisorState<S, C> {
     sync_config: C,
     events_actor: ActorRef<ToEvents>,
     events_actor_failures: u16,
-    address_book_actor: ActorRef<ToAddressBook<TopicId>>,
+    address_book_actor: ActorRef<ToAddressBook>,
     address_book_actor_failures: u16,
     endpoint_supervisor: ActorRef<()>,
     endpoint_supervisor_failures: u16,
@@ -62,7 +62,7 @@ impl<S, M> Default for Supervisor<S, M> {
 
 impl<S, M> ThreadLocalActor for Supervisor<S, M>
 where
-    S: AddressBookStore<TopicId, NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
+    S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
     M: SyncManager<TopicId> + Send + 'static,
     M::Error: StdError + Send + Sync + 'static,
