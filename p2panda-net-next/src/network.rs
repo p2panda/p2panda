@@ -178,7 +178,7 @@ where
     /// handles by calling `ephemeral_stream()` repeatedly.
     pub async fn ephemeral_stream(
         &self,
-        topic_id: &TopicId,
+        topic_id: TopicId,
     ) -> Result<EphemeralStream, NetworkError<T>> {
         // Get a reference to the ephemeral streams actor.
         if let Some(ephemeral_streams_actor) =
@@ -187,12 +187,12 @@ where
             let actor: ActorRef<ToEphemeralStreams> = ephemeral_streams_actor.into();
 
             // Ask the ephemeral streams actor for a stream.
-            let stream = call!(actor, ToEphemeralStreams::Create, *topic_id)
-                .map_err(|_| StreamError::Create(*topic_id))?;
+            let stream = call!(actor, ToEphemeralStreams::Create, topic_id)
+                .map_err(|_| StreamError::Create(topic_id))?;
 
             Ok(stream)
         } else {
-            Err(StreamError::Create(*topic_id))?
+            Err(StreamError::Create(topic_id))?
         }
     }
 
@@ -212,7 +212,7 @@ where
     /// handles by calling `eventually_consistent_stream()` repeatedly.
     pub async fn eventually_consistent_stream(
         &self,
-        topic_id: &TopicId,
+        topic_id: TopicId,
         live_mode: bool,
     ) -> Result<EventuallyConsistentStream<<M::Protocol as Protocol>::Event>, NetworkError<TopicId>>
     {
@@ -228,14 +228,14 @@ where
             let stream = call!(
                 actor,
                 ToEventuallyConsistentStreams::Create,
-                *topic_id,
+                topic_id,
                 live_mode
             )
-            .map_err(|_| StreamError::Create(*topic_id))?;
+            .map_err(|_| StreamError::Create(topic_id))?;
 
             Ok(stream)
         } else {
-            Err(StreamError::Create(*topic_id))?
+            Err(StreamError::Create(topic_id))?
         }
     }
 }
