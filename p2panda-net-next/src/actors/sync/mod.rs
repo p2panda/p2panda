@@ -4,6 +4,6 @@ mod manager;
 mod poller;
 mod session;
 
-pub use manager::{SYNC_MANAGER, SyncManager, ToSyncManager};
+pub use manager::{SyncManager, ToSyncManager};
 
 pub const SYNC_PROTOCOL_ID: &[u8] = b"p2panda/sync/v1";

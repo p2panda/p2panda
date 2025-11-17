@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Listen for messages from the user and forward them to the gossip sender.
-use std::cell::RefCell;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use p2panda_sync::SyncManagerEvent;
@@ -14,9 +12,7 @@ use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::Receiver;
 use tokio::sync::{Mutex, broadcast};
-use tracing::warn;
 
 use crate::actors::ActorNamespace;
 
@@ -66,7 +62,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, manager, sender) = args;
+        let (_, manager, sender) = args;
 
         // Invoke the handler to wait for the first manager event.
         let _ = myself.cast(ToSyncPoller::WaitForMessage);

@@ -290,7 +290,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     None => NodeInfo::new(state.args.public_key),
                 };
                 node_info.update_transports(transport_info)?;
-                call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
+                let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
             }
         }
 
