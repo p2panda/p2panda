@@ -197,7 +197,7 @@ where
         let stream_thread_pool = ThreadLocalActorSpawner::new();
 
         // Send message to inbox which triggers registering of connection handler.
-        myself.send_message(ToEventuallyConsistentStreams::RegisterProtocol)?;
+        let _ = myself.cast(ToEventuallyConsistentStreams::RegisterProtocol);
 
         Ok(EventuallyConsistentStreamsState {
             actor_namespace,
