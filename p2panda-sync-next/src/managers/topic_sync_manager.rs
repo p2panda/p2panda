@@ -23,10 +23,10 @@ use crate::topic_log_sync::{
     LiveModeMessage, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
 use crate::traits::{NetworkRequirements, Protocol, SyncManager};
-use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
+use crate::{FromSync, SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<M> =
-    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> SyncManagerEvent<M> + Send + 'static>>;
+    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> FromSync<M> + Send + 'static>>;
 
 /// Create and manage topic log sync sessions.
 ///
@@ -48,7 +48,7 @@ pub struct TopicSyncManager<T, S, M, L, E> {
     pub(crate) store: S,
     pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
     pub(crate) events_rx_set: Arc<Mutex<SelectAll<SessionEventReceiver<TopicLogSyncEvent<E>>>>>,
-    pub(crate) manager_output_queue: Vec<SyncManagerEvent<TopicLogSyncEvent<E>>>,
+    pub(crate) manager_output_queue: Vec<FromSync<TopicLogSyncEvent<E>>>,
     _phantom: PhantomData<L>,
 }
 
@@ -92,12 +92,7 @@ where
 
         {
             let mut events_rx_set = self.events_rx_set.lock().await;
-            events_rx_set.push(
-                event_rx.map(Box::new(move |event| SyncManagerEvent::FromSync {
-                    session_id,
-                    event,
-                })),
-            );
+            events_rx_set.push(event_rx.map(Box::new(move |event| FromSync { session_id, event })));
         }
 
         let live_rx = if config.live_mode {
@@ -149,7 +144,7 @@ where
 
     async fn next_event(
         &mut self,
-    ) -> Result<Option<SyncManagerEvent<<Self::Protocol as Protocol>::Event>>, Self::Error> {
+    ) -> Result<Option<FromSync<<Self::Protocol as Protocol>::Event>>, Self::Error> {
         // If the manager has output events queued then these are prioritised.
         if let Some(manager_event) = self.manager_output_queue.pop() {
             return Ok(Some(manager_event));
@@ -163,12 +158,8 @@ where
             }
         };
 
-        let SyncManagerEvent::FromSync { session_id, event } = &manager_event else {
-            // NOTE: events from sync sessions are mapped to FromSync events in the manager so we
-            // can always expect only this event variant.
-            panic!("only sync events are emitted from session channels");
-        };
-        let session_id = *session_id;
+        let session_id = manager_event.session_id();
+        let event = manager_event.event();
 
         // If this is a sync or live-mode event containing an operation then get the header and
         // body ready for forwarding to relevant sessions.
@@ -267,7 +258,7 @@ mod tests {
     };
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
-    use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
+    use crate::{FromSync, SyncSessionConfig, ToSync};
 
     #[test]
     fn from_config() {
@@ -311,9 +302,7 @@ mod tests {
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
         // Instantiate sync session for Peer B.
-        let peer_b_session = peer_b_manager
-            .session(SESSION_ID, &config)
-            .await;
+        let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
 
         // Get a handle to Peer A sync session.
         let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).unwrap();
@@ -338,7 +327,7 @@ mod tests {
             match index {
                 0 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Started { .. }
                         )),
@@ -347,7 +336,7 @@ mod tests {
                 ),
                 1 | 2 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Progress { .. }
                         )),
@@ -356,14 +345,14 @@ mod tests {
                 ),
                 3 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
                         ..
                     }
                 ),
                 4 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Completed { .. }
                         )),
@@ -372,7 +361,7 @@ mod tests {
                 ),
                 5 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         event: TopicLogSyncEvent::Close { .. },
                         ..
                     }
@@ -391,7 +380,7 @@ mod tests {
             match index {
                 0 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Started { .. }
@@ -400,7 +389,7 @@ mod tests {
                 ),
                 1 | 2 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Progress { .. }
@@ -409,14 +398,14 @@ mod tests {
                 ),
                 3 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_))
                     }
                 ),
                 4 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Completed { .. }
@@ -425,14 +414,14 @@ mod tests {
                 ),
                 5 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Live { .. }
                     }
                 ),
                 6 => assert_matches!(
                     event,
-                    SyncManagerEvent::FromSync {
+                    FromSync {
                         session_id: 0,
                         event: TopicLogSyncEvent::Close { .. }
                     }
@@ -486,9 +475,7 @@ mod tests {
             live_mode: true,
         };
         let session_ab = manager_a.session(SESSION_AB, &config).await;
-        let session_b = manager_b
-            .session(SESSION_BA, &config)
-            .await;
+        let session_b = manager_b.session(SESSION_BA, &config).await;
 
         // Session A -> C (A initiates)
         let config = SyncSessionConfig {
@@ -496,9 +483,7 @@ mod tests {
             live_mode: true,
         };
         let session_ac = manager_a.session(SESSION_AC, &config).await;
-        let session_c = manager_c
-            .session(SESSION_CA, &config)
-            .await;
+        let session_c = manager_c.session(SESSION_CA, &config).await;
 
         // Run both protocols concurrently
         tokio::spawn(async move {
@@ -537,21 +522,17 @@ mod tests {
         let mut operations_a = vec![];
         let mut operations_b = vec![];
         let mut operations_c = vec![];
-        let push_operation =
-            |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
-             event: SyncManagerEvent<TestTopicSyncEvent>| {
-                let SyncManagerEvent::FromSync { event, .. } = event else {
-                    return;
-                };
+        let push_operation = |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
+                              event: FromSync<TestTopicSyncEvent>| {
 
-                if let TestTopicSyncEvent::Live { header, body } = &event {
-                    operations.push((*header.clone(), body.clone()));
-                }
+            if let TestTopicSyncEvent::Live { header, body } = event.event() {
+                operations.push((*header.clone(), body.clone()));
+            }
 
-                if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = &event {
-                    operations.push((operation.header.clone(), operation.body.clone()));
-                }
-            };
+            if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = event.event() {
+                operations.push((operation.header.clone(), operation.body.clone()));
+            }
+        };
 
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
             loop {

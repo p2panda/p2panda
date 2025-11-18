@@ -29,15 +29,17 @@ pub enum ToSync {
 
 /// Events which are emitted from a manager.
 #[derive(Clone, Debug)]
-pub enum SyncManagerEvent<E> {
-    /// Generic events emitted from a sync protocol implementation.
-    FromSync { session_id: u64, event: E },
+pub struct FromSync<E> {
+    session_id: u64,
+    event: E,
 }
 
-impl<E> SyncManagerEvent<E> {
+impl<E> FromSync<E> {
     pub fn session_id(&self) -> u64 {
-        match self {
-            SyncManagerEvent::FromSync { session_id, .. } => *session_id,
-        }
+        self.session_id
+    }
+
+    pub fn event(&self) -> &E {
+        &self.event
     }
 }
