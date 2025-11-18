@@ -161,7 +161,7 @@ where
         let config = IrohGossipConfig::default();
 
         let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
-        let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &args.network_id);
+        let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, &args.network_id);
         let gossip = IrohGossip::builder()
             .alpn(mixed_alpn)
             .max_message_size(config.max_message_size)
