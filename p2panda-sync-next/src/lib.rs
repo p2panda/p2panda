@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::PublicKey;
+
 pub mod dedup;
 pub mod managers;
 pub mod protocols;
@@ -16,17 +18,9 @@ pub use session_topic_map::SessionTopicMap;
 /// Configuration object for instantiated sync sessions.
 #[derive(Clone, Debug)]
 pub struct SyncSessionConfig<T> {
-    pub topic: Option<T>,
+    pub topic: T,
+    pub remote: PublicKey,
     pub live_mode: bool,
-}
-
-impl<T> Default for SyncSessionConfig<T> {
-    fn default() -> Self {
-        Self {
-            topic: Default::default(),
-            live_mode: true,
-        }
-    }
 }
 
 /// Message sent to running sync sessions.
@@ -38,23 +32,22 @@ pub enum ToSync {
 
 /// Events which are emitted from a manager.
 #[derive(Clone, Debug)]
-pub enum SyncManagerEvent<T, E> {
-    /// Emitted once both parties in the sync protocol have agreed on the topic for a session.
-    ///
-    /// Normally the initiator will suggest a topic, if the remote rejects this for any reason,
-    /// this event will not be emitted. This event is emitted on both the initiator and receiver
-    /// sides.
-    TopicAgreed { session_id: u64, topic: T },
-
-    /// Generic events emitted from a sync protocol implementation.
-    FromSync { session_id: u64, event: E },
+pub struct FromSync<E> {
+    session_id: u64,
+    remote: PublicKey,
+    event: E,
 }
 
-impl<T, E> SyncManagerEvent<T, E> {
+impl<E> FromSync<E> {
     pub fn session_id(&self) -> u64 {
-        match self {
-            SyncManagerEvent::TopicAgreed { session_id, .. } => *session_id,
-            SyncManagerEvent::FromSync { session_id, .. } => *session_id,
-        }
+        self.session_id
+    }
+
+    pub fn event(&self) -> &E {
+        &self.event
+    }
+
+    pub fn remote(&self) -> &PublicKey {
+        &self.remote
     }
 }
