@@ -27,16 +27,22 @@ use tracing::{debug, warn};
 use crate::TopicId;
 use crate::actors::ActorNamespace;
 use crate::actors::gossip::session::{GossipSession, ToGossipSession};
+use crate::actors::iroh::register_protocol;
 use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
 };
 use crate::actors::{generate_actor_namespace, with_namespace};
+use crate::args::ApplicationArguments;
+use crate::protocols::hash_protocol_id_with_network_id;
 use crate::utils::{from_public_key, to_public_key};
 
 /// Gossip actor name.
 pub const GOSSIP: &str = "net.gossip";
 
 pub enum ToGossip {
+    /// Accept incoming "gossip protocol" connection requests.
+    RegisterProtocol,
+
     /// Return a handle to the iroh gossip actor.
     ///
     /// This is required when registering the gossip ALPN with the router.
@@ -142,18 +148,20 @@ where
 {
     type State = GossipState;
     type Msg = ToGossip;
-    type Arguments = IrohEndpoint;
+    type Arguments = (ApplicationArguments, IrohEndpoint);
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
-        endpoint: Self::Arguments,
+        myself: ActorRef<Self::Msg>,
+        args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let (args, endpoint) = args;
         let config = IrohGossipConfig::default();
 
         let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
-
+        let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &args.network_id);
         let gossip = IrohGossip::builder()
+            .alpn(mixed_alpn)
             .max_message_size(config.max_message_size)
             .membership_config(config.membership)
             .broadcast_config(config.broadcast)
@@ -165,6 +173,9 @@ where
 
         // Gossip "worker" actors are all spawned in a dedicated thread.
         let gossip_thread_pool = ThreadLocalActorSpawner::new();
+
+        // Invoke the handler to register the gossip protocol.
+        let _ = myself.cast(ToGossip::RegisterProtocol);
 
         Ok(GossipState {
             gossip,
@@ -195,6 +206,16 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            ToGossip::RegisterProtocol => {
+                // Accept incoming "gossip protocol" connection requests.
+                println!("register gossip handler");
+                register_protocol(
+                    iroh_gossip::ALPN,
+                    state.gossip.clone(),
+                    state.actor_namespace.clone(),
+                )?;
+                Ok(())
+            }
             ToGossip::Handle(reply) => {
                 let gossip = state.gossip.clone();
                 let _ = reply.send(gossip);
@@ -599,15 +620,15 @@ mod tests {
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (ant_args, ant_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (bat_args, bat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (cat_args, cat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -616,6 +637,8 @@ mod tests {
         let bat_gossip = call!(bat_gossip_actor, ToGossip::Handle).unwrap();
         let cat_gossip = call!(bat_gossip_actor, ToGossip::Handle).unwrap();
 
+        // @TODO: should this ALPN be mixed with network id? 
+        
         // Build and spawn routers.
         let ant_router = IrohRouter::builder(ant_endpoint.clone())
             .accept(GOSSIP_ALPN, ant_gossip)
@@ -732,11 +755,11 @@ mod tests {
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (ant_args, ant_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (bat_args, bat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -891,15 +914,15 @@ mod tests {
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (ant_args, ant_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (bat_args, bat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (cat_args, cat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
 
@@ -1089,15 +1112,15 @@ mod tests {
 
         // Spawn gossip actors.
         let (ant_gossip_actor, ant_gossip_actor_handle) =
-            TestGossip::spawn(None, ant_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (ant_args, ant_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (bat_gossip_actor, bat_gossip_actor_handle) =
-            TestGossip::spawn(None, bat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (bat_args, bat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
         let (cat_gossip_actor, cat_gossip_actor_handle) =
-            TestGossip::spawn(None, cat_endpoint.clone(), thread_pool.clone())
+            TestGossip::spawn(None, (cat_args, cat_endpoint.clone()), thread_pool.clone())
                 .await
                 .unwrap();
 
