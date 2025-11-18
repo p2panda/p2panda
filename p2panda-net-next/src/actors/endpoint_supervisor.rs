@@ -7,6 +7,7 @@
 //!     - "Iroh Endpoint" Actor
 //!     - "Discovery Manager" Actor
 //!     - "Stream" Supervisor
+//!     - "Iroh mDNS" Actor (optional)
 //! ```
 //!
 //! This supervisor monitors the health of the iroh endpoint actor, as well as the stream and
@@ -20,6 +21,7 @@ use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_sync::traits::{Protocol, SyncManager};
+use ractor::ActorCell;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
@@ -27,6 +29,8 @@ use tracing::{debug, warn};
 use crate::TopicId;
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
+#[cfg(feature = "mdns")]
+use crate::actors::iroh::{MDNS_DISCOVERY, Mdns, ToMdns};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::addrs::{NodeId, NodeInfo};
@@ -46,6 +50,10 @@ pub struct EndpointSupervisorState<S, C> {
     discovery_manager_actor_failures: u16,
     stream_supervisor: ActorRef<()>,
     stream_supervisor_failures: u16,
+    #[cfg(feature = "mdns")]
+    mdns_discovery_actor_failures: u16,
+    #[cfg(feature = "mdns")]
+    mdns_discovery_actor: Option<ActorRef<ToMdns>>,
 }
 
 pub struct EndpointSupervisor<S, M> {
@@ -57,6 +65,65 @@ impl<S, M> Default for EndpointSupervisor<S, M> {
         Self {
             _marker: PhantomData,
         }
+    }
+}
+
+impl<S, M> EndpointSupervisorState<S, M> {
+    #[cfg(feature = "mdns")]
+    async fn spawn_mdns(&mut self, myself: ActorCell) -> Result<(), ActorProcessingErr> {
+        if !self.args.iroh_config.mdns_discovery_mode.is_active() {
+            return Ok(());
+        }
+
+        let (actor, _) = Mdns::spawn_linked(
+            Some(with_namespace(MDNS_DISCOVERY, &self.actor_namespace)),
+            self.args.clone(),
+            myself,
+            self.args.root_thread_pool.clone(),
+        )
+        .await?;
+
+        self.mdns_discovery_actor = Some(actor);
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "mdns"))]
+    async fn spawn_mdns(&mut self, _myself: ActorCell) -> Result<(), ActorProcessingErr> {
+        Ok(()) // Noop
+    }
+
+    #[cfg(feature = "mdns")]
+    async fn maybe_respawn_mdns(
+        &mut self,
+        name: &str,
+        myself: ActorCell,
+        panic_msg: ActorProcessingErr,
+    ) -> Result<(), ActorProcessingErr> {
+        if name != with_namespace(MDNS_DISCOVERY, &self.actor_namespace) {
+            return Ok(());
+        }
+
+        warn!(
+            "{ENDPOINT_SUPERVISOR} actor: {MDNS_DISCOVERY} actor failed: {}",
+            panic_msg
+        );
+
+        self.spawn_mdns(myself).await?;
+
+        self.mdns_discovery_actor_failures += 1;
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "mdns"))]
+    async fn maybe_respawn_mdns(
+        &mut self,
+        _name: &str,
+        _myself: ActorCell,
+        _panic_msg: ActorProcessingErr,
+    ) -> Result<(), ActorProcessingErr> {
+        Ok(()) // Noop
     }
 }
 
@@ -111,7 +178,7 @@ where
         )
         .await?;
 
-        Ok(EndpointSupervisorState {
+        let mut state = EndpointSupervisorState {
             actor_namespace,
             args,
             store,
@@ -122,7 +189,16 @@ where
             discovery_manager_actor_failures: 0,
             stream_supervisor,
             stream_supervisor_failures: 0,
-        })
+            #[cfg(feature = "mdns")]
+            mdns_discovery_actor_failures: 0,
+            #[cfg(feature = "mdns")]
+            mdns_discovery_actor: None,
+        };
+
+        // Spawn mDNS discovery actor if enabled.
+        state.spawn_mdns(myself.clone().into()).await?;
+
+        Ok(state)
     }
 
     async fn post_stop(
@@ -168,6 +244,9 @@ where
                         // 1. Stop the stream supervisor and discovery actors
                         // 2. Respawn the iroh endpoint actor
                         // 3. Respawn the stream supervisor and discovery actors
+                        //
+                        // NOTE: The mDNS actor (if enabled) shouldn't be affected by this as it
+                        // doesn't use the iroh endpoint.
                         state
                             .stream_supervisor
                             .stop(Some("{IROH_ENDPOINT} actor failed".to_string()));
@@ -242,6 +321,11 @@ where
 
                         state.stream_supervisor_failures += 1;
                         state.stream_supervisor = stream_supervisor;
+                    } else {
+                        // Also check for the potentially enabled mDNS actor.
+                        state
+                            .maybe_respawn_mdns(name, myself.clone().into(), panic_msg)
+                            .await?;
                     }
                 }
             }

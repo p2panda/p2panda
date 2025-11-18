@@ -8,19 +8,15 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use iroh::Watcher;
-#[cfg(feature = "mdns")]
-use iroh::discovery::UserData;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
-#[cfg(feature = "mdns")]
-use crate::actors::iroh::mdns::{MDNS_DISCOVERY, Mdns};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
@@ -189,21 +185,6 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind()
                     .await?;
 
-                // Register mDNS discovery with the endpoint if enabled.
-                if cfg!(feature = "mdns") && config.mdns_discovery_mode.is_active() {
-                    Mdns::spawn_linked(
-                        Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
-                        (
-                            state.actor_namespace.clone(),
-                            endpoint.id(),
-                            config.mdns_discovery_mode,
-                        ),
-                        myself.clone().into(),
-                        state.worker_pool.clone(),
-                    )
-                    .await?;
-                }
-
                 // Watch for changes of our own endpoint address.
                 let watch_addr_handle = {
                     let mut watcher = endpoint.watch_addr().stream();
@@ -303,81 +284,23 @@ impl ThreadLocalActor for IrohEndpoint {
                     "bind always takes place first, an endpoint must exist after this point",
                 ));
             }
-            ToIrohEndpoint::AddressChanged(addr) => {
-                debug!(?addr, "updated iroh endpoint address");
+            ToIrohEndpoint::AddressChanged(endpoint_addr) => {
+                debug!(?endpoint_addr, "updated iroh endpoint address");
 
                 // Create a new transport info with iroh addresses if given. If no iroh address
                 // exists (because we are not reachable) we're explicitly making the address array
                 // empty to inform other nodes about this.
-                let transport_info = match addr {
+                let transport_info = match endpoint_addr {
                     Some(addr) => UnsignedTransportInfo::from_addrs([addr.into()]),
                     None => UnsignedTransportInfo::new(),
                 }
                 .sign(&state.args.private_key)?;
-
-                // Inform iroh's added discovery services (mDNS, GossipDiscovery in iroh-gossip,
-                // etc.) about our updated transport info.
-                if let Ok(user_data) = UserData::try_from(transport_info.clone()) {
-                    state
-                    .endpoint
-                    .as_ref()
-                    .expect(
-                        "bind always takes place first, an endpoint must exist after this point",
-                    )
-                    .set_user_data_for_discovery(Some(user_data));
-                }
 
                 // Update entry about ourselves in address book to allow this information to
                 // propagate in other discovery mechanisms or side-channels outside of iroh.
                 state
                     .update_address_book(state.args.public_key, transport_info)
                     .await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Watch mDNS actor and restart if it crashed.
-    //
-    // @TODO(adz): We might want to refactor this into an own "iroh supervisor".
-    #[cfg(feature = "mdns")]
-    async fn handle_supervisor_evt(
-        &self,
-        myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        if let SupervisionEvent::ActorFailed(actor_cell, err) = message {
-            use tracing::warn;
-
-            // Ignore unnamed actors.
-            let Some(name) = actor_cell.get_name() else {
-                return Ok(());
-            };
-
-            // We're only interested in mDNS discovery services for now.
-            if !name.contains(MDNS_DISCOVERY) {
-                return Ok(());
-            }
-
-            if state.args.iroh_config.mdns_discovery_mode.is_active() {
-                warn!("mdns discovery actor failed, try to restart: {err:#}");
-                Mdns::spawn_linked(
-                    Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
-                    (
-                        state.actor_namespace.clone(),
-                        state
-                            .endpoint
-                            .as_ref()
-                            .expect("iroh endpoint must exist at this point")
-                            .id(),
-                        state.args.iroh_config.mdns_discovery_mode.clone(),
-                    ),
-                    myself.clone().into(),
-                    state.worker_pool.clone(),
-                )
-                .await?;
             }
         }
 

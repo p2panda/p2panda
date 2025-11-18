@@ -24,6 +24,8 @@ use crate::actors::{ActorNamespace, with_namespace};
 use crate::addrs::NodeId;
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
+#[cfg(feature = "mdns")]
+pub use mdns::{MDNS_DISCOVERY, Mdns, ToMdns};
 
 pub fn register_protocol<P>(
     protocol_id: impl AsRef<[u8]>,
