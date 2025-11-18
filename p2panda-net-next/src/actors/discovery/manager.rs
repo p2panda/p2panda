@@ -29,6 +29,9 @@ use crate::utils::{ShortFormat, to_public_key};
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
 pub enum ToDiscoveryManager {
+    /// Accept incoming "discovery protocol" connection requests.
+    RegisterProtocol,
+
     /// Initiate a discovery session with the given node.
     ///
     /// A reference to the walker actor which initiated this session is kept, so the result of the
@@ -190,15 +193,6 @@ where
         let actor_namespace = generate_actor_namespace(&args.public_key);
         let pool = ThreadLocalActorSpawner::new();
 
-        // Accept incoming "discovery protocol" connection requests.
-        register_protocol(
-            DISCOVERY_PROTOCOL_ID,
-            DiscoveryProtocolHandler {
-                manager_ref: myself.clone(),
-            },
-            actor_namespace.clone(),
-        )?;
-
         // Spawn random walkers. They automatically initiate discovery sessions.
         let mut walkers = HashMap::new();
         for walker_id in 0..args.discovery_config.random_walkers_count {
@@ -224,6 +218,9 @@ where
             );
         }
 
+        // Invoke the handler to register the discovery protocol.
+        let _ = myself.cast(ToDiscoveryManager::RegisterProtocol);
+
         Ok(DiscoveryManagerState {
             actor_namespace,
             args,
@@ -243,6 +240,16 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            ToDiscoveryManager::RegisterProtocol => {
+                // Accept incoming "discovery protocol" connection requests.
+                register_protocol(
+                    DISCOVERY_PROTOCOL_ID,
+                    DiscoveryProtocolHandler {
+                        manager_ref: myself.clone(),
+                    },
+                    state.actor_namespace.clone(),
+                )?;
+            }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
