@@ -12,7 +12,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
@@ -335,7 +335,7 @@ where
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
-                debug!(
+                info!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
