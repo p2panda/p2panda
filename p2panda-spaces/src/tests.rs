@@ -2118,3 +2118,107 @@ async fn process_operation_from_expired_member() {
     // can't decrypt the initial key agreement (X3DH) in the direct message anymore.
     assert!(bob.manager.process(&messages[1]).await.is_err());
 }
+
+#[tokio::test]
+async fn nested_group_bubble() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&alice_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let (ga, alice_msgs, _) = alice_manager
+        .create_group(&[(alice_id, Access::write())])
+        .await
+        .unwrap();
+
+    let (gb, bob_msgs, _) = bob_manager
+        .create_group(&[(bob_id, Access::write())])
+        .await
+        .unwrap();
+
+    for m in alice_msgs.iter() {
+        bob_manager.persist_message(&m).await.unwrap();
+        bob_manager.process(m).await.unwrap();
+    }
+
+    for m in bob_msgs.iter() {
+        alice_manager.persist_message(&m).await.unwrap();
+        alice_manager.process(m).await.unwrap();
+    }
+
+    alice_manager
+        .create_space(0, &[(ga.id(), Access::write()), (gb.id(), Access::write())])
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn nested_space_bubble() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+
+    let alice_id = alice.manager.id();
+    let bob_id = bob.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&alice_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    let (sa, alice_msgs, _) = alice_manager
+        .create_space(0, &[(alice_id, Access::write())])
+        .await
+        .unwrap();
+
+    let (sb, bob_msgs, _) = bob_manager
+        .create_space(1, &[(bob_id, Access::write())])
+        .await
+        .unwrap();
+
+    for m in alice_msgs.iter() {
+        bob_manager.persist_message(&m).await.unwrap();
+        bob_manager.process(m).await.unwrap();
+    }
+
+    for m in bob_msgs.iter() {
+        alice_manager.persist_message(&m).await.unwrap();
+        alice_manager.process(m).await.unwrap();
+    }
+
+    alice_manager
+        .create_space(
+            2,
+            &[
+                (sa.group_id().await.unwrap(), Access::write()),
+                (sb.group_id().await.unwrap(), Access::write()),
+            ],
+        )
+        .await
+        .unwrap();
+}
