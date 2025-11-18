@@ -18,7 +18,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
 };
-use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker};
+use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkFromHere};
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, DiscoveryActorName};
 use crate::actors::iroh::register_protocol;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
@@ -78,16 +78,20 @@ impl<S> DiscoveryManagerState<S> {
     pub fn next_walk_step(
         &mut self,
         walker_id: usize,
-        result: Option<DiscoveryResult<NodeId, NodeInfo>>,
+        discovery_result: DiscoveryResult<NodeId, NodeInfo>,
+        newly_learned_transport_infos: usize,
     ) {
         let info = self
             .walkers
             .get_mut(&walker_id)
             .expect("walker with this id must exist");
-        let _ = info
-            .walker_ref
-            .send_message(ToDiscoveryWalker::NextNode(result.clone()));
-        info.last_result = result;
+        let _ =
+            info.walker_ref
+                .send_message(ToDiscoveryWalker::NextNode(WalkFromHere::LastSession {
+                    discovery_result: discovery_result.clone(),
+                    newly_learned_transport_infos,
+                }));
+        info.last_result = Some(discovery_result);
     }
 
     /// Continue random walk by re-using the previous result which hopefully came from a successful
@@ -100,9 +104,11 @@ impl<S> DiscoveryManagerState<S> {
             .walkers
             .get(&walker_id)
             .expect("walker with this id must exist");
-        let _ = info
-            .walker_ref
-            .send_message(ToDiscoveryWalker::NextNode(info.last_result.clone()));
+        let _ = info.walker_ref.send_message(ToDiscoveryWalker::NextNode(
+            WalkFromHere::FailedSession {
+                last_successful: info.last_result.clone(),
+            },
+        ));
     }
 }
 
@@ -204,8 +210,9 @@ where
             )
             .await?;
 
-            // Start random walk, from now on it will run forever.
-            walker_ref.send_message(ToDiscoveryWalker::NextNode(None))?;
+            // Start random walk from bootstrap nodes (if available), from now on it will run
+            // forever.
+            walker_ref.send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap))?;
 
             walkers.insert(
                 walker_id,
@@ -333,12 +340,18 @@ where
                     "successful discovery session"
                 );
 
+                let newly_learned_transport_infos =
+                    Self::insert_address_book(state, &discovery_result).await;
+                state.metrics.newly_learned_transport_infos += newly_learned_transport_infos;
+
                 if let DiscoverySessionInfo::Initiated { walker_id, .. } = session_info {
                     // Continue random walk.
-                    state.next_walk_step(walker_id, Some(discovery_result.clone()));
+                    state.next_walk_step(
+                        walker_id,
+                        discovery_result.clone(),
+                        newly_learned_transport_infos,
+                    );
                 }
-
-                Self::insert_address_book(state, discovery_result).await;
             }
             ToDiscoveryManager::OnFailure(session_id, err) => {
                 state.metrics.failed_discovery_sessions += 1;
@@ -412,20 +425,21 @@ where
 impl<S> DiscoveryManager<S> {
     async fn insert_address_book(
         state: &mut DiscoveryManagerState<S>,
-        discovery_result: DiscoveryResult<NodeId, NodeInfo>,
-    ) {
+        discovery_result: &DiscoveryResult<NodeId, NodeInfo>,
+    ) -> usize {
         // Ignore missing address book actor or receive errors. This means the system is shutting
         // down.
         let address_book_ref = {
             let Some(actor) =
                 registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
             else {
-                return;
+                return 0;
             };
             ActorRef::<ToAddressBook>::from(actor)
         };
 
         // Populate address book with hopefully new transport info.
+        let mut newly_learned_transport_infos = 0;
         for (node_id, transport_info) in &discovery_result.node_transport_infos {
             let Ok(result) = call!(
                 address_book_ref,
@@ -433,13 +447,13 @@ impl<S> DiscoveryManager<S> {
                 *node_id,
                 transport_info.clone()
             ) else {
-                return;
+                return 0;
             };
 
             match result {
                 Ok(is_new_info) => {
                     if is_new_info {
-                        state.metrics.newly_learned_transport_infos += 1;
+                        newly_learned_transport_infos += 1;
                     }
                 }
                 Err(_) => {
@@ -447,7 +461,7 @@ impl<S> DiscoveryManager<S> {
                     // invalid (eg. wrong signature) and we stop here as we can't trust this node.
                     //
                     // @TODO: Later we want to "rate" this node as misbehaving.
-                    return;
+                    return newly_learned_transport_infos;
                 }
             }
         }
@@ -457,7 +471,7 @@ impl<S> DiscoveryManager<S> {
             address_book_ref,
             ToAddressBook::SetSyncTopics(
                 discovery_result.remote_node_id,
-                discovery_result.sync_topics,
+                discovery_result.sync_topics.clone(),
             )
         );
 
@@ -466,9 +480,11 @@ impl<S> DiscoveryManager<S> {
             address_book_ref,
             ToAddressBook::SetEphemeralMessagingTopics(
                 discovery_result.remote_node_id,
-                discovery_result.ephemeral_messaging_topics
+                discovery_result.ephemeral_messaging_topics.clone()
             )
         );
+
+        newly_learned_transport_infos
     }
 }
 
