@@ -17,7 +17,7 @@ use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::TopicLogMap;
-use p2panda_sync::{SyncManagerEvent, TopicSyncManager};
+use p2panda_sync::{FromSync, TopicSyncManager};
 use rand::{SeedableRng, random};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -121,19 +121,9 @@ async fn main() -> Result<()> {
 
     // Receive messages from the network stream.
     tokio::task::spawn(async move {
-        while let Ok(event) = stream_subscriber.recv().await {
-            match event {
-                SyncManagerEvent::TopicAgreed { .. } => {
-                    print!("agreed on sync topic with remote node");
-                }
-                SyncManagerEvent::FromSync {
-                    session_id: _,
-                    event,
-                } => {
-                    // TODO: Decode message.
-                    print!("{:?}", event);
-                }
-            }
+        while let Ok(from_sync) = stream_subscriber.recv().await {
+            // TODO: Proper match on FromSync<TopicLogSyncEvent<ChatExtensions>>.
+            println!("{:?}", from_sync);
         }
     });
 
