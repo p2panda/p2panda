@@ -26,6 +26,8 @@ pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
 const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 
 /// Increment the backoff if success rate falls under this threshold.
+///
+/// If we're reaching a higher value again, the backoff will be reset.
 const SUCCESS_RATE_THRESHOLD: SuccessRate = 0.15; // 15% new results
 
 /// Success metric for last discovery session.
@@ -147,7 +149,12 @@ where
                 // down when it doesn't bring any new results anymore.
                 if walk_from_here.success_rate() < SUCCESS_RATE_THRESHOLD {
                     state.backoff.increment();
+                } else {
+                    // If there's a new wave of information we make the walker faster again. This
+                    // should help us to adapt to changing network dynamics.
+                    state.backoff.reset();
                 }
+
                 state.backoff.sleep().await;
 
                 // Next "random walker" step finds us another node id to connect to. If this fails
@@ -204,7 +211,7 @@ impl Default for BackoffConfig {
             min_increment: Duration::from_secs(5),
             max_increment: Duration::from_secs(10),
             max_value: Duration::from_secs(60),
-            min_reset: Duration::from_mins(3),
+            min_reset: Duration::from_mins(2),
             max_reset: Duration::from_mins(5),
         }
     }
@@ -249,10 +256,11 @@ impl Backoff {
     }
 
     pub async fn sleep(&self) {
+        trace!("backoff {} seconds", self.value.as_secs());
         tokio::time::sleep(self.value).await;
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.value = self.config.initial_value;
         self.next_reset_at = self.random_next_reset_at();
     }
@@ -264,8 +272,9 @@ impl Backoff {
     }
 
     fn random_next_reset_at(&mut self) -> u64 {
-        self.rng.random_range::<u64, _>(
-            self.config.min_reset.as_secs()..self.config.max_reset.as_secs(),
-        )
+        current_timestamp()
+            + self.rng.random_range::<u64, _>(
+                self.config.min_reset.as_secs()..self.config.max_reset.as_secs(),
+            )
     }
 }
