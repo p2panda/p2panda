@@ -21,7 +21,7 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
-use crate::{NodeInfo, UnsignedTransportInfo};
+use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -70,6 +70,34 @@ pub struct IrohState {
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
+}
+
+impl IrohState {
+    pub async fn update_address_book(
+        &self,
+        node_id: NodeId,
+        transport_info: TransportInfo,
+    ) -> Result<(), ActorProcessingErr> {
+        let address_book_ref = {
+            let Some(actor) =
+                registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
+            else {
+                // Address book is not reachable, so we're probably shutting down.
+                return Ok(());
+            };
+            ActorRef::<ToAddressBook>::from(actor)
+        };
+
+        // Update existing node info about us if available or create a new one.
+        let mut node_info = match call!(address_book_ref, ToAddressBook::NodeInfo, node_id)? {
+            Some(node_info) => node_info,
+            None => NodeInfo::new(node_id),
+        };
+        node_info.update_transports(transport_info)?;
+        let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -148,8 +176,6 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
                 // Create and bind the endpoint to the socket.
-                // @TODO: Add static provider to register addresses coming from our discovery
-                // mechanism.
                 let endpoint = iroh::Endpoint::builder()
                     .secret_key(from_private_key(state.args.private_key.clone()))
                     .transport_config(transport_config)
@@ -258,37 +284,23 @@ impl ThreadLocalActor for IrohEndpoint {
                     "bind always takes place first, an endpoint must exist after this point",
                 ));
             }
-            ToIrohEndpoint::AddressChanged(addr) => {
-                debug!(?addr, "updated iroh endpoint address");
+            ToIrohEndpoint::AddressChanged(endpoint_addr) => {
+                debug!(?endpoint_addr, "updated iroh endpoint address");
 
                 // Create a new transport info with iroh addresses if given. If no iroh address
                 // exists (because we are not reachable) we're explicitly making the address array
                 // empty to inform other nodes about this.
-                let transport_info = match addr {
+                let transport_info = match endpoint_addr {
                     Some(addr) => UnsignedTransportInfo::from_addrs([addr.into()]),
                     None => UnsignedTransportInfo::new(),
                 }
                 .sign(&state.args.private_key)?;
 
-                let Some(actor) =
-                    registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
-                else {
-                    // Address book is not reachable, so we're probably shutting down.
-                    return Ok(());
-                };
-                let address_book_ref = ActorRef::<ToAddressBook>::from(actor);
-
-                // Update existing node info about us if available or create a new one.
-                let mut node_info = match call!(
-                    address_book_ref,
-                    ToAddressBook::NodeInfo,
-                    state.args.public_key
-                )? {
-                    Some(node_info) => node_info,
-                    None => NodeInfo::new(state.args.public_key),
-                };
-                node_info.update_transports(transport_info)?;
-                let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
+                // Update entry about ourselves in address book to allow this information to
+                // propagate in other discovery mechanisms or side-channels outside of iroh.
+                state
+                    .update_address_book(state.args.public_key, transport_info)
+                    .await?;
             }
         }
 

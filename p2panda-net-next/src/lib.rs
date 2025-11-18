@@ -15,6 +15,8 @@ mod utils;
 pub use addrs::{
     NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,
 };
+#[cfg(feature = "mdns")]
+pub use config::MdnsDiscoveryMode;
 pub use network::NetworkBuilder;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.

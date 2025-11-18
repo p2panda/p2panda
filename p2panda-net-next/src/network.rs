@@ -21,6 +21,8 @@ use crate::actors::streams::eventually_consistent::{
 use crate::actors::supervisor::{SUPERVISOR, Supervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
+#[cfg(feature = "mdns")]
+use crate::config::MdnsDiscoveryMode;
 use crate::streams::StreamError;
 use crate::streams::ephemeral::EphemeralStream;
 use crate::streams::eventually_consistent::EventuallyConsistentStream;
@@ -91,9 +93,16 @@ impl NetworkBuilder {
     /// both of the peers are behind a NAT. The relay node might offer proxy functionality on top
     /// (via the Tailscale DERP protocol which is very similar to TURN) if the connection attempt
     /// fails, which will serve to relay the data in that case.
+    //
     // TODO: Expose QUIC address discovery address as `Option<u16>` or config struct.
     pub fn relay(mut self, url: iroh::RelayUrl) -> Self {
         self.args.iroh_config.relay_urls.push(url);
+        self
+    }
+
+    #[cfg(feature = "mdns")]
+    pub fn mdns(mut self, mode: MdnsDiscoveryMode) -> Self {
+        self.args.iroh_config.mdns_discovery_mode = mode;
         self
     }
 
