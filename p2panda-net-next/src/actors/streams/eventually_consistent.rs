@@ -144,11 +144,10 @@ impl<M, E> EventuallyConsistentStreamsState<M, E> {
     /// Inform address book about our current topics by updating our own entry.
     fn update_address_book(&self) {
         if let Some(address_book_ref) = self.address_book_actor()
-            && let Err(err) =
-                address_book_ref.send_message(ToAddressBook::SetSyncTopics(
-                    self.args.public_key,
-                    HashSet::from_iter(self.sync_receivers.keys().cloned()),
-                ))
+            && let Err(err) = address_book_ref.send_message(ToAddressBook::SetSyncTopics(
+                self.args.public_key,
+                HashSet::from_iter(self.sync_receivers.keys().cloned()),
+            ))
         {
             warn!("failed updating local topics in address book: {err:#?}")
         }
