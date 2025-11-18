@@ -178,9 +178,6 @@ impl ThreadLocalActor for Mdns {
                 endpoint_addr,
                 user_data,
             } => {
-                // `user_data` is populated with needed extra transport info since other nodes call
-                // `set_user_data_for_discovery` on the iroh endpoint to inform the connected
-                // discovery services (mDNS) about this additional info.
                 let Some(user_data) = user_data else {
                     trace!(
                         %endpoint_id,
@@ -216,7 +213,7 @@ impl ThreadLocalActor for Mdns {
                     Err(err) => {
                         trace!(
                             %endpoint_id,
-                            "ignore discovered endpoint addr from iroh's services, it contain's unparseable: {err:#?}"
+                            "ignore discovered endpoint addr from mdns service, it contains unparseable user data: {err:#?}"
                         );
                         return Ok(());
                     }
@@ -233,8 +230,7 @@ impl ThreadLocalActor for Mdns {
                     .transports
                     .expect("if there's an endpoint address then there's transport info");
 
-                // Inform iroh's added discovery services (mDNS, GossipDiscovery in iroh-gossip,
-                // etc.) about our updated transport info.
+                // Inform mDNS service about our updated transport info.
                 if let Ok(user_data) = UserData::try_from(transport_info) {
                     state
                         .service
