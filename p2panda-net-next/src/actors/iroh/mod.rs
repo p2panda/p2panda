@@ -250,7 +250,7 @@ impl Discovery for AddressBookDiscovery {
         let Ok(transport_info) = if data.has_addrs() {
             UnsignedTransportInfo::from_addrs([iroh::EndpointAddr {
                 id: from_public_key(self.args.public_key),
-                addrs: BTreeSet::from_iter(data.addrs().cloned().into_iter()),
+                addrs: BTreeSet::from_iter(data.addrs().cloned()),
             }
             .into()])
         } else {
@@ -262,7 +262,7 @@ impl Discovery for AddressBookDiscovery {
         };
 
         let actor_namespace = self.actor_namespace.clone();
-        let public_key = self.args.public_key.clone();
+        let public_key = self.args.public_key;
 
         tokio::task::spawn(async move {
             // Update entry about ourselves in address book to allow this information to
