@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::PublicKey;
+
 pub mod dedup;
 pub mod managers;
 pub mod protocols;
@@ -17,6 +19,7 @@ pub use session_topic_map::SessionTopicMap;
 #[derive(Clone, Debug)]
 pub struct SyncSessionConfig<T> {
     pub topic: T,
+    pub remote: PublicKey,
     pub live_mode: bool,
 }
 
@@ -31,6 +34,7 @@ pub enum ToSync {
 #[derive(Clone, Debug)]
 pub struct FromSync<E> {
     session_id: u64,
+    remote: PublicKey,
     event: E,
 }
 
@@ -41,5 +45,9 @@ impl<E> FromSync<E> {
 
     pub fn event(&self) -> &E {
         &self.event
+    }
+
+    pub fn remote(&self) -> &PublicKey {
+        &self.remote
     }
 }

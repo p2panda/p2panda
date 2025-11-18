@@ -163,8 +163,9 @@ where
                 live_mode,
             } => {
                 let config = SyncSessionConfig {
-                    live_mode,
                     topic: topic.clone(),
+                    remote: node_id,
+                    live_mode,
                 };
                 let (session, _id) = Self::new_session(state, node_id, topic.clone(), config).await;
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
@@ -188,8 +189,9 @@ where
                 live_mode,
             } => {
                 let config = SyncSessionConfig {
-                    live_mode,
                     topic: topic.clone(),
+                    remote: node_id,
+                    live_mode,
                 };
                 let (session, _id) = Self::new_session(state, node_id, topic, config).await;
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(

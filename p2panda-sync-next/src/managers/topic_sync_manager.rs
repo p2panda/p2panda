@@ -89,10 +89,11 @@ where
         self.session_topic_map
             .insert_with_topic(session_id, config.topic.clone(), live_tx);
         let (event_tx, event_rx) = mpsc::channel(128);
+        let remote = config.remote.clone();
 
         {
             let mut events_rx_set = self.events_rx_set.lock().await;
-            events_rx_set.push(event_rx.map(Box::new(move |event| FromSync { session_id, event })));
+            events_rx_set.push(event_rx.map(Box::new(move |event| FromSync { session_id, remote, event })));
         }
 
         let live_rx = if config.live_mode {
@@ -213,6 +214,12 @@ where
     }
 }
 
+pub struct ManagerHandleInner {
+
+}
+
+pub struct ManagerHandle {}
+
 #[derive(Clone, Debug)]
 pub struct TopicSyncManagerConfig<S, M> {
     pub store: S,
@@ -297,6 +304,7 @@ mod tests {
         // Instantiate sync session for Peer A.
         let config = SyncSessionConfig {
             topic,
+            remote: peer_b.id(),
             live_mode: true,
         };
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
@@ -384,7 +392,8 @@ mod tests {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Started { .. }
-                        ))
+                        )),
+                        ..
                     }
                 ),
                 1 | 2 => assert_matches!(
@@ -393,14 +402,16 @@ mod tests {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Progress { .. }
-                        ))
+                        )),
+                        ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_))
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        ..
                     }
                 ),
                 4 => assert_matches!(
@@ -409,21 +420,24 @@ mod tests {
                         session_id: 0,
                         event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
                             StatusEvent::Completed { .. }
-                        ))
+                        )),
+                        ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Live { .. }
+                        event: TopicLogSyncEvent::Live { .. },
+                        ..
                     }
                 ),
                 6 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Close { .. }
+                        event: TopicLogSyncEvent::Close { .. },
+                        ..
                     }
                 ),
                 _ => panic!(),
@@ -470,19 +484,23 @@ mod tests {
         let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
 
         // Session A -> B (A initiates)
-        let config = SyncSessionConfig {
+        let mut config = SyncSessionConfig {
             topic: topic.clone(),
+            remote: peer_b.id(),
             live_mode: true,
         };
         let session_ab = manager_a.session(SESSION_AB, &config).await;
+        config.remote = peer_a.id();
         let session_b = manager_b.session(SESSION_BA, &config).await;
 
         // Session A -> C (A initiates)
-        let config = SyncSessionConfig {
+        let mut config = SyncSessionConfig {
             topic: topic.clone(),
+            remote: peer_c.id(),
             live_mode: true,
         };
         let session_ac = manager_a.session(SESSION_AC, &config).await;
+        config.remote = peer_a.id();
         let session_c = manager_c.session(SESSION_CA, &config).await;
 
         // Run both protocols concurrently
