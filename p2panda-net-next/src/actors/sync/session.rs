@@ -20,6 +20,11 @@ use crate::actors::sync::SYNC_PROTOCOL_ID;
 use crate::addrs::NodeId;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 
+/// Actor name prefix for a session.
+pub const SYNC_SESSION: &str = "net.sync.session";
+
+pub type SyncSessionId = u64;
+
 pub enum SyncSessionMessage<P> {
     Initiate {
         node_id: NodeId,
