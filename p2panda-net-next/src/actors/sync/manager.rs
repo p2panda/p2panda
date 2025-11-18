@@ -15,7 +15,7 @@ use p2panda_sync::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
 };
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
-use p2panda_sync::{SessionTopicMap, FromSync, SyncSessionConfig, ToSync};
+use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{Mutex, broadcast};
@@ -163,11 +163,11 @@ where
                 live_mode,
             } => {
                 let config = SyncSessionConfig {
-                    topic: topic.clone(),
+                    topic,
                     remote: node_id,
                     live_mode,
                 };
-                let (session, _id) = Self::new_session(state, node_id, topic.clone(), config).await;
+                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
                     None,
                     state.actor_namespace.clone(),
@@ -189,7 +189,7 @@ where
                 live_mode,
             } => {
                 let config = SyncSessionConfig {
-                    topic: topic.clone(),
+                    topic,
                     remote: node_id,
                     live_mode,
                 };

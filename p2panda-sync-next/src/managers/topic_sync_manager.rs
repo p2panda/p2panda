@@ -89,11 +89,15 @@ where
         self.session_topic_map
             .insert_with_topic(session_id, config.topic.clone(), live_tx);
         let (event_tx, event_rx) = mpsc::channel(128);
-        let remote = config.remote.clone();
+        let remote = config.remote;
 
         {
             let mut events_rx_set = self.events_rx_set.lock().await;
-            events_rx_set.push(event_rx.map(Box::new(move |event| FromSync { session_id, remote, event })));
+            events_rx_set.push(event_rx.map(Box::new(move |event| FromSync {
+                session_id,
+                remote,
+                event,
+            })));
         }
 
         let live_rx = if config.live_mode {
@@ -214,9 +218,7 @@ where
     }
 }
 
-pub struct ManagerHandleInner {
-
-}
+pub struct ManagerHandleInner {}
 
 pub struct ManagerHandle {}
 
@@ -542,7 +544,6 @@ mod tests {
         let mut operations_c = vec![];
         let push_operation = |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
                               event: FromSync<TestTopicSyncEvent>| {
-
             if let TestTopicSyncEvent::Live { header, body } = event.event() {
                 operations.push((*header.clone(), body.clone()));
             }

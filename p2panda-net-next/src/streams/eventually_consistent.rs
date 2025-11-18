@@ -138,10 +138,7 @@ where
     E: Clone + Send + 'static,
 {
     /// Returns a handle to an eventually consistent messaging stream subscriber.
-    pub(crate) fn new(
-        topic: TopicId,
-        from_sync_rx: BroadcastReceiver<FromSync<E>>,
-    ) -> Self {
+    pub(crate) fn new(topic: TopicId, from_sync_rx: BroadcastReceiver<FromSync<E>>) -> Self {
         Self {
             topic,
             from_sync_rx,
