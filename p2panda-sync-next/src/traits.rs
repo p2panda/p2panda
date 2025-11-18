@@ -6,7 +6,7 @@ use futures::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::{SyncManagerEvent, SyncSessionConfig, ToSync};
+use crate::{FromSync, SyncSessionConfig, ToSync};
 
 // @TODO: remove or clarify purpose and use when p2panda-net API is more stable.
 //
@@ -54,10 +54,5 @@ pub trait SyncManager<T> {
     /// Drive the manager to process and return events emitted from all running sync sessions.
     fn next_event(
         &mut self,
-    ) -> impl Future<
-        Output = Result<
-            Option<SyncManagerEvent<T, <Self::Protocol as Protocol>::Event>>,
-            Self::Error,
-        >,
-    >;
+    ) -> impl Future<Output = Result<Option<FromSync<<Self::Protocol as Protocol>::Event>>, Self::Error>>;
 }

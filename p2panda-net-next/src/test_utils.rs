@@ -122,9 +122,7 @@ impl SyncManager<TopicId> for NoSyncManager {
         Some(sink)
     }
 
-    async fn next_event(
-        &mut self,
-    ) -> Result<Option<p2panda_sync::SyncManagerEvent<TopicId, ()>>, Self::Error> {
+    async fn next_event(&mut self) -> Result<Option<p2panda_sync::FromSync<()>>, Self::Error> {
         Ok(None)
     }
 }
