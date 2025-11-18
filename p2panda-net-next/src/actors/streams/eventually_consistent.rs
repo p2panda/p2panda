@@ -72,6 +72,9 @@ pub enum ToEventuallyConsistentStreams<E> {
 
     /// End a sync session.
     EndSync(TopicId, PublicKey),
+
+    /// Register iroh connection handler.
+    RegisterProtocol,
 }
 
 /// Mapping of topic to the sender channels of the associated gossip overlay.
@@ -193,14 +196,8 @@ where
         // Sync manager actors are all spawned in a dedicated thread.
         let stream_thread_pool = ThreadLocalActorSpawner::new();
 
-        // // Accept incoming "sync protocol" connection requests.
-        register_protocol(
-            SYNC_PROTOCOL_ID,
-            SyncProtocolHandler {
-                stream_ref: myself.clone(),
-            },
-            EVENTUALLY_CONSISTENT_STREAMS.to_string(),
-        )?;
+        // Send message to inbox which triggers registering of connection handler.
+        myself.send_message(ToEventuallyConsistentStreams::RegisterProtocol)?;
 
         Ok(EventuallyConsistentStreamsState {
             actor_namespace,
@@ -389,6 +386,16 @@ where
                 {
                     sync_manager_actor.send_message(ToSyncManager::Close { node_id, topic })?;
                 }
+            }
+            ToEventuallyConsistentStreams::RegisterProtocol => {
+                // Register handler for accepting incoming "sync protocol" connection requests.
+                register_protocol(
+                    SYNC_PROTOCOL_ID,
+                    SyncProtocolHandler {
+                        stream_ref: myself.clone(),
+                    },
+                    EVENTUALLY_CONSISTENT_STREAMS.to_string(),
+                )?;
             }
         }
 
