@@ -48,10 +48,8 @@ pub struct MdnsState {
 
 impl MdnsState {
     async fn address_book_ref(&self) -> Option<ActorRef<ToAddressBook>> {
-        match registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace)) {
-            Some(actor) => Some(ActorRef::<ToAddressBook>::from(actor)),
-            None => None,
-        }
+        registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
+            .map(ActorRef::<ToAddressBook>::from)
     }
 
     pub async fn update_address_book(
