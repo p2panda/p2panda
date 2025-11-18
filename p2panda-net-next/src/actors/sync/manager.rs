@@ -19,13 +19,14 @@ use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{Mutex, broadcast};
+use tracing::debug;
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
 use crate::actors::iroh::register_protocol;
-use crate::actors::sync::SYNC_PROTOCOL_ID;
 use crate::actors::sync::poller::SyncPoller;
-use crate::actors::sync::session::{SyncSession, SyncSessionMessage};
+use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
+use crate::actors::sync::{SYNC_PROTOCOL_ID, SyncSessionName};
 use crate::addrs::NodeId;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::utils::to_public_key;
@@ -71,8 +72,8 @@ where
     // locking access to the whole manager on every read/write.
     manager: Arc<Mutex<M>>,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
-    node_session_map: HashMap<NodeId, HashSet<u64>>,
-    next_session_id: u64,
+    node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
+    next_session_id: SyncSessionId,
     pool: ThreadLocalActorSpawner,
 }
 
@@ -167,9 +168,10 @@ where
                     remote: node_id,
                     live_mode,
                 };
-                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
+                    name,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -193,9 +195,10 @@ where
                     remote: node_id,
                     live_mode,
                 };
-                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
+                    name,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -262,21 +265,18 @@ where
         &self,
         _myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(_actor) => {
-                // @TODO
+            SupervisionEvent::ActorTerminated(actor, _, _) => {
+                let name = SyncSessionName::from_actor_cell(&actor);
+                debug!("sync session {} terminated", name.session_id);
+                Self::drop_session(state, name.session_id);
             }
-            SupervisionEvent::ActorTerminated(_actor, _state, _reason) => {
-                // @TODO: drop related session handle on manager.
-                // @TODO: need the session id to remove the session from manager state mappings.
-                // @TODO: have the session id as the actor suffix and parse it out here.
-                // Self::drop_session(state, session_id);
-            }
-            SupervisionEvent::ActorFailed(_actor, _error) => {
-                // @TODO: have the session id as the actor suffix and parse it out here.
-                // Self::drop_session(state, session_id);
+            SupervisionEvent::ActorFailed(actor, err) => {
+                let name = SyncSessionName::from_actor_cell(&actor);
+                debug!("sync session {} failed: {}", name.session_id, err);
+                Self::drop_session(state, name.session_id);
             }
             _ => (),
         }
@@ -296,9 +296,9 @@ where
         node_id: NodeId,
         topic: TopicId,
         config: SyncSessionConfig<TopicId>,
-    ) -> (<M as SyncManagerTrait<TopicId>>::Protocol, u64) {
+    ) -> (<M as SyncManagerTrait<TopicId>>::Protocol, SyncSessionId) {
         // Get next session id.
-        let session_id: u64 = state.next_session_id;
+        let session_id: SyncSessionId = state.next_session_id;
         state.next_session_id += 1;
 
         // Instantiate the session.
@@ -330,7 +330,7 @@ where
     }
 
     /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut SyncManagerState<M>, id: u64) {
+    fn drop_session(state: &mut SyncManagerState<M>, id: SyncSessionId) {
         state.session_topic_map.drop(id);
         state.node_session_map.iter_mut().for_each(|(_, sessions)| {
             sessions.remove(&id);
