@@ -105,6 +105,11 @@ where
         )
         .await?;
 
+        // NOTE: We're registering the gossip protocol in our own iroh endpoint actor outside of
+        // the gossip actor itself. All gossip actor tests are not depending on the iroh endpoint
+        // actor and would fail otherwise.
+        gossip_actor.send_message(ToGossip::RegisterProtocol)?;
+
         // Spawn the eventually consistent streams actor.
         let (eventually_consistent_streams_actor, _) =
             EventuallyConsistentStreams::<M>::spawn_linked(
@@ -176,6 +181,11 @@ where
                                 state.args.root_thread_pool.clone(),
                             )
                             .await?;
+
+                        // NOTE: We're registering the gossip protocol in our own iroh endpoint
+                        // actor outside of the gossip actor itself. All gossip actor tests are not
+                        // depending on the iroh endpoint actor and would fail otherwise.
+                        gossip_actor.send_message(ToGossip::RegisterProtocol)?;
 
                         state.gossip_actor_failures += 1;
                         state.gossip_actor = gossip_actor;
