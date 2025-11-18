@@ -11,6 +11,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 use tokio::sync::broadcast;
+use tracing::info;
 
 use crate::args::ApplicationArguments;
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
@@ -351,6 +352,7 @@ where
                 let _ = reply.send(result);
             }
             ToAddressBook::SetSyncTopics(node_id, topics) => {
+                info!("set {} sync topic(s) for node {}", topics.len(), node_id.to_hex());
                 for topic in &topics {
                     state.call_sync_topic_subscribers(*topic).await;
                 }
@@ -358,6 +360,7 @@ where
                 state.store.set_sync_topics(node_id, topics).await?;
             }
             ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
+                info!("set {} ephemeral topic(s) for node {}", topics.len(), node_id.to_hex());
                 for topic in &topics {
                     state.call_ephemeral_topic_subscribers(*topic).await;
                 }

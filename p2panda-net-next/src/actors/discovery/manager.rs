@@ -12,7 +12,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
-use tracing::debug;
+use tracing::info;
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
@@ -258,6 +258,7 @@ where
                 )?;
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
+                info!("initiate discovery session with: {}", remote_node_id.to_hex());
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();
@@ -293,6 +294,7 @@ where
                 );
             }
             ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
+                info!("accept discovery session with: {}", remote_node_id.to_hex());
                 // @TODO: Have a max. of concurrently running discovery sessions.
                 let session_id = state.next_session_id();
 
@@ -330,7 +332,7 @@ where
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
-                debug!(
+                info!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
@@ -359,7 +361,7 @@ where
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when session failed");
-                debug!(
+                info!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
