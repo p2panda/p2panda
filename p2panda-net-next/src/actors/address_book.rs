@@ -8,7 +8,7 @@ use std::time::Duration;
 // @TODO: This will come from `p2panda-store` eventually.
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 use tokio::sync::broadcast;
 
@@ -118,7 +118,10 @@ pub struct AddressBookState<S> {
     topic_subscribers: HashMap<TopicId, broadcast::Sender<TopicEvent>>,
 }
 
-impl<S> AddressBookState<S> {
+impl<S> AddressBookState<S>
+where
+    S: AddressBookStore<NodeId, NodeInfo>,
+{
     /// Inform all subscribers about a node info change;
     fn call_node_subscribers(&mut self, node_id: NodeId, node_info: &NodeInfo) {
         let Some(tx) = self.node_subscribers.get(&node_id) else {
@@ -138,17 +141,12 @@ impl<S> AddressBookState<S> {
         }
     }
 
-    async fn call_sync_topic_subscribers(
-        &mut self,
-        actor_ref: ActorRef<ToAddressBook>,
-        topic: TopicId,
-    ) {
+    async fn call_sync_topic_subscribers(&mut self, topic: TopicId) {
         let Some(tx) = self.topic_subscribers.get(&topic) else {
             return;
         };
 
-        let Ok(node_infos) = call!(actor_ref, ToAddressBook::NodeInfosBySyncTopics, vec![topic])
-        else {
+        let Ok(node_infos) = self.store.node_infos_by_sync_topics(&[topic]).await else {
             return;
         };
 
@@ -159,20 +157,16 @@ impl<S> AddressBookState<S> {
         }
     }
 
-    async fn call_ephemeral_topic_subscribers(
-        &mut self,
-        actor_ref: ActorRef<ToAddressBook>,
-        topic: TopicId,
-    ) {
+    async fn call_ephemeral_topic_subscribers(&mut self, topic: TopicId) {
         let Some(tx) = self.topic_subscribers.get(&topic) else {
             return;
         };
 
-        let Ok(node_infos) = call!(
-            actor_ref,
-            ToAddressBook::NodeInfosByEphemeralMessagingTopics,
-            vec![topic]
-        ) else {
+        let Ok(node_infos) = self
+            .store
+            .node_infos_by_ephemeral_messaging_topics(&[topic])
+            .await
+        else {
             return;
         };
 
@@ -224,7 +218,7 @@ where
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -334,18 +328,14 @@ where
             }
             ToAddressBook::SetSyncTopics(node_id, topics) => {
                 for topic in &topics {
-                    state
-                        .call_sync_topic_subscribers(myself.clone(), *topic)
-                        .await;
+                    state.call_sync_topic_subscribers(*topic).await;
                 }
 
                 state.store.set_sync_topics(node_id, topics).await?;
             }
             ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
                 for topic in &topics {
-                    state
-                        .call_ephemeral_topic_subscribers(myself.clone(), *topic)
-                        .await;
+                    state.call_ephemeral_topic_subscribers(*topic).await;
                 }
 
                 state
