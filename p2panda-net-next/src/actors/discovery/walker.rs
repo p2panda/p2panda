@@ -211,8 +211,8 @@ impl Default for BackoffConfig {
             min_increment: Duration::from_secs(5),
             max_increment: Duration::from_secs(10),
             max_value: Duration::from_secs(60),
-            min_reset: Duration::from_mins(2),
-            max_reset: Duration::from_mins(5),
+            min_reset: Duration::from_secs(60 * 2),
+            max_reset: Duration::from_secs(60 * 5),
         }
     }
 }
