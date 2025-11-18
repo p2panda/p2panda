@@ -105,7 +105,7 @@ where
         ActorNamespace,
         TopicId,
         M::Config,
-        broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(
@@ -164,10 +164,9 @@ where
             } => {
                 let config = SyncSessionConfig {
                     live_mode,
-                    topic: Some(topic),
+                    topic: topic.clone(),
                 };
-                let (session, _) = Self::new_session(state, node_id, topic, config).await;
-
+                let (session, _id) = Self::new_session(state, node_id, topic.clone(), config).await;
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
                     None,
                     state.actor_namespace.clone(),
@@ -188,15 +187,11 @@ where
                 topic,
                 live_mode,
             } => {
-                // @TODO: once topic handshake has been removed from the managers' protocol
-                // implementation then we will also set the topic here. For now a redundant round
-                // of topic handshake occurs.
                 let config = SyncSessionConfig {
                     live_mode,
-                    topic: None,
+                    topic: topic.clone(),
                 };
-                let (session, _) = Self::new_session(state, node_id, topic, config).await;
-
+                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
                     None,
                     state.actor_namespace.clone(),

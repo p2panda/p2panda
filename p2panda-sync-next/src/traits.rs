@@ -56,7 +56,7 @@ pub trait SyncManager<T> {
         &mut self,
     ) -> impl Future<
         Output = Result<
-            Option<SyncManagerEvent<T, <Self::Protocol as Protocol>::Event>>,
+            Option<SyncManagerEvent<<Self::Protocol as Protocol>::Event>>,
             Self::Error,
         >,
     >;

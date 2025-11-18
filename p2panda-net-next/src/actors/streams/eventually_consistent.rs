@@ -66,7 +66,7 @@ pub enum ToEventuallyConsistentStreams<E> {
 type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
 /// Mapping of topic to the receiver channel from the associated sync manager.
-type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<SyncManagerEvent<TopicId, E>>>;
+type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<SyncManagerEvent<E>>>;
 
 #[derive(Default)]
 struct SyncManagers {

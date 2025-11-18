@@ -25,7 +25,7 @@ where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     manager: Arc<Mutex<M>>,
-    sender: broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
+    sender: broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
 }
 
 pub struct SyncPoller<M> {
@@ -54,7 +54,7 @@ where
     type Arguments = (
         ActorNamespace,
         Arc<Mutex<M>>,
-        broadcast::Sender<SyncManagerEvent<TopicId, <M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(

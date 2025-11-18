@@ -16,17 +16,8 @@ pub use session_topic_map::SessionTopicMap;
 /// Configuration object for instantiated sync sessions.
 #[derive(Clone, Debug)]
 pub struct SyncSessionConfig<T> {
-    pub topic: Option<T>,
+    pub topic: T,
     pub live_mode: bool,
-}
-
-impl<T> Default for SyncSessionConfig<T> {
-    fn default() -> Self {
-        Self {
-            topic: Default::default(),
-            live_mode: true,
-        }
-    }
 }
 
 /// Message sent to running sync sessions.
@@ -38,22 +29,14 @@ pub enum ToSync {
 
 /// Events which are emitted from a manager.
 #[derive(Clone, Debug)]
-pub enum SyncManagerEvent<T, E> {
-    /// Emitted once both parties in the sync protocol have agreed on the topic for a session.
-    ///
-    /// Normally the initiator will suggest a topic, if the remote rejects this for any reason,
-    /// this event will not be emitted. This event is emitted on both the initiator and receiver
-    /// sides.
-    TopicAgreed { session_id: u64, topic: T },
-
+pub enum SyncManagerEvent<E> {
     /// Generic events emitted from a sync protocol implementation.
     FromSync { session_id: u64, event: E },
 }
 
-impl<T, E> SyncManagerEvent<T, E> {
+impl<E> SyncManagerEvent<E> {
     pub fn session_id(&self) -> u64 {
         match self {
-            SyncManagerEvent::TopicAgreed { session_id, .. } => *session_id,
             SyncManagerEvent::FromSync { session_id, .. } => *session_id,
         }
     }
