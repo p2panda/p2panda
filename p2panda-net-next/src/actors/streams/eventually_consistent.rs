@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 
 use p2panda_core::PublicKey;
 use p2panda_discovery::address_book::NodeInfo;
-use p2panda_sync::SyncManagerEvent;
+use p2panda_sync::FromSync;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{
@@ -66,7 +66,7 @@ pub enum ToEventuallyConsistentStreams<E> {
 type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
 
 /// Mapping of topic to the receiver channel from the associated sync manager.
-type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<SyncManagerEvent<TopicId, E>>>;
+type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<FromSync<E>>>;
 
 #[derive(Default)]
 struct SyncManagers {
