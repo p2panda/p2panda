@@ -10,7 +10,7 @@
 //! synchronising past state with others nodes.
 use std::marker::PhantomData;
 
-use p2panda_sync::SyncManagerEvent;
+use p2panda_sync::FromSync;
 use ractor::{ActorRef, call, registry};
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 
@@ -128,7 +128,7 @@ where
 pub struct EventuallyConsistentSubscription<E> {
     topic: TopicId,
     // Messages sent directly from the sync manager.
-    from_sync_rx: BroadcastReceiver<SyncManagerEvent<E>>,
+    from_sync_rx: BroadcastReceiver<FromSync<E>>,
 }
 
 // TODO: Implement `Stream` for `BroadcastReceiver`.
@@ -140,7 +140,7 @@ where
     /// Returns a handle to an eventually consistent messaging stream subscriber.
     pub(crate) fn new(
         topic: TopicId,
-        from_sync_rx: BroadcastReceiver<SyncManagerEvent<E>>,
+        from_sync_rx: BroadcastReceiver<FromSync<E>>,
     ) -> Self {
         Self {
             topic,
@@ -149,12 +149,12 @@ where
     }
 
     /// Receives the next message from the stream.
-    pub async fn recv(&mut self) -> Result<SyncManagerEvent<E>, StreamError<()>> {
+    pub async fn recv(&mut self) -> Result<FromSync<E>, StreamError<()>> {
         self.from_sync_rx.recv().await.map_err(StreamError::Recv)
     }
 
     /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<SyncManagerEvent<E>, StreamError<()>> {
+    pub fn try_recv(&mut self) -> Result<FromSync<E>, StreamError<()>> {
         self.from_sync_rx.try_recv().map_err(StreamError::TryRecv)
     }
 

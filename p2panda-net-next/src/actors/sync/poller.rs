@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_sync::SyncManagerEvent;
+use p2panda_sync::FromSync;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
@@ -25,7 +25,7 @@ where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     manager: Arc<Mutex<M>>,
-    sender: broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
+    sender: broadcast::Sender<FromSync<<M::Protocol as Protocol>::Event>>,
 }
 
 pub struct SyncPoller<M> {
@@ -54,7 +54,7 @@ where
     type Arguments = (
         ActorNamespace,
         Arc<Mutex<M>>,
-        broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<FromSync<<M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(

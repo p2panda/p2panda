@@ -15,7 +15,7 @@ use p2panda_sync::topic_handshake::{
     TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
 };
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
-use p2panda_sync::{SessionTopicMap, SyncManagerEvent, SyncSessionConfig, ToSync};
+use p2panda_sync::{SessionTopicMap, FromSync, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{Mutex, broadcast};
@@ -105,7 +105,7 @@ where
         ActorNamespace,
         TopicId,
         M::Config,
-        broadcast::Sender<SyncManagerEvent<<M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<FromSync<<M::Protocol as Protocol>::Event>>,
     );
 
     async fn pre_start(
