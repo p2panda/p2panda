@@ -145,7 +145,7 @@ impl<M, E> EventuallyConsistentStreamsState<M, E> {
     fn update_address_book(&self) {
         if let Some(address_book_ref) = self.address_book_actor()
             && let Err(err) =
-                address_book_ref.send_message(ToAddressBook::SetEphemeralMessagingTopics(
+                address_book_ref.send_message(ToAddressBook::SetSyncTopics(
                     self.args.public_key,
                     HashSet::from_iter(self.sync_receivers.keys().cloned()),
                 ))
