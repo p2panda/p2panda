@@ -20,11 +20,21 @@ use rand::{SeedableRng, random};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 use url::Url;
 
 const TOPIC_ID: [u8; 32] = [1; 32];
 const NETWORK_ID: [u8; 32] = [7; 32];
 const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
+
+pub fn setup_logging() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(EnvFilter::from_default_env())
+        .try_init()
+        .ok();
+}
 
 #[derive(Parser)]
 struct Args {
@@ -56,6 +66,8 @@ type ChatTopicSyncManager =
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    setup_logging();
+
     let args = Args::parse();
 
     let private_key = PrivateKey::new();
