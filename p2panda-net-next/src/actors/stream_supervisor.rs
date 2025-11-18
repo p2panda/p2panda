@@ -99,7 +99,7 @@ where
         // Spawn the gossip actor.
         let (gossip_actor, _) = Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
-            endpoint.clone(),
+            (args.clone(), endpoint.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -171,7 +171,7 @@ where
                         let (gossip_actor, _) =
                             Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
                                 Some(with_namespace(GOSSIP, &actor_namespace)),
-                                state.endpoint.clone(),
+                                (state.args.clone(), state.endpoint.clone()),
                                 myself.clone().into(),
                                 state.args.root_thread_pool.clone(),
                             )
