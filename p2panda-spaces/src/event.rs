@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use serde::{Serialize, Deserialize};
+
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
@@ -12,7 +14,7 @@ use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{added_members, removed_members, sort_members};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GroupActor {
     id: ActorId,
     is_group: bool,
@@ -47,7 +49,7 @@ impl GroupActor {
 }
 
 /// Events emitted when system state changes or application messages are processed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<ID, C> {
     Application { space_id: ID, data: Vec<u8> },
@@ -58,7 +60,7 @@ pub enum Event<ID, C> {
 }
 
 /// Additional context attached to group events.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupContext<C> {
     /// The actor who authored this action.
     pub author: ActorId,
@@ -71,7 +73,7 @@ pub struct GroupContext<C> {
 }
 
 /// Additional context attached to space events.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpaceContext {
     /// The actor who authored this group change action.
     pub auth_author: ActorId,
@@ -90,7 +92,7 @@ pub struct SpaceContext {
 }
 
 /// Events emitted when global auth state changes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GroupEvent<C> {
     /// A group was created.
     Created {
@@ -133,7 +135,7 @@ pub enum GroupEvent<C> {
 }
 
 /// Events emitted when space encryption group membership changes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpaceEvent<ID> {
     /// A space was created.
     Created {
