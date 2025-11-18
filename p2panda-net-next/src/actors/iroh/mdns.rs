@@ -5,10 +5,11 @@ use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
 use iroh::discovery::{Discovery, EndpointData, UserData};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, call, registry};
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tracing::{trace, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
 use crate::actors::iroh::UserDataTransportInfo;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
@@ -17,6 +18,8 @@ use crate::utils::{from_public_key, to_public_key};
 use crate::{NodeId, NodeInfo, TransportInfo};
 
 pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
+
+const MDNS_SERVICE_NAME: &str = "p2pandav1";
 
 pub enum ToMdns {
     /// Start mDNS "ambient" discovery.
@@ -44,19 +47,21 @@ pub struct MdnsState {
 }
 
 impl MdnsState {
+    async fn address_book_ref(&self) -> Option<ActorRef<ToAddressBook>> {
+        match registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace)) {
+            Some(actor) => Some(ActorRef::<ToAddressBook>::from(actor)),
+            None => None,
+        }
+    }
+
     pub async fn update_address_book(
         &self,
         node_id: NodeId,
         transport_info: TransportInfo,
     ) -> Result<(), ActorProcessingErr> {
-        let address_book_ref = {
-            let Some(actor) =
-                registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
-            else {
-                // Address book is not reachable, so we're probably shutting down.
-                return Ok(());
-            };
-            ActorRef::<ToAddressBook>::from(actor)
+        let Some(address_book_ref) = self.address_book_ref().await else {
+            // Address book is not reachable, so we're probably shutting down.
+            return Ok(());
         };
 
         // Update existing node info about us if available or create a new one.
@@ -68,6 +73,26 @@ impl MdnsState {
         let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
 
         Ok(())
+    }
+
+    pub async fn subscribe_to_node_info(
+        &self,
+        node_id: NodeId,
+    ) -> Option<broadcast::Receiver<NodeEvent>> {
+        let Some(address_book_ref) = self.address_book_ref().await else {
+            // Address book is not reachable, so we're probably shutting down.
+            return None;
+        };
+
+        let Ok(rx) = call!(
+            address_book_ref,
+            ToAddressBook::SubscribeNodeChanges,
+            node_id
+        ) else {
+            return None;
+        };
+
+        Some(rx)
     }
 }
 
@@ -126,44 +151,59 @@ impl ThreadLocalActor for Mdns {
                     return Ok(());
                 }
 
-                let mdns = MdnsDiscovery::builder()
-                    // Do not advertise our own endpoint address if in "passive" mode.
-                    .advertise(mode.is_active())
-                    .build(endpoint_id)?;
-
                 // NOTE: We're _not_ hooking iroh's endpoint into this service (iroh would use the
                 // resolving interface) as we're already handling that ourselves with checked and
                 // authenticated addresses.
 
-                // Start polling async stream of incoming discovery events.
+                let mdns = MdnsDiscovery::builder()
+                    // Do not advertise our own endpoint address if in "passive" mode.
+                    .advertise(mode.is_active())
+                    .service_name(MDNS_SERVICE_NAME)
+                    .build(endpoint_id)?;
+
                 let handle = {
                     let myself = myself.clone();
+
+                    // Subscribe to incoming discovery events of mDNS service.
                     let mut stream = mdns.subscribe().await;
+
+                    // Subscribe to address book to listen to changes of our own node info.
+                    let mut rx = state
+                        .subscribe_to_node_info(state.args.public_key)
+                        .await
+                        .ok_or("mdns service can't subscribe to address book node info changes")?;
 
                     tokio::task::spawn(async move {
                         loop {
-                            match stream.next().await {
-                                Some(DiscoveryEvent::Discovered { endpoint_info, .. }) => {
-                                    let _ = myself.send_message(ToMdns::DiscoveredEndpointInfo {
-                                        endpoint_id: endpoint_info.endpoint_id,
-                                        user_data: endpoint_info.user_data().cloned(),
-                                        endpoint_addr: Some(endpoint_info.into()),
-                                    });
-                                }
-                                Some(DiscoveryEvent::Expired { .. }) => {
-                                    // At this point we know another node has not responded anymore within the
-                                    // local network.
-                                    //
-                                    // We can't do much here though since "removing" the iroh endpoint address
-                                    // from the transport info would need to be signed, and we don't have a
-                                    // signature here anymore.
-                                    //
-                                    // Additionally we don't know if that node might actually still be
-                                    // reachable (just not inside the same local area network).
-                                }
-                                None => {
-                                    // The stream has seized, close actor.
-                                    myself.stop(Some("mdns stream stopped".into()));
+                            tokio::select! {
+                                event = stream.next() => {
+                                    match event {
+                                        Some(DiscoveryEvent::Discovered { endpoint_info, .. }) => {
+                                            let _ = myself.send_message(ToMdns::DiscoveredEndpointInfo {
+                                                endpoint_id: endpoint_info.endpoint_id,
+                                                user_data: endpoint_info.user_data().cloned(),
+                                                endpoint_addr: Some(endpoint_info.into()),
+                                            });
+                                        }
+                                        Some(DiscoveryEvent::Expired { .. }) => {
+                                            // At this point we know another node has not responded anymore
+                                            // within the local network.
+                                            //
+                                            // We can't do much here though since "removing" the iroh
+                                            // endpoint address from the transport info would need to be
+                                            // signed, and we don't have a signature here anymore.
+                                            //
+                                            // Additionally we don't know if that node might actually still
+                                            // be reachable (just not inside the same local area network).
+                                        }
+                                        None => {
+                                            // The stream has seized, close actor.
+                                            myself.stop(Some("mdns stream stopped".into()));
+                                        }
+                                    }
+                                },
+                                Ok(event) = rx.recv() => {
+                                    let _ = myself.send_message(ToMdns::UpdateNodeInfo(event.node_info));
                                 }
                             }
                         }
@@ -188,7 +228,8 @@ impl ThreadLocalActor for Mdns {
 
                 match UserDataTransportInfo::try_from(user_data) {
                     Ok(txt) => {
-                        // Assemble a transport info manually by combining the extra user data (
+                        // Assemble a transport info manually by combining the extra user data
+                        // (timestamp, signature) with actual addressing information from iroh.
                         let transport_info = TransportInfo {
                             timestamp: txt.timestamp,
                             signature: txt.signature,
@@ -206,9 +247,15 @@ impl ThreadLocalActor for Mdns {
                             return Ok(());
                         }
 
-                        state
+                        if let Err(err) = state
                             .update_address_book(to_public_key(endpoint_id), transport_info)
-                            .await?;
+                            .await
+                        {
+                            warn!(
+                                %endpoint_id,
+                                "updating address book failed with error: {err:#?}"
+                            );
+                        }
                     }
                     Err(err) => {
                         trace!(
