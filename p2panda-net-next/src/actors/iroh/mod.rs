@@ -2,6 +2,8 @@
 
 mod connection;
 mod endpoint;
+#[cfg(feature = "mdns")]
+mod mdns;
 #[cfg(test)]
 mod tests;
 

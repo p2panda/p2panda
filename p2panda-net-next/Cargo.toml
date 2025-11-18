@@ -6,6 +6,12 @@ edition = "2024"
 [lints]
 workspace = true
 
+[features]
+default = ["mdns"]
+mdns = [
+  "iroh/discovery-local-network",
+]
+
 [dependencies]
 ciborium = "0.2.2"
 futures-channel = "0.3.31"
