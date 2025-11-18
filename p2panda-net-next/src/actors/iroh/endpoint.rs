@@ -172,16 +172,14 @@ impl ThreadLocalActor for IrohEndpoint {
                     .await?;
 
                 // Register mDNS discovery with the endpoint if enabled.
-                if cfg!(feature = "mdns") {
-                    if config.mdns_discovery_mode.is_active() {
-                        Mdns::spawn_linked(
-                            Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
-                            (endpoint.clone(), config.mdns_discovery_mode, myself.clone()),
-                            myself.clone().into(),
-                            state.worker_pool.clone(),
-                        )
-                        .await?;
-                    }
+                if cfg!(feature = "mdns") && config.mdns_discovery_mode.is_active() {
+                    Mdns::spawn_linked(
+                        Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
+                        (endpoint.clone(), config.mdns_discovery_mode, myself.clone()),
+                        myself.clone().into(),
+                        state.worker_pool.clone(),
+                    )
+                    .await?;
                 }
 
                 // Watch for changes of our own endpoint address.
@@ -344,40 +342,37 @@ impl ThreadLocalActor for IrohEndpoint {
         message: SupervisionEvent,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        match message {
-            SupervisionEvent::ActorFailed(actor_cell, err) => {
-                use tracing::warn;
+        if let SupervisionEvent::ActorFailed(actor_cell, err) = message {
+            use tracing::warn;
 
-                // Ignore unnamed actors.
-                let Some(name) = actor_cell.get_name() else {
-                    return Ok(());
-                };
+            // Ignore unnamed actors.
+            let Some(name) = actor_cell.get_name() else {
+                return Ok(());
+            };
 
-                // We're only interested in mDNS discovery services for now.
-                if !name.contains(MDNS_DISCOVERY) {
-                    return Ok(());
-                }
-
-                warn!("mdns discovery actor failed, try to restart: {err:#}");
-
-                if state.args.iroh_config.mdns_discovery_mode.is_active() {
-                    Mdns::spawn_linked(
-                        Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
-                        (
-                            state
-                                .endpoint
-                                .clone()
-                                .expect("iroh endpoint must exist at this point"),
-                            state.args.iroh_config.mdns_discovery_mode.clone(),
-                            myself.clone(),
-                        ),
-                        myself.clone().into(),
-                        state.worker_pool.clone(),
-                    )
-                    .await?;
-                }
+            // We're only interested in mDNS discovery services for now.
+            if !name.contains(MDNS_DISCOVERY) {
+                return Ok(());
             }
-            _ => (),
+
+            warn!("mdns discovery actor failed, try to restart: {err:#}");
+
+            if state.args.iroh_config.mdns_discovery_mode.is_active() {
+                Mdns::spawn_linked(
+                    Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
+                    (
+                        state
+                            .endpoint
+                            .clone()
+                            .expect("iroh endpoint must exist at this point"),
+                        state.args.iroh_config.mdns_discovery_mode.clone(),
+                        myself.clone(),
+                    ),
+                    myself.clone().into(),
+                    state.worker_pool.clone(),
+                )
+                .await?;
+            }
         }
 
         Ok(())

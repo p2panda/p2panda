@@ -175,7 +175,7 @@ impl TryFrom<UserData> for TransportInfoTxt {
         }
 
         // Try to parse halfs into signature and timestamp.
-        let signature = Signature::from_str(parts.get(0).expect("we've checked the size before"))?;
+        let signature = Signature::from_str(parts.first().expect("we've checked the size before"))?;
         let timestamp = u64::from_str(parts.get(1).expect("we've checked the size before"))?;
 
         Ok(Self {
