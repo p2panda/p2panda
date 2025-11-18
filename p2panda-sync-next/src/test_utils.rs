@@ -17,7 +17,7 @@ use crate::TopicSyncManager;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
-    LiveModeMessage, Role, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
+    LiveModeMessage, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
 use crate::traits::Protocol;
 
@@ -31,8 +31,8 @@ pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, Tes
 pub type TestLogSyncError = LogSyncError<u64, LogIdExtension, TestMemoryStore>;
 
 // Types used in topic log sync protocol tests.
-pub type TestTopicSyncMessage = TopicLogSyncMessage<TestTopic, u64, LogIdExtension>;
-pub type TestTopicSyncEvent = TopicLogSyncEvent<TestTopic, LogIdExtension>;
+pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, LogIdExtension>;
+pub type TestTopicSyncEvent = TopicLogSyncEvent<LogIdExtension>;
 pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
 pub type TestTopicSyncError =
@@ -72,7 +72,7 @@ impl Peer {
     /// Return a topic sync protocol.
     pub fn topic_sync_protocol(
         &mut self,
-        role: Role<TestTopic>,
+        topic: TestTopic,
         live_mode: bool,
     ) -> (
         TestTopicSync,
@@ -83,9 +83,9 @@ impl Peer {
         let (live_tx, live_rx) = mpsc::channel(128);
         let live_rx = if live_mode { Some(live_rx) } else { None };
         let session = TopicLogSync::new(
+            topic,
             self.store.clone(),
             self.topic_map.clone(),
-            role,
             live_rx,
             event_tx,
         );

@@ -6,7 +6,6 @@ use std::hash::Hash;
 /// Mapping of generic topics to session ids and of session ids to a channel sender.
 #[derive(Clone, Debug)]
 pub struct SessionTopicMap<T, TX> {
-    pub(crate) accepting_sessions: HashSet<u64>,
     pub(crate) session_tx_map: HashMap<u64, TX>,
     pub(crate) session_topic_map: HashMap<u64, T>,
     pub(crate) topic_session_map: HashMap<T, HashSet<u64>>,
@@ -15,7 +14,6 @@ pub struct SessionTopicMap<T, TX> {
 impl<T, TX> Default for SessionTopicMap<T, TX> {
     fn default() -> Self {
         Self {
-            accepting_sessions: Default::default(),
             session_tx_map: Default::default(),
             session_topic_map: Default::default(),
             topic_session_map: Default::default(),
@@ -39,36 +37,11 @@ where
         self.session_tx_map.insert(session_id, tx);
     }
 
-    /// Insert a session id and tx channel when the topic is not yet known.
-    pub fn insert_accepting(&mut self, session_id: u64, tx: TX) {
-        self.accepting_sessions.insert(session_id);
-        self.session_tx_map.insert(session_id, tx);
-    }
-
-    /// Upgrade an "accepting" session to a session with known topic.
-    pub fn accepted(&mut self, session_id: u64, topic: T) -> bool {
-        if self.accepting_sessions.remove(&session_id) {
-            self.session_topic_map.insert(session_id, topic.clone());
-            self.topic_session_map
-                .entry(topic.clone())
-                .and_modify(|sessions| {
-                    sessions.insert(session_id);
-                })
-                .or_insert(HashSet::from_iter([session_id]));
-        };
-
-        true
-    }
-
     /// Drop a session from all mappings.
     ///
     /// Returns true if the session existed and was dropped, otherwise returns false when the
     /// session was known
     pub fn drop(&mut self, session_id: u64) -> bool {
-        if self.accepting_sessions.remove(&session_id) {
-            self.session_tx_map.remove(&session_id);
-            return true;
-        };
         let Some(topic) = self.session_topic_map.remove(&session_id) else {
             return false;
         };
@@ -126,7 +99,6 @@ mod tests {
     #[test]
     fn default_is_empty() {
         let map: SessionTopicMap<TestTopic, ()> = SessionTopicMap::default();
-        assert!(map.accepting_sessions.is_empty());
         assert!(map.session_tx_map.is_empty());
         assert!(map.session_topic_map.is_empty());
         assert!(map.topic_session_map.is_empty());
@@ -150,38 +122,6 @@ mod tests {
 
         // Channel should be retrievable
         assert!(map.sender(SESSION1).is_some());
-    }
-
-    #[test]
-    fn accept() {
-        let (tx, _rx) = mpsc::channel::<()>(128);
-        let mut map = SessionTopicMap::default();
-
-        map.insert_accepting(SESSION1, tx.clone());
-        assert!(map.accepting_sessions.contains(&SESSION1));
-        assert!(map.session_tx_map.contains_key(&SESSION1));
-
-        map.accepted(SESSION1, TestTopic::new(TOPIC_A));
-
-        assert!(!map.accepting_sessions.contains(&SESSION1));
-        assert!(map.session_tx_map.contains_key(&SESSION1));
-        assert_eq!(map.topic(SESSION1), Some(&TestTopic::new(TOPIC_A)));
-        assert_eq!(
-            map.sessions(&TestTopic::new(TOPIC_A)),
-            HashSet::from([SESSION1])
-        );
-    }
-
-    #[test]
-    fn drop_accepting() {
-        let (tx, _rx) = mpsc::channel::<()>(128);
-
-        let mut map = SessionTopicMap::<TestTopic, _>::default();
-
-        map.insert_accepting(SESSION1, tx);
-        assert!(map.drop(SESSION1));
-        assert!(map.accepting_sessions.is_empty());
-        assert!(map.session_tx_map.is_empty());
     }
 
     #[test]
