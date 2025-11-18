@@ -104,7 +104,6 @@ pub enum ToAddressBook {
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
 
     /// Subscribes to channel informing us about changes on node infos for a specific node.
-    #[allow(unused)]
     SubscribeNodeChanges(NodeId, RpcReplyPort<broadcast::Receiver<NodeEvent>>),
 
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
