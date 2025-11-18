@@ -23,8 +23,47 @@ pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
 /// Delay next step when no result was previously given.
 const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 
+pub type SuccessRate = f32;
+
+pub enum WalkFromHere {
+    Bootstrap,
+    LastSession {
+        discovery_result: DiscoveryResult<NodeId, NodeInfo>,
+        newly_learned_transport_infos: usize,
+    },
+    FailedSession {
+        last_successful: Option<DiscoveryResult<NodeId, NodeInfo>>,
+    },
+}
+
+impl WalkFromHere {
+    pub fn success_rate(&self) -> SuccessRate {
+        match self {
+            WalkFromHere::Bootstrap => 1.0,
+            WalkFromHere::LastSession {
+                discovery_result,
+                newly_learned_transport_infos,
+            } => {
+                *newly_learned_transport_infos as f32
+                    / discovery_result.node_transport_infos.len() as f32
+            }
+            WalkFromHere::FailedSession { .. } => 0.0,
+        }
+    }
+
+    pub fn next_node_args(&self) -> Option<&DiscoveryResult<NodeId, NodeInfo>> {
+        match self {
+            WalkFromHere::Bootstrap => None,
+            WalkFromHere::LastSession {
+                discovery_result, ..
+            } => Some(discovery_result),
+            WalkFromHere::FailedSession { last_successful } => last_successful.as_ref(),
+        }
+    }
+}
+
 pub enum ToDiscoveryWalker {
-    NextNode(Option<DiscoveryResult<NodeId, NodeInfo>>),
+    NextNode(WalkFromHere),
 }
 
 pub struct DiscoveryWalkerState<S> {
@@ -81,12 +120,12 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryWalker::NextNode(previous) => {
+            ToDiscoveryWalker::NextNode(walk_from_here) => {
                 // Next "random walker" step finds us another node id to connect to. If this fails
                 // a critical store error occurred and we stop the actor.
                 let node_id = state
                     .walker
-                    .next_node(previous.as_ref())
+                    .next_node(walk_from_here.next_node_args())
                     .await
                     .map_err(|err| ActorProcessingErr::from(err.to_string()))?;
 
@@ -110,7 +149,8 @@ where
                     // hopefully some other process will add entries in the address book soon.
                     None => {
                         time::sleep(NO_RESULTS_DELAY).await;
-                        let _ = myself.send_message(ToDiscoveryWalker::NextNode(None));
+                        let _ = myself
+                            .send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap));
                     }
                 }
             }
