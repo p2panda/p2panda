@@ -10,9 +10,15 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use futures_channel::mpsc;
+use iroh::endpoint::Connection;
+use iroh::protocol::ProtocolHandler;
 use p2panda_core::PublicKey;
 use p2panda_discovery::address_book::NodeInfo;
 use p2panda_sync::FromSync;
+use p2panda_sync::topic_handshake::{
+    TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
+};
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{
@@ -22,16 +28,19 @@ use tokio::sync::broadcast::{self, Receiver as BroadcastReceiver, Sender as Broa
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, warn};
 
-use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
+use crate::actors::iroh::register_protocol;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
-use crate::actors::sync::{SyncManager, ToSyncManager};
+use crate::actors::sync::{SYNC_PROTOCOL_ID, SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
+use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::streams::eventually_consistent::{
     EventuallyConsistentStream, EventuallyConsistentSubscription,
 };
+use crate::utils::to_public_key;
+use crate::{NodeId, TopicId};
 
 /// Eventually consistent streams actor name.
 pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consistent";
@@ -58,8 +67,14 @@ pub enum ToEventuallyConsistentStreams<E> {
     /// Initiate a sync session.
     InitiateSync(TopicId, PublicKey),
 
+    /// Accept a sync session.
+    Accept(NodeId, TopicId, Connection),
+
     /// End a sync session.
     EndSync(TopicId, PublicKey),
+
+    /// Register iroh connection handler.
+    RegisterProtocol,
 }
 
 /// Mapping of topic to the sender channels of the associated gossip overlay.
@@ -168,7 +183,7 @@ where
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (args, gossip_actor, sync_config) = args;
@@ -180,6 +195,9 @@ where
 
         // Sync manager actors are all spawned in a dedicated thread.
         let stream_thread_pool = ThreadLocalActorSpawner::new();
+
+        // Send message to inbox which triggers registering of connection handler.
+        let _ = myself.cast(ToEventuallyConsistentStreams::RegisterProtocol);
 
         Ok(EventuallyConsistentStreamsState {
             actor_namespace,
@@ -350,12 +368,35 @@ where
                     })?;
                 }
             }
+            ToEventuallyConsistentStreams::Accept(node_id, topic, connection) => {
+                if let Some((sync_manager_actor, live_mode)) =
+                    state.sync_managers.topic_manager_map.get(&topic)
+                {
+                    sync_manager_actor.send_message(ToSyncManager::Accept {
+                        node_id,
+                        topic,
+                        live_mode: *live_mode,
+                        connection,
+                    })?;
+                }
+            }
             ToEventuallyConsistentStreams::EndSync(topic, node_id) => {
                 if let Some((sync_manager_actor, _)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
                     sync_manager_actor.send_message(ToSyncManager::Close { node_id, topic })?;
                 }
+            }
+            ToEventuallyConsistentStreams::RegisterProtocol => {
+                // Register handler for accepting incoming "sync protocol" connection requests.
+                let actor_namespace = generate_actor_namespace(&state.args.public_key);
+                register_protocol(
+                    SYNC_PROTOCOL_ID,
+                    SyncProtocolHandler {
+                        stream_ref: myself.clone(),
+                    },
+                    actor_namespace,
+                )?;
             }
         }
 
@@ -411,6 +452,56 @@ where
             }
             _ => (),
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct SyncProtocolHandler<E> {
+    stream_ref: ActorRef<ToEventuallyConsistentStreams<E>>,
+}
+
+impl<E> ProtocolHandler for SyncProtocolHandler<E>
+where
+    E: Debug + Send + 'static,
+{
+    async fn accept(
+        &self,
+        connection: iroh::endpoint::Connection,
+    ) -> Result<(), iroh::protocol::AcceptError> {
+        let node_id = to_public_key(connection.remote_id());
+        let (tx, rx) = connection.accept_bi().await?;
+
+        // As we are accepting a sync session here we don't yet know the topic which the initiator
+        // choses themselves. This "topic handshake" step takes place here before accepting the
+        // actual sync session. We may choose to reject the sync session if the handshake resolves
+        // to a topic we aren't subscribed to.
+
+        // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
+        // encoding for message framing.
+        let mut tx = into_cbor_sink::<TopicHandshakeMessage<TopicId>, _>(tx);
+        let mut rx = into_cbor_stream::<TopicHandshakeMessage<TopicId>, _>(rx);
+
+        // Channels for sending and receiving protocol events.
+        //
+        // @NOTE: We don't need to observe these events here as the topic is returned as output
+        // when the protocol completes, so these channels are actually only just to satisfy the
+        // API.
+        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<TopicId>>(128);
+        let protocol = TopicHandshakeAcceptor::new(event_tx);
+        let topic = protocol
+            .run(&mut tx, &mut rx)
+            .await
+            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
+
+        // We know the topic now and send an accept message to the eventual consistent stream
+        // actor where it will then be routed to the correct sync manager.
+        self.stream_ref
+            .send_message(ToEventuallyConsistentStreams::Accept(
+                node_id, topic, connection,
+            ))
+            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
         Ok(())
     }

@@ -7,30 +7,21 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
-use iroh::protocol::ProtocolHandler;
-use p2panda_sync::topic_handshake::{
-    TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
-};
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{Mutex, broadcast};
+use tracing::debug;
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
-use crate::actors::iroh::register_protocol;
-use crate::actors::sync::SYNC_PROTOCOL_ID;
+use crate::actors::sync::SyncSessionName;
 use crate::actors::sync::poller::SyncPoller;
-use crate::actors::sync::session::{SyncSession, SyncSessionMessage};
+use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
-use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::utils::to_public_key;
-
-pub const SYNC_MANAGER: &str = "net.sync.manager";
 
 type SessionSink<M> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<TopicId>>::Error>>>;
 
@@ -71,8 +62,8 @@ where
     // locking access to the whole manager on every read/write.
     manager: Arc<Mutex<M>>,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
-    node_session_map: HashMap<NodeId, HashSet<u64>>,
-    next_session_id: u64,
+    node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
+    next_session_id: SyncSessionId,
     pool: ThreadLocalActorSpawner,
 }
 
@@ -116,19 +107,6 @@ where
         let (actor_namespace, topic, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
-        // @TODO: move registering the sync protocol to the stream actor as this is who will be
-        // responsible for routing accepted sync requests to the correct manager based on the
-        // resolved topic.
-
-        // Accept incoming "sync protocol" connection requests.
-        register_protocol(
-            SYNC_PROTOCOL_ID,
-            SyncProtocolHandler {
-                manager_ref: myself.clone(),
-            },
-            SYNC_MANAGER.to_string(),
-        )?;
-
         let manager = Arc::new(Mutex::new(M::from_config(config)));
 
         let (_, _) = SyncPoller::<M>::spawn_linked(
@@ -167,9 +145,10 @@ where
                     remote: node_id,
                     live_mode,
                 };
-                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
+                    name,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -193,9 +172,10 @@ where
                     remote: node_id,
                     live_mode,
                 };
-                let (session, _id) = Self::new_session(state, node_id, topic, config).await;
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
                 let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
+                    name,
                     state.actor_namespace.clone(),
                     myself.clone().into(),
                     state.pool.clone(),
@@ -262,21 +242,18 @@ where
         &self,
         _myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorStarted(_actor) => {
-                // @TODO
+            SupervisionEvent::ActorTerminated(actor, _, _) => {
+                let name = SyncSessionName::from_actor_cell(&actor);
+                debug!("sync session {} terminated", name.session_id);
+                Self::drop_session(state, name.session_id);
             }
-            SupervisionEvent::ActorTerminated(_actor, _state, _reason) => {
-                // @TODO: drop related session handle on manager.
-                // @TODO: need the session id to remove the session from manager state mappings.
-                // @TODO: have the session id as the actor suffix and parse it out here.
-                // Self::drop_session(state, session_id);
-            }
-            SupervisionEvent::ActorFailed(_actor, _error) => {
-                // @TODO: have the session id as the actor suffix and parse it out here.
-                // Self::drop_session(state, session_id);
+            SupervisionEvent::ActorFailed(actor, err) => {
+                let name = SyncSessionName::from_actor_cell(&actor);
+                debug!("sync session {} failed: {}", name.session_id, err);
+                Self::drop_session(state, name.session_id);
             }
             _ => (),
         }
@@ -296,9 +273,9 @@ where
         node_id: NodeId,
         topic: TopicId,
         config: SyncSessionConfig<TopicId>,
-    ) -> (<M as SyncManagerTrait<TopicId>>::Protocol, u64) {
+    ) -> (<M as SyncManagerTrait<TopicId>>::Protocol, SyncSessionId) {
         // Get next session id.
-        let session_id: u64 = state.next_session_id;
+        let session_id: SyncSessionId = state.next_session_id;
         state.next_session_id += 1;
 
         // Instantiate the session.
@@ -330,61 +307,10 @@ where
     }
 
     /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut SyncManagerState<M>, id: u64) {
+    fn drop_session(state: &mut SyncManagerState<M>, id: SyncSessionId) {
         state.session_topic_map.drop(id);
         state.node_session_map.iter_mut().for_each(|(_, sessions)| {
             sessions.remove(&id);
         });
-    }
-}
-
-#[derive(Debug)]
-struct SyncProtocolHandler {
-    manager_ref: ActorRef<ToSyncManager>,
-}
-
-impl ProtocolHandler for SyncProtocolHandler {
-    async fn accept(
-        &self,
-        connection: iroh::endpoint::Connection,
-    ) -> Result<(), iroh::protocol::AcceptError> {
-        let node_id = to_public_key(connection.remote_id());
-        let (tx, rx) = connection.accept_bi().await?;
-
-        // As we are accepting a sync session here we don't yet know the topic which the initiator
-        // choses themselves. This "topic handshake" step takes place here before accepting the
-        // actual sync session. We may choose to reject the sync session if the handshake resolves
-        // to a topic we aren't subscribed to.
-
-        // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
-        // encoding for message framing.
-        let mut tx = into_cbor_sink::<TopicHandshakeMessage<TopicId>, _>(tx);
-        let mut rx = into_cbor_stream::<TopicHandshakeMessage<TopicId>, _>(rx);
-
-        // Channels for sending and receiving protocol events.
-        //
-        // @NOTE: We don't need to observe these events here as the topic is returned as output
-        // when the protocol completes, so these channels are actually only just to satisfy the
-        // API.
-        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<TopicId>>(128);
-        let protocol = TopicHandshakeAcceptor::new(event_tx);
-        let topic = protocol
-            .run(&mut tx, &mut rx)
-            .await
-            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-
-        // We know the topic now and send an accept message to the sync manager.
-        //
-        // @TODO: this will go to the stream actor and then be routed to the correct sync manager.
-        self.manager_ref
-            .send_message(ToSyncManager::Accept {
-                topic,
-                node_id,
-                connection,
-                live_mode: true,
-            })
-            .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
-
-        Ok(())
     }
 }
