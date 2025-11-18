@@ -389,12 +389,13 @@ where
             }
             ToEventuallyConsistentStreams::RegisterProtocol => {
                 // Register handler for accepting incoming "sync protocol" connection requests.
+                let actor_namespace = generate_actor_namespace(&state.args.public_key);
                 register_protocol(
                     SYNC_PROTOCOL_ID,
                     SyncProtocolHandler {
                         stream_ref: myself.clone(),
                     },
-                    EVENTUALLY_CONSISTENT_STREAMS.to_string(),
+                    actor_namespace,
                 )?;
             }
         }
