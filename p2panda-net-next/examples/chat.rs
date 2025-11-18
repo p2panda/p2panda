@@ -10,7 +10,9 @@ use p2panda_core::{PrivateKey, PublicKey, Signature};
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore as AddressBookMemoryStore;
 use p2panda_net_next::utils::ShortFormat;
-use p2panda_net_next::{Network, NetworkBuilder, NodeId, NodeInfo, TopicId};
+use p2panda_net_next::{
+    Network, NetworkBuilder, NodeId, NodeInfo, TopicId, TransportAddress, TransportInfo,
+};
 use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
@@ -19,6 +21,7 @@ use p2panda_sync::{SyncManagerEvent, TopicSyncManager};
 use rand::{SeedableRng, random};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -38,9 +41,13 @@ pub fn setup_logging() {
 
 #[derive(Parser)]
 struct Args {
-    /// Supply the node ID of a bootstrap node for discovery over the internet.
-    #[arg(short = 'p', long, value_name = "NODE_ID")]
-    bootstrap_node: Option<NodeId>,
+    /// Supply the node ID of a bootstrap node.
+    #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
+    bootstrap_id: Option<NodeId>,
+
+    /// Supply the serialized transport info of a bootstrap node.
+    #[arg(short = 'i', long, value_name = "BOOTSTRAP_INFO")]
+    bootstrap_info: Option<String>,
 }
 
 type LogId = u64;
@@ -72,10 +79,18 @@ async fn main() -> Result<()> {
 
     let private_key = PrivateKey::new();
     let relay_url = Url::parse(RELAY_URL)?;
+    let mut info = TransportInfo::new_unsigned();
+    info.add_addr(TransportAddress::from_iroh(
+        private_key.public_key(),
+        Some(relay_url.clone().into()),
+        [],
+    ));
+    let info = info.sign(&private_key)?;
 
     println!("network id: {}", NETWORK_ID.fmt_short());
     println!("public key: {}", private_key.public_key().to_hex());
     println!("relay url: {}", RELAY_URL);
+    println!("node info: {}", json!(info));
 
     let store = ChatStore::new();
     let topic_map = ChatTopicMap::default();
@@ -85,13 +100,13 @@ async fn main() -> Result<()> {
     let rng = ChaCha20Rng::from_seed(seed);
     let address_book = AddressBookMemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
 
-    if let Some(node_id) = args.bootstrap_node {
-        let node_info = NodeInfo {
-            node_id,
-            bootstrap: true,
-            transports: None,
-        };
-        address_book.insert_node_info(node_info).await?;
+    if let Some(id) = args.bootstrap_id {
+        if let Some(transport_info) = args.bootstrap_info {
+            let transports: TransportInfo = serde_json::from_str(&transport_info)?;
+            let mut node_info = NodeInfo::new(id);
+            node_info.update_transports(transports)?;
+            address_book.insert_node_info(node_info).await?;
+        }
     }
 
     let builder = NetworkBuilder::new(NETWORK_ID);
