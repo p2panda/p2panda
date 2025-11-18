@@ -1,30 +1,27 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::num::ParseIntError;
 use std::pin::Pin;
-use std::str::FromStr;
 
 use futures_util::{Stream, StreamExt};
-use iroh::discovery::UserData;
 use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
-use iroh::endpoint_info::MaxLengthExceededError;
-use p2panda_core::{IdentityError, Signature};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use thiserror::Error;
 
-use crate::TransportInfo;
 use crate::actors::iroh::ToIrohEndpoint;
 use crate::config::MdnsDiscoveryMode;
 
 pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
 
 pub enum ToMdns {
-    Initialise(iroh::Endpoint, MdnsDiscoveryMode),
+    Initialise(iroh::EndpointId, MdnsDiscoveryMode),
     NextStreamEvent,
 }
 
-pub type MdnsArguments = (iroh::Endpoint, MdnsDiscoveryMode, ActorRef<ToIrohEndpoint>);
+pub type MdnsArguments = (
+    iroh::EndpointId,
+    MdnsDiscoveryMode,
+    ActorRef<ToIrohEndpoint>,
+);
 
 pub struct MdnsState {
     iroh_endpoint_ref: ActorRef<ToIrohEndpoint>,
@@ -46,10 +43,10 @@ impl ThreadLocalActor for Mdns {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (endpoint, mode, iroh_endpoint_ref) = args;
+        let (endpoint_id, mode, iroh_endpoint_ref) = args;
 
         // Automatically initialise mDNS service after starting actor.
-        myself.send_message(ToMdns::Initialise(endpoint, mode))?;
+        myself.send_message(ToMdns::Initialise(endpoint_id, mode))?;
 
         Ok(MdnsState {
             iroh_endpoint_ref,
@@ -64,7 +61,7 @@ impl ThreadLocalActor for Mdns {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToMdns::Initialise(endpoint, mode) => {
+            ToMdns::Initialise(endpoint_id, mode) => {
                 if !mode.is_active() {
                     return Ok(());
                 }
@@ -72,10 +69,11 @@ impl ThreadLocalActor for Mdns {
                 let mdns = MdnsDiscovery::builder()
                     // Do not advertise our own endpoint address if in "passive" mode.
                     .advertise(mode.is_active())
-                    .build(endpoint.id())?;
+                    .build(endpoint_id)?;
 
-                // Make iroh endpoint aware of mDNS discovery service.
-                endpoint.discovery().add(mdns.clone());
+                // NOTE: We're _not_ hooking iroh's endpoint into this service (iroh would use the
+                // resolving interface) as we're already handling that ourselves with checked and
+                // authenticated addresses.
 
                 // Start polling async stream of incoming discovery events.
                 state.stream = Some(Box::pin(mdns.subscribe().await));
@@ -115,110 +113,5 @@ impl ThreadLocalActor for Mdns {
             }
         }
         Ok(())
-    }
-}
-
-const INFO_SEPARATOR: char = '.';
-
-/// Helper to bring additional transport info (signature and timestamp) into a TXT DNS record.
-///
-/// We need this data to check the authenticity of the transport info.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TransportInfoTxt {
-    signature: Signature,
-    timestamp: u64,
-}
-
-impl TransportInfoTxt {
-    pub fn from_transport_info(info: TransportInfo) -> Self {
-        Self {
-            signature: info.signature,
-            timestamp: info.timestamp,
-        }
-    }
-}
-
-impl TryFrom<TransportInfo> for UserData {
-    type Error = MaxLengthExceededError;
-
-    fn try_from(info: TransportInfo) -> Result<Self, Self::Error> {
-        UserData::try_from(TransportInfoTxt::from_transport_info(info))
-    }
-}
-
-impl TryFrom<TransportInfoTxt> for UserData {
-    type Error = MaxLengthExceededError;
-
-    fn try_from(info: TransportInfoTxt) -> Result<Self, Self::Error> {
-        // Encode the signature as an hex-string (128 characters) and the timestamp as a plain
-        // number. There's a 245 character limit for user data.
-        //
-        // NOTE: This will currently fail if the u64 integer gets too large .. we can't "remote
-        // crash" nodes because of that at least.
-        UserData::try_from(format!(
-            "{}{INFO_SEPARATOR}{}",
-            info.signature, info.timestamp
-        ))
-    }
-}
-
-impl TryFrom<UserData> for TransportInfoTxt {
-    type Error = TransportInfoTxtError;
-
-    fn try_from(user_data: UserData) -> Result<Self, Self::Error> {
-        let user_data = user_data.to_string();
-
-        // Try to split string by separator into two halfs.
-        let parts: Vec<_> = user_data.split(INFO_SEPARATOR).collect();
-        if parts.len() != 2 {
-            return Err(TransportInfoTxtError::InvalidSize(parts.len()));
-        }
-
-        // Try to parse halfs into signature and timestamp.
-        let signature = Signature::from_str(parts.first().expect("we've checked the size before"))?;
-        let timestamp = u64::from_str(parts.get(1).expect("we've checked the size before"))?;
-
-        Ok(Self {
-            signature,
-            timestamp,
-        })
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum TransportInfoTxtError {
-    #[error("invalid size of separated info parts, expected 2, given: {0}")]
-    InvalidSize(usize),
-
-    #[error(transparent)]
-    InvalidSignature(#[from] IdentityError),
-
-    #[error(transparent)]
-    InvalidTimestamp(#[from] ParseIntError),
-}
-
-#[cfg(test)]
-mod tests {
-    use iroh::discovery::UserData;
-    use p2panda_core::PrivateKey;
-
-    use crate::TransportInfo;
-    use crate::actors::iroh::mdns::TransportInfoTxt;
-
-    #[test]
-    fn transport_info_to_dns_txt() {
-        // Create simple transport info object without any addresses attached.
-        let private_key = PrivateKey::new();
-        let transport_info = TransportInfo::new_unsigned().sign(&private_key).unwrap();
-
-        // Extract information we want for our TXT record.
-        let txt_info = TransportInfoTxt::from_transport_info(transport_info);
-
-        // Convert it into iroh data type.
-        let user_data = UserData::try_from(txt_info.clone()).unwrap();
-
-        // .. and back!
-        let txt_info_again = TransportInfoTxt::try_from(user_data).unwrap();
-        assert_eq!(txt_info, txt_info_again);
     }
 }

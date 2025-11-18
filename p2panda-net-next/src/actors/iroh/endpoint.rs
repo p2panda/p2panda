@@ -15,17 +15,18 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, registry};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::debug;
+use tracing::{debug, trace, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::iroh::UserDataTransportInfo;
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 #[cfg(feature = "mdns")]
 use crate::actors::iroh::mdns::{MDNS_DISCOVERY, Mdns};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
-use crate::utils::{ShortFormat, from_private_key};
-use crate::{NodeInfo, UnsignedTransportInfo};
+use crate::utils::{ShortFormat, from_private_key, to_public_key};
+use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -63,10 +64,11 @@ pub enum ToIrohEndpoint {
     /// Our own endpoint address has changed.
     AddressChanged(Option<iroh::EndpointAddr>),
 
-    /// One of iroh's discovery services (mDNS, etc.) found an updated endpoint address.
+    /// An iroh-specific (Internet Protocol) discovery service (mDNS, etc.) found an updated
+    /// endpoint address.
     ///
-    /// This came from an endpoint-specific discovery source and we now need to translate this
-    /// information into our "meta" transport info types.
+    /// Since this came from an external discovery source we now need to translate this information
+    /// into our "meta" transport info types.
     UpdatedEndpointAddr {
         endpoint_id: iroh::PublicKey,
         endpoint_addr: Option<iroh::EndpointAddr>,
@@ -84,6 +86,34 @@ pub struct IrohState {
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
+}
+
+impl IrohState {
+    pub async fn update_address_book(
+        &self,
+        node_id: NodeId,
+        transport_info: TransportInfo,
+    ) -> Result<(), ActorProcessingErr> {
+        let address_book_ref = {
+            let Some(actor) =
+                registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
+            else {
+                // Address book is not reachable, so we're probably shutting down.
+                return Ok(());
+            };
+            ActorRef::<ToAddressBook>::from(actor)
+        };
+
+        // Update existing node info about us if available or create a new one.
+        let mut node_info = match call!(address_book_ref, ToAddressBook::NodeInfo, node_id)? {
+            Some(node_info) => node_info,
+            None => NodeInfo::new(self.args.public_key),
+        };
+        node_info.update_transports(transport_info)?;
+        let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -175,7 +205,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 if cfg!(feature = "mdns") && config.mdns_discovery_mode.is_active() {
                     Mdns::spawn_linked(
                         Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
-                        (endpoint.clone(), config.mdns_discovery_mode, myself.clone()),
+                        (endpoint.id(), config.mdns_discovery_mode, myself.clone()),
                         myself.clone().into(),
                         state.worker_pool.clone(),
                     )
@@ -293,7 +323,8 @@ impl ThreadLocalActor for IrohEndpoint {
                 }
                 .sign(&state.args.private_key)?;
 
-                // Inform iroh's added discovery services about our updated transport info.
+                // Inform iroh's added discovery services (mDNS, GossipDiscovery in iroh-gossip,
+                // etc.) about our updated transport info.
                 if let Ok(user_data) = UserData::try_from(transport_info.clone()) {
                     state
                     .endpoint
@@ -304,28 +335,57 @@ impl ThreadLocalActor for IrohEndpoint {
                     .set_user_data_for_discovery(Some(user_data));
                 }
 
-                let Some(actor) =
-                    registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
-                else {
-                    // Address book is not reachable, so we're probably shutting down.
+                // Update entry about ourselves in address book to allow this information to
+                // propagate in other discovery mechanisms or side-channels outside of iroh.
+                state
+                    .update_address_book(state.args.public_key, transport_info)
+                    .await?;
+            }
+            ToIrohEndpoint::UpdatedEndpointAddr {
+                endpoint_id,
+                endpoint_addr,
+                user_data,
+            } => {
+                let Some(user_data) = user_data else {
+                    trace!(
+                        %endpoint_id,
+                        "ignore discovered endpoint addr from iroh's services, it doesn't contain any user data"
+                    );
                     return Ok(());
                 };
-                let address_book_ref = ActorRef::<ToAddressBook>::from(actor);
 
-                // Update existing node info about us if available or create a new one.
-                let mut node_info = match call!(
-                    address_book_ref,
-                    ToAddressBook::NodeInfo,
-                    state.args.public_key
-                )? {
-                    Some(node_info) => node_info,
-                    None => NodeInfo::new(state.args.public_key),
-                };
-                node_info.update_transports(transport_info)?;
-                let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
-            }
-            ToIrohEndpoint::UpdatedEndpointAddr { .. } => {
-                todo!();
+                match UserDataTransportInfo::try_from(user_data) {
+                    Ok(txt) => {
+                        // Assemble a transport info manually by combining the extra user data (
+                        let transport_info = TransportInfo {
+                            timestamp: txt.timestamp,
+                            signature: txt.signature,
+                            addresses: endpoint_addr
+                                .map(|addr| vec![addr.into()])
+                                .unwrap_or(vec![]),
+                        };
+
+                        // Check authenticity.
+                        if transport_info.verify(&to_public_key(endpoint_id)).is_err() {
+                            warn!(
+                                %endpoint_id,
+                                "found invalid transport info coming from iroh's services"
+                            );
+                            return Ok(());
+                        }
+
+                        state
+                            .update_address_book(to_public_key(endpoint_id), transport_info)
+                            .await?;
+                    }
+                    Err(err) => {
+                        trace!(
+                            %endpoint_id,
+                            "ignore discovered endpoint addr from iroh's services, it contain's unparseable: {err:#?}"
+                        );
+                        return Ok(());
+                    }
+                }
             }
         }
 
@@ -355,16 +415,16 @@ impl ThreadLocalActor for IrohEndpoint {
                 return Ok(());
             }
 
-            warn!("mdns discovery actor failed, try to restart: {err:#}");
-
             if state.args.iroh_config.mdns_discovery_mode.is_active() {
+                warn!("mdns discovery actor failed, try to restart: {err:#}");
                 Mdns::spawn_linked(
                     Some(with_namespace(MDNS_DISCOVERY, &state.actor_namespace)),
                     (
                         state
                             .endpoint
-                            .clone()
-                            .expect("iroh endpoint must exist at this point"),
+                            .as_ref()
+                            .expect("iroh endpoint must exist at this point")
+                            .id(),
                         state.args.iroh_config.mdns_discovery_mode.clone(),
                         myself.clone(),
                     ),

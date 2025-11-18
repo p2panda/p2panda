@@ -7,10 +7,17 @@ mod mdns;
 #[cfg(test)]
 mod tests;
 
+use std::num::ParseIntError;
+use std::str::FromStr;
+
+use iroh::discovery::UserData;
+use iroh::endpoint_info::MaxLengthExceededError;
 use iroh::protocol::ProtocolHandler;
+use p2panda_core::{IdentityError, Signature};
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 
+use crate::TransportInfo;
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, with_namespace};
@@ -103,4 +110,85 @@ pub enum ConnectError {
 
     #[error(transparent)]
     ConnectionActor(#[from] ConnectionActorError),
+}
+
+/// Helper to bring additional transport info (signature and timestamp) into iroh's user data
+/// struct.
+///
+/// We need this data to check the authenticity of the transport info.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserDataTransportInfo {
+    pub signature: Signature,
+    pub timestamp: u64,
+}
+
+impl UserDataTransportInfo {
+    pub fn from_transport_info(info: TransportInfo) -> Self {
+        Self {
+            signature: info.signature,
+            timestamp: info.timestamp,
+        }
+    }
+}
+
+impl TryFrom<TransportInfo> for UserData {
+    type Error = MaxLengthExceededError;
+
+    fn try_from(info: TransportInfo) -> Result<Self, Self::Error> {
+        UserData::try_from(UserDataTransportInfo::from_transport_info(info))
+    }
+}
+
+const INFO_SEPARATOR: char = '.';
+
+impl TryFrom<UserDataTransportInfo> for UserData {
+    type Error = MaxLengthExceededError;
+
+    fn try_from(info: UserDataTransportInfo) -> Result<Self, Self::Error> {
+        // Encode the signature as an hex-string (128 characters) and the timestamp as a plain
+        // number. There's a 245 character limit for iroh's user data due to the limit of DNS TXT
+        // records.
+        //
+        // NOTE: This will currently fail if the u64 integer gets too large .. we can't "remote
+        // crash" nodes because of that at least.
+        UserData::try_from(format!(
+            "{}{INFO_SEPARATOR}{}",
+            info.signature, info.timestamp
+        ))
+    }
+}
+
+impl TryFrom<UserData> for UserDataTransportInfo {
+    type Error = TransportInfoTxtError;
+
+    fn try_from(user_data: UserData) -> Result<Self, Self::Error> {
+        let user_data = user_data.to_string();
+
+        // Try to split string by separator into two halfs.
+        let parts: Vec<_> = user_data.split(INFO_SEPARATOR).collect();
+        if parts.len() != 2 {
+            return Err(TransportInfoTxtError::Size(parts.len()));
+        }
+
+        // Try to parse halfs into signature and timestamp.
+        let signature = Signature::from_str(parts.first().expect("we've checked the size before"))?;
+        let timestamp = u64::from_str(parts.get(1).expect("we've checked the size before"))?;
+
+        Ok(Self {
+            signature,
+            timestamp,
+        })
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum TransportInfoTxtError {
+    #[error("invalid size of separated info parts, expected 2, given: {0}")]
+    Size(usize),
+
+    #[error(transparent)]
+    Signature(#[from] IdentityError),
+
+    #[error(transparent)]
+    Timestamp(#[from] ParseIntError),
 }
