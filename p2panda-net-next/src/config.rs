@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// Default port of a node socket.
@@ -64,6 +65,17 @@ pub enum MdnsDiscoveryMode {
     #[default]
     Passive,
     Disabled,
+}
+
+impl Display for MdnsDiscoveryMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            MdnsDiscoveryMode::Active => "active",
+            MdnsDiscoveryMode::Passive => "passive",
+            MdnsDiscoveryMode::Disabled => "disabled",
+        };
+        write!(f, "{value}")
+    }
 }
 
 #[cfg(feature = "mdns")]

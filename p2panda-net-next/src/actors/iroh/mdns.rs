@@ -7,7 +7,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, call, registry};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
 use crate::actors::iroh::UserDataTransportInfo;
@@ -145,6 +145,8 @@ impl ThreadLocalActor for Mdns {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToMdns::Initialise(endpoint_id, mode) => {
+                debug!("initialise mdns discovery service in {mode} mode");
+
                 if !mode.is_active() {
                     return Ok(());
                 }
@@ -245,6 +247,8 @@ impl ThreadLocalActor for Mdns {
                             return Ok(());
                         }
 
+                        trace!(%endpoint_id, "discovered new transport info");
+
                         if let Err(err) = state
                             .update_address_book(to_public_key(endpoint_id), transport_info)
                             .await
@@ -265,6 +269,7 @@ impl ThreadLocalActor for Mdns {
                 }
             }
             ToMdns::UpdateNodeInfo(node_info) => {
+                trace!("received updated node info");
                 let Ok(endpoint_addr) = TryInto::<iroh::EndpointAddr>::try_into(node_info.clone())
                 else {
                     // Node info doesn't contain any iroh-related address information.
