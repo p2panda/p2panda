@@ -96,7 +96,7 @@ where
         // Spawn the address book actor.
         let (address_book_actor, _) = AddressBook::spawn_linked(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (store.clone(),),
+            (args.clone(), store.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -178,7 +178,7 @@ where
 
                         let (address_book_actor, _) = AddressBook::spawn_linked(
                             Some(with_namespace(ADDRESS_BOOK, &state.actor_namespace)),
-                            (state.store.clone(),),
+                            (state.args.clone(), state.store.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
