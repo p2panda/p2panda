@@ -19,14 +19,15 @@ use iroh::protocol::ProtocolHandler;
 use p2panda_core::{IdentityError, Signature};
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
+use tokio::sync::broadcast;
 use tracing::{debug, error, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::NodeId;
 use crate::args::ApplicationArguments;
-use crate::utils::from_public_key;
+use crate::utils::{from_public_key, to_public_key};
 use crate::{NodeInfoError, TransportInfo, UnsignedTransportInfo};
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
@@ -240,6 +241,26 @@ impl AddressBookDiscovery {
 
         Ok(())
     }
+
+    async fn subscribe_to_node_info(
+        actor_namespace: ActorNamespace,
+        node_id: NodeId,
+    ) -> Option<broadcast::Receiver<NodeEvent>> {
+        let Some(address_book_ref) = Self::address_book_ref(actor_namespace).await else {
+            // Address book is not reachable, so we're probably shutting down.
+            return None;
+        };
+
+        let Ok(rx) = call!(
+            address_book_ref,
+            ToAddressBook::SubscribeNodeChanges,
+            node_id
+        ) else {
+            return None;
+        };
+
+        Some(rx)
+    }
 }
 
 impl Discovery for AddressBookDiscovery {
@@ -279,7 +300,7 @@ impl Discovery for AddressBookDiscovery {
 
     fn resolve(
         &self,
-        _endpoint_id: iroh::EndpointId,
+        endpoint_id: iroh::EndpointId,
     ) -> Option<BoxStream<Result<iroh::discovery::DiscoveryItem, iroh::discovery::DiscoveryError>>>
     {
         None
