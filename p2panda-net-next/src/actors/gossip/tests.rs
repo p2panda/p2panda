@@ -115,21 +115,21 @@ async fn correct_termination_state() {
 
     let (ant_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
-        (ant_store.clone(),),
+        (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (bat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
-        (bat_store.clone(),),
+        (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (cat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
-        (cat_store.clone(),),
+        (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
     )
     .await
@@ -257,14 +257,14 @@ async fn two_peer_gossip() {
 
     let (ant_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
-        (ant_store.clone(),),
+        (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (bat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
-        (bat_store.clone(),),
+        (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
@@ -411,21 +411,21 @@ async fn third_peer_joins_non_bootstrap() {
 
     let (ant_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
-        (ant_store.clone(),),
+        (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (bat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
-        (bat_store.clone(),),
+        (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (cat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
-        (cat_store.clone(),),
+        (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
     )
     .await
@@ -611,21 +611,21 @@ async fn three_peer_gossip_with_rejoin() {
 
     let (ant_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
-        (ant_store.clone(),),
+        (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (bat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
-        (bat_store.clone(),),
+        (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (cat_address_book_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
-        (cat_store.clone(),),
+        (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
     )
     .await
