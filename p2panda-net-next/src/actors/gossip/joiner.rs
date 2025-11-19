@@ -52,8 +52,8 @@ impl ThreadLocalActor for GossipJoiner {
         match message {
             ToGossipJoiner::JoinPeers(peers) => {
                 debug!("received join peers message with peers: {:?}", peers);
-                if let Some(sender) = &mut state.sender {
-                    if !peers.is_empty() {
+                if !peers.is_empty() {
+                    if let Some(sender) = &mut state.sender {
                         sender.join_peers(peers).await?;
                         debug!("told gossip to join peers");
                     }
