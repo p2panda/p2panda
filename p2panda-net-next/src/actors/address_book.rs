@@ -151,6 +151,12 @@ where
             return;
         };
 
+        // Remove ourselves.
+        let node_infos = node_infos
+            .into_iter()
+            .filter(|info| info.id() != self.args.public_key)
+            .collect();
+
         if tx.send(TopicEvent { topic, node_infos }).is_err() {
             // On an error we know that all receivers have been dropped, so we can remove this
             // subscription as well and clean up after ourselves.
@@ -170,6 +176,12 @@ where
         else {
             return;
         };
+
+        // Remove ourselves.
+        let node_infos = node_infos
+            .into_iter()
+            .filter(|info| info.id() != self.args.public_key)
+            .collect();
 
         if tx.send(TopicEvent { topic, node_infos }).is_err() {
             // On an error we know that all receivers have been dropped, so we can remove this
