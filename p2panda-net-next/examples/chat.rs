@@ -18,7 +18,7 @@ use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::TopicLogMap;
 use p2panda_sync::{FromSync, TopicSyncManager};
-use rand::{Rng, SeedableRng, random};
+use rand::{SeedableRng, random};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -116,13 +116,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    // let ipv4_port = rng.random_range(2000, 3000);
-    // let ipv6_port = rng.random_range(2000, 3000);
     let builder = NetworkBuilder::new(NETWORK_ID);
     let builder = builder.private_key(private_key.clone());
     let builder = builder.relay(relay_url.into());
-    // let builder = builder.bind_port_v4(ipv4_port);
-    // let builder = builder.bind_port_v6(ipv6_port);
 
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
