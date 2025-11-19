@@ -12,6 +12,7 @@ use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 use tokio::sync::broadcast;
 
+use crate::args::ApplicationArguments;
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 /// Address book actor name.
@@ -112,6 +113,7 @@ pub enum ToAddressBook {
 }
 
 pub struct AddressBookState<S> {
+    args: ApplicationArguments,
     store: S,
     node_subscribers: HashMap<NodeId, broadcast::Sender<NodeEvent>>,
     topic_subscribers: HashMap<TopicId, broadcast::Sender<TopicEvent>>,
@@ -200,15 +202,16 @@ where
 
     // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
     // address subsets in the future.
-    type Arguments = (S,);
+    type Arguments = (ApplicationArguments, S);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (store,) = args;
+        let (args, store) = args;
         Ok(AddressBookState {
+            args,
             store,
             node_subscribers: HashMap::new(),
             topic_subscribers: HashMap::new(),
@@ -312,6 +315,11 @@ where
             }
             ToAddressBook::NodeInfosBySyncTopics(topics, reply) => {
                 let result = state.store.node_infos_by_sync_topics(&topics).await?;
+                // Remove ourselves.
+                let result = result
+                    .into_iter()
+                    .filter(|info| info.id() != state.args.public_key)
+                    .collect();
                 let _ = reply.send(result);
             }
             ToAddressBook::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
@@ -319,6 +327,11 @@ where
                     .store
                     .node_infos_by_ephemeral_messaging_topics(&topics)
                     .await?;
+                // Remove ourselves.
+                let result = result
+                    .into_iter()
+                    .filter(|info| info.id() != state.args.public_key)
+                    .collect();
                 let _ = reply.send(result);
             }
             ToAddressBook::RandomNodeInfo(reply) => {
@@ -380,48 +393,45 @@ pub enum AddressBookError {
 mod tests {
     use p2panda_core::PrivateKey;
     use p2panda_discovery::address_book::NodeInfo as _;
-    use p2panda_discovery::address_book::memory::MemoryStore;
     use ractor::call;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
 
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
+    use crate::addrs::{NodeInfo, TransportAddress, UnsignedTransportInfo};
+    use crate::test_utils::test_args;
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
     #[tokio::test]
     async fn insert_node_and_transport_info() {
-        let private_key = PrivateKey::new();
-        let public_key = private_key.public_key();
-        let actor_namespace = generate_actor_namespace(&public_key);
+        let (args, store, _) = test_args();
+
+        let actor_namespace = generate_actor_namespace(&args.public_key);
         let spawner = ThreadLocalActorSpawner::new();
-        let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let (actor, _handle) = AddressBook::spawn(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng),),
+            (args.clone(), store),
             spawner,
         )
         .await
         .unwrap();
 
         // Insert new node info.
-        let node_info = NodeInfo::new(public_key);
+        let node_info = NodeInfo::new(args.public_key.clone());
         let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(result.unwrap());
 
         // Overwriting node info should return "false".
-        let mut node_info = NodeInfo::new(public_key);
+        let mut node_info = NodeInfo::new(args.public_key.clone());
         node_info.bootstrap = true;
         let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(!result.unwrap());
 
         // Bootstrap should be set to "true", as node info was still overwritten.
-        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+        let result = call!(actor, ToAddressBook::NodeInfo, args.public_key.clone())
             .unwrap()
             .expect("node info exists in store");
         assert!(result.bootstrap);
@@ -430,16 +440,16 @@ mod tests {
         // Inserting invalid node info should fail.
         let node_info = {
             NodeInfo {
-                node_id: public_key,
+                node_id: args.public_key.clone(),
                 bootstrap: false,
                 transports: Some({
                     let mut unsigned = UnsignedTransportInfo::new();
                     unsigned.add_addr(TransportAddress::from_iroh(
-                        public_key,
+                        args.public_key.clone(),
                         Some("https://my.relay.net".parse().unwrap()),
                         [],
                     ));
-                    let mut transport_info = unsigned.sign(&private_key).unwrap();
+                    let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
                     transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
                     transport_info
                 }),
@@ -450,7 +460,7 @@ mod tests {
         assert!(result.is_err());
 
         // Inserting transport info should not overwrite "local" data.
-        let mut node_info = NodeInfo::new(public_key);
+        let mut node_info = NodeInfo::new(args.public_key.clone());
         node_info.bootstrap = true;
         let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
@@ -458,23 +468,23 @@ mod tests {
         let transport_info = {
             let mut unsigned = UnsignedTransportInfo::new();
             unsigned.add_addr(TransportAddress::from_iroh(
-                public_key,
+                args.public_key.clone(),
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            unsigned.sign(&private_key).unwrap()
+            unsigned.sign(&args.private_key).unwrap()
         };
         let result = call!(
             actor,
             ToAddressBook::InsertTransportInfo,
-            public_key,
+            args.public_key.clone(),
             transport_info
         )
         .unwrap();
         assert!(result.is_ok());
 
         // Even after insertion of new transport info, the "local" bootstrap config is still true.
-        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+        let result = call!(actor, ToAddressBook::NodeInfo, args.public_key.clone())
             .unwrap()
             .expect("node info exists in store");
         assert!(result.bootstrap);
@@ -486,19 +496,19 @@ mod tests {
         let transport_info = {
             let mut unsigned = UnsignedTransportInfo::new();
             unsigned.add_addr(TransportAddress::from_iroh(
-                public_key,
+                args.public_key.clone(),
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            let mut transport_info = unsigned.sign(&private_key).unwrap();
+            let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
             transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
             transport_info
         };
-        assert!(transport_info.verify(&public_key).is_err());
+        assert!(transport_info.verify(&args.public_key).is_err());
         let result = call!(
             actor,
             ToAddressBook::InsertTransportInfo,
-            public_key,
+            args.public_key.clone(),
             transport_info
         )
         .unwrap();

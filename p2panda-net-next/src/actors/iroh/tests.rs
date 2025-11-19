@@ -118,14 +118,14 @@ async fn mdns_discovery() {
     // Spawn address book (it's a dependency) for both.
     let (address_book_alice_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
-        (store_alice,),
+        (args_alice.clone(), store_alice),
         thread_pool.clone(),
     )
     .await
     .unwrap();
     let (address_book_bob_ref, _) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
-        (store_bob,),
+        (args_bob.clone(), store_bob),
         thread_pool.clone(),
     )
     .await

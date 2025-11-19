@@ -52,7 +52,7 @@ impl TestNode {
 
         let (address_book_ref, _) = AddressBook::spawn(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (store.clone(),),
+            (args.clone(), store.clone()),
             thread_pool.clone(),
         )
         .await
