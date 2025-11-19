@@ -148,9 +148,6 @@ async fn mdns_discovery() {
         .await
         .expect("actor spawns successfully");
 
-    // Wait for endpoints to bind.
-    sleep(Duration::from_millis(50)).await;
-
     // Wait until they find each other and exchange transport infos.
     sleep(Duration::from_millis(1000)).await;
 
