@@ -18,7 +18,7 @@ use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::TopicLogMap;
 use p2panda_sync::{FromSync, TopicSyncManager};
-use rand::{SeedableRng, random};
+use rand::{Rng, SeedableRng, random};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -41,6 +41,10 @@ pub fn setup_logging() {
 
 #[derive(Parser)]
 struct Args {
+    /// Supply seed for deterministic node id generation.
+    #[arg(short = 's', long, value_name = "SEED")]
+    seed: Option<u8>,
+
     /// Supply the node ID of a bootstrap node.
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
@@ -76,8 +80,12 @@ async fn main() -> Result<()> {
     setup_logging();
 
     let args = Args::parse();
+    let seed = args
+        .seed
+        .map(|seed| [seed; 32])
+        .unwrap_or_else(|| rand::random::<[u8; 32]>());
 
-    let private_key = PrivateKey::new();
+    let private_key = PrivateKey::from_bytes(&seed);
     let relay_url = Url::parse(RELAY_URL)?;
     let mut info = TransportInfo::new_unsigned();
     info.add_addr(TransportAddress::from_iroh(
@@ -96,8 +104,7 @@ async fn main() -> Result<()> {
     let topic_map = ChatTopicMap::default();
     let sync_config = TopicSyncManagerConfig { topic_map, store };
 
-    let seed = rand::random();
-    let rng = ChaCha20Rng::from_seed(seed);
+    let rng: ChaCha20Rng = ChaCha20Rng::from_seed(seed);
     let address_book = AddressBookMemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
 
     if let Some(id) = args.bootstrap_id {
@@ -109,9 +116,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    // let ipv4_port = rng.random_range(2000, 3000);
+    // let ipv6_port = rng.random_range(2000, 3000);
     let builder = NetworkBuilder::new(NETWORK_ID);
     let builder = builder.private_key(private_key.clone());
     let builder = builder.relay(relay_url.into());
+    // let builder = builder.bind_port_v4(ipv4_port);
+    // let builder = builder.bind_port_v6(ipv6_port);
 
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
