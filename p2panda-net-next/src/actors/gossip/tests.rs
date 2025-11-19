@@ -6,20 +6,24 @@ use std::time::Duration;
 use iroh::discovery::EndpointInfo;
 use iroh::discovery::static_provider::StaticProvider;
 use iroh::protocol::Router as IrohRouter;
-use iroh::{Endpoint as IrohEndpoint, RelayMode};
+use iroh::{self, RelayMode};
 use p2panda_core::PublicKey;
+use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
+use rand::Rng;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
 
-use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
 use crate::actors::gossip::session::ToGossipSession;
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
+use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
-use crate::test_utils::test_args;
+use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
 use crate::utils::from_private_key;
+use crate::{NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::{Gossip, GossipState, ToGossip};
 
@@ -74,7 +78,7 @@ async fn correct_termination_state() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -82,7 +86,7 @@ async fn correct_termination_state() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -90,7 +94,7 @@ async fn correct_termination_state() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -228,7 +232,7 @@ async fn two_peer_gossip() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -236,7 +240,7 @@ async fn two_peer_gossip() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -374,7 +378,7 @@ async fn third_peer_joins_non_bootstrap() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -382,7 +386,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -390,7 +394,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -573,7 +577,7 @@ async fn three_peer_gossip_with_rejoin() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -581,7 +585,7 @@ async fn three_peer_gossip_with_rejoin() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -589,7 +593,7 @@ async fn three_peer_gossip_with_rejoin() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -783,4 +787,153 @@ async fn three_peer_gossip_with_rejoin() {
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
     cat_router.shutdown().await.unwrap();
+}
+
+pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
+    let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
+        args.public_key,
+        None,
+        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
+    )]);
+    transport_info.timestamp = args.rng.random::<u32>() as u64;
+    let transport_info = transport_info.sign(&args.private_key).unwrap();
+    NodeInfo {
+        node_id: args.public_key,
+        bootstrap: false,
+        transports: Some(transport_info),
+    }
+}
+
+#[tokio::test]
+async fn using_endpoint_actor() {
+    setup_logging();
+
+    let (mut args_alice, store_alice, _) = test_args_from_seed([112; 32]);
+    let (mut args_bob, store_bob, _) = test_args_from_seed([113; 32]);
+
+    let alice_namespace = generate_actor_namespace(&args_alice.public_key);
+    let bob_namespace = generate_actor_namespace(&args_bob.public_key);
+
+    let topic = [99; 32];
+
+    // Generate node info for both parties.
+    let alice_info = generate_node_info(&mut args_alice);
+    let bob_info = generate_node_info(&mut args_bob);
+
+    // Alice knows about bob beforehands.
+    store_alice
+        .insert_node_info(bob_info.clone())
+        .await
+        .unwrap();
+
+    // .. and vice-versa
+    store_bob
+        .insert_node_info(alice_info.clone())
+        .await
+        .unwrap();
+
+    let thread_pool = ThreadLocalActorSpawner::new();
+
+    // Spawn address books for both.
+    let (address_book_alice_ref, _) = AddressBook::spawn(
+        Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
+        (args_alice.clone(), store_alice),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+    let (address_book_bob_ref, _) = AddressBook::spawn(
+        Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
+        (args_bob.clone(), store_bob),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+
+    // Spawn both endpoint actors.
+    let (endpoint_alice_ref, _) = IrohEndpoint::spawn(
+        Some(with_namespace(IROH_ENDPOINT, &alice_namespace)),
+        args_alice.clone(),
+        thread_pool.clone(),
+    )
+    .await
+    .expect("actor spawns successfully");
+    let (endpoint_bob_ref, _) = IrohEndpoint::spawn(
+        Some(with_namespace(IROH_ENDPOINT, &bob_namespace)),
+        args_bob.clone(),
+        thread_pool.clone(),
+    )
+    .await
+    .expect("actor spawns successfully");
+
+    // Receive iroh::Endpoint object, it's required for iroh-gossip.
+    let endpoint_alice = call!(endpoint_alice_ref, ToIrohEndpoint::Endpoint).unwrap();
+    let endpoint_bob = call!(endpoint_bob_ref, ToIrohEndpoint::Endpoint).unwrap();
+
+    // Spawn gossip managers for both.
+    let (gossip_alice_ref, _) = TestGossip::spawn(
+        None,
+        (args_alice.clone(), endpoint_alice),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+    let (gossip_bob_ref, _) =
+        TestGossip::spawn(None, (args_bob.clone(), endpoint_bob), thread_pool.clone())
+            .await
+            .unwrap();
+
+    // We need to explicitly register the protocol in our endpoints.
+    //
+    // @TODO: This is currently required since the other tests to _not_ use our endpoint actor and
+    // would fail otherwise (because they would then expect that actor to exists).
+    gossip_alice_ref
+        .send_message(ToGossip::RegisterProtocol)
+        .unwrap();
+    gossip_bob_ref
+        .send_message(ToGossip::RegisterProtocol)
+        .unwrap();
+
+    // Sleepy pie time.
+    sleep(Duration::from_millis(2000)).await;
+
+    // Both peers subscribe to the gossip overlay for the same topic.
+    let (alice_tx, alice_tx_2) = call!(
+        gossip_alice_ref,
+        ToGossip::Subscribe,
+        topic,
+        vec![bob_info.id()]
+    )
+    .unwrap();
+    let (bob_tx, bob_tx_2) = call!(
+        gossip_bob_ref,
+        ToGossip::Subscribe,
+        topic,
+        vec![alice_info.id()]
+    )
+    .unwrap();
+
+    // Sleepy pie time.
+    sleep(Duration::from_millis(2000)).await;
+
+    // Subscribe to sender to obtain receiver.
+    let mut alice_rx = alice_tx_2.subscribe();
+    let mut bob_rx = bob_tx_2.subscribe();
+
+    // Send message from ant to bat.
+    alice_tx.send(b"hi!".to_vec()).await.unwrap();
+
+    // Ensure bat receives the message from ant.
+    let Ok(msg) = bob_rx.recv().await else {
+        panic!("expected msg from ant")
+    };
+    assert_eq!(msg, b"hi".to_vec());
+
+    // Shut down all actors since they're not supervised.
+    address_book_alice_ref.stop(None);
+    address_book_bob_ref.stop(None);
+    gossip_alice_ref.stop(None);
+    gossip_bob_ref.stop(None);
+    endpoint_alice_ref.stop(None);
+    endpoint_bob_ref.stop(None);
 }
