@@ -200,6 +200,8 @@ impl ThreadLocalActor for GossipSession {
                 }
             },
             ToGossipSession::JoinPeers(peers) => {
+                debug!("join peers");
+
                 let _ = state
                     .gossip_joiner_actor
                     .cast(ToGossipJoiner::JoinPeers(peers));

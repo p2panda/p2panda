@@ -8,6 +8,9 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use iroh::Watcher;
+use iroh::discovery::dns::DnsDiscovery;
+use iroh::discovery::pkarr::PkarrPublisher;
+use iroh::dns::DnsResolver;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
@@ -176,12 +179,15 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
                 // Create and bind the endpoint to the socket.
-                let endpoint = iroh::Endpoint::builder()
+                let endpoint = iroh::Endpoint::empty_builder(iroh::RelayMode::Default)
+                    // @TODO: Replace this with our own resolver (talking to the address book).
+                    // This will be needed by iroh-gossip.
+                    .discovery(PkarrPublisher::n0_dns())
+                    .discovery(DnsDiscovery::n0_dns())
                     .secret_key(from_private_key(state.args.private_key.clone()))
                     .transport_config(transport_config)
-                    .relay_mode(relay_mode)
-                    .bind_addr_v4(socket_address_v4)
-                    .bind_addr_v6(socket_address_v6)
+                    // .bind_addr_v4(socket_address_v4)
+                    // .bind_addr_v6(socket_address_v6)
                     .bind()
                     .await?;
 
@@ -266,7 +272,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 //
                 // This means: The lifetime of this actor does _not_ indicate the lifetime of the
                 // connection itself.
-                IrohConnection::spawn(
+                IrohConnection::spawn_linked(
                     None,
                     (
                         state.args.public_key,
@@ -275,6 +281,7 @@ impl ThreadLocalActor for IrohEndpoint {
                             protocols: state.protocols.clone(),
                         },
                     ),
+                    myself.clone().into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
@@ -304,6 +311,16 @@ impl ThreadLocalActor for IrohEndpoint {
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_supervisor_evt(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        message: ractor::SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        debug!("{:?}", message);
         Ok(())
     }
 }

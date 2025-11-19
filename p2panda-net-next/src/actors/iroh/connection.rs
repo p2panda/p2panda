@@ -87,6 +87,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             reply,
         } => {
             tracing::Span::current().record("alpn", alpn.fmt_short());
+            debug!("try to initialise connection");
             match endpoint
                 .connect(endpoint_addr, &alpn)
                 .await
@@ -112,6 +113,7 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             incoming,
             protocols,
         } => {
+            debug!("accept incoming connection");
             // Accept incoming request.
             let mut accepting = match incoming.accept() {
                 Ok(accepting) => accepting,
@@ -152,7 +154,11 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
 
             // Pass over connection to handler, ignore any errors here as this is nothing we need
             // to be aware of anymore, this is the end of this actor.
-            let _ = protocol_handler.accept(connection).await;
+            if let Err(err) = protocol_handler.accept(connection).await {
+                warn!("errrorr: {err:#?}");
+            }
+
+            debug!("end here");
         }
     }
 

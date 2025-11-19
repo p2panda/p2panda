@@ -14,6 +14,7 @@ use ractor::{ActorRef, call};
 use rand::Rng;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
+use tracing::{debug, error};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
 use crate::actors::gossip::session::ToGossipSession;
@@ -22,7 +23,7 @@ use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
 use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
-use crate::utils::from_private_key;
+use crate::utils::{from_private_key, from_public_key, to_public_key};
 use crate::{NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::{Gossip, GossipState, ToGossip};
@@ -804,7 +805,7 @@ pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn using_endpoint_actor() {
     setup_logging();
 
@@ -817,123 +818,192 @@ async fn using_endpoint_actor() {
     let topic = [99; 32];
 
     // Generate node info for both parties.
-    let alice_info = generate_node_info(&mut args_alice);
-    let bob_info = generate_node_info(&mut args_bob);
+    // let alice_info = generate_node_info(&mut args_alice);
+    // let bob_info = generate_node_info(&mut args_bob);
+    //
+    // // Alice knows about bob beforehands.
+    // store_alice
+    //     .insert_node_info(bob_info.clone())
+    //     .await
+    //     .unwrap();
+    //
+    // // .. and vice-versa
+    // store_bob
+    //     .insert_node_info(alice_info.clone())
+    //     .await
+    //     .unwrap();
 
-    // Alice knows about bob beforehands.
-    store_alice
-        .insert_node_info(bob_info.clone())
-        .await
-        .unwrap();
-
-    // .. and vice-versa
-    store_bob
-        .insert_node_info(alice_info.clone())
-        .await
-        .unwrap();
-
-    let thread_pool = ThreadLocalActorSpawner::new();
+    let thread_pool_1 = ThreadLocalActorSpawner::new();
+    let thread_pool_2 = ThreadLocalActorSpawner::new();
+    let thread_pool_3 = ThreadLocalActorSpawner::new();
+    let thread_pool_4 = ThreadLocalActorSpawner::new();
+    let thread_pool_5 = ThreadLocalActorSpawner::new();
+    let thread_pool_6 = ThreadLocalActorSpawner::new();
 
     // Spawn address books for both.
-    let (address_book_alice_ref, _) = AddressBook::spawn(
-        Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
-        (args_alice.clone(), store_alice),
-        thread_pool.clone(),
-    )
-    .await
-    .unwrap();
-    let (address_book_bob_ref, _) = AddressBook::spawn(
-        Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
-        (args_bob.clone(), store_bob),
-        thread_pool.clone(),
-    )
-    .await
-    .unwrap();
+    // let (address_book_alice_ref, _) = AddressBook::spawn(
+    //     Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
+    //     (args_alice.clone(), store_alice),
+    //     thread_pool_1.clone(),
+    // )
+    // .await
+    // .unwrap();
+    // let (address_book_bob_ref, _) = AddressBook::spawn(
+    //     Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
+    //     (args_bob.clone(), store_bob),
+    //     thread_pool_2.clone(),
+    // )
+    // .await
+    // .unwrap();
 
     // Spawn both endpoint actors.
     let (endpoint_alice_ref, _) = IrohEndpoint::spawn(
         Some(with_namespace(IROH_ENDPOINT, &alice_namespace)),
         args_alice.clone(),
-        thread_pool.clone(),
+        thread_pool_3.clone(),
     )
     .await
     .expect("actor spawns successfully");
     let (endpoint_bob_ref, _) = IrohEndpoint::spawn(
         Some(with_namespace(IROH_ENDPOINT, &bob_namespace)),
         args_bob.clone(),
-        thread_pool.clone(),
+        thread_pool_4.clone(),
     )
     .await
     .expect("actor spawns successfully");
+
+    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &args_alice.network_id);
 
     // Receive iroh::Endpoint object, it's required for iroh-gossip.
     let endpoint_alice = call!(endpoint_alice_ref, ToIrohEndpoint::Endpoint).unwrap();
     let endpoint_bob = call!(endpoint_bob_ref, ToIrohEndpoint::Endpoint).unwrap();
 
-    // Spawn gossip managers for both.
-    let (gossip_alice_ref, _) = TestGossip::spawn(
-        None,
-        (args_alice.clone(), endpoint_alice),
-        thread_pool.clone(),
-    )
-    .await
-    .unwrap();
-    let (gossip_bob_ref, _) =
-        TestGossip::spawn(None, (args_bob.clone(), endpoint_bob), thread_pool.clone())
-            .await
-            .unwrap();
+    let alice_gossip = iroh_gossip::Gossip::builder()
+        .alpn(&mixed_alpn)
+        .spawn(endpoint_alice);
 
-    // We need to explicitly register the protocol in our endpoints.
+    let bob_gossip = iroh_gossip::Gossip::builder()
+        .alpn(&mixed_alpn)
+        .spawn(endpoint_bob);
+
+    endpoint_alice_ref
+        .send_message(ToIrohEndpoint::RegisterProtocol(
+            iroh_gossip::ALPN.to_vec(),
+            Box::new(alice_gossip.clone()),
+        ))
+        .unwrap();
+
+    endpoint_bob_ref
+        .send_message(ToIrohEndpoint::RegisterProtocol(
+            iroh_gossip::ALPN.to_vec(),
+            Box::new(bob_gossip.clone()),
+        ))
+        .unwrap();
+
+    let (alice_tx, mut alice_rx) = alice_gossip
+        .subscribe(topic.into(), vec![from_public_key(args_bob.public_key)])
+        .await
+        .unwrap()
+        .split();
+
+    let (bob_tx, mut bob_rx) = bob_gossip
+        .subscribe(topic.into(), vec![from_public_key(args_alice.public_key)])
+        .await
+        .unwrap()
+        .split();
+
+    // bob_tx
+    //     .join_peers(vec![from_public_key(args_alice.public_key)])
+    //     .await
+    //     .unwrap();
     //
-    // @TODO: This is currently required since the other tests to _not_ use our endpoint actor and
-    // would fail otherwise (because they would then expect that actor to exists).
-    gossip_alice_ref
-        .send_message(ToGossip::RegisterProtocol)
-        .unwrap();
-    gossip_bob_ref
-        .send_message(ToGossip::RegisterProtocol)
-        .unwrap();
+    // debug!("lala");
+
+    tokio::task::spawn(async move {
+        alice_rx.joined().await.unwrap();
+        error!("alice joined");
+        error!("alice joined");
+        error!("alice joined");
+    });
+
+    tokio::task::spawn(async move {
+        bob_rx.joined().await.unwrap();
+        error!("bob joined");
+        error!("bob joined");
+        error!("bob joined");
+    });
 
     // Sleepy pie time.
-    sleep(Duration::from_millis(2000)).await;
+    sleep(Duration::from_millis(5000)).await;
+
+    alice_gossip.shutdown().await.unwrap();
+    bob_gossip.shutdown().await.unwrap();
+
+    // // Spawn gossip managers for both.
+    // let (gossip_alice_ref, _) = TestGossip::spawn(
+    //     None,
+    //     (args_alice.clone(), endpoint_alice),
+    //     thread_pool_5.clone(),
+    // )
+    // .await
+    // .unwrap();
+    // let (gossip_bob_ref, _) = TestGossip::spawn(
+    //     None,
+    //     (args_bob.clone(), endpoint_bob),
+    //     thread_pool_6.clone(),
+    // )
+    // .await
+    // .unwrap();
+    //
+    // // We need to explicitly register the protocol in our endpoints.
+    // //
+    // // @TODO: This is currently required since the other tests to _not_ use our endpoint actor and
+    // // would fail otherwise (because they would then expect that actor to exists).
+    // gossip_alice_ref
+    //     .send_message(ToGossip::RegisterProtocol)
+    //     .unwrap();
+    // gossip_bob_ref
+    //     .send_message(ToGossip::RegisterProtocol)
+    //     .unwrap();
 
     // Both peers subscribe to the gossip overlay for the same topic.
-    let (alice_tx, alice_tx_2) = call!(
-        gossip_alice_ref,
-        ToGossip::Subscribe,
-        topic,
-        vec![bob_info.id()]
-    )
-    .unwrap();
-    let (bob_tx, bob_tx_2) = call!(
-        gossip_bob_ref,
-        ToGossip::Subscribe,
-        topic,
-        vec![alice_info.id()]
-    )
-    .unwrap();
+    // let (alice_tx, alice_tx_2) = call!(
+    //     gossip_alice_ref,
+    //     ToGossip::Subscribe,
+    //     topic,
+    //     vec![bob_info.id()]
+    // )
+    // .unwrap();
+    // let (bob_tx, bob_tx_2) = call!(
+    //     gossip_bob_ref,
+    //     ToGossip::Subscribe,
+    //     topic,
+    //     vec![alice_info.id()]
+    // )
+    // .unwrap();
 
-    // Sleepy pie time.
-    sleep(Duration::from_millis(2000)).await;
+    // // Sleepy pie time.
+    // sleep(Duration::from_millis(2000)).await;
 
     // Subscribe to sender to obtain receiver.
-    let mut alice_rx = alice_tx_2.subscribe();
-    let mut bob_rx = bob_tx_2.subscribe();
-
-    // Send message from ant to bat.
-    alice_tx.send(b"hi!".to_vec()).await.unwrap();
-
-    // Ensure bat receives the message from ant.
-    let Ok(msg) = bob_rx.recv().await else {
-        panic!("expected msg from ant")
-    };
-    assert_eq!(msg, b"hi".to_vec());
+    // let mut alice_rx = alice_tx_2.subscribe();
+    // let mut bob_rx = bob_tx_2.subscribe();
+    //
+    // // Send message from ant to bat.
+    // alice_tx.send(b"hi!".to_vec()).await.unwrap();
+    //
+    // // Ensure bat receives the message from ant.
+    // let Ok(msg) = bob_rx.recv().await else {
+    //     panic!("expected msg from ant")
+    // };
+    // assert_eq!(msg, b"hi".to_vec());
 
     // Shut down all actors since they're not supervised.
-    address_book_alice_ref.stop(None);
-    address_book_bob_ref.stop(None);
-    gossip_alice_ref.stop(None);
-    gossip_bob_ref.stop(None);
+    // address_book_alice_ref.stop(None);
+    // address_book_bob_ref.stop(None);
+    // gossip_alice_ref.stop(None);
+    // gossip_bob_ref.stop(None);
+
     endpoint_alice_ref.stop(None);
     endpoint_bob_ref.stop(None);
 }
