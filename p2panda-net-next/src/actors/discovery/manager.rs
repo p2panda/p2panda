@@ -258,7 +258,10 @@ where
                 )?;
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
-                info!("initiate discovery session with: {}", remote_node_id.to_hex());
+                info!(
+                    "initiate discovery session with: {}",
+                    remote_node_id.to_hex()
+                );
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
                 let session_id = state.next_session_id();

@@ -366,6 +366,8 @@ where
                 node_id,
                 session_id,
             } => {
+                debug!("received neighbor up");
+
                 // Insert the node into the set of neighbours.
                 if let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id)
                     && let Some(neighbours) = state.neighbours.get_mut(topic)
@@ -375,6 +377,8 @@ where
                     ) {
                         let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
                             eventually_consistent_streams_actor.into();
+
+                        debug!("sending initiate sync to ev streams actor");
 
                         // Ask the eventually consistent streams actor to initiate a sync session
                         // for this topic.

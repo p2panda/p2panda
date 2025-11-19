@@ -25,8 +25,9 @@ use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::utils::to_public_key;
+use crate::utils::{ShortFormat, to_public_key};
 
+#[derive(Debug)]
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
     ProcessEvent(IrohEvent),
@@ -146,11 +147,15 @@ impl ThreadLocalActor for GossipSession {
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        debug!("{:?}", message);
+
         // Gossip events are passed up the chain to the main gossip actor.
         //
         // We perform type conversion here to reduce the workload of the gossip actor.
         match message {
             ToGossipSession::ProcessJoined(peers) => {
+                debug!("joined peers on gossip overlay: {:?}", peers);
+
                 let topic = state.topic;
                 let peers: Vec<PublicKey> = peers.into_iter().map(to_public_key).collect();
                 let session_id = myself.get_id();
@@ -181,6 +186,12 @@ impl ThreadLocalActor for GossipSession {
                     });
                 }
                 IrohEvent::NeighborUp(peer) => {
+                    debug!(
+                        "neighbor up for topic {}: {}",
+                        state.topic.fmt_short(),
+                        peer.fmt_short()
+                    );
+
                     let node_id = to_public_key(peer);
                     let session_id = myself.get_id();
 
@@ -200,6 +211,8 @@ impl ThreadLocalActor for GossipSession {
                 }
             },
             ToGossipSession::JoinPeers(peers) => {
+                debug!("received join peers message with peers: {:?}", peers);
+
                 let _ = state
                     .gossip_joiner_actor
                     .cast(ToGossipJoiner::JoinPeers(peers));

@@ -5,6 +5,7 @@ use iroh::EndpointId;
 use iroh_gossip::api::GossipSender as IrohGossipSender;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
+use tracing::debug;
 
 pub enum ToGossipJoiner {
     /// Join the given set of peers.
@@ -50,8 +51,12 @@ impl ThreadLocalActor for GossipJoiner {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToGossipJoiner::JoinPeers(peers) => {
-                if let Some(sender) = &mut state.sender {
-                    sender.join_peers(peers).await?;
+                debug!("received join peers message with peers: {:?}", peers);
+                if !peers.is_empty() {
+                    if let Some(sender) = &mut state.sender {
+                        sender.join_peers(peers).await?;
+                        debug!("told gossip to join peers");
+                    }
                 }
             }
         }
