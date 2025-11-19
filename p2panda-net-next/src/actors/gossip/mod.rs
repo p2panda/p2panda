@@ -204,22 +204,28 @@ where
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        debug!("doodee");
         match message {
             ToGossip::RegisterProtocol => {
+                debug!("register protocol...");
                 register_protocol(
                     iroh_gossip::ALPN,
                     state.gossip.clone(),
                     state.actor_namespace.clone(),
                 )?;
+                debug!("registered");
                 Ok(())
             }
             ToGossip::Handle(reply) => {
+                debug!("get handle...");
                 let gossip = state.gossip.clone();
                 let _ = reply.send(gossip);
+                debug!("returned handle");
 
                 Ok(())
             }
             ToGossip::Subscribe(topic, peers, reply) => {
+                debug!("subscribe...");
                 // Channel to receive messages from the user (to the gossip overlay).
                 let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
 
@@ -287,9 +293,13 @@ where
                 // Return sender / receiver pair to the user.
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
 
+                debug!("subscribed");
+
                 Ok(())
             }
             ToGossip::Unsubscribe(topic) => {
+                debug!("unsubscribe...");
+
                 // Stop the session associated with this topic.
                 if let Some(actor) = state.sessions.sessions_by_topic.remove(&topic) {
                     let actor_id = actor.get_id();
@@ -304,9 +314,13 @@ where
                 state.neighbours.remove(&topic);
                 state.topic_delivery_scopes.remove(&topic);
 
+                debug!("unsubscribed");
+
                 Ok(())
             }
             ToGossip::JoinPeers(topic, peers) => {
+                debug!("join peers...");
+
                 // Convert p2panda public keys to iroh endpoint ids.
                 let peers: Vec<EndpointId> = peers
                     .iter()
@@ -317,6 +331,8 @@ where
                     let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
                 }
 
+                debug!("joined peers");
+
                 Ok(())
             }
             ToGossip::ReceivedMessage {
@@ -326,6 +342,8 @@ where
                 topic,
                 session_id: _,
             } => {
+                debug!("receiving message...");
+
                 // Store the delivery scope of the received message.
                 state
                     .topic_delivery_scopes
@@ -337,6 +355,8 @@ where
                 if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic) {
                     let _number_of_subscribers = from_gossip_tx.send(bytes)?;
                 }
+
+                debug!("received message");
 
                 Ok(())
             }
@@ -360,13 +380,15 @@ where
                 // Store the neighbours with whom we have joined the topic.
                 state.neighbours.insert(topic, peer_set);
 
+                debug!("joined");
+
                 Ok(())
             }
             ToGossip::NeighborUp {
                 node_id,
                 session_id,
             } => {
-                debug!("received neighbor up");
+                debug!("receiving neighbor up...");
 
                 // Insert the node into the set of neighbours.
                 if let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id)
@@ -389,6 +411,7 @@ where
 
                     neighbours.insert(node_id);
                 }
+                debug!("received neighbor up");
 
                 Ok(())
             }
@@ -396,6 +419,8 @@ where
                 node_id,
                 session_id,
             } => {
+                debug!("receiving neighbor down...");
+
                 // Remove the peer from the set of neighbours.
                 if let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id)
                     && let Some(neighbours) = state.neighbours.get_mut(topic)
@@ -415,6 +440,8 @@ where
 
                     neighbours.remove(&node_id);
                 }
+
+                debug!("received neighbor down");
 
                 Ok(())
             }
