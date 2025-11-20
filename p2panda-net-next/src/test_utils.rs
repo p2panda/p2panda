@@ -120,8 +120,6 @@ impl Protocol for NoSyncProtocol {
             })
             .unwrap();
 
-        sink.flush().await.unwrap();
-
         Ok(())
     }
 }
