@@ -349,8 +349,6 @@ async fn two_peer_gossip() {
     ant_router.shutdown().await.unwrap();
 }
 
-// @TODO: This test keeps hanging at random times.
-#[ignore]
 #[tokio::test]
 async fn third_peer_joins_non_bootstrap() {
     // Scenario:
