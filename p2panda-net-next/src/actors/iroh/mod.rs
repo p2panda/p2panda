@@ -12,7 +12,7 @@ use std::num::ParseIntError;
 use std::pin::Pin;
 use std::str::FromStr;
 
-use futures_util::{Stream, StreamExt};
+use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::discovery::{
     Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo, UserData,
 };
@@ -23,9 +23,9 @@ use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::{debug, error, trace, warn};
+use tracing::{Instrument, debug, error, info_span, trace, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
+use crate::actors::address_book::{ADDRESS_BOOK, ImmediateResult, NodeEvent, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::NodeId;
@@ -277,19 +277,19 @@ impl Discovery for AddressBookDiscovery {
         &self,
         endpoint_id: iroh::EndpointId,
     ) -> Option<BoxStream<Result<DiscoveryItem, DiscoveryError>>> {
-        trace!(%endpoint_id, "resolve");
-
-        use futures_util::FutureExt;
-
         let actor_namespace = self.actor_namespace.clone();
 
+        let span = info_span!("resolve", endpoint_id = %endpoint_id.fmt_short());
+        trace!(parent: &span, "received request to resolve endpoint id");
+
         let stream = async move {
-            let subscription = subscribe_to_node_info(actor_namespace, to_public_key(endpoint_id))
-                .await
-                .ok_or(DiscoveryError::from_err_any(
-                    PROVENANCE,
-                    "address book actor did not respond with subscription",
-                ));
+            let subscription =
+                subscribe_to_node_info(actor_namespace, to_public_key(endpoint_id), true)
+                    .await
+                    .ok_or(DiscoveryError::from_err_any(
+                        PROVENANCE,
+                        "address book actor did not respond with subscription",
+                    ));
 
             match subscription {
                 Ok(rx) => BroadcastStream::new(rx)
@@ -299,14 +299,24 @@ impl Discovery for AddressBookDiscovery {
                                 let info = EndpointInfo::from(endpoint_addr);
                                 Ok(DiscoveryItem::new(info, PROVENANCE, None))
                             }
-                            Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
+                            Err(err) => {
+                                warn!("failed resolving address: {err:#?}");
+                                Err(DiscoveryError::from_err(PROVENANCE, err))
+                            }
                         },
-                        Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
+                        Err(err) => {
+                            warn!("failed resolving address: {err:#?}");
+                            Err(DiscoveryError::from_err(PROVENANCE, err))
+                        }
                     })
                     .boxed(),
-                Err(err) => futures_util::stream::once(async { Err(err) }).boxed(),
+                Err(err) => {
+                    warn!("failed resolving address due to actor error: {err:#?}");
+                    futures_util::stream::once(async { Err(err) }).boxed()
+                }
             }
-        };
+        }
+        .instrument(span);
 
         Some(Box::pin(stream.flatten_stream()))
     }
@@ -343,6 +353,7 @@ async fn update_address_book(
 async fn subscribe_to_node_info(
     actor_namespace: ActorNamespace,
     node_id: NodeId,
+    immediate: ImmediateResult,
 ) -> Option<broadcast::Receiver<NodeEvent>> {
     let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
         // Address book is not reachable, so we're probably shutting down.
@@ -352,7 +363,8 @@ async fn subscribe_to_node_info(
     let Ok(rx) = call!(
         address_book_ref,
         ToAddressBook::SubscribeNodeChanges,
-        node_id
+        node_id,
+        immediate
     ) else {
         return None;
     };

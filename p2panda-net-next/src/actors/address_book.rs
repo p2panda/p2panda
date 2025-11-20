@@ -105,12 +105,20 @@ pub enum ToAddressBook {
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
 
     /// Subscribes to channel informing us about changes on node infos for a specific node.
-    SubscribeNodeChanges(NodeId, RpcReplyPort<broadcast::Receiver<NodeEvent>>),
+    SubscribeNodeChanges(
+        NodeId,
+        ImmediateResult,
+        RpcReplyPort<broadcast::Receiver<NodeEvent>>,
+    ),
 
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
     /// id for eventually consistent and ephemeral streams.
     SubscribeTopicChanges(TopicId, RpcReplyPort<broadcast::Receiver<TopicEvent>>),
 }
+
+/// When set "true" the subscription will directly yield the current state without waiting for
+/// changes to come.
+pub type ImmediateResult = bool;
 
 pub struct AddressBookState<S> {
     args: ApplicationArguments,
@@ -289,7 +297,7 @@ where
                     }
                 }
             }
-            ToAddressBook::SubscribeNodeChanges(node_id, reply) => {
+            ToAddressBook::SubscribeNodeChanges(node_id, immediate, reply) => {
                 let rx = match state.node_subscribers.get_mut(&node_id) {
                     Some(tx) => tx.subscribe(),
                     None => {
@@ -298,6 +306,13 @@ where
                         rx
                     }
                 };
+
+                // Respond with current node info (if there's any) if requested.
+                if immediate
+                    && let Some(node_info) = state.store.node_info(&node_id).await? {
+                        state.call_node_subscribers(node_id, &node_info);
+                    }
+
                 let _ = reply.send(rx);
             }
             ToAddressBook::SubscribeTopicChanges(topic, reply) => {
