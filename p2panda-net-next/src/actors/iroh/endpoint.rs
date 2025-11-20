@@ -6,24 +6,18 @@ use std::collections::BTreeMap;
 use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 
-use futures_util::StreamExt;
-use iroh::Watcher;
-use iroh::discovery::dns::DnsDiscovery;
-use iroh::discovery::pkarr::PkarrPublisher;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::iroh::AddressBookDiscovery;
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
-use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -55,49 +49,17 @@ pub enum ToIrohEndpoint {
 
     /// We've received a connection attempt from a remote iroh endpoint.
     Incoming(iroh::endpoint::Incoming),
-
-    /// Our own endpoint address has changed.
-    AddressChanged(Option<iroh::EndpointAddr>),
 }
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
 pub struct IrohState {
-    actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
     worker_pool: ThreadLocalActorSpawner,
-}
-
-impl IrohState {
-    pub async fn update_address_book(
-        &self,
-        node_id: NodeId,
-        transport_info: TransportInfo,
-    ) -> Result<(), ActorProcessingErr> {
-        let address_book_ref = {
-            let Some(actor) =
-                registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
-            else {
-                // Address book is not reachable, so we're probably shutting down.
-                return Ok(());
-            };
-            ActorRef::<ToAddressBook>::from(actor)
-        };
-
-        // Update existing node info about us if available or create a new one.
-        let mut node_info = match call!(address_book_ref, ToAddressBook::NodeInfo, node_id)? {
-            Some(node_info) => node_info,
-            None => NodeInfo::new(node_id),
-        };
-        node_info.update_transports(transport_info)?;
-        let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
-
-        Ok(())
-    }
 }
 
 #[derive(Default)]
@@ -115,13 +77,10 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let actor_namespace = generate_actor_namespace(&args.public_key);
-
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
 
         Ok(IrohState {
-            actor_namespace,
             args,
             endpoint: None,
             protocols: Arc::default(),
@@ -170,29 +129,18 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
+                // Connect iroh's endpoint with our own address book to "publish" our changed iroh
+                // address directly and "resolve" endpoint id's.
+                let address_book_discovery = AddressBookDiscovery::new(state.args.clone());
+
                 // Create and bind the endpoint to the socket.
                 let endpoint = iroh::Endpoint::empty_builder(relay_mode)
-                    // @TODO: Replace this with our own resolver (talking to the address book).
-                    // This will be needed by iroh-gossip.
-                    .discovery(PkarrPublisher::n0_dns())
-                    .discovery(DnsDiscovery::n0_dns())
+                    .discovery(address_book_discovery)
                     .secret_key(from_private_key(state.args.private_key.clone()))
                     .bind_addr_v4(socket_address_v4)
                     .bind_addr_v6(socket_address_v6)
                     .bind()
                     .await?;
-
-                // Watch for changes of our own endpoint address.
-                let watch_addr_handle = {
-                    let mut watcher = endpoint.watch_addr().stream();
-                    let myself = myself.clone();
-                    tokio::spawn(async move {
-                        loop {
-                            let addr = watcher.next().await;
-                            let _ = myself.send_message(ToIrohEndpoint::AddressChanged(addr));
-                        }
-                    })
-                };
 
                 // Handle incoming connection requests from other nodes.
                 let accept_handle = {
@@ -209,7 +157,6 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 state.endpoint = Some(endpoint);
                 state.accept_handle = Some(accept_handle);
-                state.watch_addr_handle = Some(watch_addr_handle);
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
@@ -280,24 +227,6 @@ impl ThreadLocalActor for IrohEndpoint {
                 let _ = reply.send(state.endpoint.clone().expect(
                     "bind always takes place first, an endpoint must exist after this point",
                 ));
-            }
-            ToIrohEndpoint::AddressChanged(endpoint_addr) => {
-                debug!(?endpoint_addr, "updated iroh endpoint address");
-
-                // Create a new transport info with iroh addresses if given. If no iroh address
-                // exists (because we are not reachable) we're explicitly making the address array
-                // empty to inform other nodes about this.
-                let transport_info = match endpoint_addr {
-                    Some(addr) => UnsignedTransportInfo::from_addrs([addr.into()]),
-                    None => UnsignedTransportInfo::new(),
-                }
-                .sign(&state.args.private_key)?;
-
-                // Update entry about ourselves in address book to allow this information to
-                // propagate in other discovery mechanisms or side-channels outside of iroh.
-                state
-                    .update_address_book(state.args.public_key, transport_info)
-                    .await?;
             }
         }
 
