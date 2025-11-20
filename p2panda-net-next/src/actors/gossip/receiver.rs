@@ -6,7 +6,6 @@ use futures_util::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use tokio::time::Instant;
 use tracing::{debug, error};
 
 use crate::actors::gossip::session::ToGossipSession;
