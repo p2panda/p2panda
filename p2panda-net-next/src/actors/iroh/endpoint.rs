@@ -161,6 +161,7 @@ impl ThreadLocalActor for IrohEndpoint {
             ToIrohEndpoint::Bind => {
                 let config = state.args.iroh_config.clone();
 
+                // Configure sockets to bind to.
                 let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
                 let socket_address_v6 =
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
