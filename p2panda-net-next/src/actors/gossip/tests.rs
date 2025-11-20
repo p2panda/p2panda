@@ -6,20 +6,24 @@ use std::time::Duration;
 use iroh::discovery::EndpointInfo;
 use iroh::discovery::static_provider::StaticProvider;
 use iroh::protocol::Router as IrohRouter;
-use iroh::{Endpoint as IrohEndpoint, RelayMode};
+use iroh::{self, RelayMode};
 use p2panda_core::PublicKey;
+use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
+use rand::Rng;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
 
-use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
 use crate::actors::gossip::session::ToGossipSession;
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
+use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
-use crate::test_utils::test_args;
+use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
 use crate::utils::from_private_key;
+use crate::{NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::{Gossip, GossipState, ToGossip};
 
@@ -74,7 +78,7 @@ async fn correct_termination_state() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -82,7 +86,7 @@ async fn correct_termination_state() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -90,7 +94,7 @@ async fn correct_termination_state() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -113,21 +117,21 @@ async fn correct_termination_state() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -187,7 +191,7 @@ async fn correct_termination_state() {
     assert!(neighbours.contains(&bat_public_key));
     assert!(neighbours.contains(&cat_public_key));
 
-    // Stop all other actors and routers.
+    // Stop gossip actors.
     ant_gossip_actor.stop(None);
     bat_gossip_actor.stop(None);
     cat_gossip_actor.stop(None);
@@ -196,10 +200,14 @@ async fn correct_termination_state() {
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
+    // Shutdown routers.
     ant_router.shutdown().await.unwrap();
     bat_router.shutdown().await.unwrap();
     cat_router.shutdown().await.unwrap();
@@ -228,7 +236,7 @@ async fn two_peer_gossip() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -236,7 +244,7 @@ async fn two_peer_gossip() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -255,14 +263,14 @@ async fn two_peer_gossip() {
     let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
@@ -337,16 +345,16 @@ async fn two_peer_gossip() {
     bat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
     ant_router.shutdown().await.unwrap();
 }
 
-// @TODO: This test keeps hanging at random times.
-#[ignore]
 #[tokio::test]
 async fn third_peer_joins_non_bootstrap() {
     // Scenario:
@@ -374,7 +382,7 @@ async fn third_peer_joins_non_bootstrap() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -382,7 +390,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -390,7 +398,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -409,21 +417,21 @@ async fn third_peer_joins_non_bootstrap() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -531,9 +539,12 @@ async fn third_peer_joins_non_bootstrap() {
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     ant_router.shutdown().await.unwrap();
@@ -573,7 +584,7 @@ async fn three_peer_gossip_with_rejoin() {
 
     // Create endpoints.
     let ant_discovery = StaticProvider::new();
-    let ant_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let ant_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(ant_private_key))
         .discovery(ant_discovery.clone())
         .bind()
@@ -581,7 +592,7 @@ async fn three_peer_gossip_with_rejoin() {
         .unwrap();
 
     let bat_discovery = StaticProvider::new();
-    let bat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let bat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(bat_private_key))
         .discovery(bat_discovery.clone())
         .bind()
@@ -589,7 +600,7 @@ async fn three_peer_gossip_with_rejoin() {
         .unwrap();
 
     let cat_discovery = StaticProvider::new();
-    let cat_endpoint = IrohEndpoint::empty_builder(RelayMode::Disabled)
+    let cat_endpoint = iroh::Endpoint::empty_builder(RelayMode::Disabled)
         .secret_key(from_private_key(cat_private_key))
         .discovery(cat_discovery.clone())
         .bind()
@@ -609,21 +620,21 @@ async fn three_peer_gossip_with_rejoin() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -696,9 +707,11 @@ async fn three_peer_gossip_with_rejoin() {
 
     assert_eq!(msg, bat_msg_to_ant);
 
-    // Stop the gossip actor and router for ant (going offline).
+    // Ant is going offline (stop actors and router).
     ant_gossip_actor.stop(None);
     ant_gossip_actor_handle.await.unwrap();
+    ant_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
     ant_router.shutdown().await.unwrap();
 
     // Cat joins the gossip topic (using ant as bootstrap).
@@ -771,16 +784,179 @@ async fn three_peer_gossip_with_rejoin() {
 
     // Stop gossip actors.
     bat_gossip_actor.stop(None);
-    bat_gossip_actor_handle.await.unwrap();
     cat_gossip_actor.stop(None);
+    bat_gossip_actor_handle.await.unwrap();
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
     cat_router.shutdown().await.unwrap();
+}
+
+pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
+    let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
+        args.public_key,
+        None,
+        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
+    )]);
+    transport_info.timestamp = args.rng.random::<u32>() as u64;
+    let transport_info = transport_info.sign(&args.private_key).unwrap();
+    NodeInfo {
+        node_id: args.public_key,
+        bootstrap: false,
+        transports: Some(transport_info),
+    }
+}
+
+#[tokio::test]
+async fn using_endpoint_actor() {
+    setup_logging();
+
+    let (mut alice_args, alice_store, _) = test_args_from_seed([112; 32]);
+    let (mut bob_args, bob_store, _) = test_args_from_seed([113; 32]);
+
+    let alice_namespace = generate_actor_namespace(&alice_args.public_key);
+    let bob_namespace = generate_actor_namespace(&bob_args.public_key);
+
+    let topic = [99; 32];
+
+    // Generate node info for both parties.
+    let alice_info = generate_node_info(&mut alice_args);
+    let bob_info = generate_node_info(&mut bob_args);
+
+    // Alice knows about bob beforehands.
+    alice_store
+        .insert_node_info(bob_info.clone())
+        .await
+        .unwrap();
+
+    // .. and vice-versa
+    bob_store
+        .insert_node_info(alice_info.clone())
+        .await
+        .unwrap();
+
+    let thread_pool = ThreadLocalActorSpawner::new();
+
+    // Spawn address books for both.
+    let (alice_address_book_actor, alice_address_book_actor_handle) = AddressBook::spawn(
+        Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
+        (alice_args.clone(), alice_store),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+    let (bob_address_book_actor, bob_address_book_actor_handle) = AddressBook::spawn(
+        Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
+        (bob_args.clone(), bob_store),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+
+    // Spawn both endpoint actors.
+    let (alice_endpoint_actor, alice_endpoint_actor_handle) = IrohEndpoint::spawn(
+        Some(with_namespace(IROH_ENDPOINT, &alice_namespace)),
+        alice_args.clone(),
+        thread_pool.clone(),
+    )
+    .await
+    .expect("actor spawns successfully");
+    let (bob_endpoint_actor, bob_endpoint_actor_handle) = IrohEndpoint::spawn(
+        Some(with_namespace(IROH_ENDPOINT, &bob_namespace)),
+        bob_args.clone(),
+        thread_pool.clone(),
+    )
+    .await
+    .expect("actor spawns successfully");
+
+    // Receive iroh::Endpoint object, it's required for iroh-gossip.
+    let alice_endpoint = call!(alice_endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
+    let bob_endpoint = call!(bob_endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
+
+    // Spawn gossip managers for both.
+    let (alice_gossip_actor, alice_gossip_actor_handle) = TestGossip::spawn(
+        None,
+        (alice_args.clone(), alice_endpoint),
+        thread_pool.clone(),
+    )
+    .await
+    .unwrap();
+    let (bob_gossip_actor, bob_gossip_actor_handle) =
+        TestGossip::spawn(None, (bob_args.clone(), bob_endpoint), thread_pool.clone())
+            .await
+            .unwrap();
+
+    // We need to explicitly register the protocol in our endpoints.
+    //
+    // @TODO: This is currently required since the other tests do _not_ use our endpoint actor and
+    // would fail otherwise (because they would then expect that actor to exist).
+    alice_gossip_actor
+        .send_message(ToGossip::RegisterProtocol)
+        .unwrap();
+    bob_gossip_actor
+        .send_message(ToGossip::RegisterProtocol)
+        .unwrap();
+
+    // Allow time to register protocols.
+    sleep(Duration::from_millis(500)).await;
+
+    // Both peers subscribe to the gossip overlay for the same topic.
+    let (alice_to_gossip_tx, alice_from_gossip_tx) = call!(
+        alice_gossip_actor,
+        ToGossip::Subscribe,
+        topic,
+        vec![bob_info.id()]
+    )
+    .unwrap();
+    let (_bob_to_gossip_tx, bob_from_gossip_tx) = call!(
+        bob_gossip_actor,
+        ToGossip::Subscribe,
+        topic,
+        vec![alice_info.id()]
+    )
+    .unwrap();
+
+    // Allow time for joining the gossip overlays.
+    sleep(Duration::from_millis(1000)).await;
+
+    // Subscribe to sender to obtain receiver.
+    let mut _alice_from_gossip_rx = alice_from_gossip_tx.subscribe();
+    let mut bob_from_gossip_rx = bob_from_gossip_tx.subscribe();
+
+    // Send message from ant to bat.
+    alice_to_gossip_tx.send(b"hi!".to_vec()).await.unwrap();
+
+    // Allow time to process sent message.
+    sleep(Duration::from_millis(500)).await;
+
+    // Ensure bat receives the message from ant.
+    let Ok(msg) = bob_from_gossip_rx.recv().await else {
+        panic!("expected msg from ant")
+    };
+    assert_eq!(msg, b"hi!".to_vec());
+
+    // Stop gossip actors.
+    alice_gossip_actor.stop(None);
+    alice_gossip_actor_handle.await.unwrap();
+    bob_gossip_actor.stop(None);
+    bob_gossip_actor_handle.await.unwrap();
+
+    // Stop endpoint actors.
+    alice_endpoint_actor.stop(None);
+    alice_endpoint_actor_handle.await.unwrap();
+    bob_endpoint_actor.stop(None);
+    bob_endpoint_actor_handle.await.unwrap();
+
+    // Stop address book actors.
+    alice_address_book_actor.stop(None);
+    alice_address_book_actor_handle.await.unwrap();
+    bob_address_book_actor.stop(None);
+    bob_address_book_actor_handle.await.unwrap();
 }
