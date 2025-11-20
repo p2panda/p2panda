@@ -26,7 +26,7 @@ use ractor::{
 };
 use tokio::sync::broadcast::{self, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
@@ -357,6 +357,7 @@ where
                 }
             }
             ToEventuallyConsistentStreams::InitiateSync(topic, node_id) => {
+                info!("initiate sync with node {}", node_id.to_hex());
                 if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
@@ -368,6 +369,7 @@ where
                 }
             }
             ToEventuallyConsistentStreams::Accept(node_id, topic, connection) => {
+                info!("accept sync with node {}", node_id.to_hex());
                 if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {

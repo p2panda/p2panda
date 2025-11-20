@@ -89,6 +89,8 @@ impl ThreadLocalActor for GossipHealer {
                 if let Some(receiver) = &mut state.receiver {
                     match receiver.recv().await {
                         Ok(event) => {
+                            debug!("received address book event: {:?}", event);
+
                             let node_ids = event
                                 .node_infos
                                 .iter()
@@ -99,6 +101,8 @@ impl ThreadLocalActor for GossipHealer {
                             state
                                 .gossip_session_ref
                                 .send_message(ToGossipSession::JoinPeers(node_ids))?;
+
+                            debug!("sent join peers message to gossip session");
 
                             // Invoke the handler to wait for the next event on the receiver.
                             let _ = myself.cast(ToGossipHealer::WaitForEvent);

@@ -6,10 +6,11 @@ use futures_util::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::actors::gossip::session::ToGossipSession;
 
+#[derive(Debug)]
 pub enum ToGossipReceiver {
     /// Wait for an event on the gossip topic receiver.
     WaitForEvent,
@@ -63,15 +64,21 @@ impl ThreadLocalActor for GossipReceiver {
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        debug!("{:?}", message);
+
         match message {
             ToGossipReceiver::WaitForJoin => {
                 if let Some(receiver) = &mut state.receiver {
+                    debug!("waiting to join gossip");
+
                     // Wait for the first peer connection.
                     //
                     // This will block the actor's message processing queue until the first
                     // `NeighborUp` event is received. The event is consumed by the call to
                     // `joined()`.
                     receiver.joined().await?;
+
+                    debug!("receiver.joiner returned");
 
                     // Inform the session actor about our direct neighbors.
                     let peers = receiver.neighbors().collect();
