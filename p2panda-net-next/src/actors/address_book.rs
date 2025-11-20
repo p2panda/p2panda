@@ -308,10 +308,9 @@ where
                 };
 
                 // Respond with current node info (if there's any) if requested.
-                if immediate
-                    && let Some(node_info) = state.store.node_info(&node_id).await? {
-                        state.call_node_subscribers(node_id, &node_info);
-                    }
+                if immediate && let Some(node_info) = state.store.node_info(&node_id).await? {
+                    state.call_node_subscribers(node_id, &node_info);
+                }
 
                 let _ = reply.send(rx);
             }
