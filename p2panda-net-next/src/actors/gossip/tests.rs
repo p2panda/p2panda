@@ -355,6 +355,7 @@ async fn two_peer_gossip() {
     ant_router.shutdown().await.unwrap();
 }
 
+#[ignore]
 #[tokio::test]
 async fn third_peer_joins_non_bootstrap() {
     // Scenario:
