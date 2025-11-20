@@ -317,7 +317,7 @@ impl Discovery for AddressBookDiscovery {
 }
 
 // @TODO: We can probably factor all of these "address book helper" methods out into an own
-// "utils-like" mod so it can be used by other actors as well (where he have similar code already).
+// "utils-like" mod so it can be used by other actors as well (where we have similar code already).
 
 async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
     registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
