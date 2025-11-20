@@ -36,7 +36,7 @@ use crate::actors::streams::eventually_consistent::{
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
-use crate::utils::{from_public_key, to_public_key};
+use crate::utils::{ShortFormat, from_public_key, to_public_key};
 
 /// Gossip actor name.
 pub const GOSSIP: &str = "net.gossip";
@@ -437,8 +437,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.get(&actor_id) {
                     debug!(
-                        "gossip actor: received ready from gossip session actor #{} for topic {:?}",
-                        actor_id, topic
+                        ?actor_id,
+                        topic = topic.fmt_short(),
+                        "received ready from gossip session",
                     );
                 }
             }
@@ -446,8 +447,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     debug!(
-                        "gossip actor: gossip session #{} over topic {:?} terminated with reason: {:?}",
-                        actor_id, topic, reason
+                        ?actor_id,
+                        topic = topic.fmt_short(),
+                        "gossip session terminated: {reason:#?}",
                     );
 
                     // Drop all state associated with the terminated gossip session.
@@ -469,8 +471,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     warn!(
-                        "gossip_actor: gossip session #{} over topic {:?} failed with reason: {}",
-                        actor_id, topic, panic_msg
+                        ?actor_id,
+                        topic = topic.fmt_short(),
+                        "gossip session failed: {panic_msg:#?}",
                     );
 
                     // Drop all state associated with the failed gossip session.
