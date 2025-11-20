@@ -117,21 +117,21 @@ async fn correct_termination_state() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -191,7 +191,7 @@ async fn correct_termination_state() {
     assert!(neighbours.contains(&bat_public_key));
     assert!(neighbours.contains(&cat_public_key));
 
-    // Stop all other actors and routers.
+    // Stop gossip actors.
     ant_gossip_actor.stop(None);
     bat_gossip_actor.stop(None);
     cat_gossip_actor.stop(None);
@@ -200,10 +200,14 @@ async fn correct_termination_state() {
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
+    // Shutdown routers.
     ant_router.shutdown().await.unwrap();
     bat_router.shutdown().await.unwrap();
     cat_router.shutdown().await.unwrap();
@@ -259,14 +263,14 @@ async fn two_peer_gossip() {
     let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
@@ -341,8 +345,10 @@ async fn two_peer_gossip() {
     bat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
@@ -411,21 +417,21 @@ async fn third_peer_joins_non_bootstrap() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -533,9 +539,12 @@ async fn third_peer_joins_non_bootstrap() {
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    ant_address_book_actor.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     ant_router.shutdown().await.unwrap();
@@ -611,21 +620,21 @@ async fn three_peer_gossip_with_rejoin() {
     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
 
-    let (ant_address_book_ref, _) = AddressBook::spawn(
+    let (ant_address_book_actor, ant_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &ant_actor_namespace)),
         (ant_args.clone(), ant_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (bat_address_book_ref, _) = AddressBook::spawn(
+    let (bat_address_book_actor, bat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &bat_actor_namespace)),
         (bat_args.clone(), bat_store.clone()),
         thread_pool.clone(),
     )
     .await
     .unwrap();
-    let (cat_address_book_ref, _) = AddressBook::spawn(
+    let (cat_address_book_actor, cat_address_book_actor_handle) = AddressBook::spawn(
         Some(with_namespace(ADDRESS_BOOK, &cat_actor_namespace)),
         (cat_args.clone(), cat_store.clone()),
         thread_pool.clone(),
@@ -698,9 +707,11 @@ async fn three_peer_gossip_with_rejoin() {
 
     assert_eq!(msg, bat_msg_to_ant);
 
-    // Stop the gossip actor and router for ant (going offline).
+    // Ant is going offline (stop actors and router).
     ant_gossip_actor.stop(None);
     ant_gossip_actor_handle.await.unwrap();
+    ant_address_book_actor.stop(None);
+    ant_address_book_actor_handle.await.unwrap();
     ant_router.shutdown().await.unwrap();
 
     // Cat joins the gossip topic (using ant as bootstrap).
@@ -773,14 +784,15 @@ async fn three_peer_gossip_with_rejoin() {
 
     // Stop gossip actors.
     bat_gossip_actor.stop(None);
-    bat_gossip_actor_handle.await.unwrap();
     cat_gossip_actor.stop(None);
+    bat_gossip_actor_handle.await.unwrap();
     cat_gossip_actor_handle.await.unwrap();
 
     // Stop address book actors.
-    ant_address_book_ref.stop(None);
-    bat_address_book_ref.stop(None);
-    cat_address_book_ref.stop(None);
+    bat_address_book_actor.stop(None);
+    cat_address_book_actor.stop(None);
+    bat_address_book_actor_handle.await.unwrap();
+    cat_address_book_actor_handle.await.unwrap();
 
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
