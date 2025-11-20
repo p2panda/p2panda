@@ -130,9 +130,6 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
                 // We connect iroh's endpoint with our own address book. From here the endpoint can
-                // resolve node id's to iroh addresses and inform the address book about our own,
-                // changed address (for example if the home relay changed or we got an direct IP
-                // address, etc.).
                 let address_book_discovery = AddressBookDiscovery::new(state.args.clone());
 
                 // Create and bind the endpoint to the socket.

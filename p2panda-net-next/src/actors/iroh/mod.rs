@@ -27,7 +27,7 @@ use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::NodeId;
 use crate::args::ApplicationArguments;
-use crate::utils::{from_public_key, to_public_key};
+use crate::utils::from_public_key;
 use crate::{NodeInfoError, TransportInfo, UnsignedTransportInfo};
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
@@ -179,9 +179,13 @@ impl TryFrom<UserData> for UserDataTransportInfo {
             return Err(TransportInfoTxtError::Size(parts.len()));
         }
 
+        let mut parts = parts.iter();
+        let signature_str = parts.next().expect("we've checked the size before");
+        let timestamp_str = parts.next().expect("we've checked the size before");
+
         // Try to parse halfs into signature and timestamp.
-        let signature = Signature::from_str(parts.first().expect("we've checked the size before"))?;
-        let timestamp = u64::from_str(parts.get(1).expect("we've checked the size before"))?;
+        let signature = Signature::from_str(signature_str)?;
+        let timestamp = u64::from_str(timestamp_str)?;
 
         Ok(Self {
             signature,
@@ -210,64 +214,18 @@ struct AddressBookDiscovery {
 
 impl AddressBookDiscovery {
     pub fn new(args: ApplicationArguments) -> Self {
-        let actor_namespace = generate_actor_namespace(&args.public_key);
         Self {
-            actor_namespace,
+            actor_namespace: generate_actor_namespace(&args.public_key),
             args,
         }
-    }
-
-    async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
-        registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
-            .map(ActorRef::<ToAddressBook>::from)
-    }
-
-    async fn update_address_book(
-        actor_namespace: ActorNamespace,
-        node_id: NodeId,
-        transport_info: TransportInfo,
-    ) -> Result<(), AddressBookDiscoveryError> {
-        let Some(address_book_ref) = Self::address_book_ref(actor_namespace).await else {
-            return Err(AddressBookDiscoveryError::ActorNotAvailable);
-        };
-
-        let _ = call!(
-            address_book_ref,
-            ToAddressBook::InsertTransportInfo,
-            node_id,
-            transport_info
-        )
-        .map_err(|_| AddressBookDiscoveryError::ActorFailed)?;
-
-        Ok(())
-    }
-
-    async fn subscribe_to_node_info(
-        actor_namespace: ActorNamespace,
-        node_id: NodeId,
-    ) -> Option<broadcast::Receiver<NodeEvent>> {
-        let Some(address_book_ref) = Self::address_book_ref(actor_namespace).await else {
-            // Address book is not reachable, so we're probably shutting down.
-            return None;
-        };
-
-        let Ok(rx) = call!(
-            address_book_ref,
-            ToAddressBook::SubscribeNodeChanges,
-            node_id
-        ) else {
-            return None;
-        };
-
-        Some(rx)
     }
 }
 
 impl Discovery for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
-        // Create a new transport info with iroh addresses if given. If no iroh address
-        // exists (because we are not reachable) we're explicitly making the address array
-        // empty to inform other nodes about this.
+        // Create a new transport info with iroh addresses if given. If no iroh address exists
+        // (because we are not reachable) we're explicitly making the address array empty to inform
+        // other nodes about this.
         let Ok(transport_info) = if data.has_addrs() {
             UnsignedTransportInfo::from_addrs([iroh::EndpointAddr {
                 id: from_public_key(self.args.public_key),
@@ -278,7 +236,7 @@ impl Discovery for AddressBookDiscovery {
             UnsignedTransportInfo::new()
         }
         .sign(&self.args.private_key) else {
-            error!("critically failed signing own transport info");
+            error!("failed signing own transport info");
             return;
         };
 
@@ -286,10 +244,10 @@ impl Discovery for AddressBookDiscovery {
         let public_key = self.args.public_key;
 
         tokio::task::spawn(async move {
-            // Update entry about ourselves in address book to allow this information to
-            // propagate in other discovery mechanisms or side-channels outside of iroh.
+            // Update entry about ourselves in address book to allow this information to propagate
+            // in other discovery mechanisms or side-channels outside of iroh.
             if let Err(err) =
-                Self::update_address_book(actor_namespace, public_key, transport_info.clone()).await
+                update_address_book(actor_namespace, public_key, transport_info.clone()).await
             {
                 warn!("could not update address book with own transport info: {err:#?}");
             } else {
@@ -307,6 +265,54 @@ impl Discovery for AddressBookDiscovery {
     }
 }
 
+// @TODO: We can probably factor all of these "address book helper" methods out into an own
+// "utils-like" mod so it can be used by other actors as well (where he have similar code already).
+
+async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
+    registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
+        .map(ActorRef::<ToAddressBook>::from)
+}
+
+async fn update_address_book(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+    transport_info: TransportInfo,
+) -> Result<(), AddressBookDiscoveryError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookDiscoveryError::ActorNotAvailable);
+    };
+
+    let _ = call!(
+        address_book_ref,
+        ToAddressBook::InsertTransportInfo,
+        node_id,
+        transport_info
+    )
+    .map_err(|_| AddressBookDiscoveryError::ActorFailed)?;
+
+    Ok(())
+}
+
+async fn subscribe_to_node_info(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+) -> Option<broadcast::Receiver<NodeEvent>> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        // Address book is not reachable, so we're probably shutting down.
+        return None;
+    };
+
+    let Ok(rx) = call!(
+        address_book_ref,
+        ToAddressBook::SubscribeNodeChanges,
+        node_id
+    ) else {
+        return None;
+    };
+
+    Some(rx)
+}
+
 #[derive(Debug, Error)]
 pub enum AddressBookDiscoveryError {
     #[error("address book actor is not available")]
@@ -319,4 +325,4 @@ pub enum AddressBookDiscoveryError {
     UpdateFailed(#[from] NodeInfoError),
 }
 
-pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
+type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
