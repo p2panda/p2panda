@@ -124,7 +124,7 @@ async fn smoke_test() {
     // Alice inserts Bob's info in address book.
     let alice = TestNode::spawn([10; 32], vec![bob.node_info()]).await;
 
-    sleep(Duration::from_millis(5000)).await;
+    sleep(Duration::from_millis(100)).await;
 
     // Alice didn't learn about new transport info of Bob.
     let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
