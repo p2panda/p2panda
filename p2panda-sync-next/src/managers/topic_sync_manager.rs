@@ -183,6 +183,7 @@ where
 ///
 /// This stream must be polled in order for the manager to perform work based on events received
 /// from running sync sessions.
+#[allow(clippy::type_complexity)]
 pub struct ManagerEventStream<T, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
