@@ -49,10 +49,10 @@ pub trait SyncManager<T> {
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>>;
+    ) -> impl Future<Output = Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>>>;
 
-    /// Drive the manager to process and return events emitted from all running sync sessions.
-    fn next_event(
-        &mut self,
-    ) -> impl Future<Output = Result<Option<FromSync<<Self::Protocol as Protocol>::Event>>, Self::Error>>;
+    /// Subscribe to the manager event stream.
+    fn subscribe(
+        &self,
+    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static;
 }
