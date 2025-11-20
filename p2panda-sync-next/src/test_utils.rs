@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, convert::Infallible};
 
-use futures::{SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
 use p2panda_core::PublicKey;
@@ -193,6 +193,17 @@ where
         .await?;
 
     Ok(remote_message_rx)
+}
+
+pub async fn drain_stream<S>(mut stream: S) -> Vec<S::Item>
+where
+    S: Stream + Unpin,
+{
+    let mut items = Vec::new();
+    while let Some(Some(item)) = stream.next().now_or_never() {
+        items.push(item);
+    }
+    return items;
 }
 
 /// Log id extension.

@@ -116,10 +116,10 @@ async fn smoke_test() {
     setup_logging();
 
     // Bob's address book is empty;
-    let mut bob = TestNode::spawn([11; 32], vec![]).await;
+    let mut bob = TestNode::spawn([17; 32], vec![]).await;
 
     // Alice inserts Bob's info in address book.
-    let alice = TestNode::spawn([10; 32], vec![bob.node_info()]).await;
+    let alice = TestNode::spawn([18; 32], vec![bob.node_info()]).await;
 
     sleep(Duration::from_millis(100)).await;
 

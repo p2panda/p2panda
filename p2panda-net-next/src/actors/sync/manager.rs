@@ -5,7 +5,6 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
@@ -13,7 +12,7 @@ use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::broadcast;
 use tracing::debug;
 
 use crate::TopicId;
@@ -58,9 +57,7 @@ where
     actor_namespace: ActorNamespace,
     #[allow(unused)]
     topic: TopicId,
-    // @TODO: Would rather refactor the M manager itself to use inner mutability so as to avoid
-    // locking access to the whole manager on every read/write.
-    manager: Arc<Mutex<M>>,
+    manager: M,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
     next_session_id: SyncSessionId,
@@ -107,11 +104,12 @@ where
         let (actor_namespace, topic, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
-        let manager = Arc::new(Mutex::new(M::from_config(config)));
+        let manager = M::from_config(config);
+        let event_stream = manager.subscribe();
 
-        let (_, _) = SyncPoller::<M>::spawn_linked(
+        let (_, _) = SyncPoller::spawn_linked(
             None,
-            (actor_namespace.clone(), manager.clone(), sender),
+            (actor_namespace.clone(), event_stream, sender),
             myself.clone().into(),
             pool.clone(),
         )
@@ -279,12 +277,13 @@ where
         state.next_session_id += 1;
 
         // Instantiate the session.
-        let mut manager = state.manager.lock().await;
-        let session = manager.session(session_id, &config).await;
+        let session = state.manager.session(session_id, &config).await;
 
         // Get a tx sender handle to the session.
-        let session_handle = manager
+        let session_handle = state
+            .manager
             .session_handle(session_id)
+            .await
             .expect("we just created this session");
 
         // Register the session on the manager state.
