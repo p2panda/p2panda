@@ -31,11 +31,11 @@ pub enum ToSync {
 }
 
 /// Events which are emitted from a manager.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct FromSync<E> {
-    session_id: u64,
-    remote: PublicKey,
-    event: E,
+    pub session_id: u64,
+    pub remote: PublicKey,
+    pub event: E,
 }
 
 impl<E> FromSync<E> {
