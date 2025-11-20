@@ -5,13 +5,16 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 
 use futures_channel::mpsc::{self, SendError};
-use futures_util::Sink;
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore;
-use p2panda_sync::ToSync;
 use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::{FromSync, ToSync};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::{ApplicationArguments, ArgsBuilder};
@@ -38,6 +41,7 @@ pub fn test_args_from_seed(
     let mut rng = ChaCha20Rng::from_seed(seed);
     let store = MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
     let private_key_bytes: [u8; 32] = rng.random();
+    let (sync_config, _) = NoSyncConfig::new();
     (
         ArgsBuilder::new(TEST_NETWORK_ID)
             .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
@@ -51,7 +55,7 @@ pub fn test_args_from_seed(
             .with_rng(rng)
             .build(),
         store,
-        NoSyncConfig,
+        sync_config,
     )
 }
 
@@ -71,58 +75,135 @@ fn deterministic_args() {
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
 
-pub struct NoProtocol;
+pub struct NoSyncProtocol {
+    session_id: u64,
+    config: p2panda_sync::SyncSessionConfig<TopicId>,
+    event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+}
 
-impl Protocol for NoProtocol {
+impl Protocol for NoSyncProtocol {
     type Output = ();
     type Error = Infallible;
-    type Event = ();
-    type Message = ();
+    type Event = NoSyncEvent;
+    type Message = NoSyncMessage;
 
     async fn run(
         self,
-        _sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
-        _stream: &mut (
+        sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
+        stream: &mut (
                  impl futures_util::Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin
              ),
     ) -> Result<Self::Output, Self::Error> {
+        self.event_tx
+            .send(FromSync {
+                session_id: self.session_id,
+                remote: self.config.remote,
+                event: NoSyncEvent::SyncStarted,
+            })
+            .unwrap();
+
+        sink.send(NoSyncMessage).await.unwrap();
+
+        let message = stream.next().await.unwrap().unwrap();
+
+        self.event_tx
+            .send(FromSync {
+                session_id: self.session_id,
+                remote: self.config.remote,
+                event: NoSyncEvent::Received(message),
+            })
+            .unwrap();
+
+        self.event_tx
+            .send(FromSync {
+                session_id: self.session_id,
+                remote: self.config.remote,
+                event: NoSyncEvent::SyncFinished,
+            })
+            .unwrap();
+
         Ok(())
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct NoSyncManager;
+#[derive(Clone, Debug)]
+pub enum NoSyncEvent {
+    SessionCreated,
+    SyncStarted,
+    Received(NoSyncMessage),
+    SyncFinished,
+}
 
-#[derive(Clone, Debug, Default)]
-pub struct NoSyncConfig;
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NoSyncMessage;
+
+#[derive(Debug)]
+pub struct NoSyncManager {
+    pub event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+    #[allow(unused)]
+    pub event_rx: broadcast::Receiver<FromSync<NoSyncEvent>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NoSyncConfig {
+    pub event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+}
+
+impl NoSyncConfig {
+    pub fn new() -> (Self, broadcast::Receiver<FromSync<NoSyncEvent>>) {
+        let (tx, rx) = broadcast::channel(128);
+        (Self { event_tx: tx }, rx)
+    }
+}
 
 impl SyncManager<TopicId> for NoSyncManager {
-    type Protocol = NoProtocol;
+    type Protocol = NoSyncProtocol;
     type Config = NoSyncConfig;
     type Error = SendError;
 
-    fn from_config(_config: Self::Config) -> Self {
-        NoSyncManager
+    fn from_config(config: Self::Config) -> Self {
+        let event_rx = config.event_tx.subscribe();
+        NoSyncManager {
+            event_tx: config.event_tx,
+            event_rx,
+        }
     }
 
     async fn session(
         &mut self,
-        _session_id: u64,
-        _config: &p2panda_sync::SyncSessionConfig<TopicId>,
+        session_id: u64,
+        config: &p2panda_sync::SyncSessionConfig<TopicId>,
     ) -> Self::Protocol {
-        NoProtocol
+        self.event_tx
+            .send(FromSync {
+                session_id,
+                remote: config.remote,
+                event: NoSyncEvent::SessionCreated,
+            })
+            .unwrap();
+        NoSyncProtocol {
+            session_id,
+            config: config.clone(),
+            event_tx: self.event_tx.clone(),
+        }
     }
 
-    fn session_handle(
+    async fn session_handle(
         &self,
         _session_id: u64,
     ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
+        // NOTE: just a dummy channel to satisfy the API in testing environment.
         let (tx, _) = mpsc::channel::<ToSync>(128);
         let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>;
         Some(sink)
     }
 
-    async fn next_event(&mut self) -> Result<Option<p2panda_sync::FromSync<()>>, Self::Error> {
-        Ok(None)
+    fn subscribe(
+        &self,
+    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static
+    {
+        let stream = BroadcastStream::new(self.event_tx.subscribe())
+            .filter_map(|event| async { event.ok() });
+        Box::pin(stream)
     }
 }

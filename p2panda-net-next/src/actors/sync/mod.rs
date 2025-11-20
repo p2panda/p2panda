@@ -3,6 +3,8 @@
 mod manager;
 mod poller;
 mod session;
+#[cfg(test)]
+mod tests;
 
 pub use manager::{SyncManager, ToSyncManager};
 use ractor::ActorCell;
