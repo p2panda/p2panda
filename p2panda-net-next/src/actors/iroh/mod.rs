@@ -12,22 +12,25 @@ use std::num::ParseIntError;
 use std::pin::Pin;
 use std::str::FromStr;
 
-use futures_util::Stream;
-use iroh::discovery::{Discovery, EndpointData, UserData};
+use futures_util::{Stream, StreamExt};
+use iroh::discovery::{
+    Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo, UserData,
+};
 use iroh::endpoint_info::MaxLengthExceededError;
 use iroh::protocol::ProtocolHandler;
 use p2panda_core::{IdentityError, Signature};
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast;
-use tracing::{debug, error, warn};
+use tokio_stream::wrappers::BroadcastStream;
+use tracing::{debug, error, trace, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::NodeId;
 use crate::args::ApplicationArguments;
-use crate::utils::from_public_key;
+use crate::utils::{from_public_key, to_public_key};
 use crate::{NodeInfoError, TransportInfo, UnsignedTransportInfo};
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
@@ -206,11 +209,25 @@ pub enum TransportInfoTxtError {
     Timestamp(#[from] ParseIntError),
 }
 
+/// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
+/// implements iroh's `Discovery` trait.
+///
+/// The endpoint can "resolve" node ids to iroh's endpoint addresses and inform the address book
+/// about our own, changed address (for example if the home relay changed or we got an direct IP
+/// address, etc., in iroh this is called "publish").
+//
+// NOTE: Strictly speaking we only need the "resolver" part for iroh-gossip right now, as our own
+// protocols call the `connect` helper method which takes an endpoint address from the address book
+// and returns an error if there's no information given (so we _never_ call an iroh endpoint with
+// only the endpoint id).
 #[derive(Debug)]
 struct AddressBookDiscovery {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
 }
+
+/// Identifies source of discovered item.
+const PROVENANCE: &str = "address book";
 
 impl AddressBookDiscovery {
     pub fn new(args: ApplicationArguments) -> Self {
@@ -251,7 +268,7 @@ impl Discovery for AddressBookDiscovery {
             {
                 warn!("could not update address book with own transport info: {err:#?}");
             } else {
-                debug!(?transport_info, "updated our iroh endpoint address");
+                debug!(%transport_info, "updated our iroh endpoint address");
             }
         });
     }
@@ -259,9 +276,39 @@ impl Discovery for AddressBookDiscovery {
     fn resolve(
         &self,
         endpoint_id: iroh::EndpointId,
-    ) -> Option<BoxStream<Result<iroh::discovery::DiscoveryItem, iroh::discovery::DiscoveryError>>>
-    {
-        None
+    ) -> Option<BoxStream<Result<DiscoveryItem, DiscoveryError>>> {
+        trace!(%endpoint_id, "resolve");
+
+        use futures_util::FutureExt;
+
+        let actor_namespace = self.actor_namespace.clone();
+
+        let stream = async move {
+            let subscription = subscribe_to_node_info(actor_namespace, to_public_key(endpoint_id))
+                .await
+                .ok_or(DiscoveryError::from_err_any(
+                    PROVENANCE,
+                    "address book actor did not respond with subscription",
+                ));
+
+            match subscription {
+                Ok(rx) => BroadcastStream::new(rx)
+                    .map(|event| match event {
+                        Ok(event) => match iroh::EndpointAddr::try_from(event.node_info) {
+                            Ok(endpoint_addr) => {
+                                let info = EndpointInfo::from(endpoint_addr);
+                                Ok(DiscoveryItem::new(info, PROVENANCE, None))
+                            }
+                            Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
+                        },
+                        Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
+                    })
+                    .boxed(),
+                Err(err) => futures_util::stream::once(async { Err(err) }).boxed(),
+            }
+        };
+
+        Some(Box::pin(stream.flatten_stream()))
     }
 }
 
