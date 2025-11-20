@@ -52,6 +52,10 @@ pub enum ToGossip {
     Handle(RpcReplyPort<IrohGossip>),
 
     /// Subscribe to the given topic, using the given peers as gossip bootstrap nodes.
+    ///
+    /// Two senders are returned: 1) a sender _into_ the gossip overlay, 2) a sender _out of_ the
+    /// gossip overlay. The reason we return the second sender is because it's a broadcast channel
+    /// and we need the sender in order to produce receivers by calling `.subscribe()`.
     Subscribe(
         TopicId,
         Vec<PublicKey>,

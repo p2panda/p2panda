@@ -12,7 +12,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
-use tracing::info;
+use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::discovery::session::{
@@ -258,7 +258,7 @@ where
                 )?;
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
-                info!(
+                debug!(
                     "initiate discovery session with: {}",
                     remote_node_id.to_hex()
                 );
@@ -297,7 +297,7 @@ where
                 );
             }
             ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
-                info!("accept discovery session with: {}", remote_node_id.to_hex());
+                debug!("accept discovery session with: {}", remote_node_id.to_hex());
                 // @TODO: Have a max. of concurrently running discovery sessions.
                 let session_id = state.next_session_id();
 
@@ -335,7 +335,7 @@ where
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
-                info!(
+                debug!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
@@ -364,7 +364,7 @@ where
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when session failed");
-                info!(
+                warn!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = session_info.started_at().elapsed().as_millis(),
