@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
 use std::net::SocketAddr;
@@ -266,6 +267,18 @@ impl TransportInfo {
     }
 }
 
+impl Display for TransportInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let addresses = if self.addresses.is_empty() {
+            "[]".to_string()
+        } else {
+            self.addresses.iter().map(|addr| addr.to_string()).collect()
+        };
+
+        write!(f, "timestamp={}, addresses={}", self.timestamp, addresses)
+    }
+}
+
 /// Associated transport addresses to aid establishing a connection to this node.
 ///
 /// Currently this only supports using iroh (Internet Protocol) to connect.
@@ -302,6 +315,16 @@ impl TransportAddress {
 impl From<EndpointAddr> for TransportAddress {
     fn from(addr: EndpointAddr) -> Self {
         Self::Iroh(addr)
+    }
+}
+
+impl Display for TransportAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransportAddress::Iroh(endpoint_addr) => {
+                write!(f, "iroh({:?})", endpoint_addr.addrs)
+            }
+        }
     }
 }
 
