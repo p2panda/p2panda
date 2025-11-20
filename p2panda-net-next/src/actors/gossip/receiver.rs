@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use iroh_gossip::api::GossipReceiver as IrohGossipReceiver;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::actors::gossip::session::ToGossipSession;
 
@@ -66,8 +66,6 @@ impl ThreadLocalActor for GossipReceiver {
         match message {
             ToGossipReceiver::WaitForJoin => {
                 if let Some(receiver) = &mut state.receiver {
-                    debug!("wait to join");
-
                     // Wait for the first peer connection.
                     //
                     // This will block the actor's message processing queue until the first

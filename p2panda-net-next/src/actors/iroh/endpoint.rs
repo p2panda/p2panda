@@ -10,7 +10,6 @@ use futures_util::StreamExt;
 use iroh::Watcher;
 use iroh::discovery::dns::DnsDiscovery;
 use iroh::discovery::pkarr::PkarrPublisher;
-use iroh::dns::DnsResolver;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
@@ -27,9 +26,6 @@ use crate::utils::{ShortFormat, from_private_key};
 use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
-
-/// Maximum number of streams accepted on a QUIC connection.
-const DEFAULT_MAX_STREAMS: u32 = 1024;
 
 #[allow(clippy::large_enum_variant)]
 pub enum ToIrohEndpoint {
