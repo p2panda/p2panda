@@ -15,7 +15,7 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Receiver as OneshotReceiver;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
@@ -219,15 +219,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorStarted(actor) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    debug!(
-                        "gossip session actor: received ready from gossip sender actor #{}",
-                        actor_id
-                    )
+                    trace!(?actor_id, "received ready from gossip sender",)
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    debug!(
-                        "gossip session actor: received ready from gossip receiver actor #{}",
-                        actor_id
-                    )
+                    trace!(?actor_id, "received ready from gossip receiver",)
                 }
             }
             // We're not interested in respawning a terminated actor in the context of a gossip
@@ -237,15 +231,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    debug!(
-                        "gossip session actor: gossip sender actor #{} terminated with reason: {:?}",
-                        actor_id, reason
-                    );
+                    debug!(?actor_id, "gossip sender actor terminated: {reason:#?}",);
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    debug!(
-                        "gossip session actor: gossip receiver actor #{} terminated with reason: {:?}",
-                        actor_id, reason
-                    );
+                    debug!(?actor_id, "gossip receiver actor terminated: {reason:#?}",);
                 }
 
                 // Process any remaining messages in the queue of the gossip sender and receiver
@@ -258,15 +246,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    debug!(
-                        "gossip session actor: gossip sender actor #{} failed with message: {:?}",
-                        actor_id, panic_msg
-                    );
+                    debug!(?actor_id, "gossip sender actor failed: {panic_msg:#?}",);
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    debug!(
-                        "gossip session actor: gossip receiver actor #{} failed with message: {:?}",
-                        actor_id, panic_msg
-                    );
+                    debug!(?actor_id, "gossip receiver actor failed: {panic_msg:#?}",);
                 }
 
                 myself
