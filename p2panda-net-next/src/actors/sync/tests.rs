@@ -2,6 +2,7 @@
 
 use std::error::Error as StdError;
 use std::fmt::Debug;
+use std::time::Duration;
 
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
@@ -9,6 +10,7 @@ use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
 use rand::Rng;
+use tokio::time::sleep;
 
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -211,6 +213,8 @@ async fn e2e_sync() {
             } if remote == expected_remote
         ));
     }
+
+    sleep(Duration::from_millis(100)).await;
 
     alice.shutdown();
     bob.shutdown();
