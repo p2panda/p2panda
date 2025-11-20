@@ -164,12 +164,6 @@ impl ThreadLocalActor for IrohEndpoint {
             ToIrohEndpoint::Bind => {
                 let config = state.args.iroh_config.clone();
 
-                // Configure QUIC transport and sockets to bind to.
-                let mut transport_config = iroh::endpoint::TransportConfig::default();
-                transport_config
-                    .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
-                    .max_concurrent_uni_streams(0u32.into());
-
                 let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
                 let socket_address_v6 =
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
@@ -179,15 +173,14 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
                 // Create and bind the endpoint to the socket.
-                let endpoint = iroh::Endpoint::empty_builder(iroh::RelayMode::Default)
+                let endpoint = iroh::Endpoint::empty_builder(relay_mode)
                     // @TODO: Replace this with our own resolver (talking to the address book).
                     // This will be needed by iroh-gossip.
                     .discovery(PkarrPublisher::n0_dns())
                     .discovery(DnsDiscovery::n0_dns())
                     .secret_key(from_private_key(state.args.private_key.clone()))
-                    .transport_config(transport_config)
-                    // .bind_addr_v4(socket_address_v4)
-                    // .bind_addr_v6(socket_address_v6)
+                    .bind_addr_v4(socket_address_v4)
+                    .bind_addr_v6(socket_address_v6)
                     .bind()
                     .await?;
 
@@ -311,16 +304,6 @@ impl ThreadLocalActor for IrohEndpoint {
             }
         }
 
-        Ok(())
-    }
-
-    async fn handle_supervisor_evt(
-        &self,
-        myself: ActorRef<Self::Msg>,
-        message: ractor::SupervisionEvent,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        debug!("{:?}", message);
         Ok(())
     }
 }
