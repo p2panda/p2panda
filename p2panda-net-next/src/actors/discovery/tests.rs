@@ -11,7 +11,7 @@ use tokio::time::sleep;
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
-use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint};
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
 use crate::args::ApplicationArguments;
@@ -32,6 +32,8 @@ fn actor_name_helper() {
 
 struct TestNode {
     args: ApplicationArguments,
+    #[allow(unused)]
+    endpoint_ref: ActorRef<ToIrohEndpoint>,
     address_book_ref: ActorRef<ToAddressBook>,
     discovery_manager_ref: ActorRef<ToDiscoveryManager>,
     #[allow(unused)]
@@ -58,7 +60,7 @@ impl TestNode {
         .await
         .unwrap();
 
-        IrohEndpoint::spawn(
+        let (endpoint_ref, _) = IrohEndpoint::spawn(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
             args.clone(),
             thread_pool.clone(),
@@ -76,6 +78,7 @@ impl TestNode {
 
         Self {
             args,
+            endpoint_ref,
             address_book_ref,
             discovery_manager_ref,
             thread_pool,
@@ -121,7 +124,7 @@ async fn smoke_test() {
     // Alice inserts Bob's info in address book.
     let alice = TestNode::spawn([10; 32], vec![bob.node_info()]).await;
 
-    sleep(Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(5000)).await;
 
     // Alice didn't learn about new transport info of Bob.
     let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();

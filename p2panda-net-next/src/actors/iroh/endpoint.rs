@@ -28,6 +28,7 @@ use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum ToIrohEndpoint {
     /// Bind the iroh endpoint.
     ///
@@ -261,7 +262,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 //
                 // This means: The lifetime of this actor does _not_ indicate the lifetime of the
                 // connection itself.
-                IrohConnection::spawn_linked(
+                IrohConnection::spawn(
                     None,
                     (
                         state.args.public_key,
@@ -270,7 +271,6 @@ impl ThreadLocalActor for IrohEndpoint {
                             protocols: state.protocols.clone(),
                         },
                     ),
-                    myself.clone().into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
@@ -300,6 +300,18 @@ impl ThreadLocalActor for IrohEndpoint {
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_supervisor_evt(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        _message: ractor::SupervisionEvent,
+        _state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // NOTE: We're not supervising any child actors here right now but override the default
+        // impl of `handle_supervisor_evt` anyhow, to prevent potential footguns in the future: Any
+        // termination of any child actor would cause the endpoint to go down as well otherwise.
         Ok(())
     }
 }
