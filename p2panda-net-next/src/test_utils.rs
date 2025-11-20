@@ -90,9 +90,7 @@ impl Protocol for NoSyncProtocol {
     async fn run(
         self,
         sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
-        stream: &mut (
-                 impl futures_util::Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin
-             ),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
         self.event_tx
             .send(FromSync {
@@ -121,6 +119,8 @@ impl Protocol for NoSyncProtocol {
                 event: NoSyncEvent::SyncFinished,
             })
             .unwrap();
+
+        sink.flush().await.unwrap();
 
         Ok(())
     }
