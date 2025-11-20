@@ -246,9 +246,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    debug!(?actor_id, "gossip sender actor failed: {panic_msg:#?}",);
+                    warn!(?actor_id, "gossip sender actor failed: {panic_msg:#?}",);
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    debug!(?actor_id, "gossip receiver actor failed: {panic_msg:#?}",);
+                    warn!(?actor_id, "gossip receiver actor failed: {panic_msg:#?}",);
                 }
 
                 myself
