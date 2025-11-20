@@ -135,7 +135,6 @@ where
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn e2e_sync() {
     setup_logging();
