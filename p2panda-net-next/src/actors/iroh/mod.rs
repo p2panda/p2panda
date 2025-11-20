@@ -299,15 +299,9 @@ impl Discovery for AddressBookDiscovery {
                                 let info = EndpointInfo::from(endpoint_addr);
                                 Ok(DiscoveryItem::new(info, PROVENANCE, None))
                             }
-                            Err(err) => {
-                                warn!("failed resolving address: {err:#?}");
-                                Err(DiscoveryError::from_err(PROVENANCE, err))
-                            }
+                            Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
                         },
-                        Err(err) => {
-                            warn!("failed resolving address: {err:#?}");
-                            Err(DiscoveryError::from_err(PROVENANCE, err))
-                        }
+                        Err(err) => Err(DiscoveryError::from_err(PROVENANCE, err)),
                     })
                     .boxed(),
                 Err(err) => {
