@@ -5,12 +5,11 @@ use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
 use iroh::discovery::{Discovery, EndpointData, UserData};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, call, registry};
-use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, NodeEvent, ToAddressBook};
-use crate::actors::iroh::UserDataTransportInfo;
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::iroh::{UserDataTransportInfo, subscribe_to_node_info};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::config::MdnsDiscoveryMode;
@@ -71,26 +70,6 @@ impl MdnsState {
         let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
 
         Ok(())
-    }
-
-    pub async fn subscribe_to_node_info(
-        &self,
-        node_id: NodeId,
-    ) -> Option<broadcast::Receiver<NodeEvent>> {
-        let Some(address_book_ref) = self.address_book_ref().await else {
-            // Address book is not reachable, so we're probably shutting down.
-            return None;
-        };
-
-        let Ok(rx) = call!(
-            address_book_ref,
-            ToAddressBook::SubscribeNodeChanges,
-            node_id
-        ) else {
-            return None;
-        };
-
-        Some(rx)
     }
 }
 
@@ -168,10 +147,15 @@ impl ThreadLocalActor for Mdns {
                     let mut stream = mdns.subscribe().await;
 
                     // Subscribe to address book to listen to changes of our own node info.
-                    let mut rx = state
-                        .subscribe_to_node_info(state.args.public_key)
-                        .await
-                        .ok_or("mdns service can't subscribe to address book node info changes")?;
+                    let mut rx = subscribe_to_node_info(
+                        state.actor_namespace.clone(),
+                        state.args.public_key,
+                        // Enable "immediate result" to inform mdns about our current transport
+                        // info as soon as possible.
+                        true,
+                    )
+                    .await
+                    .ok_or("mdns service can't subscribe to address book node info changes")?;
 
                     tokio::task::spawn(async move {
                         loop {
