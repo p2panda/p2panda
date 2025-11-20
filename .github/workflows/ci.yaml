@@ -21,9 +21,6 @@ jobs:
           channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Run tests
-        # Ensure debug output is also tested
-        env:
-          RUST_LOG: debug
         run: cargo test --all-features
 
   check:

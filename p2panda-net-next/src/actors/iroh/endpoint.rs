@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use iroh::Watcher;
+use iroh::discovery::dns::DnsDiscovery;
+use iroh::discovery::pkarr::PkarrPublisher;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
@@ -25,10 +27,8 @@ use crate::{NodeId, NodeInfo, TransportInfo, UnsignedTransportInfo};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
-/// Maximum number of streams accepted on a QUIC connection.
-const DEFAULT_MAX_STREAMS: u32 = 1024;
-
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum ToIrohEndpoint {
     /// Bind the iroh endpoint.
     ///
@@ -161,12 +161,7 @@ impl ThreadLocalActor for IrohEndpoint {
             ToIrohEndpoint::Bind => {
                 let config = state.args.iroh_config.clone();
 
-                // Configure QUIC transport and sockets to bind to.
-                let mut transport_config = iroh::endpoint::TransportConfig::default();
-                transport_config
-                    .max_concurrent_bidi_streams(DEFAULT_MAX_STREAMS.into())
-                    .max_concurrent_uni_streams(0u32.into());
-
+                // Configure sockets to bind to.
                 let socket_address_v4 = SocketAddrV4::new(config.bind_ip_v4, config.bind_port_v4);
                 let socket_address_v6 =
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
@@ -176,10 +171,12 @@ impl ThreadLocalActor for IrohEndpoint {
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
 
                 // Create and bind the endpoint to the socket.
-                let endpoint = iroh::Endpoint::builder()
+                let endpoint = iroh::Endpoint::empty_builder(relay_mode)
+                    // @TODO: Replace this with our own resolver (talking to the address book).
+                    // This will be needed by iroh-gossip.
+                    .discovery(PkarrPublisher::n0_dns())
+                    .discovery(DnsDiscovery::n0_dns())
                     .secret_key(from_private_key(state.args.private_key.clone()))
-                    .transport_config(transport_config)
-                    .relay_mode(relay_mode)
                     .bind_addr_v4(socket_address_v4)
                     .bind_addr_v6(socket_address_v6)
                     .bind()
@@ -304,6 +301,18 @@ impl ThreadLocalActor for IrohEndpoint {
             }
         }
 
+        Ok(())
+    }
+
+    async fn handle_supervisor_evt(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        _message: ractor::SupervisionEvent,
+        _state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // NOTE: We're not supervising any child actors here right now but override the default
+        // impl of `handle_supervisor_evt` anyhow, to prevent potential footguns in the future: Any
+        // termination of any child actor would cause the endpoint to go down as well otherwise.
         Ok(())
     }
 }
