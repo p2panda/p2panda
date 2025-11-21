@@ -106,7 +106,7 @@ where
                 // both peers, sync protocol implementations must coordinate the close of a
                 // connection. Normally this would mean one side sends a "last message" and then
                 // waits for the other to close the connection themselves. If this doesn't occur
-                // in a timely manner then the connection will timeout. 
+                // in a timely manner then the connection will timeout.
                 connection.close(VarInt::from_u32(0), b"sync protocol initiate completed");
             }
             SyncSessionMessage::Accept {
