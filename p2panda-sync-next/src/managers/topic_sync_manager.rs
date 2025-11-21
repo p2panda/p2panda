@@ -671,4 +671,126 @@ mod tests {
                 .is_none()
         );
     }
+
+    #[tokio::test]
+    async fn non_blocking_manager_stream() {
+        const TOPIC_NAME: &str = "messages";
+        const LOG_ID: u64 = 0;
+        const SESSION_ID: u64 = 0;
+
+        let topic = TestTopic::new(TOPIC_NAME);
+
+        // Setup Peer A
+        let mut peer_a = Peer::new(0);
+        let body = Body::new("Hello from Peer A".as_bytes());
+        let _ = peer_a.create_operation(&body, LOG_ID).await;
+        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.insert_topic(&topic, &logs);
+        let mut peer_a_manager =
+            TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+
+        // Spawn a task polling peer a's manager stream.
+        let mut peer_a_stream = peer_a_manager.subscribe();
+        tokio::task::spawn(async move {
+            loop {
+                peer_a_stream.next().await;
+            }
+        });
+
+        // Setup Peer B
+        let mut peer_b = Peer::new(1);
+        let body = Body::new("Hello from Peer B".as_bytes());
+        let _ = peer_b.create_operation(&body, LOG_ID).await;
+        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.insert_topic(&topic, &logs);
+        let mut peer_b_manager =
+            TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+
+        // Instantiate sync session for Peer A.
+        let config = SyncSessionConfig {
+            topic,
+            remote: peer_b.id(),
+            live_mode: true,
+        };
+        let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
+
+        // Instantiate sync session for Peer B.
+        let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
+
+        // Get a handle to Peer A sync session.
+        let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).await.unwrap();
+
+        // Create and send a new live-mode message.
+        let (header_1, _) = peer_a.create_operation_no_insert(&body, LOG_ID).await;
+        let bytes = encode_cbor(&(header_1.clone(), Some(body.clone()))).unwrap();
+        peer_a_handle.send(ToSync::Payload(bytes)).await.unwrap();
+        peer_a_handle.send(ToSync::Close).await.unwrap();
+
+        // Actually run the protocol.
+        run_protocol(peer_a_session, peer_b_session).await.unwrap();
+
+        // Assert Peer B's events.
+        let event_stream = peer_b_manager.subscribe();
+        let events = drain_stream(event_stream).await;
+        assert_eq!(events.len(), 7);
+        for (index, event) in events.into_iter().enumerate() {
+            match index {
+                0 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Started { .. }
+                        )),
+                        ..
+                    }
+                ),
+                1 | 2 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Progress { .. }
+                        )),
+                        ..
+                    }
+                ),
+                3 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        ..
+                    }
+                ),
+                4 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                            StatusEvent::Completed { .. }
+                        )),
+                        ..
+                    }
+                ),
+                5 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Live { .. },
+                        ..
+                    }
+                ),
+                6 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::Close { .. },
+                        ..
+                    }
+                ),
+                _ => break,
+            }
+        }
+    }
 }
