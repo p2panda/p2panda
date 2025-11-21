@@ -13,7 +13,7 @@ use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::broadcast;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
@@ -250,7 +250,7 @@ where
             }
             SupervisionEvent::ActorFailed(actor, err) => {
                 let name = SyncSessionName::from_actor_cell(&actor);
-                debug!("sync session {} failed: {}", name.session_id, err);
+                warn!("sync session {} failed: {}", name.session_id, err);
                 Self::drop_session(state, name.session_id);
             }
             _ => (),
