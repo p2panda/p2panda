@@ -135,7 +135,6 @@ where
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn e2e_sync() {
     setup_logging();
@@ -200,7 +199,7 @@ async fn e2e_sync() {
             FromSync {
                 session_id: 0,
                 remote,
-                event: NoSyncEvent::Received(NoSyncMessage)
+                event: NoSyncEvent::Received(NoSyncMessage::Data)
             } if remote == expected_remote
         ));
         assert!(matches!(
