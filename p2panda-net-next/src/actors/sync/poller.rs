@@ -3,6 +3,7 @@
 //! Listen for messages from the user and forward them to the gossip sender.
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
 use p2panda_sync::FromSync;
@@ -60,7 +61,7 @@ where
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         _message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -71,7 +72,8 @@ where
             state.sender.send(event)?;
         }
 
-        // The stream closed, which is caused by the sync session terminated.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let _ = myself.cast(ToSyncPoller::WaitForMessage);
 
         Ok(())
     }
