@@ -95,3 +95,28 @@ pub enum UserDataInfoError {
     #[error(transparent)]
     Timestamp(#[from] ParseIntError),
 }
+
+#[cfg(test)]
+mod tests {
+    use iroh::discovery::UserData;
+    use p2panda_core::PrivateKey;
+
+    use super::{TransportInfo, UserDataTransportInfo};
+
+    #[test]
+    fn transport_info_to_user_data() {
+        // Create simple transport info object without any addresses attached.
+        let private_key = PrivateKey::new();
+        let transport_info = TransportInfo::new_unsigned().sign(&private_key).unwrap();
+
+        // Extract information we want for our TXT record.
+        let txt_info = UserDataTransportInfo::from_transport_info(transport_info);
+
+        // Convert it into iroh data type.
+        let user_data = UserData::try_from(txt_info.clone()).unwrap();
+
+        // .. and back!
+        let txt_info_again = UserDataTransportInfo::try_from(user_data).unwrap();
+        assert_eq!(txt_info, txt_info_again);
+    }
+}
