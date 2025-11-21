@@ -4,17 +4,17 @@ use futures_util::StreamExt;
 use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
 use iroh::discovery::{Discovery, EndpointData, UserData};
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, call, registry};
+use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook, watch_node_info};
+use crate::actors::address_book::{update_address_book, watch_node_info};
 use crate::actors::iroh::user_data::UserDataTransportInfo;
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
+use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::args::ApplicationArguments;
 use crate::config::MdnsDiscoveryMode;
 use crate::utils::{from_public_key, to_public_key};
-use crate::{NodeId, NodeInfo, TransportInfo};
+use crate::{NodeInfo, TransportInfo};
 
 pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
 
@@ -43,34 +43,6 @@ pub struct MdnsState {
     args: ApplicationArguments,
     service: Option<MdnsDiscovery>,
     handle: Option<JoinHandle<()>>,
-}
-
-impl MdnsState {
-    async fn address_book_ref(&self) -> Option<ActorRef<ToAddressBook>> {
-        registry::where_is(with_namespace(ADDRESS_BOOK, &self.actor_namespace))
-            .map(ActorRef::<ToAddressBook>::from)
-    }
-
-    pub async fn update_address_book(
-        &self,
-        node_id: NodeId,
-        transport_info: TransportInfo,
-    ) -> Result<(), ActorProcessingErr> {
-        let Some(address_book_ref) = self.address_book_ref().await else {
-            // Address book is not reachable, so we're probably shutting down.
-            return Ok(());
-        };
-
-        // Update existing node info about us if available or create a new one.
-        let mut node_info = match call!(address_book_ref, ToAddressBook::NodeInfo, node_id)? {
-            Some(node_info) => node_info,
-            None => NodeInfo::new(node_id),
-        };
-        node_info.update_transports(transport_info)?;
-        let _ = call!(address_book_ref, ToAddressBook::InsertNodeInfo, node_info)?;
-
-        Ok(())
-    }
 }
 
 #[derive(Default)]
@@ -234,9 +206,12 @@ impl ThreadLocalActor for Mdns {
 
                         trace!(%endpoint_id, "discovered new transport info");
 
-                        if let Err(err) = state
-                            .update_address_book(to_public_key(endpoint_id), transport_info)
-                            .await
+                        if let Err(err) = update_address_book(
+                            state.actor_namespace.clone(),
+                            to_public_key(endpoint_id),
+                            transport_info,
+                        )
+                        .await
                         {
                             warn!(
                                 %endpoint_id,
@@ -257,7 +232,8 @@ impl ThreadLocalActor for Mdns {
                 trace!("received updated node info");
                 let Ok(endpoint_addr) = TryInto::<iroh::EndpointAddr>::try_into(node_info.clone())
                 else {
-                    // Node info doesn't contain any iroh-related address information.
+                    // Node info doesn't contain any iroh-related address information. This is
+                    // unlikely to happen currently as our only transport is iroh.
                     return Ok(());
                 };
 
