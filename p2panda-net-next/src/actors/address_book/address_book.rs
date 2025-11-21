@@ -44,6 +44,7 @@ pub enum ToAddressBook {
     /// Returns `true` if entry got newly inserted or `false` if existing entry was updated.
     /// Previous entries are simply overwritten. Entries with attached transport information get
     /// checked against authenticity and throw an error otherwise.
+    #[allow(unused)]
     InsertNodeInfo(NodeInfo, RpcReplyPort<Result<bool, AddressBookError>>),
 
     /// Inserts or updates attached transport info for a node. Use this method if adding transport
