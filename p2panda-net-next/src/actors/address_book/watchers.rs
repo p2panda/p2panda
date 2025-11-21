@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::hash::Hash as StdHash;
 
 use tokio::sync::mpsc;
 
+/// When set "false" the subscription will directly yield the current state without waiting for
+/// changes to come.
 pub type UpdatesOnly = bool;
 
 pub trait Watched {
@@ -92,9 +96,70 @@ where
         rx
     }
 
+    pub fn len(&self) -> usize {
+        self.subscribers.borrow().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.subscribers.borrow().is_empty()
+    }
+
     fn notify(&self, value: WatchedValue<T::Value>) {
         let mut subscribers = self.subscribers.borrow_mut();
+
+        // Remove subscribers automatically if they've dropped the receiver's channel end.
         subscribers.retain(|tx| tx.send(value.clone()).is_ok());
+    }
+}
+
+pub struct WatcherSet<K, T>
+where
+    T: Watched,
+{
+    watchers: RefCell<HashMap<K, Watcher<T>>>,
+}
+
+impl<K, T> WatcherSet<K, T>
+where
+    K: Eq + StdHash,
+    T: Watched,
+{
+    pub fn new() -> Self {
+        Self {
+            watchers: RefCell::new(HashMap::new()),
+        }
+    }
+
+    pub fn subscribe(
+        &self,
+        key: K,
+        updates_only: UpdatesOnly,
+        initial: T,
+    ) -> WatcherReceiver<T::Value> {
+        let mut watchers = self.watchers.borrow_mut();
+        if watchers.contains_key(&key) {
+            let watcher = watchers.get_mut(&key).expect("we've checked it exists");
+            watcher.subscribe(updates_only)
+        } else {
+            let watcher = Watcher::new(initial);
+            let rx = watcher.subscribe(updates_only);
+            watchers.insert(key, watcher);
+            rx
+        }
+    }
+
+    pub fn update(&self, key: &K, value: T::Value) {
+        let mut watchers = self.watchers.borrow_mut();
+
+        // Check if anyone is interested in this update and inform them.
+        if let Some(watcher) = watchers.get_mut(key) {
+            watcher.update(value);
+
+            // Clean up watcher if there's no subscribers left for that key.
+            if watcher.is_empty() {
+                watchers.remove(&key);
+            }
+        }
     }
 }
 
