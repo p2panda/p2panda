@@ -100,7 +100,7 @@ impl Protocol for NoSyncProtocol {
             })
             .unwrap();
 
-        sink.send(NoSyncMessage).await.unwrap();
+        sink.send(NoSyncMessage::Data).await.unwrap();
 
         let message = stream.next().await.unwrap().unwrap();
 
@@ -120,7 +120,17 @@ impl Protocol for NoSyncProtocol {
             })
             .unwrap();
 
-        Ok(())
+        // Send a close message and wait for the remote to actually close the connection.
+        sink.send(NoSyncMessage::Close).await.unwrap();
+        let message = stream.next().await.unwrap();
+        match message {
+            // We received the remote's close message and so now we close ourselves.
+            Ok(NoSyncMessage::Close) => Ok(()),
+            // The stream was closed by the remote.
+            Err(_) => Ok(()),
+            // Unexpected message.
+            _ => panic!(),
+        }
     }
 }
 
@@ -133,7 +143,10 @@ pub enum NoSyncEvent {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NoSyncMessage;
+pub enum NoSyncMessage {
+    Data,
+    Close,
+}
 
 #[derive(Debug)]
 pub struct NoSyncManager {
