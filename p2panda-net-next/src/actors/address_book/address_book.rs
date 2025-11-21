@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -10,9 +11,13 @@ use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
-use tokio::sync::broadcast;
+use tracing::{debug, warn};
 
+use crate::actors::address_book::watchers::{
+    UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
+};
 use crate::args::ApplicationArguments;
+use crate::utils::ShortFormat;
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 /// Address book actor name.
@@ -24,14 +29,6 @@ pub enum ToAddressBook {
     /// Returns `None` if no information was found for this node.
     NodeInfo(NodeId, RpcReplyPort<Option<NodeInfo>>),
 
-    /// Returns a list of all known node informations.
-    #[allow(unused)]
-    AllNodeInfos(RpcReplyPort<Vec<NodeInfo>>),
-
-    /// Returns a list of node informations for a selected set.
-    #[allow(unused)]
-    SelectedNodeInfos(Vec<NodeId>, RpcReplyPort<Vec<NodeInfo>>),
-
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
     #[allow(unused)]
@@ -40,11 +37,6 @@ pub enum ToAddressBook {
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
     NodeInfosByEphemeralMessagingTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
-
-    /// Returns information from a randomly picked node or `None` when no information exists in the
-    /// database.
-    #[allow(unused)]
-    RandomNodeInfo(RpcReplyPort<Option<NodeInfo>>),
 
     /// Inserts or updates node information into address book. Use this method if adding node
     /// information from a local configuration, trusted, external source, etc.
@@ -104,98 +96,64 @@ pub enum ToAddressBook {
     #[allow(unused)]
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
 
-    /// Subscribes to channel informing us about changes on node infos for a specific node.
-    SubscribeNodeChanges(
+    /// Subscribes to channel informing us about node info changes for a specific node.
+    WatchNodeInfo(
         NodeId,
-        ImmediateResult,
-        RpcReplyPort<broadcast::Receiver<NodeEvent>>,
+        UpdatesOnly,
+        RpcReplyPort<WatcherReceiver<Option<NodeInfo>>>,
     ),
 
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
-    /// id for eventually consistent and ephemeral streams.
-    SubscribeTopicChanges(TopicId, RpcReplyPort<broadcast::Receiver<TopicEvent>>),
+    /// for eventually consistent and ephemeral streams.
+    WatchTopic(
+        TopicId,
+        UpdatesOnly,
+        RpcReplyPort<WatcherReceiver<HashSet<NodeId>>>,
+    ),
 }
-
-/// When set "true" the subscription will directly yield the current state without waiting for
-/// changes to come.
-pub type ImmediateResult = bool;
 
 pub struct AddressBookState<S> {
     args: ApplicationArguments,
     store: S,
-    node_subscribers: HashMap<NodeId, broadcast::Sender<NodeEvent>>,
-    topic_subscribers: HashMap<TopicId, broadcast::Sender<TopicEvent>>,
+    node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
+    topic_watchers: WatcherSet<TopicId, WatchedTopic>,
 }
 
 impl<S> AddressBookState<S>
 where
     S: AddressBookStore<NodeId, NodeInfo>,
 {
-    /// Inform all subscribers about a node info change;
-    fn call_node_subscribers(&mut self, node_id: NodeId, node_info: &NodeInfo) {
-        let Some(tx) = self.node_subscribers.get(&node_id) else {
-            return;
-        };
-
-        if tx
-            .send(NodeEvent {
-                node_id,
-                node_info: node_info.clone(),
-            })
-            .is_err()
-        {
-            // On an error we know that all receivers have been dropped, so we can remove this
-            // subscription as well and clean up after ourselves.
-            self.node_subscribers.remove(&node_id);
-        }
-    }
-
-    async fn call_sync_topic_subscribers(&mut self, topic: TopicId) {
-        let Some(tx) = self.topic_subscribers.get(&topic) else {
-            return;
-        };
-
-        let Ok(node_infos) = self.store.node_infos_by_sync_topics(&[topic]).await else {
-            return;
-        };
+    async fn node_infos_by_sync_topics(
+        &self,
+        topics: Vec<TopicId>,
+    ) -> Result<Vec<NodeInfo>, S::Error> {
+        let result = self.store.node_infos_by_sync_topics(&topics).await?;
 
         // Remove ourselves.
-        let node_infos = node_infos
+        let result = result
             .into_iter()
             .filter(|info| info.id() != self.args.public_key)
             .collect();
 
-        if tx.send(TopicEvent { topic, node_infos }).is_err() {
-            // On an error we know that all receivers have been dropped, so we can remove this
-            // subscription as well and clean up after ourselves.
-            self.topic_subscribers.remove(&topic);
-        }
+        Ok(result)
     }
 
-    async fn call_ephemeral_topic_subscribers(&mut self, topic: TopicId) {
-        let Some(tx) = self.topic_subscribers.get(&topic) else {
-            return;
-        };
-
-        let Ok(node_infos) = self
+    async fn node_infos_by_ephemeral_messaging_topics(
+        &self,
+        topics: Vec<TopicId>,
+    ) -> Result<Vec<NodeInfo>, S::Error> {
+        let result = self
             .store
-            .node_infos_by_ephemeral_messaging_topics(&[topic])
-            .await
-        else {
-            return;
-        };
+            .node_infos_by_ephemeral_messaging_topics(&topics)
+            .await?;
 
         // Remove ourselves.
-        let node_infos = node_infos
+        let result = result
             .into_iter()
             .filter(|info| info.id() != self.args.public_key)
             .collect();
 
-        if tx.send(TopicEvent { topic, node_infos }).is_err() {
-            // On an error we know that all receivers have been dropped, so we can remove this
-            // subscription as well and clean up after ourselves.
-            self.topic_subscribers.remove(&topic);
-        }
+        Ok(result)
     }
 }
 
@@ -233,8 +191,8 @@ where
         Ok(AddressBookState {
             args,
             store,
-            node_subscribers: HashMap::new(),
-            topic_subscribers: HashMap::new(),
+            node_watchers: WatcherSet::new(),
+            topic_watchers: WatcherSet::new(),
         })
     }
 
@@ -254,10 +212,14 @@ where
                     return Ok(());
                 }
 
-                state.call_node_subscribers(node_info.id(), &node_info);
-
                 // Overwrite any previously given information if it existed.
-                let result = state.store.insert_node_info(node_info).await?;
+                let result = state.store.insert_node_info(node_info.clone()).await?;
+
+                // Inform subscribers about this update. This will only get notified if it really
+                // changed.
+                state
+                    .node_watchers
+                    .update(&node_info.node_id, Some(node_info.clone()));
 
                 let _ = reply.send(Ok(result));
             }
@@ -284,45 +246,66 @@ where
 
                 match node_info.update_transports(transport_info) {
                     Ok(is_newer) => {
-                        if is_newer {
-                            state.call_node_subscribers(node_info.id(), &node_info);
-                        }
-
-                        state.store.insert_node_info(node_info).await?;
-
+                        state.store.insert_node_info(node_info.clone()).await?;
                         let _ = reply.send(Ok(is_newer));
                     }
                     Err(err) => {
                         let _ = reply.send(Err(AddressBookError::NodeInfo(err)));
                     }
                 }
+
+                // Inform subscribers about this update. This will only get notified if it really
+                // changed.
+                state
+                    .node_watchers
+                    .update(&node_info.node_id, Some(node_info.clone()));
             }
-            ToAddressBook::SubscribeNodeChanges(node_id, immediate, reply) => {
-                let rx = match state.node_subscribers.get_mut(&node_id) {
-                    Some(tx) => tx.subscribe(),
-                    None => {
-                        let (tx, rx) = broadcast::channel(32);
-                        state.node_subscribers.insert(node_id, tx);
-                        rx
-                    }
-                };
-
-                // Respond with current node info (if there's any) if requested.
-                if immediate && let Some(node_info) = state.store.node_info(&node_id).await? {
-                    state.call_node_subscribers(node_id, &node_info);
-                }
-
+            ToAddressBook::WatchNodeInfo(node_id, updates_only, reply) => {
+                let node_info = state.store.node_info(&node_id).await?;
+                let rx = state.node_watchers.subscribe(
+                    node_id,
+                    updates_only,
+                    WatchedNodeInfo::from_node_info(node_info),
+                );
                 let _ = reply.send(rx);
             }
-            ToAddressBook::SubscribeTopicChanges(topic, reply) => {
-                let rx = match state.topic_subscribers.get_mut(&topic) {
-                    Some(tx) => tx.subscribe(),
-                    None => {
-                        let (tx, rx) = broadcast::channel(32);
-                        state.topic_subscribers.insert(topic, tx);
-                        rx
-                    }
-                };
+            ToAddressBook::WatchTopic(topic, updates_only, reply) => {
+                // Since we don't know where this topic belongs to we need to check both stream
+                // types.
+                let sync_node_ids: HashSet<NodeId> = state
+                    .node_infos_by_sync_topics(vec![topic])
+                    .await?
+                    .iter()
+                    .map(|info| info.id())
+                    .collect();
+
+                let ephemeral_node_ids: HashSet<NodeId> = state
+                    .node_infos_by_ephemeral_messaging_topics(vec![topic])
+                    .await?
+                    .iter()
+                    .map(|info| info.id())
+                    .collect();
+
+                // @TODO: Topic re-use across stream types should be prohibited on our high-level
+                // API and discovery protocol.
+                if !sync_node_ids.is_empty() && !ephemeral_node_ids.is_empty() {
+                    warn!(
+                        topic = %topic.fmt_short(),
+                        "detected re-use of the same topic for both ephemeral messaging and sync"
+                    );
+                    return Ok(());
+                }
+
+                // Since we've checked that one of the sets _needs_ to be empty, we can simply
+                // merge them.
+                let mut node_ids: HashSet<NodeId> = sync_node_ids;
+                node_ids.extend(ephemeral_node_ids);
+
+                let rx = state.topic_watchers.subscribe(
+                    topic,
+                    updates_only,
+                    WatchedTopic::from_node_ids(topic, node_ids),
+                );
                 let _ = reply.send(rx);
             }
 
@@ -331,55 +314,48 @@ where
                 let result = state.store.node_info(&node_id).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::AllNodeInfos(reply) => {
-                let result = state.store.all_node_infos().await?;
-                let _ = reply.send(result);
-            }
-            ToAddressBook::SelectedNodeInfos(node_ids, reply) => {
-                let result = state.store.selected_node_infos(&node_ids).await?;
-                let _ = reply.send(result);
-            }
             ToAddressBook::NodeInfosBySyncTopics(topics, reply) => {
-                let result = state.store.node_infos_by_sync_topics(&topics).await?;
-                // Remove ourselves.
-                let result = result
-                    .into_iter()
-                    .filter(|info| info.id() != state.args.public_key)
-                    .collect();
+                let result = state.node_infos_by_sync_topics(topics).await?;
                 let _ = reply.send(result);
             }
             ToAddressBook::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
                 let result = state
-                    .store
-                    .node_infos_by_ephemeral_messaging_topics(&topics)
+                    .node_infos_by_ephemeral_messaging_topics(topics)
                     .await?;
-                // Remove ourselves.
-                let result = result
-                    .into_iter()
-                    .filter(|info| info.id() != state.args.public_key)
-                    .collect();
-                let _ = reply.send(result);
-            }
-            ToAddressBook::RandomNodeInfo(reply) => {
-                let result = state.store.random_node().await?;
                 let _ = reply.send(result);
             }
             ToAddressBook::SetSyncTopics(node_id, topics) => {
-                for topic in &topics {
-                    state.call_sync_topic_subscribers(*topic).await;
-                }
+                state.store.set_sync_topics(node_id, topics.clone()).await?;
 
-                state.store.set_sync_topics(node_id, topics).await?;
+                // Inform subscribers about potential change in set of interested nodes.
+                for topic in &topics {
+                    let node_ids = state
+                        .node_infos_by_sync_topics(vec![*topic])
+                        .await?
+                        .into_iter()
+                        .map(|info| info.id());
+                    state
+                        .topic_watchers
+                        .update(topic, HashSet::from_iter(node_ids));
+                }
             }
             ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
-                for topic in &topics {
-                    state.call_ephemeral_topic_subscribers(*topic).await;
-                }
-
                 state
                     .store
-                    .set_ephemeral_messaging_topics(node_id, topics)
+                    .set_ephemeral_messaging_topics(node_id, topics.clone())
                     .await?;
+
+                // Inform subscribers about potential change in set of interested nodes.
+                for topic in &topics {
+                    let node_ids = state
+                        .node_infos_by_ephemeral_messaging_topics(vec![*topic])
+                        .await?
+                        .into_iter()
+                        .map(|info| info.id());
+                    state
+                        .topic_watchers
+                        .update(topic, HashSet::from_iter(node_ids));
+                }
             }
             ToAddressBook::RemoveNodeInfo(node_id, reply) => {
                 let result = state.store.remove_node_info(&node_id).await?;
@@ -395,24 +371,109 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TopicEvent {
-    #[allow(unused)]
-    pub topic: TopicId,
-    pub node_infos: Vec<NodeInfo>,
-}
-
-#[derive(Debug, Clone)]
-#[allow(unused)]
-pub struct NodeEvent {
-    pub node_id: NodeId,
-    pub node_info: NodeInfo,
-}
-
 #[derive(Debug, Error)]
 pub enum AddressBookError {
     #[error(transparent)]
     NodeInfo(crate::addrs::NodeInfoError),
+}
+
+#[derive(Default)]
+pub struct WatchedNodeInfo(RefCell<Option<NodeInfo>>);
+
+impl WatchedNodeInfo {
+    pub fn from_node_info(node_info: Option<NodeInfo>) -> Self {
+        Self(RefCell::new(node_info))
+    }
+}
+
+impl Watched for WatchedNodeInfo {
+    type Value = Option<NodeInfo>;
+
+    fn current(&self) -> Self::Value {
+        self.0.borrow().clone()
+    }
+
+    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
+        if !self.0.borrow().eq(cmp) {
+            if let Some(info) = cmp {
+                let transports = info
+                    .transports
+                    .as_ref()
+                    .map(|info| info.to_string())
+                    .unwrap_or("none".to_string());
+                debug!(
+                    node_id = info.node_id.fmt_short(),
+                    %transports,
+                    "node info changed"
+                );
+            }
+
+            self.0.replace(cmp.to_owned());
+
+            UpdateResult::Changed(WatchedValue {
+                difference: None,
+                value: cmp.to_owned(),
+            })
+        } else {
+            UpdateResult::Unchanged
+        }
+    }
+}
+
+pub struct WatchedTopic {
+    topic: TopicId,
+    node_ids: RefCell<HashSet<NodeId>>,
+}
+
+impl WatchedTopic {
+    pub fn from_node_ids(topic: TopicId, node_ids: HashSet<NodeId>) -> Self {
+        Self {
+            topic,
+            node_ids: RefCell::new(node_ids),
+        }
+    }
+}
+
+impl Watched for WatchedTopic {
+    type Value = HashSet<NodeId>;
+
+    fn current(&self) -> Self::Value {
+        self.node_ids.borrow().clone()
+    }
+
+    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
+        let difference: HashSet<NodeId> = self
+            .node_ids
+            .borrow()
+            .symmetric_difference(cmp)
+            .cloned()
+            .collect();
+
+        if difference.is_empty() {
+            UpdateResult::Unchanged
+        } else {
+            {
+                let node_ids: Vec<String> = self
+                    .node_ids
+                    .borrow()
+                    .iter()
+                    .map(|id| id.fmt_short())
+                    .collect();
+                debug!(
+                    topic = self.topic.fmt_short(),
+                    node_ids = ?node_ids,
+                    "interested nodes for topic changed"
+                );
+            }
+
+            self.node_ids.replace(cmp.to_owned());
+
+            UpdateResult::Changed(WatchedValue {
+                difference: Some(difference),
+                value: cmp.to_owned(),
+            })
+        }
+    }
 }
 
 #[cfg(test)]
