@@ -11,7 +11,7 @@ use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use crate::actors::address_book::watchers::{
     UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
@@ -401,7 +401,7 @@ impl Watched for WatchedNodeInfo {
                     .as_ref()
                     .map(|info| info.to_string())
                     .unwrap_or("none".to_string());
-                info!(
+                debug!(
                     node_id = info.node_id.fmt_short(),
                     %transports,
                     "node info changed"
@@ -459,7 +459,7 @@ impl Watched for WatchedTopic {
                     .iter()
                     .map(|id| id.fmt_short())
                     .collect();
-                info!(
+                debug!(
                     topic = self.topic.fmt_short(),
                     node_ids = ?node_ids,
                     "interested nodes for topic changed"
