@@ -2,17 +2,18 @@
 
 //! Subscribe to address book updates and rejoin the gossip with the given nodes if we're actively
 //! interested in the associated topics.
-use p2panda_discovery::address_book::NodeInfo as _;
+use std::collections::HashSet;
+
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, call, registry};
-use tokio::sync::broadcast::Receiver;
 use tracing::debug;
 
-use crate::TopicId;
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook, TopicEvent};
+use crate::actors::address_book::watchers::WatcherReceiver;
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::session::ToGossipSession;
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::utils::from_public_key;
+use crate::{NodeId, TopicId};
 
 pub enum ToGossipHealer {
     /// Subscribe to changes regarding nodes for our topics of interest.
@@ -24,7 +25,7 @@ pub enum ToGossipHealer {
 
 pub struct GossipHealerState {
     actor_namespace: ActorNamespace,
-    receiver: Option<Receiver<TopicEvent>>,
+    receiver: Option<WatcherReceiver<HashSet<NodeId>>>,
     gossip_session_ref: ActorRef<ToGossipSession>,
 }
 
@@ -75,7 +76,7 @@ impl ThreadLocalActor for GossipHealer {
                 {
                     let actor: ActorRef<ToAddressBook> = address_book_actor.into();
 
-                    let receiver = call!(actor, ToAddressBook::SubscribeTopicChanges, topic)
+                    let receiver = call!(actor, ToAddressBook::WatchTopic, topic, true)
                         .expect("address book actor should handle call");
                     state.receiver = Some(receiver);
 
@@ -88,12 +89,9 @@ impl ThreadLocalActor for GossipHealer {
             ToGossipHealer::WaitForEvent => {
                 if let Some(receiver) = &mut state.receiver {
                     match receiver.recv().await {
-                        Ok(event) => {
-                            let node_ids = event
-                                .node_infos
-                                .iter()
-                                .map(|node_info| from_public_key(node_info.id()))
-                                .collect();
+                        Some(event) => {
+                            let node_ids =
+                                Vec::from_iter(event.value.into_iter().map(from_public_key));
 
                             // Send the join signal to the gossip session actor.
                             state
@@ -103,7 +101,7 @@ impl ThreadLocalActor for GossipHealer {
                             // Invoke the handler to wait for the next event on the receiver.
                             let _ = myself.cast(ToGossipHealer::WaitForEvent);
                         }
-                        Err(_) => {
+                        None => {
                             debug!(
                                 "gossip healer actor: address book dropped broadcast tx - channel closed"
                             );
