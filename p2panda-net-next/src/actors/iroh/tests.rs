@@ -2,19 +2,17 @@
 
 use std::time::Duration;
 
-use iroh::discovery::UserData;
 use iroh::protocol::ProtocolHandler;
-use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{call, cast};
 use tokio::time::sleep;
 
+use crate::MdnsDiscoveryMode;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::iroh::{IrohEndpoint, Mdns, ToIrohEndpoint, UserDataTransportInfo};
+use crate::actors::iroh::{IrohEndpoint, Mdns, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::test_utils::{setup_logging, test_args_from_seed};
 use crate::utils::from_public_key;
-use crate::{MdnsDiscoveryMode, TransportInfo};
 
 const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 
@@ -175,21 +173,4 @@ async fn mdns_discovery() {
     alice_ref.stop(None);
     endpoint_alice_ref.stop(None);
     endpoint_bob_ref.stop(None);
-}
-
-#[test]
-fn transport_info_to_user_data() {
-    // Create simple transport info object without any addresses attached.
-    let private_key = PrivateKey::new();
-    let transport_info = TransportInfo::new_unsigned().sign(&private_key).unwrap();
-
-    // Extract information we want for our TXT record.
-    let txt_info = UserDataTransportInfo::from_transport_info(transport_info);
-
-    // Convert it into iroh data type.
-    let user_data = UserData::try_from(txt_info.clone()).unwrap();
-
-    // .. and back!
-    let txt_info_again = UserDataTransportInfo::try_from(user_data).unwrap();
-    assert_eq!(txt_info, txt_info_again);
 }

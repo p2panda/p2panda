@@ -16,7 +16,7 @@ use crate::utils::{current_timestamp, from_public_key, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeInfo {
     /// Unique identifier (Ed25519 public key) of this node.
     pub node_id: NodeId,

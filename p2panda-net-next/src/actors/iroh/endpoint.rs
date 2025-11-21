@@ -13,8 +13,8 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
-use crate::actors::iroh::AddressBookDiscovery;
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
+use crate::actors::iroh::discovery::AddressBookDiscovery;
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
