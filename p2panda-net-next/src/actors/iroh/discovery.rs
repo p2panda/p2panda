@@ -85,10 +85,10 @@ impl Discovery for AddressBookDiscovery {
         let actor_namespace = self.actor_namespace.clone();
 
         let span = info_span!("resolve", endpoint_id = %endpoint_id.fmt_short());
-        trace!(parent: &span, "received request to resolve endpoint id");
+        trace!(parent: &span, "try to resolve endpoint id");
 
         let stream = async move {
-            let subscription = watch_node_info(actor_namespace, to_public_key(endpoint_id), true)
+            let subscription = watch_node_info(actor_namespace, to_public_key(endpoint_id), false)
                 .await
                 .map_err(|_| {
                     DiscoveryError::from_err_any(
