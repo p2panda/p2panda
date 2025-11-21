@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 
+use assert_matches::assert_matches;
+use p2panda_core::Body;
+use p2panda_core::cbor::encode_cbor;
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
+use p2panda_sync::log_sync::{LogSyncEvent, StatusEvent};
+use p2panda_sync::topic_log_sync::TopicLogSyncEvent;
 use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
@@ -21,7 +27,8 @@ use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
 use crate::args::ApplicationArguments;
 use crate::test_utils::{
-    NoSyncConfig, NoSyncEvent, NoSyncManager, NoSyncMessage, setup_logging, test_args_from_seed,
+    App, NoSyncConfig, NoSyncEvent, NoSyncManager, NoSyncMessage, TestTopicSyncManager,
+    setup_logging, test_args_from_seed,
 };
 
 struct TestNode<M>
@@ -136,9 +143,8 @@ where
 }
 
 #[tokio::test]
-async fn e2e_sync() {
+async fn e2e_no_sync() {
     setup_logging();
-
     let topic_id = [0; 32];
 
     let (bob_sync_config, _bob_rx) = NoSyncConfig::new();
@@ -211,6 +217,186 @@ async fn e2e_sync() {
             } if remote == expected_remote
         ));
     }
+
+    alice.shutdown();
+    bob.shutdown();
+}
+
+#[tokio::test]
+async fn e2e_topic_log_sync() {
+    setup_logging();
+    const TOPIC_ID: [u8; 32] = [0; 32];
+    const LOG_ID: u64 = 0;
+
+    // Setup Alice's app logic.
+    let mut alice_app = {
+        // @NOTE: In these tests the "app" layer where the p2panda identity lives has a different
+        // private key from the node.
+        let mut app = App::new(0);
+        let body = Body::new(b"Hello from Alice");
+        let _ = app.create_operation(&body, LOG_ID).await;
+        let logs = HashMap::from([(app.id(), vec![LOG_ID])]);
+        app.insert_topic(&TOPIC_ID, &logs);
+        app
+    };
+
+    // Setup Bob's app logic.
+    let bob_app = {
+        let mut app = App::new(1);
+        let body = Body::new(b"Hello from Bob");
+        let _ = app.create_operation(&body, LOG_ID).await;
+        let logs = HashMap::from([(app.id(), vec![LOG_ID])]);
+        app.insert_topic(&TOPIC_ID, &logs);
+        app
+    };
+
+    // Setup Bob's node.
+    let mut bob: TestNode<TestTopicSyncManager> =
+        TestNode::spawn([13; 32], vec![], bob_app.sync_config()).await;
+
+    // Setup Alice's node.
+    let alice: TestNode<TestTopicSyncManager> =
+        TestNode::spawn([12; 32], vec![bob.node_info()], alice_app.sync_config()).await;
+
+    // Create Alice's stream.
+    let alice_stream = call!(
+        alice.stream_ref,
+        ToEventuallyConsistentStreams::Create,
+        TOPIC_ID,
+        true
+    )
+    .unwrap();
+
+    // Create Bob's stream.
+    let bob_stream = call!(
+        bob.stream_ref,
+        ToEventuallyConsistentStreams::Create,
+        TOPIC_ID,
+        true
+    )
+    .unwrap();
+
+    // Subscribe to both streams.
+    let mut alice_subscription = alice_stream.subscribe().await.unwrap();
+    let mut bob_subscription = bob_stream.subscribe().await.unwrap();
+
+    // Alice initiates sync.
+    alice
+        .stream_ref
+        .cast(ToEventuallyConsistentStreams::InitiateSync(
+            TOPIC_ID,
+            bob.node_id(),
+        ))
+        .unwrap();
+
+    // Assert Alice receives the expected events.
+    let bob_id = bob.node_id();
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            session_id: 0,
+            remote,
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                StatusEvent::Started { .. }
+            )),
+        } if remote == bob_id
+    );
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            ..
+        }
+    );
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            ..
+        }
+    );
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+            ..
+        }
+    );
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. })),
+            ..
+        }
+    );
+
+    // Assert Bob receives the expected events.
+    let alice_id = alice.node_id();
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            session_id: 0,
+            remote,
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
+                StatusEvent::Started { .. }
+            )),
+        } if remote == alice_id
+    );
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            ..
+        }
+    );
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            ..
+        }
+    );
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+            ..
+        }
+    );
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. })),
+            ..
+        }
+    );
+
+    // Alice publishes a live mode message.
+    let (header, body) = alice_app
+        .create_operation(&Body::new(b"live message from alice"), LOG_ID)
+        .await;
+    let bytes = encode_cbor(&(header.clone(), Some(body.clone()))).unwrap();
+    alice_stream.publish(bytes).await.unwrap();
+
+    // Bob receives this message.
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: TopicLogSyncEvent::Live { .. },
+            ..
+        }
+    );
 
     alice.shutdown();
     bob.shutdown();
