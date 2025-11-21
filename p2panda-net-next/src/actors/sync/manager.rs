@@ -24,6 +24,7 @@ use crate::addrs::NodeId;
 
 type SessionSink<M> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<TopicId>>::Error>>>;
 
+#[derive(Debug)]
 pub enum ToSyncManager {
     /// Initiate a sync session with this peer over the given topic.
     Initiate {
@@ -98,7 +99,7 @@ where
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (actor_namespace, topic, config, sender) = args;
@@ -107,10 +108,11 @@ where
         let manager = M::from_config(config);
         let event_stream = manager.subscribe();
 
-        let (_, _) = SyncPoller::spawn_linked(
+        // The sync poller actor lives as long as the manager and only terminates due to the
+        // manager actor itself terminating. Therefore no supervision is required.
+        let (_, _) = SyncPoller::spawn(
             None,
             (actor_namespace.clone(), event_stream, sender),
-            myself.clone().into(),
             pool.clone(),
         )
         .await?;
