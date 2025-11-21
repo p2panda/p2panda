@@ -2,7 +2,7 @@
 
 #[allow(clippy::module_inception)]
 mod address_book;
-mod subscribers;
+pub mod watchers;
 
 pub use address_book::{
     ADDRESS_BOOK, AddressBook, ImmediateResult, NodeEvent, ToAddressBook, TopicEvent,
