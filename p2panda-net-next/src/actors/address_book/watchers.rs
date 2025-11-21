@@ -96,10 +96,6 @@ where
         rx
     }
 
-    pub fn len(&self) -> usize {
-        self.subscribers.borrow().len()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.subscribers.borrow().is_empty()
     }
@@ -130,6 +126,7 @@ where
         }
     }
 
+    #[allow(clippy::map_entry, reason = "it's easier to read")]
     pub fn subscribe(
         &self,
         key: K,
@@ -157,7 +154,7 @@ where
 
             // Clean up watcher if there's no subscribers left for that key.
             if watcher.is_empty() {
-                watchers.remove(&key);
+                watchers.remove(key);
             }
         }
     }

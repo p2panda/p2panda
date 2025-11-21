@@ -8,8 +8,8 @@ use ractor::{ActorProcessingErr, ActorRef, call, registry};
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
-use crate::actors::iroh::{UserDataTransportInfo, subscribe_to_node_info};
+use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook, watch_node_info};
+use crate::actors::iroh::user_data::UserDataTransportInfo;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::config::MdnsDiscoveryMode;
@@ -147,15 +147,14 @@ impl ThreadLocalActor for Mdns {
                     let mut stream = mdns.subscribe().await;
 
                     // Subscribe to address book to listen to changes of our own node info.
-                    let mut rx = subscribe_to_node_info(
+                    let mut rx = watch_node_info(
                         state.actor_namespace.clone(),
                         state.args.public_key,
-                        // Enable "immediate result" to inform mdns about our current transport
-                        // info as soon as possible.
-                        true,
+                        // Disable "updates only" to inform mdns about our current transport info
+                        // as soon as possible.
+                        false,
                     )
-                    .await
-                    .ok_or("mdns service can't subscribe to address book node info changes")?;
+                    .await?;
 
                     tokio::task::spawn(async move {
                         loop {
@@ -186,8 +185,10 @@ impl ThreadLocalActor for Mdns {
                                         }
                                     }
                                 },
-                                Ok(event) = rx.recv() => {
-                                    let _ = myself.send_message(ToMdns::UpdateNodeInfo(event.node_info));
+                                Some(event) = rx.recv() => {
+                                    if let Some(node_info) = event.value {
+                                        let _ = myself.send_message(ToMdns::UpdateNodeInfo(node_info));
+                                    }
                                 }
                             }
                         }

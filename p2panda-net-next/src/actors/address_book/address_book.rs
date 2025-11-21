@@ -31,6 +31,7 @@ pub enum ToAddressBook {
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
+    #[allow(unused)]
     NodeInfosBySyncTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
@@ -110,8 +111,6 @@ pub enum ToAddressBook {
         RpcReplyPort<WatcherReceiver<HashSet<NodeId>>>,
     ),
 }
-
-pub type ImmediateResult = bool;
 
 pub struct AddressBookState<S> {
     args: ApplicationArguments,

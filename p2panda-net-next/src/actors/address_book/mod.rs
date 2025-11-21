@@ -4,6 +4,65 @@
 mod address_book;
 pub mod watchers;
 
-pub use address_book::{
-    ADDRESS_BOOK, AddressBook, ImmediateResult, NodeEvent, ToAddressBook, TopicEvent,
-};
+use ractor::{ActorRef, call, registry};
+use thiserror::Error;
+
+use crate::actors::address_book::watchers::{UpdatesOnly, WatcherReceiver};
+use crate::actors::{ActorNamespace, with_namespace};
+use crate::{NodeId, NodeInfo, TransportInfo};
+
+pub use address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
+
+async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
+    registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
+        .map(ActorRef::<ToAddressBook>::from)
+}
+
+pub async fn update_address_book(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+    transport_info: TransportInfo,
+) -> Result<(), AddressBookUtilsError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookUtilsError::ActorNotAvailable);
+    };
+
+    let _ = call!(
+        address_book_ref,
+        ToAddressBook::InsertTransportInfo,
+        node_id,
+        transport_info
+    )
+    .map_err(|_| AddressBookUtilsError::ActorFailed)?;
+
+    Ok(())
+}
+
+pub async fn watch_node_info(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+    updates_only: UpdatesOnly,
+) -> Result<WatcherReceiver<Option<NodeInfo>>, AddressBookUtilsError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookUtilsError::ActorNotAvailable);
+    };
+
+    let rx = call!(
+        address_book_ref,
+        ToAddressBook::WatchNodeInfo,
+        node_id,
+        updates_only
+    )
+    .map_err(|_| AddressBookUtilsError::ActorFailed)?;
+
+    Ok(rx)
+}
+
+#[derive(Debug, Error)]
+pub enum AddressBookUtilsError {
+    #[error("address book actor is not available")]
+    ActorNotAvailable,
+
+    #[error("address book actor failed")]
+    ActorFailed,
+}
