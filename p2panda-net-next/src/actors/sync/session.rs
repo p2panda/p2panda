@@ -4,7 +4,7 @@ use std::error::Error as StdError;
 use std::marker::PhantomData;
 
 use futures_channel::mpsc;
-use iroh::endpoint::Connection;
+use iroh::endpoint::{Connection, VarInt};
 use p2panda_sync::topic_handshake::{
     TopicHandshakeEvent, TopicHandshakeInitiator, TopicHandshakeMessage,
 };
@@ -101,6 +101,13 @@ where
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);
                 protocol.run(&mut tx, &mut rx).await?;
+
+                // @NOTE: in order to ensure all sent messages can be received and processed by
+                // both peers, sync protocol implementations must coordinate the close of a
+                // connection. Normally this would mean one side sends a "last message" and then
+                // waits for the other to close the connection themselves. If this doesn't occur
+                // in a timely manner then the connection will timeout.
+                connection.close(VarInt::from_u32(0), b"sync protocol initiate completed");
             }
             SyncSessionMessage::Accept {
                 connection,
@@ -112,6 +119,9 @@ where
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);
                 protocol.run(&mut tx, &mut rx).await?;
+
+                // @NOTE: see comment above regarding graceful connection closure.
+                connection.close(VarInt::from_u32(0), b"sync protocol accept completed");
             }
         }
         Ok(())
