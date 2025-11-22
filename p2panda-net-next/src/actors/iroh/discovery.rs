@@ -6,7 +6,7 @@ use std::pin::Pin;
 use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::discovery::{Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{Instrument, debug, error, info_span, trace, warn};
+use tracing::{Instrument, error, info_span, trace, warn};
 
 use crate::UnsignedTransportInfo;
 use crate::actors::address_book::{update_address_book, watch_node_info};
@@ -73,8 +73,6 @@ impl Discovery for AddressBookDiscovery {
                     .await
             {
                 warn!("could not update address book with own transport info: {err:#?}");
-            } else {
-                debug!(%transport_info, "updated our iroh endpoint address");
             }
         });
     }

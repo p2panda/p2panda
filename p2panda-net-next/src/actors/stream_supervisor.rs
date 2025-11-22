@@ -26,7 +26,7 @@ use std::marker::PhantomData;
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 use crate::TopicId;
 use crate::actors::gossip::{GOSSIP, Gossip, ToGossip};
@@ -156,7 +156,7 @@ where
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{STREAM_SUPERVISOR} actor: received ready from {} actor",
                         without_namespace(&name)
                     );
@@ -239,7 +239,7 @@ where
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{STREAM_SUPERVISOR} actor: {} actor terminated",
                         without_namespace(&name)
                     );

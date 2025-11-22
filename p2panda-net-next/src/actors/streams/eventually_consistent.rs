@@ -39,7 +39,7 @@ use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::streams::eventually_consistent::{
     EventuallyConsistentStream, EventuallyConsistentSubscription,
 };
-use crate::utils::to_public_key;
+use crate::utils::{ShortFormat, to_public_key};
 use crate::{NodeId, TopicId};
 
 /// Eventually consistent streams actor name.
@@ -413,8 +413,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sync_managers.actor_topic_map.get(&actor_id) {
                     debug!(
-                        "eventually consistent streams actor: received ready from sync manager #{} for topic {:?}",
-                        actor_id, topic
+                        %actor_id,
+                        topic = %topic.fmt_short(),
+                        "received ready from sync manager"
                     );
                 }
             }
@@ -422,8 +423,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sync_managers.actor_topic_map.remove(&actor_id) {
                     debug!(
-                        "eventually consistent streams actor: sync manager #{} over topic {:?} terminated with reason: {:?}",
-                        actor_id, topic, reason
+                        %actor_id,
+                        topic = %topic.fmt_short(),
+                        "sync manager terminated with reason: {reason:?}",
                     );
 
                     // Drop all state associated with the terminated sync manager.
@@ -438,8 +440,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sync_managers.actor_topic_map.remove(&actor_id) {
                     warn!(
-                        "eventually consistent streams actor: sync manager #{} over topic {:?} failed with reason: {:?}",
-                        actor_id, topic, panic_msg
+                        %actor_id,
+                        topic = %topic.fmt_short(),
+                        "sync manager failed with reason: {panic_msg:#?}",
                     );
 
                     // Tell the gossip actor to unsubscribe from this topic.

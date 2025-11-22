@@ -39,6 +39,12 @@ impl ShortFormat for NodeId {
     }
 }
 
+impl ShortFormat for iroh::EndpointId {
+    fn fmt_short(&self) -> String {
+        self.to_string()[0..10].to_string()
+    }
+}
+
 impl ShortFormat for [u8; 32] {
     fn fmt_short(&self) -> String {
         hex::encode(&self[0..5]).to_string()
@@ -48,5 +54,22 @@ impl ShortFormat for [u8; 32] {
 impl ShortFormat for Vec<u8> {
     fn fmt_short(&self) -> String {
         hex::encode(&self[0..5]).to_string()
+    }
+}
+
+impl ShortFormat for Vec<NodeId> {
+    fn fmt_short(&self) -> String {
+        let list: Vec<String> = self.iter().map(|addr| addr.fmt_short()).collect();
+        format!("[{}]", list.join(", "))
+    }
+}
+
+impl ShortFormat for Vec<iroh::EndpointId> {
+    fn fmt_short(&self) -> String {
+        let list: Vec<String> = self
+            .iter()
+            .map(|addr| addr.fmt_short().to_string())
+            .collect();
+        format!("[{}]", list.join(", "))
     }
 }
